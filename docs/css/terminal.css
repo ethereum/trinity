@@ -1,0 +1,97 @@
+.terminal {
+  line-height: 1.4em;
+}
+
+.terminal-window {
+  text-align: left;
+  max-width: 1110px;
+  min-height: 440px;
+  border-radius: 10px;
+  margin: auto;
+  position: relative;
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+    -webkit-box-shadow: 0px 0px 38px 0px rgba(0,0,0,0.45);
+  -moz-box-shadow: 0px 0px 38px 0px rgba(0,0,0,0.45);
+  box-shadow: 0px 0px 38px 0px rgba(0,0,0,0.45);
+}
+
+@media (max-width: 767px){
+  .terminal-window {
+    min-height: 560px;
+  }
+}
+
+.terminal-window header {
+  background: #2B3E50;
+  height: 30px;
+  border-radius: 8px 8px 0 0;
+  padding-left: 15px;
+  padding-top: 5px;
+}
+
+.terminal-window header .button {
+  width: 10px;
+  height: 10px;
+  margin: 10px 4px 0 0;
+  display: inline-block;
+  border-radius: 8px;
+}
+
+.terminal-window header .button.green {
+  background: #27C93F;
+}
+
+.terminal-window header .button.yellow {
+  background: #FFBD2E;
+}
+
+.terminal-window header .button.red {
+  background: #FF5F56;
+}
+
+.terminal-window section.terminal {
+  color: #F9F9F3;
+  font-family: Hack, Monaco, "Consolas", "Courier New", "Courier";
+  font-size: 0.85em;
+  background: #2B3E50;
+  padding: 15px;
+  box-sizing: border-box;
+  position: absolute;
+  width: 100%;
+  top: 30px;
+  bottom: 0;
+  overflow: auto;
+  border-radius: 0 0 8px 8px;
+}
+
+.terminal-window section.terminal .typed-cursor {
+    opacity: 1;
+    -webkit-animation: blink 0.7s infinite;
+    -moz-animation: blink 0.7s infinite;
+    animation: blink 0.7s infinite;
+}
+@keyframes blink{
+    0% { opacity:1; }
+    50% { opacity:0; }
+    100% { opacity:1; }
+}
+@-webkit-keyframes blink{
+    0% { opacity:1; }
+    50% { opacity:0; }
+    100% { opacity:1; }
+}
+@-moz-keyframes blink{
+    0% { opacity:1; }
+    50% { opacity:0; }
+    100% { opacity:1; }
+}
+
+.terminal-data { display: none; }
+.terminal-window .gray { color: gray; }
+.terminal-window .purple { color: #D59AFF!important;}
+.terminal-window .red { color: #FF6540!important;} 
+.terminal-window .blue { color: #22A6D3!important;} 
+.terminal-window .darkblue { color: #60A0D7!important;} 
+.terminal-window .green { color: #71C05C!important;} 
+

@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <!--
+          ______     _       _ __
+ /_  __/____(_)___  (_) /___  __
+  / / / ___/ / __ \/ / __/ / / /
+ / / / /  / / / / / / /_/ /_/ /
+/_/ /_/  /_/_/ /_/_/\__/\__, /
+                       /____/
+        -->
+        <title>Trinity - Python client for the Ethereum Blockchain</title>
+        <meta name="description" content="Trinity is a Python client for the Ethereum Blockchain" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="css/stack-interface.css" rel="stylesheet" type="text/css" media="all">
+        <link href="css/socicon.css" rel="stylesheet" type="text/css" media="all" />
+        <link href="css/bootstrap.css" rel="stylesheet" type="text/css" media="all" />
+        <link href="css/stack-interface.css" rel="stylesheet" type="text/css" media="all" />
+        <link href="css/theme.css" rel="stylesheet" type="text/css" media="all" />
+        <link href="css/custom.css" rel="stylesheet" type="text/css" media="all" />
+        <link href="css/terminal.css" rel="stylesheet" type="text/css" media="all" />
+        <link href="css/particles.css" rel="stylesheet" type="text/css" media="all" />
+        <link href="https://fonts.googleapis.com/css?family=Montserrat:400,500" rel="stylesheet">
+        <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+
+    </head>
+    <body data-smooth-scroll-offset="77">
+
+        <div id="particles-js"></div> <script src="http://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+
+        <div class="nav-container">
+            <div>
+                <div class="bar bar--sm visible-xs">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-3 col-md-2">
+                                <a href="index.html"> <img class="logo logo-dark" alt="Trinity Logo" src="images/trinity-logo-icon.svg"> </a>
+                            </div>
+                            <div class="col-9 col-md-10 text-right">
+                                <a href="#" class="hamburger-toggle" data-toggle-class="#menu1;hidden-xs hidden-sm"> <i class="icon icon--sm stack-interface stack-menu"></i> </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <nav id="menu1" class="bar bar-1 hidden-xs bar--absolute bar--transparent bg--dark">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-lg-1 col-md-2 hidden-xs">
+                                <div class="bar__module">
+                                    <a href="index.html"> <img class="logo logo-light" alt="Trinity Logo" src="images/trinity-logo-icon.svg"> </a>
+                                </div>
+                            </div>
+                            <div class="col-lg-11 col-md-12 text-right text-left-xs text-left-sm">
+                                <div class="bar__module">
+                                    <ul class="menu-horizontal text-left">
+                                        <li> <a href="#install">Install</a> </li>
+                                        <li> <a href="#team">Team</a> </li>
+                                        <li> <span><a href="https://github.com/ethereum/py-evm">Github Repo</a></span> </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </nav>
+            </div>
+        </div>
+        <div class="main-container">
+            <section class="cover bg--dark">
+                <div class="container hero">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <span class="h1 inline-block"><span>Trinity</span> is a client for the Etherum Blockchain</span>
+                        </div>
+                    </div>
+                    <div class="row justify-content-center">
+                        <div class="col-md-12 col-lg-12">
+                                <div class="terminal-window">
+                                      <header>
+                                        <div class="button red"></div>
+                                        <div class="button yellow"></div>
+                                        <div class="button green"></div>
+                                      </header>
+                                      <section class="terminal">
+                                        <div class="history"></div>
+                                        <div class="cursors">
+                                        $&nbsp;<span class="prompt"></span>
+                                        <span class="typed-cursor"></span>
+                                        </div>
+                                        
+                                      </section>
+                                    </div>
+                                    <!-- data -->
+                                      <div class="terminal-data mimik-run-output">
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10</span>:29:44&nbsp;&nbsp;&nbsp;&nbsp;logging&nbsp;&nbsp;Trinity DEBUG log file is created at /Users/piper/.local/share/trinity/mainnet/logs/trinity.log</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10</span>:29:44&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;main&nbsp;&nbsp;Started DB server process <span class="green">(pid</span><span class="blue">=</span><span class="purple">17034</span>)</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10</span>:29:45&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;main&nbsp;&nbsp;Started networking process <span class="green">(pid</span><span class="blue">=</span><span class="purple">17037</span>)</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10</span>:29:46&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;main</br> 
+                                    &nbsp;&nbsp;&nbsp;______&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;_&nbsp;__</br>
+                                    &nbsp;&nbsp;/_&nbsp;&nbsp;__/____(_)___&nbsp;&nbsp;(_)&nbsp;/___&nbsp;&nbsp;__</br>
+                                    &nbsp;&nbsp;&nbsp;/ / / ___/ / __ \/ / __/ / / /</br>
+                                    &nbsp;&nbsp;/ / / /&nbsp;&nbsp;/ / / / / / /_/ /_/ /</br>
+                                    &nbsp;/_/ /_/&nbsp;&nbsp;/_/_/ /_/_/\__/\__, /</br>
+                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/____/</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:46</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;main&nbsp;&nbsp;Trinity/0.1.0a11/darwin/cpython3.6.3</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:46</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ipc&nbsp;&nbsp;IPC started at: /Users/piper/.local/share/trinity/mainnet/jsonrpc.ipc</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:46</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server&nbsp;&nbsp;Running server...</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:51</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server  enode://7b8fb3e32de9aa5d7930fe0dd0e2365361b85c97daa1eb042ac37005f527bb80a450e9ec9012d53d8fcb94d015b115630f4556153fcf4e746993a29b14e13734<span class="blue">@</span>0.0.0.0:30304</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:51</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server&nbsp;&nbsp;network: <span class="purple">1</span> </br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:51</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server&nbsp;&nbsp;peers: <span class="green">max_peers</span><span class="blue">=</span><span class="purple">25</span> </br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:51</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;peer&nbsp;&nbsp;Running PeerPool...</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:51</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;peer&nbsp;&nbsp;Connected peers: <span class="purple">0</span>  inbound, <span class="purple">0</span> outbound</br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:29:51</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sync&nbsp;&nbsp;Starting fast-sync; current head: <span class="darkblue">#2219711</span></br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:30:04</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;peer&nbsp;&nbsp;Successfully connected to ETHPeer &lt;Node(0x4ef8@159.65.131.192></br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:30:04</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chain&nbsp;&nbsp;Starting sync with ETHPeer &lt;Node(0x4ef8@159.65.131.192)></br>
+                                        INFO  <span class="purple">06-<span class="blue">06</span> 10:30:10</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chain&nbsp;&nbsp;Imported <span class="purple">192</span> headers <span class="red">in</span> <span class="purple">5</span>.95 seconds, new head: <span class="darkblue">#2219711 (b5571e)</span></br>
+                                </div>
+
+
+                            <span class="h6 inline-block">⚠️ The Trinity client is currently in an alpha release stage and is not suitable for mission critical production use cases.</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="feature feature-1"> <img alt="Eth Logo" src="images/eth-logo@2x.png">
+                                    <p> Full Ethereum node supported by a dedicated development team.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="feature feature-1"> <img alt="Python Logo" src="images/python-logo@2x.png">
+                                    <p> Python console powered by</p> <a href="http://web3.py"> Web3.py</a> 
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section id="install"class="switchable feature-large unpad--bottom imagebg switchable--switch parallax" data-overlay="0">
+                <div class="background-image-holder"> <img alt="background" src="images/install-bg@2x.jpg"> </div>
+                <div class="container">
+                    <div class="row justify-content-around">
+                        <div class="col-md-8">
+                            <div class="switchable__text">
+                                <h4>Install</h4>
+                                <div class="terminalinstall">
+                                    <p>pip install -U trinity</p>
+                                </div>    
+                                <h6>Paste that at a Terminal prompt.</h6>
+                                <p>For detailed installation instruction go to: </br><a href="http://py-evm.readthedocs.io/en/latest/guides/trinity/quickstart.html#installation">http://py-evm.readthedocs.io/en/latest/guides/trinity/quickstart.html#installation</a></p>
+                                <p>Quick Start: <a href="http://py-evm.readthedocs.io/en/latest/guides/trinity/quickstart.html">http://py-evm.readthedocs.io/en/latest/guides/trinity/quickstart.html</a></p>
+                                <p>Github: <a href="https://github.com/ethereum/py-evm">https://github.com/ethereum/py-evm</a></p>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-4 col-12 text-center"> <img class="triceratops" alt="Triceratops" src="images/triceratops@2x.png"> </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="team" class="text-center">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h4>Team</h4>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="feature feature-8"> <img alt="Piper Meriam" src="images/piper@2x.jpg">
+                                <h5>Piper Merriam</h5> <span>Lead Architect</span>
+                            <br/>
+                                <ul class="social-list list-inline list--hover">
+                                    <li><a href="https://twitter.com/pipermerriam"><i class="socicon socicon-twitter icon icon--xs"></i></a></li>
+                                    <li><a href="https://github.com/pipermerriam"><i class="socicon socicon-github icon icon--xs"></i></a></li>
+                                </ul></div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="feature feature-8"> <img alt="Jason Craver" src="images/jason@2x.jpg">
+                                <h5>Jason Craver</h5> <span>Smart Contract Developer</span>
+                                <br/>
+                                <ul class="social-list list-inline list--hover">
+                                    <!-- <li><a href="#"><i class="socicon socicon-twitter icon icon--xs"></i></a></li> -->
+                                    <li><a href="https://github.com/carver"><i class="socicon socicon-github icon icon--xs"></i></a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="feature feature-8"> <img alt="Christof Burgdorf" src="images/christof@2x.jpg">
+                                <h5>Christof Burgdorf</h5> <span>Python Developer</span> 
+                                <br/>
+                                <ul class="social-list list-inline list--hover">
+                                    <!-- <li><a href="#"><i class="socicon socicon-twitter icon icon--xs"></i></a></li> -->
+                                    <li><a href="https://github.com/cburgdorf"><i class="socicon socicon-github icon icon--xs"></i></a></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="feature feature-8"> <img alt="Christof Burgdorf" src="images/salgado@2x.jpg">
+                                <h5>Guilherme Salgado</h5> <span>Python Developer</span> 
+                                <br/>
+                                <ul class="social-list list-inline list--hover">
+                                    <li><a href="https://github.com/gsalgado"><i class="socicon socicon-github icon icon--xs"></i></a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <footer class="text-center-xs space--xs">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-sm-7"> <span class="type--fine-print">© <span class="update-year"></span> Trinity.</span> </div>
+                        <div class="col-sm-5 text-right text-center-xs"> <a class="type--fine-print" href="mailto:support@trinity.io">support@trinity.io</a> 
+                            <ul class="social-list list-inline list--hover">
+                                <!-- <li><a href="#"><i class="socicon socicon-twitter icon icon--xs"></i></a></li> -->
+                                <li><a style="vertical-align:middle; margin-left: 5px" href="https://github.com/ethereum/py-evm"><i class="socicon socicon-github icon icon--xs"></i></a></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </div>
+        <script src="js/jquery-3.1.1.min.js"></script>
+        <script src="js/parallax.js"></script>
+        <script src="js/smooth-scroll.min.js"></script>
+        <script src="js/scripts.js"></script>
+        <script src="js/particle.js"></script>
+        <script src="js/terminal.js"></script>
+        <script src='http://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js'></script>
+        <script src='https://www.mattboldt.com/demos/typed-js/js/typed.custom.js'></script>
+
+    </body>
+
+</html>
