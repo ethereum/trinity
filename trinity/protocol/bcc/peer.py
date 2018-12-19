@@ -2,7 +2,14 @@ from typing import (
     cast,
 )
 
+from eth_utils import (
+    encode_hex,
+)
+
 from eth2.beacon.db.chain import BaseBeaconChainDB
+from eth2.beacon.types.blocks import (
+    BeaconBlock,
+)
 
 from p2p.peer import (
     BasePeer,
@@ -16,6 +23,8 @@ from p2p.protocol import (
 from p2p.exceptions import HandshakeFailure
 from p2p.p2p_proto import DisconnectReason
 
+from trinity.protocol.bcc.handlers import BCCExchangeHandler
+
 from trinity.protocol.bcc.proto import BCCProtocol
 from trinity.protocol.bcc.commands import (
     Status,
@@ -25,22 +34,13 @@ from trinity.protocol.bcc.context import (
     BeaconContext,
 )
 
-from eth_utils import (
-    encode_hex,
-)
-from eth_typing import (
-    Hash32,
-)
-
-from eth2.beacon.types.blocks import (
-    BeaconBlock,
-)
-
 
 class BCCPeer(BasePeer):
 
     _supported_sub_protocols = [BCCProtocol]
     sub_proto: BCCProtocol = None
+
+    _requests: BCCExchangeHandler = None
 
     context: BeaconContext
 
@@ -82,6 +82,12 @@ class BCCPeer(BasePeer):
     @property
     def chain_db(self) -> BaseBeaconChainDB:
         return self.context.chain_db
+
+    @property
+    def requests(self) -> BCCExchangeHandler:
+        if self._requests is None:
+            self._requests = BCCExchangeHandler(self)
+        return self._requests
 
 
 class BCCPeerFactory(BasePeerFactory):
