@@ -1,7 +1,7 @@
 # Python Implementation of the Ethereum protocol
 
 [![Join the chat at https://gitter.im/ethereum/py-evm](https://badges.gitter.im/ethereum/py-evm.svg)](https://gitter.im/ethereum/py-evm)
-[![Documentation Status](https://readthedocs.org/projects/py-evm/badge/?version=latest)](https://py-evm.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/py-evm/badge/?version=latest)](https://py-evm.readthedocs.io/en/latest/?badge=latest) [![Join the chat at https://gitter.im/ethereum/trinity](https://badges.gitter.im/ethereum/trinity.svg)](https://gitter.im/ethereum/trinity?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 
 ## Py-EVM
