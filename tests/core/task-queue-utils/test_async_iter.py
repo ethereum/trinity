@@ -10,28 +10,18 @@ from eth_utils.toolz import (
 from trinity._utils.async_iter import (
     async_chain,
     async_cons,
-    async_iter_wrapper,
+    async_iterator,
     async_sliding_window,
     async_take,
 )
 
 
 @pytest.mark.asyncio
-async def test_wrapping_async():
-    async def async_range():
-        for i in range(3):
-            yield i
-
-    wrapped = async_iter_wrapper(async_range())
-    result = [i async for i in wrapped]
-    assert result == [0, 1, 2]
-
-
-@pytest.mark.asyncio
-async def test_wrapping_sync():
-    wrapped = async_iter_wrapper(range(3))
-    result = [i async for i in wrapped]
-    assert result == [0, 1, 2]
+async def test_asyncify_iterable():
+    original = [1, 2, 3]
+    async_iterable = async_iterator(original)
+    result = [i async for i in async_iterable]
+    assert result == original
 
 
 @pytest.mark.parametrize("iterables", [
@@ -43,7 +33,7 @@ async def test_wrapping_sync():
 ])
 @pytest.mark.asyncio
 async def test_async_chain(iterables):
-    chained = async_chain(*iterables)
+    chained = async_chain(*[async_iterator(iterable) for iterable in iterables])
     result = [i async for i in chained]
     expected = list(itertools.chain(*iterables))
     assert result == expected
@@ -59,7 +49,7 @@ async def test_async_chain(iterables):
 ])
 @pytest.mark.asyncio
 async def test_async_take(num, iterable):
-    taken = async_take(num, iterable)
+    taken = async_take(num, async_iterator(iterable))
     result = [i async for i in taken]
     expected = list(take(num, iterable))
     assert result == expected
@@ -71,7 +61,7 @@ async def test_async_take(num, iterable):
 ])
 @pytest.mark.asyncio
 async def test_async_cons(item, iterable):
-    consed = async_cons(item, iterable)
+    consed = async_cons(item, async_iterator(iterable))
     result = [i async for i in consed]
     expected = list(cons(item, iterable))
     assert result == expected
@@ -86,7 +76,7 @@ async def test_async_cons(item, iterable):
 ])
 @pytest.mark.asyncio
 async def test_async_sliding_window(window_size, iterable, expected):
-    windowed = async_sliding_window(window_size, iterable)
+    windowed = async_sliding_window(window_size, async_iterator(iterable))
     result = [i async for i in windowed]
     assert result == expected
 
@@ -94,4 +84,4 @@ async def test_async_sliding_window(window_size, iterable, expected):
 @pytest.mark.asyncio
 async def test_negative_sliding_window_size():
     with pytest.raises(ValueError):
-        async_sliding_window(-1, [1, 2, 3])
+        async_sliding_window(-1, async_iterator([1, 2, 3]))

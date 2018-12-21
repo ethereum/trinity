@@ -6,13 +6,10 @@ from typing import (
     Set,
     Tuple,
     TypeVar,
-    Union,
 )
 
 
 T = TypeVar('T')
-
-AnyIterable = Union[Iterable[T], AsyncIterable[T]]
 
 
 async def contains_all(async_gen: AsyncIterable[str], keywords: Set[str]) -> bool:
@@ -32,28 +29,27 @@ async def contains_all(async_gen: AsyncIterable[str], keywords: Set[str]) -> boo
     return False
 
 
-async def async_iter_wrapper(iterable: AnyIterable[T]) -> AsyncIterator[T]:
-    if isinstance(iterable, Iterable):
-        for item in iterable:
-            yield item
-    elif isinstance(iterable, AsyncIterable):
-        async for item in iterable:
-            yield item
+async def async_iterator(iterable: Iterable[T]) -> AsyncIterator[T]:
+    for item in iterable:
+        yield item
 
 
-async def async_chain(*iterables: AnyIterable[T]) -> AsyncIterator[T]:
-    for iterable in iterables:
-        async for item in async_iter_wrapper(iterable):
+async def async_chain(*async_iterables: AsyncIterable[T]) -> AsyncIterator[T]:
+    for async_iterable in async_iterables:
+        async for item in async_iterable:
             yield item
 
 
 def async_cons(first_item: T,
-               iterable: AnyIterable[T]) -> AsyncIterator[T]:
-    return async_chain([first_item], iterable)
+               async_iterable: AsyncIterable[T]) -> AsyncIterator[T]:
+    return async_chain(
+        async_iterator([first_item]),
+        async_iterable,
+    )
 
 
 def async_take(n: int,
-               iterable: AnyIterable[T]) -> AsyncIterator[T]:
+               async_iterable: AsyncIterable[T]) -> AsyncIterator[T]:
     if n < 0:
         raise ValueError("Number of elements to take must be non-negative")
 
@@ -62,7 +58,7 @@ def async_take(n: int,
             return
 
         yielded_items = 0
-        async for item in async_iter_wrapper(iterable):
+        async for item in async_iterable:
             yield item
 
             yielded_items += 1
@@ -73,15 +69,13 @@ def async_take(n: int,
 
 
 def async_sliding_window(window_size: int,
-                         iterable: AnyIterable[T]) -> AsyncIterator[Tuple[T, ...]]:
+                         async_iterable: AsyncIterable[T]) -> AsyncIterator[Tuple[T, ...]]:
     if window_size < 0:
         raise ValueError("size of sliding window must be non-negative")
 
     async def async_generator() -> AsyncIterator[Tuple[T, ...]]:
         if window_size == 0:
             return
-
-        async_iterable = async_iter_wrapper(iterable)
 
         d = collections.deque(
             [item async for item in async_take(window_size, async_iterable)],
