@@ -1,4 +1,5 @@
 import collections
+import itertools
 from typing import (
     AsyncIterable,
     AsyncIterator,
@@ -48,21 +49,20 @@ def async_cons(first_item: T,
     )
 
 
-def async_take(n: int,
+def async_take(num_items: int,
                async_iterable: AsyncIterable[T]) -> AsyncIterator[T]:
-    if n < 0:
+    if num_items < 0:
         raise ValueError("Number of elements to take must be non-negative")
 
     async def async_generator() -> AsyncIterator[T]:
-        if n == 0:
+        if num_items == 0:
             return
 
-        yielded_items = 0
+        counter = itertools.count(1)
         async for item in async_iterable:
             yield item
 
-            yielded_items += 1
-            if yielded_items >= n:
+            if next(counter) >= num_items:
                 break
 
     return async_generator()
