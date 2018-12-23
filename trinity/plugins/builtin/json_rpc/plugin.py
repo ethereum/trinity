@@ -57,6 +57,13 @@ class JsonRpcServerPlugin(BaseIsolatedPlugin):
             header_db = db_manager.get_headerdb()  # type: ignore
             event_bus_light_peer_chain = EventBusLightPeerChain(self.context.event_bus)
             chain = chain_config.light_chain_class(header_db, peer_chain=event_bus_light_peer_chain)
+
+        # Currently SYNC_FAST and SYNC_FULL are using the same implementation
+        #   We need to still work on the actual SYNC_FULL implementation:
+        #   - https://github.com/ethereum/trinity/issues/76
+        elif eth1_app_config.is_fast_mode:
+            db = db_manager.get_db()  # type: ignore
+            chain = chain_config.full_chain_class(db)
         elif eth1_app_config.is_full_mode:
             db = db_manager.get_db()  # type: ignore
             chain = chain_config.full_chain_class(db)

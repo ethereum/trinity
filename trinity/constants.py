@@ -22,6 +22,7 @@ ASSETS_DIR = Path(__file__).parent / "assets"
 
 # sync modes
 SYNC_FULL = 'full'
+SYNC_FAST = 'fast'
 SYNC_LIGHT = 'light'
 
 # lahja endpoint names
