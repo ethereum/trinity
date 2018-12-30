@@ -13,3 +13,13 @@ def hash_eth2(data: Union[bytes, bytearray]) -> Hash32:
     a future Ethereum 2.0 deployment phase.
     """
     return Hash32(keccak(data))
+
+
+def repeat_hash_eth2(data: bytes, repeats: int) -> Hash32:
+    """
+    Return Hash onion of ``data`` with ``repeats`` layers
+    """
+    if repeats == 0:
+        return Hash32(data)
+    else:
+        return repeat_hash_eth2(bytes(hash_eth2(data)), repeats - 1)

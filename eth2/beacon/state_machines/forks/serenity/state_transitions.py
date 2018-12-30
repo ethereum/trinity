@@ -10,6 +10,7 @@ from eth2.beacon.state_machines.state_transitions import BaseStateTransition
 
 from .operations import (
     process_attestations,
+    validate_randao,
 )
 from .validation import (
     validate_serenity_proposer_signature,
@@ -50,6 +51,7 @@ class SerenityStateTransition(BaseStateTransition):
             epoch_length=self.config.EPOCH_LENGTH,
         )
 
+        state = validate_randao(state, block, self.config)
         state = process_attestations(state, block, self.config)
 
         return state
