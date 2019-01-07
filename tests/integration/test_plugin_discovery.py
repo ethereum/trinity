@@ -3,6 +3,7 @@ from trinity.plugins.registry import (
     discover_plugins
 )
 
+
 def test_plugin_discovery():
     if not pytest.config.getoption("--integration"):
         pytest.skip("Not asked to run integration tests")
