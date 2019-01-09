@@ -248,6 +248,11 @@ class Eth(Eth1ChainRPCModule):
         return hex(nonce)
 
     @format_params(decode_hex)
+    async def getTransactionByHash(self, transaction_hash: Hash32) -> Dict[str, str]:
+        transaction = self.chain.get_canonical_transaction(transaction_hash)
+        return transaction_to_dict(transaction)
+
+    @format_params(decode_hex)
     async def getUncleCountByBlockHash(self, block_hash: Hash32) -> str:
         block = await self.chain.coro_get_block_by_hash(block_hash)
         return hex(len(block.uncles))
