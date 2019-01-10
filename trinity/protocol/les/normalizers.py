@@ -16,5 +16,5 @@ LESNormalizer = BaseNormalizer[Dict[str, Any], TResult]
 class BlockHeadersNormalizer(LESNormalizer[Tuple[BlockHeader, ...]]):
     @staticmethod
     def normalize_result(message: Dict[str, Any]) -> Tuple[BlockHeader, ...]:
-        result = message['headers']
+        result = message.headers
         return result

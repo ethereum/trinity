@@ -2,10 +2,11 @@ import enum
 from typing import (
     cast,
     Dict,
-    TYPE_CHECKING
+    List,
+    NamedTuple,
+    TYPE_CHECKING,
+    Union,
 )
-
-from eth_utils.toolz import assoc
 
 import rlp
 from rlp import sedes
@@ -24,9 +25,18 @@ if TYPE_CHECKING:
     )
 
 
+class HelloMessage(NamedTuple):
+    version: int
+    client_version_string: str
+    capabilities: List[List[Union[str, int]]]
+    listen_port: int
+    remote_pubkey: bytes
+
+
 class Hello(Command):
     _cmd_id = 0
     decode_strict = False
+    message_class = HelloMessage
     structure = [
         ('version', sedes.big_endian_int),
         ('client_version_string', sedes.text),
@@ -54,8 +64,14 @@ class DisconnectReason(enum.Enum):
     subprotocol_error = 16
 
 
+class DisconnectMessage(NamedTuple):
+    reason: int
+    reason_name: str = None
+
+
 class Disconnect(Command):
     _cmd_id = 1
+    message_class = DisconnectMessage
     structure = [('reason', sedes.big_endian_int)]
 
     def get_reason_name(self, reason_id: int) -> str:
@@ -66,19 +82,35 @@ class Disconnect(Command):
 
     def decode(self, data: bytes) -> _DecodedMsgType:
         try:
-            raw_decoded = cast(Dict[str, int], super().decode(data))
+            raw_msg = cast(Dict[str, int], super().decode(data))
         except rlp.exceptions.ListDeserializationError:
             self.logger.warning("Malformed Disconnect message: %s", data)
             raise MalformedMessage(f"Malformed Disconnect message: {data}")
-        return assoc(raw_decoded, 'reason_name', self.get_reason_name(raw_decoded['reason']))
+
+        return self.get_message_class()(
+            reason=raw_msg.reason,
+            reason_name=self.get_reason_name(raw_msg.reason),
+        )
+
+
+class PingMessage(NamedTuple):
+    # Ping message is supposed to be empty
+    pass
 
 
 class Ping(Command):
     _cmd_id = 2
+    message_class = PingMessage
+
+
+class PongMessage(NamedTuple):
+    # Pong message is supposed to be empty
+    pass
 
 
 class Pong(Command):
     _cmd_id = 3
+    message_class = PongMessage
 
 
 class P2PProtocol(Protocol):

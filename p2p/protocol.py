@@ -44,6 +44,9 @@ _DecodedMsgType = PayloadType
 class Command:
     _cmd_id: int = None
     decode_strict = True
+    # This message_class has to be a NamedTuple derived class
+    # which has the types to the fields of the message
+    message_class = None
     structure: List[Tuple[str, Any]] = []
 
     _logger: logging.Logger = None
@@ -64,6 +67,13 @@ class Command:
 
     def __str__(self) -> str:
         return f"{type(self).__name__} (cmd_id={self.cmd_id})"
+
+    @classmethod
+    def get_message_class(cls):
+        # This method is used just to ensure that every Command has as associated Message Class
+        if cls.message_class is None:
+            raise AttributeError("Command {} is missing Message Class".format(str(cls)))
+        return cls.message_class
 
     def encode_payload(self, data: Union[PayloadType, sedes.CountableList]) -> bytes:
         if isinstance(data, dict):  # convert dict to ordered list
@@ -95,11 +105,13 @@ class Command:
 
         if isinstance(self.structure, sedes.CountableList):
             return data
-        return {
+
+        message_dict = {
             field_name: value
             for ((field_name, _), value)
             in zip(self.structure, data)
         }
+        return self.get_message_class()(**message_dict)
 
     def decode(self, data: bytes) -> PayloadType:
         packet_type = get_devp2p_cmd_id(data)

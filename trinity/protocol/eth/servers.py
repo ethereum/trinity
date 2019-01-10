@@ -59,10 +59,10 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         query = cast(Dict[Any, Union[bool, int]], msg)
         self.logger.debug("%s requested headers: %s", peer, query)
         request = ETHHeaderRequest(
-            cast(BlockIdentifier, query['block_number_or_hash']),
-            query['max_headers'],
-            query['skip'],
-            cast(bool, query['reverse']),
+            cast(BlockIdentifier, query.block_number_or_hash),
+            query.max_headers,
+            query.skip,
+            cast(bool, query.reverse),
         )
 
         headers = await self.lookup_headers(request)

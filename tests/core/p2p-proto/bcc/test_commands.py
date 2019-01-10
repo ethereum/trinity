@@ -14,9 +14,10 @@ from p2p.peer import (
 )
 
 from trinity.protocol.bcc.commands import (
+    AttestationRecords,
     BeaconBlocks,
     GetBeaconBlocks,
-    AttestationRecords,
+    GetBeaconBlocksMessage,
 )
 
 from .helpers import (
@@ -95,10 +96,10 @@ async def test_send_get_blocks_by_slot(request, event_loop):
 
     message = await msg_buffer.msg_queue.get()
     assert isinstance(message.command, GetBeaconBlocks)
-    assert message.payload == {
-        "block_slot_or_root": 123,
-        "max_blocks": 10,
-    }
+    assert message.payload == GetBeaconBlocksMessage(
+        block_slot_or_root=123,
+        max_blocks=10,
+    )
 
 
 @pytest.mark.asyncio
@@ -111,10 +112,10 @@ async def test_send_get_blocks_by_hash(request, event_loop):
 
     message = await msg_buffer.msg_queue.get()
     assert isinstance(message.command, GetBeaconBlocks)
-    assert message.payload == {
-        "block_slot_or_root": b"\x33" * 32,
-        "max_blocks": 15,
-    }
+    assert message.payload == GetBeaconBlocksMessage(
+        block_slot_or_root=b"\x33" * 32,
+        max_blocks=15,
+    )
 
 
 @pytest.mark.asyncio

@@ -69,8 +69,8 @@ class BCCRequestServer(BaseRequestServer):
         if not peer.is_operational:
             return
 
-        max_blocks = msg["max_blocks"]
-        block_slot_or_root = msg["block_slot_or_root"]
+        max_blocks = msg.max_blocks
+        block_slot_or_root = msg.block_slot_or_root
 
         try:
             if isinstance(block_slot_or_root, int):

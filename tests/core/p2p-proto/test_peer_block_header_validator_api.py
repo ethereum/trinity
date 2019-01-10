@@ -21,7 +21,7 @@ class RequestIDMonitor(PeerSubscriber):
 
     async def next_request_id(self):
         msg = await self.msg_queue.get()
-        return msg.payload['request_id']
+        return msg.payload.request_id
 
 
 @to_tuple

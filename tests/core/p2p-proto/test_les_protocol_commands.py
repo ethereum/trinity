@@ -55,9 +55,9 @@ async def test_les_protocol_methods_request_id(
     peer, cmd, msg = messages[0]
 
     # Asserted that the reply message has the request_id as that which was generated
-    assert generated_request_id == msg['request_id']
+    assert generated_request_id == msg.request_id
     # Assert the generated request_id is same as that which was provided
     if is_request_id_provided:
-        assert msg['request_id'] == request_id
+        assert msg.request_id == request_id
     else:
-        assert msg['request_id'] != request_id
+        assert msg.request_id != request_id

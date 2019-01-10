@@ -120,8 +120,10 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
         with self.subscribe(self.peer_pool):
             while self.is_operational:
                 peer, cmd, msg = await self.wait(self.msg_queue.get())
-                if isinstance(msg, dict):
-                    request_id = msg.get('request_id')
+                # Check for NamedTuple
+                # TODO: Come up with better check when NamedTuple has better support
+                if isinstance(msg, tuple) and type(msg) is not tuple:
+                    request_id = msg.request_id
                     # request_id can be None here because not all LES messages include one. For
                     # instance, the Announce msg doesn't.
                     if request_id is not None and request_id in self._pending_replies:
@@ -168,9 +170,9 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
         self.logger.debug("Fetching block %s from %s", encode_hex(block_hash), peer)
         request_id = peer.sub_proto.send_get_block_bodies([block_hash])
         reply = await self._wait_for_reply(request_id)
-        if not reply['bodies']:
+        if not reply.bodies:
             raise BlockNotFound(f"Peer {peer} has no block with hash {block_hash}")
-        return reply['bodies'][0]
+        return reply.bodies[0]
 
     # TODO add a get_receipts() method to BaseChain API, and dispatch to this, as needed
 
@@ -181,9 +183,9 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
         self.logger.debug("Fetching %s receipts from %s", encode_hex(block_hash), peer)
         request_id = peer.sub_proto.send_get_receipts(block_hash)
         reply = await self._wait_for_reply(request_id)
-        if not reply['receipts']:
+        if not reply.receipts:
             raise BlockNotFound(f"No block with hash {block_hash} found")
-        return reply['receipts'][0]
+        return reply.receipts[0]
 
     # TODO implement AccountDB exceptions that provide the info needed to
     # request accounts and code (and storage?)
@@ -254,10 +256,10 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
         request_id = peer.sub_proto.send_get_contract_code(block_hash, keccak(address))
         reply = await self._wait_for_reply(request_id)
 
-        if not reply['codes']:
+        if not reply.codes:
             bytecode = b''
         else:
-            bytecode = reply['codes'][0]
+            bytecode = reply.codes[0]
 
         # validate bytecode against a proven account
         if code_hash == keccak(bytecode):
@@ -368,7 +370,7 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
                          from_level: int = 0) -> List[bytes]:
         request_id = peer.sub_proto.send_get_proof(block_hash, account_key, key, from_level)
         reply = await self._wait_for_reply(request_id)
-        return reply['proof']
+        return reply.proof
 
     async def _retry_on_bad_response(self, make_request_to_peer: Callable[[LESPeer], Any]) -> Any:
         """

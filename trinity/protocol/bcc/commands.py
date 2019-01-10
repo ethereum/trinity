@@ -1,4 +1,6 @@
 from typing import (
+    Any,
+    NamedTuple,
     Union,
 )
 
@@ -24,8 +26,16 @@ from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.types.attestations import Attestation
 
 
+class StatusMessage(NamedTuple):
+    protocol_version: int
+    network_id: int
+    genesis_hash: bytes
+    best_hash: bytes
+
+
 class Status(Command):
     _cmd_id = 0
+    message_class = StatusMessage
     structure = [
         ('protocol_version', sedes.big_endian_int),
         ('network_id', sedes.big_endian_int),
@@ -40,8 +50,15 @@ GetBeaconBlocksMessage = TypedDict("GetBeaconBlocksMessage", {
 })
 
 
+class GetBeaconBlocksMessage(NamedTuple):
+    # TODO: Replace below Type Hint Appropriately
+    block_slot_or_root: Any
+    max_blocks: int
+
+
 class GetBeaconBlocks(Command):
     _cmd_id = 1
+    message_class = GetBeaconBlocksMessage
     structure = [
         ('block_slot_or_root', HashOrNumber()),
         ('max_blocks', sedes.big_endian_int),

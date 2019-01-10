@@ -1,6 +1,9 @@
 from typing import (
     cast,
+    List,
+    NamedTuple,
     Tuple,
+    Union,
 )
 
 from rlp import sedes
@@ -19,8 +22,17 @@ from trinity.rlp.block_body import BlockBody
 from trinity.rlp.sedes import HashOrNumber
 
 
+class StatusMessage(NamedTuple):
+    protocol_version: int
+    network_id: int
+    td: int
+    best_hash: bytes
+    genesis_hash: bytes
+
+
 class Status(Command):
     _cmd_id = 0
+    message_class = StatusMessage
     structure = [
         ('protocol_version', sedes.big_endian_int),
         ('network_id', sedes.big_endian_int),
@@ -40,8 +52,16 @@ class Transactions(Command):
     structure = sedes.CountableList(BaseTransactionFields)
 
 
+class GetBlockHeadersMessage(NamedTuple):
+    block_number_or_hash: int
+    max_headers: int
+    skip: int
+    reverse: bool
+
+
 class GetBlockHeaders(Command):
     _cmd_id = 3
+    message_class = GetBlockHeadersMessage
     structure = [
         ('block_number_or_hash', HashOrNumber()),
         ('max_headers', sedes.big_endian_int),
@@ -68,8 +88,14 @@ class BlockBodies(Command):
     structure = sedes.CountableList(BlockBody)
 
 
+class NewBlockMessage(NamedTuple):
+    block: List[Union[BlockHeader, List[BaseTransactionFields], List[BlockHeader]]]
+    total_difficulty: int
+
+
 class NewBlock(Command):
     _cmd_id = 7
+    message_class = NewBlockMessage
     structure = [
         ('block', sedes.List([BlockHeader,
                               sedes.CountableList(BaseTransactionFields),

@@ -59,22 +59,22 @@ class BCCPeer(BasePeer):
             raise HandshakeFailure(f"Expected a BCC Status msg, got {cmd}, disconnecting")
 
         msg = cast(Dict[str, Any], msg)
-        if msg['network_id'] != self.network_id:
+        if msg.network_id != self.network_id:
             await self.disconnect(DisconnectReason.useless_peer)
             raise HandshakeFailure(
-                f"{self} network ({msg['network_id']}) does not match ours "
+                f"{self} network ({msg.network_id}) does not match ours "
                 f"({self.network_id}), disconnecting"
             )
         # TODO: pass accurate `block_class: Type[BaseBeaconBlock]` under per BeaconStateMachine fork
         genesis_block = self.chain_db.get_canonical_block_by_slot(0, BeaconBlock)
-        if msg['genesis_hash'] != genesis_block.hash:
+        if msg.genesis_hash != genesis_block.hash:
             await self.disconnect(DisconnectReason.useless_peer)
             raise HandshakeFailure(
-                f"{self} genesis ({encode_hex(msg['genesis_hash'])}) does not "
+                f"{self} genesis ({encode_hex(msg.genesis_hash)}) does not "
                 f"match ours ({encode_hex(genesis_block.hash)}), disconnecting"
             )
 
-        self.head_hash = msg['best_hash']
+        self.head_hash = msg.best_hash
 
     @property
     def network_id(self) -> int:

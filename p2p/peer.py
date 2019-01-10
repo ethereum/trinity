@@ -306,7 +306,7 @@ class BasePeer(BaseService):
             msg = cast(Dict[str, Any], msg)
             # Peers sometimes send a disconnect msg before they send the sub-proto handshake.
             raise HandshakeFailure(
-                f"{self} disconnected before completing sub-proto handshake: {msg['reason_name']}"
+                f"{self} disconnected before completing sub-proto handshake: {msg.reason_name}"
             )
         await self.process_sub_proto_handshake(cmd, msg)
         self.logger.debug("Finished %s handshake with %s", self.sub_proto, self.remote)
@@ -329,7 +329,7 @@ class BasePeer(BaseService):
             msg = cast(Dict[str, Any], msg)
             # Peers sometimes send a disconnect msg before they send the initial P2P handshake.
             raise HandshakeFailure(
-                f"{self} disconnected before completing sub-proto handshake: {msg['reason_name']}"
+                f"{self} disconnected before completing sub-proto handshake: {msg.reason_name}"
             )
         await self.process_p2p_handshake(cmd, msg)
 
@@ -447,7 +447,7 @@ class BasePeer(BaseService):
         """Handle the base protocol (P2P) messages."""
         if isinstance(cmd, Disconnect):
             msg = cast(Dict[str, Any], msg)
-            raise RemoteDisconnected(msg['reason_name'])
+            raise RemoteDisconnected(msg.reason_name)
         elif isinstance(cmd, Ping):
             self.base_protocol.send_pong()
         elif isinstance(cmd, Pong):
@@ -487,7 +487,7 @@ class BasePeer(BaseService):
         if not isinstance(cmd, Hello):
             await self.disconnect(DisconnectReason.bad_protocol)
             raise HandshakeFailure(f"Expected a Hello msg, got {cmd}, disconnecting")
-        remote_capabilities = msg['capabilities']
+        remote_capabilities = msg.capabilities
         try:
             self.sub_proto = self.select_sub_protocol(remote_capabilities)
         except NoMatchingPeerCapabilities:

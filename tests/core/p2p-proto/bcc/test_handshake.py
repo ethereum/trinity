@@ -50,10 +50,10 @@ async def test_unidirectional_handshake(request, event_loop):
 
     assert isinstance(cmd, Status)
 
-    assert msg["protocol_version"] == BCCProtocol.version
-    assert msg["network_id"] == alice.context.network_id
-    assert msg["genesis_hash"] == alice_head_hash
-    assert msg["best_hash"] == alice_genesis_hash
+    assert msg.protocol_version == BCCProtocol.version
+    assert msg.network_id == alice.context.network_id
+    assert msg.genesis_hash == alice_head_hash
+    assert msg.best_hash == alice_genesis_hash
 
     await bob.process_sub_proto_handshake(cmd, msg)
 

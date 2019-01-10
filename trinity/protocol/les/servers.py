@@ -28,11 +28,11 @@ class LESPeerRequestHandler(BasePeerRequestHandler):
             return
         self.logger.debug("Peer %s made header request: %s", peer, msg)
         request = LightHeaderRequest(
-            msg['query'].block_number_or_hash,
-            msg['query'].max_headers,
-            msg['query'].skip,
-            msg['query'].reverse,
-            msg['request_id'],
+            msg.query.block_number_or_hash,
+            msg.query.max_headers,
+            msg.query.skip,
+            msg.query.reverse,
+            msg.request_id,
         )
         headers = await self.lookup_headers(request)
         self.logger.debug2("Replying to %s with %d headers", peer, len(headers))
