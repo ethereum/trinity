@@ -91,6 +91,7 @@ from .constants import (
 )
 
 from .events import (
+    ConnectToNodeCommand,
     PeerCandidatesRequest,
     PeerCountRequest,
     PeerCountResponse,
@@ -798,6 +799,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         self._subscribers: List[PeerSubscriber] = []
         self.event_bus = event_bus
 
+    async def accept_connect_commands(self) -> None:
+        async for command in self.event_bus.stream(ConnectToNodeCommand):
+            # TODO: This adds nodes in series, it won't handle a high rate of commands
+            self.logger.debug('Received request to connect to %s', command.node)
+            await self.connect_to_nodes(from_uris([command.node]))
+
     async def handle_peer_count_requests(self) -> None:
         async for req in self.event_bus.stream(PeerCountRequest):
                 # We are listening for all `PeerCountRequest` events but we ensure to only send a
@@ -925,6 +932,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         if self.event_bus is not None:
             self.run_daemon_task(self.handle_peer_count_requests())
             self.run_daemon_task(self.maybe_connect_more_peers())
+            self.run_daemon_task(self.accept_connect_commands())
         self.run_daemon_task(self._periodically_report_stats())
         await self.cancel_token.wait()
 
