@@ -482,18 +482,22 @@ def verify_slashable_vote_data(state: 'BeaconState',
 
 
 def is_double_vote(attestation_data_1: 'AttestationData',
-                   attestation_data_2: 'AttestationData') -> bool:
+                   attestation_data_2: 'AttestationData',
+                   epoch_length: int) -> bool:
     """
     Assumes ``attestation_data_1`` is distinct from ``attestation_data_2``.
 
     Returns True if the provided ``AttestationData`` are slashable
     due to a 'double vote'.
     """
-    return attestation_data_1.slot == attestation_data_2.slot
+    target_epoch_1 = attestation_data_1.slot // epoch_length
+    target_epoch_2 = attestation_data_2.slot // epoch_length
+    return target_epoch_1 == target_epoch_2
 
 
 def is_surround_vote(attestation_data_1: 'AttestationData',
-                     attestation_data_2: 'AttestationData') -> bool:
+                     attestation_data_2: 'AttestationData',
+                     epoch_length: int) -> bool:
     """
     Assumes ``attestation_data_1`` is distinct from ``attestation_data_2``.
 
@@ -503,8 +507,12 @@ def is_surround_vote(attestation_data_1: 'AttestationData',
     Note: parameter order matters as this function only checks
     that ``attestation_data_1`` surrounds ``attestation_data_2``.
     """
+    source_epoch_1 = attestation_data_1.justified_slot // epoch_length
+    source_epoch_2 = attestation_data_2.justified_slot // epoch_length
+    target_epoch_1 = attestation_data_1.slot // epoch_length
+    target_epoch_2 = attestation_data_2.slot // epoch_length
     return (
-        (attestation_data_1.justified_slot < attestation_data_2.justified_slot) and
-        (attestation_data_2.justified_slot + 1 == attestation_data_2.slot) and
-        (attestation_data_2.slot < attestation_data_1.slot)
+        (source_epoch_1 < source_epoch_2) and
+        (source_epoch_2 + 1 == target_epoch_2) and
+        (target_epoch_2 < target_epoch_1)
     )
