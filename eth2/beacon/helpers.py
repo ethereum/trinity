@@ -166,6 +166,13 @@ def get_active_validator_indices(validators: Sequence['ValidatorRecord'],
 
 
 #
+# Get the epoch that a slot is in
+#
+def epoch_from_slot(slot, epoch_length):
+    return slot // epoch_length
+
+
+#
 # Shuffling
 #
 @to_tuple
@@ -490,8 +497,8 @@ def is_double_vote(attestation_data_1: 'AttestationData',
     Returns True if the provided ``AttestationData`` are slashable
     due to a 'double vote'.
     """
-    target_epoch_1 = attestation_data_1.slot // epoch_length
-    target_epoch_2 = attestation_data_2.slot // epoch_length
+    target_epoch_1 = epoch_from_slot(attestation_data_1.slot, epoch_length)
+    target_epoch_2 = epoch_from_slot(attestation_data_2.slot, epoch_length)
     return target_epoch_1 == target_epoch_2
 
 
@@ -507,10 +514,10 @@ def is_surround_vote(attestation_data_1: 'AttestationData',
     Note: parameter order matters as this function only checks
     that ``attestation_data_1`` surrounds ``attestation_data_2``.
     """
-    source_epoch_1 = attestation_data_1.justified_slot // epoch_length
-    source_epoch_2 = attestation_data_2.justified_slot // epoch_length
-    target_epoch_1 = attestation_data_1.slot // epoch_length
-    target_epoch_2 = attestation_data_2.slot // epoch_length
+    source_epoch_1 = epoch_from_slot(attestation_data_1.justified_slot, epoch_length)
+    source_epoch_2 = epoch_from_slot(attestation_data_2.justified_slot, epoch_length)
+    target_epoch_1 = epoch_from_slot(attestation_data_1.slot, epoch_length)
+    target_epoch_2 = epoch_from_slot(attestation_data_2.slot, epoch_length)
     return (
         (source_epoch_1 < source_epoch_2) and
         (source_epoch_2 + 1 == target_epoch_2) and

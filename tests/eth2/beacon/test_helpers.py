@@ -945,45 +945,38 @@ def test_verify_slashable_vote_data(num_validators,
     _run_verify_slashable_vote(params, state, max_casper_votes, should_succeed)
 
 
-def test_is_double_vote(sample_attestation_data_params):
-    epoch_length = 64
+@pytest.mark.parametrize(
+    (
+        'attestation_1_slot,'
+        'attestation_2_slot,'
+        'expected,'
+        'epoch_length'
+    ),
+    [
+        ((64 * 15) + 5, (64 * 15) + 5, True, 64),
+        ((64 * 15) + 5, 64 * 25, False, 64),
+        ((64 * 15) + 5, (64 * 16) - 1, True, 64),
+        ((64 * 15) + 5, 64 * 16, False, 64),
+    ],
+)
+def test_is_double_vote(sample_attestation_data_params,
+                        attestation_1_slot,
+                        attestation_2_slot,
+                        expected,
+                        epoch_length):
     attestation_data_1_params = {
         **sample_attestation_data_params,
-        'slot': (epoch_length * 15) + 5,
+        'slot': attestation_1_slot,
     }
     attestation_data_1 = AttestationData(**attestation_data_1_params)
 
     attestation_data_2_params = {
         **sample_attestation_data_params,
-        'slot': (epoch_length * 15) + 5,
+        'slot': attestation_2_slot,
     }
     attestation_data_2 = AttestationData(**attestation_data_2_params)
 
-    assert is_double_vote(attestation_data_1, attestation_data_2, epoch_length)
-
-    attestation_data_3_params = {
-        **sample_attestation_data_params,
-        'slot': epoch_length * 25,
-    }
-    attestation_data_3 = AttestationData(**attestation_data_3_params)
-
-    assert not is_double_vote(attestation_data_1, attestation_data_3, epoch_length)
-
-    attestation_data_4_params = {
-        **sample_attestation_data_params,
-        'slot': (epoch_length * 16) - 1,
-    }
-    attestation_data_4 = AttestationData(**attestation_data_4_params)
-
-    assert is_double_vote(attestation_data_1, attestation_data_4, epoch_length)
-
-    attestation_data_5_params = {
-        **sample_attestation_data_params,
-        'slot': epoch_length * 16,
-    }
-    attestation_data_5 = AttestationData(**attestation_data_5_params)
-
-    assert not is_double_vote(attestation_data_1, attestation_data_5, epoch_length)
+    assert is_double_vote(attestation_data_1, attestation_data_2, epoch_length) == expected
 
 
 @pytest.mark.parametrize(
@@ -992,14 +985,15 @@ def test_is_double_vote(sample_attestation_data_params):
         'attestation_1_justified_slot,'
         'attestation_2_slot,'
         'attestation_2_justified_slot,'
-        'expected'
+        'expected,'
+        'epoch_length'
     ),
     [
-        (64, 0, 64 * 2, 64, False),
-        (64, 64, 64 * 2, 64 * 2, False),  # not (source_epoch_1 < source_epoch_2)
-        (4, 0, 64 * 6, 64 * 5, False),  # not (source_epoch_2 + 1 == target_epoch_2)
-        (64, 0, 0, 0, False),  # not (target_epoch_2 < target_epoch_1)
-        (64 * 4, 0, 64 * 3, 64 * 2, True),
+        (64, 0, 64 * 2, 64, False, 64),
+        (64, 64, 64 * 2, 64 * 2, False, 64),  # not (source_epoch_1 < source_epoch_2)
+        (4, 0, 64 * 6, 64 * 5, False, 64),  # not (source_epoch_2 + 1 == target_epoch_2)
+        (64, 0, 0, 0, False, 64),  # not (target_epoch_2 < target_epoch_1)
+        (64 * 4, 0, 64 * 3, 64 * 2, True, 64),
     ],
 )
 def test_is_surround_vote(sample_attestation_data_params,
@@ -1007,8 +1001,8 @@ def test_is_surround_vote(sample_attestation_data_params,
                           attestation_1_justified_slot,
                           attestation_2_slot,
                           attestation_2_justified_slot,
-                          expected):
-    epoch_length = 64
+                          expected,
+                          epoch_length):
     attestation_data_1_params = {
         **sample_attestation_data_params,
         'slot': attestation_1_slot,
