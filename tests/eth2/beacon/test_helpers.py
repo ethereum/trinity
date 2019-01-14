@@ -983,7 +983,7 @@ def test_is_double_vote(sample_attestation_data_params):
     }
     attestation_data_5 = AttestationData(**attestation_data_5_params)
 
-    assert not is_double_vote(attestation_data_1, attestation_data_5, epoch_length) 
+    assert not is_double_vote(attestation_data_1, attestation_data_5, epoch_length)
 
 
 @pytest.mark.parametrize(
