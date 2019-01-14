@@ -24,7 +24,7 @@ from .helpers import (
 
 
 async def get_request_server_setup(request, event_loop, chain_db):
-    genesis = chain_db.get_canonical_block_by_slot(0)
+    genesis = chain_db.get_canonical_block_by_slot(0, BeaconBlock)
     alice_chain_db = get_chain_db((genesis,))
     alice, alice_peer_pool, bob, bob_peer_pool = await get_directly_linked_peers_in_peer_pools(
         request,

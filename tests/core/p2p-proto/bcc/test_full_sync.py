@@ -2,6 +2,8 @@ import pytest
 
 import asyncio
 
+from eth2.beacon.types.blocks import BeaconBlock
+
 from trinity.protocol.bcc.servers import BCCRequestServer
 
 from trinity.sync.beacon.chain import BeaconChainSyncer
@@ -47,11 +49,12 @@ async def test_sync_from_genesis(request, event_loop):
 
     await alice_syncer.events.finished.wait()
 
-    assert alice_chain_db.get_canonical_head().slot == 99
-    assert alice_chain_db.get_canonical_head() == bob_chain_db.get_canonical_head()
+    assert alice_chain_db.get_canonical_head(BeaconBlock).slot == 99
+    assert (alice_chain_db.get_canonical_head(BeaconBlock) ==
+            bob_chain_db.get_canonical_head(BeaconBlock))
     for slot in range(100):
-        alice_block = alice_chain_db.get_canonical_block_by_slot(slot)
-        bob_block = bob_chain_db.get_canonical_block_by_slot(slot)
+        alice_block = alice_chain_db.get_canonical_block_by_slot(slot, BeaconBlock)
+        bob_block = bob_chain_db.get_canonical_block_by_slot(slot, BeaconBlock)
         assert alice_block == bob_block
 
 
@@ -67,11 +70,12 @@ async def test_sync_from_old_head(request, event_loop):
 
     await alice_syncer.events.finished.wait()
 
-    assert alice_chain_db.get_canonical_head().slot == 99
-    assert alice_chain_db.get_canonical_head() == bob_chain_db.get_canonical_head()
+    assert alice_chain_db.get_canonical_head(BeaconBlock).slot == 99
+    assert (alice_chain_db.get_canonical_head(BeaconBlock) ==
+            bob_chain_db.get_canonical_head(BeaconBlock))
     for slot in range(100):
-        alice_block = alice_chain_db.get_canonical_block_by_slot(slot)
-        bob_block = bob_chain_db.get_canonical_block_by_slot(slot)
+        alice_block = alice_chain_db.get_canonical_block_by_slot(slot, BeaconBlock)
+        bob_block = bob_chain_db.get_canonical_block_by_slot(slot, BeaconBlock)
         assert alice_block == bob_block
 
 
@@ -87,11 +91,12 @@ async def test_reorg_sync(request, event_loop):
 
     await alice_syncer.events.finished.wait()
 
-    assert alice_chain_db.get_canonical_head().slot == 99
-    assert alice_chain_db.get_canonical_head() == bob_chain_db.get_canonical_head()
+    assert alice_chain_db.get_canonical_head(BeaconBlock).slot == 99
+    assert (alice_chain_db.get_canonical_head(BeaconBlock) ==
+            bob_chain_db.get_canonical_head(BeaconBlock))
     for slot in range(100):
-        alice_block = alice_chain_db.get_canonical_block_by_slot(slot)
-        bob_block = bob_chain_db.get_canonical_block_by_slot(slot)
+        alice_block = alice_chain_db.get_canonical_block_by_slot(slot, BeaconBlock)
+        bob_block = bob_chain_db.get_canonical_block_by_slot(slot, BeaconBlock)
         assert alice_block == bob_block
 
 
@@ -107,8 +112,8 @@ async def test_sync_when_already_at_best_head(request, event_loop):
 
     await alice_syncer.events.finished.wait()
 
-    assert alice_chain_db.get_canonical_head().slot == 99
-    assert alice_chain_db.get_canonical_head() == alice_blocks[-1]
+    assert alice_chain_db.get_canonical_head(BeaconBlock).slot == 99
+    assert alice_chain_db.get_canonical_head(BeaconBlock) == alice_blocks[-1]
     for slot in range(100):
-        alice_block = alice_chain_db.get_canonical_block_by_slot(slot)
+        alice_block = alice_chain_db.get_canonical_block_by_slot(slot, BeaconBlock)
         assert alice_block == alice_blocks[slot]

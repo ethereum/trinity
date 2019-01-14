@@ -21,8 +21,11 @@ from p2p.service import (
     BaseService,
 )
 
-from eth.beacon.types.blocks import BaseBeaconBlock
-from eth.beacon.db.chain import BaseBeaconChainDB
+from eth2.beacon.types.blocks import (
+    BaseBeaconBlock,
+    BeaconBlock,
+)
+from eth2.beacon.db.chain import BaseBeaconChainDB
 
 from trinity.protocol.bcc.peer import (
     BCCPeer,
@@ -54,7 +57,7 @@ class BeaconChainSyncer(BaseService):
 
         await self.sync()
 
-        new_head = self.chain_db.get_canonical_head()
+        new_head = self.chain_db.get_canonical_head(BeaconBlock)
         self.logger.info(f"Sync with {self.sync_peer} finished, new head: {new_head}")
 
     def select_sync_peer(self) -> BCCPeer:
@@ -66,7 +69,7 @@ class BeaconChainSyncer(BaseService):
         sorted_peers = sorted(peers, key=operator.attrgetter("head_slot"), reverse=True)
         best_peer = first(sorted_peers)
 
-        finalized_head_slot = self.chain_db.get_finalized_head().slot
+        finalized_head_slot = self.chain_db.get_finalized_head(BeaconBlock).slot
         if best_peer.head_slot <= finalized_head_slot:
             return None
 
@@ -77,10 +80,10 @@ class BeaconChainSyncer(BaseService):
             "Syncing with %s (their head slot: %d, our finalized slot: %d)",
             self.sync_peer,
             self.sync_peer.head_slot,
-            self.chain_db.get_finalized_head().slot,
+            self.chain_db.get_finalized_head(BeaconBlock).slot,
         )
 
-        start_slot = self.chain_db.get_finalized_head().slot + 1
+        start_slot = self.chain_db.get_finalized_head(BeaconBlock).slot + 1
         batches = self.request_batches(start_slot)
 
         last_block = None
@@ -97,7 +100,7 @@ class BeaconChainSyncer(BaseService):
             last_block = batch[-1]
 
             try:
-                self.chain_db.persist_block_chain(batch)
+                self.chain_db.persist_block_chain(batch, BeaconBlock)
             except ValidationError as exception:
                 self.logger.info(f"Received invalid batch from {self.sync_peer}: {exception}")
                 break
@@ -135,7 +138,7 @@ class BeaconChainSyncer(BaseService):
                 "genesis block"
             )
 
-        canonical_cousin = self.chain_db.get_canonical_block_by_slot(parent_slot)
+        canonical_cousin = self.chain_db.get_canonical_block_by_slot(parent_slot, BeaconBlock)
         if canonical_cousin.hash != parent_root:
             self.logger.info(f"Peer has different block finalized at slot #{parent_root}")
             raise ValidationError()

@@ -6,7 +6,7 @@ from eth.beacon.types.blocks import (
     BaseBeaconBlock,
 )
 
-from trinity.utils.les import (
+from trinity._utils.les import (
     gen_request_id,
 )
 
