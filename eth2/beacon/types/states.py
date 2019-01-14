@@ -62,8 +62,6 @@ class BeaconState(rlp.Serializable):
         ('latest_randao_mixes', CountableList(hash32)),
         ('latest_vdf_outputs', CountableList(hash32)),
         ('shard_committees_at_slots', CountableList(CountableList((ShardCommittee)))),
-        ('persistent_committees', CountableList(CountableList(uint24))),
-        ('persistent_committee_reassignments', CountableList(ShardReassignmentRecord)),
 
         # Custody challenges
         ('custody_challenges', CountableList(CustodyChallenge)),
@@ -105,8 +103,6 @@ class BeaconState(rlp.Serializable):
             latest_randao_mixes: Sequence[Hash32]=(),
             latest_vdf_outputs: Sequence[Hash32]=(),
             shard_committees_at_slots: Sequence[Sequence[ShardCommittee]]=(),
-            persistent_committees: Sequence[Sequence[ValidatorIndex]]=(),
-            persistent_committee_reassignments: Sequence[ShardReassignmentRecord]=(),
             custody_challenges: Sequence[CustodyChallenge]=(),
             latest_crosslinks: Sequence[CrosslinkRecord]=(),
             latest_block_roots: Sequence[Hash32]=(),
@@ -134,8 +130,6 @@ class BeaconState(rlp.Serializable):
             latest_randao_mixes=latest_randao_mixes,
             latest_vdf_outputs=latest_vdf_outputs,
             shard_committees_at_slots=shard_committees_at_slots,
-            persistent_committees=persistent_committees,
-            persistent_committee_reassignments=persistent_committee_reassignments,
             # Proof of Custody
             custody_challenges=custody_challenges,
             # Finality
