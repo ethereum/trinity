@@ -168,7 +168,7 @@ def get_active_validator_indices(validators: Sequence['ValidatorRecord'],
 #
 # Get the epoch that a slot is in
 #
-def epoch_from_slot(slot, epoch_length):
+def epoch_from_slot(slot: int, epoch_length: int) -> int:
     return slot // epoch_length
 
 
