@@ -1,22 +1,32 @@
 Contributing
 ------------
 
-Thank you for your interest in contributing! We welcome all contributions no matter their size. Please read along to learn how to get started. If you get stuck, feel free to reach for help in our `Gitter channel <https://gitter.im/ethereum/py-evm>`_.
+Thank you for your interest in contributing! We welcome all contributions no matter their size.
+Please read along to learn how to get started. If you get stuck, feel free to reach for help in
+our `Gitter channel <https://gitter.im/ethereum/py-evm>`_.
+
+Prerequisites
+~~~~~~~~~~~~~
+
+Trinity depends on various software that needs to be installed on the host system. Follow
+along the :doc:`Quickstart </guides/quickstart>` to setup the host system but stop before
+installing trinity via pip. In other words, do **not** run ``pip3 install -U trinity``.
+
 
 Setting the stage
 ~~~~~~~~~~~~~~~~~
 
-First we need to clone the Py-EVM repository. Py-EVM depends on a submodule of the common tests across all clients, so we need to clone the repo with the ``--recursive`` flag. Example:
+After all system dependencies are installed, clone the Trinity repository.
 
 .. code:: sh
 
-    $ git clone --recursive https://github.com/ethereum/py-evm.git
-
+    $ git clone https://github.com/ethereum/trinity.git
 
 
 .. include:: /fragments/virtualenv_explainer.rst
 
-After we have activated our virtual environment, installing all dependencies that are needed to run, develop and test all code in this repository is as easy as:
+After we have activated our virtual environment, installing all dependencies that are needed
+to run, develop and test all code in this repository is as easy as:
 
 .. code:: sh
 

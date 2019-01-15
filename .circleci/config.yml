@@ -23,10 +23,13 @@ common: &common
         when: on_fail
     - restore_cache:
         keys:
-          - cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}
+          - cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum ".circleci/install_rocksdb.sh" }}
     - run:
         name: install libsnappy-dev
         command: sudo apt install -y libsnappy-dev
+    - run:
+        name: install rocksdb
+        command: sudo sh ./.circleci/install_rocksdb.sh
     - run:
         name: install dependencies
         command: pip install --user tox
@@ -40,7 +43,7 @@ common: &common
           - ~/.cache/pip
           - ~/.local
           - ./eggs
-        key: cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}
+        key: cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum ".circleci/install_rocksdb.sh" }}
 
 geth_steps: &geth_steps
   working_directory: ~/repo
@@ -48,10 +51,13 @@ geth_steps: &geth_steps
     - checkout
     - restore_cache:
         keys:
-          - cache-v2-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}
+          - cache-v2-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum ".circleci/install_rocksdb.sh" }}
     - run:
         name: install libsnappy-dev
         command: sudo apt install -y libsnappy-dev
+    - run:
+        name: install rocksdb
+        command: sudo sh ./.circleci/install_rocksdb.sh
     - run:
         name: install dependencies
         command: pip install --user tox
@@ -85,7 +91,7 @@ geth_steps: &geth_steps
           - ./eggs
           - ~/.ethash
           - ~/.py-geth
-        key: cache-v2-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}
+        key: cache-v2-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum ".circleci/install_rocksdb.sh" }}
 
 p2pd_steps: &p2pd_steps
   steps:
@@ -93,6 +99,7 @@ p2pd_steps: &p2pd_steps
     - restore_cache:
         keys:
           - cache-v1-{{ arch }}-p2pd-{{ checksum "./.circleci/install_p2pd.sh" }}
+          - cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum ".circleci/install_rocksdb.sh" }}
     - run:
         name: build libp2p daemon
         command: ./.circleci/install_p2pd.sh
@@ -100,12 +107,12 @@ p2pd_steps: &p2pd_steps
         paths:
           - ~/.p2pd
         key: cache-v1-{{ arch }}-p2pd-{{ checksum "./.circleci/install_p2pd.sh" }}
-    - restore_cache:
-        keys:
-          - cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}
     - run:
         name: install libsnappy-dev
         command: sudo apt install -y libsnappy-dev
+    - run:
+        name: install rocksdb
+        command: sudo sh ./.circleci/install_rocksdb.sh
     - run:
         name: install deps
         command: pip install --user tox codecov
@@ -122,7 +129,7 @@ p2pd_steps: &p2pd_steps
           - .tox
           - ~/.cache/pip
           - ~/.local
-        key: cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}
+        key: cache-v1-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum ".circleci/install_rocksdb.sh" }}
 
 jobs:
   py36-lint:
