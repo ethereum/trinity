@@ -1,4 +1,4 @@
-from logging import Logger
+import logging
 from multiprocessing import Process
 import os
 import pathlib
@@ -23,7 +23,7 @@ def wait_for_ipc(ipc_path: pathlib.Path, timeout: int=30) -> None:
     raise TimeoutError("IPC socket file has not appeared in %d seconds!" % timeout)
 
 
-def remove_dangling_ipc_files(logger: Logger,
+def remove_dangling_ipc_files(logger: logging.Logger,
                               ipc_dir: pathlib.Path,
                               except_file: pathlib.Path = None) -> None:
 
@@ -43,13 +43,14 @@ def remove_dangling_ipc_files(logger: Logger,
             logger.debug('ipcfile %s was already gone', ipcfile)
 
 
+DEFAULT_LOGGER = logging.getLogger('trinity.utils.ipc')
 DEFAULT_SIGINT_TIMEOUT = 10
 DEFAULT_SIGTERM_TIMEOUT = 5
 
 
 def kill_process_gracefully(
         process: Process,
-        logger: Logger,
+        logger: logging.Logger=DEFAULT_LOGGER,
         SIGINT_timeout: int=DEFAULT_SIGINT_TIMEOUT,
         SIGTERM_timeout: int=DEFAULT_SIGTERM_TIMEOUT) -> None:
     kill_process_id_gracefully(process.pid, process.join, logger, SIGINT_timeout, SIGTERM_timeout)
@@ -57,7 +58,7 @@ def kill_process_gracefully(
 
 def kill_processes_gracefully(
         processes: Iterable[Process],
-        logger: Logger,
+        logger: logging.Logger=DEFAULT_LOGGER,
         SIGINT_timeout: int=DEFAULT_SIGINT_TIMEOUT,
         SIGTERM_timeout: int=DEFAULT_SIGTERM_TIMEOUT) -> None:
 
@@ -93,7 +94,7 @@ def kill_processes_gracefully(
 
 def kill_popen_gracefully(
         popen: subprocess.Popen,
-        logger: Logger,
+        logger: logging.Logger=DEFAULT_LOGGER,
         SIGINT_timeout: int=DEFAULT_SIGINT_TIMEOUT,
         SIGTERM_timeout: int=DEFAULT_SIGTERM_TIMEOUT) -> None:
 
@@ -109,7 +110,7 @@ def kill_popen_gracefully(
 def kill_process_id_gracefully(
         process_id: int,
         wait_for_completion: Callable[[int], None],
-        logger: Logger,
+        logger: logging.Logger=DEFAULT_LOGGER,
         SIGINT_timeout: int=DEFAULT_SIGINT_TIMEOUT,
         SIGTERM_timeout: int=DEFAULT_SIGTERM_TIMEOUT) -> None:
 
@@ -121,7 +122,7 @@ def kill_process_id_gracefully(
 def sigint_process_id(
         process_id: int,
         wait_for_completion: Callable[[int], None],
-        logger: Logger,
+        logger: logging.Logger=DEFAULT_LOGGER,
         SIGINT_timeout: int=DEFAULT_SIGINT_TIMEOUT) -> None:
 
     try:
@@ -144,7 +145,7 @@ def sigint_process_id(
 def sigterm_process_id(
         process_id: int,
         wait_for_completion: Callable[[int], None],
-        logger: Logger,
+        logger: logging.Logger=DEFAULT_LOGGER,
         SIGTERM_timeout: int=DEFAULT_SIGTERM_TIMEOUT) -> None:
 
     try:
@@ -166,7 +167,7 @@ def sigterm_process_id(
 
 def sigkill_process_id(
         process_id: int,
-        logger: Logger) -> None:
+        logger: logging.Logger=DEFAULT_LOGGER) -> None:
 
     try:
         os.kill(process_id, signal.SIGKILL)
