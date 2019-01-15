@@ -178,16 +178,29 @@ class Protocol:
     def __init__(self, peer: 'BasePeer', cmd_id_offset: int, snappy_support: bool) -> None:
         self.peer = peer
         self.cmd_id_offset = cmd_id_offset
-        self.snappy_support = snappy_support
-        self.commands = [cmd_class(cmd_id_offset, snappy_support) for cmd_class in self._commands]
-        self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
-        self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
+        self._snappy_support = snappy_support
+        self.snappy_support = self._snappy_support
 
     @property
     def logger(self) -> logging.Logger:
         if self._logger is None:
             self._logger = logging.getLogger(f"p2p.protocol.{type(self).__name__}")
         return self._logger
+
+    @property
+    def snappy_support(self) -> bool:
+        '''TODO'''
+        return self._snappy_support
+
+    @snappy_support.setter
+    def snappy_support(self, enabled: bool) -> None:
+        '''TODO'''
+        self._snappy_support = enabled
+        # update available commands, including their parameters
+        self.commands = [cmd_class(self.cmd_id_offset, self._snappy_support)
+                         for cmd_class in self._commands]
+        self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
+        self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
 
     def send(self, header: bytes, body: bytes) -> None:
         self.peer.send(header, body)

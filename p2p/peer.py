@@ -212,9 +212,7 @@ class BasePeer(BaseService):
         # Networking reader and writer objects for communication
         self.reader = connection.reader
         self.writer = connection.writer
-        # Initially while doing the handshake, the base protocol shouldn't support
-        # snappy compression
-        self.base_protocol = P2PProtocol(self, snappy_support=False)
+        self.base_protocol = P2PProtocol(self)
 
         # Flag indicating whether the connection this peer represents was
         # established from a dial-out or dial-in (True: dial-in, False:
@@ -496,11 +494,8 @@ class BasePeer(BaseService):
         # based on other peer's p2p protocol version
         snappy_support = msg['version'] >= SNAPPY_PROTOCOL_VERSION
 
-        if snappy_support:
-            # Now update the base protocol to support snappy compression
-            # This is needed so that Trinity is compatible with parity since
-            # parity sends Ping immediately after Handshake
-            self.base_protocol = P2PProtocol(self, snappy_support=snappy_support)
+        # Now update the base protocol to support snappy compression
+        self.base_protocol.snappy_support = snappy_support
 
         remote_capabilities = msg['capabilities']
         try:
