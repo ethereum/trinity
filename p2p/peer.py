@@ -498,7 +498,7 @@ class BasePeer(BaseService):
         if snappy_support:
             # Now update the base protocol to support snappy compression
             # This is needed so that Trinity is compatible with parity since
-            # parity sends Ping even after Handshake
+            # parity sends Ping immediately after Handshake
             self.base_protocol = P2PProtocol(self, snappy_support=snappy_support)
 
         remote_capabilities = msg['capabilities']
