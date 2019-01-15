@@ -74,3 +74,6 @@ monkeytype.sqlite3
 .idea/**
 
 !tests/integration/fixtures/*.ldb.zip
+
+# rocksdb
+rocksdb/

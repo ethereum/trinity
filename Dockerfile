@@ -1,9 +1,12 @@
-FROM python:3.6
+FROM python:3.6-stretch
+
 # Set up code directory
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
 COPY . /usr/src/app
+
+RUN /usr/src/app/.circleci/install_rocksdb.sh
 
 RUN pip install -e .[dev]  --no-cache-dir
 RUN pip install -U trinity --no-cache-dir
