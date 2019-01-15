@@ -14,7 +14,7 @@ async def test_snappy_compression_enabled_between_connected_v5_protocol_peers(re
 
 
 @pytest.mark.asyncio
-async def test_snappy_compression_enabled_between_connected_v4_and_v5_protocol_peers(
+async def test_snappy_compression_disabled_between_connected_v4_and_v5_protocol_peers(
         request,
         event_loop):
     alice, bob = await get_directly_linked_v4_and_v5_peers(request, event_loop)

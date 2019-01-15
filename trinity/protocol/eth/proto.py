@@ -63,7 +63,8 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
             'genesis_hash': chain_info.genesis_hash,
         }
         cmd = Status(self.cmd_id_offset, self.snappy_support)
-        self.logger.debug2("Sending ETH/Status msg: %s", resp)
+        self.logger.debug2("Sending ETH/Status msg: %s; with cmd id_offset %s and compression %s",
+                           resp, cmd.cmd_id_offset, cmd.snappy_support)
         self.send(*cmd.encode(resp))
 
     #
