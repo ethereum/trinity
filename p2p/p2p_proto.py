@@ -96,10 +96,10 @@ class P2PProtocol(Protocol):
     _commands = [Hello, Ping, Pong, Disconnect]
     cmd_length = 16
 
-    def __init__(self, peer: 'BasePeer', snappy_support: bool) -> None:
-        # For the base protocol the cmd_id_offset is always 0.
-        # For the base protocol snappy compression should be disabled
-        super().__init__(peer, cmd_id_offset=0, snappy_support=snappy_support)
+    def __init__(self, peer: 'BasePeer') -> None:
+        # DEVp2p command ID offset is always 0, since it's the lowest-level protocol.
+        # DEVp2p sessions always start with compression disabled, upgrading if remote supports it.
+        super().__init__(peer, cmd_id_offset=0, snappy_support=False)
 
     def send_handshake(self) -> None:
         # TODO: move import out once this is in the trinity codebase
