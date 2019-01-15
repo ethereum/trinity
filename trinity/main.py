@@ -6,16 +6,12 @@ from typing import (
     Any,
     Dict,
     Iterable,
-    Type,
 )
 
 from lahja import (
     EventBus,
     Endpoint,
 )
-
-from eth.db.backends.base import BaseDB
-from eth.db.backends.level import LevelDB
 
 from p2p.service import BaseService
 
@@ -34,6 +30,9 @@ from trinity.constants import (
 )
 from trinity.db.eth1.manager import (
     create_db_server_manager,
+)
+from trinity.db.rocksdb import (
+    RocksDB,
 )
 from trinity.events import (
     ShutdownRequest
@@ -103,7 +102,6 @@ def trinity_boot(args: Namespace,
         target=run_database_process,
         args=(
             trinity_config,
-            LevelDB,
         ),
         kwargs=extra_kwargs,
     )
@@ -178,11 +176,11 @@ def launch_node(args: Namespace, trinity_config: TrinityConfig, endpoint: Endpoi
 
 @setup_cprofiler('run_database_process')
 @with_queued_logging
-def run_database_process(trinity_config: TrinityConfig, db_class: Type[BaseDB]) -> None:
+def run_database_process(trinity_config: TrinityConfig) -> None:
     with trinity_config.process_id_file('database'):
         app_config = trinity_config.get_app_config(Eth1AppConfig)
 
-        base_db = db_class(db_path=app_config.database_dir)
+        base_db = RocksDB(db_path=app_config.database_dir)
 
         manager = create_db_server_manager(trinity_config, base_db)
         serve_until_sigint(manager)
