@@ -46,30 +46,21 @@ async def test_les_handshake():
     assert isinstance(peer2.sub_proto, LESProtocol)
 
 
-@pytest.mark.parametrize(
-    'snappy_support',
-    (
-        True,
-        False,
-    )
-)
-def test_sub_protocol_selection(snappy_support):
-    peer = ProtoMatchingPeer([LESProtocol, LESProtocolV2], snappy_support)
+def test_sub_protocol_selection():
+    peer = ProtoMatchingPeer([LESProtocol, LESProtocolV2])
 
     proto = peer.select_sub_protocol([
         (LESProtocol.name, LESProtocol.version),
         (LESProtocolV2.name, LESProtocolV2.version),
         (LESProtocolV3.name, LESProtocolV3.version),
-        ('unknown', 1),
-    ],
-        snappy_support=snappy_support
-    )
+        ('unknown', 1)
+    ])
 
     assert isinstance(proto, LESProtocolV2)
     assert proto.cmd_id_offset == peer.base_protocol.cmd_length
 
     with pytest.raises(NoMatchingPeerCapabilities):
-        peer.select_sub_protocol([('unknown', 1)], snappy_support)
+        peer.select_sub_protocol([('unknown', 1)])
 
 
 @pytest.mark.asyncio
@@ -102,6 +93,6 @@ class LESProtocolV3(LESProtocol):
 
 class ProtoMatchingPeer(LESPeer):
 
-    def __init__(self, supported_sub_protocols, snappy_support):
+    def __init__(self, supported_sub_protocols):
         self._supported_sub_protocols = supported_sub_protocols
-        self.base_protocol = P2PProtocol(self, snappy_support)
+        self.base_protocol = P2PProtocol(self)

@@ -232,24 +232,22 @@ async def process_v4_p2p_handshake(
         cmd: protocol.Command,
         msg: protocol.PayloadType) -> None:
     """
-    This function is the replacement to the existing process_p2p_handshake
-    function.
-    This is used to simulate the v4 P2PProtocol node.
-    The only change that has been made is to remove the snappy support irrespective
-    of whether the other client supports it or not.
+    A replacement to the existing process_p2p_handshake function. The
+    only change is to remove snappy compression, irrespective of whether
+    the other client supports it or not. This simulates a DEVp2p v4
+    (in Trinity terms: P2PProtocol.version==4) node.
     """
     msg = cast(Dict[str, Any], msg)
     if not isinstance(cmd, Hello):
         await self.disconnect(DisconnectReason.bad_protocol)
         raise HandshakeFailure(f"Expected a Hello msg, got {cmd}, disconnecting")
 
-    # As far as a v4 P2PProtocol client is concerned,
-    # it never support snappy compression
-    snappy_support = False
+    # snappy compression (EIP-706) was introduced in DEVp2p v5; turning it off "forces" v4
+    self.snappy_support = False
 
     remote_capabilities = msg['capabilities']
     try:
-        self.sub_proto = self.select_sub_protocol(remote_capabilities, snappy_support)
+        self.sub_proto = self.select_sub_protocol(remote_capabilities)
     except NoMatchingPeerCapabilities:
         await self.disconnect(DisconnectReason.useless_peer)
         raise HandshakeFailure(
@@ -286,6 +284,7 @@ async def get_directly_linked_v4_and_v5_peers(
     assert alice.sub_proto.name == bob.sub_proto.name
     assert alice.sub_proto.version == bob.sub_proto.version
     assert alice.sub_proto.cmd_id_offset == bob.sub_proto.cmd_id_offset
+    # NOTE: Not testing for compression here - that's done in the actual test!
 
     # Perform the handshake for the enabled sub-protocol.
     await asyncio.gather(alice.do_sub_proto_handshake(), bob.do_sub_proto_handshake())

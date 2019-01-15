@@ -499,7 +499,7 @@ class BasePeer(BaseService):
 
         remote_capabilities = msg['capabilities']
         try:
-            self.sub_proto = self.select_sub_protocol(remote_capabilities, snappy_support)
+            self.sub_proto = self.select_sub_protocol(remote_capabilities)
         except NoMatchingPeerCapabilities:
             await self.disconnect(DisconnectReason.useless_peer)
             raise HandshakeFailure(
@@ -612,9 +612,8 @@ class BasePeer(BaseService):
         if self.is_operational:
             self.cancel_nowait()
 
-    def select_sub_protocol(self,
-                            remote_capabilities: List[Tuple[bytes, int]],
-                            snappy_support: bool) -> protocol.Protocol:
+    def select_sub_protocol(
+            self, remote_capabilities: List[Tuple[bytes, int]]) -> protocol.Protocol:
         """Select the sub-protocol to use when talking to the remote.
 
         Find the highest version of our supported sub-protocols that is also supported by the
@@ -628,7 +627,9 @@ class BasePeer(BaseService):
         if not matching_capabilities:
             raise NoMatchingPeerCapabilities()
         _, highest_matching_version = max(matching_capabilities, key=operator.itemgetter(1))
+        # inherit protocol properties from base protocol (e.g. ETH or LES - from DEVp2p)
         offset = self.base_protocol.cmd_length
+        snappy_support = self.base_protocol.snappy_support
         for proto_class in self._supported_sub_protocols:
             if proto_class.version == highest_matching_version:
                 return proto_class(self, offset, snappy_support)
