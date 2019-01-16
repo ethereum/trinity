@@ -1,5 +1,9 @@
 import pytest
 
+from eth_utils import (
+    ValidationError,
+)
+
 from trinity._utils.validation import (
     validate_enode_uri
 )
@@ -26,12 +30,8 @@ GOOD_KEY = (
     ),
 )
 def test_validate_enode_failures(uri, message):
-    try:
+    with pytest.raises(ValidationError, match=message):
         validate_enode_uri(uri)
-    except ValueError as e:
-        assert message == str(e)
-    else:
-        assert False, 'an exception should have been thrown'
 
 
 @pytest.mark.parametrize(
@@ -59,7 +59,7 @@ def test_validate_enode_success(uri):
 def test_validate_enode_require_ip(uri, should_fail):
     try:
         validate_enode_uri(uri, require_ip=True)
-    except ValueError as e:
+    except ValidationError as e:
         if not should_fail:
             raise
         assert 'A concrete IP address must be specified' == str(e)

@@ -9,6 +9,7 @@ from urllib import parse as urlparse
 from eth_utils import (
     is_address,
     decode_hex,
+    ValidationError,
 )
 
 from eth_keys import (
@@ -53,20 +54,31 @@ def validate_transaction_call_dict(transaction_dict: Dict[str, Any], vm: BaseVM)
 
 
 def validate_enode_uri(enode: str, require_ip: bool = False) -> None:
-    parsed = urlparse.urlparse(enode)
+    try:
+        parsed = urlparse.urlparse(enode)
+    except ValueError as e:
+        raise ValidationError(str(e))
 
     if parsed.scheme != 'enode' or not parsed.username:
-        raise ValueError('enode string must be of the form "enode://public-key@ip:port"')
+        raise ValidationError('enode string must be of the form "enode://public-key@ip:port"')
 
     if not re.match('^[0-9a-fA-F]{128}$', parsed.username):
-        raise ValueError('public key must be a 128-character hex string')
+        raise ValidationError('public key must be a 128-character hex string')
 
     decoded_username = decode_hex(parsed.username)
-    ip = ipaddress.ip_address(parsed.hostname)
+
+    try:
+        ip = ipaddress.ip_address(parsed.hostname)
+    except ValueError as e:
+        raise ValidationError(str(e))
 
     if require_ip and ip in (ipaddress.ip_address('0.0.0.0'), ipaddress.ip_address('::')):
-        raise ValueError('A concrete IP address must be specified')
+        raise ValidationError('A concrete IP address must be specified')
 
-    # The rest of these already throw ValueError when something bad happens
     keys.PublicKey(decoded_username)
-    parsed.port  # if this property is not accessed validation is not done on the port
+
+    try:
+        # this property performs a check that the port is in range
+        parsed.port
+    except ValueError as e:
+        raise ValidationError(str(e))
