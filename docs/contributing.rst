@@ -3,7 +3,7 @@ Contributing
 
 Thank you for your interest in contributing! We welcome all contributions no matter their size.
 Please read along to learn how to get started. If you get stuck, feel free to reach for help in
-our `Gitter channel <https://gitter.im/ethereum/py-evm>`_.
+our `Gitter channel <https://gitter.im/ethereum/trinity>`_.
 
 Prerequisites
 ~~~~~~~~~~~~~
