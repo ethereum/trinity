@@ -20,6 +20,7 @@ from trinity.constants import (
     SYNC_LIGHT,
 )
 from trinity._utils.eip1085 import validate_raw_eip1085_genesis_config
+from trinity._utils.validation import validate_enode_uri
 
 
 class ValidateAndStoreEnodes(argparse.Action):
@@ -30,6 +31,8 @@ class ValidateAndStoreEnodes(argparse.Action):
                  option_string: str=None) -> None:
         if value is None:
             return
+
+        validate_enode_uri(value)
 
         enode = Node.from_uri(value)
 

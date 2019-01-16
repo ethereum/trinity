@@ -1,9 +1,9 @@
 from lahja import Endpoint
 
 from p2p.events import ConnectToNodeCommand
-from p2p.kademlia import Node
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.rpc.modules import BaseRPCModule
+from trinity._utils.validation import validate_enode_uri
 
 
 class Admin(BaseRPCModule):
@@ -16,9 +16,7 @@ class Admin(BaseRPCModule):
         return 'admin'
 
     async def addPeer(self, node: str) -> None:
-
-        # Throw an exception to show the user if {node} has the wrong format
-        enode = Node.from_uri(node)  # noqa: F841
+        validate_enode_uri(node, require_ip=True)
 
         self.event_bus.broadcast(
             ConnectToNodeCommand(node),
