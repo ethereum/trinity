@@ -49,6 +49,9 @@ from trinity.constants import (
     ROPSTEN_NETWORK_ID,
     SYNC_LIGHT,
 )
+from trinity.db.rocksdb import (
+    RocksDB,
+)
 from trinity._utils.chains import (
     construct_trinity_config_params,
     get_data_dir_for_network_id,
@@ -516,6 +519,8 @@ class Eth1DbMode(Enum):
 
 class Eth1AppConfig(BaseAppConfig):
 
+    _readonly_database = None
+
     def __init__(self, trinity_config: TrinityConfig, sync_mode: str):
         super().__init__(trinity_config)
         self.trinity_config = trinity_config
@@ -567,6 +572,16 @@ class Eth1AppConfig(BaseAppConfig):
     @property
     def sync_mode(self) -> str:
         return self._sync_mode
+
+    @property
+    def readonly_database(self) -> RocksDB:
+        if self._readonly_database is None:
+            self._readonly_database = RocksDB(
+                db_path=self.database_dir,
+                read_only=True
+            )
+
+        return self._readonly_database
 
 
 class BeaconAppConfig(BaseAppConfig):
