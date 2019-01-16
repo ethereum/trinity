@@ -1,3 +1,5 @@
+import asyncio
+import itertools
 import operator
 from typing import (
     cast,
@@ -33,6 +35,8 @@ from trinity.protocol.bcc.peer import (
 )
 from trinity.sync.beacon.constants import (
     MAX_BLOCKS_PER_REQUEST,
+    PEER_SELECTION_RETRY_INTERVAL,
+    PEER_SELECTION_MAX_RETRIES,
 )
 
 
@@ -50,10 +54,36 @@ class BeaconChainSyncer(BaseService):
 
         self.sync_peer: BCCPeer = None
 
+    @property
+    def is_sync_peer_selected(self):
+        return self.sync_peer is not None
+
     async def _run(self) -> None:
-        self.sync_peer = self.select_sync_peer()
-        if not self.sync_peer:
-            self.logger.info("No suitable peers to sync with")
+        for retry in itertools.count():
+            is_last_retry = retry == PEER_SELECTION_MAX_RETRIES - 1
+            if retry >= PEER_SELECTION_MAX_RETRIES:
+                raise Exception("Invariant: Cannot exceed max retries")
+
+            try:
+                self.sync_peer = self.select_sync_peer()
+            except ValidationError as exception:
+                self.logger.info(f"No suitable peers to sync with: {exception}")
+                if is_last_retry:
+                    # selecting sync peer has failed
+                    break
+                else:
+                    # wait some time and try again
+                    await asyncio.sleep(PEER_SELECTION_RETRY_INTERVAL)
+                    continue
+            else:
+                # sync peer selected successfully
+                break
+
+            raise Exception("Unreachable")
+
+        if not self.is_sync_peer_selected:
+            self.logger.info("Failed to find suitable sync peer in time")
+            return
 
         await self.sync()
 
@@ -62,7 +92,7 @@ class BeaconChainSyncer(BaseService):
 
     def select_sync_peer(self) -> BCCPeer:
         if len(self.peer_pool) == 0:
-            return None
+            raise ValidationError("Not connected to anyone")
 
         # choose the peer with the highest head slot
         peers = cast(Iterable[BCCPeer], self.peer_pool.connected_nodes.values())
@@ -71,7 +101,7 @@ class BeaconChainSyncer(BaseService):
 
         finalized_head_slot = self.chain_db.get_finalized_head(BeaconBlock).slot
         if best_peer.head_slot <= finalized_head_slot:
-            return None
+            raise ValidationError("No peer that is ahead of us")
 
         return best_peer
 
@@ -138,7 +168,7 @@ class BeaconChainSyncer(BaseService):
                 "genesis block"
             )
 
-        canonical_cousin = self.chain_db.get_canonical_block_by_slot(parent_slot, BeaconBlock)
-        if canonical_cousin.hash != parent_root:
-            self.logger.info(f"Peer has different block finalized at slot #{parent_root}")
+        canonical_parent = self.chain_db.get_canonical_block_by_slot(parent_slot, BeaconBlock)
+        if canonical_parent.hash != parent_root:
+            self.logger.info(f"Peer has different block finalized at slot #{parent_slot}")
             raise ValidationError()
