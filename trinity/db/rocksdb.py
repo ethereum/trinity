@@ -77,6 +77,41 @@ class RocksDB(BaseAtomicDB):
         self.db.write(batch)
 
 
+class ReadonlyRocksDB(BaseAtomicDB):
+    logger = logging.getLogger("trinity.db.rocksdb.ReadonlyRocksDB")
+
+    def __init__(self,
+                 db_path: Path = None) -> None:
+        if not db_path:
+            raise TypeError("The RocksDB backend requires a database path")
+
+        self._db_path = db_path
+
+    def _initialize_db(self) -> rocksdb.DB:
+        return rocksdb.DB(str(self._db_path), rocksdb.Options(), read_only=True)
+
+    def __getitem__(self, key: bytes) -> bytes:
+        db = self._initialize_db()
+        v = db.get(key)
+        if v is None:
+            raise KeyError(key)
+        return v
+
+    def __setitem__(self, key: bytes, value: bytes) -> None:
+        raise NotImplementedError("Readonly connection")
+
+    def _exists(self, key: bytes) -> bool:
+        db = self._initialize_db()
+        return db.get(key) is not None
+
+    def __delitem__(self, key: bytes) -> None:
+        raise NotImplementedError("Readonly connection")
+
+    @contextmanager
+    def atomic_batch(self) -> Iterator['RocksDBWriteBatch']:
+        raise NotImplementedError("Readonly connection")
+
+
 class RocksDBWriteBatch(BaseDB):
     """
     A native rocksdb write batch does not permit reads on the in-progress data.
