@@ -1,6 +1,13 @@
 Trinity 
 =======
 
+0.1.0-alpha.21
+--------------
+
+Released Jan 15, 2019
+
+- `#176 <https://github.com/ethereum/trinity/pull/176>`_: Delay Constantinople upgrade
+
 0.1.0-alpha.20
 --------------
 
