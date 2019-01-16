@@ -109,7 +109,10 @@ class Node:
         return cls(pubkey, Address(parsed.hostname, parsed.port))
 
     def uri(self) -> str:
-        return f'enode://{self.pubkey.to_hex()}@{self.address.ip}:{self.address.tcp_port}'
+        hexstring = self.pubkey.to_hex()
+        if hexstring.startswith('0x'):
+            hexstring = hexstring[2:]
+        return f'enode://{hexstring}@{self.address.ip}:{self.address.tcp_port}'
 
     def __str__(self) -> str:
         return '<Node(%s@%s)>' % (self.pubkey.to_hex()[:6], self.address.ip)
