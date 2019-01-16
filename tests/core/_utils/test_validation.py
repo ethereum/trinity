@@ -24,6 +24,9 @@ GOOD_KEY = (
         ('enode://public_key:[::]:30303', MALFORMED_URI),
         ('enode://nonhex@add', 'public key must be a 128-character hex string'),
         ('enode://00@[::]:30303', 'public key must be a 128-character hex string'),
+
+        # The following tests check for validations which are done by functions internal
+        # to validate_enode_uri
         (f'enode://{GOOD_KEY}@10:30303', "'10' does not appear to be an IPv4 or IPv6 address"),
         (f'enode://{GOOD_KEY}@[::]:3000000', "Port out of range 0-65535"),
         (f'enode://{GOOD_KEY}@[::/24]:30303', "Invalid IPv6 URL"),

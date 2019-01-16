@@ -801,9 +801,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
     async def accept_connect_commands(self) -> None:
         async for command in self.event_bus.stream(ConnectToNodeCommand):
-            # TODO: This adds nodes in series, it won't handle a high rate of commands
             self.logger.debug('Received request to connect to %s', command.node)
-            await self.connect_to_nodes(from_uris([command.node]))
+            self.run_task(self.connect_to_nodes(from_uris([command.node])))
 
     async def handle_peer_count_requests(self) -> None:
         async for req in self.event_bus.stream(PeerCountRequest):
