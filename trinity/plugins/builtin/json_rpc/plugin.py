@@ -70,8 +70,7 @@ class JsonRpcServerPlugin(BaseIsolatedPlugin):
             event_bus_light_peer_chain = EventBusLightPeerChain(self.context.event_bus)
             chain = chain_config.light_chain_class(header_db, peer_chain=event_bus_light_peer_chain)
         elif eth1_app_config.database_mode is Eth1DbMode.FULL:
-            db = db_manager.get_db()  # type: ignore
-            chain = chain_config.full_chain_class(db)
+            chain = chain_config.full_chain_class(eth1_app_config.readonly_database)
         else:
             raise Exception(f"Unsupported Database Mode: {eth1_app_config.database_mode}")
 
