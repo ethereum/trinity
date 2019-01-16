@@ -537,10 +537,9 @@ GOOD_KEY = (
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'description, request_msg, expected',
+    'request_msg, expected',
     (
         (
-            'Validation occurs',
             build_request('admin_addPeer', ['enode://none@[::]:30303']),
             {
                 'jsonrpc': '2.0',
@@ -549,7 +548,6 @@ GOOD_KEY = (
             },
         ),
         (
-            'Validation checks for ip address',
             build_request('admin_addPeer', [f'enode://{GOOD_KEY}@[::]:30303']),
             {
                 'jsonrpc': '2.0',
@@ -557,10 +555,10 @@ GOOD_KEY = (
                 'A concrete IP address must be specified'
             },
         ),
-    )
+    ),
+    ids=["Validation occurs", "Validation checks for ip address"],
 )
 async def test_admin_addPeer_error_messages(
-        description,
         jsonrpc_ipc_pipe_path,
         request_msg,
         event_loop,

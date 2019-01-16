@@ -20,6 +20,7 @@ from urllib import parse as urlparse
 from eth_utils import (
     big_endian_to_int,
     decode_hex,
+    remove_0x_prefix,
 )
 
 from eth_keys import (
@@ -110,8 +111,7 @@ class Node:
 
     def uri(self) -> str:
         hexstring = self.pubkey.to_hex()
-        if hexstring.startswith('0x'):
-            hexstring = hexstring[2:]
+        hexstring = remove_0x_prefix(hexstring)
         return f'enode://{hexstring}@{self.address.ip}:{self.address.tcp_port}'
 
     def __str__(self) -> str:
