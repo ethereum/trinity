@@ -60,11 +60,9 @@ def test_validate_enode_success(uri):
     ),
 )
 def test_validate_enode_require_ip(uri, should_fail):
-    try:
-        validate_enode_uri(uri, require_ip=True)
-    except ValidationError as e:
-        if not should_fail:
-            raise
-        assert 'A concrete IP address must be specified' == str(e)
+    if should_fail:
+        message = "A concrete IP address must be specified"
+        with pytest.raises(ValidationError, match=message):
+            validate_enode_uri(uri, require_ip=True)
     else:
-        assert not should_fail
+        validate_enode_uri(uri, require_ip=True)
