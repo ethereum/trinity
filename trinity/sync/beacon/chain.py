@@ -28,6 +28,9 @@ from eth2.beacon.types.blocks import (
     BeaconBlock,
 )
 from eth2.beacon.db.chain import BaseBeaconChainDB
+from eth2.beacon.typing import (
+    SlotNumber,
+)
 
 from trinity.protocol.bcc.peer import (
     BCCPeer,
@@ -55,7 +58,7 @@ class BeaconChainSyncer(BaseService):
         self.sync_peer: BCCPeer = None
 
     @property
-    def is_sync_peer_selected(self):
+    def is_sync_peer_selected(self) -> bool:
         return self.sync_peer is not None
 
     async def _run(self) -> None:
@@ -136,7 +139,7 @@ class BeaconChainSyncer(BaseService):
                 break
 
     async def request_batches(self,
-                              start_slot: int
+                              start_slot: SlotNumber,
                               ) -> AsyncGenerator[Tuple[BaseBeaconBlock, ...], None]:
         slot = start_slot
         while True:

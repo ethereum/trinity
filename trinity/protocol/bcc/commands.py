@@ -13,6 +13,10 @@ from eth_typing import (
     Hash32,
 )
 
+from eth2.beacon.typing import (
+    SlotNumber,
+)
+
 from p2p.protocol import (
     Command,
 )
@@ -38,7 +42,7 @@ StatusMessage = TypedDict("StatusMessage", {
     'protocol_version': int,
     'network_id': int,
     'genesis_hash': Hash32,
-    'head_slot': int,
+    'head_slot': SlotNumber,
 })
 
 

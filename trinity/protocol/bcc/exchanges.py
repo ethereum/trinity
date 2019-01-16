@@ -1,9 +1,18 @@
 from typing import (
     Tuple,
+    Union,
 )
 
-from eth.beacon.types.blocks import (
+from eth_typing import (
+    Hash32,
+)
+
+from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
+)
+
+from eth2.beacon.typing import (
+    SlotNumber,
 )
 
 from trinity._utils.les import (
@@ -32,7 +41,7 @@ class BeaconBlocksExchange(BaseExchange[GetBeaconBlocksMessage,
     tracker_class = GetBeaconBlocksTracker
 
     async def __call__(self,  # type: ignore
-                       block_slot_or_hash: int,
+                       block_slot_or_hash: Union[SlotNumber, Hash32],
                        max_headers: int = None,
                        timeout: float = None) -> Tuple[BaseBeaconBlock, ...]:
 

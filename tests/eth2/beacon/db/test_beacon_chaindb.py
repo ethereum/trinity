@@ -124,6 +124,7 @@ def test_chaindb_state(chaindb, state):
     result_state = chaindb.get_state_by_root(state.root)
     assert result_state.root == state.root
 
+
 def test_chaindb_get_finalized_head(chaindb, block):
     # TODO: update when we support finalizing blocks that are not the genesis block
     genesis = block.copy(parent_root=GENESIS_PARENT_HASH)
