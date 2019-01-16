@@ -6,7 +6,6 @@ from typing import (
 
 from eth_typing import (
     Hash32,
-    BlockNumber,
 )
 
 from p2p.protocol import Protocol
