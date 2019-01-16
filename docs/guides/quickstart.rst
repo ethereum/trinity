@@ -4,37 +4,59 @@ Quickstart
 Installation
 ~~~~~~~~~~~~
 
-This is the quickstart guide for Trinity. If you only care about running a Trinity node, this
-guide will help you to get things set up. If you plan to develop on top of Py-EVM or contribute
-to the project you may rather want to checkout the :doc:`Contributing Guide </contributing>` which
-explains how to set everything up for development.
+This is the quickstart guide for Trinity. If all we care about is *running* a Trinity node,
+this guide covers everything to set things up.
+
+For developers who want to *work* on Trinity and *contribute* to the project, the
+:doc:`Contributing Guide </contributing>` explains how to setup the system for development.
+
+Prerequisites
+-------------
+
+Trinity depends on the following software to be installed on the host system:
+
+  - Python 3.6 or greater
+  - Pip package manager
+  - Snappy compression library
+  - RocksDB database
+
+The following sections demonstrate how to install Trinity on Ubuntu and Mac OS. While Trinity
+may work on other systems, it is currently only tested against these two.
 
 Installing on Ubuntu
 --------------------
 
-Trinity requires Python 3.6 as well as some tools to compile its dependencies. On Ubuntu, the
-``python3.6-dev`` package contains everything we need. Run the following command to install it.
+To install the required Python toolchain run:
 
 .. code:: sh
 
-  apt-get install python3.6-dev
+  apt-get install python3.6-dev python3-pip
 
-Trinity is installed through the pip package manager, if pip isn't available on the system already,
-we need to install the ``python3-pip`` package through the following command.
+
+Next, to install the dependencies for RocksDB run:
 
 .. code:: sh
 
-  apt-get install python3-pip
+  apt-get install libgflags-dev liblz4-dev libsnappy-dev zlib1g-dev libbz2-dev libzstd-dev
+
+To install RocksDB either run:
+
+.. code:: sh
+
+  apt-get install librocksdb-dev
+
+Or, **alternatively**, install a specific version from source.
+
+.. code:: sh
+
+  wget https://github.com/facebook/rocksdb/archive/v5.14.2.tar.gz
+  tar xvf v5.14.2.tar.gz
+  cd rocksdb-5.14.2
+  make shared_lib && make install-shared INSTALL_PATH=/usr
 
 .. note::
   .. include:: /fragments/virtualenv_explainer.rst
 
-Trinity uses Snappy Compression and hence needs the Snappy Library to be pre-installed on the system.
-It can be installed through the following command.
-
-.. code:: sh
-
-  apt-get install libsnappy-dev
 
 Finally, we can install the ``trinity`` package via pip.
 
@@ -42,23 +64,40 @@ Finally, we can install the ``trinity`` package via pip.
 
   pip3 install -U trinity
 
-Installing on macOS
--------------------
+Installing on Mac OS
+--------------------
 
-First, install LevelDB and the latest Python 3 with brew:
+Make sure to have latest XCode toolchain installed.
 
 .. code:: sh
 
-  brew install python3 leveldb
+  xcode-select --install
+
+To install the required Python toolchain run:
+
+.. code:: sh
+
+  brew install python3
+
+To install RocksDB either run:
+
+.. code:: sh
+
+  brew install rocksdb
+
+Or, **alternatively**, install a specific version from source.
+
+.. code:: sh
+
+  wget https://github.com/facebook/rocksdb/archive/v5.14.2.tar.gz
+  tar xvf v5.14.2.tar.gz
+  cd rocksdb-5.14.2
+  make shared_lib && make install-shared INSTALL_PATH=/usr
+
 
 .. note::
   .. include:: /fragments/virtualenv_explainer.rst
 
-Now, install Snappy Library with brew as follows:
-
-.. code:: sh
-
-  brew install snappy
 
 Finally, install the ``trinity`` package via pip:
 
