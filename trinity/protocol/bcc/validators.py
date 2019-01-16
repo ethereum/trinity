@@ -79,11 +79,6 @@ class BeaconBlocksValidator(BaseValidator[Tuple[BaseBeaconBlock, ...]]):
                 raise ValidationError(
                     "Returned blocks are not a connected branch"
                 )
-            # check that the blocks are ordered by slot and no slot is missing
-            if child.slot != parent.slot + 1:
-                raise ValidationError(
-                    f"Slot of returned block {child} is not the successor of its parent"
-                )
 
 
 def match_payload_request_id(request: RequestMessage, response: ResponseMessage) -> None:
