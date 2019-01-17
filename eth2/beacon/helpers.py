@@ -494,3 +494,17 @@ def is_surround_vote(attestation_data_1: 'AttestationData',
         (attestation_data_2.justified_slot + 1 == attestation_data_2.slot) and
         (attestation_data_2.slot < attestation_data_1.slot)
     )
+
+
+#
+# Per Epoch Processing
+#
+
+
+def total_balance(validator_indices: Sequence[ValidatorIndex],
+                  validator_balances: Sequence[Gwei],
+                  max_deposits: Ether) -> Gwei:
+    return Gwei(sum(
+        get_effective_balance(validator_balances, index, max_deposits)
+        for index in validator_indices
+    ))

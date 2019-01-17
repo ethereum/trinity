@@ -19,6 +19,8 @@ from .validation import (
     validate_serenity_proposer_signature,
 )
 
+from .epoch_transitions import process_justification
+
 
 class SerenityStateTransition(BaseStateTransition):
     config = None
@@ -101,5 +103,11 @@ class SerenityStateTransition(BaseStateTransition):
         return state
 
     def per_epoch_transition(self, state: BeaconState) -> BeaconState:
-        # TODO
+        # TODO: state = process_receipt_roots(state, self.config)
+        state = process_justification(state, self.config)
+        # TODO: state = process_rosslinks(state, self.config)
+        # TODO: state = process_rewards_and_penalties(state, self.config)
+        # TODO: state = process_ejections(state, self.config)
+        # TODO: state = process_validator_registry(state, self.config)
+        # TODO: state = process_final_updates(state, self.config)
         return state
