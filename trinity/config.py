@@ -79,6 +79,10 @@ if TYPE_CHECKING:
 
 DATABASE_DIR_NAME = 'chain'
 
+# Change this whenever a db migration should cause a hard error
+# where the database directory needs to be re-initialized
+DATABASE_DIR_VERSION_MARKER = "trinity_rocksdb_v1"
+
 MAINNET_EIP1085_PATH = ASSETS_DIR / 'eip1085' / 'mainnet.json'
 ROPSTEN_EIP1085_PATH = ASSETS_DIR / 'eip1085' / 'ropsten.json'
 

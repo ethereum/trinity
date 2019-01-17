@@ -37,6 +37,9 @@ from trinity.db.rocksdb import (
 from trinity.events import (
     ShutdownRequest
 )
+from trinity.exceptions import (
+    InvalidDatabase,
+)
 from trinity.extensibility import (
     BasePlugin,
     PluginManager,
@@ -91,7 +94,14 @@ def trinity_boot(args: Namespace,
     # the local logger.
     listener.start()
 
-    ensure_eth1_dirs(trinity_config.get_app_config(Eth1AppConfig))
+    eth1_app_config = trinity_config.get_app_config(Eth1AppConfig)
+    try:
+        ensure_eth1_dirs(eth1_app_config)
+    except InvalidDatabase:
+        logger.error(
+            "Invalid database. Please delete %s and restart", eth1_app_config.database_dir
+        )
+        return
 
     networking_endpoint = event_bus.create_endpoint(NETWORKING_EVENTBUS_ENDPOINT)
     event_bus.start()
