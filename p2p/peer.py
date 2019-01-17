@@ -189,6 +189,7 @@ class BasePeer(BaseService):
     listen_port = 30303
     # Will be set upon the successful completion of a P2P handshake.
     sub_proto: protocol.Protocol = None
+    proto_version: int = None
 
     def __init__(self,
                  remote: Node,
@@ -406,6 +407,12 @@ class BasePeer(BaseService):
                 self.logger.debug("%r disconnected: %s", self, e)
                 return
 
+    def decompress(self, maybe_compressed: bytes) -> bytes:
+        if self.is_compressing:
+            return maybe_compressed[0] + snappy.decompress(maybe_compressed[1:])
+        else:
+            return maybe_compressed
+
     async def read_msg(self) -> Tuple[protocol.Command, protocol.PayloadType]:
         header_data = await self.read(HEADER_LEN + MAC_LEN)
         try:
@@ -430,12 +437,13 @@ class BasePeer(BaseService):
             )
             raise MalformedMessage from err
         cmd = self.get_protocol_command_for(msg)
+        decompressed_msg = self.decompress(msg)
         # NOTE: This used to be a bottleneck but it doesn't seem to be so anymore. If we notice
         # too much time is being spent on this again, we need to consider running this in a
         # ProcessPoolExecutor(). Need to make sure we don't use all CPUs in the machine for that,
         # though, otherwise asyncio's event loop can't run and we can't keep up with other peers.
         try:
-            decoded_msg = cast(Dict[str, Any], cmd.decode(msg))
+            decoded_msg = cast(Dict[str, Any], cmd.decode(decompressed_msg))
         except MalformedMessage as err:
             self.logger.debug(
                 "Malformed message from peer %s: CMD:%s Error: %r",
@@ -485,6 +493,12 @@ class BasePeer(BaseService):
         else:
             self.handle_sub_proto_msg(cmd, msg)
 
+    @property
+    def is_compressing(self) -> bool:
+        # Check whether to support Snappy Compression or not
+        # based on other peer's p2p protocol version
+        return self.proto_version is not None and self.proto_version >= SNAPPY_PROTOCOL_VERSION
+
     async def process_p2p_handshake(
             self, cmd: protocol.Command, msg: protocol.PayloadType) -> None:
         msg = cast(Dict[str, Any], msg)
@@ -492,9 +506,7 @@ class BasePeer(BaseService):
             await self.disconnect(DisconnectReason.bad_protocol)
             raise HandshakeFailure(f"Expected a Hello msg, got {cmd}, disconnecting")
 
-        # Check whether to support Snappy Compression or not
-        # based on other peer's p2p protocol version
-        snappy_support = msg['version'] >= SNAPPY_PROTOCOL_VERSION
+        self.proto_version = msg['version']
 
         if snappy_support:
             # Now update the base protocol to support snappy compression
@@ -579,6 +591,36 @@ class BasePeer(BaseService):
         encoded_size = b'\x00' + header[:3]
         (size,) = struct.unpack(b'>I', encoded_size)
         return size
+
+    def compress(self, payload: bytes) -> bytes:
+        if self.is_compressing:
+            return snappy.compress(payload)
+        else:
+            return payload
+
+    def _encode(self, cmd_id: int, encoded_payload: bytes) -> Tuple[bytes, bytes]:
+        compressed_payload = self.compress(encoded_payload)
+
+        enc_cmd_id = rlp.encode(cmd_id, sedes=rlp.sedes.big_endian_int)
+        frame_size = len(enc_cmd_id) + len(compressed_payload)
+        if frame_size.bit_length() > 24:
+            raise ValueError("Frame size has to fit in a 3-byte integer")
+
+        # Drop the first byte as, per the spec, frame_size must be a 3-byte int.
+        header = struct.pack('>I', frame_size)[1:]
+        # All clients seem to ignore frame header data, so we do the same, although I'm not sure
+        # why geth uses the following value:
+        # https://github.com/ethereum/go-ethereum/blob/master/p2p/rlpx.go#L556
+        zero_header = b'\xc2\x80\x80'
+        header += zero_header
+        header = _pad_to_16_byte_boundary(header)
+
+        body = _pad_to_16_byte_boundary(enc_cmd_id + compressed_payload)
+        return header, body
+
+    def request(self, cmd: protocol.Command, payload: bytes) -> None:
+        header, body = self._encode(cmd.cmd_id, payload)
+        self.send(header, body)
 
     def send(self, header: bytes, body: bytes) -> None:
         cmd_id = rlp.decode(body[:1], sedes=rlp.sedes.big_endian_int)

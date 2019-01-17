@@ -75,9 +75,8 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
         self.send(header, body)
 
     def send_node_data(self, nodes: Tuple[bytes, ...]) -> None:
-        cmd = NodeData(self.cmd_id_offset, self.snappy_support)
-        header, body = cmd.encode(nodes)
-        self.send(header, body)
+        cmd = NodeData(self.cmd_id_offset)
+        self.request(cmd, cmd.encode_payload(nodes))
 
     #
     # Block Headers

@@ -128,28 +128,6 @@ class Command:
         else:
             return raw_payload
 
-    def encode(self, data: PayloadType) -> Tuple[bytes, bytes]:
-        encoded_payload = self.encode_payload(data)
-        compressed_payload = self.compress_payload(encoded_payload)
-
-        enc_cmd_id = rlp.encode(self.cmd_id, sedes=rlp.sedes.big_endian_int)
-        frame_size = len(enc_cmd_id) + len(compressed_payload)
-        if frame_size.bit_length() > 24:
-            raise ValueError("Frame size has to fit in a 3-byte integer")
-
-        # Drop the first byte as, per the spec, frame_size must be a 3-byte int.
-        header = struct.pack('>I', frame_size)[1:]
-        # All clients seem to ignore frame header data, so we do the same, although I'm not sure
-        # why geth uses the following value:
-        # https://github.com/ethereum/go-ethereum/blob/master/p2p/rlpx.go#L556
-        zero_header = b'\xc2\x80\x80'
-        header += zero_header
-        header = _pad_to_16_byte_boundary(header)
-
-        body = _pad_to_16_byte_boundary(enc_cmd_id + compressed_payload)
-        return header, body
-
-
 class BaseRequest(ABC, Generic[TRequestPayload]):
     """
     Must define command_payload during init. This is the data that will
