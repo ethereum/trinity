@@ -15,6 +15,14 @@ class AmbigiousFileSystem(BaseTrinityError):
     pass
 
 
+class InvalidDatabase(BaseTrinityError):
+    """
+    Raised when the existing database does not match expectations
+    and can not be worked with
+    """
+    pass
+
+
 class MissingPath(BaseTrinityError):
     """
     Raised when an expected path is missing

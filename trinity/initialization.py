@@ -12,6 +12,7 @@ from trinity.config import (
     BeaconChainConfig,
     Eth1AppConfig,
     ChainConfig,
+    DATABASE_DIR_VERSION_MARKER,
     TrinityConfig,
 )
 
@@ -20,6 +21,7 @@ from eth2.beacon.types.blocks import (
 )
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from trinity.exceptions import (
+    InvalidDatabase,
     MissingPath,
 )
 from trinity._utils.filesystem import (
@@ -150,10 +152,23 @@ def initialize_beacon_database(chain_config: BeaconChainConfig,
 
 
 def ensure_eth1_dirs(app_config: Eth1AppConfig) -> None:
+
+    db_marker_file = app_config.database_dir / DATABASE_DIR_VERSION_MARKER
+
     if not app_config.database_dir.exists():
         app_config.database_dir.mkdir(parents=True, exist_ok=True)
+        db_marker_file.write_text(DATABASE_DIR_VERSION_MARKER)
+
+    if not db_marker_file.exists():
+        raise InvalidDatabase(f"Marker file missing: {db_marker_file}")
 
 
 def ensure_beacon_dirs(app_config: BeaconAppConfig) -> None:
+    db_marker_file = app_config.database_dir / DATABASE_DIR_VERSION_MARKER
+
     if not app_config.database_dir.exists():
         app_config.database_dir.mkdir(parents=True, exist_ok=True)
+        db_marker_file.write_text(DATABASE_DIR_VERSION_MARKER)
+
+    if not db_marker_file.exists():
+        raise InvalidDatabase(f"Marker file missing: {db_marker_file}")
