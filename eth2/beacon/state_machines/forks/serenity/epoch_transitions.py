@@ -42,26 +42,32 @@ def get_epoch_boundary_attesting_balances(
     MAX_DEPOSIT = config.MAX_DEPOSIT
     LATEST_BLOCK_ROOTS_LENGTH = config.LATEST_BLOCK_ROOTS_LENGTH
 
+    now = state.slot
+    one_epoch_ago = now - EPOCH_LENGTH
+    two_epochs_ago = now - 2 * EPOCH_LENGTH
+
     current_epoch_attestations = tuple(
         attestation
         for attestation in state.latest_attestations
-        if state.slot - EPOCH_LENGTH <= attestation.data.slot < state.slot
+        if one_epoch_ago <= attestation.data.slot < now
     )
     previous_epoch_attestations = tuple(
         attestation
         for attestation in state.latest_attestations
-        if state.slot - 2 * EPOCH_LENGTH <= attestation.data.slot < state.slot - EPOCH_LENGTH
+        if two_epochs_ago <= attestation.data.slot < one_epoch_ago
     )
+
+    previous_justified_slot = state.previous_justified_slot
 
     previous_epoch_justified_attestations = tuple(
         attestation
         for attestation in current_epoch_attestations + previous_epoch_attestations
-        if attestation.justified_slot == state.previous_justified_slot
+        if attestation.justified_slot == previous_justified_slot
     )
 
     previous_epoch_boundary_root = get_block_root(
         state,
-        state.slot - 2 * EPOCH_LENGTH,
+        two_epochs_ago,
         LATEST_BLOCK_ROOTS_LENGTH,
     )
     previous_epoch_boundary_attestations = tuple(
@@ -93,15 +99,16 @@ def get_epoch_boundary_attesting_balances(
 
     current_epoch_boundary_root = get_block_root(
         state,
-        state.slot - EPOCH_LENGTH,
+        one_epoch_ago,
         LATEST_BLOCK_ROOTS_LENGTH,
     )
 
+    justified_slot = state.justified_slot
     current_epoch_boundary_attestations = tuple(
         attestation
         for attestation in current_epoch_attestations
         if attestation.epoch_boundary_root == current_epoch_boundary_root and
-        attestation.data.justified_slot == state.justified_slot
+        attestation.data.justified_slot == justified_slot
     )
 
     sets_of_current_epoch_boundary_participants = tuple(
