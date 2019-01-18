@@ -189,7 +189,13 @@ class Protocol:
         self.peer = peer
         self.cmd_id_offset = cmd_id_offset
         self._snappy_support = snappy_support
-        self.snappy_support = self._snappy_support
+        self._update_protocol_commands()
+
+    def _update_protocol_commands(self) -> None:
+        self.commands = [cmd_class(self.cmd_id_offset, self._snappy_support)
+                         for cmd_class in self._commands]
+        self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
+        self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
 
     @property
     def logger(self) -> logging.Logger:
@@ -206,11 +212,7 @@ class Protocol:
     def snappy_support(self, enabled: bool) -> None:
         '''TODO'''
         self._snappy_support = enabled
-        # update available commands, including their parameters
-        self.commands = [cmd_class(self.cmd_id_offset, self._snappy_support)
-                         for cmd_class in self._commands]
-        self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
-        self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
+        self._update_protocol_commands()
 
     def send(self, header: bytes, body: bytes) -> None:
         self.peer.send(header, body)
