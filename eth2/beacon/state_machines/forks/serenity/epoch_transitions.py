@@ -24,27 +24,18 @@ def get_epoch_boundary_attesting_balances(
         state: BeaconState,
         config: BeaconConfig) -> Tuple[Gwei, Gwei]:
     """
-    previous_epoch_boundary_attesting_balance:
-        SELECT sum(v.balance)
-        FROM Validator as v
-        RIGHT JOIN Attestations as a
-        ON v.index = a.participant
-        WHERE
-            a.slot between `now` and `2 epoch ago` AND
-            a.justified_slot = previous_justified_slot AND
-            a.epoch_boundary_root = `2 epoch ago`
-        GROUP BY v.index
+    Return attesting balances for previous epoch boundary and current epoch boundary.
+    They are sum of balances, of unique validators, who has sent attestations satisfying these constraints:
 
-    current_epoch_boundary_attesting_balance:
-        SELECT sum(v.balance)
-        FROM Validator as v
-        RIGHT JOIN Attestations as a
-        ON v.index = a.participant
-        WHERE
-            a.slot between `now` and `1 epoch ago` AND
-            a.justified_slot = justified_slot AND
-            a.epoch_boundary_root = `1 epoch ago`
-        GROUP BY v.index
+    Previous epoch boundary attestations:
+        - slot in latest 2 epochs, and
+        - justified_slot is previous_justified_slot, and
+        - epoch_boundary_root is exactly 2 epoch ago
+
+    Current epoch boundary attestations:
+        - slot in latest 1 epoch, and
+        - justified_slot is justified_slot, and
+        - epoch_boundary_root is exactly 1 epoch ago
     """
 
     EPOCH_LENGTH = config.EPOCH_LENGTH
