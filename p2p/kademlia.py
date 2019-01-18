@@ -229,6 +229,8 @@ class KBucket(Sized):
         elif len(self) < self.k:
             self.nodes.append(node)
         else:
+            if node in self.replacement_cache:
+                self.replacement_cache.remove(node)
             self.replacement_cache.append(node)
             return self.head
         return None
