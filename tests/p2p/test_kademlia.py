@@ -114,6 +114,18 @@ def test_kbucket_add():
     assert bucket.add(node3) == node2
     assert bucket.nodes == [node2, node]
     assert bucket.head == node2
+    assert bucket.replacement_cache == [node3]
+
+    node4 = random_node()
+    assert bucket.add(node4) == node2
+    assert bucket.nodes == [node2, node]
+    assert bucket.head == node2
+    assert bucket.replacement_cache == [node3, node4]
+
+    assert bucket.add(node3) == node2
+    assert bucket.nodes == [node2, node]
+    assert bucket.head == node2
+    assert bucket.replacement_cache == [node4, node3]
 
 
 def test_kbucket_remove():
