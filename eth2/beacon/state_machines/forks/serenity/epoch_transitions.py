@@ -25,7 +25,8 @@ def get_epoch_boundary_attesting_balances(
         config: BeaconConfig) -> Tuple[Gwei, Gwei]:
     """
     Return attesting balances for previous epoch boundary and current epoch boundary.
-    They are sum of balances, of unique validators, who has sent attestations satisfying these constraints:
+    They are sum of balances, of unique validators, who have sent attestations
+    satisfying these constraints:
 
     Previous epoch boundary attestations:
         - slot in latest 2 epochs, and
