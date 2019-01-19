@@ -1,4 +1,5 @@
 import random
+import itertools
 
 import pytest
 
@@ -116,17 +117,6 @@ def test_kbucket_add():
     assert bucket.head == node2
     assert bucket.replacement_cache == [node3]
 
-    node4 = random_node()
-    assert bucket.add(node4) == node2
-    assert bucket.nodes == [node2, node]
-    assert bucket.head == node2
-    assert bucket.replacement_cache == [node3, node4]
-
-    assert bucket.add(node3) == node2
-    assert bucket.nodes == [node2, node]
-    assert bucket.head == node2
-    assert bucket.replacement_cache == [node4, node3]
-
 
 def test_kbucket_remove():
     bucket = kademlia.KBucket(0, 100)
@@ -154,6 +144,49 @@ def test_kbucket_remove():
         bucket.remove_node(replacement_node)
     assert bucket.nodes == []
     assert bucket.replacement_cache == []
+
+
+def test_kbucket_duplicate():
+    bucket = kademlia.KBucket(0, 100)
+    bucket.k = 3
+    nodes = [random_node() for _ in range(3)]
+
+    for node in nodes:
+        assert bucket.add(node) is None
+    assert bucket.nodes == nodes
+    assert bucket.replacement_cache == []
+
+    assert bucket.add(nodes[0]) is None
+    assert bucket.nodes == nodes[1:] + nodes[:1]
+    assert bucket.replacement_cache == []
+
+    for node in reversed(nodes):
+        assert bucket.add(node) is None
+    assert bucket.nodes == list(reversed(nodes))
+    assert bucket.replacement_cache == []
+
+    replacement_nodes = [random_node() for _ in range(5)]
+    for replacement_node in replacement_nodes:
+        assert bucket.add(replacement_node) == nodes[-1]
+    assert bucket.nodes == list(reversed(nodes))
+    assert bucket.replacement_cache == replacement_nodes
+
+    assert bucket.add(replacement_nodes[0]) == nodes[-1]
+    assert bucket.nodes == list(reversed(nodes))
+    assert bucket.replacement_cache == replacement_nodes[1:] + replacement_nodes[:1]
+
+    for replacement_node in reversed(replacement_nodes):
+        assert bucket.add(replacement_node) == nodes[-1]
+    assert bucket.nodes == list(reversed(nodes))
+    assert bucket.replacement_cache == list(reversed(replacement_nodes))
+
+    all_nodes = list(itertools.chain(nodes, replacement_nodes))
+    random.shuffle(all_nodes)
+    for node in all_nodes:
+        return_value = None if node in bucket.nodes else bucket.head
+        assert bucket.add(node) == return_value
+    assert bucket.nodes == [node for node in all_nodes if node in nodes]
+    assert bucket.replacement_cache == [node for node in all_nodes if node in replacement_nodes]
 
 
 def test_kbucket_split():
