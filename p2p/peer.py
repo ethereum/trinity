@@ -283,12 +283,12 @@ class BasePeer(BaseService):
         """
         await self.send_sub_proto_handshake()
         cmd, msg = await self.read_msg()
-        if isinstance(cmd, Ping):
+        if cmd.cmd_type == Ping:
             # Parity sends a Ping before the sub-proto handshake, so respond to that and read the
             # next one, which hopefully will be the actual handshake.
             self.base_protocol.send_pong()
             cmd, msg = await self.read_msg()
-        if isinstance(cmd, Disconnect):
+        if cmd.cmd_type == Disconnect:
             msg = cast(Dict[str, Any], msg)
             # Peers sometimes send a disconnect msg before they send the sub-proto handshake.
             raise HandshakeFailure(
@@ -311,7 +311,7 @@ class BasePeer(BaseService):
         except MalformedMessage as e:
             raise HandshakeFailure("Got malformed message during handshake") from e
 
-        if isinstance(cmd, Disconnect):
+        if cmd.cmd_type == Disconnect:
             msg = cast(Dict[str, Any], msg)
             # Peers sometimes send a disconnect msg before they send the initial P2P handshake.
             raise HandshakeFailure(
@@ -431,12 +431,14 @@ class BasePeer(BaseService):
 
     def handle_p2p_msg(self, cmd: protocol.Command, msg: protocol.PayloadType) -> None:
         """Handle the base protocol (P2P) messages."""
-        if isinstance(cmd, Disconnect):
+        cmd_type = cmd.cmd_type
+
+        if cmd_type == Disconnect:
             msg = cast(Dict[str, Any], msg)
             raise RemoteDisconnected(msg['reason_name'])
-        elif isinstance(cmd, Ping):
+        elif cmd_type == Ping:
             self.base_protocol.send_pong()
-        elif isinstance(cmd, Pong):
+        elif cmd_type == Pong:
             # Currently we don't do anything when we get a pong, but eventually we should
             # update the last time we heard from a peer in our DB (which doesn't exist yet).
             pass
@@ -444,7 +446,7 @@ class BasePeer(BaseService):
             raise UnexpectedMessage(f"Unexpected msg: {cmd} ({msg})")
 
     def handle_sub_proto_msg(self, cmd: protocol.Command, msg: protocol.PayloadType) -> None:
-        cmd_type = type(cmd)
+        cmd_type = cmd.cmd_type
 
         if self._subscribers:
             was_added = tuple(
@@ -470,16 +472,16 @@ class BasePeer(BaseService):
     async def process_p2p_handshake(
             self, cmd: protocol.Command, msg: protocol.PayloadType) -> None:
         msg = cast(Dict[str, Any], msg)
-        if not isinstance(cmd, Hello):
+        if not cmd.cmd_type == Hello:
             await self.disconnect(DisconnectReason.bad_protocol)
             raise HandshakeFailure(f"Expected a Hello msg, got {cmd}, disconnecting")
 
-        # Check whether to support Snappy Compression or not
-        # based on other peer's p2p protocol version
+        # Snappy compression is negotiated indirectly, by comparing protocol versions;
+        # if both sides support v5, then compression is mandatory
         snappy_support = msg['version'] >= SNAPPY_PROTOCOL_VERSION
-
-        # Now update the base protocol to support snappy compression
-        self.base_protocol.snappy_support = snappy_support
+        if snappy_support:
+            # TODO: select protocol directly, instead of using side-effect of property
+            self.base_protocol.snappy_support = snappy_support
 
         remote_capabilities = msg['capabilities']
         try:
@@ -693,7 +695,7 @@ class PeerSubscriber(ABC):
     def add_msg(self, msg: PeerMessage) -> bool:
         peer, cmd, _ = msg
 
-        if not self.is_subscription_command(type(cmd)):
+        if not self.is_subscription_command(cmd.cmd_type):
             if hasattr(self, 'logger'):
                 self.logger.debug2(  # type: ignore
                     "Discarding %s msg from %s; not subscribed to msg type; "

@@ -71,10 +71,7 @@ class Command:
             cls._logger = logging.getLogger(f"p2p.protocol.{type(cls).__name__}")
         return cls._logger
 
-    # FIXME: make @classmethod
-    @property
-    def is_base_protocol(cls) -> bool:
-        return cls._cmd_id_offset == 0
+    # TODO: add abstract methods for is_base_protocol
 
     # FIXME: reference to `self`
     # def __str__(self) -> str:
@@ -184,6 +181,7 @@ def get_command_class(cmd_class, cmd_id_offset, snappy_support):
         _snappy_support = snappy_support
 
         cmd_id = _cmd_id_offset + cmd_class._cmd_id
+        is_base_protocol = _cmd_id_offset == 0
         cmd_type = cmd_class
 
         # FIXME: `self`

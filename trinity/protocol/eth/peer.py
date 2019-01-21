@@ -48,7 +48,7 @@ class ETHPeer(BaseChainPeer):
         return self._requests
 
     def handle_sub_proto_msg(self, cmd: Command, msg: _DecodedMsgType) -> None:
-        if isinstance(cmd, NewBlock):
+        if cmd.cmd_type == NewBlock:
             msg = cast(Dict[str, Any], msg)
             header, _, _ = msg['block']
             actual_head = header.parent_hash
@@ -64,7 +64,7 @@ class ETHPeer(BaseChainPeer):
 
     async def process_sub_proto_handshake(
             self, cmd: Command, msg: _DecodedMsgType) -> None:
-        if not isinstance(cmd, Status):
+        if not cmd.cmd_type == Status:
             await self.disconnect(DisconnectReason.subprotocol_error)
             raise HandshakeFailure(f"Expected a ETH Status msg, got {cmd}, disconnecting")
         msg = cast(Dict[str, Any], msg)

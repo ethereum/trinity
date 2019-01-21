@@ -143,7 +143,7 @@ class ResponseCandidateStream(
                 if peer != self._peer:
                     self.logger.error("Unexpected peer: %s  expected: %s", peer, self._peer)
                     continue
-                elif isinstance(cmd, self.response_msg_type):
+                elif cmd.cmd_type == self.response_msg_type:
                     await self._handle_msg(cast(TResponsePayload, msg))
                 else:
                     self.logger.warning("Unexpected payload type: %s", cmd.__class__.__name__)

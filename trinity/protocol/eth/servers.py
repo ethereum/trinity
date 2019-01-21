@@ -161,17 +161,20 @@ class ETHRequestServer(BaseRequestServer):
             commands.NewBlockHashes,
         )
 
-        if isinstance(cmd, ignored_commands):
+        cmd_type = cmd.cmd_type
+
+        if cmd_type in ignored_commands:
+            self.logger.debug2("cmd %s in ignored_commands, doing nothing.", cmd)
             pass
-        elif isinstance(cmd, commands.GetBlockHeaders):
+        elif cmd_type == commands.GetBlockHeaders:
             await self._handler.handle_get_block_headers(peer, cast(Dict[str, Any], msg))
-        elif isinstance(cmd, commands.GetBlockBodies):
+        elif cmd_type == commands.GetBlockBodies:
             block_hashes = cast(Sequence[Hash32], msg)
             await self._handler.handle_get_block_bodies(peer, block_hashes)
-        elif isinstance(cmd, commands.GetReceipts):
+        elif cmd_type == commands.GetReceipts:
             block_hashes = cast(Sequence[Hash32], msg)
             await self._handler.handle_get_receipts(peer, block_hashes)
-        elif isinstance(cmd, commands.GetNodeData):
+        elif cmd_type == commands.GetNodeData:
             node_hashes = cast(Sequence[Hash32], msg)
             await self._handler.handle_get_node_data(peer, node_hashes)
         else:
