@@ -64,6 +64,7 @@ class Command:
 
     _logger: logging.Logger = None
 
+    # FIXME: does this even work?
     @property
     def logger(cls) -> logging.Logger:
         if cls._logger is None:
@@ -73,76 +74,83 @@ class Command:
     # FIXME: make @classmethod
     @property
     def is_base_protocol(cls) -> bool:
-        return cls.cmd_id_offset == 0
+        return cls._cmd_id_offset == 0
 
-    def __str__(self) -> str:
-        return f"{type(self).__name__} (cmd_id={self.cmd_id})"
+    # FIXME: reference to `self`
+    # def __str__(self) -> str:
+    #     return f"{type(self).__name__} (cmd_id={cls.cmd_id})"
 
-    def encode_payload(self, data: Union[PayloadType, sedes.CountableList]) -> bytes:
+    @classmethod
+    def encode_payload(cls, data: Union[PayloadType, sedes.CountableList]) -> bytes:
         if isinstance(data, dict):  # convert dict to ordered list
-            if not isinstance(self.structure, list):
+            if not isinstance(cls.structure, list):
                 raise ValueError("Command.structure must be a list when data is a dict")
-            expected_keys = sorted(name for name, _ in self.structure)
+            expected_keys = sorted(name for name, _ in cls.structure)
             data_keys = sorted(data.keys())
             if data_keys != expected_keys:
                 raise ValueError(
                     f"Keys in data dict ({data_keys}) do not match expected keys ({expected_keys})"
                 )
-            data = [data[name] for name, _ in self.structure]
-        if isinstance(self.structure, sedes.CountableList):
-            encoder = self.structure
+            data = [data[name] for name, _ in cls.structure]
+        if isinstance(cls.structure, sedes.CountableList):
+            encoder = cls.structure
         else:
-            encoder = sedes.List([type_ for _, type_ in self.structure])
+            encoder = sedes.List([type_ for _, type_ in cls.structure])
         return rlp.encode(data, sedes=encoder)
 
-    def decode_payload(self, rlp_data: bytes) -> PayloadType:
-        if isinstance(self.structure, sedes.CountableList):
-            decoder = self.structure
+    @classmethod
+    def decode_payload(cls, rlp_data: bytes) -> PayloadType:
+        if isinstance(cls.structure, sedes.CountableList):
+            decoder = cls.structure
         else:
             decoder = sedes.List(
-                [type_ for _, type_ in self.structure], strict=self.decode_strict)
+                [type_ for _, type_ in cls.structure], strict=cls.decode_strict)
         try:
             data = rlp.decode(rlp_data, sedes=decoder, recursive_cache=True)
         except rlp.DecodingError as err:
-            raise MalformedMessage(f"Malformed {type(self).__name__} message: {err!r}") from err
+            raise MalformedMessage(f"Malformed {type(cls).__name__} message: {err!r}") from err
 
-        if isinstance(self.structure, sedes.CountableList):
+        if isinstance(cls.structure, sedes.CountableList):
             return data
         return {
             field_name: value
             for ((field_name, _), value)
-            in zip(self.structure, data)
+            in zip(cls.structure, data)
         }
 
-    def decode(self, data: bytes) -> PayloadType:
+    @classmethod
+    def decode(cls, data: bytes) -> PayloadType:
         packet_type = get_devp2p_cmd_id(data)
-        if packet_type != self.cmd_id:
-            raise MalformedMessage(f"Wrong packet type: {packet_type}, expected {self.cmd_id}")
+        if packet_type != cls.cmd_id:
+            raise MalformedMessage(f"Wrong packet type: {packet_type}, expected {cls.cmd_id}")
 
         compressed_payload = data[1:]
-        encoded_payload = self.decompress_payload(compressed_payload)
+        encoded_payload = cls.decompress_payload(compressed_payload)
 
-        return self.decode_payload(encoded_payload)
+        return cls.decode_payload(encoded_payload)
 
-    def decompress_payload(self, raw_payload: bytes) -> bytes:
+    @classmethod
+    def decompress_payload(cls, raw_payload: bytes) -> bytes:
         # Do the Snappy Decompression only if Snappy Compression is supported by the protocol
-        if self.snappy_support:
+        if cls._snappy_support:
             return snappy.decompress(raw_payload)
         else:
             return raw_payload
 
-    def compress_payload(self, raw_payload: bytes) -> bytes:
+    @classmethod
+    def compress_payload(cls, raw_payload: bytes) -> bytes:
         # Do the Snappy Compression only if Snappy Compression is supported by the protocol
-        if self.snappy_support:
+        if cls._snappy_support:
             return snappy.compress(raw_payload)
         else:
             return raw_payload
 
-    def encode(self, data: PayloadType) -> Tuple[bytes, bytes]:
-        encoded_payload = self.encode_payload(data)
-        compressed_payload = self.compress_payload(encoded_payload)
+    @classmethod
+    def encode(cls, data: PayloadType) -> Tuple[bytes, bytes]:
+        encoded_payload = cls.encode_payload(data)
+        compressed_payload = cls.compress_payload(encoded_payload)
 
-        enc_cmd_id = rlp.encode(self.cmd_id, sedes=rlp.sedes.big_endian_int)
+        enc_cmd_id = rlp.encode(cls.cmd_id, sedes=rlp.sedes.big_endian_int)
         frame_size = len(enc_cmd_id) + len(compressed_payload)
         if frame_size.bit_length() > 24:
             raise ValueError("Frame size has to fit in a 3-byte integer")
@@ -159,18 +167,16 @@ class Command:
         body = _pad_to_16_byte_boundary(enc_cmd_id + compressed_payload)
         return header, body
 
-
+### FIXME: move to p2p._utils module?..
 # FIXME: module-level, global "look-up table"; is this acceptable?..
 command_classes: Dict[Tuple, Type[Command]] = {}
 # FIXME: use kwargs for feature specification; they shouldn't be spelled out here!
 def get_command_class(cmd_class, cmd_id_offset, snappy_support):
     # TODO: use NamedTuple?..
     specifier = (cmd_class, cmd_id_offset, snappy_support)
-    print('XXXXX', specifier)
 
     # use existing if available
     if specifier in command_classes.keys():
-        print('XXXXX IN COMMAND CLASS CACHE')
         return command_classes[specifier]
 
     class CommandClassInstance(cmd_class):
@@ -178,10 +184,12 @@ def get_command_class(cmd_class, cmd_id_offset, snappy_support):
         _snappy_support = snappy_support
 
         cmd_id = _cmd_id_offset + cmd_class._cmd_id
+        cmd_type = cmd_class
 
+        # FIXME: `self`
         def __repr__(self):
             # FIXME: not, strictly speaking, correct (it's not a tuple!)
-            return f'{id}'
+            return f'{specifier}'
         # def __type__(self):
         #     return cmd_class
 
@@ -224,9 +232,7 @@ class Protocol:
     def _update_protocol_commands(self) -> None:
         self.commands = [get_command_class(cmd_class, self._cmd_id_offset, self._snappy_support)
                          for cmd_class in self._commands]
-        # FIXME: not used, likely broken; fix or remove
-        # self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
-        # FIXME: likely broken look-up (compared to before rework-as-class)
+        self.cmd_by_type = {cmd.cmd_type: cmd for cmd in self.commands}
         self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
 
     @property

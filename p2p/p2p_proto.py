@@ -36,11 +36,13 @@ class Hello(Command):
         ('remote_pubkey', sedes.binary)
     ]
 
-    def decompress_payload(self, raw_payload: bytes) -> bytes:
+    @classmethod
+    def decompress_payload(cls, raw_payload: bytes) -> bytes:
         # The `Hello` command doesn't support snappy compression
         return raw_payload
 
-    def compress_payload(self, raw_payload: bytes) -> bytes:
+    @classmethod
+    def compress_payload(cls, raw_payload: bytes) -> bytes:
         # The `Hello` command doesn't support snappy compression
         return raw_payload
 
@@ -67,19 +69,21 @@ class Disconnect(Command):
     _cmd_id = 1
     structure = [('reason', sedes.big_endian_int)]
 
-    def get_reason_name(self, reason_id: int) -> str:
+    @classmethod
+    def get_reason_name(cls, reason_id: int) -> str:
         try:
             return DisconnectReason(reason_id).name
         except ValueError:
             return "unknown reason"
 
-    def decode(self, data: bytes) -> _DecodedMsgType:
+    @classmethod
+    def decode(cls, data: bytes) -> _DecodedMsgType:
         try:
             raw_decoded = cast(Dict[str, int], super().decode(data))
         except rlp.exceptions.ListDeserializationError:
             self.logger.warning("Malformed Disconnect message: %s", data)
             raise MalformedMessage(f"Malformed Disconnect message: {data}")
-        return assoc(raw_decoded, 'reason_name', self.get_reason_name(raw_decoded['reason']))
+        return assoc(raw_decoded, 'reason_name', cls.get_reason_name(raw_decoded['reason']))
 
 
 class Ping(Command):
@@ -109,17 +113,14 @@ class P2PProtocol(Protocol):
                     capabilities=self.peer.capabilities,
                     listen_port=self.peer.listen_port,
                     remote_pubkey=self.peer.privkey.public_key.to_bytes())
-        header, body = Hello(self._cmd_id_offset, self._snappy_support).encode(data)
+        header, body = self.cmd_by_type[Hello].encode(data)
         self.send(header, body)
 
     def send_disconnect(self, reason: DisconnectReason) -> None:
         msg: Dict[str, Any] = {"reason": reason}
-        header, body = Disconnect(
-            self.cmd_id_offset,
-            self.snappy_support
-        ).encode(msg)
+        header, body = self.cmd_by_type[Disconnect].encode(msg)
         self.send(header, body)
 
     def send_pong(self) -> None:
-        header, body = Pong(self._cmd_id_offset, self._snappy_support).encode({})
+        header, body = self.cmd_by_type[Pong].encode({})
         self.send(header, body)
