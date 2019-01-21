@@ -55,25 +55,25 @@ _DecodedMsgType = PayloadType
 
 class Command:
     _cmd_id: int = None
+    _cmd_id_offset: int = None
+    cmd_id = None
+    _snappy_support = None
+
     decode_strict = True
     structure: List[Tuple[str, Any]] = []
 
     _logger: logging.Logger = None
 
-    def __init__(self, cmd_id_offset: int, snappy_support: bool) -> None:
-        self.cmd_id_offset = cmd_id_offset
-        self.cmd_id = cmd_id_offset + self._cmd_id
-        self.snappy_support = snappy_support
-
     @property
-    def logger(self) -> logging.Logger:
-        if self._logger is None:
-            self._logger = logging.getLogger(f"p2p.protocol.{type(self).__name__}")
-        return self._logger
+    def logger(cls) -> logging.Logger:
+        if cls._logger is None:
+            cls._logger = logging.getLogger(f"p2p.protocol.{type(cls).__name__}")
+        return cls._logger
 
+    # FIXME: make @classmethod
     @property
-    def is_base_protocol(self) -> bool:
-        return self.cmd_id_offset == 0
+    def is_base_protocol(cls) -> bool:
+        return cls.cmd_id_offset == 0
 
     def __str__(self) -> str:
         return f"{type(self).__name__} (cmd_id={self.cmd_id})"
@@ -160,6 +160,36 @@ class Command:
         return header, body
 
 
+# FIXME: module-level, global "look-up table"; is this acceptable?..
+command_classes: Dict[Tuple, Type[Command]] = {}
+# FIXME: use kwargs for feature specification; they shouldn't be spelled out here!
+def get_command_class(cmd_class, cmd_id_offset, snappy_support):
+    # TODO: use NamedTuple?..
+    specifier = (cmd_class, cmd_id_offset, snappy_support)
+    print('XXXXX', specifier)
+
+    # use existing if available
+    if specifier in command_classes.keys():
+        print('XXXXX IN COMMAND CLASS CACHE')
+        return command_classes[specifier]
+
+    class CommandClassInstance(cmd_class):
+        _cmd_id_offset = cmd_id_offset
+        _snappy_support = snappy_support
+
+        cmd_id = _cmd_id_offset + cmd_class._cmd_id
+
+        def __repr__(self):
+            # FIXME: not, strictly speaking, correct (it's not a tuple!)
+            return f'{id}'
+        # def __type__(self):
+        #     return cmd_class
+
+    c = CommandClassInstance()
+    command_classes[specifier] = c
+    return c
+
+
 class BaseRequest(ABC, Generic[TRequestPayload]):
     """
     Must define command_payload during init. This is the data that will
@@ -180,21 +210,23 @@ class Protocol:
     name: str = None
     version: int = None
     cmd_length: int = None
-    # List of Command classes that this protocol supports.
+    # List of "featureless" Command classes that this Protocol object instance supports.
     _commands: List[Type[Command]] = []
 
     _logger: logging.Logger = None
 
     def __init__(self, peer: 'BasePeer', cmd_id_offset: int, snappy_support: bool) -> None:
         self.peer = peer
-        self.cmd_id_offset = cmd_id_offset
+        self._cmd_id_offset = cmd_id_offset
         self._snappy_support = snappy_support
         self._update_protocol_commands()
 
     def _update_protocol_commands(self) -> None:
-        self.commands = [cmd_class(self.cmd_id_offset, self._snappy_support)
+        self.commands = [get_command_class(cmd_class, self._cmd_id_offset, self._snappy_support)
                          for cmd_class in self._commands]
-        self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
+        # FIXME: not used, likely broken; fix or remove
+        # self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
+        # FIXME: likely broken look-up (compared to before rework-as-class)
         self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
 
     @property
@@ -202,6 +234,11 @@ class Protocol:
         if self._logger is None:
             self._logger = logging.getLogger(f"p2p.protocol.{type(self).__name__}")
         return self._logger
+
+    @property
+    def cmd_id_offset(self) -> int:
+        '''TODO'''
+        return self._cmd_id_offset
 
     @property
     def snappy_support(self) -> bool:
@@ -223,7 +260,7 @@ class Protocol:
         self.send(header, body)
 
     def supports_command(self, cmd_type: Type[Command]) -> bool:
-        return cmd_type in self.cmd_by_type
+        return cmd_type in self._commands
 
     def __repr__(self) -> str:
         return "(%s, %d)" % (self.name, self.version)
