@@ -30,7 +30,6 @@ from eth_keys import (
 
 from eth_hash.auto import keccak
 
-from trinity._utils.validation import validate_enode_uri
 
 k_b = 8  # 8 bits per hop
 
@@ -104,7 +103,6 @@ class Node:
 
     @classmethod
     def from_uri(cls, uri: str) -> 'Node':
-        validate_enode_uri(uri)  # Be no more permissive than the validation
         parsed = urlparse.urlparse(uri)
         pubkey = keys.PublicKey(decode_hex(parsed.username))
         return cls(pubkey, Address(parsed.hostname, parsed.port))
