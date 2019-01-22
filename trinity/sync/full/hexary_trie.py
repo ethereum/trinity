@@ -148,6 +148,9 @@ class HexaryTrieSync:
     def has_pending_requests(self) -> bool:
         return len(self.requests) > 0
 
+    def new_root_hash(self, root_hash: Hash32):
+        self.logger.info('accepted new root hash command')
+
     def next_batch(self, n: int = 1) -> List[SyncRequest]:
         """Return the next requests that should be dispatched."""
         if len(self.queue) == 0:

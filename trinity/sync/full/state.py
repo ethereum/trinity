@@ -58,7 +58,10 @@ from trinity.exceptions import (
     SyncRequestAlreadyProcessed,
 )
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
-from trinity.protocol.eth.monitors import ETHChainTipMonitor
+from trinity.protocol.eth.monitors import (
+    ETHChainTipMonitor,
+    ETHVerifiedTipMonitor,
+)
 from trinity.protocol.eth import (
     constants as eth_constants,
 )
@@ -87,13 +90,16 @@ class StateDownloader(BaseService, PeerSubscriber):
         self.peer_pool = peer_pool
         self._account_db = account_db
 
-        self._tip_monitor = ETHChainTipMonitor(self.peer_pool, token=self.cancel_token)
         # We use a LevelDB instance for the nodes cache because a full state download, if run
         # uninterrupted will visit more than 180M nodes, making an in-memory cache unfeasible.
         self._nodes_cache_dir = tempfile.TemporaryDirectory(prefix="pyevm-state-sync-cache")
 
         self.request_tracker = TrieNodeRequestTracker(self._reply_timeout, self.logger)
         self._peer_missing_nodes: Dict[ETHPeer, Set[Hash32]] = collections.defaultdict(set)
+
+        # will be fired once the correct state tree to crawl has been determined
+        self._ready = asyncio.Event()
+        self.scheduler = None
 
     # We are only interested in peers leaving the pool
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset()
@@ -240,43 +246,27 @@ class StateDownloader(BaseService, PeerSubscriber):
             next_timeout = self.request_tracker.get_next_timeout()
             await self.sleep(next_timeout - time.time())
 
+    async def _monitor_new_blocks(self) -> None:
+        monitor = ETHVerifiedTipMonitor(self.peer_pool, self.cancel_token)
+        self.run_daemon(monitor)
+        async for (peer, header) in monitor.wait_tip_info():
+            self.root_hash = header.state_root
+            self.logger.debug('telling sync to use %s from %s', encode_hex(self.root_hash), peer)
+            if self.scheduler:
+                # TODO: this logic is a little hard to follow. is there a way to get rid
+                # of the conditional?
+                self.scheduler.new_root_hash(self.root_hash)
+            self._ready.set()  # tell _run to start running if it isn't already
+
     async def _run(self) -> None:
         """Fetch all trie nodes starting from self.root_hash, and store them in self.db.
 
         Raises OperationCancelled if we're interrupted before that is completed.
         """
         self.logger.info("Waiting for a client to connect")
-        self.run_child_service(self._tip_monitor)
+        self.run_daemon_task(self._monitor_new_blocks())
 
-        peer = await self._tip_monitor.wait_tip_info().__anext__()
-        block_hash = peer.head_hash
-        self.logger.info("Connected to %s, asking for highest block", peer)
-
-        # TODO: Maybe this header is already in the database, it's worth checking
-
-        try:
-            TWO_SECONDS = 2
-            headers = await peer.requests.get_block_headers(
-                block_hash, max_headers=1, reverse=False, timeout=TWO_SECONDS
-            )
-        except (TimeoutError, PeerConnectionLost) as err:
-            self.logger.error("Unable to fetch the latest block from peer, quitting")
-            return
-        except ValidationError as err:
-            self.logger.error("Invalid header response from peer. Quitting")
-            return
-
-        if len(headers) != 1:
-            self.logger.error(
-                "Didn't expect to receive %s headers from peer. Quitting", len(headers)
-            )
-        else:
-            header = headers[0]
-
-        # TODO: validate the header? ensure_same_side_on_dao_fork() has more
-
-        self.root_hash = header.state_root
-        self.logger.info("Starting state sync for root hash %s", encode_hex(self.root_hash))
+        await self.wait(self._ready.wait())
 
         # Allow the LevelDB instance to consume half of the entire file descriptor limit that
         # the OS permits. Let the other half be reserved for other db access, networking etc.
@@ -288,13 +278,16 @@ class StateDownloader(BaseService, PeerSubscriber):
             self.logger
         )
 
+        self.logger.info("Starting state sync for root hash %s", encode_hex(self.root_hash))
+
         self._timer.start()
         self.run_task(self._periodically_report_progress())
         self.run_task(self._periodically_retry_timedout_and_missing())
         with self.subscribe(self.peer_pool):
             while self.scheduler.has_pending_requests:
                 # This ensures we yield control and give deregister_peer a chance to run.
-                # It also ensures we exit when our cancel token is triggered.
+                # It also ensures we exit when our cancel token is triggered, and that
+                # _monitor_new_blocks has a chance to change the root_hash
                 await self.sleep(0)
 
                 requests = self.scheduler.next_batch(eth_constants.MAX_STATE_FETCH)

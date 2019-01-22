@@ -34,8 +34,9 @@ async def connect_to_peers_loop(peer_pool, nodes):
     """Loop forever trying to connect to one of the given nodes if the pool is not yet full."""
     while peer_pool.is_operational:
         try:
-            if not peer_pool.is_full:
-                await peer_pool.connect_to_nodes(nodes)
+            await peer_pool.connect_to_nodes(
+                [node for node in nodes if node not in peer_pool.connected_nodes]
+            )
             await peer_pool.wait(asyncio.sleep(2))
         except OperationCancelled:
             break
