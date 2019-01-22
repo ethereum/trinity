@@ -12,9 +12,9 @@ from trinity.db.base import AsyncBaseDB
 from trinity.db.chain import AsyncChainDB
 from trinity.protocol.eth.peer import ETHPeerPool
 
-from .chain import FastChainSyncer, RegularChainSyncer
-from .constants import FAST_SYNC_CUTOFF
-from .state import StateDownloader
+from trinity.sync.full.chain import FastChainSyncer, RegularChainSyncer
+from trinity.sync.full.constants import FAST_SYNC_CUTOFF
+from trinity.sync.full.state import StateDownloader
 
 
 class FullNodeSyncer(BaseService):
