@@ -40,12 +40,12 @@ from tests.eth2.beacon.helpers import (
     ]
 )
 def test_activate_validator(genesis,
-                            empty_beacon_state,
+                            filled_beacon_state,
                             genesis_slot,
                             entry_exit_delay,
                             max_deposit):
     validator_count = 10
-    state = empty_beacon_state.copy(
+    state = filled_beacon_state.copy(
         validator_registry=tuple(
             mock_validator_record(
                 pubkey=index.to_bytes(48, 'big'),

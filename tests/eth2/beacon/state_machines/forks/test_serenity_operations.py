@@ -4,16 +4,6 @@ from eth_utils import (
     ValidationError,
 )
 
-from eth.constants import (
-    ZERO_HASH32,
-)
-
-from eth2.beacon.helpers import (
-    get_block_root,
-    get_crosslink_committees_at_slot,
-)
-
-from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.blocks import (
     BeaconBlockBody,
 )
@@ -23,52 +13,6 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
 from eth2.beacon.state_machines.forks.serenity.operations import (
     process_attestations,
 )
-
-
-@pytest.fixture
-def create_mock_signed_attestations_at_slot(config,
-                                            sample_attestation_data_params,
-                                            create_mock_signed_attestation):
-    def create_mock_signed_attestations_at_slot(state,
-                                                attestation_slot):
-        attestations = []
-        crosslink_committees_at_slot = get_crosslink_committees_at_slot(
-            state,
-            slot=attestation_slot,
-            epoch_length=config.EPOCH_LENGTH,
-            target_committee_size=config.TARGET_COMMITTEE_SIZE,
-            shard_count=config.SHARD_COUNT,
-        )
-        for crosslink_committee in crosslink_committees_at_slot:
-            committee, shard = crosslink_committee
-            # have 0th committee member sign
-            voting_committee_indices = [0]
-            latest_crosslink_root = state.latest_crosslinks[shard].shard_block_root
-
-            assert len(committee) > 0
-            attestation_data = AttestationData(**sample_attestation_data_params).copy(
-                slot=attestation_slot,
-                shard=shard,
-                justified_slot=state.previous_justified_slot,
-                justified_block_root=get_block_root(
-                    state,
-                    state.previous_justified_slot,
-                    config.LATEST_BLOCK_ROOTS_LENGTH,
-                ),
-                latest_crosslink_root=latest_crosslink_root,
-                shard_block_root=ZERO_HASH32,
-            )
-
-            attestations.append(
-                create_mock_signed_attestation(
-                    state,
-                    crosslink_committee,
-                    voting_committee_indices,
-                    attestation_data,
-                )
-            )
-        return tuple(attestations)
-    return create_mock_signed_attestations_at_slot
 
 
 @pytest.mark.parametrize(
@@ -103,6 +47,7 @@ def test_process_attestations(genesis_state,
     attestations = create_mock_signed_attestations_at_slot(
         state,
         attestation_slot,
+        1.0,
     )
 
     assert len(attestations) > 0

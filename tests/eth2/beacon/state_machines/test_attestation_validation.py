@@ -265,8 +265,7 @@ def test_validate_serenity_attestation_aggregate_signature(genesis_state,
 
     # randomly select 3/4 participants from committee
     votes_count = len(committee) * 3 // 4
-    voting_committee_indices = random.sample(range(committee_size), votes_count)
-    assert len(voting_committee_indices) > 0
+    assert votes_count > 0
 
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
         slot=slot,
@@ -275,9 +274,9 @@ def test_validate_serenity_attestation_aggregate_signature(genesis_state,
 
     attestation = create_mock_signed_attestation(
         state,
-        crosslink_committee,
-        voting_committee_indices,
         attestation_data,
+        committee,
+        votes_count,
     )
 
     if is_valid:

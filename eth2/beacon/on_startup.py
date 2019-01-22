@@ -1,12 +1,10 @@
 from typing import (
     Sequence,
+    Type,
 )
 
 from eth_typing import (
     Hash32,
-)
-from eth_utils import (
-    denoms,
 )
 
 from eth.constants import (
@@ -15,6 +13,7 @@ from eth.constants import (
 
 from eth2.beacon.constants import (
     EMPTY_SIGNATURE,
+    GWEI_PER_ETH,
 )
 from eth2.beacon.deposit_helpers import (
     process_deposit,
@@ -24,7 +23,6 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
-    BeaconBlock,
     BeaconBlockBody,
 )
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
@@ -45,8 +43,10 @@ from eth2.beacon.validator_status_helpers import (
 )
 
 
-def get_genesis_block(startup_state_root: Hash32, genesis_slot: SlotNumber) -> BaseBeaconBlock:
-    return BeaconBlock(
+def get_genesis_block(startup_state_root: Hash32,
+                      genesis_slot: SlotNumber,
+                      block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
+    return block_class(
         slot=genesis_slot,
         parent_root=ZERO_HASH32,
         state_root=startup_state_root,
@@ -149,7 +149,7 @@ def get_initial_beacon_state(*,
             state.validator_balances,
             validator_index,
             max_deposit,
-        ) >= max_deposit * denoms.gwei
+        ) >= max_deposit * GWEI_PER_ETH
         if is_enough_effective_balance:
             state = activate_validator(
                 state,

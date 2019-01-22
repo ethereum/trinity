@@ -42,8 +42,8 @@ def test_validator_registry_and_balances_length(sample_beacon_state_params):
 )
 def test_num_validators(expected,
                         max_deposit,
-                        empty_beacon_state):
-    state = empty_beacon_state.copy(
+                        filled_beacon_state):
+    state = filled_beacon_state.copy(
         validator_registry=tuple(
             mock_validator_record(
                 pubkey,
@@ -61,12 +61,12 @@ def test_num_validators(expected,
 )
 def test_num_crosslink_records(expected,
                                sample_crosslink_record_params,
-                               empty_beacon_state):
+                               filled_beacon_state):
     crosslink_records = [
         CrosslinkRecord(**sample_crosslink_record_params)
         for i in range(expected)
     ]
-    state = empty_beacon_state.copy(
+    state = filled_beacon_state.copy(
         latest_crosslinks=crosslink_records,
     )
 

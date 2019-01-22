@@ -2,16 +2,16 @@ from eth_typing import (
     Hash32,
 )
 
+from eth2._utils.merkle import get_merkle_root
 from eth2.beacon.helpers import get_beacon_proposer_index
-
 from eth2.beacon.state_machines.configs import BeaconConfig
 from eth2.beacon.state_machines.state_transitions import BaseStateTransition
-
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 
-from eth2._utils.merkle import get_merkle_root
-
+from .epoch_processing import (
+    process_final_updates,
+)
 from .operations import (
     process_attestations,
 )
@@ -32,7 +32,7 @@ class SerenityStateTransition(BaseStateTransition):
             if state.slot == block.slot:
                 state = self.per_block_transition(state, block)
             if state.slot % self.config.EPOCH_LENGTH == 0:
-                state = self.per_epoch_transition(state)
+                state = self.per_epoch_transition(state, block)
 
         return state
 
@@ -108,13 +108,13 @@ class SerenityStateTransition(BaseStateTransition):
 
         return state
 
-    def per_epoch_transition(self, state: BeaconState) -> BeaconState:
-        # TODO: state = process_receipt_roots(state, self.config)
-        # TODO: state = process_justification(state, self.config)
-        # TODO: state = process_rosslinks(state, self.config)
-        # TODO: state = process_rewards_and_penalties(state, self.config)
-        # TODO: state = process_ejections(state, self.config)
-        # TODO: state = process_validator_registry(state, self.config)
-        # TODO: state = process_final_updates(state, self.config)
+    def per_epoch_transition(self, state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
+        # TODO: state = process_receipt_roots(state, block, self.config)
+        # TODO: state = process_justification(state, block, self.config)
+        # TODO: state = process_rosslinks(state, block, self.config)
+        # TODO: state = process_rewards_and_penalties(state, block, self.config)
+        # TODO: state = process_ejections(state, block, self.config)
+        # TODO: state = process_validator_registry(state, block, self.config)
+        state = process_final_updates(state, block, self.config)
 
         return state

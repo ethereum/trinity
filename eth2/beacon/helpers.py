@@ -108,7 +108,8 @@ def get_active_validator_indices(validators: Sequence['ValidatorRecord'],
     Get indices of active validators from ``validators``.
     """
     return tuple(
-        ValidatorIndex(index)for index, validator in enumerate(validators)
+        ValidatorIndex(index)
+        for index, validator in enumerate(validators)
         if validator.is_active(slot)
     )
 

@@ -1,10 +1,14 @@
+import pytest
+
 from eth.constants import (
     ZERO_HASH32,
 )
 
 from eth2.beacon.constants import (
     EMPTY_SIGNATURE,
+    GWEI_PER_ETH,
 )
+from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositData
@@ -16,20 +20,18 @@ from eth2.beacon.on_startup import (
     get_genesis_block,
     get_initial_beacon_state,
 )
+from eth2.beacon.tools.builder.state_machine.validator import (
+    sign_proof_of_possession,
+)
 from eth2.beacon.typing import (
     Gwei,
-)
-
-from tests.eth2.beacon.helpers import (
-    make_deposit_input,
-    sign_proof_of_possession,
 )
 
 
 def test_get_genesis_block():
     startup_state_root = b'\x10' * 32
     genesis_slot = 10
-    genesis_block = get_genesis_block(startup_state_root, genesis_slot)
+    genesis_block = get_genesis_block(startup_state_root, genesis_slot, BeaconBlock)
     assert genesis_block.slot == genesis_slot
     assert genesis_block.parent_root == ZERO_HASH32
     assert genesis_block.state_root == startup_state_root
@@ -39,9 +41,18 @@ def test_get_genesis_block():
     assert genesis_block.body.is_empty
 
 
+@pytest.mark.parametrize(
+    (
+        'num_validators,'
+    ),
+    [
+        (10)
+    ]
+)
 def test_get_initial_beacon_state(
         privkeys,
         pubkeys,
+        num_validators,
         genesis_slot,
         genesis_fork_version,
         genesis_start_shard,
@@ -79,7 +90,7 @@ def test_get_initial_beacon_state(
                     randao_commitment=randao_commitment,
                     custody_commitment=custody_commitment,
                     proof_of_possession=sign_proof_of_possession(
-                        deposit_input=make_deposit_input(
+                        deposit_input=DepositInput(
                             pubkey=pubkeys[i],
                             withdrawal_credentials=withdrawal_credentials,
                             randao_commitment=randao_commitment,
@@ -90,7 +101,7 @@ def test_get_initial_beacon_state(
                         slot=genesis_slot,
                     ),
                 ),
-                amount=max_deposit,
+                amount=max_deposit * GWEI_PER_ETH,
                 timestamp=0,
             ),
         )
@@ -128,7 +139,6 @@ def test_get_initial_beacon_state(
     assert len(state.validator_balances) == validator_count
     assert state.validator_registry_latest_change_slot == genesis_slot
     assert state.validator_registry_exit_count == 0
-    assert state.validator_registry_delta_chain_tip == ZERO_HASH32
 
     # Randomness and committees
     assert len(state.latest_randao_mixes) == latest_randao_mixes_length
@@ -170,3 +180,5 @@ def test_get_initial_beacon_state(
     # Ethereum 1.0 chain data
     assert state.latest_eth1_data == latest_eth1_data
     assert len(state.eth1_data_votes) == 0
+
+    assert state.validator_registry[0].is_active(genesis_slot)

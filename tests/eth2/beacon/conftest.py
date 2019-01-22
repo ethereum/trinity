@@ -1,5 +1,4 @@
 import pytest
-import rlp
 
 from eth.constants import (
     ZERO_HASH32,
@@ -17,14 +16,14 @@ from eth2.beacon.aggregation import (
     aggregate_votes,
 )
 from eth2.beacon.constants import (
+    EMPTY_SIGNATURE,
     FAR_FUTURE_SLOT,
     GWEI_PER_ETH,
 )
-from eth2.beacon.enums import (
-    SignatureDomain,
-)
+
 from eth2.beacon.helpers import (
-    get_domain,
+    get_block_root,
+    get_crosslink_committees_at_slot,
 )
 
 from eth2.beacon.types.attestation_data import AttestationData
@@ -37,21 +36,17 @@ from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.proposal_signed_data import ProposalSignedData
 from eth2.beacon.types.slashable_vote_data import SlashableVoteData
 
-
-from eth2.beacon.constants import (
-    EMPTY_SIGNATURE,
-)
 from eth2.beacon.helpers import (
     get_beacon_proposer_index,
+)
+from eth2.beacon.on_startup import (
+    get_genesis_block,
 )
 from eth2.beacon.types.blocks import (
     BeaconBlockBody,
 )
 from eth2.beacon.types.fork_data import (
     ForkData,
-)
-from eth2.beacon.typing import (
-    FromBlockParams,
 )
 from eth2.beacon.state_machines.configs import BeaconConfig
 from eth2.beacon.state_machines.forks.serenity import (
@@ -62,7 +57,13 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
 )
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 
-
+from eth2.beacon.tools.builder.state_machine.proposer import (
+    create_block_on_state,
+)
+from eth2.beacon.tools.builder.state_machine.validator import (
+    prepare_attesstation_signing,
+    sign_attestation,
+)
 from tests.eth2.beacon.helpers import (
     mock_validator_record,
 )
@@ -358,52 +359,26 @@ def sample_validator_registry_delta_block_params():
 
 
 @pytest.fixture
-def empty_beacon_state(latest_block_roots_length,
-                       latest_penalized_exit_length,
-                       sample_eth1_data_params,
-                       genesis_slot,
-                       genesis_start_shard):
-    return BeaconState(
-        slot=0,
-        genesis_time=0,
-        fork_data=ForkData(
-            pre_fork_version=0,
-            post_fork_version=0,
-            fork_slot=0,
-        ),
-        validator_registry=(),
-        validator_balances=(),
-        validator_registry_latest_change_slot=10,
-        validator_registry_exit_count=0,
-        validator_registry_delta_chain_tip=ZERO_HASH32,
-        latest_randao_mixes=(),
-        latest_vdf_outputs=(),
-        persistent_committees=(),
-        persistent_committee_reassignments=(),
-        previous_epoch_start_shard=genesis_start_shard,
-        current_epoch_start_shard=genesis_start_shard,
-        previous_epoch_calculation_slot=genesis_slot,
-        current_epoch_calculation_slot=genesis_slot,
-        previous_epoch_randao_mix=ZERO_HASH32,
-        current_epoch_randao_mix=ZERO_HASH32,
-        previous_justified_slot=0,
-        justified_slot=0,
-        justification_bitfield=0,
-        finalized_slot=0,
-        latest_crosslinks=(),
-        latest_block_roots=(ZERO_HASH32,) * latest_block_roots_length,
-        latest_penalized_exit_balances=(0,) * latest_penalized_exit_length,
-        latest_attestations=(),
-        batched_block_roots=(),
-        latest_eth1_data=Eth1Data(**sample_eth1_data_params),
-        eth1_data_votes=(),
+def filled_beacon_state(genesis_slot,
+                        genesis_start_shard,
+                        shard_count,
+                        latest_block_roots_length,
+                        latest_randao_mixes_length,
+                        latest_penalized_exit_length):
+    return BeaconState.create_filled_state(
+        genesis_start_shard=genesis_start_shard,
+        genesis_slot=genesis_slot,
+        shard_count=shard_count,
+        latest_block_roots_length=latest_block_roots_length,
+        latest_randao_mixes_length=latest_randao_mixes_length,
+        latest_penalized_exit_length=latest_penalized_exit_length,
     )
 
 
 @pytest.fixture()
-def ten_validators_state(empty_beacon_state, max_deposit):
+def ten_validators_state(filled_beacon_state, max_deposit):
     validator_count = 10
-    return empty_beacon_state.copy(
+    return filled_beacon_state.copy(
         validator_registry=tuple(
             mock_validator_record(
                 pubkey=index.to_bytes(48, "big"),
@@ -615,7 +590,7 @@ def max_exits():
 # genesis
 #
 @pytest.fixture
-def genesis_state(empty_beacon_state,
+def genesis_state(filled_beacon_state,
                   activated_genesis_validators,
                   genesis_balances,
                   epoch_length,
@@ -623,11 +598,13 @@ def genesis_state(empty_beacon_state,
                   genesis_slot,
                   shard_count,
                   latest_block_roots_length,
+                  latest_penalized_exit_length,
                   latest_randao_mixes_length):
-    return empty_beacon_state.copy(
+    return filled_beacon_state.copy(
         validator_registry=activated_genesis_validators,
         validator_balances=genesis_balances,
         latest_block_roots=tuple(ZERO_HASH32 for _ in range(latest_block_roots_length)),
+        latest_penalized_exit_balances=(0,) * latest_penalized_exit_length,
         latest_crosslinks=tuple(
             CrosslinkRecord(
                 slot=genesis_slot,
@@ -638,20 +615,16 @@ def genesis_state(empty_beacon_state,
         latest_randao_mixes=tuple(
             ZERO_HASH32
             for _ in range(latest_randao_mixes_length)
-        )
+        ),
     )
 
 
 @pytest.fixture
 def genesis_block(genesis_state, genesis_slot):
-    return SerenityBeaconBlock(
-        slot=genesis_slot,
-        parent_root=ZERO_HASH32,
-        state_root=genesis_state.root,
-        randao_reveal=ZERO_HASH32,
-        eth1_data=Eth1Data.create_empty_data(),
-        signature=EMPTY_SIGNATURE,
-        body=BeaconBlockBody.create_empty_body(),
+    return get_genesis_block(
+        genesis_state.root,
+        genesis_slot,
+        SerenityBeaconBlock,
     )
 
 
@@ -784,30 +757,76 @@ def fixture_sm_class(config):
 # Create mock consensus objects
 #
 @pytest.fixture
+def create_mock_signed_attestations_at_slot(config,
+                                            sample_attestation_data_params,
+                                            create_mock_signed_attestation):
+    def create_mock_signed_attestations_at_slot(state,
+                                                attestation_slot,
+                                                voted_attesters_ratio):
+        attestations = []
+        crosslink_committees_at_slot = get_crosslink_committees_at_slot(
+            state,
+            slot=attestation_slot,
+            epoch_length=config.EPOCH_LENGTH,
+            target_committee_size=config.TARGET_COMMITTEE_SIZE,
+            shard_count=config.SHARD_COUNT,
+        )
+        for crosslink_committee in crosslink_committees_at_slot:
+            committee, shard = crosslink_committee
+            # have 0th committee member sign
+
+            num_voted_attesters = int(len(committee) * voted_attesters_ratio)
+            latest_crosslink_root = state.latest_crosslinks[shard].shard_block_root
+
+            attestation_data = AttestationData(
+                slot=attestation_slot,
+                shard=shard,
+                beacon_block_root=ZERO_HASH32,
+                epoch_boundary_root=ZERO_HASH32,
+                shard_block_root=ZERO_HASH32,
+                latest_crosslink_root=latest_crosslink_root,
+                justified_slot=state.previous_justified_slot,
+                justified_block_root=get_block_root(
+                    state,
+                    state.previous_justified_slot,
+                    config.LATEST_BLOCK_ROOTS_LENGTH,
+                ),
+            )
+
+            attestations.append(
+                create_mock_signed_attestation(
+                    state,
+                    attestation_data,
+                    committee,
+                    num_voted_attesters,
+                )
+            )
+        return tuple(attestations)
+    return create_mock_signed_attestations_at_slot
+
+
+@pytest.fixture
 def create_mock_signed_attestation(keymap):
     def _create_mock_signed_attestation(state,
-                                        crosslink_committee,
-                                        voting_committee_indices,
-                                        attestation_data):
-        committee, _ = crosslink_committee
-        message = hash_eth2(
-            rlp.encode(attestation_data) +
-            (0).to_bytes(1, "big")
+                                        attestation_data,
+                                        committee,
+                                        num_voted_attesters):
+        message, voting_committee_indices = prepare_attesstation_signing(
+            attestation_data,
+            committee,
+            num_voted_attesters,
         )
-        # participants sign message
+
         signatures = [
-            bls.sign(
+            sign_attestation(
                 message=message,
                 privkey=keymap[
                     state.validator_registry[
                         committee[committee_index]
                     ].pubkey
                 ],
-                domain=get_domain(
-                    fork_data=state.fork_data,
-                    slot=attestation_data.slot,
-                    domain_type=SignatureDomain.DOMAIN_ATTESTATION,
-                )
+                fork_data=state.fork_data,
+                slot=attestation_data.slot,
             )
             for committee_index in voting_committee_indices
         ]
@@ -833,47 +852,38 @@ def create_mock_signed_attestation(keymap):
 
 @pytest.fixture
 def create_mock_block(keymap):
-    def _create_mock_block(state, block_class, parent_block, config, slot=None):
+    def _create_mock_block(state,
+                           block_class,
+                           parent_block,
+                           config,
+                           slot=None,
+                           attestations=()):
         if slot is None:
-            slot = state.slot
+            slot = state.slot + 1
 
-        # Prepare block
-        block = block_class.from_parent(
-            parent_block=parent_block,
-            block_params=FromBlockParams(slot=slot),
-        )
-
-        # Sign block
-        beacon_proposer_index = get_beacon_proposer_index(
-            state,
-            block.slot,
+        proposer_index = get_beacon_proposer_index(
+            state.copy(
+                slot=slot,
+            ),
+            slot,
             config.EPOCH_LENGTH,
             config.TARGET_COMMITTEE_SIZE,
             config.SHARD_COUNT,
         )
+        proposer_pubkey = state.validator_registry[proposer_index].pubkey
+        proposer_privkey = keymap[proposer_pubkey]
 
-        # Get privkey
-        beacon_proposer_privkey = keymap[
-            state.validator_registry[beacon_proposer_index].pubkey
-        ]
-
-        # Sign the block
-        empty_signature_block_root = block.block_without_signature_root
-        proposal_root = ProposalSignedData(
-            block.slot,
-            config.BEACON_CHAIN_SHARD_NUMBER,
-            empty_signature_block_root,
-        ).root
-
-        # Finally
-        block = block.copy(
-            state_root=state.root,
-            signature=bls.sign(
-                message=proposal_root,
-                privkey=beacon_proposer_privkey,
-                domain=get_domain(state.fork_data, state.slot, SignatureDomain.DOMAIN_PROPOSAL),
-            ),
+        block = create_block_on_state(
+            state,
+            config,
+            parent_block,
+            parent_block,
+            slot,
+            validator_index=proposer_index,
+            privkey=proposer_privkey,
+            attestations=attestations,
         )
+
         return block
 
     return _create_mock_block

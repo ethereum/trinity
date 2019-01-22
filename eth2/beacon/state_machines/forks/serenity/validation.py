@@ -4,16 +4,12 @@ from eth_typing import (
 from eth_utils import (
     ValidationError,
 )
-import rlp
 
 from eth.constants import (
     ZERO_HASH32,
 )
 
 from eth2._utils import bls as bls
-from eth2.beacon._utils.hash import (
-    hash_eth2,
-)
 
 from eth2.beacon.enums import (
     SignatureDomain,
@@ -24,6 +20,7 @@ from eth2.beacon.helpers import (
     get_block_root,
     get_domain,
 )
+from eth2.beacon.types.attestation_data_and_custody_bits import AttestationDataAndCustodyBit
 from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.types.attestations import Attestation  # noqa: F401
@@ -61,16 +58,27 @@ def validate_serenity_proposer_signature(state: BeaconState,
         shard_count,
     )
     proposer_pubkey = state.validator_registry[beacon_proposer_index].pubkey
+    domain = get_domain(state.fork_data, state.slot, SignatureDomain.DOMAIN_PROPOSAL)
 
     is_valid_signature = bls.verify(
         pubkey=proposer_pubkey,
         message=proposal_root,
         signature=block.signature,
-        domain=get_domain(state.fork_data, state.slot, SignatureDomain.DOMAIN_PROPOSAL),
+        domain=domain,
     )
 
     if not is_valid_signature:
-        raise ValidationError("Invalid Proposer Signature on block")
+        raise ValidationError(
+            "Invalid Proposer Signature on block, "
+            "beacon_proposer_index={}, pubkey={}, message={}, "
+            "block.signature={}, domain={}".format(
+                beacon_proposer_index,
+                proposer_pubkey,
+                proposal_root,
+                block.signature,
+                domain,
+            )
+        )
 
 
 #
@@ -278,11 +286,7 @@ def validate_serenity_attestation_aggregate_signature(state: BeaconState,
     group_public_key = bls.aggregate_pubkeys(pubkeys)
 
     # TODO: change to tree hashing when we have SSZ
-    # TODO: Replace with AttestationAndCustodyBit data structure
-    message = hash_eth2(
-        rlp.encode(attestation.data) +
-        (0).to_bytes(1, "big")
-    )
+    message = AttestationDataAndCustodyBit.create_attestation_message(attestation.data)
 
     is_valid_signature = bls.verify(
         message=message,
