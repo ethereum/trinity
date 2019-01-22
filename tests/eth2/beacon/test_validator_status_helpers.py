@@ -1,9 +1,5 @@
 import pytest
 
-from eth_utils import (
-    ValidationError,
-)
-
 from eth2.beacon.constants import (
     FAR_FUTURE_SLOT,
     GWEI_PER_ETH,
@@ -23,64 +19,12 @@ from eth2.beacon.validator_status_helpers import (
     initiate_validator_exit,
     prepare_validator_for_withdrawal,
     penalize_validator,
-    update_tuple_item,
 )
 
 
 from tests.eth2.beacon.helpers import (
     mock_validator_record,
 )
-
-
-#
-# Helper
-#
-@pytest.mark.parametrize(
-    (
-        'tuple_data, index, new_value, expected'
-    ),
-    [
-        (
-            (1, ) * 10,
-            0,
-            -99,
-            (-99,) + (1, ) * 9,
-        ),
-        (
-            (1, ) * 10,
-            5,
-            -99,
-            (1, ) * 5 + (-99,) + (1, ) * 4,
-        ),
-        (
-            (1, ) * 10,
-            9,
-            -99,
-            (1, ) * 9 + (-99,),
-        ),
-        (
-            (1, ) * 10,
-            10,
-            -99,
-            ValidationError(),
-        )
-    ]
-)
-def test_update_tuple_item(tuple_data, index, new_value, expected):
-    if isinstance(expected, Exception):
-        with pytest.raises(ValidationError):
-            update_tuple_item(
-                tuple_data=tuple_data,
-                index=index,
-                new_value=new_value,
-            )
-    else:
-        result = update_tuple_item(
-            tuple_data=tuple_data,
-            index=index,
-            new_value=new_value,
-        )
-        assert result == expected
 
 
 #
