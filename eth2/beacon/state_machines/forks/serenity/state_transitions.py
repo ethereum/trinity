@@ -86,7 +86,7 @@ class SerenityStateTransition(BaseStateTransition):
         return state
 
     def per_block_transition(self, state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
-        # TODO
+        # TODO: finish per-block processing logic as the spec
         validate_serenity_proposer_signature(
             state,
             block,
@@ -95,11 +95,26 @@ class SerenityStateTransition(BaseStateTransition):
             target_committee_size=self.config.TARGET_COMMITTEE_SIZE,
             shard_count=self.config.SHARD_COUNT
         )
+        # TODO: state = process_randao(state, block, self.config)
+        # TODO: state = process_eth1_data(state, block, self.config)
 
+        # Operations
+        # TODO: state = process_proposer_slashings(state, block, self.config)
+        # TODO: state = process_casper_slashings(state, block, self.config)
         state = process_attestations(state, block, self.config)
+        # TODO: state = process_deposits(state, block, self.config)
+        # TODO: state = process_exits(state, block, self.config)
+        # TODO: validate_custody(state, block, self.config)
 
         return state
 
     def per_epoch_transition(self, state: BeaconState) -> BeaconState:
-        # TODO
+        # TODO: state = process_receipt_roots(state, self.config)
+        # TODO: state = process_justification(state, self.config)
+        # TODO: state = process_rosslinks(state, self.config)
+        # TODO: state = process_rewards_and_penalties(state, self.config)
+        # TODO: state = process_ejections(state, self.config)
+        # TODO: state = process_validator_registry(state, self.config)
+        # TODO: state = process_final_updates(state, self.config)
+
         return state
