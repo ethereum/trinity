@@ -22,6 +22,7 @@ import rlp
 
 from eth_utils import (
     encode_hex,
+    ValidationError,
 )
 
 from eth_typing import (
@@ -46,6 +47,7 @@ from p2p.protocol import (
 from p2p.exceptions import (
     NoEligiblePeers,
     NoIdlePeers,
+    PeerConnectionLost,
 )
 from p2p.peer import BasePeer, PeerSubscriber
 
@@ -56,6 +58,7 @@ from trinity.exceptions import (
     SyncRequestAlreadyProcessed,
 )
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
+from trinity.protocol.eth.monitors import ETHChainTipMonitor
 from trinity.protocol.eth import (
     constants as eth_constants,
 )
@@ -77,31 +80,22 @@ class StateDownloader(BaseService, PeerSubscriber):
     def __init__(self,
                  chaindb: AsyncChainDB,
                  account_db: AsyncBaseDB,
-                 root_hash: Hash32,
                  peer_pool: ETHPeerPool,
                  token: CancelToken = None) -> None:
         super().__init__(token)
         self.chaindb = chaindb
         self.peer_pool = peer_pool
-        self.root_hash = root_hash
+        self._account_db = account_db
+
+        self._tip_monitor = ETHChainTipMonitor(self.peer_pool, token=self.cancel_token)
         # We use a LevelDB instance for the nodes cache because a full state download, if run
         # uninterrupted will visit more than 180M nodes, making an in-memory cache unfeasible.
         self._nodes_cache_dir = tempfile.TemporaryDirectory(prefix="pyevm-state-sync-cache")
 
-        # Allow the LevelDB instance to consume half of the entire file descriptor limit that
-        # the OS permits. Let the other half be reserved for other db access, networking etc.
-        max_open_files = get_open_fd_limit() // 2
-
-        self.scheduler = StateSync(
-            root_hash,
-            account_db,
-            LevelDB(Path(self._nodes_cache_dir.name), max_open_files),
-            self.logger
-        )
         self.request_tracker = TrieNodeRequestTracker(self._reply_timeout, self.logger)
         self._peer_missing_nodes: Dict[ETHPeer, Set[Hash32]] = collections.defaultdict(set)
 
-    # We are only interested in peers entering or leaving the pool
+    # We are only interested in peers leaving the pool
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset()
 
     # This is a rather arbitrary value, but when the sync is operating normally we never see
@@ -251,15 +245,56 @@ class StateDownloader(BaseService, PeerSubscriber):
 
         Raises OperationCancelled if we're interrupted before that is completed.
         """
-        self._timer.start()
+        self.logger.info("Waiting for a client to connect")
+        self.run_child_service(self._tip_monitor)
+
+        peer = await self._tip_monitor.wait_tip_info().__anext__()
+        block_hash = peer.head_hash
+        self.logger.info("Connected to %s, asking for highest block", peer)
+
+        # TODO: Maybe this header is already in the database, it's worth checking
+
+        try:
+            TWO_SECONDS = 2
+            headers = await peer.requests.get_block_headers(
+                block_hash, max_headers=1, reverse=False, timeout=TWO_SECONDS
+            )
+        except (TimeoutError, PeerConnectionLost) as err:
+            self.logger.error("Unable to fetch the latest block from peer, quitting")
+            return
+        except ValidationError as err:
+            self.logger.error("Invalid header response from peer. Quitting")
+            return
+
+        if len(headers) != 1:
+            self.logger.error(
+                "Didn't expect to receive %s headers from peer. Quitting", len(headers)
+            )
+        else:
+            header = headers[0]
+
+        # TODO: validate the header? ensure_same_side_on_dao_fork() has more
+
+        self.root_hash = header.state_root
         self.logger.info("Starting state sync for root hash %s", encode_hex(self.root_hash))
+
+        # Allow the LevelDB instance to consume half of the entire file descriptor limit that
+        # the OS permits. Let the other half be reserved for other db access, networking etc.
+        max_open_files = get_open_fd_limit() // 2
+        self.scheduler = StateSync(
+            self.root_hash,
+            self._account_db,
+            LevelDB(Path(self._nodes_cache_dir.name), max_open_files),
+            self.logger
+        )
+
+        self._timer.start()
         self.run_task(self._periodically_report_progress())
         self.run_task(self._periodically_retry_timedout_and_missing())
         with self.subscribe(self.peer_pool):
             while self.scheduler.has_pending_requests:
-                # This ensures we yield control and give _handle_msg() a chance to process any nodes
-                # we may have received already, also ensuring we exit when our cancel token is
-                # triggered.
+                # This ensures we yield control and give deregister_peer a chance to run.
+                # It also ensures we exit when our cancel token is triggered.
                 await self.sleep(0)
 
                 requests = self.scheduler.next_batch(eth_constants.MAX_STATE_FETCH)
@@ -336,19 +371,27 @@ class StateSync(HexaryTrieSync):
 def _test() -> None:
     import argparse
     import signal
+    from pathlib import Path
     from eth.chains.ropsten import ROPSTEN_VM_CONFIGURATION
+    from eth.chains.mainnet import MAINNET_VM_CONFIGURATION
+    from eth.exceptions import CanonicalHeadNotFound
     from p2p import ecies
     from p2p.kademlia import Node
-    from trinity.constants import DEFAULT_PREFERRED_NODES, ROPSTEN_NETWORK_ID
+    from trinity.config import ChainConfig
+    from trinity.constants import DEFAULT_PREFERRED_NODES, ROPSTEN_NETWORK_ID, MAINNET_NETWORK_ID
+    from trinity.initialization import initialize_database
     from trinity.protocol.common.context import ChainContext
+    from trinity.protocol.eth.servers import ETHRequestServer
+    from trinity._utils.chains import load_nodekey
     from tests.core.integration_test_helpers import (
         FakeAsyncChainDB, FakeAsyncLevelDB, connect_to_peers_loop)
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s')
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-db', type=str, required=True)
     parser.add_argument('-debug', action="store_true")
     parser.add_argument('-enode', type=str, required=False, help="The enode we should connect to")
+    parser.add_argument('-nodekey', type=str)
     args = parser.parse_args()
 
     log_level = logging.INFO
@@ -357,26 +400,44 @@ def _test() -> None:
 
     db = FakeAsyncLevelDB(args.db)
     chaindb = FakeAsyncChainDB(db)
-    network_id = ROPSTEN_NETWORK_ID
+
+    # doesn't work because this fake db isn't allow to write to the database?
+    try:
+        chaindb.get_canonical_head()
+    except CanonicalHeadNotFound:
+        chain_config = ChainConfig.from_preconfigured_network(MAINNET_NETWORK_ID)
+        chain_config.initialize_chain(chaindb)
+
+    network_id = MAINNET_NETWORK_ID
     if args.enode:
         nodes = tuple([Node.from_uri(args.enode)])
     else:
         nodes = DEFAULT_PREFERRED_NODES[network_id]
 
+    if args.nodekey:
+        privkey = load_nodekey(Path(args.nodekey))
+    else:
+        privkey = ecies.generate_privkey()
+
     context = ChainContext(
         headerdb=chaindb,
         network_id=network_id,
-        vm_configuration=ROPSTEN_VM_CONFIGURATION,
+        vm_configuration=MAINNET_VM_CONFIGURATION,
     )
     peer_pool = ETHPeerPool(
-        privkey=ecies.generate_privkey(),
+        privkey=privkey,
         context=context,
     )
+
+    # without this parity asks about the DAO, times out, and disconnects from us
+    request_server = ETHRequestServer(chaindb, peer_pool)
+
     asyncio.ensure_future(peer_pool.run())
+    asyncio.ensure_future(request_server.run())
     peer_pool.run_task(connect_to_peers_loop(peer_pool, nodes))
 
-    head = chaindb.get_canonical_head()
-    downloader = StateDownloader(chaindb, db, head.state_root, peer_pool)
+    # head = chaindb.get_canonical_head()
+    downloader = StateDownloader(chaindb, db, peer_pool)
     downloader.logger.setLevel(log_level)
     loop = asyncio.get_event_loop()
 
@@ -386,8 +447,9 @@ def _test() -> None:
 
     async def exit_on_sigint() -> None:
         await sigint_received.wait()
-        await peer_pool.cancel()
         await downloader.cancel()
+        await request_server.cancel()
+        await peer_pool.cancel()
         loop.stop()
 
     async def run() -> None:
