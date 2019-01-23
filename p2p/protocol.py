@@ -176,7 +176,8 @@ def get_command_class(cmd_class, cmd_id_offset, snappy_support):
     if specifier in command_classes.keys():
         return command_classes[specifier]
 
-    class CommandClassInstance(cmd_class):
+    class CommandWithSettings(cmd_class):
+        '''TODO'''
         _cmd_id_offset = cmd_id_offset
         _snappy_support = snappy_support
 
@@ -184,14 +185,14 @@ def get_command_class(cmd_class, cmd_id_offset, snappy_support):
         is_base_protocol = _cmd_id_offset == 0
         cmd_type = cmd_class
 
-        # FIXME: `self`
-        def __repr__(self):
-            # FIXME: not, strictly speaking, correct (it's not a tuple!)
-            return f'{specifier}'
-        # def __type__(self):
-        #     return cmd_class
+        @classmethod
+        def __repr__(cls):
+            return (
+                f"{cmd_class}<cmd_id_offset={cmd_id_offset}, "
+                f"snappy_support={snappy_support})>"
+            )
 
-    c = CommandClassInstance()
+    c = CommandWithSettings()
     command_classes[specifier] = c
     return c
 
