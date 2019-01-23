@@ -1,11 +1,14 @@
 import asyncio
 import collections
+import functools
 import itertools
 import logging
 from pathlib import Path
 import tempfile
 import time
 from typing import (
+    Any,
+    Awaitable,
     cast,
     Dict,
     Iterable,
@@ -20,9 +23,12 @@ import eth_utils.toolz
 
 import rlp
 
+from eth_hash.auto import keccak
 from eth_utils import (
+    decode_hex,
     encode_hex,
     ValidationError,
+    remove_0x_prefix,
 )
 
 from eth_typing import (
@@ -36,8 +42,21 @@ from eth.constants import (
     EMPTY_SHA3,
 )
 from eth.db.backends.level import LevelDB
+from eth.db.backends.base import BaseDB
 from eth.rlp.accounts import Account
 from eth.tools.logging import ExtendedDebugLogger
+
+from trie.constants import (
+    NODE_TYPE_BLANK,
+    NODE_TYPE_BRANCH,
+    NODE_TYPE_EXTENSION,
+    NODE_TYPE_LEAF,
+)
+from trie.utils.nodes import (
+    decode_node,
+    get_node_type,
+    is_blank_node,
+)
 
 from p2p.service import BaseService
 from p2p.protocol import (
@@ -250,6 +269,7 @@ class StateDownloader(BaseService, PeerSubscriber):
         monitor = ETHVerifiedTipMonitor(self.peer_pool, self.cancel_token)
         self.run_daemon(monitor)
         async for (peer, header) in monitor.wait_tip_info():
+            # TOOD: a global variable like this is likely bad form
             self.root_hash = header.state_root
             self.logger.debug('telling sync to use %s from %s', encode_hex(self.root_hash), peer)
             if self.scheduler:
@@ -271,11 +291,12 @@ class StateDownloader(BaseService, PeerSubscriber):
         # Allow the LevelDB instance to consume half of the entire file descriptor limit that
         # the OS permits. Let the other half be reserved for other db access, networking etc.
         max_open_files = get_open_fd_limit() // 2
-        self.scheduler = StateSync(
+        self.scheduler = SingleAddressStateSync(
             self.root_hash,
             self._account_db,
             LevelDB(Path(self._nodes_cache_dir.name), max_open_files),
-            self.logger
+            self.logger,
+            self.get_event_loop(),
         )
 
         self.logger.info("Starting state sync for root hash %s", encode_hex(self.root_hash))
@@ -300,7 +321,8 @@ class StateDownloader(BaseService, PeerSubscriber):
                     await self.sleep(0.5)
                     continue
 
-                await self.request_nodes([request.node_key for request in requests])
+                await self.request_nodes(requests)
+                # await self.request_nodes([request.node_key for request in requests])
 
         self.logger.info("Finished state sync with root hash %s", encode_hex(self.root_hash))
 
@@ -359,6 +381,121 @@ class StateSync(HexaryTrieSync):
             await self.schedule(account.storage_root, parent, depth, leaf_callback=None)
         if account.code_hash != EMPTY_SHA3:
             await self.schedule(account.code_hash, parent, depth, leaf_callback=None, is_raw=True)
+
+
+class SingleAddressStateSync:
+    "Does a state sync but only attempts to sync data for a single address"
+    def __init__(self,
+                 root_hash: Hash32,
+                 db: AsyncBaseDB,
+                 nodes_cache: BaseDB,
+                 logger: ExtendedDebugLogger,
+                 loop: asyncio.AbstractEventLoop) -> None:
+        self.db = db
+        self.nodes_cache = nodes_cache
+        self.logger = logger
+        self.loop = loop
+
+        self.address = 'd0a6e6c54dbc68db5db3a091b171a77407ff7ccf'  # EOS
+        self.address = '53a1e561f01ea6b6f39270fde1f15f5b71fcf300'
+        self.address = remove_0x_prefix(encode_hex(keccak(decode_hex(self.address))))
+        self.run_task(self.crawl(root_hash))
+
+        self.committed_nodes = 0
+        self.queue: List[Hash32] = list()
+        self.requests: Dict[Hash32, asyncio.Future] = dict()
+
+    def run_task(self, awaitable: Awaitable[Any]) -> None:
+        @functools.wraps(awaitable)  # type: ignore
+        async def _run_task_wrapper() -> None:
+            try:
+                await awaitable
+            except OperationCancelled:
+                pass
+            except Exception as e:
+                self.logger.warning("Task %s finished unexpectedly: %s", awaitable, e)
+                self.logger.debug("Task failure traceback", exc_info=True)
+        self.loop.create_task(_run_task_wrapper())
+
+    @property
+    def has_pending_requests(self) -> bool:
+        # run forever
+        return True
+
+    def new_root_hash(self, root_hash: Hash32):
+        self.run_task(self.crawl(root_hash))
+
+    def next_batch(self, n: int = 1) -> List[SyncRequest]:
+        # StateDownloader is asking for the next few nodes it should request
+        if n >= len(self.queue):
+            result = self.queue
+            self.queue = list()
+            return result
+
+        result = self.queue[:n]
+        self.queue = self.queue[n:]
+        return result
+
+    async def process(self, results: List[Tuple[Hash32, bytes]]) -> None:
+        # StateDownloader received some nodes, handle them!
+        for node_key, data in results:
+            request = self.requests.pop(node_key, None)
+            if request is None:
+                self.logger.debug("%s was probably already fired", encode_hex(node_key))
+            else:
+                request.set_result(data)
+
+    async def crawl(self, root_hash: Hash32) -> None:
+        await asyncio.sleep(1)  # giving parity a second to build the state root
+        ident = encode_hex(root_hash[:4])
+        self.logger.debug("[%s] starting crawl", ident)
+        node = await self._fetch_node(root_hash)
+        node_type = get_node_type(node)
+
+        trail = []
+        depth = 0
+        while True:
+            if node_type == NODE_TYPE_BLANK:
+                self.logger.error("[%s] received blank node", ident)
+                return
+            elif node_type == NODE_TYPE_LEAF:
+                leaf = node[1]
+                account = rlp.decode(leaf, sedes=Account)
+                self.logger.debug(
+                    "[%s] found account {%s, %s}. trail: %s",
+                    ident, account.nonce, account.balance, trail
+                )
+                return
+            elif node_type == NODE_TYPE_EXTENSION:
+                self.logger.error("[%s] don't know how to handle extensions", ident)
+                return
+            elif node_type == NODE_TYPE_BRANCH:
+                self.logger.error("[%s] got branch, at depth %s", ident, depth)
+                index = int(self.address[depth], 16)
+                to_fetch = node[index]
+                if to_fetch == b'':
+                    self.logger.error("[%s] found 0x, %s does not exist", ident, self.address)
+                    return
+                trail.append(encode_hex(to_fetch[:6]))
+                node = await self._fetch_node(to_fetch)
+                node_type = get_node_type(node)
+                depth += 1
+                continue
+            else:
+                self.logger.error('[%s] unexpected node type: %s', ident, node_type)
+                return
+
+    async def _fetch_node(self, node_key: Hash32):
+        future = self.loop.create_future()
+        self.queue.append(node_key)
+        if self.requests.get(node_key, None):
+            self.logger.warning("%s is already being fetched!", encode_hex(node_key))
+            future = self.requests[node_key]
+        else:
+            self.requests[node_key] = future
+        data = await future
+        node = decode_node(data)
+        return node
 
 
 def _test() -> None:
