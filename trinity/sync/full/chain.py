@@ -848,7 +848,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         tasks (downloading block bodies) as they become available.
         """
         async for headers in self.wait_iter(self._header_syncer.new_sync_headers()):
-            self._block_import_tracker.register_tasks(headers)
+            self._block_import_tracker.register_tasks(headers, ignore_duplicates=True)
 
             new_headers = tuple(h for h in headers if h not in self._block_body_tasks)
 
