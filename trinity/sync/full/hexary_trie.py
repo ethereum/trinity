@@ -149,7 +149,9 @@ class HexaryTrieSync:
         return len(self.requests) > 0
 
     def new_root_hash(self, root_hash: Hash32):
-        self.logger.info('accepted new root hash command')
+        pass
+        #self._schedule(root_hash, parent=None, depth=0, leaf_callback=self.leaf_callback)
+        # TODO: this should also clear the queue?
 
     def next_batch(self, n: int = 1) -> List[SyncRequest]:
         """Return the next requests that should be dispatched."""
@@ -164,6 +166,7 @@ class HexaryTrieSync:
                        is_raw: bool = False) -> None:
         """Schedule a request for the node with the given key."""
         if node_key in self.nodes_cache:
+            # TODO: try to schedule any missing children of this node
             self.logger.debug2("Node %s already exists in db", encode_hex(node_key))
             return
         if await self.db.coro_exists(node_key):
