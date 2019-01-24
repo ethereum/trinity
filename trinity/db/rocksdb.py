@@ -3,10 +3,10 @@ import logging
 from pathlib import Path
 from typing import (
     Iterator,
-    TYPE_CHECKING,
 )
 
 from eth_utils import ValidationError
+import rocksdb
 
 from eth.db.backends.base import (
     BaseAtomicDB,
@@ -18,10 +18,6 @@ from eth.db.diff import (
 )
 
 
-if TYPE_CHECKING:
-    import rocksdb  # noqa: F401
-
-
 class RocksDB(BaseAtomicDB):
     logger = logging.getLogger("eth.db.backends.RocksDB")
 
@@ -31,13 +27,6 @@ class RocksDB(BaseAtomicDB):
                  read_only: bool=False) -> None:
         if not db_path:
             raise TypeError("The RocksDB backend requires a database path")
-        try:
-            import rocksdb  # noqa: F811
-        except ImportError:
-            raise ImportError(
-                "RocksDB requires the python-rocksdb library which is not "
-                "available for import."
-            )
 
         if opts is None:
             opts = rocksdb.Options(create_if_missing=True)
@@ -64,7 +53,6 @@ class RocksDB(BaseAtomicDB):
 
     @contextmanager
     def atomic_batch(self) -> Iterator['RocksDBWriteBatch']:
-        import rocksdb  # noqa: F811
         batch = rocksdb.WriteBatch()
 
         readable_batch = RocksDBWriteBatch(self, batch)
