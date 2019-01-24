@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 import logging
 import struct
 from typing import (
@@ -53,18 +53,28 @@ TRequestPayload = TypeVar('TRequestPayload', bound=PayloadType, covariant=True)
 _DecodedMsgType = PayloadType
 
 
-class Command:
+class Command(ABC):
     _cmd_id: int = None
     _cmd_id_offset: int = None
-    cmd_id = None
     _snappy_support = None
+
+    cmd_id = None
+    is_base_protocol = None
 
     decode_strict = True
     structure: List[Tuple[str, Any]] = []
 
     logger = None
 
-    # TODO: add abstract methods for is_base_protocol
+    @classmethod
+    @abstractmethod
+    def __repr__(cls) -> str:
+        raise NotImplementedError("Commands not bound to a protocol must not exist.")
+
+    @classmethod
+    @abstractmethod
+    def __str__(cls) -> str:
+        raise NotImplementedError("Commands not bound to a protocol must not exist.")
 
     @classmethod
     def encode_payload(cls, data: Union[PayloadType, sedes.CountableList]) -> bytes:
@@ -189,8 +199,8 @@ def get_command_class(cmd_base_class: Type[Command],
         _snappy_support = snappy_support
 
         cmd_id = _cmd_id_offset + cmd_base_class._cmd_id
-
         is_base_protocol = _cmd_id_offset == 0
+
         cmd_type = cmd_base_class
 
         logger = logging.getLogger(f"p2p.protocol.{cmd_base_class.__name__}")

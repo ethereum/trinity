@@ -9,7 +9,8 @@ from p2p.protocol import (
 )
 
 
-class BaseBlockHeaders(ABC, Command):
+# `Command` must come before `ABC`, since `Command` is derived from `ABC`
+class BaseBlockHeaders(Command, ABC):
 
     @abstractmethod
     def extract_headers(self, msg: _DecodedMsgType) -> Tuple[BlockHeader, ...]:
