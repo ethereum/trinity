@@ -16,12 +16,12 @@ from eth2.beacon.helpers import (
     get_crosslink_committees_at_slot,
 )
 from eth2.beacon.state_machines.forks.serenity.validation import (
-    validate_serenity_attestation_aggregate_signature,
-    validate_serenity_attestation_latest_crosslink_root,
-    validate_serenity_attestation_justified_block_root,
-    validate_serenity_attestation_justified_slot,
-    validate_serenity_attestation_shard_block_root,
-    validate_serenity_attestation_slot,
+    validate_attestation_aggregate_signature,
+    validate_attestation_latest_crosslink_root,
+    validate_attestation_justified_block_root,
+    validate_attestation_justified_slot,
+    validate_attestation_shard_block_root,
+    validate_attestation_slot,
 )
 from eth2.beacon.types.attestation_data import AttestationData
 
@@ -43,18 +43,18 @@ from eth2.beacon.types.attestation_data import AttestationData
         (9, 20, 10, 2, False),  # attestation_slot + EPOCH_LENGTH < current_slot
     ]
 )
-def test_validate_serenity_attestation_slot(sample_attestation_data_params,
-                                            attestation_slot,
-                                            current_slot,
-                                            epoch_length,
-                                            min_attestation_inclusion_delay,
-                                            is_valid):
+def test_validate_attestation_slot(sample_attestation_data_params,
+                                   attestation_slot,
+                                   current_slot,
+                                   epoch_length,
+                                   min_attestation_inclusion_delay,
+                                   is_valid):
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
         slot=attestation_slot,
     )
 
     if is_valid:
-        validate_serenity_attestation_slot(
+        validate_attestation_slot(
             attestation_data,
             current_slot,
             epoch_length,
@@ -62,7 +62,7 @@ def test_validate_serenity_attestation_slot(sample_attestation_data_params,
         )
     else:
         with pytest.raises(ValidationError):
-            validate_serenity_attestation_slot(
+            validate_attestation_slot(
                 attestation_data,
                 current_slot,
                 epoch_length,
@@ -90,21 +90,21 @@ def test_validate_serenity_attestation_slot(sample_attestation_data_params,
         (10, 10, 10, 10, 10, 10, True),
     ]
 )
-def test_validate_serenity_attestation_justified_slot(sample_attestation_data_params,
-                                                      attestation_slot,
-                                                      attestation_justified_slot,
-                                                      current_slot,
-                                                      previous_justified_slot,
-                                                      justified_slot,
-                                                      epoch_length,
-                                                      is_valid):
+def test_validate_attestation_justified_slot(sample_attestation_data_params,
+                                             attestation_slot,
+                                             attestation_justified_slot,
+                                             current_slot,
+                                             previous_justified_slot,
+                                             justified_slot,
+                                             epoch_length,
+                                             is_valid):
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
         slot=attestation_slot,
         justified_slot=attestation_justified_slot,
     )
 
     if is_valid:
-        validate_serenity_attestation_justified_slot(
+        validate_attestation_justified_slot(
             attestation_data,
             current_slot,
             previous_justified_slot,
@@ -113,7 +113,7 @@ def test_validate_serenity_attestation_justified_slot(sample_attestation_data_pa
         )
     else:
         with pytest.raises(ValidationError):
-            validate_serenity_attestation_justified_slot(
+            validate_attestation_justified_slot(
                 attestation_data,
                 current_slot,
                 previous_justified_slot,
@@ -133,22 +133,22 @@ def test_validate_serenity_attestation_justified_slot(sample_attestation_data_pa
         (b'\x42' * 32, b'\x42' * 32, True),
     ]
 )
-def test_validate_serenity_attestation_justified_block_root(sample_attestation_data_params,
-                                                            attestation_justified_block_root,
-                                                            justified_block_root,
-                                                            is_valid):
+def test_validate_attestation_justified_block_root(sample_attestation_data_params,
+                                                   attestation_justified_block_root,
+                                                   justified_block_root,
+                                                   is_valid):
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
         justified_block_root=attestation_justified_block_root,
     )
 
     if is_valid:
-        validate_serenity_attestation_justified_block_root(
+        validate_attestation_justified_block_root(
             attestation_data,
             justified_block_root
         )
     else:
         with pytest.raises(ValidationError):
-            validate_serenity_attestation_justified_block_root(
+            validate_attestation_justified_block_root(
                 attestation_data,
                 justified_block_root
             )
@@ -169,11 +169,11 @@ def test_validate_serenity_attestation_justified_block_root(sample_attestation_d
         (b'\x42' * 32, b'\x42' * 32, b'\x42' * 32, True),
     ]
 )
-def test_validate_serenity_attestation_latest_crosslink_root(sample_attestation_data_params,
-                                                             attestation_latest_crosslink_root,
-                                                             attestation_shard_block_root,
-                                                             latest_crosslink_root,
-                                                             is_valid):
+def test_validate_attestation_latest_crosslink_root(sample_attestation_data_params,
+                                                    attestation_latest_crosslink_root,
+                                                    attestation_shard_block_root,
+                                                    latest_crosslink_root,
+                                                    is_valid):
     sample_attestation_data_params['latest_crosslink_root'] = attestation_latest_crosslink_root
     sample_attestation_data_params['shard_block_root'] = attestation_shard_block_root
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
@@ -182,13 +182,13 @@ def test_validate_serenity_attestation_latest_crosslink_root(sample_attestation_
     )
 
     if is_valid:
-        validate_serenity_attestation_latest_crosslink_root(
+        validate_attestation_latest_crosslink_root(
             attestation_data,
             latest_crosslink_root,
         )
     else:
         with pytest.raises(ValidationError):
-            validate_serenity_attestation_latest_crosslink_root(
+            validate_attestation_latest_crosslink_root(
                 attestation_data,
                 latest_crosslink_root,
             )
@@ -205,20 +205,20 @@ def test_validate_serenity_attestation_latest_crosslink_root(sample_attestation_
         (b'\x66' * 32, False),
     ]
 )
-def test_validate_serenity_attestation_shard_block_root(sample_attestation_data_params,
-                                                        attestation_shard_block_root,
-                                                        is_valid):
+def test_validate_attestation_shard_block_root(sample_attestation_data_params,
+                                               attestation_shard_block_root,
+                                               is_valid):
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
         shard_block_root=attestation_shard_block_root,
     )
 
     if is_valid:
-        validate_serenity_attestation_shard_block_root(
+        validate_attestation_shard_block_root(
             attestation_data,
         )
     else:
         with pytest.raises(ValidationError):
-            validate_serenity_attestation_shard_block_root(
+            validate_attestation_shard_block_root(
                 attestation_data,
             )
 
@@ -240,14 +240,14 @@ def test_validate_serenity_attestation_shard_block_root(sample_attestation_data_
         (20, 5, 3, 2, False),
     ],
 )
-def test_validate_serenity_attestation_aggregate_signature(genesis_state,
-                                                           epoch_length,
-                                                           random,
-                                                           sample_attestation_data_params,
-                                                           create_mock_signed_attestation,
-                                                           is_valid,
-                                                           target_committee_size,
-                                                           shard_count,):
+def test_validate_attestation_aggregate_signature(genesis_state,
+                                                  epoch_length,
+                                                  random,
+                                                  sample_attestation_data_params,
+                                                  create_mock_signed_attestation,
+                                                  is_valid,
+                                                  target_committee_size,
+                                                  shard_count,):
     state = genesis_state
 
     # choose committee
@@ -280,7 +280,7 @@ def test_validate_serenity_attestation_aggregate_signature(genesis_state,
     )
 
     if is_valid:
-        validate_serenity_attestation_aggregate_signature(
+        validate_attestation_aggregate_signature(
             state,
             attestation,
             epoch_length,
@@ -296,7 +296,7 @@ def test_validate_serenity_attestation_aggregate_signature(genesis_state,
             )
         )
         with pytest.raises(ValidationError):
-            validate_serenity_attestation_aggregate_signature(
+            validate_attestation_aggregate_signature(
                 state,
                 attestation,
                 epoch_length,

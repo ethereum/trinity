@@ -34,12 +34,12 @@ from eth2.beacon.typing import (
 #
 # Proposer signature validation
 #
-def validate_serenity_proposer_signature(state: BeaconState,
-                                         block: BaseBeaconBlock,
-                                         beacon_chain_shard_number: ShardNumber,
-                                         epoch_length: int,
-                                         target_committee_size: int,
-                                         shard_count: int) -> None:
+def validate_proposer_signature(state: BeaconState,
+                                block: BaseBeaconBlock,
+                                beacon_chain_shard_number: ShardNumber,
+                                epoch_length: int,
+                                target_committee_size: int,
+                                shard_count: int) -> None:
     block_without_signature_root = block.block_without_signature_root
 
     # TODO: Replace this root with tree hash root
@@ -84,26 +84,26 @@ def validate_serenity_proposer_signature(state: BeaconState,
 #
 # Attestation validation
 #
-def validate_serenity_attestation(state: BeaconState,
-                                  attestation: Attestation,
-                                  epoch_length: int,
-                                  min_attestation_inclusion_delay: int,
-                                  latest_block_roots_length: int,
-                                  target_committee_size: int,
-                                  shard_count: int) -> None:
+def validate_attestation(state: BeaconState,
+                         attestation: Attestation,
+                         epoch_length: int,
+                         min_attestation_inclusion_delay: int,
+                         latest_block_roots_length: int,
+                         target_committee_size: int,
+                         shard_count: int) -> None:
     """
     Validate the given ``attestation``.
     Raise ``ValidationError`` if it's invalid.
     """
 
-    validate_serenity_attestation_slot(
+    validate_attestation_slot(
         attestation.data,
         state.slot,
         epoch_length,
         min_attestation_inclusion_delay,
     )
 
-    validate_serenity_attestation_justified_slot(
+    validate_attestation_justified_slot(
         attestation.data,
         state.slot,
         state.previous_justified_slot,
@@ -111,7 +111,7 @@ def validate_serenity_attestation(state: BeaconState,
         epoch_length,
     )
 
-    validate_serenity_attestation_justified_block_root(
+    validate_attestation_justified_block_root(
         attestation.data,
         justified_block_root=get_block_root(
             state=state,
@@ -120,14 +120,14 @@ def validate_serenity_attestation(state: BeaconState,
         ),
     )
 
-    validate_serenity_attestation_latest_crosslink_root(
+    validate_attestation_latest_crosslink_root(
         attestation.data,
         latest_crosslink_root=state.latest_crosslinks[attestation.data.shard].shard_block_root,
     )
 
-    validate_serenity_attestation_shard_block_root(attestation.data)
+    validate_attestation_shard_block_root(attestation.data)
 
-    validate_serenity_attestation_aggregate_signature(
+    validate_attestation_aggregate_signature(
         state,
         attestation,
         epoch_length,
@@ -136,10 +136,10 @@ def validate_serenity_attestation(state: BeaconState,
     )
 
 
-def validate_serenity_attestation_slot(attestation_data: AttestationData,
-                                       current_slot: int,
-                                       epoch_length: int,
-                                       min_attestation_inclusion_delay: int) -> None:
+def validate_attestation_slot(attestation_data: AttestationData,
+                              current_slot: int,
+                              epoch_length: int,
+                              min_attestation_inclusion_delay: int) -> None:
     """
     Validate ``slot`` field of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
@@ -168,11 +168,11 @@ def validate_serenity_attestation_slot(attestation_data: AttestationData,
         )
 
 
-def validate_serenity_attestation_justified_slot(attestation_data: AttestationData,
-                                                 current_slot: int,
-                                                 previous_justified_slot: int,
-                                                 justified_slot: int,
-                                                 epoch_length: int) -> None:
+def validate_attestation_justified_slot(attestation_data: AttestationData,
+                                        current_slot: int,
+                                        previous_justified_slot: int,
+                                        justified_slot: int,
+                                        epoch_length: int) -> None:
     """
     Validate ``justified_slot`` field of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
@@ -195,8 +195,8 @@ def validate_serenity_attestation_justified_slot(attestation_data: AttestationDa
             )
 
 
-def validate_serenity_attestation_justified_block_root(attestation_data: AttestationData,
-                                                       justified_block_root: Hash32) -> None:
+def validate_attestation_justified_block_root(attestation_data: AttestationData,
+                                              justified_block_root: Hash32) -> None:
     """
     Validate ``justified_block_root`` field of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
@@ -214,8 +214,8 @@ def validate_serenity_attestation_justified_block_root(attestation_data: Attesta
         )
 
 
-def validate_serenity_attestation_latest_crosslink_root(attestation_data: AttestationData,
-                                                        latest_crosslink_root: Hash32) -> None:
+def validate_attestation_latest_crosslink_root(attestation_data: AttestationData,
+                                               latest_crosslink_root: Hash32) -> None:
     """
     Validate that either the attestation ``latest_crosslink_root`` or ``shard_block_root``
     field of ``attestation_data`` is the provided ``latest_crosslink_root``.
@@ -238,7 +238,7 @@ def validate_serenity_attestation_latest_crosslink_root(attestation_data: Attest
         )
 
 
-def validate_serenity_attestation_shard_block_root(attestation_data: AttestationData) -> None:
+def validate_attestation_shard_block_root(attestation_data: AttestationData) -> None:
     """
     Validate ``shard_block_root`` field of `attestation_data`.
     Raise ``ValidationError`` if it's invalid.
@@ -257,11 +257,11 @@ def validate_serenity_attestation_shard_block_root(attestation_data: Attestation
         )
 
 
-def validate_serenity_attestation_aggregate_signature(state: BeaconState,
-                                                      attestation: Attestation,
-                                                      epoch_length: int,
-                                                      target_committee_size: int,
-                                                      shard_count: int) -> None:
+def validate_attestation_aggregate_signature(state: BeaconState,
+                                             attestation: Attestation,
+                                             epoch_length: int,
+                                             target_committee_size: int,
+                                             shard_count: int) -> None:
     """
     Validate ``aggregate_signature`` field of ``attestation``.
     Raise ``ValidationError`` if it's invalid.

@@ -4,7 +4,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.state_machines.configs import BeaconConfig
 
 from .validation import (
-    validate_serenity_attestation,
+    validate_attestation,
 )
 
 
@@ -21,7 +21,7 @@ def process_attestations(state: BeaconState,
     Return resulting ``state``.
     """
     for attestation in block.body.attestations:
-        validate_serenity_attestation(
+        validate_attestation(
             state,
             attestation,
             config.EPOCH_LENGTH,

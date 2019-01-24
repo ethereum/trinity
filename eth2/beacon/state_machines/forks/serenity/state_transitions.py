@@ -12,11 +12,11 @@ from eth2.beacon.types.states import BeaconState
 from .epoch_processing import (
     process_final_updates,
 )
-from .operations import (
+from .operation_processing import (
     process_attestations,
 )
 from .validation import (
-    validate_serenity_proposer_signature,
+    validate_proposer_signature,
 )
 
 
@@ -87,7 +87,7 @@ class SerenityStateTransition(BaseStateTransition):
 
     def per_block_transition(self, state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
         # TODO: finish per-block processing logic as the spec
-        validate_serenity_proposer_signature(
+        validate_proposer_signature(
             state,
             block,
             beacon_chain_shard_number=self.config.BEACON_CHAIN_SHARD_NUMBER,

@@ -1,11 +1,8 @@
 from eth2._utils.tuple import (
     update_tuple_item,
 )
-from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.state_machines.configs import BeaconConfig
-
-# def filter_attestation(latest_attestations: Attestation, state_slot: SlotNumber)
 
 
 def process_final_updates(state: BeaconState,
