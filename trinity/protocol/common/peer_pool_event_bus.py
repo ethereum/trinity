@@ -1,3 +1,8 @@
+from typing import (
+    cast,
+    Generic,
+    TypeVar,
+)
 from cancel_token import (
     CancelToken,
 )
@@ -8,8 +13,16 @@ from lahja import (
 from p2p.kademlia import (
     from_uris,
 )
+from p2p.peer import (
+    BasePeer,
+    IdentifiablePeer,
+    PeerSubscriber,
+)
 from p2p.peer_pool import (
     BasePeerPool,
+)
+from p2p.protocol import (
+    Command,
 )
 from p2p.service import (
     BaseService,
@@ -19,10 +32,14 @@ from .events import (
     ConnectToNodeCommand,
     PeerCountRequest,
     PeerCountResponse,
+    PeerPoolMessageEvent,
 )
 
 
-class BasePeerPoolEventBusRequestHandler(BaseService):
+TPeer = TypeVar('TPeer', bound=BasePeer)
+
+
+class BasePeerPoolEventBusRequestHandler(BaseService, Generic[TPeer]):
     """
     Base class that handles requests that are coming through the event bus and are meant to be
     handled by the peer pool. Subclasses should extend this class with custom event handlers.
@@ -55,3 +72,49 @@ class BasePeerPoolEventBusRequestHandler(BaseService):
         self.run_daemon_task(self.accept_connect_commands())
 
         await self.cancel_token.wait()
+
+    def maybe_return_peer(self, dto_peer: IdentifiablePeer) -> TPeer:
+
+        try:
+            peer = self._peer_pool.connected_nodes[dto_peer.uri]
+        except KeyError:
+            self.logger.warning("Peer %s does not exist in the pool anymore", dto_peer.uri)
+            return None
+        else:
+            if not peer.is_operational:
+                self.logger.warning("Peer %s is not operational", peer)
+                return None
+            else:
+                return cast(TPeer, peer)
+
+
+class BasePeerPoolMessageRelayer(BaseService, PeerSubscriber):
+    """
+    Base class that relays peer pool events on the event bus. The following events are exposed
+    on the event bus:
+      - Incoming peer messages -> :class:`~trinity.protocol.common.events.PeerPoolMessageEvent`
+      - Peer joined the pool -> :class:`~trinity.protocol.common.events.PeerJoinedEvent`
+      - Peer left the pool -> :class:`~trinity.protocol.common.events.PeerLeftEvent`
+
+    Subclasses should extend this to relay events specific to other peer pools.
+    """
+
+    msg_queue_maxsize: int = 2000
+
+    subscription_msg_types = frozenset({Command})
+
+    def __init__(self,
+                 peer_pool: BasePeerPool,
+                 event_bus: Endpoint,
+                 token: CancelToken = None) -> None:
+        super().__init__(token)
+        self._event_bus = event_bus
+        self._peer_pool = peer_pool
+
+    async def _run(self) -> None:
+        self.logger.info("Running BasePeerPoolMessageRelayer")
+
+        with self.subscribe(self._peer_pool):
+            while self.is_operational:
+                peer, cmd, msg = await self.wait(self.msg_queue.get())
+                self._event_bus.broadcast(PeerPoolMessageEvent(peer.to_dto(), cmd, msg))

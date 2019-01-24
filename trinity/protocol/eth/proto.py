@@ -1,9 +1,13 @@
+from abc import (
+    abstractmethod,
+)
 from typing import (
     List,
     Tuple,
     TYPE_CHECKING,
     Union,
 )
+import typing_extensions
 
 from eth_typing import (
     Hash32,
@@ -13,7 +17,13 @@ from eth_typing import (
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransactionFields
-
+from lahja import (
+    Endpoint,
+    BroadcastConfig,
+)
+from p2p.peer import (
+    IdentifiablePeer,
+)
 from p2p.protocol import (
     Protocol,
 )
@@ -35,11 +45,64 @@ from .commands import (
     Status,
     Transactions,
 )
+from .events import (
+    SendBlockBodiesEvent,
+    SendBlockHeadersEvent,
+    SendNodeDataEvent,
+    SendReceiptsEvent,
+)
 
 from trinity._utils.logging import HasExtendedDebugLogger
 
 if TYPE_CHECKING:
     from .peer import ETHPeer  # noqa: F401
+
+
+class ETHProtocolLike(typing_extensions.Protocol):
+    """
+    Define the ETH protocol used to communicate between ETH peers.
+    """
+
+    @abstractmethod
+    def send_get_node_data(self, node_hashes: Tuple[Hash32, ...]) -> None:
+        pass
+
+    @abstractmethod
+    def send_node_data(self, nodes: Tuple[bytes, ...]) -> None:
+        pass
+
+    @abstractmethod
+    def send_get_block_headers(
+            self,
+            block_number_or_hash: Union[BlockNumber, Hash32],
+            max_headers: int,
+            skip: int,
+            reverse: bool) -> None:
+        pass
+
+    @abstractmethod
+    def send_block_headers(self, headers: Tuple[BlockHeader, ...]) -> None:
+        pass
+
+    @abstractmethod
+    def send_get_block_bodies(self, block_hashes: Tuple[Hash32, ...]) -> None:
+        pass
+
+    @abstractmethod
+    def send_block_bodies(self, blocks: List[BlockBody]) -> None:
+        pass
+
+    @abstractmethod
+    def send_get_receipts(self, block_hashes: Tuple[Hash32, ...]) -> None:
+        pass
+
+    @abstractmethod
+    def send_receipts(self, receipts: List[List[Receipt]]) -> None:
+        pass
+
+    @abstractmethod
+    def send_transactions(self, transactions: List[BaseTransactionFields]) -> None:
+        pass
 
 
 # HasExtendedDebugLogger must come before Protocol so there's self.logger.debug2()
@@ -142,3 +205,77 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
         cmd = Transactions(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(transactions)
         self.send(header, body)
+
+
+class ProxyETHProtocol:
+    """
+    An ``ETHProtocol`` that can be used outside of the process that runs the peer pool. Any
+    action performed on this class is delegated to the process that runs the peer pool.
+    """
+
+    def __init__(self,
+                 dto_peer: IdentifiablePeer,
+                 event_bus: Endpoint,
+                 broadcast_config: BroadcastConfig):
+        self._dto_peer = dto_peer
+        self._event_bus = event_bus
+        self._broadcast_config = broadcast_config
+
+    #
+    # Node Data
+    #
+    def send_get_node_data(self, node_hashes: Tuple[Hash32, ...]) -> None:
+        raise NotImplementedError("Not yet implemented")
+
+    def send_node_data(self, nodes: Tuple[bytes, ...]) -> None:
+        self._event_bus.broadcast(
+            SendNodeDataEvent(self._dto_peer, nodes),
+            self._broadcast_config,
+        )
+
+    #
+    # Block Headers
+    #
+    def send_get_block_headers(
+            self,
+            block_number_or_hash: Union[BlockNumber, Hash32],
+            max_headers: int,
+            skip: int,
+            reverse: bool) -> None:
+        raise NotImplementedError("Not yet implemented")
+
+    def send_block_headers(self, headers: Tuple[BlockHeader, ...]) -> None:
+        self._event_bus.broadcast(
+            SendBlockHeadersEvent(self._dto_peer, headers),
+            self._broadcast_config,
+        )
+
+    #
+    # Block Bodies
+    #
+    def send_get_block_bodies(self, block_hashes: Tuple[Hash32, ...]) -> None:
+        raise NotImplementedError("Not yet implemented")
+
+    def send_block_bodies(self, blocks: List[BlockBody]) -> None:
+        self._event_bus.broadcast(
+            SendBlockBodiesEvent(self._dto_peer, blocks),
+            self._broadcast_config,
+        )
+
+    #
+    # Receipts
+    #
+    def send_get_receipts(self, block_hashes: Tuple[Hash32, ...]) -> None:
+        raise NotImplementedError("Not yet implemented")
+
+    def send_receipts(self, receipts: List[List[Receipt]]) -> None:
+        self._event_bus.broadcast(
+            SendReceiptsEvent(self._dto_peer, receipts),
+            self._broadcast_config,
+        )
+
+    #
+    # Transactions
+    #
+    def send_transactions(self, transactions: List[BaseTransactionFields]) -> None:
+        raise NotImplementedError("Not yet implemented")

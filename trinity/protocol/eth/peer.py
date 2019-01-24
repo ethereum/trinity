@@ -1,17 +1,25 @@
+from abc import (
+    abstractmethod,
+)
 from typing import (
     Any,
     cast,
     Dict,
     List,
 )
+import typing_extensions
 
 from eth_utils import encode_hex
-
+from lahja import (
+    BroadcastConfig,
+    Endpoint,
+)
 from p2p.exceptions import (
     HandshakeFailure,
     WrongNetworkFailure,
     WrongGenesisFailure,
 )
+from p2p.peer import IdentifiablePeer
 from p2p.p2p_proto import DisconnectReason
 from p2p.protocol import (
     Command,
@@ -23,14 +31,36 @@ from trinity.protocol.common.peer import (
     BaseChainPeerFactory,
     BaseChainPeerPool,
 )
+from trinity.protocol.common.peer_pool_event_bus import (
+    BasePeerPoolEventBusRequestHandler,
+)
 
 from .commands import (
     NewBlock,
     Status,
 )
 from .constants import MAX_HEADERS_FETCH
-from .proto import ETHProtocol
+from .events import (
+    SendBlockBodiesEvent,
+    SendBlockHeadersEvent,
+    SendNodeDataEvent,
+    SendReceiptsEvent,
+)
+from .proto import ETHProtocol, ETHProtocolLike, ProxyETHProtocol
 from .handlers import ETHExchangeHandler
+
+
+class ETHPeerLike(typing_extensions.Protocol):
+
+    @property
+    @abstractmethod
+    def sub_proto(self) -> ETHProtocolLike:
+        pass
+
+    @property
+    @abstractmethod
+    def is_operational(self) -> bool:
+        pass
 
 
 class ETHPeer(BaseChainPeer):
@@ -89,8 +119,78 @@ class ETHPeer(BaseChainPeer):
         self.head_hash = msg['best_hash']
 
 
+class ETHProxyPeer:
+    """
+    A ``ETHPeer`` that can be used from any process as a drop-in replacement for the actual
+    peer that sits in the peer pool. Any action performed on the ``ETHProxyPeer`` is delegated
+    to the actual peer in the pool.
+    """
+
+    def __init__(self, sub_proto: ProxyETHProtocol):
+        self.sub_proto = sub_proto
+
+    @property
+    def is_operational(self) -> bool:
+        # We implement this API because parts of our code base works with actual and proxy peers
+        # for the time being and expect this API to exist.
+        # We return `True` here because it would be a waste to do this extra round trip, plus it
+        # would only be a race condition at best.
+        # When working with a proxy peer one *must* do the `is_operational` check in the request
+        # handler that runs in the peer pool process.
+        return True
+
+    @classmethod
+    def from_dto_peer(cls,
+                      dto_peer: IdentifiablePeer,
+                      event_bus: Endpoint,
+                      broadcast_config: BroadcastConfig) -> 'ETHProxyPeer':
+        return cls(ProxyETHProtocol(dto_peer, event_bus, broadcast_config))
+
+
 class ETHPeerFactory(BaseChainPeerFactory):
     peer_class = ETHPeer
+
+
+class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPeer]):
+    """
+    A request handler to handle ETH specific requests to the peer pool.
+    """
+
+    async def _run(self) -> None:
+        self.logger.info("Running ETHPeerPoolEventBusRequestHandler")
+        self.run_daemon_task(self.handle_send_blockheader_events())
+        self.run_daemon_task(self.handle_send_block_bodies_events())
+        self.run_daemon_task(self.handle_send_nodes_events())
+        self.run_daemon_task(self.handle_send_receipts_events())
+        await super()._run()
+
+    async def handle_send_blockheader_events(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(SendBlockHeadersEvent)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+            if peer is None:
+                continue
+            peer.sub_proto.send_block_headers(ev.headers)
+
+    async def handle_send_block_bodies_events(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(SendBlockBodiesEvent)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+            if peer is None:
+                continue
+            peer.sub_proto.send_block_bodies(ev.blocks)
+
+    async def handle_send_nodes_events(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(SendNodeDataEvent)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+            if peer is None:
+                continue
+            peer.sub_proto.send_node_data(ev.nodes)
+
+    async def handle_send_receipts_events(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(SendReceiptsEvent)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+            if peer is None:
+                continue
+            peer.sub_proto.send_receipts(ev.receipts)
 
 
 class ETHPeerPool(BaseChainPeerPool):

@@ -142,10 +142,10 @@ async def get_directly_linked_v4_and_v5_peers(
 
 
 class MockPeerPoolWithConnectedPeers(ETHPeerPool):
-    def __init__(self, peers) -> None:
-        super().__init__(privkey=None, context=None)
+    def __init__(self, peers, event_bus=None) -> None:
+        super().__init__(privkey=None, context=None, event_bus=event_bus)
         for peer in peers:
-            self.connected_nodes[peer.remote] = peer
+            self.connected_nodes[peer.remote.uri()] = peer
 
     async def _run(self) -> None:
         raise NotImplementedError("This is a mock PeerPool implementation, you must not _run() it")

@@ -92,7 +92,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         self.max_peers = max_peers
         self.context = context
 
-        self.connected_nodes: Dict[Node, BasePeer] = {}
+        self.connected_nodes: Dict[str, BasePeer] = {}
         self._subscribers: List[PeerSubscriber] = []
         self.event_bus = event_bus
 
@@ -201,7 +201,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         to the peer, we also add the given messages to our subscriber's queues.
         """
         self.logger.info('Adding %s to pool', peer)
-        self.connected_nodes[peer.remote] = peer
+        self.connected_nodes[peer.remote.uri()] = peer
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
             subscriber.register_peer(peer)
@@ -291,9 +291,9 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         This is passed as a callback to be called when a peer finishes.
         """
         peer = cast(BasePeer, peer)
-        if peer.remote in self.connected_nodes:
+        if peer.remote.uri() in self.connected_nodes:
             self.logger.info("%s finished, removing from pool", peer)
-            self.connected_nodes.pop(peer.remote)
+            self.connected_nodes.pop(peer.remote.uri())
         else:
             self.logger.warning(
                 "%s finished but was not found in connected_nodes (%s)", peer, self.connected_nodes)

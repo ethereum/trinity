@@ -21,17 +21,32 @@ from eth_typing import (
 from eth_utils import (
     to_hex,
 )
+from lahja import (
+    BroadcastConfig,
+    Endpoint,
+)
 
 from p2p import protocol
-from p2p.peer import BasePeer
+from p2p.peer import (
+    BasePeer,
+    IdentifiablePeer,
+)
 from p2p.protocol import (
     Command,
 )
 
 from trinity.db.eth1.chain import BaseAsyncChainDB
-from trinity.protocol.common.servers import BaseRequestServer, BasePeerRequestHandler
+from trinity.protocol.common.servers import (
+    BaseIsolatedRequestServer,
+    BaseRequestServer,
+    BasePeerRequestHandler,
+)
 from trinity.protocol.eth import commands
-from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
+from trinity.protocol.eth.peer import (
+    ETHPeerLike,
+    ETHPeerPool,
+    ETHProxyPeer,
+)
 
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransactionFields
@@ -52,7 +67,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
 
     async def handle_get_block_headers(
             self,
-            peer: ETHPeer,
+            peer: ETHPeerLike,
             msg: Dict[str, Any]) -> None:
         if not peer.is_operational:
             return
@@ -69,7 +84,9 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         self.logger.debug2("Replying to %s with %d headers", peer, len(headers))
         peer.sub_proto.send_block_headers(headers)
 
-    async def handle_get_block_bodies(self, peer: ETHPeer, block_hashes: Sequence[Hash32]) -> None:
+    async def handle_get_block_bodies(self,
+                                      peer: ETHPeerLike,
+                                      block_hashes: Sequence[Hash32]) -> None:
         if not peer.is_operational:
             return
         self.logger.debug2("%s requested bodies for %d blocks", peer, len(block_hashes))
@@ -90,7 +107,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         self.logger.debug2("Replying to %s with %d block bodies", peer, len(bodies))
         peer.sub_proto.send_block_bodies(bodies)
 
-    async def handle_get_receipts(self, peer: ETHPeer, block_hashes: Sequence[Hash32]) -> None:
+    async def handle_get_receipts(self, peer: ETHPeerLike, block_hashes: Sequence[Hash32]) -> None:
         if not peer.is_operational:
             return
         self.logger.debug2("%s requested receipts for %d blocks", peer, len(block_hashes))
@@ -109,7 +126,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         self.logger.debug2("Replying to %s with receipts for %d blocks", peer, len(receipts))
         peer.sub_proto.send_receipts(receipts)
 
-    async def handle_get_node_data(self, peer: ETHPeer, node_hashes: Sequence[Hash32]) -> None:
+    async def handle_get_node_data(self, peer: ETHPeerLike, node_hashes: Sequence[Hash32]) -> None:
         if not peer.is_operational:
             return
         self.logger.debug2("%s requested %d trie nodes", peer, len(node_hashes))
@@ -154,7 +171,7 @@ class ETHRequestServer(BaseRequestServer):
 
     async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
                           msg: protocol._DecodedMsgType) -> None:
-        peer = cast(ETHPeer, base_peer)
+        peer = cast(ETHPeerLike, base_peer)
 
         ignored_commands = (
             commands.Transactions,
@@ -164,6 +181,53 @@ class ETHRequestServer(BaseRequestServer):
         if isinstance(cmd, ignored_commands):
             pass
         elif isinstance(cmd, commands.GetBlockHeaders):
+            await self._handler.handle_get_block_headers(peer, cast(Dict[str, Any], msg))
+        elif isinstance(cmd, commands.GetBlockBodies):
+            block_hashes = cast(Sequence[Hash32], msg)
+            await self._handler.handle_get_block_bodies(peer, block_hashes)
+        elif isinstance(cmd, commands.GetReceipts):
+            block_hashes = cast(Sequence[Hash32], msg)
+            await self._handler.handle_get_receipts(peer, block_hashes)
+        elif isinstance(cmd, commands.GetNodeData):
+            node_hashes = cast(Sequence[Hash32], msg)
+            await self._handler.handle_get_node_data(peer, node_hashes)
+        else:
+            self.logger.debug("%s msg not handled yet, need to be implemented", cmd)
+
+
+class ETHIsolatedRequestServer(BaseIsolatedRequestServer):
+    """
+    Like :class:`~trinity.protocol.eth.servers.ETHRequestServer` but can be run outside of the
+    process that hosts the :class:`~p2p.peer_pool.BasePeerPool`.
+    """
+
+    _handled_commands = (
+        commands.GetBlockHeaders,
+        commands.GetBlockBodies,
+        commands.GetReceipts,
+        commands.GetNodeData,
+    )
+
+    def __init__(
+            self,
+            event_bus: Endpoint,
+            broadcast_config: BroadcastConfig,
+            db: BaseAsyncChainDB,
+            token: CancelToken = None) -> None:
+        super().__init__(event_bus, broadcast_config, token)
+        self._handler = ETHPeerRequestHandler(db, self.cancel_token)
+
+    async def _handle_msg(self,
+                          dto_peer: IdentifiablePeer,
+                          cmd: Command,
+                          msg: protocol._DecodedMsgType) -> None:
+
+        if type(cmd) not in self._handled_commands:
+            return
+
+        self.logger.debug("Peer %s requested %s", dto_peer.uri, cmd)
+        peer = ETHProxyPeer.from_dto_peer(dto_peer, self.event_bus, self.broadcast_config)
+        if isinstance(cmd, commands.GetBlockHeaders):
             await self._handler.handle_get_block_headers(peer, cast(Dict[str, Any], msg))
         elif isinstance(cmd, commands.GetBlockBodies):
             block_hashes = cast(Sequence[Hash32], msg)

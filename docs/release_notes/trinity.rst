@@ -4,7 +4,8 @@ Trinity
 Unreleased (latest source)
 --------------------------
 
-None
+- `#291 <https://github.com/ethereum/trinity/pull/291>`_: Performance: Move the Request server into its own isolated plugin process
+- `#291 <https://github.com/ethereum/trinity/pull/291>`_: Extensibility: Relay all peer pool message on the event bus
 
 0.1.0-alpha.23
 --------------------------

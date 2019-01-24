@@ -23,6 +23,7 @@ from typing import (
     Type,
     TYPE_CHECKING,
 )
+import typing_extensions
 
 import sha3
 
@@ -165,6 +166,32 @@ class BasePeerContext:
     pass
 
 
+class IdentifiablePeer(typing_extensions.Protocol):
+    """
+    A protocol used to identify a peer based on the presence of an ``uri`` property. The
+    peer pool uses this to lookup and match DTO peers against the actual real peer instance.
+    The ``BaseDTOPeer`` qualifies for this protocol but usage of the ``BaseDTOPeer`` isn't
+    strictly needed. E.g. one might implement a different DTO class that derives from
+    ``NamedTuple`` which is fine as long as it defines an ``uri`` property.
+    """
+
+    @property
+    @abstractmethod
+    def uri(self) -> str:
+        pass
+
+
+class BaseDTOPeer:
+    """
+    A peer solely meant as a Data Transfer Object (DTO) to travel across process boundaries.
+    It's a shallow, pickleable representation of a peer that carries enough information to
+    make the peer identifiable within the actual pool of real peers.
+    """
+
+    def __init__(self, uri: str):
+        self.uri = uri
+
+
 class BasePeer(BaseService):
     conn_idle_timeout = CONN_IDLE_TIMEOUT
     # Must be defined in subclasses. All items here must be Protocol classes representing
@@ -242,6 +269,12 @@ class BasePeer(BaseService):
 
     def get_boot_manager(self) -> BasePeerBootManager:
         return self.boot_manager_class(self)
+
+    def to_dto(self) -> IdentifiablePeer:
+        """
+        Convert into a Data Transfer Object (DTO) that can be send across process boundaries
+        """
+        return BaseDTOPeer(self.remote.uri())
 
     @abstractmethod
     async def send_sub_proto_handshake(self) -> None:
@@ -576,6 +609,7 @@ class BasePeer(BaseService):
             self.logger.error(
                 "Attempted to send msg with cmd id %d to disconnected peer %s", cmd_id, self)
             return
+
         self.writer.write(self.encrypt(header, body))
 
     def _disconnect(self, reason: DisconnectReason) -> None:

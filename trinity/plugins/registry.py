@@ -22,6 +22,9 @@ from trinity.plugins.builtin.json_rpc.plugin import (
 from trinity.plugins.builtin.peer_discovery.plugin import (
     PeerDiscoveryPlugin,
 )
+from trinity.plugins.builtin.request_server.plugin import (
+    RequestServerPlugin,
+)
 from trinity.plugins.builtin.syncer.plugin import (
     FastThenFullSyncStrategy,
     FullSyncStrategy,
@@ -58,6 +61,7 @@ ETH1_NODE_PLUGINS: Tuple[BasePlugin, ...] = (
     DbShellPlugin(use_ipython=is_ipython_available()),
     EthstatsPlugin(),
     LightPeerChainBridgePlugin(),
+    RequestServerPlugin(),
     SyncerPlugin((
         FastThenFullSyncStrategy(),
         FullSyncStrategy(),

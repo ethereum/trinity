@@ -5,6 +5,13 @@ from typing import (
     Dict,
 )
 
+from lahja import (
+    BroadcastConfig,
+    Endpoint,
+)
+from p2p.peer import (
+    IdentifiablePeer,
+)
 from p2p.protocol import (
     Protocol,
 )
@@ -13,6 +20,9 @@ from .commands import (
     BroadcastData,
     GetSum,
     Sum,
+)
+from .events import (
+    GetSumRequest,
 )
 
 
@@ -49,3 +59,30 @@ class ParagonProtocol(Protocol):
         msg: Dict[str, Any] = {'result': result}
         header, body = cmd.encode(msg)
         self.send(header, body)
+
+
+class ProxyParagonProtocol:
+    """
+    A ``PargonProtocol`` that can be used outside of the process that runs the peer pool. Any
+    action performed on this class is delegated to the process that runs the peer pool.
+    """
+
+    def __init__(self,
+                 dto_peer: IdentifiablePeer,
+                 event_bus: Endpoint,
+                 broadcast_config: BroadcastConfig):
+        self._dto_peer = dto_peer
+        self._event_bus = event_bus
+        self._broadcast_config = broadcast_config
+
+    def send_broadcast_data(self, data: bytes) -> None:
+        raise NotImplementedError("Not yet implemented")
+
+    def send_get_sum(self, value_a: int, value_b: int) -> None:
+        self._event_bus.broadcast(
+            GetSumRequest(self._dto_peer, value_a, value_b),
+            self._broadcast_config,
+        )
+
+    def send_sum(self, result: int) -> None:
+        raise NotImplementedError("Not yet implemented")

@@ -1,5 +1,6 @@
 from typing import (
     cast,
+    NamedTuple,
 )
 
 from eth_utils import (
@@ -18,6 +19,7 @@ from eth2.beacon.typing import (
 from p2p.peer import (
     BasePeer,
     BasePeerFactory,
+    IdentifiablePeer,
 )
 from p2p.peer_pool import (
     BasePeerPool,
@@ -39,6 +41,12 @@ from trinity.protocol.bcc.commands import (
 from trinity.protocol.bcc.context import (
     BeaconContext,
 )
+
+
+class BCCPeerDTO(NamedTuple):
+    head_slot: Slot
+    network_id: int
+    uri: str
 
 
 class BCCPeer(BasePeer):
@@ -94,6 +102,13 @@ class BCCPeer(BasePeer):
         if self._requests is None:
             self._requests = BCCExchangeHandler(self)
         return self._requests
+
+    def to_dto(self) -> IdentifiablePeer:
+        return BCCPeerDTO(
+            head_slot=self.head_slot,
+            network_id=self.network_id,
+            uri=self.remote.uri(),
+        )
 
 
 class BCCPeerFactory(BasePeerFactory):

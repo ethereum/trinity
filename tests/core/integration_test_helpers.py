@@ -25,9 +25,20 @@ from eth.tools.builder.chain import (
 from eth.db.header import HeaderDB
 from eth.vm.forks.byzantium import ByzantiumVM
 
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.base import BaseAsyncDB
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
+
+from trinity.protocol.common.peer_pool_event_bus import (
+    BasePeerPoolMessageRelayer,
+)
+from trinity.protocol.eth.peer import (
+    ETHPeerPoolEventBusRequestHandler,
+)
+from trinity.protocol.eth.servers import (
+    ETHIsolatedRequestServer,
+)
 
 ZIPPED_FIXTURES_PATH = Path(__file__).parent.parent / 'integration' / 'fixtures'
 
@@ -165,3 +176,33 @@ def load_fixture_db(db_fixture, db_class=LevelDB):
     with ZipFile(zipped_path, 'r') as zipped, TemporaryDirectory() as tmpdir:
         zipped.extractall(tmpdir)
         yield db_class(Path(tmpdir) / db_fixture.value)
+
+
+async def make_peer_pool_answer_event_bus_requests(event_bus, peer_pool, handler_type=None):
+
+    handler_type = ETHPeerPoolEventBusRequestHandler if handler_type is None else handler_type
+
+    peer_pool_event_bus_request_handler = handler_type(
+        event_bus,
+        peer_pool,
+        peer_pool.cancel_token
+    )
+    asyncio.ensure_future(peer_pool_event_bus_request_handler.run())
+    await peer_pool_event_bus_request_handler.events.started.wait()
+
+
+async def make_peer_pool_relay_messages_on_event_bus(event_bus, peer_pool):
+    peer_pool_message_relayer = BasePeerPoolMessageRelayer(peer_pool, event_bus)
+    asyncio.ensure_future(peer_pool_message_relayer.run())
+    await peer_pool_message_relayer.events.started.wait()
+
+
+async def run_isolated_request_server(event_bus, chaindb, server_type=None):
+    server_type = ETHIsolatedRequestServer if server_type is None else server_type
+    request_server = server_type(
+        event_bus,
+        TO_NETWORKING_BROADCAST_CONFIG,
+        FakeAsyncChainDB(chaindb)
+    )
+    asyncio.ensure_future(request_server.run())
+    await request_server.events.started.wait()
