@@ -62,20 +62,9 @@ class Command:
     decode_strict = True
     structure: List[Tuple[str, Any]] = []
 
-    _logger: logging.Logger = None
-
-    # FIXME: does this even work?
-    @property
-    def logger(cls) -> logging.Logger:
-        if cls._logger is None:
-            cls._logger = logging.getLogger(f"p2p.protocol.{type(cls).__name__}")
-        return cls._logger
+    logger = None
 
     # TODO: add abstract methods for is_base_protocol
-
-    # FIXME: reference to `self`
-    # def __str__(self) -> str:
-    #     return f"{type(self).__name__} (cmd_id={cls.cmd_id})"
 
     @classmethod
     def encode_payload(cls, data: Union[PayloadType, sedes.CountableList]) -> bytes:
@@ -164,32 +153,60 @@ class Command:
         body = _pad_to_16_byte_boundary(enc_cmd_id + compressed_payload)
         return header, body
 
+
 ### FIXME: move to p2p._utils module?..
 # FIXME: module-level, global "look-up table"; is this acceptable?..
 command_classes: Dict[Tuple, Type[Command]] = {}
-# FIXME: use kwargs for feature specification; they shouldn't be spelled out here!
-def get_command_class(cmd_class, cmd_id_offset, snappy_support):
-    # TODO: use NamedTuple?..
-    specifier = (cmd_class, cmd_id_offset, snappy_support)
+
+def get_command_class(cmd_base_class: Type[Command],
+                      cmd_id_offset: int, snappy_support: bool) -> Type[Command]:
+    """
+    Receives a :class:`Command` sub-class and protocol settings. Returns
+    a command class with those settings applied.
+
+    The :class:`Command` sub-class must be a class of a particular command (such as
+    :class:`Hello` of the DEVp2p protocol, or :class:`Status` of the ETH sub-protocol)
+    implementing a protocol command.
+
+    The returned class is either an existing one from cache, or dynamically-created one.
+
+    This is a helper function for :class:`Protocol` implementations. It should not
+    be used stand-alone, without :class:`Protocol` acting as proxy.
+
+    :param cmd_base_class: command class to look up (and derive from if never before used)
+    :param cmd_id_offset: sub/protocol-dependent command ID offset
+    :param snappy_support: whether to enable Snappy compression
+    :returns: a class of the command with the settings applied
+    """
+    specifier = (cmd_base_class, cmd_id_offset, snappy_support)
 
     # use existing if available
     if specifier in command_classes.keys():
         return command_classes[specifier]
 
-    class CommandWithSettings(cmd_class):
-        '''TODO'''
+    class CommandWithSettings(cmd_base_class):
         _cmd_id_offset = cmd_id_offset
         _snappy_support = snappy_support
 
-        cmd_id = _cmd_id_offset + cmd_class._cmd_id
+        cmd_id = _cmd_id_offset + cmd_base_class._cmd_id
+
         is_base_protocol = _cmd_id_offset == 0
-        cmd_type = cmd_class
+        cmd_type = cmd_base_class
+
+        logger = logging.getLogger(f"p2p.protocol.{cmd_base_class.__name__}")
 
         @classmethod
         def __repr__(cls):
             return (
-                f"{cmd_class}<cmd_id_offset={cmd_id_offset}, "
+                f"{cmd_base_class}<cmd_id_offset={cmd_id_offset},"
                 f"snappy_support={snappy_support})>"
+            )
+
+        @classmethod
+        def __str__(cls) -> str:
+            return (
+                f"{cmd_base_class} (with sub/protocol settings cmd_id_offset={cmd_id_offset}, "
+                f"snappy_support={snappy_support})"
             )
 
     c = CommandWithSettings()
