@@ -115,6 +115,6 @@ class SerenityStateTransition(BaseStateTransition):
         # TODO: state = process_rewards_and_penalties(state, block, self.config)
         # TODO: state = process_ejections(state, block, self.config)
         # TODO: state = process_validator_registry(state, block, self.config)
-        state = process_final_updates(state, block, self.config)
+        state = process_final_updates(state, self.config)
 
         return state

@@ -26,15 +26,16 @@ from eth2.beacon.helpers import (
     get_crosslink_committees_at_slot,
 )
 
-from eth2.beacon.types.attestation_data import AttestationData
+
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.proposal_signed_data import ProposalSignedData
 from eth2.beacon.types.slashable_vote_data import SlashableVoteData
+from eth2.beacon.types.states import BeaconState
 
 from eth2.beacon.helpers import (
     get_beacon_proposer_index,

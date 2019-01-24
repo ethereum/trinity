@@ -9,7 +9,6 @@ from eth2.beacon.state_machines.configs import BeaconConfig
 
 
 def process_final_updates(state: BeaconState,
-                          block: BaseBeaconBlock,
                           config: BeaconConfig) -> BeaconState:
     epoch = state.slot // config.EPOCH_LENGTH
     current_index = (epoch + 1) % config.LATEST_PENALIZED_EXIT_LENGTH
