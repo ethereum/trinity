@@ -273,33 +273,38 @@ def validate_attestation_aggregate_signature(state: BeaconState,
     participant_indices = get_attestation_participants(
         state=state,
         attestation_data=attestation.data,
-        aggregation_bitfield=attestation.participation_bitfield,
+        aggregation_bitfield=attestation.aggregation_bitfield,
         epoch_length=epoch_length,
         target_committee_size=target_committee_size,
         shard_count=shard_count,
     )
-
     pubkeys = tuple(
         state.validator_registry[validator_index].pubkey
         for validator_index in participant_indices
     )
     group_public_key = bls.aggregate_pubkeys(pubkeys)
-
     # TODO: change to tree hashing when we have SSZ
     message = AttestationDataAndCustodyBit.create_attestation_message(attestation.data)
+    domain = get_domain(
+        fork_data=state.fork_data,
+        slot=attestation.data.slot,
+        domain_type=SignatureDomain.DOMAIN_ATTESTATION,
+    )
 
     is_valid_signature = bls.verify(
         message=message,
         pubkey=group_public_key,
         signature=attestation.aggregate_signature,
-        domain=get_domain(
-            fork_data=state.fork_data,
-            slot=attestation.data.slot,
-            domain_type=SignatureDomain.DOMAIN_ATTESTATION,
-        ),
-
+        domain=domain,
     )
+
     if not is_valid_signature:
         raise ValidationError(
-            "Attestation ``aggregate_signature`` is invalid."
+            "Attestation aggregate_signature is invalid. "
+            "message={}, participant_indices={} "
+            "domain={}".format(
+                message,
+                participant_indices,
+                domain,
+            )
         )

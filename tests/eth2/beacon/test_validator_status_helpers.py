@@ -254,13 +254,13 @@ def test_settle_penality_to_validator_and_whistleblower(monkeypatch,
         shard_count=shard_count,
     )
 
-    # Check `state.latest_penalized_exit_balances`
-    latest_penalized_exit_balances_list = list(state.latest_penalized_exit_balances)
+    # Check `state.latest_penalized_balances`
+    latest_penalized_balances_list = list(state.latest_penalized_balances)
     last_penalized_epoch = (state.slot // epoch_length) % latest_penalized_exit_length
-    latest_penalized_exit_balances_list[last_penalized_epoch] = max_deposit * GWEI_PER_ETH
-    latest_penalized_exit_balances = tuple(latest_penalized_exit_balances_list)
+    latest_penalized_balances_list[last_penalized_epoch] = max_deposit * GWEI_PER_ETH
+    latest_penalized_balances = tuple(latest_penalized_balances_list)
 
-    assert state.latest_penalized_exit_balances == latest_penalized_exit_balances
+    assert state.latest_penalized_balances == latest_penalized_balances
 
     # Check penality and reward
     whistleblower_reward = (

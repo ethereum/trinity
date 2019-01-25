@@ -110,7 +110,7 @@ def sample_proposer_slashing_params(sample_proposal_signed_data_params):
 def sample_attestation_params(sample_attestation_data_params):
     return {
         'data': AttestationData(**sample_attestation_data_params),
-        'participation_bitfield': b'\12' * 16,
+        'aggregation_bitfield': b'\12' * 16,
         'custody_bitfield': b'\34' * 16,
         'aggregate_signature': [0, 0],
     }
@@ -174,7 +174,7 @@ def sample_beacon_state_params(sample_fork_data_params, sample_eth1_data_params)
         'fork_data': ForkData(**sample_fork_data_params),
         'validator_registry': (),
         'validator_balances': (),
-        'validator_registry_latest_change_slot': 10,
+        'validator_registry_update_slot': 10,
         'validator_registry_exit_count': 10,
         'validator_registry_delta_chain_tip': b'\x55' * 32,
         'latest_randao_mixes': (),
@@ -194,7 +194,7 @@ def sample_beacon_state_params(sample_fork_data_params, sample_eth1_data_params)
         'finalized_slot': 0,
         'latest_crosslinks': (),
         'latest_block_roots': (),
-        'latest_penalized_exit_balances': (),
+        'latest_penalized_balances': (),
         'latest_attestations': (),
         'batched_block_roots': (),
         'latest_eth1_data': Eth1Data(**sample_eth1_data_params),
@@ -277,7 +277,7 @@ def sample_fork_data_params():
 def sample_pending_attestation_record_params(sample_attestation_data_params):
     return {
         'data': AttestationData(**sample_attestation_data_params),
-        'participation_bitfield': b'\12' * 16,
+        'aggregation_bitfield': b'\12' * 16,
         'custody_bitfield': b'\34' * 16,
         'slot_included': 0,
     }
@@ -605,7 +605,7 @@ def genesis_state(filled_beacon_state,
         validator_registry=activated_genesis_validators,
         validator_balances=genesis_balances,
         latest_block_roots=tuple(ZERO_HASH32 for _ in range(latest_block_roots_length)),
-        latest_penalized_exit_balances=(0,) * latest_penalized_exit_length,
+        latest_penalized_balances=(0,) * latest_penalized_exit_length,
         latest_crosslinks=tuple(
             CrosslinkRecord(
                 slot=genesis_slot,
@@ -766,7 +766,9 @@ def create_mock_signed_attestations_at_slot(config,
                                                 voted_attesters_ratio):
         attestations = []
         crosslink_committees_at_slot = get_crosslink_committees_at_slot(
-            state,
+            state.copy(
+                slot=state.slot + 1,
+            ),
             slot=attestation_slot,
             epoch_length=config.EPOCH_LENGTH,
             target_committee_size=config.TARGET_COMMITTEE_SIZE,
@@ -833,7 +835,7 @@ def create_mock_signed_attestation(keymap):
         ]
 
         # aggregate signatures and construct participant bitfield
-        participation_bitfield, aggregate_signature = aggregate_votes(
+        aggregation_bitfield, aggregate_signature = aggregate_votes(
             bitfield=get_empty_bitfield(len(committee)),
             sigs=(),
             voting_sigs=signatures,
@@ -843,7 +845,7 @@ def create_mock_signed_attestation(keymap):
         # create attestation from attestation_data, particpipant_bitfield, and signature
         return Attestation(
             data=attestation_data,
-            participation_bitfield=participation_bitfield,
+            aggregation_bitfield=aggregation_bitfield,
             custody_bitfield=b'',
             aggregate_signature=aggregate_signature,
         )

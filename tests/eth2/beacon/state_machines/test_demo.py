@@ -18,7 +18,7 @@ from eth2.beacon.tools.builder.initializer import (
         'shard_count'
     ),
     [
-        (20, 5, 1, 2, 2)
+        (20, 4, 2, 2, 2)
     ]
 )
 def test_demo(base_db,
@@ -46,18 +46,9 @@ def test_demo(base_db,
 
     current_slot = 1
     chain_length = 3 * config.EPOCH_LENGTH
+    attestations = ()
     for current_slot in range(chain_length):
-        if current_slot > config.MIN_ATTESTATION_INCLUSION_DELAY:
-            attestation_slot = current_slot - config.MIN_ATTESTATION_INCLUSION_DELAY
-            attestations = create_mock_signed_attestations_at_slot(
-                state,
-                attestation_slot,
-                1.0,
-            )
-        else:
-            attestations = ()
-
-        # two epoch
+        # two epochs
         block = create_mock_block(
             state=state,
             block_class=SerenityBeaconBlock,
@@ -87,6 +78,16 @@ def test_demo(base_db,
 
         chaindb.persist_state(state)
         chaindb.persist_block(block, SerenityBeaconBlock)
+
+        if current_slot > config.MIN_ATTESTATION_INCLUSION_DELAY:
+            attestation_slot = current_slot - config.MIN_ATTESTATION_INCLUSION_DELAY
+            attestations = create_mock_signed_attestations_at_slot(
+                state,
+                attestation_slot,
+                1.0,
+            )
+        else:
+            attestations = ()
 
     assert state.slot == chain_length - 1
     assert isinstance(sm.block, SerenityBeaconBlock)

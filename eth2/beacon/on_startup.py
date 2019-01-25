@@ -85,7 +85,7 @@ def get_initial_beacon_state(*,
         # Validator registry
         validator_registry=(),
         validator_balances=(),
-        validator_registry_latest_change_slot=genesis_slot,
+        validator_registry_update_slot=genesis_slot,
         validator_registry_exit_count=0,
         validator_registry_delta_chain_tip=ZERO_HASH32,
 
@@ -119,7 +119,7 @@ def get_initial_beacon_state(*,
             for _ in range(shard_count)
         ]),
         latest_block_roots=tuple(ZERO_HASH32 for _ in range(latest_block_roots_length)),
-        latest_penalized_exit_balances=tuple(
+        latest_penalized_balances=tuple(
             Gwei(0)
             for _ in range(latest_penalized_exit_length)
         ),

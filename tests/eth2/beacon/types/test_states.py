@@ -23,7 +23,7 @@ from tests.eth2.beacon.helpers import (
 def test_defaults(sample_beacon_state_params):
     state = BeaconState(**sample_beacon_state_params)
     assert state.validator_registry == sample_beacon_state_params['validator_registry']
-    assert state.validator_registry_latest_change_slot == sample_beacon_state_params['validator_registry_latest_change_slot']  # noqa: E501
+    assert state.validator_registry_update_slot == sample_beacon_state_params['validator_registry_update_slot']  # noqa: E501
 
 
 def test_validator_registry_and_balances_length(sample_beacon_state_params):

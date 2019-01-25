@@ -11,6 +11,7 @@ from eth2.beacon.types.states import BeaconState
 
 from .epoch_processing import (
     process_final_updates,
+    process_validator_registry,
 )
 from .operation_processing import (
     process_attestations,
@@ -114,7 +115,7 @@ class SerenityStateTransition(BaseStateTransition):
         # TODO: state = process_rosslinks(state, block, self.config)
         # TODO: state = process_rewards_and_penalties(state, block, self.config)
         # TODO: state = process_ejections(state, block, self.config)
-        # TODO: state = process_validator_registry(state, block, self.config)
+        state = process_validator_registry(state, self.config)
         state = process_final_updates(state, self.config)
 
         return state

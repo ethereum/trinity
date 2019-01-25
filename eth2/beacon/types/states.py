@@ -57,7 +57,7 @@ class BeaconState(rlp.Serializable):
         # Validator registry
         ('validator_registry', CountableList(ValidatorRecord)),
         ('validator_balances', CountableList(uint64)),
-        ('validator_registry_latest_change_slot', uint64),
+        ('validator_registry_update_slot', uint64),
         ('validator_registry_exit_count', uint64),
         ('validator_registry_delta_chain_tip', hash32),  # For light clients to easily track delta
 
@@ -90,7 +90,7 @@ class BeaconState(rlp.Serializable):
         # Recent state
         ('latest_crosslinks', CountableList(CrosslinkRecord)),
         ('latest_block_roots', CountableList(hash32)),  # Needed to process attestations, older to newer  # noqa: E501
-        ('latest_penalized_exit_balances', CountableList(uint64)),  # Balances penalized at every withdrawal period  # noqa: E501
+        ('latest_penalized_balances', CountableList(uint64)),  # Balances penalized at every withdrawal period  # noqa: E501
         ('latest_attestations', CountableList(PendingAttestationRecord)),
         ('batched_block_roots', CountableList(Hash32)),  # allow for a log-sized Merkle proof from any block to any historical block root"  # noqa: E501
 
@@ -109,7 +109,7 @@ class BeaconState(rlp.Serializable):
             # Validator registry
             validator_registry: Sequence[ValidatorRecord],
             validator_balances: Sequence[Gwei],
-            validator_registry_latest_change_slot: SlotNumber,
+            validator_registry_update_slot: SlotNumber,
             validator_registry_exit_count: int,
             validator_registry_delta_chain_tip: Hash32,
             # Randomness and committees
@@ -133,7 +133,7 @@ class BeaconState(rlp.Serializable):
             # Recent state
             latest_crosslinks: Sequence[CrosslinkRecord],
             latest_block_roots: Sequence[Hash32],
-            latest_penalized_exit_balances: Sequence[Gwei],
+            latest_penalized_balances: Sequence[Gwei],
             batched_block_roots: Sequence[Hash32],
             latest_attestations: Sequence[PendingAttestationRecord],
             # Ethereum 1.0 chain
@@ -151,7 +151,7 @@ class BeaconState(rlp.Serializable):
             # Validator registry
             validator_registry=validator_registry,
             validator_balances=validator_balances,
-            validator_registry_latest_change_slot=validator_registry_latest_change_slot,
+            validator_registry_update_slot=validator_registry_update_slot,
             validator_registry_exit_count=validator_registry_exit_count,
             validator_registry_delta_chain_tip=validator_registry_delta_chain_tip,
             # Randomness and committees
@@ -175,7 +175,7 @@ class BeaconState(rlp.Serializable):
             # Recent state
             latest_crosslinks=latest_crosslinks,
             latest_block_roots=latest_block_roots,
-            latest_penalized_exit_balances=latest_penalized_exit_balances,
+            latest_penalized_balances=latest_penalized_balances,
             latest_attestations=latest_attestations,
             batched_block_roots=batched_block_roots,
             # Ethereum 1.0 chain
@@ -234,7 +234,7 @@ class BeaconState(rlp.Serializable):
             # Validator registry
             validator_registry=activated_genesis_validators,
             validator_balances=genesis_balances,
-            validator_registry_latest_change_slot=genesis_slot,
+            validator_registry_update_slot=genesis_slot,
             validator_registry_exit_count=0,
             validator_registry_delta_chain_tip=ZERO_HASH32,
 
@@ -271,7 +271,7 @@ class BeaconState(rlp.Serializable):
                 for _ in range(shard_count)
             ),
             latest_block_roots=tuple(ZERO_HASH32 for _ in range(latest_block_roots_length)),
-            latest_penalized_exit_balances=(Gwei(0),) * latest_penalized_exit_length,
+            latest_penalized_balances=(Gwei(0),) * latest_penalized_exit_length,
             latest_attestations=(),
             batched_block_roots=(),
 

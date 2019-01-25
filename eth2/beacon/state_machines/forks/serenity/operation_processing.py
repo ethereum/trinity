@@ -35,7 +35,7 @@ def process_attestations(state: BeaconState,
     additional_pending_attestations = tuple(
         PendingAttestationRecord(
             data=attestation.data,
-            participation_bitfield=attestation.participation_bitfield,
+            aggregation_bitfield=attestation.aggregation_bitfield,
             custody_bitfield=attestation.custody_bitfield,
             slot_included=state.slot,
         )

@@ -24,18 +24,23 @@ def sign_proof_of_possession(deposit_input,
         slot,
         SignatureDomain.DOMAIN_DEPOSIT,
     )
-    return bls.sign(deposit_input.root, privkey, domain)
+    return bls.sign(
+        message=deposit_input.root,
+        privkey=privkey,
+        domain=domain,
+    )
 
 
 def sign_attestation(message, privkey, fork_data, slot):
+    domain = get_domain(
+        fork_data,
+        slot,
+        SignatureDomain.DOMAIN_ATTESTATION,
+    )
     return bls.sign(
         message=message,
         privkey=privkey,
-        domain=get_domain(
-            fork_data=fork_data,
-            slot=slot,
-            domain_type=SignatureDomain.DOMAIN_ATTESTATION,
-        )
+        domain=domain,
     )
 
 

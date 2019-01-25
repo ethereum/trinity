@@ -137,7 +137,7 @@ def test_get_initial_beacon_state(
     # Validator registry
     assert len(state.validator_registry) == validator_count
     assert len(state.validator_balances) == validator_count
-    assert state.validator_registry_latest_change_slot == genesis_slot
+    assert state.validator_registry_update_slot == genesis_slot
     assert state.validator_registry_exit_count == 0
 
     # Randomness and committees
@@ -171,8 +171,8 @@ def test_get_initial_beacon_state(
     )
     assert len(state.latest_block_roots) == latest_block_roots_length
     assert state.latest_block_roots[0] == ZERO_HASH32
-    assert len(state.latest_penalized_exit_balances) == latest_penalized_exit_length
-    assert state.latest_penalized_exit_balances[0] == Gwei(0)
+    assert len(state.latest_penalized_balances) == latest_penalized_exit_length
+    assert state.latest_penalized_balances[0] == Gwei(0)
 
     assert len(state.latest_attestations) == 0
     assert len(state.batched_block_roots) == 0
