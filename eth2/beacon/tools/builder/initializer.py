@@ -29,15 +29,16 @@ from eth2.beacon.typing import (
     Timestamp,
 )
 
-from eth2.beacon.tools.builder.state_machine.validator import (
+from eth2.beacon.tools.builder.validator import (
     sign_proof_of_possession,
 )
 
 
-def mock_initial_validator_deposits(num_validators: int,
-                                    config: BeaconConfig,
-                                    pubkeys: Sequence[BLSPubkey],
-                                    keymap: Dict[BLSPubkey, int]) -> Tuple[Deposit, ...]:
+def create_mock_initial_validator_deposits(
+        num_validators: int,
+        config: BeaconConfig,
+        pubkeys: Sequence[BLSPubkey],
+        keymap: Dict[BLSPubkey, int]) -> Tuple[Deposit, ...]:
     # Mock data
     withdrawal_credentials = b'\x22' * 32
     randao_commitment = b'\x33' * 32
@@ -84,18 +85,19 @@ def mock_initial_validator_deposits(num_validators: int,
     return initial_validator_deposits
 
 
-def mock_genesis(num_validators: int,
-                 config: BeaconConfig,
-                 keymap: Dict[BLSPubkey, int],
-                 genesis_block_class: Type[BaseBeaconBlock],
-                 genesis_time: Timestamp=0) -> Tuple[BeaconState, BaseBeaconBlock]:
+def create_mock_genesis(
+        num_validators: int,
+        config: BeaconConfig,
+        keymap: Dict[BLSPubkey, int],
+        genesis_block_class: Type[BaseBeaconBlock],
+        genesis_time: Timestamp=0) -> Tuple[BeaconState, BaseBeaconBlock]:
     latest_eth1_data = Eth1Data.create_empty_data()
 
     assert num_validators <= len(keymap)
 
     pubkeys = list(keymap)[:num_validators]
 
-    initial_validator_deposits = mock_initial_validator_deposits(
+    initial_validator_deposits = create_mock_initial_validator_deposits(
         num_validators=num_validators,
         config=config,
         pubkeys=pubkeys,

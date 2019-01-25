@@ -5,7 +5,13 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
 from eth2.beacon.tools.builder.initializer import (
-    mock_genesis,
+    create_mock_genesis,
+)
+from eth2.beacon.tools.builder.proposer import (
+    create_mock_block,
+)
+from eth2.beacon.tools.builder.validator import (
+    create_mock_signed_attestations_at_slot,
 )
 
 
@@ -25,12 +31,10 @@ def test_demo(base_db,
               num_validators,
               config,
               keymap,
-              fixture_sm_class,
-              create_mock_block,
-              create_mock_signed_attestations_at_slot):
+              fixture_sm_class):
     chaindb = BeaconChainDB(base_db)
 
-    genesis_state, genesis_block = mock_genesis(
+    genesis_state, genesis_block = create_mock_genesis(
         num_validators=num_validators,
         config=config,
         keymap=keymap,
@@ -51,9 +55,10 @@ def test_demo(base_db,
         # two epochs
         block = create_mock_block(
             state=state,
+            config=config,
             block_class=SerenityBeaconBlock,
             parent_block=genesis_block,
-            config=config,
+            keymap=keymap,
             slot=current_slot,
             attestations=attestations,
         )
@@ -83,7 +88,9 @@ def test_demo(base_db,
             attestation_slot = current_slot - config.MIN_ATTESTATION_INCLUSION_DELAY
             attestations = create_mock_signed_attestations_at_slot(
                 state,
+                config,
                 attestation_slot,
+                keymap,
                 1.0,
             )
         else:

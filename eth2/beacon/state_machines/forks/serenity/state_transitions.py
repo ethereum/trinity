@@ -110,11 +110,11 @@ class SerenityStateTransition(BaseStateTransition):
         return state
 
     def per_epoch_transition(self, state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
-        # TODO: state = process_receipt_roots(state, block, self.config)
-        # TODO: state = process_justification(state, block, self.config)
-        # TODO: state = process_rosslinks(state, block, self.config)
-        # TODO: state = process_rewards_and_penalties(state, block, self.config)
-        # TODO: state = process_ejections(state, block, self.config)
+        # TODO: state = process_receipt_roots(state, self.config)
+        # TODO: state = process_justification(state, self.config)
+        # TODO: state = process_crosslinks(state, self.config)
+        # TODO: state = process_rewards_and_penalties(state, self.config)
+        # TODO: state = process_ejections(state, self.config)
         state = process_validator_registry(state, self.config)
         state = process_final_updates(state, self.config)
 

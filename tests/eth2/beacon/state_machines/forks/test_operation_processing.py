@@ -13,6 +13,9 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
 from eth2.beacon.state_machines.forks.serenity.operation_processing import (
     process_attestations,
 )
+from eth2.beacon.tools.builder.validator import (
+    create_mock_signed_attestations_at_slot,
+)
 
 
 @pytest.mark.parametrize(
@@ -35,7 +38,7 @@ def test_process_attestations(genesis_state,
                               sample_beacon_block_params,
                               sample_beacon_block_body_params,
                               config,
-                              create_mock_signed_attestations_at_slot,
+                              keymap,
                               success):
 
     attestation_slot = 0
@@ -46,7 +49,9 @@ def test_process_attestations(genesis_state,
 
     attestations = create_mock_signed_attestations_at_slot(
         state,
+        config,
         attestation_slot,
+        keymap,
         1.0,
     )
 

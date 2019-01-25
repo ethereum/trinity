@@ -9,25 +9,12 @@ from eth_utils import (
 
 import eth2._utils.bls as bls
 from eth2.beacon._utils.hash import hash_eth2
-from eth2._utils.bitfield import (
-    get_empty_bitfield,
-)
-from eth2.beacon.aggregation import (
-    aggregate_votes,
-)
 from eth2.beacon.constants import (
     EMPTY_SIGNATURE,
     FAR_FUTURE_SLOT,
     GWEI_PER_ETH,
 )
 
-from eth2.beacon.helpers import (
-    get_block_root,
-    get_crosslink_committees_at_slot,
-)
-
-
-from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.deposit_data import DepositData
@@ -37,9 +24,6 @@ from eth2.beacon.types.proposal_signed_data import ProposalSignedData
 from eth2.beacon.types.slashable_vote_data import SlashableVoteData
 from eth2.beacon.types.states import BeaconState
 
-from eth2.beacon.helpers import (
-    get_beacon_proposer_index,
-)
 from eth2.beacon.on_startup import (
     get_genesis_block,
 )
@@ -58,13 +42,6 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
 )
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 
-from eth2.beacon.tools.builder.state_machine.proposer import (
-    create_block_on_state,
-)
-from eth2.beacon.tools.builder.state_machine.validator import (
-    prepare_attesstation_signing,
-    sign_attestation,
-)
 from tests.eth2.beacon.helpers import (
     mock_validator_record,
 )
@@ -752,141 +729,3 @@ def fixture_sm_class(config):
         __name__='SerenityStateMachineForTesting',
         config=config,
     )
-
-
-#
-# Create mock consensus objects
-#
-@pytest.fixture
-def create_mock_signed_attestations_at_slot(config,
-                                            sample_attestation_data_params,
-                                            create_mock_signed_attestation):
-    def create_mock_signed_attestations_at_slot(state,
-                                                attestation_slot,
-                                                voted_attesters_ratio):
-        attestations = []
-        crosslink_committees_at_slot = get_crosslink_committees_at_slot(
-            state.copy(
-                slot=state.slot + 1,
-            ),
-            slot=attestation_slot,
-            epoch_length=config.EPOCH_LENGTH,
-            target_committee_size=config.TARGET_COMMITTEE_SIZE,
-            shard_count=config.SHARD_COUNT,
-        )
-        for crosslink_committee in crosslink_committees_at_slot:
-            committee, shard = crosslink_committee
-            # have 0th committee member sign
-
-            num_voted_attesters = int(len(committee) * voted_attesters_ratio)
-            latest_crosslink_root = state.latest_crosslinks[shard].shard_block_root
-
-            attestation_data = AttestationData(
-                slot=attestation_slot,
-                shard=shard,
-                beacon_block_root=ZERO_HASH32,
-                epoch_boundary_root=ZERO_HASH32,
-                shard_block_root=ZERO_HASH32,
-                latest_crosslink_root=latest_crosslink_root,
-                justified_slot=state.previous_justified_slot,
-                justified_block_root=get_block_root(
-                    state,
-                    state.previous_justified_slot,
-                    config.LATEST_BLOCK_ROOTS_LENGTH,
-                ),
-            )
-
-            attestations.append(
-                create_mock_signed_attestation(
-                    state,
-                    attestation_data,
-                    committee,
-                    num_voted_attesters,
-                )
-            )
-        return tuple(attestations)
-    return create_mock_signed_attestations_at_slot
-
-
-@pytest.fixture
-def create_mock_signed_attestation(keymap):
-    def _create_mock_signed_attestation(state,
-                                        attestation_data,
-                                        committee,
-                                        num_voted_attesters):
-        message, voting_committee_indices = prepare_attesstation_signing(
-            attestation_data,
-            committee,
-            num_voted_attesters,
-        )
-
-        signatures = [
-            sign_attestation(
-                message=message,
-                privkey=keymap[
-                    state.validator_registry[
-                        committee[committee_index]
-                    ].pubkey
-                ],
-                fork=state.fork,
-                slot=attestation_data.slot,
-            )
-            for committee_index in voting_committee_indices
-        ]
-
-        # aggregate signatures and construct participant bitfield
-        aggregation_bitfield, aggregate_signature = aggregate_votes(
-            bitfield=get_empty_bitfield(len(committee)),
-            sigs=(),
-            voting_sigs=signatures,
-            voting_committee_indices=voting_committee_indices,
-        )
-
-        # create attestation from attestation_data, particpipant_bitfield, and signature
-        return Attestation(
-            data=attestation_data,
-            aggregation_bitfield=aggregation_bitfield,
-            custody_bitfield=b'',
-            aggregate_signature=aggregate_signature,
-        )
-
-    return _create_mock_signed_attestation
-
-
-@pytest.fixture
-def create_mock_block(keymap):
-    def _create_mock_block(state,
-                           block_class,
-                           parent_block,
-                           config,
-                           slot=None,
-                           attestations=()):
-        if slot is None:
-            slot = state.slot + 1
-
-        proposer_index = get_beacon_proposer_index(
-            state.copy(
-                slot=slot,
-            ),
-            slot,
-            config.EPOCH_LENGTH,
-            config.TARGET_COMMITTEE_SIZE,
-            config.SHARD_COUNT,
-        )
-        proposer_pubkey = state.validator_registry[proposer_index].pubkey
-        proposer_privkey = keymap[proposer_pubkey]
-
-        block = create_block_on_state(
-            state,
-            config,
-            parent_block,
-            parent_block,
-            slot,
-            validator_index=proposer_index,
-            privkey=proposer_privkey,
-            attestations=attestations,
-        )
-
-        return block
-
-    return _create_mock_block

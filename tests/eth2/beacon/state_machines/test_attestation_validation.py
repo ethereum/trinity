@@ -23,6 +23,9 @@ from eth2.beacon.state_machines.forks.serenity.validation import (
     validate_attestation_shard_block_root,
     validate_attestation_slot,
 )
+from eth2.beacon.tools.builder.validator import (
+    create_mock_signed_attestation,
+)
 from eth2.beacon.types.attestation_data import AttestationData
 
 
@@ -244,10 +247,10 @@ def test_validate_attestation_aggregate_signature(genesis_state,
                                                   epoch_length,
                                                   random,
                                                   sample_attestation_data_params,
-                                                  create_mock_signed_attestation,
                                                   is_valid,
                                                   target_committee_size,
-                                                  shard_count,):
+                                                  shard_count,
+                                                  keymap):
     state = genesis_state
 
     # choose committee
@@ -277,6 +280,7 @@ def test_validate_attestation_aggregate_signature(genesis_state,
         attestation_data,
         committee,
         votes_count,
+        keymap,
     )
 
     if is_valid:

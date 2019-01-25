@@ -1,5 +1,7 @@
 from typing import (
+    Dict,
     Sequence,
+    Type,
 )
 
 from eth.constants import (
@@ -31,6 +33,7 @@ from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.proposal_signed_data import ProposalSignedData
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
+    BLSPubkey,
     FromBlockParams,
     SlotNumber,
 )
@@ -116,6 +119,42 @@ def create_block_on_state(
             privkey=privkey,
             domain=domain,
         ),
+    )
+
+    return block
+
+
+def create_mock_block(state: BeaconState,
+                      config: BeaconConfig,
+                      block_class: Type[BaseBeaconBlock],
+                      parent_block: BaseBeaconBlock,
+                      keymap: Dict[BLSPubkey, int],
+                      slot: SlotNumber=None,
+                      attestations: Sequence[Attestation]=()) -> BaseBeaconBlock:
+    if slot is None:
+        slot = state.slot + 1
+
+    proposer_index = get_beacon_proposer_index(
+        state.copy(
+            slot=slot,
+        ),
+        slot,
+        config.EPOCH_LENGTH,
+        config.TARGET_COMMITTEE_SIZE,
+        config.SHARD_COUNT,
+    )
+    proposer_pubkey = state.validator_registry[proposer_index].pubkey
+    proposer_privkey = keymap[proposer_pubkey]
+
+    block = create_block_on_state(
+        state,
+        config,
+        block_class,
+        parent_block,
+        slot,
+        validator_index=proposer_index,
+        privkey=proposer_privkey,
+        attestations=attestations,
     )
 
     return block

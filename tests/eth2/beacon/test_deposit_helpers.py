@@ -16,7 +16,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validator_records import ValidatorRecord
 from eth2.beacon.types.deposit_input import DepositInput
 
-from eth2.beacon.tools.builder.state_machine.validator import (
+from eth2.beacon.tools.builder.validator import (
     sign_proof_of_possession,
 )
 

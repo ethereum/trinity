@@ -20,7 +20,7 @@ from eth2.beacon.on_startup import (
     get_genesis_block,
     get_initial_beacon_state,
 )
-from eth2.beacon.tools.builder.state_machine.validator import (
+from eth2.beacon.tools.builder.validator import (
     sign_proof_of_possession,
 )
 from eth2.beacon.typing import (
