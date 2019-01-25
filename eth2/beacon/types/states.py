@@ -38,7 +38,7 @@ from .eth1_data import Eth1Data
 from .eth1_data_vote import Eth1DataVote
 from .custody_challenges import CustodyChallenge
 from .crosslink_records import CrosslinkRecord
-from .fork_data import ForkData
+from .forks import Fork
 from .pending_attestation_records import PendingAttestationRecord
 from .shard_reassignment_records import ShardReassignmentRecord
 from .validator_records import ValidatorRecord
@@ -52,7 +52,7 @@ class BeaconState(rlp.Serializable):
         # Misc
         ('slot', uint64),
         ('genesis_time', uint64),
-        ('fork_data', ForkData),  # For versioning hard forks
+        ('fork', Fork),  # For versioning hard forks
 
         # Validator registry
         ('validator_registry', CountableList(ValidatorRecord)),
@@ -105,7 +105,7 @@ class BeaconState(rlp.Serializable):
             # Misc
             slot: SlotNumber,
             genesis_time: Timestamp,
-            fork_data: ForkData,
+            fork: Fork,
             # Validator registry
             validator_registry: Sequence[ValidatorRecord],
             validator_balances: Sequence[Gwei],
@@ -147,7 +147,7 @@ class BeaconState(rlp.Serializable):
             # Misc
             slot=slot,
             genesis_time=genesis_time,
-            fork_data=fork_data,
+            fork=fork,
             # Validator registry
             validator_registry=validator_registry,
             validator_balances=validator_balances,
@@ -225,10 +225,10 @@ class BeaconState(rlp.Serializable):
             # Misc
             slot=genesis_slot,
             genesis_time=Timestamp(0),
-            fork_data=ForkData(
-                pre_fork_version=0,
-                post_fork_version=0,
-                fork_slot=genesis_slot,
+            fork=Fork(
+                previous_version=0,
+                current_version=0,
+                slot=genesis_slot,
             ),
 
             # Validator registry

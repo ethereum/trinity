@@ -17,10 +17,10 @@ from eth2.beacon.types.attestation_data_and_custody_bits import (
 #
 def sign_proof_of_possession(deposit_input,
                              privkey,
-                             fork_data,
+                             fork,
                              slot):
     domain = get_domain(
-        fork_data,
+        fork,
         slot,
         SignatureDomain.DOMAIN_DEPOSIT,
     )
@@ -31,9 +31,9 @@ def sign_proof_of_possession(deposit_input,
     )
 
 
-def sign_attestation(message, privkey, fork_data, slot):
+def sign_attestation(message, privkey, fork, slot):
     domain = get_domain(
-        fork_data,
+        fork,
         slot,
         SignatureDomain.DOMAIN_ATTESTATION,
     )

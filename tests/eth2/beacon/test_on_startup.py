@@ -14,7 +14,7 @@ from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.eth1_data import Eth1Data
-from eth2.beacon.types.fork_data import ForkData
+from eth2.beacon.types.forks import Fork
 
 from eth2.beacon.on_startup import (
     get_genesis_block,
@@ -68,10 +68,10 @@ def test_get_initial_beacon_state(
     withdrawal_credentials = b'\x22' * 32
     randao_commitment = b'\x33' * 32
     custody_commitment = b'\x44' * 32
-    fork_data = ForkData(
-        pre_fork_version=genesis_fork_version,
-        post_fork_version=genesis_fork_version,
-        fork_slot=genesis_slot,
+    fork = Fork(
+        previous_version=genesis_fork_version,
+        current_version=genesis_fork_version,
+        slot=genesis_slot,
     )
 
     validator_count = 5
@@ -97,7 +97,7 @@ def test_get_initial_beacon_state(
                             custody_commitment=custody_commitment,
                         ),
                         privkey=privkeys[i],
-                        fork_data=fork_data,
+                        fork=fork,
                         slot=genesis_slot,
                     ),
                 ),
@@ -130,9 +130,9 @@ def test_get_initial_beacon_state(
     # Misc
     assert state.slot == genesis_slot
     assert state.genesis_time == genesis_time
-    assert state.fork_data.pre_fork_version == genesis_fork_version
-    assert state.fork_data.post_fork_version == genesis_fork_version
-    assert state.fork_data.fork_slot == genesis_slot
+    assert state.fork.previous_version == genesis_fork_version
+    assert state.fork.current_version == genesis_fork_version
+    assert state.fork.slot == genesis_slot
 
     # Validator registry
     assert len(state.validator_registry) == validator_count

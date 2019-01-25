@@ -28,7 +28,7 @@ from eth2.beacon.types.blocks import (
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
-from eth2.beacon.types.fork_data import ForkData
+from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     Ether,
@@ -76,10 +76,10 @@ def get_initial_beacon_state(*,
         # Misc
         slot=genesis_slot,
         genesis_time=genesis_time,
-        fork_data=ForkData(
-            pre_fork_version=genesis_fork_version,
-            post_fork_version=genesis_fork_version,
-            fork_slot=genesis_slot,
+        fork=Fork(
+            previous_version=genesis_fork_version,
+            current_version=genesis_fork_version,
+            slot=genesis_slot,
         ),
 
         # Validator registry

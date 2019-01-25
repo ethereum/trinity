@@ -22,7 +22,7 @@ from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.eth1_data import Eth1Data
-from eth2.beacon.types.fork_data import ForkData
+from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     BLSPubkey,
@@ -43,10 +43,10 @@ def mock_initial_validator_deposits(num_validators: int,
     randao_commitment = b'\x33' * 32
     custody_commitment = b'\x44' * 32
     deposit_timestamp = 0
-    fork_data = ForkData(
-        pre_fork_version=config.GENESIS_FORK_VERSION,
-        post_fork_version=config.GENESIS_FORK_VERSION,
-        fork_slot=config.GENESIS_SLOT,
+    fork = Fork(
+        previous_version=config.GENESIS_FORK_VERSION,
+        current_version=config.GENESIS_FORK_VERSION,
+        slot=config.GENESIS_SLOT,
     )
 
     initial_validator_deposits = tuple(
@@ -70,7 +70,7 @@ def mock_initial_validator_deposits(num_validators: int,
                             custody_commitment=custody_commitment,
                         ),
                         privkey=keymap[pubkeys[i]],
-                        fork_data=fork_data,
+                        fork=fork,
                         slot=config.GENESIS_SLOT,
                     ),
                 ),

@@ -69,7 +69,7 @@ def test_validate_proof_of_possession(sample_beacon_state_params, pubkeys, privk
         proof_of_possession = sign_proof_of_possession(
             deposit_input,
             privkey,
-            state.fork_data,
+            state.fork,
             state.slot,
         )
 
@@ -119,7 +119,7 @@ def test_process_deposit(sample_beacon_state_params,
     proof_of_possession = sign_proof_of_possession(
         deposit_input,
         privkey_1,
-        state.fork_data,
+        state.fork,
         state.slot,
     )
 
@@ -155,7 +155,7 @@ def test_process_deposit(sample_beacon_state_params,
     proof_of_possession = sign_proof_of_possession(
         deposit_input,
         privkey_2,
-        state.fork_data,
+        state.fork,
         state.slot,
     )
     result_state = process_deposit(

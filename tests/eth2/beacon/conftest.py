@@ -46,8 +46,8 @@ from eth2.beacon.on_startup import (
 from eth2.beacon.types.blocks import (
     BeaconBlockBody,
 )
-from eth2.beacon.types.fork_data import (
-    ForkData,
+from eth2.beacon.types.forks import (
+    Fork,
 )
 from eth2.beacon.state_machines.configs import BeaconConfig
 from eth2.beacon.state_machines.forks.serenity import (
@@ -167,11 +167,11 @@ def sample_beacon_block_params(sample_beacon_block_body_params,
 
 
 @pytest.fixture
-def sample_beacon_state_params(sample_fork_data_params, sample_eth1_data_params):
+def sample_beacon_state_params(sample_fork_params, sample_eth1_data_params):
     return {
         'slot': 0,
         'genesis_time': 0,
-        'fork_data': ForkData(**sample_fork_data_params),
+        'fork': Fork(**sample_fork_params),
         'validator_registry': (),
         'validator_balances': (),
         'validator_registry_update_slot': 10,
@@ -265,11 +265,11 @@ def sample_exit_params():
 
 
 @pytest.fixture
-def sample_fork_data_params():
+def sample_fork_params():
     return {
-        'pre_fork_version': 0,
-        'post_fork_version': 0,
-        'fork_slot': 2**64 - 1,
+        'previous_version': 0,
+        'current_version': 0,
+        'slot': 2**64 - 1,
     }
 
 
@@ -828,7 +828,7 @@ def create_mock_signed_attestation(keymap):
                         committee[committee_index]
                     ].pubkey
                 ],
-                fork_data=state.fork_data,
+                fork=state.fork,
                 slot=attestation_data.slot,
             )
             for committee_index in voting_committee_indices

@@ -106,7 +106,7 @@ def create_block_on_state(
         empty_signature_block_root,
     ).root
     domain = get_domain(
-        state.fork_data,
+        state.fork,
         slot,
         SignatureDomain.DOMAIN_PROPOSAL,
     )

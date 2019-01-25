@@ -58,7 +58,7 @@ def validate_proposer_signature(state: BeaconState,
         shard_count,
     )
     proposer_pubkey = state.validator_registry[beacon_proposer_index].pubkey
-    domain = get_domain(state.fork_data, state.slot, SignatureDomain.DOMAIN_PROPOSAL)
+    domain = get_domain(state.fork, state.slot, SignatureDomain.DOMAIN_PROPOSAL)
 
     is_valid_signature = bls.verify(
         pubkey=proposer_pubkey,
@@ -286,7 +286,7 @@ def validate_attestation_aggregate_signature(state: BeaconState,
     # TODO: change to tree hashing when we have SSZ
     message = AttestationDataAndCustodyBit.create_attestation_message(attestation.data)
     domain = get_domain(
-        fork_data=state.fork_data,
+        fork=state.fork,
         slot=attestation.data.slot,
         domain_type=SignatureDomain.DOMAIN_ATTESTATION,
     )
