@@ -19,9 +19,7 @@ from eth2.beacon.helpers import (
     get_beacon_proposer_index,
     get_domain,
 )
-from eth2.beacon.state_machines.base import (
-    BaseBeaconStateMachine,
-)
+
 from eth2.beacon.state_machines.configs import BeaconConfig
 
 from eth2.beacon.types.attestations import Attestation
@@ -39,25 +37,6 @@ from eth2.beacon.typing import (
 )
 
 
-def create_block_on_state_machine(
-        sm: BaseBeaconStateMachine,
-        parent_block: BaseBeaconBlock,
-        slot: SlotNumber,
-        validator_index: int,
-        privkey: int,
-        attestations: Sequence[Attestation]) -> BaseBeaconBlock:
-    create_block_on_state(
-        sm.state,
-        sm.config,
-        sm.get_block_class(),
-        parent_block,
-        slot,
-        validator_index,
-        privkey,
-        attestations,
-    )
-
-
 def create_block_on_state(
         state: BeaconState,
         config: BeaconConfig,
@@ -67,7 +46,9 @@ def create_block_on_state(
         validator_index: int,
         privkey: int,
         attestations: Sequence[Attestation]):
-
+    """
+    Create a beacon block with the given parameters.
+    """
     # Check proposer
     beacon_proposer_index = get_beacon_proposer_index(
         state.copy(
@@ -88,7 +69,7 @@ def create_block_on_state(
         block_params=FromBlockParams(slot=slot),
     )
 
-    # TODO: STUB, Need to add more operations
+    # TODO: Add more operations
     randao_reveal = ZERO_HASH32
     eth1_data = Eth1Data.create_empty_data()
     body = BeaconBlockBody.create_empty_body().copy(
@@ -131,9 +112,9 @@ def create_mock_block(state: BeaconState,
                       keymap: Dict[BLSPubkey, int],
                       slot: SlotNumber=None,
                       attestations: Sequence[Attestation]=()) -> BaseBeaconBlock:
-    if slot is None:
-        slot = state.slot + 1
-
+    """
+    Create a mocking block with the given block parameters and ``keymap``.
+    """
     proposer_index = get_beacon_proposer_index(
         state.copy(
             slot=slot,

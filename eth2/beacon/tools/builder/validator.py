@@ -56,8 +56,6 @@ def verify_votes(
 ) -> Tuple[Tuple[BLSSignature, ...], Tuple[CommitteeIndex, ...]]:
     """
     Verify the given votes.
-
-    vote: (committee_index, sig, public_key)
     """
     sigs_with_committee_info = tuple(
         (sig, committee_index)
@@ -134,14 +132,19 @@ def sign_attestation(message: bytes,
 #
 # Only for test/simulation
 #
-def prepare_attesstation_signing(attestation_data: AttestationData,
-                                 committee: Sequence[ValidatorIndex],
-                                 num_voted_attesters: int) -> Tuple[bytes, Tuple[ValidatorIndex]]:
+def _get_mock_message_and_voting_committee_indices(
+        attestation_data: AttestationData,
+        committee: Sequence[ValidatorIndex],
+        num_voted_attesters: int) -> Tuple[bytes, Tuple[CommitteeIndex]]:
+    """
+    Get ``message`` and voting indices of the given ``committee``.
+    """
     message = AttestationDataAndCustodyBit.create_attestation_message(attestation_data)
 
     committee_size = len(committee)
     assert num_voted_attesters <= committee_size
 
+    # Index in committee
     voting_committee_indices = tuple(random.sample(range(committee_size), num_voted_attesters))
 
     return message, voting_committee_indices
@@ -152,7 +155,10 @@ def create_mock_signed_attestation(state: BeaconState,
                                    committee: Sequence[ValidatorIndex],
                                    num_voted_attesters: int,
                                    keymap: Dict[BLSPubkey, int]) -> Attestation:
-    message, voting_committee_indices = prepare_attesstation_signing(
+    """
+    Create a mocking attestation of the given ``attestation_data`` slot with ``keymap``.
+    """
+    message, voting_committee_indices = _get_mock_message_and_voting_committee_indices(
         attestation_data,
         committee,
         num_voted_attesters,
@@ -196,6 +202,9 @@ def create_mock_signed_attestations_at_slot(
         attestation_slot: SlotNumber,
         keymap: Dict[BLSPubkey, int],
         voted_attesters_ratio: float=1.0) -> Tuple[Attestation, ...]:
+    """
+    Create the mocking attestations of the given ``attestation_slot`` slot with ``keymap``.
+    """
     attestations = []
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
         state.copy(
@@ -208,7 +217,6 @@ def create_mock_signed_attestations_at_slot(
     )
     for crosslink_committee in crosslink_committees_at_slot:
         committee, shard = crosslink_committee
-        # have 0th committee member sign
 
         num_voted_attesters = int(len(committee) * voted_attesters_ratio)
         latest_crosslink_root = state.latest_crosslinks[shard].shard_block_root

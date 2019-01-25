@@ -34,7 +34,6 @@ from eth2.beacon.tools.builder.validator import (
     ]
 )
 def test_process_attestations(genesis_state,
-                              sample_attestation_data_params,
                               sample_beacon_block_params,
                               sample_beacon_block_body_params,
                               config,
