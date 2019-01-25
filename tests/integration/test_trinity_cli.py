@@ -129,6 +129,7 @@ async def test_web3(command, async_process_runner):
     attached_trinity = pexpect.spawn('trinity', ['attach'], logfile=sys.stdout)
     try:
         attached_trinity.expect("An instance of Web3 connected to the running chain")
+        attached_trinity.expect(r"In \[.*\]:")  # ipython console ready to accept commands
         attached_trinity.sendline("w3.net.version")
         attached_trinity.expect("'1'")
         attached_trinity.sendline("w3")
