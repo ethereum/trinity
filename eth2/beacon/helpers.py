@@ -102,6 +102,17 @@ def get_block_root(
     )
 
 
+def get_randao_mix(state: 'BeaconState',
+                   slot: SlotNumber,
+                   latest_randao_mixes_length: int) -> Hash32:
+    """
+    Return the randao mix at a recent ``slot``.
+    """
+    assert state.slot < slot + latest_randao_mixes_length
+    assert slot <= state.slot
+    return state.latest_randao_mixes[slot % latest_randao_mixes_length]
+
+
 def get_active_validator_indices(validators: Sequence['ValidatorRecord'],
                                  slot: SlotNumber) -> Tuple[ValidatorIndex, ...]:
     """
