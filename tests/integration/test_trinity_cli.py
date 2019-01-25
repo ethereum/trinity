@@ -114,11 +114,12 @@ async def test_light_boot(async_process_runner, command):
 @pytest.mark.parametrize(
     'command',
     (
-        ('trinity', ),
+        # no network sync -> less resources used -> no kill in CI run
+        ('trinity', '--disable-discovery', '--max-peers=0',),
     )
 )
 @pytest.mark.asyncio
-async def test_web3(command, async_process_runner):
+async def test_web3(async_process_runner, command):
     await async_process_runner.run(command, timeout_sec=30)
     assert await contains_all(async_process_runner.stderr, {
         "Started DB server process",
