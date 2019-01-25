@@ -1,5 +1,8 @@
 import pytest
 
+from eth._utils.numeric import (
+    int_to_bytes32,
+)
 from eth.constants import (
     ZERO_HASH32,
 )
@@ -90,14 +93,39 @@ def test_check_if_update_validator_registry(genesis_state,
 
 @pytest.mark.parametrize(
     (
-        'num_validators,'
-        'state_slot,'
-        'epoch_length,'
+        'num_validators, epoch_length, target_committee_size, shard_count,'
+        'latest_randao_mixes_length, seed_lookahead, state_slot,'
         'need_to_update,'
         'num_shards_in_committees,'
+        'validator_registry_update_slot,'
+        'current_epoch_calculation_slot,'
+        'latest_randao_mixes,'
+        'expected_current_epoch_calculation_slot,'
+        'expected_current_epoch_randao_mix,'
     ),
     [
-        (10, 0, 5, True, 10),
+        (
+            40, 4, 2, 2,
+            2**10, 4, 20,
+            False,
+            10,
+            16,  # (state.slot - state.validator_registry_update_slot) EPOCH_LENGTH is power of two
+            0,
+            [int_to_bytes32(i) for i in range(2**10)],
+            20,  # expected current_epoch_calculation_slot is state.slot
+            int_to_bytes32((20 - 4) % 2**10),  # latest_randao_mixes[(result_state.current_epoch_calculation_slot - SEED_LOOKAHEAD) % LATEST_RANDAO_MIXES_LENGTH]  # noqa: E501
+        ),
+        (
+            40, 4, 2, 2,
+            2**10, 4, 20,
+            False,
+            10,
+            8,  # (state.slot - state.validator_registry_update_slot) EPOCH_LENGTH != power of two
+            0,
+            [int_to_bytes32(i) for i in range(2**10)],
+            0,  # expected current_epoch_calculation_slot is state.slot
+            int_to_bytes32(0),
+        ),
     ]
 )
 def test_process_validator_registry(monkeypatch,
@@ -105,6 +133,11 @@ def test_process_validator_registry(monkeypatch,
                                     state_slot,
                                     need_to_update,
                                     num_shards_in_committees,
+                                    validator_registry_update_slot,
+                                    current_epoch_calculation_slot,
+                                    latest_randao_mixes,
+                                    expected_current_epoch_calculation_slot,
+                                    expected_current_epoch_randao_mix,
                                     config):
     from eth2.beacon.state_machines.forks.serenity import epoch_processing
 
@@ -119,19 +152,26 @@ def test_process_validator_registry(monkeypatch,
 
     state = genesis_state.copy(
         slot=state_slot,
+        validator_registry_update_slot=validator_registry_update_slot,
+        current_epoch_calculation_slot=current_epoch_calculation_slot,
+        latest_randao_mixes=latest_randao_mixes,
     )
 
     result_state = process_validator_registry(state, config)
+
     assert result_state.previous_epoch_calculation_slot == state.current_epoch_start_shard
     assert result_state.previous_epoch_start_shard == state.current_epoch_start_shard
     assert result_state.previous_epoch_randao_mix == state.current_epoch_randao_mix
 
     if need_to_update:
         assert result_state.current_epoch_calculation_slot == state_slot
-        # TODO
+        # TODO: Add test for validator registry updates
     else:
-        # TODO
-        pass
+        assert (
+            result_state.current_epoch_calculation_slot ==
+            expected_current_epoch_calculation_slot
+        )
+        assert result_state.current_epoch_randao_mix == expected_current_epoch_randao_mix
 
 
 @pytest.mark.parametrize(
@@ -152,10 +192,27 @@ def test_process_final_updates(genesis_state,
     state = genesis_state.copy(
         slot=state_slot,
     )
+    epoch = state.slot // config.EPOCH_LENGTH
+    current_index = (epoch + 1) % config.LATEST_PENALIZED_EXIT_LENGTH
+    previous_index = epoch & config.LATEST_PENALIZED_EXIT_LENGTH
+
+    # Fill latest_penalized_balances
+    penalized_balance_of_previous_epoch = 100
+    latest_penalized_balances = update_tuple_item(
+        state.latest_penalized_balances,
+        previous_index,
+        penalized_balance_of_previous_epoch,
+    )
+    state = state.copy(
+        latest_penalized_balances=latest_penalized_balances,
+    )
 
     result_state = process_final_updates(state, config)
 
-    # TODO: test latest_penalized_balances after we add `penalize_validator`
+    assert (
+        result_state.latest_penalized_balances[current_index] ==
+        penalized_balance_of_previous_epoch
+    )
 
     for attestation in result_state.latest_attestations:
         assert attestation.data.slot >= state_slot - config.EPOCH_LENGTH
