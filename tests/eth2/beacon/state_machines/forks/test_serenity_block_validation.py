@@ -18,11 +18,40 @@ from eth2.beacon.types.proposal_signed_data import (
 )
 from eth2.beacon.types.states import BeaconState
 
-from eth2.beacon.state_machines.forks.serenity.validation import (
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_block_slot,
     validate_proposer_signature,
 )
 
 from tests.eth2.beacon.helpers import mock_validator_record
+
+
+@pytest.mark.parametrize(
+    'state_slot,'
+    'block_slot,'
+    'expected',
+    (
+        (10, 10, None),
+        (1, 10, ValidationError()),
+        (10, 1, ValidationError()),
+    ),
+)
+def test_validate_block_slot(sample_beacon_state_params,
+                             sample_beacon_block_params,
+                             state_slot,
+                             block_slot,
+                             expected):
+    state = BeaconState(**sample_beacon_state_params).copy(
+        slot=state_slot,
+    )
+    block = BeaconBlock(**sample_beacon_block_params).copy(
+        slot=block_slot,
+    )
+    if isinstance(expected, Exception):
+        with pytest.raises(ValidationError):
+            validate_block_slot(state, block)
+    else:
+        validate_block_slot(state, block)
 
 
 @pytest.mark.parametrize(

@@ -3,7 +3,7 @@ from eth2.beacon.types.pending_attestation_records import PendingAttestationReco
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.state_machines.configs import BeaconConfig
 
-from .validation import (
+from .block_validation import (
     validate_attestation,
 )
 

@@ -13,6 +13,7 @@ from eth2._utils.tuple import (
 from eth2.beacon.helpers import (
     get_current_epoch_committee_count_per_slot,
 )
+from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
     _check_if_update_validator_registry,
@@ -89,6 +90,8 @@ def test_check_if_update_validator_registry(genesis_state,
             target_committee_size=config.TARGET_COMMITTEE_SIZE,
         ) * config.EPOCH_LENGTH
         assert num_shards_in_committees == expected_num_shards_in_committees
+    else:
+        assert num_shards_in_committees == 0
 
 
 @pytest.mark.parametrize(
@@ -178,23 +181,42 @@ def test_process_validator_registry(monkeypatch,
     (
         'num_validators,'
         'state_slot,'
+        'attestation_slot,'
+        'len_latest_attestations,'
+        'expected_result_len_latest_attestations,'
         'epoch_length'
     ),
     [
-        (10, 0, 5),
-        (10, 5, 5),
-        (10, 6, 5),
+        (10, 4, 4, 2, 2, 4),  # attestation.data.slot >= state.slot - config.EPOCH_LENGTH, -> expected_result_len_latest_attestations = len_latest_attestations  # noqa: E501
+        (10, 8, 4, 2, 2, 4),  # attestation.data.slot >= state.slot - config.EPOCH_LENGTH, -> expected_result_len_latest_attestations = len_latest_attestations  # noqa: E501
+        (10, 16, 4, 2, 0, 4),  # attestation.data.slot < state.slot - config.EPOCH_LENGTH, -> expected_result_len_latest_attestations = 0  # noqa: E501
     ]
 )
 def test_process_final_updates(genesis_state,
                                state_slot,
-                               config):
+                               attestation_slot,
+                               len_latest_attestations,
+                               expected_result_len_latest_attestations,
+                               config,
+                               sample_attestation_params):
     state = genesis_state.copy(
         slot=state_slot,
     )
     epoch = state.slot // config.EPOCH_LENGTH
     current_index = (epoch + 1) % config.LATEST_PENALIZED_EXIT_LENGTH
     previous_index = epoch % config.LATEST_PENALIZED_EXIT_LENGTH
+
+    # Assume `len_latest_attestations` attestations in state.latest_attestations
+    # with attestation.data.slot = attestation_slot
+    attestation = Attestation(**sample_attestation_params)
+    latest_attestations = [
+        attestation.copy(
+            data=attestation.data.copy(
+                slot=attestation_slot
+            )
+        )
+        for i in range(len_latest_attestations)
+    ]
 
     # Fill latest_penalized_balances
     penalized_balance_of_previous_epoch = 100
@@ -205,6 +227,7 @@ def test_process_final_updates(genesis_state,
     )
     state = state.copy(
         latest_penalized_balances=latest_penalized_balances,
+        latest_attestations=latest_attestations,
     )
 
     result_state = process_final_updates(state, config)
@@ -214,5 +237,6 @@ def test_process_final_updates(genesis_state,
         penalized_balance_of_previous_epoch
     )
 
+    assert len(result_state.latest_attestations) == expected_result_len_latest_attestations
     for attestation in result_state.latest_attestations:
         assert attestation.data.slot >= state_slot - config.EPOCH_LENGTH

@@ -21,7 +21,7 @@ def _is_power_of_two(value: int) -> bool:
     if value == 0:
         return False
     else:
-        return (math.log2(value) + 1).is_integer()
+        return math.log2(value).is_integer()
 
 
 def _check_if_update_validator_registry(state: BeaconState,

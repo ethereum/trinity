@@ -16,7 +16,8 @@ from .epoch_processing import (
 from .operation_processing import (
     process_attestations,
 )
-from .validation import (
+from .block_validation import (
+    validate_block_slot,
     validate_proposer_signature,
 )
 
@@ -88,6 +89,7 @@ class SerenityStateTransition(BaseStateTransition):
 
     def per_block_transition(self, state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
         # TODO: finish per-block processing logic as the spec
+        validate_block_slot(state, block)
         validate_proposer_signature(
             state,
             block,
@@ -110,7 +112,7 @@ class SerenityStateTransition(BaseStateTransition):
         return state
 
     def per_epoch_transition(self, state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
-        # TODO: state = process_receipt_roots(state, self.config)
+        # TODO: state = process_et1_data_votes(state, self.config)
         # TODO: state = process_justification(state, self.config)
         # TODO: state = process_crosslinks(state, self.config)
         # TODO: state = process_rewards_and_penalties(state, self.config)

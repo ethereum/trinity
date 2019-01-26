@@ -32,6 +32,20 @@ from eth2.beacon.typing import (
 
 
 #
+# Slot validatation
+#
+def validate_block_slot(state: BeaconState,
+                        block: BaseBeaconBlock) -> None:
+    if block.slot != state.slot:
+        raise ValidationError(
+            "block.slot ({}) is not equal to state.slot ({})".format(
+                block.slot,
+                state.slot,
+            )
+        )
+
+
+#
 # Proposer signature validation
 #
 def validate_proposer_signature(state: BeaconState,

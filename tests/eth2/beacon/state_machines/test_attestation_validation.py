@@ -15,7 +15,7 @@ from eth.constants import (
 from eth2.beacon.helpers import (
     get_crosslink_committees_at_slot,
 )
-from eth2.beacon.state_machines.forks.serenity.validation import (
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_attestation_aggregate_signature,
     validate_attestation_latest_crosslink_root,
     validate_attestation_justified_block_root,
