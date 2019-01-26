@@ -194,7 +194,7 @@ def test_process_final_updates(genesis_state,
     )
     epoch = state.slot // config.EPOCH_LENGTH
     current_index = (epoch + 1) % config.LATEST_PENALIZED_EXIT_LENGTH
-    previous_index = epoch & config.LATEST_PENALIZED_EXIT_LENGTH
+    previous_index = epoch % config.LATEST_PENALIZED_EXIT_LENGTH
 
     # Fill latest_penalized_balances
     penalized_balance_of_previous_epoch = 100

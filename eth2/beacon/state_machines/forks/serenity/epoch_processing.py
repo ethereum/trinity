@@ -106,7 +106,7 @@ def process_final_updates(state: BeaconState,
                           config: BeaconConfig) -> BeaconState:
     epoch = state.slot // config.EPOCH_LENGTH
     current_index = (epoch + 1) % config.LATEST_PENALIZED_EXIT_LENGTH
-    previous_index = epoch & config.LATEST_PENALIZED_EXIT_LENGTH
+    previous_index = epoch % config.LATEST_PENALIZED_EXIT_LENGTH
 
     state = state.copy(
         latest_penalized_balances=update_tuple_item(
