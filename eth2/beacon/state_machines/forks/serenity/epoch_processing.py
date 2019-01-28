@@ -1,7 +1,9 @@
-import math
-
 from typing import (
     Tuple,
+)
+
+from eth2._utils.numeric import (
+    is_power_of_two,
 )
 from eth2._utils.tuple import (
     update_tuple_item,
@@ -17,13 +19,6 @@ from eth2.beacon.state_machines.configs import BeaconConfig
 #
 # Validator Registry
 #
-def _is_power_of_two(value: int) -> bool:
-    if value == 0:
-        return False
-    else:
-        return math.log2(value).is_integer()
-
-
 def _check_if_update_validator_registry(state: BeaconState,
                                         config: BeaconConfig) -> Tuple[bool, int]:
     if state.finalized_slot <= state.validator_registry_update_slot:
@@ -37,10 +32,10 @@ def _check_if_update_validator_registry(state: BeaconState,
     ) * config.EPOCH_LENGTH
 
     # Get every shard in the current committees
-    shards = set([
+    shards = set(
         (state.current_epoch_start_shard + i) % config.SHARD_COUNT
         for i in range(num_shards_in_committees)
-    ])
+    )
     for shard in shards:
         if state.latest_crosslinks[shard].slot <= state.validator_registry_update_slot:
             return False, 0
@@ -65,6 +60,9 @@ def process_validator_registry(state: BeaconState,
 
     if need_to_update:
         state = update_validator_registry(state)
+
+        # Update step-by-step since updated `state.current_epoch_calculation_slot`
+        # is used to calculate other value). Follow the spec tightly now.
         state = state.copy(
             current_epoch_calculation_slot=state.slot,
         )
@@ -84,7 +82,9 @@ def process_validator_registry(state: BeaconState,
         epochs_since_last_registry_change = (
             state.slot - state.validator_registry_update_slot
         ) // config.EPOCH_LENGTH
-        if _is_power_of_two(epochs_since_last_registry_change):
+        if is_power_of_two(epochs_since_last_registry_change):
+            # Update step-by-step since updated `state.current_epoch_calculation_slot`
+            # is used to calculate other value). Follow the spec tightly now.
             state = state.copy(
                 current_epoch_calculation_slot=state.slot,
             )
@@ -115,9 +115,11 @@ def process_final_updates(state: BeaconState,
             state.latest_penalized_balances[previous_index],
         ),
     )
+
+    epoch_start = state.slot - config.EPOCH_LENGTH
     latest_attestations = tuple(
         filter(
-            lambda attestation: attestation.data.slot >= state.slot - config.EPOCH_LENGTH,
+            lambda attestation: attestation.data.slot >= epoch_start,
             state.latest_attestations
         )
     )

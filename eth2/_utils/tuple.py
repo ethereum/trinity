@@ -1,7 +1,6 @@
 from typing import (
-    Any,
-    Iterable,
-    Sequence,
+    Tuple,
+    TypeVar,
 )
 
 from eth_utils import (
@@ -9,9 +8,12 @@ from eth_utils import (
 )
 
 
-def update_tuple_item(tuple_data: Sequence[Any],
+VType = TypeVar('VType')
+
+
+def update_tuple_item(tuple_data: Tuple[VType, ...],
                       index: int,
-                      new_value: Any) -> Iterable[Any]:
+                      new_value: VType) -> Tuple[VType, ...]:
     """
     Update the ``index``th item of ``tuple_data`` to ``new_value``
     """

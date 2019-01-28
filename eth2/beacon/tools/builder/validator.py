@@ -6,8 +6,13 @@ from typing import (
     Sequence,
     Tuple,
 )
+
 from cytoolz import (
-    pipe
+    pipe,
+)
+
+from eth_utils import (
+    to_tuple,
 )
 
 from eth.constants import (
@@ -196,16 +201,16 @@ def create_mock_signed_attestation(state: BeaconState,
     )
 
 
+@to_tuple
 def create_mock_signed_attestations_at_slot(
         state: BeaconState,
         config: BeaconConfig,
         attestation_slot: SlotNumber,
         keymap: Dict[BLSPubkey, int],
-        voted_attesters_ratio: float=1.0) -> Tuple[Attestation, ...]:
+        voted_attesters_ratio: float=1.0) -> Iterable[Attestation]:
     """
     Create the mocking attestations of the given ``attestation_slot`` slot with ``keymap``.
     """
-    attestations = []
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
         state.copy(
             slot=state.slot + 1,
@@ -236,13 +241,10 @@ def create_mock_signed_attestations_at_slot(
             ),
         )
 
-        attestations.append(
-            create_mock_signed_attestation(
-                state,
-                attestation_data,
-                committee,
-                num_voted_attesters,
-                keymap,
-            )
+        yield create_mock_signed_attestation(
+            state,
+            attestation_data,
+            committee,
+            num_voted_attesters,
+            keymap,
         )
-    return tuple(attestations)

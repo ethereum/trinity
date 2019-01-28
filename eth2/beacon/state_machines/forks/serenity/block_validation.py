@@ -38,10 +38,7 @@ def validate_block_slot(state: BeaconState,
                         block: BaseBeaconBlock) -> None:
     if block.slot != state.slot:
         raise ValidationError(
-            "block.slot ({}) is not equal to state.slot ({})".format(
-                block.slot,
-                state.slot,
-            )
+            f"block.slot ({block.slot}) is not equal to state.slot ({state.slot})"
         )
 
 
@@ -83,15 +80,9 @@ def validate_proposer_signature(state: BeaconState,
 
     if not is_valid_signature:
         raise ValidationError(
-            "Invalid Proposer Signature on block, "
-            "beacon_proposer_index={}, pubkey={}, message={}, "
-            "block.signature={}, domain={}".format(
-                beacon_proposer_index,
-                proposer_pubkey,
-                proposal_root,
-                block.signature,
-                domain,
-            )
+            f"Invalid Proposer Signature on block, beacon_proposer_index={beacon_proposer_index}, "
+            f"pubkey={proposer_pubkey}, message={proposal_root},"
+            f"block.signature={block.signature}, domain={domain}"
         )
 
 
