@@ -36,6 +36,9 @@ from eth.rlp.blocks import (
 from eth.rlp.headers import (
     BlockHeader
 )
+from eth.rlp.logs import (
+    Log
+)
 from eth.vm.spoof import (
     SpoofTransaction,
 )
@@ -52,6 +55,7 @@ from trinity.rpc.format import (
     header_to_dict,
     format_params,
     normalize_transaction_dict,
+    receipt_to_dict,
     to_int_if_hex,
     transaction_to_dict,
 )
@@ -251,6 +255,19 @@ class Eth(Eth1ChainRPCModule):
     async def getTransactionByHash(self, transaction_hash: Hash32) -> Dict[str, str]:
         transaction = self.chain.get_canonical_transaction(transaction_hash)
         return transaction_to_dict(transaction)
+
+    @format_params(decode_hex)
+    async def getTransactionReceipt(
+            self,
+            transaction_hash: Hash32) -> Dict[str, Union[str, List[Log]]]:
+        transaction_block_number, transaction_index = self.chain.chaindb.get_transaction_index(
+            transaction_hash
+        )
+        receipt = self.chain.chaindb.get_receipt_by_index(
+            block_number=transaction_block_number,
+            receipt_index=transaction_index,
+        )
+        return receipt_to_dict(receipt)
 
     @format_params(decode_hex)
     async def getUncleCountByBlockHash(self, block_hash: Hash32) -> str:

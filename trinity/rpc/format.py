@@ -29,6 +29,12 @@ from eth.rlp.blocks import (
 from eth.rlp.headers import (
     BlockHeader
 )
+from eth.rlp.logs import (
+    Log
+)
+from eth.rlp.receipts import (
+    Receipt
+)
 from eth.rlp.transactions import (
     BaseTransaction
 )
@@ -48,6 +54,15 @@ def transaction_to_dict(transaction: BaseTransaction) -> Dict[str, str]:
         r=hex(transaction.r),
         s=hex(transaction.s),
         v=hex(transaction.v),
+    )
+
+
+def receipt_to_dict(receipt: Receipt) -> Dict[str, Union[str, List[Log]]]:
+    return dict(
+        state_root=encode_hex(receipt.state_root),
+        gas_used=hex(receipt.gas_used),
+        bloom=hex(receipt.bloom),
+        logs=receipt.logs,
     )
 
 
