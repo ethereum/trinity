@@ -11,6 +11,9 @@ from p2p.service import (
 from trinity import (
     __version__,
 )
+from trinity.config import (
+    Eth1AppConfig,
+)
 from trinity.constants import (
     SYNC_LIGHT,
     TO_NETWORKING_BROADCAST_CONFIG,
@@ -161,9 +164,10 @@ class EthstatsService(BaseService):
         }
 
     def get_chain(self) -> BaseChain:
-        db_manager = create_db_consumer_manager(self.boot_info.trinity_config.database_ipc_path)
-
-        chain_config = self.boot_info.trinity_config.get_chain_config()
+        db_manager = create_db_consumer_manager(self.context.trinity_config.database_ipc_path)
+        trinity_config = self.boot_info.trinity_config
+        chain_config = trinity_config.get_chain_config()
+        eth1_app_config = trinity_config.get_app_config(Eth1AppConfig)
 
         chain: BaseChain
 
@@ -174,7 +178,6 @@ class EthstatsService(BaseService):
                 peer_chain=EventBusLightPeerChain(self.event_bus)
             )
         else:
-            db = db_manager.get_db()  # type: ignore
-            chain = chain_config.full_chain_class(db)
+            chain = chain_config.full_chain_class(eth1_app_config.readonly_database)
 
         return chain

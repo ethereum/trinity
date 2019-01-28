@@ -24,6 +24,7 @@ Released 2019-02-28
 - `#263 <https://github.com/ethereum/trinity/pull/263>`_: Performance: Upgrade to lahja 0.11.0 and get rid of EventBus coordinator process
 - `#227 <https://github.com/ethereum/trinity/pull/227>`_: Bugfix: Do not accidentially create many processes that sit idle
 - `#227 <https://github.com/ethereum/trinity/pull/227>`_: Tests: Cover APIs that also hit the database in `trinity attach` tests
+- `#173 <https://github.com/ethereum/trinity/pull/173>`_: Performance: Use `readonly_database` in EthStats Service
 - `#173 <https://github.com/ethereum/trinity/pull/173>`_: Performance: Use `readonly_database` in JSON-RPC API
 - `#173 <https://github.com/ethereum/trinity/pull/173>`_: Expose `readonly_database` from `Eth1AppConfig`
 - `#173 <https://github.com/ethereum/trinity/pull/173>`_: **BREAKING CHANGE:** Trinity uses RocksDB as underlying database
