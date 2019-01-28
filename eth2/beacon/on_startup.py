@@ -39,6 +39,7 @@ from eth2.beacon.typing import (
     SlotNumber,
     Timestamp,
     ValidatorIndex,
+    EpochNumber,
 )
 from eth2.beacon.validator_status_helpers import (
     activate_validator,
@@ -62,6 +63,7 @@ def get_initial_beacon_state(*,
                              genesis_time: Timestamp,
                              latest_eth1_data: Eth1Data,
                              genesis_slot: SlotNumber,
+                             genesis_epoch: EpochNumber,
                              genesis_fork_version: int,
                              genesis_start_shard: ShardNumber,
                              shard_count: int,
@@ -108,10 +110,10 @@ def get_initial_beacon_state(*,
         custody_challenges=(),
 
         # Finality
-        previous_justified_slot=genesis_slot,
-        justified_slot=genesis_slot,
+        previous_justified_epoch=genesis_epoch,
+        justified_epoch=genesis_epoch,
         justification_bitfield=0,
-        finalized_slot=genesis_slot,
+        finalized_epoch=genesis_epoch,
 
         # Recent state
         latest_crosslinks=tuple([

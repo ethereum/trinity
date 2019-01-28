@@ -26,6 +26,7 @@ from eth2.beacon.typing import (
     Gwei,
     ShardNumber,
     SlotNumber,
+    EpochNumber,
     Timestamp,
     ValidatorIndex,
 )
@@ -75,13 +76,13 @@ class BeaconState(rlp.Serializable):
         ('custody_challenges', CountableList(CustodyChallenge)),
 
         # Finality
-        ('previous_justified_slot', uint64),
-        ('justified_slot', uint64),
+        ('previous_justified_epoch', uint64),
+        ('justified_epoch', uint64),
 
         # Note: justification_bitfield is meant to be defined as an integer type,
         # so its bit operation in Python and is easier to specify and implement.
         ('justification_bitfield', uint64),
-        ('finalized_slot', uint64),
+        ('finalized_epoch', uint64),
 
         # Recent state
         ('latest_crosslinks', CountableList(CrosslinkRecord)),
@@ -109,10 +110,10 @@ class BeaconState(rlp.Serializable):
             current_epoch_calculation_slot: SlotNumber,
             previous_epoch_randao_mix: Hash32,
             current_epoch_randao_mix: Hash32,
-            previous_justified_slot: SlotNumber,
-            justified_slot: SlotNumber,
+            previous_justified_epoch: EpochNumber,
+            justified_epoch: EpochNumber,
             justification_bitfield: int,
-            finalized_slot: SlotNumber,
+            finalized_epoch: EpochNumber,
             latest_eth1_data: Eth1Data,
             validator_registry: Sequence[ValidatorRecord]=(),
             validator_balances: Sequence[Gwei]=(),
@@ -157,10 +158,10 @@ class BeaconState(rlp.Serializable):
             # Proof of Custody
             custody_challenges=custody_challenges,
             # Finality
-            previous_justified_slot=previous_justified_slot,
-            justified_slot=justified_slot,
+            previous_justified_epoch=previous_justified_epoch,
+            justified_epoch=justified_epoch,
             justification_bitfield=justification_bitfield,
-            finalized_slot=finalized_slot,
+            finalized_epoch=finalized_epoch,
             # Recent state
             latest_crosslinks=latest_crosslinks,
             latest_block_roots=latest_block_roots,

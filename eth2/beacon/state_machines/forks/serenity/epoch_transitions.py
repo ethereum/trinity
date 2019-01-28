@@ -5,7 +5,7 @@ from typing import (
 from eth2.beacon.typing import (
     Ether,
     Gwei,
-    SlotNumber,
+    EpochNumber,
 )
 from eth2.beacon.types.validator_records import ValidatorRecord
 from eth2.beacon.types.states import BeaconState
@@ -16,11 +16,15 @@ from eth2.beacon.helpers import (
     get_attestation_participants,
     get_block_root,
     total_balance,
+    get_current_epoch,
+    slot_to_epoch,
+    get_epoch_start_slot,
 )
-from eth2.beacon.constants import TWO_POWER_64
 
 
 def get_epoch_boundary_attesting_balances(
+        current_epoch,
+        previous_epoch,
         state: BeaconState,
         config: BeaconConfig) -> Tuple[Gwei, Gwei]:
     """
@@ -30,45 +34,43 @@ def get_epoch_boundary_attesting_balances(
 
     Previous epoch boundary attestations:
         - slot in latest 2 epochs, and
-        - justified_slot is previous_justified_slot, and
+        - justified_epoch is previous_justified_epoch, and
         - epoch_boundary_root is exactly 2 epoch ago
 
     Current epoch boundary attestations:
         - slot in latest 1 epoch, and
-        - justified_slot is justified_slot, and
+        - justified_epoch is justified_epoch, and
         - epoch_boundary_root is exactly 1 epoch ago
     """
 
     EPOCH_LENGTH = config.EPOCH_LENGTH
     MAX_DEPOSIT = config.MAX_DEPOSIT
     LATEST_BLOCK_ROOTS_LENGTH = config.LATEST_BLOCK_ROOTS_LENGTH
-
-    now = state.slot
-    one_epoch_ago = now - EPOCH_LENGTH
-    two_epochs_ago = now - 2 * EPOCH_LENGTH
+    SHARD_COUNT = config.SHARD_COUNT
+    TARGET_COMMITTEE_SIZE = config.TARGET_COMMITTEE_SIZE
 
     current_epoch_attestations = tuple(
         attestation
         for attestation in state.latest_attestations
-        if one_epoch_ago <= attestation.data.slot < now
+        if current_epoch == slot_to_epoch(attestation.data.slot, EPOCH_LENGTH)
     )
     previous_epoch_attestations = tuple(
         attestation
         for attestation in state.latest_attestations
-        if two_epochs_ago <= attestation.data.slot < one_epoch_ago
+        if previous_epoch <= slot_to_epoch(attestation.data.slot, EPOCH_LENGTH)
     )
 
-    previous_justified_slot = state.previous_justified_slot
+    previous_justified_epoch = state.previous_justified_epoch
 
     previous_epoch_justified_attestations = tuple(
         attestation
         for attestation in current_epoch_attestations + previous_epoch_attestations
-        if attestation.justified_slot == previous_justified_slot
+        if attestation.justified_epoch == previous_justified_epoch
     )
 
     previous_epoch_boundary_root = get_block_root(
         state,
-        two_epochs_ago,
+        get_epoch_start_slot(previous_epoch, EPOCH_LENGTH),
         LATEST_BLOCK_ROOTS_LENGTH,
     )
     previous_epoch_boundary_attestations = tuple(
@@ -80,10 +82,11 @@ def get_epoch_boundary_attesting_balances(
     sets_of_previous_epoch_boundary_participants = tuple(
         frozenset(get_attestation_participants(
             state,
-            attestation.data.slot,
-            attestation.data.shard,
+            attestation.data,
             attestation.participation_bitfield,
             EPOCH_LENGTH,
+            TARGET_COMMITTEE_SIZE,
+            SHARD_COUNT,
         ))
         for attestation in previous_epoch_boundary_attestations
     )
@@ -98,27 +101,29 @@ def get_epoch_boundary_attesting_balances(
         for index in previous_epoch_boundary_attester_indices
     ))
 
+    current_epoch_start_slot = get_epoch_start_slot(current_epoch, EPOCH_LENGTH)
     current_epoch_boundary_root = get_block_root(
         state,
-        one_epoch_ago,
+        current_epoch_start_slot,
         LATEST_BLOCK_ROOTS_LENGTH,
     )
 
-    justified_slot = state.justified_slot
+    justified_epoch = state.justified_epoch
     current_epoch_boundary_attestations = tuple(
         attestation
         for attestation in current_epoch_attestations
         if attestation.epoch_boundary_root == current_epoch_boundary_root and
-        attestation.data.justified_slot == justified_slot
+        attestation.data.justified_epoch == justified_epoch
     )
 
     sets_of_current_epoch_boundary_participants = tuple(
         frozenset(get_attestation_participants(
             state,
-            attestation.data.slot,
-            attestation.data.shard,
+            attestation.data,
             attestation.participation_bitfield,
             EPOCH_LENGTH,
+            TARGET_COMMITTEE_SIZE,
+            SHARD_COUNT,
         ))
         for attestation in current_epoch_boundary_attestations
     )
@@ -138,98 +143,83 @@ def get_epoch_boundary_attesting_balances(
 def get_total_balance(
         validator_registry: Sequence[ValidatorRecord],
         validator_balances: Sequence[Gwei],
-        slot: SlotNumber,
+        epoch: EpochNumber,
         max_deposit: Ether) -> Gwei:
 
-    active_validator_indices = get_active_validator_indices(validator_registry, slot)
+    active_validator_indices = get_active_validator_indices(validator_registry, epoch)
 
     return total_balance(active_validator_indices, validator_balances, max_deposit)
-
-
-def check_finalization(previous_justified_slot: SlotNumber,
-                       slot: SlotNumber,
-                       justification_bitfield: int,
-                       epoch_length: int)-> bool:
-
-    # Suppose B1, B2, B3, B4 are consecutive blocks and
-    # we are now processing the end of the cycle containing B4.
-
-    # If B4 and is justified using source B3, then B3 is finalized.
-    should_finalize_B3 = (
-        previous_justified_slot == slot - 2 * epoch_length and
-        justification_bitfield % 4 == 3
-    )
-    if should_finalize_B3:
-        return True
-
-    # If B4 is justified using source B2, and B3 has been justified,
-    # then B2 is finalized.
-    should_finalize_B2 = (
-        previous_justified_slot == slot - 3 * epoch_length and
-        justification_bitfield % 8 == 7
-    )
-    if should_finalize_B2:
-        return True
-    # If B3 is justified using source B1, and B1 has been justified,
-    # then B1 is finalized.
-    should_finalize_B1 = (
-        previous_justified_slot == slot - 4 * epoch_length and
-        justification_bitfield % 16 in (15, 14)
-    )
-    if should_finalize_B1:
-        return True
-    return False
 
 
 def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconState:
     EPOCH_LENGTH = config.EPOCH_LENGTH
 
-    total_balance = get_total_balance(
+    current_epoch = get_current_epoch(state, EPOCH_LENGTH)
+    previous_epoch = current_epoch - 1 if current_epoch > config.GENESIS_EPOCH else current_epoch
+
+    current_total_balance = get_total_balance(
         state.validator_registry,
         state.validator_balances,
-        state.slot,
+        current_epoch,
+        config.MAX_DEPOSIT,
+    )
+    previous_total_balance = get_total_balance(
+        state.validator_registry,
+        state.validator_balances,
+        previous_epoch,
         config.MAX_DEPOSIT,
     )
     (
         previous_epoch_boundary_attesting_balance,
         current_epoch_boundary_attesting_balance
-    ) = get_epoch_boundary_attesting_balances(state, config)
+    ) = get_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config)
 
-    previous_justified_slot = state.justified_slot
-    justified_slot = state.justified_slot
-    justification_bitfield = int.from_bytes(state.justification_bitfield, 'big')
-    finalized_slot = state.finalized_slot
+    new_justified_epoch = state.justified_epoch
+    justification_bitfield = state.justification_bitfield << 1
 
-    # Add two bits at the right of justification_bitfield. Cap it at 64 bits.
-    justification_bitfield = (justification_bitfield * 2) % TWO_POWER_64
-
-    one_epoch_ago_justifiable = 3 * current_epoch_boundary_attesting_balance >= 2 * total_balance
-    two_epochs_ago_justifiable = 3 * previous_epoch_boundary_attesting_balance >= 2 * total_balance
-
-    if one_epoch_ago_justifiable:
-        justified_slot = state.slot - EPOCH_LENGTH
-    elif two_epochs_ago_justifiable:
-        justified_slot = state.slot - 2 * EPOCH_LENGTH
-
-    if two_epochs_ago_justifiable and one_epoch_ago_justifiable:
-        justification_bitfield |= 3
-    elif two_epochs_ago_justifiable and not one_epoch_ago_justifiable:
-        justification_bitfield |= 2
-    elif not two_epochs_ago_justifiable and one_epoch_ago_justifiable:
-        justification_bitfield |= 1
-
-    should_finalize = check_finalization(
-        previous_justified_slot,
-        state.slot,
-        justification_bitfield,
-        EPOCH_LENGTH,
+    previous_epoch_justifiable = (
+        3 * current_epoch_boundary_attesting_balance >= 2 * previous_total_balance
     )
-    if should_finalize:
-        finalized_slot = previous_justified_slot
+    current_epoch_justifiable = (
+        3 * previous_epoch_boundary_attesting_balance >= 2 * current_total_balance
+    )
+
+    # TODO: refactor this
+    if previous_epoch_justifiable:
+        justification_bitfield |= 2
+        new_justified_epoch = previous_epoch
+
+    if current_epoch_justifiable:
+        justification_bitfield |= 1
+        new_justified_epoch = current_epoch
+
+    # TODO: refactor this
+    if (
+        (justification_bitfield >> 1) % 8 == 0b111 and
+        state.previous_justified_epoch == previous_epoch - 2
+    ):
+        finalized_epoch = state.previous_justified_epoch
+    elif (
+        (justification_bitfield >> 1) % 4 == 0b11 and
+        state.previous_justified_epoch == previous_epoch - 1
+    ):
+        finalized_epoch = state.previous_justified_epoch
+    elif (
+        (justification_bitfield >> 0) % 8 == 0b111 and
+        state.justified_epoch == previous_epoch - 1
+    ):
+        finalized_epoch = state.justified_epoch
+    elif (
+        (justification_bitfield >> 0) % 4 == 0b11 and
+        state.justified_epoch == previous_epoch
+    ):
+        finalized_epoch = state.justified_epoch
+    else:
+        finalized_epoch = state.finalized_epoch
 
     return state.copy(
-        previous_justified_slot=previous_justified_slot,
-        justified_slot=justified_slot,
-        justification_bitfield=justification_bitfield.to_bytes(8, 'big'),
-        finalized_slot=finalized_slot,
+        previous_justified_epoch=state.justified_epoch,
+        justified_epoch=new_justified_epoch,
+        justification_bitfield=justification_bitfield,
+        finalized_epoch=finalized_epoch,
     )

@@ -1,6 +1,7 @@
 from eth2.beacon.typing import (
     BLSSignature,
     SlotNumber,
+    EpochNumber,
 )
 
 
@@ -22,4 +23,10 @@ EMPTY_SIGNATURE = BLSSignature(b'\x00' * 96)
 GWEI_PER_ETH = 10**9
 
 TWO_POWER_64 = 2**64
+
+# TODO: remove FAR_FUTURE_SLOT in other PR.
 FAR_FUTURE_SLOT = SlotNumber(TWO_POWER_64 - 1)
+FAR_FUTURE_EPOCH = EpochNumber(TWO_POWER_64 - 1)
+
+
+GENESIS_SLOT = SlotNumber(2**19)

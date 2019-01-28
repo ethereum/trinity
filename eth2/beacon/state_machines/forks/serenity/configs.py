@@ -8,7 +8,10 @@ from eth2.beacon.typing import (
     Ether,
     Second,
 )
+from eth2.beacon.helpers import slot_to_epoch
 
+genesis_slot = SlotNumber(2**19)
+epoch_length = SlotNumber(2**6)
 
 SERENITY_CONFIG = BeaconConfig(
     # Misc
@@ -28,13 +31,14 @@ SERENITY_CONFIG = BeaconConfig(
     MAX_DEPOSIT=Ether(2**5),  # (= 32) ETH
     # Initial values
     GENESIS_FORK_VERSION=0,
-    GENESIS_SLOT=SlotNumber(0),
+    GENESIS_SLOT=genesis_slot,
+    GENESIS_EPOCH=slot_to_epoch(genesis_slot, epoch_length),
     GENESIS_START_SHARD=ShardNumber(0),
     BLS_WITHDRAWAL_PREFIX_BYTE=b'\x00',
     # Time parameters
     SLOT_DURATION=Second(6),  # seconds
     MIN_ATTESTATION_INCLUSION_DELAY=2**2,  # (= 4) slots
-    EPOCH_LENGTH=2**6,  # (= 64) slots
+    EPOCH_LENGTH=epoch_length,  # (= 64) slots
     SEED_LOOKAHEAD=2**6,  # (= 64) slots
     ENTRY_EXIT_DELAY=2**8,  # (= 256) slots
     ETH1_DATA_VOTING_PERIOD=2**10,  # (= 1,024) slots

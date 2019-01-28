@@ -40,6 +40,7 @@ from eth2.beacon.typing import (
     Gwei,
     ShardNumber,
     SlotNumber,
+    EpochNumber,
     ValidatorIndex,
 )
 from eth2.beacon.validation import (
@@ -103,13 +104,13 @@ def get_block_root(
 
 
 def get_active_validator_indices(validators: Sequence['ValidatorRecord'],
-                                 slot: SlotNumber) -> Tuple[ValidatorIndex, ...]:
+                                 epoch: EpochNumber) -> Tuple[ValidatorIndex, ...]:
     """
     Get indices of active validators from ``validators``.
     """
     return tuple(
         ValidatorIndex(index)for index, validator in enumerate(validators)
-        if validator.is_active(slot)
+        if validator.is_active(epoch)
     )
 
 
@@ -508,3 +509,15 @@ def total_balance(validator_indices: Sequence[ValidatorIndex],
         get_effective_balance(validator_balances, index, max_deposits)
         for index in validator_indices
     ))
+
+
+def slot_to_epoch(slot: SlotNumber, epoch_length: int) -> EpochNumber:
+    return EpochNumber(slot // epoch_length)
+
+
+def get_current_epoch(state: 'BeaconState', epoch_length: int) -> EpochNumber:
+    return slot_to_epoch(state.slot, epoch_length)
+
+
+def get_epoch_start_slot(epoch: EpochNumber, epoch_length: int) -> SlotNumber:
+    return epoch * epoch_length

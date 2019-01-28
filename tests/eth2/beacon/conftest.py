@@ -186,10 +186,10 @@ def sample_beacon_state_params(sample_fork_data_params, sample_eth1_data_params)
         'previous_epoch_randao_mix': b'\x77' * 32,
         'current_epoch_randao_mix': b'\x88' * 32,
         'custody_challenges': (),
-        'previous_justified_slot': 0,
-        'justified_slot': 0,
+        'previous_justified_epoch': 0,
+        'justified_epoch': 0,
         'justification_bitfield': 0,
-        'finalized_slot': 0,
+        'finalized_epoch': 0,
         'latest_crosslinks': (),
         'latest_block_roots': (),
         'latest_penalized_exit_balances': (),
@@ -386,10 +386,10 @@ def empty_beacon_state(latest_block_roots_length,
         current_epoch_calculation_slot=genesis_slot,
         previous_epoch_randao_mix=ZERO_HASH32,
         current_epoch_randao_mix=ZERO_HASH32,
-        previous_justified_slot=0,
-        justified_slot=0,
+        previous_justified_epoch=0,
+        justified_epoch=0,
         justification_bitfield=0,
-        finalized_slot=0,
+        finalized_epoch=0,
         latest_crosslinks=(),
         latest_block_roots=(ZERO_HASH32,) * latest_block_roots_length,
         latest_penalized_exit_balances=(0,) * latest_penalized_exit_length,
@@ -519,6 +519,11 @@ def genesis_fork_version():
 @pytest.fixture
 def genesis_slot():
     return SERENITY_CONFIG.GENESIS_SLOT
+
+
+@pytest.fixture
+def genesis_epoch():
+    return SERENITY_CONFIG.GENESIS_EPOCH
 
 
 @pytest.fixture
@@ -713,6 +718,7 @@ def config(
         max_deposit,
         genesis_fork_version,
         genesis_slot,
+        genesis_epoch,
         genesis_start_shard,
         bls_withdrawal_prefix_byte,
         slot_duration,
@@ -748,6 +754,7 @@ def config(
         MAX_DEPOSIT=max_deposit,
         GENESIS_FORK_VERSION=genesis_fork_version,
         GENESIS_SLOT=genesis_slot,
+        GENESIS_EPOCH=genesis_epoch,
         GENESIS_START_SHARD=genesis_start_shard,
         BLS_WITHDRAWAL_PREFIX_BYTE=bls_withdrawal_prefix_byte,
         SLOT_DURATION=slot_duration,
