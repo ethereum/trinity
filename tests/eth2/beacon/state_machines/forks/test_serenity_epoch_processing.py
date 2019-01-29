@@ -121,12 +121,17 @@ def test_update_latest_index_roots(genesis_state,
 
     result_state = _update_latest_index_roots(state, config)
 
+    # TODO: chanege to hash_tree_root
     index_root = hash_eth2(
-        bytes(
-            get_active_validator_indices(
-                state.validator_registry,
-                state.slot,
-            )
+        b''.join(
+            [
+                index.to_bytes(32, 'big')
+                for index in get_active_validator_indices(
+                    state.validator_registry,
+                    # TODO: change to `per-epoch` version
+                    state.slot,
+                )
+            ]
         )
     )
 

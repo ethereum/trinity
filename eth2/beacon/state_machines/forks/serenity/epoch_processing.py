@@ -60,15 +60,20 @@ def _update_latest_index_roots(state: BeaconState,
     next_epoch = state.next_epoch(config.EPOCH_LENGTH)
 
     # TODO: chanege to hash_tree_root
+    active_validator_indices = get_active_validator_indices(
+        state.validator_registry,
+        # TODO: change to `per-epoch` version
+        state.slot,
+    )
     index_root = hash_eth2(
-        bytes(
-            get_active_validator_indices(
-                state.validator_registry,
-                # TODO: change to `per-epoch` version
-                state.slot,
-            )
+        b''.join(
+            [
+                index.to_bytes(32, 'big')
+                for index in active_validator_indices
+            ]
         )
     )
+
     latest_index_roots = update_tuple_item(
         state.latest_index_roots,
         next_epoch % config.LATEST_INDEX_ROOTS_LENGTH,
@@ -105,7 +110,8 @@ def process_validator_registry(state: BeaconState,
             ) % config.SHARD_COUNT,
         )
 
-        # `helpers.generate_seed` path for mocking tests
+        # The `helpers.generate_seed` function is only present to provide an entry point
+        # for mocking this out in tests.
         current_epoch_seed = helpers.generate_seed(
             state=state,
             slot=state.current_epoch_calculation_slot,
@@ -128,7 +134,8 @@ def process_validator_registry(state: BeaconState,
                 current_epoch_calculation_slot=state.slot,
             )
 
-            # `helpers.generate_seed` path for mocking tests
+            # The `helpers.generate_seed` function is only present to provide an entry point
+            # for mocking this out in tests.
             current_epoch_seed = helpers.generate_seed(
                 state=state,
                 slot=state.current_epoch_calculation_slot,
