@@ -64,13 +64,14 @@ def _update_latest_index_roots(state: BeaconState,
         bytes(
             get_active_validator_indices(
                 state.validator_registry,
+                # TODO: change to `per-epoch` version
                 state.slot,
             )
         )
     )
     latest_index_roots = update_tuple_item(
         state.latest_index_roots,
-        next_epoch,
+        next_epoch % config.LATEST_INDEX_ROOTS_LENGTH,
         index_root,
     )
 

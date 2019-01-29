@@ -310,18 +310,19 @@ def generate_seed(state: 'BeaconState',
 
     TODO: it's slot version, will be changed to epoch version.
     """
-    return hash_eth2(
-        get_randao_mix(
-            state,
-            SlotNumber(slot - seed_lookahead),
-            latest_randao_mixes_length=latest_randao_mixes_length,
-        ) + get_active_index_root(
-            state,
-            slot,
-            epoch_length=epoch_length,
-            latest_index_roots_length=latest_index_roots_length,
-        )
+    randao_mix = get_randao_mix(
+        state,
+        SlotNumber(slot - seed_lookahead),
+        latest_randao_mixes_length=latest_randao_mixes_length,
     )
+    active_index_root = get_active_index_root(
+        state,
+        slot,
+        epoch_length=epoch_length,
+        latest_index_roots_length=latest_index_roots_length,
+    )
+
+    return hash_eth2(randao_mix + active_index_root)
 
 
 def get_beacon_proposer_index(state: 'BeaconState',

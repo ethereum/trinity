@@ -326,17 +326,6 @@ def sample_validator_record_params():
 
 
 @pytest.fixture
-def sample_validator_registry_delta_block_params():
-    return {
-        'latest_registry_delta_root': b'\x01' * 32,
-        'validator_index': 1,
-        'pubkey': 123,
-        'slot': 0,
-        'flag': 1,
-    }
-
-
-@pytest.fixture
 def filled_beacon_state(genesis_slot,
                         genesis_start_shard,
                         shard_count,

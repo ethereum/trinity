@@ -99,8 +99,26 @@ def test_check_if_update_validator_registry(genesis_state,
         assert num_shards_in_committees == 0
 
 
-def test_update_latest_index_roots(genesis_state, config):
-    state = genesis_state
+@pytest.mark.parametrize(
+    (
+        'epoch_length,'
+        'latest_index_roots_length,'
+        'state_slot,'
+    ),
+    [
+        (4, 16, 4),
+        (4, 16, 64),
+    ]
+)
+def test_update_latest_index_roots(genesis_state,
+                                   config,
+                                   state_slot,
+                                   epoch_length,
+                                   latest_index_roots_length):
+    state = genesis_state.copy(
+        slot=state_slot,
+    )
+
     result_state = _update_latest_index_roots(state, config)
 
     index_root = hash_eth2(
@@ -112,7 +130,9 @@ def test_update_latest_index_roots(genesis_state, config):
         )
     )
 
-    assert result_state.latest_index_roots[state.next_epoch(config.EPOCH_LENGTH)] == index_root
+    assert result_state.latest_index_roots[
+        state.next_epoch(epoch_length) % latest_index_roots_length
+    ] == index_root
 
 
 @pytest.mark.parametrize(
