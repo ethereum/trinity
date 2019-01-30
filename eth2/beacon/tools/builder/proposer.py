@@ -20,6 +20,9 @@ from eth2.beacon.helpers import (
     get_domain,
 )
 
+from eth2.beacon.state_machines.base import (
+    BaseBeaconStateMachine,
+)
 from eth2.beacon.state_machines.configs import BeaconConfig
 
 from eth2.beacon.types.attestations import Attestation
@@ -40,12 +43,13 @@ from eth2.beacon.typing import (
 def create_block_on_state(
         state: BeaconState,
         config: BeaconConfig,
+        state_machine: BaseBeaconStateMachine,
         block_class: BaseBeaconBlock,
         parent_block: BaseBeaconBlock,
         slot: SlotNumber,
         validator_index: int,
         privkey: int,
-        attestations: Sequence[Attestation]):
+        attestations: Sequence[Attestation]) -> BaseBeaconBlock:
     """
     Create a beacon block with the given parameters.
     """
@@ -82,6 +86,9 @@ def create_block_on_state(
         body=body,
     )
 
+    # Apply state transition to get state root
+    state, block = state_machine.import_block(block, is_proposer_mode=True)
+
     # Sign
     empty_signature_block_root = block.block_without_signature_root
     proposal_root = ProposalSignedData(
@@ -107,6 +114,7 @@ def create_block_on_state(
 
 def create_mock_block(state: BeaconState,
                       config: BeaconConfig,
+                      state_machine: BaseBeaconStateMachine,
                       block_class: Type[BaseBeaconBlock],
                       parent_block: BaseBeaconBlock,
                       keymap: Dict[BLSPubkey, int],
@@ -114,6 +122,8 @@ def create_mock_block(state: BeaconState,
                       attestations: Sequence[Attestation]=()) -> BaseBeaconBlock:
     """
     Create a mocking block with the given block parameters and ``keymap``.
+
+    Note that it doesn't return the correct ``state_root``.
     """
     proposer_index = get_beacon_proposer_index(
         state.copy(
@@ -127,9 +137,10 @@ def create_mock_block(state: BeaconState,
     proposer_pubkey = state.validator_registry[proposer_index].pubkey
     proposer_privkey = keymap[proposer_pubkey]
 
-    block = create_block_on_state(
+    result_block = create_block_on_state(
         state,
         config,
+        state_machine,
         block_class,
         parent_block,
         slot,
@@ -138,4 +149,4 @@ def create_mock_block(state: BeaconState,
         attestations=attestations,
     )
 
-    return block
+    return result_block

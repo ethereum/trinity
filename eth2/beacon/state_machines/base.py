@@ -72,7 +72,9 @@ class BaseBeaconStateMachine(Configurable, ABC):
     # Import block API
     #
     @abstractmethod
-    def import_block(self, block: BaseBeaconBlock) -> Tuple[BeaconState, BaseBeaconBlock]:
+    def import_block(self,
+                     block: BaseBeaconBlock,
+                     is_proposer_mode: bool=False) -> Tuple[BeaconState, BaseBeaconBlock]:
         pass
 
     @staticmethod
@@ -88,15 +90,12 @@ class BeaconStateMachine(BaseBeaconStateMachine):
                  block: BaseBeaconBlock,
                  parent_block_class: Type[BaseBeaconBlock]) -> None:
         self.chaindb = chaindb
-        self.block = self.get_block_class().from_parent(
-            parent_block=self.chaindb.get_block_by_root(block.parent_root, parent_block_class),
-            block_params=FromBlockParams(slot=block.slot),
-        )
+        self.block = block
 
     @property
     def state(self) -> BeaconState:
-        if self._state is None:
-            self._state = self.chaindb.get_state_by_root(self.block.state_root)
+        # if self._state is None:
+        self._state = self.chaindb.get_state_by_root(self.block.state_root)
         return self._state
 
     @classmethod
@@ -139,12 +138,19 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     #
     # Import block API
     #
-    def import_block(self, block: BaseBeaconBlock) -> Tuple[BeaconState, BaseBeaconBlock]:
+    def import_block(self,
+                     block: BaseBeaconBlock,
+                     is_proposer_mode: bool=False) -> Tuple[BeaconState, BaseBeaconBlock]:
         state = self.state_transition.apply_state_transition(
             self.state,
             block,
+            is_proposer_mode,
         )
         # TODO: Validate state roots
-        # TODO: Update self.state
+
+        block = block.copy(
+            state_root=state.root,
+        )
+
         # TODO: persist states in BeaconChain
         return state, block
