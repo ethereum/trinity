@@ -60,7 +60,6 @@ def test_per_slot_transition(base_db,
         state_machine=fixture_sm_class(
             chaindb,
             genesis_block,
-            parent_block_class=SerenityBeaconBlock,
         ),
         block_class=SerenityBeaconBlock,
         parent_block=genesis_block,
@@ -75,7 +74,6 @@ def test_per_slot_transition(base_db,
     sm = fixture_sm_class(
         chaindb,
         block,
-        parent_block_class=SerenityBeaconBlock,
     )
 
     # Get state transition instance

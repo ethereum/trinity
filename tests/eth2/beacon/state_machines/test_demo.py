@@ -61,7 +61,6 @@ def test_demo(base_db,
             state_machine=fixture_sm_class(
                 chaindb,
                 blocks[-1],
-                parent_block_class=SerenityBeaconBlock,
             ),
             block_class=SerenityBeaconBlock,
             parent_block=block,
@@ -79,7 +78,6 @@ def test_demo(base_db,
         sm = fixture_sm_class(
             chaindb,
             blocks[-1],
-            parent_block_class=SerenityBeaconBlock,
         )
         state, _ = sm.import_block(block)
 

@@ -32,9 +32,6 @@ from eth._utils.rlp import (
     validate_imported_block_unchanged,
 )
 
-from eth2.beacon.constants import (
-    GENESIS_PARENT_ROOT,
-)
 from eth2.beacon.db.chain import (  # noqa: F401
     BaseBeaconChainDB,
     BeaconChainDB,
@@ -256,15 +253,9 @@ class BeaconChain(BaseBeaconChain):
         block = self.ensure_block(at_block)
         sm_class = self.get_state_machine_class_for_block_slot(block.slot)
 
-        if block.parent_root == GENESIS_PARENT_ROOT:
-            parent_block_class = sm_class.block_class
-        else:
-            parent_block_class = self.get_block_class(block.parent_root)
-
         return sm_class(
             chaindb=self.chaindb,
             block=block,
-            parent_block_class=parent_block_class,
         )
 
     #
