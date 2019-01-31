@@ -480,11 +480,12 @@ def generate_aggregate_pubkeys(
     )
 
 
-def verify_vote_count(slashable_attestation: 'SlashableAttestation', max_casper_votes: int) -> bool:
+def verify_vote_count(slashable_attestation: 'SlashableAttestation',
+                      max_indices_per_slashable_vote: int) -> bool:
     """
-    Ensure we have no more than ``max_casper_votes`` in the ``slashable_attestation``.
+    Ensure we have no more than ``max_indices_per_slashable_vote`` in the ``slashable_attestation``.
     """
-    return slashable_attestation.vote_count <= max_casper_votes
+    return slashable_attestation.vote_count <= max_indices_per_slashable_vote
 
 
 def verify_slashable_attestation_signature(state: 'BeaconState',
@@ -514,14 +515,14 @@ def verify_slashable_attestation_signature(state: 'BeaconState',
 
 def verify_slashable_attestation(state: 'BeaconState',
                                  slashable_attestation: 'SlashableAttestation',
-                                 max_casper_votes: int) -> bool:
+                                 max_indices_per_slashable_vote: int) -> bool:
     """
     Ensure that the ``slashable_attestation`` is properly assembled and contains the signature
     we expect from the validators we expect. Otherwise, return False as
     the ``slashable_attestation`` is invalid.
     """
     return (
-        verify_vote_count(slashable_attestation, max_casper_votes) and
+        verify_vote_count(slashable_attestation, max_indices_per_slashable_vote) and
         verify_slashable_attestation_signature(state, slashable_attestation)
     )
 

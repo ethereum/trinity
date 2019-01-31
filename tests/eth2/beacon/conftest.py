@@ -416,8 +416,8 @@ def beacon_chain_shard_number():
 
 
 @pytest.fixture
-def max_casper_votes():
-    return SERENITY_CONFIG.MAX_CASPER_VOTES
+def max_indices_per_slashable_vote():
+    return SERENITY_CONFIG.MAX_INDICES_PER_SLASHABLE_VOTE
 
 
 @pytest.fixture
@@ -650,7 +650,7 @@ def config(
         ejection_balance,
         max_balance_churn_quotient,
         beacon_chain_shard_number,
-        max_casper_votes,
+        max_indices_per_slashable_vote,
         latest_block_roots_length,
         latest_index_roots_length,
         latest_randao_mixes_length,
@@ -686,7 +686,7 @@ def config(
         EJECTION_BALANCE=ejection_balance,
         MAX_BALANCE_CHURN_QUOTIENT=max_balance_churn_quotient,
         BEACON_CHAIN_SHARD_NUMBER=beacon_chain_shard_number,
-        MAX_CASPER_VOTES=max_casper_votes,
+        MAX_INDICES_PER_SLASHABLE_VOTE=max_indices_per_slashable_vote,
         LATEST_BLOCK_ROOTS_LENGTH=latest_block_roots_length,
         LATEST_INDEX_ROOTS_LENGTH=latest_index_roots_length,
         LATEST_RANDAO_MIXES_LENGTH=latest_randao_mixes_length,

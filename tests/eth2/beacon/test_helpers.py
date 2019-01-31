@@ -726,8 +726,10 @@ def test_generate_aggregate_pubkeys(activated_genesis_validators,
 
 
 @given(st.data())
-def test_verify_vote_count(max_casper_votes, sample_slashable_attestation_params, data):
-    (indices, some_index) = _list_and_index(data, max_size=max_casper_votes)
+def test_verify_vote_count(max_indices_per_slashable_vote,
+                           sample_slashable_attestation_params,
+                           data):
+    (indices, some_index) = _list_and_index(data, max_size=max_indices_per_slashable_vote)
     custody_bit_0_indices = indices[:some_index]
     custody_bit_1_indices = indices[some_index:]
 
@@ -738,7 +740,7 @@ def test_verify_vote_count(max_casper_votes, sample_slashable_attestation_params
 
     votes = SlashableAttestation(**sample_slashable_attestation_params)
 
-    assert verify_vote_count(votes, max_casper_votes)
+    assert verify_vote_count(votes, max_indices_per_slashable_vote)
 
 
 def _get_indices_and_signatures(num_validators, message, privkeys, fork, slot):
@@ -865,9 +867,9 @@ def test_verify_slashable_attestation_signature(
     assert not verify_slashable_attestation_signature(state, invalid_votes)
 
 
-def _run_verify_slashable_vote(params, state, max_casper_votes, should_succeed):
+def _run_verify_slashable_vote(params, state, max_indices_per_slashable_vote, should_succeed):
     votes = SlashableAttestation(**params)
-    result = verify_slashable_attestation(state, votes, max_casper_votes)
+    result = verify_slashable_attestation(state, votes, max_indices_per_slashable_vote)
     if should_succeed:
         assert result
     else:
@@ -908,7 +910,7 @@ def test_verify_slashable_attestation(
         genesis_balances,
         sample_slashable_attestation_params,
         sample_fork_params,
-        max_casper_votes):
+        max_indices_per_slashable_vote):
     state = BeaconState(**sample_beacon_state_params).copy(
         validator_registry=activated_genesis_validators,
         validator_balances=genesis_balances,
@@ -930,7 +932,7 @@ def test_verify_slashable_attestation(
         params = param_mapper(params, state.fork)
     else:
         params = param_mapper(params)
-    _run_verify_slashable_vote(params, state, max_casper_votes, should_succeed)
+    _run_verify_slashable_vote(params, state, max_indices_per_slashable_vote, should_succeed)
 
 
 @pytest.mark.parametrize(
@@ -949,7 +951,7 @@ def test_verify_slashable_attestation_after_fork(
         genesis_balances,
         sample_slashable_attestation_params,
         sample_fork_params,
-        max_casper_votes):
+        max_indices_per_slashable_vote):
     # Test that slashable data is still valid after fork
     # Slashable data slot = 10, fork slot = 15, current slot = 20
     past_fork_params = {
@@ -974,7 +976,7 @@ def test_verify_slashable_attestation_after_fork(
         privkeys,
         state.fork,
     )
-    _run_verify_slashable_vote(valid_params, state, max_casper_votes, True)
+    _run_verify_slashable_vote(valid_params, state, max_indices_per_slashable_vote, True)
 
 
 def test_is_double_vote(sample_attestation_data_params):
