@@ -74,7 +74,7 @@ def test_validate_proposer_signature(
         sample_beacon_state_params,
         beacon_chain_shard_number,
         epoch_length,
-        max_deposit,
+        max_deposit_amount,
         target_committee_size,
         shard_count):
 
@@ -83,7 +83,7 @@ def test_validate_proposer_signature(
             mock_validator_record(proposer_pubkey)
             for _ in range(10)
         ),
-        validator_balances=(max_deposit * GWEI_PER_ETH,) * 10,
+        validator_balances=(max_deposit_amount * GWEI_PER_ETH,) * 10,
     )
 
     default_block = BeaconBlock(**sample_beacon_block_params)

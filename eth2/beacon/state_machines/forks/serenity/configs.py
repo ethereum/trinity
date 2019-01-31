@@ -25,8 +25,8 @@ SERENITY_CONFIG = BeaconConfig(
     # Deposit contract
     DEPOSIT_CONTRACT_ADDRESS=ZERO_ADDRESS,  # TBD
     DEPOSIT_CONTRACT_TREE_DEPTH=2**5,  # (= 32)
-    MIN_DEPOSIT=Ether(2**0),  # (= 1) ETH
-    MAX_DEPOSIT=Ether(2**5),  # (= 32) ETH
+    MIN_DEPOSIT_AMOUNT=Ether(2**0),  # (= 1) ETH
+    MAX_DEPOSIT_AMOUNT=Ether(2**5),  # (= 32) ETH
     # Initial values
     GENESIS_FORK_VERSION=0,
     GENESIS_SLOT=SlotNumber(0),

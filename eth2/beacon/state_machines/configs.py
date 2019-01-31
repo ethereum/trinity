@@ -31,8 +31,8 @@ BeaconConfig = NamedTuple(
         # Deposit contract
         ('DEPOSIT_CONTRACT_ADDRESS', Address),
         ('DEPOSIT_CONTRACT_TREE_DEPTH', int),
-        ('MIN_DEPOSIT', Ether),
-        ('MAX_DEPOSIT', Ether),
+        ('MIN_DEPOSIT_AMOUNT', Ether),
+        ('MAX_DEPOSIT_AMOUNT', Ether),
         # ZERO_HASH (ZERO_HASH32) is defined in constants.py
         # Initial values
         ('GENESIS_FORK_VERSION', int),

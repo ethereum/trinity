@@ -562,7 +562,7 @@ def test_get_attestation_participants(
 @pytest.mark.parametrize(
     (
         'balance,'
-        'max_deposit,'
+        'max_deposit_amount,'
         'expected'
     ),
     [
@@ -583,9 +583,12 @@ def test_get_attestation_participants(
         )
     ]
 )
-def test_get_effective_balance(balance, max_deposit, expected, sample_validator_record_params):
+def test_get_effective_balance(balance,
+                               max_deposit_amount,
+                               expected,
+                               sample_validator_record_params):
     balances = (balance,)
-    result = get_effective_balance(balances, 0, max_deposit)
+    result = get_effective_balance(balances, 0, max_deposit_amount)
     assert result == expected
 
 

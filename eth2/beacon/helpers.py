@@ -423,12 +423,12 @@ def get_attestation_participants(state: 'BeaconState',
 def get_effective_balance(
         validator_balances: Sequence[Gwei],
         index: ValidatorIndex,
-        max_deposit: Ether) -> Gwei:
+        max_deposit_amount: Ether) -> Gwei:
     """
     Return the effective balance (also known as "balance at stake") for a
     ``validator`` with the given ``index``.
     """
-    return min(validator_balances[index], Gwei(max_deposit * GWEI_PER_ETH))
+    return min(validator_balances[index], Gwei(max_deposit_amount * GWEI_PER_ETH))
 
 
 def get_fork_version(fork: 'Fork',

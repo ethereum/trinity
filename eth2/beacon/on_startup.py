@@ -68,7 +68,7 @@ def get_initial_beacon_state(*,
                              latest_block_roots_length: int,
                              latest_index_roots_length: int,
                              epoch_length: int,
-                             max_deposit: Ether,
+                             max_deposit_amount: Ether,
                              latest_penalized_exit_length: int,
                              latest_randao_mixes_length: int,
                              entry_exit_delay: int) -> BeaconState:
@@ -148,8 +148,8 @@ def get_initial_beacon_state(*,
         is_enough_effective_balance = get_effective_balance(
             state.validator_balances,
             validator_index,
-            max_deposit,
-        ) >= max_deposit * GWEI_PER_ETH
+            max_deposit_amount,
+        ) >= max_deposit_amount * GWEI_PER_ETH
         if is_enough_effective_balance:
             state = activate_validator(
                 state,
