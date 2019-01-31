@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
     from eth2.beacon.types.states import BeaconState  # noqa: F401
     from eth2.beacon.types.fork import Fork  # noqa: F401
-    from eth2.beacon.types.slashable_vote_data import SlashableVoteData  # noqa: F401
+    from eth2.beacon.types.slashable_attestations import SlashableAttestation  # noqa: F401
     from eth2.beacon.types.validator_records import ValidatorRecord  # noqa: F401
 
 
@@ -464,7 +464,7 @@ def get_pubkey_for_indices(validators: Sequence['ValidatorRecord'],
 
 @to_tuple
 def generate_aggregate_pubkeys(validators: Sequence['ValidatorRecord'],
-                               vote_data: 'SlashableVoteData') -> Iterable[BLSPubkey]:
+                               vote_data: 'SlashableAttestation') -> Iterable[BLSPubkey]:
     """
     Compute the aggregate pubkey we expect based on
     the proof-of-custody indices found in the ``vote_data``.
@@ -479,7 +479,7 @@ def generate_aggregate_pubkeys(validators: Sequence['ValidatorRecord'],
     )
 
 
-def verify_vote_count(vote_data: 'SlashableVoteData', max_casper_votes: int) -> bool:
+def verify_vote_count(vote_data: 'SlashableAttestation', max_casper_votes: int) -> bool:
     """
     Ensure we have no more than ``max_casper_votes`` in the ``vote_data``.
     """
@@ -487,7 +487,7 @@ def verify_vote_count(vote_data: 'SlashableVoteData', max_casper_votes: int) -> 
 
 
 def verify_slashable_vote_data_signature(state: 'BeaconState',
-                                         vote_data: 'SlashableVoteData') -> bool:
+                                         vote_data: 'SlashableAttestation') -> bool:
     """
     Ensure we have a valid aggregate signature for the ``vote_data``.
     """
@@ -508,7 +508,7 @@ def verify_slashable_vote_data_signature(state: 'BeaconState',
 
 
 def verify_slashable_vote_data(state: 'BeaconState',
-                               vote_data: 'SlashableVoteData',
+                               vote_data: 'SlashableAttestation',
                                max_casper_votes: int) -> bool:
     """
     Ensure that the ``vote_data`` is properly assembled and contains the signature

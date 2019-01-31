@@ -37,7 +37,7 @@ from eth2.beacon.types.attestation_data import (
     AttestationData,
 )
 from eth2.beacon.types.forks import Fork
-from eth2.beacon.types.slashable_vote_data import SlashableVoteData
+from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validator_records import ValidatorRecord
 from eth2.beacon.helpers import (
@@ -711,7 +711,7 @@ def test_generate_aggregate_pubkeys(activated_genesis_validators,
     key = "custody_bit_1_indices"
     sample_slashable_vote_data_params[key] = custody_bit_1_indices
 
-    votes = SlashableVoteData(**sample_slashable_vote_data_params)
+    votes = SlashableAttestation(**sample_slashable_vote_data_params)
 
     keys = generate_aggregate_pubkeys(activated_genesis_validators, votes)
     assert len(keys) == 2
@@ -736,7 +736,7 @@ def test_verify_vote_count(max_casper_votes, sample_slashable_vote_data_params, 
     key = "custody_bit_1_indices"
     sample_slashable_vote_data_params[key] = custody_bit_1_indices
 
-    votes = SlashableVoteData(**sample_slashable_vote_data_params)
+    votes = SlashableAttestation(**sample_slashable_vote_data_params)
 
     assert verify_vote_count(votes, max_casper_votes)
 
@@ -820,7 +820,7 @@ def _corrupt_vote_count(params):
 
 def _create_slashable_vote_data_messages(params):
     # TODO update when we move to `ssz` tree hash
-    votes = SlashableVoteData(**params)
+    votes = SlashableAttestation(**params)
     return votes.messages
 
 
@@ -856,16 +856,16 @@ def test_verify_slashable_vote_data_signature(num_validators,
         privkeys,
         state.fork,
     )
-    valid_votes = SlashableVoteData(**valid_params)
+    valid_votes = SlashableAttestation(**valid_params)
     assert verify_slashable_vote_data_signature(state, valid_votes)
 
     invalid_params = _corrupt_signature(valid_params, state.fork)
-    invalid_votes = SlashableVoteData(**invalid_params)
+    invalid_votes = SlashableAttestation(**invalid_params)
     assert not verify_slashable_vote_data_signature(state, invalid_votes)
 
 
 def _run_verify_slashable_vote(params, state, max_casper_votes, should_succeed):
-    votes = SlashableVoteData(**params)
+    votes = SlashableAttestation(**params)
     result = verify_slashable_vote_data(state, votes, max_casper_votes)
     if should_succeed:
         assert result

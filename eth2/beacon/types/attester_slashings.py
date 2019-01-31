@@ -1,5 +1,5 @@
 import rlp
-from .slashable_vote_data import SlashableVoteData
+from .slashable_attestations import SlashableAttestation
 
 
 class AttesterSlashing(rlp.Serializable):
@@ -7,16 +7,16 @@ class AttesterSlashing(rlp.Serializable):
     Note: using RLP until we have standardized serialization format.
     """
     fields = [
-        # First batch of votes
-        ('slashable_vote_data_1', SlashableVoteData),
-        # Second batch of votes
-        ('slashable_vote_data_2', SlashableVoteData),
+        # First slashable attestation
+        ('slashable_attestation_1', SlashableAttestation),
+        # Second slashable attestation
+        ('slashable_attestation_2', SlashableAttestation),
     ]
 
     def __init__(self,
-                 slashable_vote_data_1: SlashableVoteData,
-                 slashable_vote_data_2: SlashableVoteData)-> None:
+                 slashable_attestation_1: SlashableAttestation,
+                 slashable_attestation_2: SlashableAttestation)-> None:
         super().__init__(
-            slashable_vote_data_1,
-            slashable_vote_data_2,
+            slashable_attestation_1,
+            slashable_attestation_2,
         )

@@ -24,7 +24,7 @@ from .attestation_data import AttestationData
 from .attestation_data_and_custody_bits import AttestationDataAndCustodyBit
 
 
-class SlashableVoteData(rlp.Serializable):
+class SlashableAttestation(rlp.Serializable):
     """
     Note: using RLP until we have standardized serialization format.
     """

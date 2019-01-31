@@ -21,7 +21,7 @@ from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.proposal_signed_data import ProposalSignedData
-from eth2.beacon.types.slashable_vote_data import SlashableVoteData
+from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.states import BeaconState
 
 from eth2.beacon.on_startup import (
@@ -299,10 +299,10 @@ def sample_slashable_vote_data_params(sample_attestation_data_params):
 
 @pytest.fixture
 def sample_casper_slashing_params(sample_slashable_vote_data_params):
-    vote_data = SlashableVoteData(**sample_slashable_vote_data_params)
+    vote_data = SlashableAttestation(**sample_slashable_vote_data_params)
     return {
-        'slashable_vote_data_1': vote_data,
-        'slashable_vote_data_2': vote_data,
+        'slashable_attestation_1': vote_data,
+        'slashable_attestation_2': vote_data,
     }
 
 

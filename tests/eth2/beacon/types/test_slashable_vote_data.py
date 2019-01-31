@@ -1,13 +1,13 @@
 from eth2.beacon.types.attestation_data_and_custody_bits import (
     AttestationDataAndCustodyBit,
 )
-from eth2.beacon.types.slashable_vote_data import (
-    SlashableVoteData,
+from eth2.beacon.types.slashable_attestations import (
+    SlashableAttestation,
 )
 
 
 def test_defaults(sample_slashable_vote_data_params):
-    vote_data = SlashableVoteData(**sample_slashable_vote_data_params)
+    vote_data = SlashableAttestation(**sample_slashable_vote_data_params)
 
     assert (vote_data.custody_bit_0_indices ==
             sample_slashable_vote_data_params['custody_bit_0_indices'])
@@ -18,7 +18,7 @@ def test_defaults(sample_slashable_vote_data_params):
 
 
 def test_hash(sample_slashable_vote_data_params):
-    vote_data = SlashableVoteData(**sample_slashable_vote_data_params)
+    vote_data = SlashableAttestation(**sample_slashable_vote_data_params)
 
     # NOTE: this hash was simply copied from the existing implementation
     # which should be the keccak-256 of the rlp serialization of `votes`.
@@ -31,7 +31,7 @@ def test_hash(sample_slashable_vote_data_params):
 
 
 def test_root(sample_slashable_vote_data_params):
-    vote_data = SlashableVoteData(**sample_slashable_vote_data_params)
+    vote_data = SlashableAttestation(**sample_slashable_vote_data_params)
 
     # NOTE: see note in `test_hash`, this test will need to be updated
     # once ssz tree hash lands...
@@ -40,7 +40,7 @@ def test_root(sample_slashable_vote_data_params):
 
 
 def test_vote_count(sample_slashable_vote_data_params):
-    vote_data = SlashableVoteData(**sample_slashable_vote_data_params)
+    vote_data = SlashableAttestation(**sample_slashable_vote_data_params)
 
     key = "custody_bit_0_indices"
     custody_bit_0_indices = sample_slashable_vote_data_params[key]
@@ -51,7 +51,7 @@ def test_vote_count(sample_slashable_vote_data_params):
 
 
 def test_messages(sample_slashable_vote_data_params):
-    vote_data = SlashableVoteData(**sample_slashable_vote_data_params)
+    vote_data = SlashableAttestation(**sample_slashable_vote_data_params)
 
     assert vote_data.messages == (
         AttestationDataAndCustodyBit(vote_data.data, False).root,
