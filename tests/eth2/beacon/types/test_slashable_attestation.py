@@ -1,3 +1,5 @@
+import rlp
+
 from eth2.beacon.types.attestation_data_and_custody_bits import (
     AttestationDataAndCustodyBit,
 )
@@ -18,6 +20,7 @@ def test_defaults(sample_slashable_attestation_params):
         slashable_attestation.aggregate_signature ==
         sample_slashable_attestation_params['aggregate_signature']
     )
+    assert rlp.encode(slashable_attestation)
 
 
 def test_hash(sample_slashable_attestation_params):

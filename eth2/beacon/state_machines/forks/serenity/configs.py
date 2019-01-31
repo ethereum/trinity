@@ -47,7 +47,7 @@ SERENITY_CONFIG = BeaconConfig(
     INACTIVITY_PENALTY_QUOTIENT=2**24,  # (= 16,777,216)
     # Max operations per block
     MAX_PROPOSER_SLASHINGS=2**4,  # (= 16)
-    MAX_CASPER_SLASHINGS=2**4,  # (= 16)
+    MAX_ATTESTER_SLASHINGS=2**4,  # (= 16)
     MAX_ATTESTATIONS=2**7,  # (= 128)
     MAX_DEPOSITS=2**4,  # (= 16)
     MAX_EXITS=2**4,  # (= 16)

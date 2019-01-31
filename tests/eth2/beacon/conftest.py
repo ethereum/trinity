@@ -298,7 +298,7 @@ def sample_slashable_attestation_params(sample_attestation_data_params):
 
 
 @pytest.fixture
-def sample_casper_slashing_params(sample_slashable_attestation_params):
+def sample_attester_slashing_params(sample_slashable_attestation_params):
     slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
     return {
         'slashable_attestation_1': slashable_attestation,
@@ -541,8 +541,8 @@ def max_proposer_slashings():
 
 
 @pytest.fixture
-def max_casper_slashings():
-    return SERENITY_CONFIG.MAX_CASPER_SLASHINGS
+def max_attester_slashings():
+    return SERENITY_CONFIG.MAX_ATTESTER_SLASHINGS
 
 
 @pytest.fixture
@@ -675,7 +675,7 @@ def config(
         includer_reward_quotient,
         inactivity_penalty_quotient,
         max_proposer_slashings,
-        max_casper_slashings,
+        max_attester_slashings,
         max_attestations,
         max_deposits,
         max_exits
@@ -711,7 +711,7 @@ def config(
         INCLUDER_REWARD_QUOTIENT=includer_reward_quotient,
         INACTIVITY_PENALTY_QUOTIENT=inactivity_penalty_quotient,
         MAX_PROPOSER_SLASHINGS=max_proposer_slashings,
-        MAX_CASPER_SLASHINGS=max_casper_slashings,
+        MAX_ATTESTER_SLASHINGS=max_attester_slashings,
         MAX_ATTESTATIONS=max_attestations,
         MAX_DEPOSITS=max_deposits,
         MAX_EXITS=max_exits,

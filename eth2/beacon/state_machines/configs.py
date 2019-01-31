@@ -54,7 +54,7 @@ BeaconConfig = NamedTuple(
         ('INACTIVITY_PENALTY_QUOTIENT', int),
         # Max operations per block
         ('MAX_PROPOSER_SLASHINGS', int),
-        ('MAX_CASPER_SLASHINGS', int),
+        ('MAX_ATTESTER_SLASHINGS', int),
         ('MAX_ATTESTATIONS', int),
         ('MAX_DEPOSITS', int),
         ('MAX_EXITS', int),
