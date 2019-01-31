@@ -424,7 +424,7 @@ def get_effective_balance(
     Return the effective balance (also known as "balance at stake") for a
     ``validator`` with the given ``index``.
     """
-    return min(validator_balances[index], Gwei(max_deposit_amount))
+    return min(validator_balances[index], max_deposit_amount)
 
 
 def get_fork_version(fork: 'Fork',
