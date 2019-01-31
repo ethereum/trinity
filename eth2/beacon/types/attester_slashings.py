@@ -2,7 +2,7 @@ import rlp
 from .slashable_vote_data import SlashableVoteData
 
 
-class CasperSlashing(rlp.Serializable):
+class AttesterSlashing(rlp.Serializable):
     """
     Note: using RLP until we have standardized serialization format.
     """

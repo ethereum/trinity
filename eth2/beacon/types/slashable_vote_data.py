@@ -78,7 +78,8 @@ class SlashableVoteData(rlp.Serializable):
     @property
     def messages(self) -> Tuple[Hash32, Hash32]:
         """
-        Build the messages that validators are expected to sign for a ``CasperSlashing`` operation.
+        Build the messages that validators are expected to sign for an
+        ``AttesterSlashing`` operation.
         """
         # TODO: change to hash_tree_root when we have SSZ tree hashing
         return (

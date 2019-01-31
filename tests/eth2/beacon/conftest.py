@@ -119,7 +119,7 @@ def sample_attestation_data_and_custody_bit_params(sample_attestation_data_param
 def sample_beacon_block_body_params():
     return {
         'proposer_slashings': (),
-        'casper_slashings': (),
+        'attester_slashings': (),
         'attestations': (),
         'custody_reseeds': (),
         'custody_challenges': (),
