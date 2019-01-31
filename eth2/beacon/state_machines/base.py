@@ -145,11 +145,9 @@ class BeaconStateMachine(BaseBeaconStateMachine):
             block,
             is_proposer_mode,
         )
-        # TODO: Validate state roots
 
         block = block.copy(
             state_root=state.root,
         )
 
-        # TODO: persist states in BeaconChain
         return state, block

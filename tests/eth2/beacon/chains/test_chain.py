@@ -86,7 +86,7 @@ def test_import_blocks(valid_chain,
             block_class=genesis_block.__class__,
             parent_block=blocks[-1],
             keymap=keymap,
-            slot=state.slot + 1,
+            slot=state.slot + 2,
         )
 
         valid_chain.import_block(block)
