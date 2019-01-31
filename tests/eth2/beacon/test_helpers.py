@@ -58,8 +58,8 @@ from eth2.beacon.helpers import (
     get_shuffling,
     generate_aggregate_pubkeys,
     verify_vote_count,
-    verify_slashable_vote_data_signature,
-    verify_slashable_vote_data,
+    verify_slashable_attestation_signature,
+    verify_slashable_attestation,
     is_double_vote,
     is_surround_vote,
 )
@@ -832,13 +832,14 @@ def _create_slashable_vote_data_messages(params):
         (40,),
     ]
 )
-def test_verify_slashable_vote_data_signature(num_validators,
-                                              privkeys,
-                                              sample_beacon_state_params,
-                                              activated_genesis_validators,
-                                              genesis_balances,
-                                              sample_slashable_vote_data_params,
-                                              sample_fork_params):
+def test_verify_slashable_attestation_signature(
+        num_validators,
+        privkeys,
+        sample_beacon_state_params,
+        activated_genesis_validators,
+        genesis_balances,
+        sample_slashable_vote_data_params,
+        sample_fork_params):
     state = BeaconState(**sample_beacon_state_params).copy(
         validator_registry=activated_genesis_validators,
         validator_balances=genesis_balances,
@@ -857,16 +858,16 @@ def test_verify_slashable_vote_data_signature(num_validators,
         state.fork,
     )
     valid_votes = SlashableAttestation(**valid_params)
-    assert verify_slashable_vote_data_signature(state, valid_votes)
+    assert verify_slashable_attestation_signature(state, valid_votes)
 
     invalid_params = _corrupt_signature(valid_params, state.fork)
     invalid_votes = SlashableAttestation(**invalid_params)
-    assert not verify_slashable_vote_data_signature(state, invalid_votes)
+    assert not verify_slashable_attestation_signature(state, invalid_votes)
 
 
 def _run_verify_slashable_vote(params, state, max_casper_votes, should_succeed):
     votes = SlashableAttestation(**params)
-    result = verify_slashable_vote_data(state, votes, max_casper_votes)
+    result = verify_slashable_attestation(state, votes, max_casper_votes)
     if should_succeed:
         assert result
     else:
@@ -896,17 +897,18 @@ def _run_verify_slashable_vote(params, state, max_casper_votes, should_succeed):
         ), False, True),
     ],
 )
-def test_verify_slashable_vote_data(num_validators,
-                                    param_mapper,
-                                    should_succeed,
-                                    needs_fork,
-                                    privkeys,
-                                    sample_beacon_state_params,
-                                    activated_genesis_validators,
-                                    genesis_balances,
-                                    sample_slashable_vote_data_params,
-                                    sample_fork_params,
-                                    max_casper_votes):
+def test_verify_slashable_attestation(
+        num_validators,
+        param_mapper,
+        should_succeed,
+        needs_fork,
+        privkeys,
+        sample_beacon_state_params,
+        activated_genesis_validators,
+        genesis_balances,
+        sample_slashable_vote_data_params,
+        sample_fork_params,
+        max_casper_votes):
     state = BeaconState(**sample_beacon_state_params).copy(
         validator_registry=activated_genesis_validators,
         validator_balances=genesis_balances,
@@ -939,14 +941,15 @@ def test_verify_slashable_vote_data(num_validators,
         (40,),
     ]
 )
-def test_verify_slashable_vote_data_after_fork(num_validators,
-                                               privkeys,
-                                               sample_beacon_state_params,
-                                               activated_genesis_validators,
-                                               genesis_balances,
-                                               sample_slashable_vote_data_params,
-                                               sample_fork_params,
-                                               max_casper_votes):
+def test_verify_slashable_attestation_after_fork(
+        num_validators,
+        privkeys,
+        sample_beacon_state_params,
+        activated_genesis_validators,
+        genesis_balances,
+        sample_slashable_vote_data_params,
+        sample_fork_params,
+        max_casper_votes):
     # Test that slashable data is still valid after fork
     # Slashable data slot = 10, fork slot = 15, current slot = 20
     past_fork_params = {
