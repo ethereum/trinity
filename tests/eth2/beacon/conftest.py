@@ -288,7 +288,7 @@ def sample_shard_reassignment_record():
 
 
 @pytest.fixture
-def sample_slashable_vote_data_params(sample_attestation_data_params):
+def sample_slashable_attestation_params(sample_attestation_data_params):
     return {
         'custody_bit_0_indices': (10, 11, 12, 15, 28),
         'custody_bit_1_indices': (7, 8, 100, 131, 249),
@@ -298,11 +298,11 @@ def sample_slashable_vote_data_params(sample_attestation_data_params):
 
 
 @pytest.fixture
-def sample_casper_slashing_params(sample_slashable_vote_data_params):
-    vote_data = SlashableAttestation(**sample_slashable_vote_data_params)
+def sample_casper_slashing_params(sample_slashable_attestation_params):
+    slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
     return {
-        'slashable_attestation_1': vote_data,
-        'slashable_attestation_2': vote_data,
+        'slashable_attestation_1': slashable_attestation,
+        'slashable_attestation_2': slashable_attestation,
     }
 
 

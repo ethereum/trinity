@@ -693,7 +693,7 @@ def _list_and_index(data, max_size=None, elements=st.integers()):
 
 @given(st.data())
 def test_generate_aggregate_pubkeys(activated_genesis_validators,
-                                    sample_slashable_vote_data_params,
+                                    sample_slashable_attestation_params,
                                     data):
     max_value_for_list = len(activated_genesis_validators) - 1
     (indices, some_index) = _list_and_index(
@@ -707,11 +707,11 @@ def test_generate_aggregate_pubkeys(activated_genesis_validators,
     custody_bit_1_indices = indices[some_index:]
 
     key = "custody_bit_0_indices"
-    sample_slashable_vote_data_params[key] = custody_bit_0_indices
+    sample_slashable_attestation_params[key] = custody_bit_0_indices
     key = "custody_bit_1_indices"
-    sample_slashable_vote_data_params[key] = custody_bit_1_indices
+    sample_slashable_attestation_params[key] = custody_bit_1_indices
 
-    votes = SlashableAttestation(**sample_slashable_vote_data_params)
+    votes = SlashableAttestation(**sample_slashable_attestation_params)
 
     keys = generate_aggregate_pubkeys(activated_genesis_validators, votes)
     assert len(keys) == 2
@@ -726,17 +726,17 @@ def test_generate_aggregate_pubkeys(activated_genesis_validators,
 
 
 @given(st.data())
-def test_verify_vote_count(max_casper_votes, sample_slashable_vote_data_params, data):
+def test_verify_vote_count(max_casper_votes, sample_slashable_attestation_params, data):
     (indices, some_index) = _list_and_index(data, max_size=max_casper_votes)
     custody_bit_0_indices = indices[:some_index]
     custody_bit_1_indices = indices[some_index:]
 
     key = "custody_bit_0_indices"
-    sample_slashable_vote_data_params[key] = custody_bit_0_indices
+    sample_slashable_attestation_params[key] = custody_bit_0_indices
     key = "custody_bit_1_indices"
-    sample_slashable_vote_data_params[key] = custody_bit_1_indices
+    sample_slashable_attestation_params[key] = custody_bit_1_indices
 
-    votes = SlashableAttestation(**sample_slashable_vote_data_params)
+    votes = SlashableAttestation(**sample_slashable_attestation_params)
 
     assert verify_vote_count(votes, max_casper_votes)
 
@@ -758,7 +758,7 @@ def _get_indices_and_signatures(num_validators, message, privkeys, fork, slot):
     return (indices, signatures)
 
 
-def _correct_slashable_vote_data_params(num_validators, params, messages, privkeys, fork):
+def _correct_slashable_attestation_params(num_validators, params, messages, privkeys, fork):
     valid_params = copy.deepcopy(params)
 
     key = "custody_bit_0_indices"
@@ -818,7 +818,7 @@ def _corrupt_vote_count(params):
         raise Exception("Unreachable code path")
 
 
-def _create_slashable_vote_data_messages(params):
+def _create_slashable_attestation_messages(params):
     # TODO update when we move to `ssz` tree hash
     votes = SlashableAttestation(**params)
     return votes.messages
@@ -838,7 +838,7 @@ def test_verify_slashable_attestation_signature(
         sample_beacon_state_params,
         activated_genesis_validators,
         genesis_balances,
-        sample_slashable_vote_data_params,
+        sample_slashable_attestation_params,
         sample_fork_params):
     state = BeaconState(**sample_beacon_state_params).copy(
         validator_registry=activated_genesis_validators,
@@ -848,11 +848,11 @@ def test_verify_slashable_attestation_signature(
 
     # NOTE: we can do this before "correcting" the params as they
     # touch disjoint subsets of the provided params
-    messages = _create_slashable_vote_data_messages(sample_slashable_vote_data_params)
+    messages = _create_slashable_attestation_messages(sample_slashable_attestation_params)
 
-    valid_params = _correct_slashable_vote_data_params(
+    valid_params = _correct_slashable_attestation_params(
         num_validators,
-        sample_slashable_vote_data_params,
+        sample_slashable_attestation_params,
         messages,
         privkeys,
         state.fork,
@@ -906,7 +906,7 @@ def test_verify_slashable_attestation(
         sample_beacon_state_params,
         activated_genesis_validators,
         genesis_balances,
-        sample_slashable_vote_data_params,
+        sample_slashable_attestation_params,
         sample_fork_params,
         max_casper_votes):
     state = BeaconState(**sample_beacon_state_params).copy(
@@ -917,11 +917,11 @@ def test_verify_slashable_attestation(
 
     # NOTE: we can do this before "correcting" the params as they
     # touch disjoint subsets of the provided params
-    messages = _create_slashable_vote_data_messages(sample_slashable_vote_data_params)
+    messages = _create_slashable_attestation_messages(sample_slashable_attestation_params)
 
-    params = _correct_slashable_vote_data_params(
+    params = _correct_slashable_attestation_params(
         num_validators,
-        sample_slashable_vote_data_params,
+        sample_slashable_attestation_params,
         messages,
         privkeys,
         state.fork,
@@ -947,7 +947,7 @@ def test_verify_slashable_attestation_after_fork(
         sample_beacon_state_params,
         activated_genesis_validators,
         genesis_balances,
-        sample_slashable_vote_data_params,
+        sample_slashable_attestation_params,
         sample_fork_params,
         max_casper_votes):
     # Test that slashable data is still valid after fork
@@ -965,11 +965,11 @@ def test_verify_slashable_attestation_after_fork(
         slot=20,
     )
 
-    messages = _create_slashable_vote_data_messages(sample_slashable_vote_data_params)
+    messages = _create_slashable_attestation_messages(sample_slashable_attestation_params)
 
-    valid_params = _correct_slashable_vote_data_params(
+    valid_params = _correct_slashable_attestation_params(
         num_validators,
-        sample_slashable_vote_data_params,
+        sample_slashable_attestation_params,
         messages,
         privkeys,
         state.fork,

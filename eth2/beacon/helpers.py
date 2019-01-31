@@ -463,14 +463,15 @@ def get_pubkey_for_indices(validators: Sequence['ValidatorRecord'],
 
 
 @to_tuple
-def generate_aggregate_pubkeys(validators: Sequence['ValidatorRecord'],
-                               vote_data: 'SlashableAttestation') -> Iterable[BLSPubkey]:
+def generate_aggregate_pubkeys(
+        validators: Sequence['ValidatorRecord'],
+        slashable_attestation: 'SlashableAttestation') -> Iterable[BLSPubkey]:
     """
     Compute the aggregate pubkey we expect based on
-    the proof-of-custody indices found in the ``vote_data``.
+    the proof-of-custody indices found in the ``slashable_attestation``.
     """
-    custody_bit_0_indices = vote_data.custody_bit_0_indices
-    custody_bit_1_indices = vote_data.custody_bit_1_indices
+    custody_bit_0_indices = slashable_attestation.custody_bit_0_indices
+    custody_bit_1_indices = slashable_attestation.custody_bit_1_indices
     all_indices = (custody_bit_0_indices, custody_bit_1_indices)
     get_pubkeys = functools.partial(get_pubkey_for_indices, validators)
     return map(
@@ -479,25 +480,29 @@ def generate_aggregate_pubkeys(validators: Sequence['ValidatorRecord'],
     )
 
 
-def verify_vote_count(vote_data: 'SlashableAttestation', max_casper_votes: int) -> bool:
+def verify_vote_count(slashable_attestation: 'SlashableAttestation', max_casper_votes: int) -> bool:
     """
-    Ensure we have no more than ``max_casper_votes`` in the ``vote_data``.
+    Ensure we have no more than ``max_casper_votes`` in the ``slashable_attestation``.
     """
-    return vote_data.vote_count <= max_casper_votes
+    return slashable_attestation.vote_count <= max_casper_votes
 
 
 def verify_slashable_attestation_signature(state: 'BeaconState',
-                                           vote_data: 'SlashableAttestation') -> bool:
+                                           slashable_attestation: 'SlashableAttestation') -> bool:
     """
-    Ensure we have a valid aggregate signature for the ``vote_data``.
+    Ensure we have a valid aggregate signature for the ``slashable_attestation``.
     """
-    pubkeys = generate_aggregate_pubkeys(state.validator_registry, vote_data)
+    pubkeys = generate_aggregate_pubkeys(state.validator_registry, slashable_attestation)
 
-    messages = vote_data.messages
+    messages = slashable_attestation.messages
 
-    signature = vote_data.aggregate_signature
+    signature = slashable_attestation.aggregate_signature
 
-    domain = get_domain(state.fork, vote_data.data.slot, SignatureDomain.DOMAIN_ATTESTATION)
+    domain = get_domain(
+        state.fork,
+        slashable_attestation.data.slot,
+        SignatureDomain.DOMAIN_ATTESTATION,
+    )
 
     return bls.verify_multiple(
         pubkeys=pubkeys,
@@ -508,16 +513,16 @@ def verify_slashable_attestation_signature(state: 'BeaconState',
 
 
 def verify_slashable_attestation(state: 'BeaconState',
-                                 vote_data: 'SlashableAttestation',
+                                 slashable_attestation: 'SlashableAttestation',
                                  max_casper_votes: int) -> bool:
     """
-    Ensure that the ``vote_data`` is properly assembled and contains the signature
+    Ensure that the ``slashable_attestation`` is properly assembled and contains the signature
     we expect from the validators we expect. Otherwise, return False as
-    the ``vote_data`` is invalid.
+    the ``slashable_attestation`` is invalid.
     """
     return (
-        verify_vote_count(vote_data, max_casper_votes) and
-        verify_slashable_attestation_signature(state, vote_data)
+        verify_vote_count(slashable_attestation, max_casper_votes) and
+        verify_slashable_attestation_signature(state, slashable_attestation)
     )
 
 
