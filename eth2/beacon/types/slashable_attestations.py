@@ -12,7 +12,7 @@ from eth_typing import (
 )
 from eth2.beacon._utils.hash import hash_eth2
 from eth2.beacon.sedes import (
-    uint24,
+    uint64,
 )
 from eth2.beacon.typing import (
     BLSSignature,
@@ -30,9 +30,9 @@ class SlashableAttestation(rlp.Serializable):
     """
     fields = [
         # Validator indices with custody bit equal to 0
-        ('custody_bit_0_indices', CountableList(uint24)),
+        ('custody_bit_0_indices', CountableList(uint64)),
         # Validator indices with custody bit equal to 1
-        ('custody_bit_1_indices', CountableList(uint24)),
+        ('custody_bit_1_indices', CountableList(uint64)),
         # Attestation data
         ('data', AttestationData),
         # Aggregate signature

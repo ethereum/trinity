@@ -1,7 +1,6 @@
 import rlp
 
 from eth2.beacon.sedes import (
-    uint24,
     uint64,
 )
 from eth2.beacon.typing import (
@@ -17,7 +16,7 @@ class ShardReassignmentRecord(rlp.Serializable):
     """
     fields = [
         # Which validator to reassign
-        ('validator_index', uint24),
+        ('validator_index', uint64),
         # To which shard
         ('shard', uint64),
         # When

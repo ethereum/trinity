@@ -23,7 +23,6 @@ from eth2.beacon._utils.hash import (
 )
 from eth2.beacon.helpers import slot_to_epoch
 from eth2.beacon.sedes import (
-    uint24,
     uint64,
     hash32,
 )
@@ -67,7 +66,7 @@ class BeaconState(rlp.Serializable):
         ('latest_vdf_outputs', CountableList(hash32)),
 
         # TODO Remove `persistent_committee_reassignments`
-        ('persistent_committees', CountableList(CountableList(uint24))),
+        ('persistent_committees', CountableList(CountableList(uint64))),
         ('persistent_committee_reassignments', CountableList(ShardReassignmentRecord)),
         ('previous_epoch_start_shard', uint64),
         ('current_epoch_start_shard', uint64),
