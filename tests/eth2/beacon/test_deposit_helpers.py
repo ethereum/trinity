@@ -4,9 +4,6 @@ from eth_utils import (
     ValidationError,
 )
 
-from eth2.beacon.constants import (
-    GWEI_PER_ETH,
-)
 from eth2.beacon.deposit_helpers import (
     add_pending_validator,
     process_deposit,
@@ -105,7 +102,7 @@ def test_process_deposit(sample_beacon_state_params,
 
     privkey_1 = privkeys[0]
     pubkey_1 = pubkeys[0]
-    amount = max_deposit_amount * GWEI_PER_ETH
+    amount = max_deposit_amount
     withdrawal_credentials = b'\x34' * 32
     custody_commitment = b'\x11' * 32
     randao_commitment = b'\x56' * 32

@@ -11,7 +11,7 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
-    Ether,
+    Gwei,
     SlotNumber,
     ValidatorIndex,
 )
@@ -100,7 +100,7 @@ def _settle_penality_to_validator_and_whistleblower(
         latest_penalized_exit_length: int,
         whistleblower_reward_quotient: int,
         epoch_length: int,
-        max_deposit_amount: Ether,
+        max_deposit_amount: Gwei,
         target_committee_size: int,
         shard_count: int) -> BeaconState:
     """
@@ -174,7 +174,7 @@ def penalize_validator(state: BeaconState,
                        latest_penalized_exit_length: int,
                        whistleblower_reward_quotient: int,
                        entry_exit_delay: int,
-                       max_deposit_amount: Ether,
+                       max_deposit_amount: Gwei,
                        target_committee_size: int,
                        shard_count: int) -> BeaconState:
     """

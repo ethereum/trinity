@@ -6,7 +6,6 @@ from eth.constants import (
 
 from eth2.beacon.constants import (
     EMPTY_SIGNATURE,
-    GWEI_PER_ETH,
 )
 from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
@@ -101,7 +100,7 @@ def test_get_initial_beacon_state(
                         slot=genesis_slot,
                     ),
                 ),
-                amount=max_deposit_amount * GWEI_PER_ETH,
+                amount=max_deposit_amount,
                 timestamp=0,
             ),
         )

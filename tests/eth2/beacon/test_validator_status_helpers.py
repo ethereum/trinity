@@ -2,7 +2,6 @@ import pytest
 
 from eth2.beacon.constants import (
     FAR_FUTURE_SLOT,
-    GWEI_PER_ETH,
 )
 from eth2.beacon.enums import (
     ValidatorStatusFlags,
@@ -53,7 +52,7 @@ def test_activate_validator(is_genesis,
             )
             for index in range(validator_count)
         ),
-        validator_balances=(max_deposit_amount * GWEI_PER_ETH,) * validator_count,
+        validator_balances=(max_deposit_amount,) * validator_count,
     )
     index = 1
     # Check that the `index`th validator in `state` is inactivated
@@ -217,7 +216,7 @@ def test_settle_penality_to_validator_and_whistleblower(monkeypatch,
         target_committee_size,
         shard_count,
     )
-    effective_balance = max_deposit_amount * GWEI_PER_ETH
+    effective_balance = max_deposit_amount
 
     # Check the initial balance
     assert (
@@ -240,7 +239,7 @@ def test_settle_penality_to_validator_and_whistleblower(monkeypatch,
     # Check `state.latest_penalized_balances`
     latest_penalized_balances_list = list(state.latest_penalized_balances)
     last_penalized_epoch = (state.slot // epoch_length) % latest_penalized_exit_length
-    latest_penalized_balances_list[last_penalized_epoch] = max_deposit_amount * GWEI_PER_ETH
+    latest_penalized_balances_list[last_penalized_epoch] = max_deposit_amount
     latest_penalized_balances = tuple(latest_penalized_balances_list)
 
     assert state.latest_penalized_balances == latest_penalized_balances

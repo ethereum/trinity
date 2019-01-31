@@ -12,7 +12,6 @@ from eth2.beacon._utils.hash import hash_eth2
 from eth2.beacon.constants import (
     EMPTY_SIGNATURE,
     FAR_FUTURE_SLOT,
-    GWEI_PER_ETH,
 )
 
 from eth2.beacon.types.attestation_data import AttestationData
@@ -355,7 +354,7 @@ def ten_validators_state(filled_beacon_state, max_deposit_amount):
             )
             for index in range(validator_count)
         ),
-        validator_balances=(max_deposit_amount * GWEI_PER_ETH,) * validator_count,
+        validator_balances=(max_deposit_amount,) * validator_count,
     )
 
 
@@ -634,7 +633,7 @@ def activated_genesis_validators(initial_validators, genesis_slot):
 @pytest.fixture
 def genesis_balances(init_validator_pubkeys, max_deposit_amount):
     return tuple(
-        max_deposit_amount * GWEI_PER_ETH
+        max_deposit_amount
         for _ in init_validator_pubkeys
     )
 

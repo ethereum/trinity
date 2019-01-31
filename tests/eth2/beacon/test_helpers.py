@@ -568,17 +568,17 @@ def test_get_attestation_participants(
     [
         (
             1 * GWEI_PER_ETH,
-            32,
+            32 * GWEI_PER_ETH,
             1 * GWEI_PER_ETH,
         ),
         (
             32 * GWEI_PER_ETH,
-            32,
+            32 * GWEI_PER_ETH,
             32 * GWEI_PER_ETH,
         ),
         (
             33 * GWEI_PER_ETH,
-            32,
+            32 * GWEI_PER_ETH,
             32 * GWEI_PER_ETH,
         )
     ]

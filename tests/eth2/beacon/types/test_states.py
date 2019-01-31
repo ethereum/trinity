@@ -2,9 +2,6 @@ import pytest
 
 import rlp
 
-from eth2.beacon.constants import (
-    GWEI_PER_ETH,
-)
 from eth2.beacon.types.states import (
     BeaconState,
 )
@@ -51,7 +48,7 @@ def test_num_validators(expected,
             )
             for pubkey in range(expected)
         ),
-        validator_balances=(max_deposit_amount * GWEI_PER_ETH,) * expected,
+        validator_balances=(max_deposit_amount,) * expected,
     )
 
     assert state.num_validators == expected

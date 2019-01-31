@@ -5,9 +5,6 @@ from typing import (
     Type,
 )
 
-from eth2.beacon.constants import (
-    GWEI_PER_ETH,
-)
 from eth2.beacon.on_startup import (
     get_genesis_block,
     get_initial_beacon_state,
@@ -75,7 +72,7 @@ def create_mock_initial_validator_deposits(
                         slot=config.GENESIS_SLOT,
                     ),
                 ),
-                amount=config.MAX_DEPOSIT_AMOUNT * GWEI_PER_ETH,
+                amount=config.MAX_DEPOSIT_AMOUNT,
                 timestamp=deposit_timestamp,
             ),
         )
