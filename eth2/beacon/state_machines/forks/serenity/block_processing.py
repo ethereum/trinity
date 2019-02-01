@@ -3,11 +3,23 @@ from eth_utils.toolz import (
 )
 
 from eth2._utils.tuple import update_tuple_item
+from eth2.beacon._utils.hash import hash_eth2
 
 from eth2.beacon.configs import BeaconConfig
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.eth1_data_vote import Eth1DataVote
+
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_randao_reveal,
+)
+
+from eth2.beacon.helpers import (
+    bitwise_xor,
+    get_beacon_proposer_index,
+    get_current_epoch,
+    get_randao_mix,
+)
 
 
 def process_eth1_data(state: BeaconState,
@@ -36,3 +48,40 @@ def process_eth1_data(state: BeaconState,
         )
 
     return state
+
+
+
+def process_randao(state: BeaconState,
+                   block: BaseBeaconBlock,
+                   config: BeaconConfig) -> BeaconState:
+    proposer_index = get_beacon_proposer_index(
+        state=state,
+        slot=state.slot,
+        epoch_length=config.EPOCH_LENGTH,
+        target_committee_size=config.TARGET_COMMITTEE_SIZE,
+        shard_count=config.SHARD_COUNT,
+    )
+    proposer = state.validator_registry[proposer_index]
+
+    epoch = get_current_epoch(state, config.EPOCH_LENGTH)
+
+    validate_randao_reveal(
+        randao_reveal=block.randao_reveal,
+        proposer_pubkey=proposer.pubkey,
+        epoch=epoch,
+        fork=state.fork,
+    )
+
+    randao_mix_index = epoch % config.LATEST_RANDAO_MIXES_LENGTH
+    new_randao_mix = bitwise_xor(
+        get_randao_mix(state, epoch, config.LATEST_RANDAO_MIXES_LENGTH),
+        hash_eth2(block.randao_reveal),
+    )
+
+    return state.copy(
+        latest_randao_mixes=update_tuple_item(
+            state.latest_randao_mixes,
+            randao_mix_index,
+            new_randao_mix,
+        ),
+    )
