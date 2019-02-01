@@ -37,11 +37,24 @@ from eth2.beacon.validation import (
 
 if TYPE_CHECKING:
     from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
-    from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
     from eth2.beacon.types.states import BeaconState  # noqa: F401
     from eth2.beacon.types.forks import Fork  # noqa: F401
     from eth2.beacon.types.slashable_attestations import SlashableAttestation  # noqa: F401
     from eth2.beacon.types.validator_records import ValidatorRecord  # noqa: F401
+
+
+def slot_to_epoch(slot: SlotNumber, epoch_length: int) -> EpochNumber:
+    """
+    Return the epoch number of the given ``slot``.
+    """
+    return slot // epoch_length
+
+
+def get_current_epoch(state: 'BeaconState', epoch_length: int) -> EpochNumber:
+    """
+    Return the current epoch of the given ``state``.
+    """
+    return slot_to_epoch(state.slot, epoch_length)
 
 
 #
