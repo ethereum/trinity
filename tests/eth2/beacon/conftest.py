@@ -201,7 +201,6 @@ def sample_deposit_input_params():
         'pubkey': 123,
         'withdrawal_credentials': b'\11' * 32,
         'randao_commitment': b'\11' * 32,
-        'custody_commitment': ZERO_HASH32,
         'proof_of_possession': (0, 0),
     }
 
@@ -302,9 +301,6 @@ def sample_validator_record_params():
         'penalized_epoch': FAR_FUTURE_EPOCH,
         'exit_count': 0,
         'status_flags': 0,
-        'custody_commitment': ZERO_HASH32,
-        'latest_custody_reseed_slot': 0,
-        'penultimate_custody_reseed_slot': 0,
     }
 
 

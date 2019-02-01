@@ -136,7 +136,6 @@ def get_initial_beacon_state(*,
             proof_of_possession=deposit.deposit_data.deposit_input.proof_of_possession,
             withdrawal_credentials=deposit.deposit_data.deposit_input.withdrawal_credentials,
             randao_commitment=deposit.deposit_data.deposit_input.randao_commitment,
-            custody_commitment=deposit.deposit_data.deposit_input.custody_commitment,
             epoch_length=epoch_length,
         )
 
