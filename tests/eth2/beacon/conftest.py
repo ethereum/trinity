@@ -289,9 +289,9 @@ def sample_shard_reassignment_record():
 @pytest.fixture
 def sample_slashable_attestation_params(sample_attestation_data_params):
     return {
-        'custody_bit_0_indices': (10, 11, 12, 15, 28),
-        'custody_bit_1_indices': (7, 8, 100, 131, 249),
+        'validator_indices': (10, 11, 12, 15, 28),
         'data': AttestationData(**sample_attestation_data_params),
+        'custody_bitfield': b'\00' * 4,
         'aggregate_signature': EMPTY_SIGNATURE,
     }
 

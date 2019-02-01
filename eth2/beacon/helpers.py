@@ -383,13 +383,13 @@ def _get_committee_for_shard(
 @to_tuple
 def get_attestation_participants(state: 'BeaconState',
                                  attestation_data: 'AttestationData',
-                                 aggregation_bitfield: Bitfield,
+                                 bitfield: Bitfield,
                                  genesis_epoch: EpochNumber,
                                  epoch_length: int,
                                  target_committee_size: int,
                                  shard_count: int) -> Iterable[ValidatorIndex]:
     """
-    Return the participant indices at for the ``attestation_data`` and ``aggregation_bitfield``.
+    Return the participant indices at for the ``attestation_data`` and ``bitfield``.
     """
     # Find the committee in the list with the desired shard
     crosslink_committees = get_crosslink_committees_at_slot(
@@ -421,15 +421,15 @@ def get_attestation_participants(state: 'BeaconState',
         )
 
     committee_size = len(committee)
-    if len(aggregation_bitfield) != get_bitfield_length(committee_size):
+    if not verify_bitfield(bitfield, committee_size):
         raise ValidationError(
             f"Invalid bitfield length,"
-            f"\texpected: {get_bitfield_length(committee_size)}, found: {len(aggregation_bitfield)}"
+            f"\texpected: {get_bitfield_length(committee_size)}, found: {len(bitfield)}"
         )
 
     # Find the participating attesters in the committee
     for bitfield_index, validator_index in enumerate(committee):
-        if has_voted(aggregation_bitfield, bitfield_index):
+        if has_voted(bitfield, bitfield_index):
             yield validator_index
 
 
@@ -618,9 +618,7 @@ def generate_aggregate_pubkeys(
     Compute the aggregate pubkey we expect based on
     the proof-of-custody indices found in the ``slashable_attestation``.
     """
-    custody_bit_0_indices = slashable_attestation.custody_bit_0_indices
-    custody_bit_1_indices = slashable_attestation.custody_bit_1_indices
-    all_indices = (custody_bit_0_indices, custody_bit_1_indices)
+    all_indices = slashable_attestation.custody_bit_indices
     get_pubkeys = functools.partial(get_pubkey_for_indices, validators)
     return map(
         bls.aggregate_pubkeys,
@@ -628,12 +626,18 @@ def generate_aggregate_pubkeys(
     )
 
 
-def verify_vote_count(slashable_attestation: 'SlashableAttestation',
-                      max_indices_per_slashable_vote: int) -> bool:
+def verify_bitfield(bitfield: bytes, committee_size: int) -> bool:
     """
-    Ensure we have no more than ``max_indices_per_slashable_vote`` in the ``slashable_attestation``.
+    Verify ``bitfield`` against the ``committee_size``.
     """
-    return slashable_attestation.vote_count <= max_indices_per_slashable_vote
+    if len(bitfield) != get_bitfield_length(committee_size):
+        return False
+
+    for i in range(committee_size + 1, committee_size - committee_size % 8 + 8):
+        if has_voted(bitfield, i):
+            return False
+
+    return True
 
 
 def verify_slashable_attestation_signature(state: 'BeaconState',
@@ -665,16 +669,47 @@ def verify_slashable_attestation_signature(state: 'BeaconState',
 def verify_slashable_attestation(state: 'BeaconState',
                                  slashable_attestation: 'SlashableAttestation',
                                  max_indices_per_slashable_vote: int,
-                                 epoch_length: int) -> bool:
+                                 epoch_length: int) -> None:
     """
+    Verify validity of ``slashable_attestation`` fields.
     Ensure that the ``slashable_attestation`` is properly assembled and contains the signature
     we expect from the validators we expect. Otherwise, return False as
     the ``slashable_attestation`` is invalid.
     """
-    return (
-        verify_vote_count(slashable_attestation, max_indices_per_slashable_vote) and
-        verify_slashable_attestation_signature(state, slashable_attestation, epoch_length)
-    )
+    # [TO BE REMOVED IN PHASE 1]
+    if not slashable_attestation.is_custody_bitfield_empty:
+        raise ValidationError(
+            "`slashable_attestation.custody_bitfield` is not empty."
+        )
+
+    if len(slashable_attestation.validator_indices) == 0:
+        raise ValidationError(
+            "`slashable_attestation.validator_indices` is empty."
+        )
+
+    if not slashable_attestation.is_validator_indices_ascending:
+        raise ValidationError(
+            "`slashable_attestation.validator_indices` "
+            f"({slashable_attestation.validator_indices}) "
+            "is not ordered in ascending."
+        )
+
+    if not slashable_attestation.is_correct_bitfield:
+        raise ValidationError(
+            "`slashable_attestation` is not in correct bitfield format"
+        )
+
+    if len(slashable_attestation.validator_indices) > max_indices_per_slashable_vote:
+        raise ValidationError(
+            f"`len(slashable_attestation.validator_indices)` "
+            f"({len(slashable_attestation.validator_indices)}) greater than"
+            f"MAX_INDICES_PER_SLASHABLE_VOTE ({max_indices_per_slashable_vote})"
+        )
+
+    if not verify_slashable_attestation_signature(state, slashable_attestation, epoch_length):
+        raise ValidationError(
+            f"slashable_attestation.signature error"
+        )
 
 
 def is_double_vote(attestation_data_1: 'AttestationData',

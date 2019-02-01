@@ -11,10 +11,10 @@ from eth2.beacon.types.slashable_attestations import (
 def test_defaults(sample_slashable_attestation_params):
     slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
 
-    assert (slashable_attestation.custody_bit_0_indices ==
-            sample_slashable_attestation_params['custody_bit_0_indices'])
-    assert (slashable_attestation.custody_bit_1_indices ==
-            sample_slashable_attestation_params['custody_bit_1_indices'])
+    assert (slashable_attestation.validator_indices ==
+            sample_slashable_attestation_params['validator_indices'])
+    assert (slashable_attestation.custody_bitfield ==
+            sample_slashable_attestation_params['custody_bitfield'])
     assert slashable_attestation.data == sample_slashable_attestation_params['data']
     assert (
         slashable_attestation.aggregate_signature ==
@@ -45,17 +45,17 @@ def test_root(sample_slashable_attestation_params):
     assert slashable_attestation.root == slashable_attestation.hash
 
 
-def test_vote_count(sample_slashable_attestation_params):
-    slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
+# def test_vote_count(sample_slashable_attestation_params):
+#     slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
 
-    key = "custody_bit_0_indices"
-    custody_bit_0_indices = sample_slashable_attestation_params[key]
-    key = "custody_bit_1_indices"
-    custody_bit_1_indices = sample_slashable_attestation_params[key]
+#     key = "custody_bit_0_indices"
+#     custody_bit_0_indices = sample_slashable_attestation_params[key]
+#     key = "custody_bit_1_indices"
+#     custody_bit_1_indices = sample_slashable_attestation_params[key]
 
-    assert slashable_attestation.vote_count == (
-        len(custody_bit_0_indices) + len(custody_bit_1_indices)
-    )
+#     assert slashable_attestation.vote_count == (
+#         len(custody_bit_0_indices) + len(custody_bit_1_indices)
+#     )
 
 
 def test_messages(sample_slashable_attestation_params):
