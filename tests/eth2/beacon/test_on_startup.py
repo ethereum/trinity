@@ -146,19 +146,11 @@ def test_get_initial_beacon_state(
 
     # Randomness and committees
     assert len(state.latest_randao_mixes) == latest_randao_mixes_length
-    assert len(state.latest_vdf_outputs) == latest_randao_mixes_length // epoch_length
-
-    # TODO: `persistent_committees`, `persistent_committee_reassignments` will be removed
-    assert len(state.persistent_committees) == 0
-    assert len(state.persistent_committee_reassignments) == 0
     assert state.previous_epoch_start_shard == genesis_start_shard
     assert state.current_epoch_start_shard == genesis_start_shard
     assert state.previous_calculation_epoch == genesis_epoch
     assert state.current_calculation_epoch == genesis_epoch
     assert state.previous_epoch_seed == ZERO_HASH32
-
-    # Custody challenges
-    assert len(state.custody_challenges) == 0
 
     # Finality
     assert state.previous_justified_epoch == genesis_epoch

@@ -120,9 +120,6 @@ def sample_beacon_block_body_params():
         'proposer_slashings': (),
         'attester_slashings': (),
         'attestations': (),
-        'custody_reseeds': (),
-        'custody_challenges': (),
-        'custody_responses': (),
         'deposits': (),
         'exits': (),
     }
@@ -153,16 +150,12 @@ def sample_beacon_state_params(sample_fork_params, sample_eth1_data_params):
         'validator_registry_update_epoch': 0,
         'validator_registry_exit_count': 10,
         'latest_randao_mixes': (),
-        'latest_vdf_outputs': (),
-        'persistent_committees': (),
-        'persistent_committee_reassignments': (),
         'previous_epoch_start_shard': 1,
         'current_epoch_start_shard': 2,
         'previous_calculation_epoch': 0,
         'current_calculation_epoch': 0,
         'previous_epoch_seed': b'\x77' * 32,
         'current_epoch_seed': b'\x88' * 32,
-        'custody_challenges': (),
         'previous_justified_epoch': 0,
         'justified_epoch': 0,
         'justification_bitfield': 0,
@@ -274,15 +267,6 @@ def sample_recent_proposer_record_params():
         'index': 10,
         'randao_commitment': b'\x43' * 32,
         'balance_delta': 3
-    }
-
-
-@pytest.fixture
-def sample_shard_reassignment_record():
-    return {
-        'validator_index': 10,
-        'shard': 11,
-        'slot': 12,
     }
 
 
