@@ -35,10 +35,7 @@ from p2p.constants import (
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
 from p2p.events import (
-    ConnectToNodeCommand,
     PeerCandidatesRequest,
-    PeerCountRequest,
-    PeerCountResponse,
     RandomBootnodeRequest,
 )
 from p2p.exceptions import (
@@ -85,7 +82,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                  max_peers: int = DEFAULT_MAX_PEERS,
                  peer_info: BasePeerInfo = NoopPeerInfo(),
                  token: CancelToken = None,
-                 event_bus: Endpoint = None
+                 event_bus: Endpoint = None,
                  ) -> None:
         super().__init__(token)
 
@@ -98,19 +95,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         self.connected_nodes: Dict[Node, BasePeer] = {}
         self._subscribers: List[PeerSubscriber] = []
         self.event_bus = event_bus
-
-    async def accept_connect_commands(self) -> None:
-        async for command in self.wait_iter(self.event_bus.stream(ConnectToNodeCommand)):
-            self.logger.debug('Received request to connect to %s', command.node)
-            self.run_task(self.connect_to_nodes(from_uris([command.node])))
-
-    async def handle_peer_count_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(PeerCountRequest)):
-                # We are listening for all `PeerCountRequest` events but we ensure to only send a
-                # `PeerCountResponse` to the callsite that made the request.  We do that by
-                # retrieving a `BroadcastConfig` from the request via the
-                # `event.broadcast_config()` API.
-                self.event_bus.broadcast(PeerCountResponse(len(self)), req.broadcast_config())
 
     async def maybe_connect_more_peers(self) -> None:
         while self.is_operational:
@@ -229,9 +213,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         # FIXME: PeerPool should probably no longer be a BaseService, but for now we're keeping it
         # so in order to ensure we cancel all peers when we terminate.
         if self.event_bus is not None:
-            self.run_daemon_task(self.handle_peer_count_requests())
             self.run_daemon_task(self.maybe_connect_more_peers())
-            self.run_daemon_task(self.accept_connect_commands())
+
         self.run_daemon_task(self._periodically_report_stats())
         await self.cancel_token.wait()
 
