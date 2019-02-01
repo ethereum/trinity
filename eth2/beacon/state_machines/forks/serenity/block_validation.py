@@ -33,12 +33,12 @@ from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.types.attestations import Attestation  # noqa: F401
 from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
 from eth2.beacon.types.proposal_signed_data import ProposalSignedData
+from eth2.beacon.types.forks import Fork
 from eth2.beacon.typing import (
     EpochNumber,
     ShardNumber,
     SlotNumber,
 )
-
 
 #
 # Slot validatation
@@ -322,4 +322,26 @@ def validate_attestation_aggregate_signature(state: BeaconState,
                 participant_indices,
                 domain,
             )
+        )
+
+
+def validate_randao_reveal(randao_reveal: bls.BLSSignature,
+                           proposer_pubkey: bls.BLSPubkey,
+                           epoch: EpochNumber,
+                           fork: Fork):
+    message = epoch.to_bytes(32, byteorder="big")
+    domain = get_domain(fork, epoch, SignatureDomain.DOMAIN_RANDAO)
+
+    is_randao_reveal_valid = bls.verify(
+        pubkey=proposer_pubkey,
+        message=message,
+        signature=randao_reveal,
+        domain=domain,
+    )
+
+    if not is_randao_reveal_valid:
+        raise ValidationError(
+            f"RANDAO reveal is invalid. "
+            f"reveal={randao_reveal}, proposer_pubkey={proposer_pubkey}, message={message}, "
+            f"domain={domain}"
         )
