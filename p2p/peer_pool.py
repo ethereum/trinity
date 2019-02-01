@@ -35,10 +35,7 @@ from p2p.constants import (
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
 from p2p.events import (
-    ConnectToNodeCommand,
     PeerCandidatesRequest,
-    PeerCountRequest,
-    PeerCountResponse,
     RandomBootnodeRequest,
 )
 from p2p.exceptions import (
@@ -60,6 +57,9 @@ from p2p.peer import (
     PeerMessage,
     PeerSubscriber,
 )
+from p2p.peer_pool_event_bus_api import (
+    BasePeerPoolEventBusAPI,
+)
 from p2p.p2p_proto import (
     DisconnectReason,
 )
@@ -80,7 +80,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                  context: BasePeerContext,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  token: CancelToken = None,
-                 event_bus: Endpoint = None
+                 event_bus: Endpoint = None,
                  ) -> None:
         super().__init__(token)
 
@@ -91,19 +91,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         self.connected_nodes: Dict[Node, BasePeer] = {}
         self._subscribers: List[PeerSubscriber] = []
         self.event_bus = event_bus
-
-    async def accept_connect_commands(self) -> None:
-        async for command in self.wait_iter(self.event_bus.stream(ConnectToNodeCommand)):
-            self.logger.debug('Received request to connect to %s', command.node)
-            self.run_task(self.connect_to_nodes(from_uris([command.node])))
-
-    async def handle_peer_count_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(PeerCountRequest)):
-                # We are listening for all `PeerCountRequest` events but we ensure to only send a
-                # `PeerCountResponse` to the callsite that made the request.  We do that by
-                # retrieving a `BroadcastConfig` from the request via the
-                # `event.broadcast_config()` API.
-                self.event_bus.broadcast(PeerCountResponse(len(self)), req.broadcast_config())
 
     async def maybe_connect_more_peers(self) -> None:
         while self.is_operational:
@@ -149,6 +136,10 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     @abstractmethod
     def peer_factory_class(self) -> Type[BasePeerFactory]:
         pass
+
+    @property
+    def event_bus_api_class(self) -> Type[BasePeerPoolEventBusAPI]:
+        return BasePeerPoolEventBusAPI
 
     def get_peer_factory(self) -> BasePeerFactory:
         return self.peer_factory_class(
@@ -222,9 +213,11 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         # FIXME: PeerPool should probably no longer be a BaseService, but for now we're keeping it
         # so in order to ensure we cancel all peers when we terminate.
         if self.event_bus is not None:
-            self.run_daemon_task(self.handle_peer_count_requests())
             self.run_daemon_task(self.maybe_connect_more_peers())
-            self.run_daemon_task(self.accept_connect_commands())
+
+            event_bus_api = self.event_bus_api_class(self.event_bus, self, self.cancel_token)
+            self.run_daemon_task(event_bus_api.run())
+
         self.run_daemon_task(self._periodically_report_stats())
         await self.cancel_token.wait()
 
