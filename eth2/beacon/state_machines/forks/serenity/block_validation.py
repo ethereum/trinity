@@ -328,9 +328,11 @@ def validate_attestation_aggregate_signature(state: BeaconState,
 def validate_randao_reveal(randao_reveal: bls.BLSSignature,
                            proposer_pubkey: bls.BLSPubkey,
                            epoch: EpochNumber,
-                           fork: Fork):
+                           fork: Fork) -> None:
     message = epoch.to_bytes(32, byteorder="big")
-    domain = get_domain(fork, epoch, SignatureDomain.DOMAIN_RANDAO)
+    # FIXME: remove this once get_comain is updated to accept epochs instead of slots
+    slot = SlotNumber(epoch)
+    domain = get_domain(fork, slot, SignatureDomain.DOMAIN_RANDAO)
 
     is_randao_reveal_valid = bls.verify(
         pubkey=proposer_pubkey,

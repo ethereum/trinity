@@ -47,7 +47,7 @@ def slot_to_epoch(slot: SlotNumber, epoch_length: int) -> EpochNumber:
     """
     Return the epoch number of the given ``slot``.
     """
-    return slot // epoch_length
+    return EpochNumber(slot // epoch_length)
 
 
 def get_current_epoch(state: 'BeaconState', epoch_length: int) -> EpochNumber:

@@ -50,6 +50,10 @@ def process_eth1_data(state: BeaconState,
     return state
 
 
+from eth2.beacon.typing import (
+    SlotNumber,
+)
+
 
 def process_randao(state: BeaconState,
                    block: BaseBeaconBlock,
@@ -73,8 +77,10 @@ def process_randao(state: BeaconState,
     )
 
     randao_mix_index = epoch % config.LATEST_RANDAO_MIXES_LENGTH
+    # FIXME: remove this once get_randao_mix is updated to accept epochs instead of slots
+    slot = SlotNumber(epoch)
     new_randao_mix = bitwise_xor(
-        get_randao_mix(state, epoch, config.LATEST_RANDAO_MIXES_LENGTH),
+        get_randao_mix(state, slot, config.LATEST_RANDAO_MIXES_LENGTH),
         hash_eth2(block.randao_reveal),
     )
 
