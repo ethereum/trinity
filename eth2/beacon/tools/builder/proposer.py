@@ -87,7 +87,7 @@ def create_block_on_state(
     )
 
     # Apply state transition to get state root
-    state, block = state_machine.import_block(block, is_proposer_mode=True)
+    state, block = state_machine.import_block(block, check_proposer_signature=True)
 
     # Sign
     empty_signature_block_root = block.block_without_signature_root
