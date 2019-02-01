@@ -45,19 +45,6 @@ def test_root(sample_slashable_attestation_params):
     assert slashable_attestation.root == slashable_attestation.hash
 
 
-# def test_vote_count(sample_slashable_attestation_params):
-#     slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
-
-#     key = "custody_bit_0_indices"
-#     custody_bit_0_indices = sample_slashable_attestation_params[key]
-#     key = "custody_bit_1_indices"
-#     custody_bit_1_indices = sample_slashable_attestation_params[key]
-
-#     assert slashable_attestation.vote_count == (
-#         len(custody_bit_0_indices) + len(custody_bit_1_indices)
-#     )
-
-
 def test_messages(sample_slashable_attestation_params):
     slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
 
