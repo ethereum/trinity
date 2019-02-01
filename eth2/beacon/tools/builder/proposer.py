@@ -37,23 +37,14 @@ from eth2.beacon.typing import (
     BLSPubkey,
     FromBlockParams,
     SlotNumber,
+    ValidatorIndex,
 )
 
 
-def create_block_on_state(
-        state: BeaconState,
-        config: BeaconConfig,
-        state_machine: BaseBeaconStateMachine,
-        block_class: BaseBeaconBlock,
-        parent_block: BaseBeaconBlock,
-        slot: SlotNumber,
-        validator_index: int,
-        privkey: int,
-        attestations: Sequence[Attestation]) -> BaseBeaconBlock:
-    """
-    Create a beacon block with the given parameters.
-    """
-    # Check proposer
+def validate_proposer_index(state: BeaconState,
+                            config: BeaconConfig,
+                            slot: SlotNumber,
+                            validator_index: ValidatorIndex):
     beacon_proposer_index = get_beacon_proposer_index(
         state.copy(
             slot=slot,
@@ -66,6 +57,26 @@ def create_block_on_state(
 
     if validator_index != beacon_proposer_index:
         raise ProposerIndexError
+
+
+def create_block_on_state(
+        *,
+        state: BeaconState,
+        config: BeaconConfig,
+        state_machine: BaseBeaconStateMachine,
+        block_class: BaseBeaconBlock,
+        parent_block: BaseBeaconBlock,
+        slot: SlotNumber,
+        validator_index: ValidatorIndex,
+        privkey: int,
+        attestations: Sequence[Attestation],
+        check_proposer_index: bool=True) -> BaseBeaconBlock:
+    """
+    Create a beacon block with the given parameters.
+    """
+    # Check proposer
+    if check_proposer_index:
+        validate_proposer_index(state, config, slot, validator_index)
 
     # Prepare block: slot and parent_root
     block = block_class.from_parent(
@@ -112,7 +123,8 @@ def create_block_on_state(
     return block
 
 
-def create_mock_block(state: BeaconState,
+def create_mock_block(*,
+                      state: BeaconState,
                       config: BeaconConfig,
                       state_machine: BaseBeaconStateMachine,
                       block_class: Type[BaseBeaconBlock],
@@ -138,15 +150,16 @@ def create_mock_block(state: BeaconState,
     proposer_privkey = keymap[proposer_pubkey]
 
     result_block = create_block_on_state(
-        state,
-        config,
-        state_machine,
-        block_class,
-        parent_block,
-        slot,
+        state=state,
+        config=config,
+        state_machine=state_machine,
+        block_class=block_class,
+        parent_block=parent_block,
+        slot=slot,
         validator_index=proposer_index,
         privkey=proposer_privkey,
         attestations=attestations,
+        check_proposer_index=False,
     )
 
     return result_block
