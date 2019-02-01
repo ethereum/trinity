@@ -53,6 +53,7 @@ from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
 from trinity.endpoint import TrinityEventBusEndpoint
 from trinity.protocol.common.context import ChainContext
 from trinity.protocol.common.peer import BasePeerPool
+from trinity.protocol.common.peer_pool_event_bus import BasePeerPoolEventBusRequestHandler
 from trinity.protocol.common.servers import BaseRequestServer
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.servers import ETHRequestServer
@@ -112,6 +113,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         # child services
         self.upnp_service = UPnPService(port, token=self.cancel_token)
         self.peer_pool = self._make_peer_pool()
+        self._peer_pool_request_handler = self._make_peer_pool_request_handler(self.peer_pool)
         self.request_server = self._make_request_server()
 
         if not bootstrap_nodes:
@@ -120,6 +122,14 @@ class BaseServer(BaseService, Generic[TPeerPool]):
     @abstractmethod
     def _make_peer_pool(self) -> TPeerPool:
         pass
+
+    def _make_peer_pool_request_handler(self,
+                                        peer_pool: TPeerPool) -> BasePeerPoolEventBusRequestHandler:
+        return BasePeerPoolEventBusRequestHandler(
+            self.event_bus,
+            peer_pool,
+            self.cancel_token
+        )
 
     @abstractmethod
     def _make_request_server(self) -> BaseRequestServer:
@@ -156,6 +166,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         self.logger.info('peers: max_peers=%s', self.max_peers)
 
         self.run_daemon(self.peer_pool)
+        self.run_daemon(self._peer_pool_request_handler)
         self.run_daemon(self.request_server)
 
         # UPNP service is still experimental and not essential, so we don't use run_daemon() for
