@@ -40,6 +40,7 @@ from eth2.beacon.typing import (
     SlotNumber,
 )
 
+
 #
 # Slot validatation
 #
