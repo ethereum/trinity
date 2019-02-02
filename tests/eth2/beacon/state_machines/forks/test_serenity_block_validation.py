@@ -131,10 +131,10 @@ def test_validate_proposer_signature(
 @pytest.mark.parametrize(
     ["is_valid", "epoch", "expected_epoch", "proposer_privkey", "expected_proposer_privkey"],
     (
-        (True, 0, 0, 0, 0),
+        (True, 0, 0, 1, 1),
         (True, 1, 1, 2, 2),
-        (False, 0, 1, 0, 0),
-        (False, 0, 0, 0, 1),
+        (False, 0, 1, 1, 1),
+        (False, 0, 0, 1, 2),
     )
 )
 def test_randao_reveal_validation(is_valid,
