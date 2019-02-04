@@ -19,7 +19,6 @@ from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.enums import SignatureDomain
 
 from eth2.beacon.helpers import (
-    get_current_epoch,
     get_domain,
 )
 
@@ -62,7 +61,7 @@ def test_randao_processing(sample_beacon_block_params,
         ),
     )
 
-    epoch = get_current_epoch(state, epoch_length=config.EPOCH_LENGTH)
+    epoch = state.current_epoch(config.EPOCH_LENGTH)
     slot = epoch * config.EPOCH_LENGTH
     message = epoch.to_bytes(32, byteorder="big")
     fork = Fork(**sample_fork_params)
@@ -104,7 +103,7 @@ def test_randao_processing_validates_randao_reveal(sample_beacon_block_params,
         ),
     )
 
-    epoch = get_current_epoch(state, epoch_length=config.EPOCH_LENGTH)
+    epoch = state.current_epoch(config.EPOCH_LENGTH)
     slot = epoch * config.EPOCH_LENGTH
     message = (epoch + 1).to_bytes(32, byteorder="big")
     fork = Fork(**sample_fork_params)

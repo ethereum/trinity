@@ -19,7 +19,6 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 
 from eth2.beacon.helpers import (
     get_beacon_proposer_index,
-    get_current_epoch,
     get_randao_mix,
 )
 
@@ -69,7 +68,7 @@ def process_randao(state: BeaconState,
     )
     proposer = state.validator_registry[proposer_index]
 
-    epoch = get_current_epoch(state, config.EPOCH_LENGTH)
+    epoch = state.current_epoch(config.EPOCH_LENGTH)
 
     validate_randao_reveal(
         randao_reveal=block.randao_reveal,
