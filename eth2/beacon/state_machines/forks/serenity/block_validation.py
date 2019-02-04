@@ -35,6 +35,8 @@ from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
 from eth2.beacon.types.proposal_signed_data import ProposalSignedData
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.typing import (
+    BLSPubkey,
+    BLSSignature,
     EpochNumber,
     ShardNumber,
     SlotNumber,
@@ -326,8 +328,8 @@ def validate_attestation_aggregate_signature(state: BeaconState,
         )
 
 
-def validate_randao_reveal(randao_reveal: bls.BLSSignature,
-                           proposer_pubkey: bls.BLSPubkey,
+def validate_randao_reveal(randao_reveal: BLSSignature,
+                           proposer_pubkey: BLSPubkey,
                            epoch: EpochNumber,
                            fork: Fork) -> None:
     message = epoch.to_bytes(32, byteorder="big")

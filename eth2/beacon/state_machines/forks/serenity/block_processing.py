@@ -3,6 +3,9 @@ from eth_utils.toolz import (
 )
 
 from eth2._utils.tuple import update_tuple_item
+from eth2._utils.numeric import (
+    bitwise_xor,
+)
 from eth2.beacon._utils.hash import hash_eth2
 
 from eth2.beacon.configs import BeaconConfig
@@ -15,7 +18,6 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 )
 
 from eth2.beacon.helpers import (
-    bitwise_xor,
     get_beacon_proposer_index,
     get_current_epoch,
     get_randao_mix,
