@@ -129,19 +129,21 @@ def test_validate_proposer_signature(
 
 
 @pytest.mark.parametrize(
-    ["is_valid", "epoch", "expected_epoch", "proposer_privkey", "expected_proposer_privkey"],
+    ["is_valid", "epoch", "expected_epoch", "proposer_key_index", "expected_proposer_key_index"],
     (
-        (True, 0, 0, 1, 1),
-        (True, 1, 1, 2, 2),
-        (False, 0, 1, 1, 1),
-        (False, 0, 0, 1, 2),
+        (True, 0, 0, 0, 0),
+        (True, 1, 1, 1, 1),
+        (False, 0, 1, 0, 0),
+        (False, 0, 0, 0, 1),
     )
 )
 def test_randao_reveal_validation(is_valid,
                                   epoch,
                                   expected_epoch,
-                                  proposer_privkey,
-                                  expected_proposer_privkey,
+                                  proposer_key_index,
+                                  expected_proposer_key_index,
+                                  privkeys,
+                                  pubkeys,
                                   sample_fork_params,
                                   config):
     message = epoch.to_bytes(32, byteorder="big")
@@ -149,9 +151,10 @@ def test_randao_reveal_validation(is_valid,
     fork = Fork(**sample_fork_params)
     domain = get_domain(fork, slot, SignatureDomain.DOMAIN_RANDAO)
 
+    proposer_privkey = privkeys[proposer_key_index]
     randao_reveal = bls.sign(message, proposer_privkey, domain)
 
-    expected_proposer_pubkey = bls.privtopub(expected_proposer_privkey)
+    expected_proposer_pubkey = pubkeys[expected_proposer_key_index]
 
     try:
         validate_randao_reveal(

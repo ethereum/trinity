@@ -6,6 +6,9 @@ from eth.constants import (
 from eth_utils import (
     ValidationError,
 )
+from eth_utils.toolz import (
+    first,
+)
 
 from eth2._utils import bls
 
@@ -43,9 +46,9 @@ from eth2.beacon.state_machines.forks.serenity.block_processing import (
 def test_randao_processing(sample_beacon_block_params,
                            sample_beacon_state_params,
                            sample_fork_params,
+                           keymap,
                            config):
-    proposer_privkey = 1
-    proposer_pubkey = bls.privtopub(proposer_privkey)
+    proposer_pubkey, proposer_privkey = first(keymap.items())
     state = SerenityBeaconState(**sample_beacon_state_params).copy(
         validator_registry=tuple(
             mock_validator_record(proposer_pubkey)
@@ -85,9 +88,9 @@ def test_randao_processing(sample_beacon_block_params,
 def test_randao_processing_validates_randao_reveal(sample_beacon_block_params,
                                                    sample_beacon_state_params,
                                                    sample_fork_params,
+                                                   keymap,
                                                    config):
-    proposer_privkey = 1
-    proposer_pubkey = bls.privtopub(proposer_privkey)
+    proposer_pubkey, proposer_privkey = first(keymap.items())
     state = SerenityBeaconState(**sample_beacon_state_params).copy(
         validator_registry=tuple(
             mock_validator_record(proposer_pubkey)
