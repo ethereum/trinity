@@ -633,9 +633,10 @@ def verify_bitfield(bitfield: bytes, committee_size: int) -> bool:
     if len(bitfield) != get_bitfield_length(committee_size):
         return False
 
-    for i in range(committee_size + 1, committee_size - committee_size % 8 + 8):
-        if has_voted(bitfield, i):
-            return False
+    if committee_size % 8 != 0:
+        for i in range(committee_size, committee_size - committee_size % 8 + 8):
+            if has_voted(bitfield, i):
+                return False
 
     return True
 
