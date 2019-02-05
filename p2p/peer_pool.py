@@ -3,6 +3,7 @@ from abc import (
 )
 import asyncio
 import operator
+from pathlib import Path
 from typing import (
     AsyncIterator,
     AsyncIterable,
@@ -27,6 +28,8 @@ from eth_utils.toolz import (
 from lahja import (
     Endpoint,
 )
+
+from eth.tools.logging import ExtendedDebugLogger
 
 from p2p.constants import (
     DEFAULT_MAX_PEERS,
@@ -68,6 +71,13 @@ from p2p.service import (
 )
 
 
+class PeerInfoPersistence:
+    def __init__(self, path: Path, logger: ExtendedDebugLogger):
+        self.path = path
+        self.logger = logger.getChild('PeerInfo')
+        self.logger.debug('Reading from %s', path)
+
+
 class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     """
     PeerPool maintains connections to up-to max_peers on a given network.
@@ -79,6 +89,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                  privkey: datatypes.PrivateKey,
                  context: BasePeerContext,
                  max_peers: int = DEFAULT_MAX_PEERS,
+                 nodedb_path: Path = None,
                  token: CancelToken = None,
                  event_bus: Endpoint = None
                  ) -> None:
@@ -87,6 +98,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         self.privkey = privkey
         self.max_peers = max_peers
         self.context = context
+
+        self.peer_info = PeerInfoPersistence(nodedb_path, self.logger)
 
         self.connected_nodes: Dict[Node, BasePeer] = {}
         self._subscribers: List[PeerSubscriber] = []

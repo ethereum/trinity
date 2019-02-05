@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import asyncio
 import logging
+from pathlib import Path
 import secrets
 from typing import (
     Generic,
@@ -85,6 +86,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
                  max_peers: int = DEFAULT_MAX_PEERS,
                  bootstrap_nodes: Tuple[Node, ...] = None,
                  preferred_nodes: Sequence[Node] = None,
+                 nodedb_path: Path = None,  # TODO: adding this breaks LightServer(...)
                  event_bus: Endpoint = None,
                  token: CancelToken = None,
                  ) -> None:
@@ -110,14 +112,14 @@ class BaseServer(BaseService, Generic[TPeerPool]):
 
         # child services
         self.upnp_service = UPnPService(port, token=self.cancel_token)
-        self.peer_pool = self._make_peer_pool()
+        self.peer_pool = self._make_peer_pool(nodedb_path)
         self.request_server = self._make_request_server()
 
         if not bootstrap_nodes:
             self.logger.warning("Running with no bootstrap nodes")
 
     @abstractmethod
-    def _make_peer_pool(self) -> TPeerPool:
+    def _make_peer_pool(self, nodedb_path: Path) -> TPeerPool:
         pass
 
     @abstractmethod
@@ -275,7 +277,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
 
 
 class FullServer(BaseServer[ETHPeerPool]):
-    def _make_peer_pool(self) -> ETHPeerPool:
+    def _make_peer_pool(self, nodedb_path: Path) -> ETHPeerPool:
         context = ChainContext(
             headerdb=self.headerdb,
             network_id=self.network_id,
@@ -285,6 +287,7 @@ class FullServer(BaseServer[ETHPeerPool]):
             privkey=self.privkey,
             max_peers=self.max_peers,
             context=context,
+            nodedb_path=nodedb_path,
             token=self.cancel_token,
             event_bus=self.event_bus
         )
@@ -298,7 +301,7 @@ class FullServer(BaseServer[ETHPeerPool]):
 
 
 class LightServer(BaseServer[LESPeerPool]):
-    def _make_peer_pool(self) -> LESPeerPool:
+    def _make_peer_pool(self, nodedb_path: Path) -> LESPeerPool:
         context = ChainContext(
             headerdb=self.headerdb,
             network_id=self.network_id,

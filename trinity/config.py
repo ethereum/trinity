@@ -432,6 +432,10 @@ class TrinityConfig:
                 f"`PrivateKey` instance: got {type(self._nodekey)}"
             )
 
+    @property
+    def nodedb_path(self) -> Path:
+        return self.with_app_suffix(self.data_dir / "nodedb")
+
     @contextmanager
     def process_id_file(self, process_name: str):  # type: ignore
         with PidFile(process_name, self.pid_dir):

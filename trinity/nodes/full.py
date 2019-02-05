@@ -22,6 +22,7 @@ class FullNode(Node):
         self._node_key = trinity_config.nodekey
         self._node_port = trinity_config.port
         self._max_peers = trinity_config.max_peers
+        self._nodedb_path = trinity_config.nodedb_path
 
     @property
     def chain_class(self) -> Type[FullChain]:
@@ -44,6 +45,7 @@ class FullNode(Node):
                 max_peers=self._max_peers,
                 bootstrap_nodes=self._bootstrap_nodes,
                 preferred_nodes=self._preferred_nodes,
+                nodedb_path=self._nodedb_path,
                 token=self.cancel_token,
                 event_bus=self.event_bus,
             )
