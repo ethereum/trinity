@@ -1131,6 +1131,36 @@ def _correct_slashable_attestation_params(
     return valid_params
 
 
+def _corrupt_custody_bitfield_not_empty(params):
+    validator_indices_length = len(params["validator_indices"])
+    corrupt_custody_bitfield = get_empty_bitfield(validator_indices_length)
+    corrupt_custody_bitfield = set_voted(corrupt_custody_bitfield, 0)
+    return assoc(params, "custody_bitfield", corrupt_custody_bitfield)
+
+
+def _corrupt_validator_indices(params):
+    corrupt_validator_indices = (
+        params["validator_indices"][1],
+        params["validator_indices"][0],
+    ) + tuple(params["validator_indices"][1:])
+
+    return assoc(params, "validator_indices", corrupt_validator_indices)
+
+
+def _corrupt_custody_bitfield_invalid(params):
+    validator_indices_length = len(params["validator_indices"])
+    corrupt_custody_bitfield = get_empty_bitfield(validator_indices_length + 8)
+    return assoc(params, "custody_bitfield", corrupt_custody_bitfield)
+
+
+def _corrupt_validator_indices_max(max_indices_per_slashable_vote, params):
+    corrupt_validator_indices = [
+        i
+        for i in range(max_indices_per_slashable_vote + 1)
+    ]
+    return assoc(params, "validator_indices", corrupt_validator_indices)
+
+
 def _corrupt_signature(epoch_length, params, fork):
     message = bytes.fromhex("deadbeefcafe")
     privkey = 42
@@ -1226,10 +1256,15 @@ def _run_verify_slashable_vote(
         'param_mapper',
         'should_succeed',
         'needs_fork',
+        'is_testing_max_length',
     ),
     [
-        (lambda params: params, True, False),
-        (_corrupt_signature, False, True),
+        (lambda params: params, True, False, False),
+        (_corrupt_custody_bitfield_not_empty, False, False, False),
+        (_corrupt_validator_indices, False, False, False),
+        (_corrupt_custody_bitfield_invalid, False, False, False),
+        (_corrupt_validator_indices_max, False, False, True),
+        (_corrupt_signature, False, True, False),
     ],
 )
 def test_validate_slashable_attestation(
@@ -1238,6 +1273,7 @@ def test_validate_slashable_attestation(
         param_mapper,
         should_succeed,
         needs_fork,
+        is_testing_max_length,
         privkeys,
         sample_beacon_state_params,
         activated_genesis_validators,
@@ -1265,6 +1301,9 @@ def test_validate_slashable_attestation(
     )
     if needs_fork:
         params = param_mapper(epoch_length, params, state.fork)
+    elif is_testing_max_length:
+        params = param_mapper(max_indices_per_slashable_vote, params)
+
     else:
         params = param_mapper(params)
     _run_verify_slashable_vote(

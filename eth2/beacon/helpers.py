@@ -668,9 +668,9 @@ def verify_slashable_attestation_signature(state: 'BeaconState',
 
 
 def validate_slashable_attestation(state: 'BeaconState',
-                                 slashable_attestation: 'SlashableAttestation',
-                                 max_indices_per_slashable_vote: int,
-                                 epoch_length: int) -> None:
+                                   slashable_attestation: 'SlashableAttestation',
+                                   max_indices_per_slashable_vote: int,
+                                   epoch_length: int) -> None:
     """
     Verify validity of ``slashable_attestation`` fields.
     Ensure that the ``slashable_attestation`` is properly assembled and contains the signature
