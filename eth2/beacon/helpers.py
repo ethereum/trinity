@@ -17,7 +17,6 @@ from eth_typing import (
 )
 
 from eth2._utils.bitfield import (
-    get_bitfield_length,
     has_voted,
 )
 import eth2._utils.bls as bls
@@ -48,6 +47,7 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 from eth2.beacon.validation import (
+    validate_bitfield,
     validate_epoch_for_active_index_root,
     validate_epoch_for_active_randao_mix,
     validate_epoch_for_current_epoch,
@@ -420,12 +420,7 @@ def get_attestation_participants(state: 'BeaconState',
             )
         )
 
-    committee_size = len(committee)
-    if not verify_bitfield(bitfield, committee_size):
-        raise ValidationError(
-            f"Invalid bitfield length,"
-            f"\texpected: {get_bitfield_length(committee_size)}, found: {len(bitfield)}"
-        )
+    validate_bitfield(bitfield, len(committee))
 
     # Find the participating attesters in the committee
     for bitfield_index, validator_index in enumerate(committee):
@@ -626,21 +621,6 @@ def generate_aggregate_pubkeys(
     )
 
 
-def verify_bitfield(bitfield: bytes, committee_size: int) -> bool:
-    """
-    Verify ``bitfield`` against the ``committee_size``.
-    """
-    if len(bitfield) != get_bitfield_length(committee_size):
-        return False
-
-    if committee_size % 8 != 0:
-        for i in range(committee_size, committee_size - committee_size % 8 + 8):
-            if has_voted(bitfield, i):
-                return False
-
-    return True
-
-
 def verify_slashable_attestation_signature(state: 'BeaconState',
                                            slashable_attestation: 'SlashableAttestation',
                                            epoch_length: int) -> bool:
@@ -695,10 +675,10 @@ def validate_slashable_attestation(state: 'BeaconState',
             "is not ordered in ascending."
         )
 
-    if not slashable_attestation.is_correct_bitfield:
-        raise ValidationError(
-            "`slashable_attestation` is not in correct bitfield format"
-        )
+    validate_bitfield(
+        slashable_attestation.custody_bitfield,
+        len(slashable_attestation.validator_indices),
+    )
 
     if len(slashable_attestation.validator_indices) > max_indices_per_slashable_vote:
         raise ValidationError(

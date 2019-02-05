@@ -23,9 +23,6 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 from eth2.beacon.constants import EMPTY_SIGNATURE
-from eth2.beacon.helpers import (
-    verify_bitfield,
-)
 
 from .attestation_data import AttestationData
 from .attestation_data_and_custody_bits import AttestationDataAndCustodyBit
@@ -75,10 +72,6 @@ class SlashableAttestation(rlp.Serializable):
     @property
     def is_custody_bitfield_empty(self) -> bool:
         return self.custody_bitfield == b'\x00' * len(self.custody_bitfield)
-
-    @property
-    def is_correct_bitfield(self) -> bool:
-        return verify_bitfield(self.custody_bitfield, len(self.validator_indices))
 
     @property
     def is_validator_indices_ascending(self) -> bool:

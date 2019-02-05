@@ -69,28 +69,6 @@ def test_is_custody_bitfield_empty(sample_slashable_attestation_params,
 @pytest.mark.parametrize(
     (
         'validator_indices',
-        'custody_bitfield',
-        'is_correct_bitfield'
-    ),
-    [
-        ((0, 1, 2), b'\x00', True),
-        ((0, 1, 2), b'\x00\x00', False),
-    ],
-)
-def test_is_correct_bitfield(sample_slashable_attestation_params,
-                             validator_indices,
-                             custody_bitfield,
-                             is_correct_bitfield):
-    slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params).copy(
-        validator_indices=validator_indices,
-        custody_bitfield=custody_bitfield,
-    )
-    assert slashable_attestation.is_correct_bitfield == is_correct_bitfield
-
-
-@pytest.mark.parametrize(
-    (
-        'validator_indices',
         'is_validator_indices_ascending'
     ),
     [
