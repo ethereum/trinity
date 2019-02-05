@@ -667,7 +667,7 @@ def verify_slashable_attestation_signature(state: 'BeaconState',
     )
 
 
-def verify_slashable_attestation(state: 'BeaconState',
+def validate_slashable_attestation(state: 'BeaconState',
                                  slashable_attestation: 'SlashableAttestation',
                                  max_indices_per_slashable_vote: int,
                                  epoch_length: int) -> None:

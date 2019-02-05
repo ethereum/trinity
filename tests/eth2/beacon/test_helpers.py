@@ -76,8 +76,8 @@ from eth2.beacon.helpers import (
     is_double_vote,
     is_surround_vote,
     slot_to_epoch,
+    validate_slashable_attestation,
     verify_slashable_attestation_signature,
-    verify_slashable_attestation,
 )
 import eth2._utils.bls as bls
 
@@ -1202,10 +1202,15 @@ def _run_verify_slashable_vote(
         should_succeed):
     votes = SlashableAttestation(**params)
     if should_succeed:
-        verify_slashable_attestation(state, votes, max_indices_per_slashable_vote, epoch_length)
+        validate_slashable_attestation(state, votes, max_indices_per_slashable_vote, epoch_length)
     else:
         with pytest.raises(ValidationError):
-            verify_slashable_attestation(state, votes, max_indices_per_slashable_vote, epoch_length)
+            validate_slashable_attestation(
+                state,
+                votes,
+                max_indices_per_slashable_vote,
+                epoch_length,
+            )
 
 
 @pytest.mark.parametrize(
@@ -1227,7 +1232,7 @@ def _run_verify_slashable_vote(
         (_corrupt_signature, False, True),
     ],
 )
-def test_verify_slashable_attestation(
+def test_validate_slashable_attestation(
         epoch_length,
         num_validators,
         param_mapper,
