@@ -1041,7 +1041,7 @@ def _list_and_index(data, max_size=None, elements=st.integers()):
     """
     Hypothesis helper function cribbed from their docs on @composite
     """
-    xs = data.draw(st.lists(elements, max_size=max_size))
+    xs = data.draw(st.lists(elements, max_size=max_size, unique=True))
     i = data.draw(st.integers(min_value=0, max_value=max(len(xs) - 1, 0)))
     return (xs, i)
 
@@ -1071,6 +1071,9 @@ def test_generate_aggregate_pubkeys(activated_genesis_validators,
 
     slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
     custody_bit_0_indices, custody_bit_1_indices = slashable_attestation.custody_bit_indices
+    assert len(
+        set(custody_bit_0_indices).intersection(set(custody_bit_1_indices))
+    ) == 0
 
     keys = generate_aggregate_pubkeys(activated_genesis_validators, slashable_attestation)
     assert len(keys) == 2
@@ -1123,7 +1126,6 @@ def _correct_slashable_attestation_params(
     valid_params["validator_indices"] = validator_indices
     valid_params["custody_bitfield"] = get_empty_bitfield(len(validator_indices))
 
-    signatures = signatures
     aggregate_signature = bls.aggregate_signatures(signatures)
 
     valid_params["aggregate_signature"] = aggregate_signature
