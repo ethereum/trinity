@@ -52,27 +52,31 @@ from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validator_records import ValidatorRecord
+from eth2.beacon.committee_helpers import (
+    get_beacon_proposer_index,
+    get_current_epoch_committee_count,
+    get_crosslink_committees_at_slot,
+    get_epoch_committee_count,
+    get_shuffling,
+    get_previous_epoch_committee_count,
+)
+from eth2.beacon.epoch_processing_helpers import (
+    get_attesting_validator_indices,
+    get_attestation_participants,
+    get_current_epoch_attestations,
+    get_previous_epoch_attestations,
+    get_winning_root,
+)
 from eth2.beacon.helpers import (
     _get_block_root,
     generate_aggregate_pubkeys,
     generate_seed,
     get_active_validator_indices,
-    get_attesting_validator_indices,
-    get_attestation_participants,
-    get_beacon_proposer_index,
-    get_epoch_committee_count,
-    get_crosslink_committees_at_slot,
-    get_current_epoch_committee_count,
-    get_current_epoch_attestations,
     get_domain,
     get_effective_balance,
     get_entry_exit_effect_epoch,
     get_fork_version,
-    get_previous_epoch_attestations,
-    get_previous_epoch_committee_count,
     get_pubkey_for_indices,
-    get_winning_root,
-    get_shuffling,
     is_double_vote,
     is_surround_vote,
     slot_to_epoch,
@@ -294,7 +298,7 @@ def test_get_prev_or_cur_epoch_committee_count(
         current_calculation_epoch,
         get_prev_or_cur_epoch_committee_count,
         delayed_activation_epoch):
-    from eth2.beacon import helpers
+    from eth2.beacon import committee_helpers
 
     def mock_get_epoch_committee_count(
             active_validator_count,
@@ -304,7 +308,7 @@ def test_get_prev_or_cur_epoch_committee_count(
         return active_validator_count // shard_count
 
     monkeypatch.setattr(
-        helpers,
+        committee_helpers,
         'get_epoch_committee_count',
         mock_get_epoch_committee_count
     )
@@ -430,7 +434,7 @@ def test_get_beacon_proposer_index(
         target_committee_size,
         shard_count):
 
-    from eth2.beacon import helpers
+    from eth2.beacon import committee_helpers
 
     def mock_get_crosslink_committees_at_slot(state,
                                               slot,
@@ -443,7 +447,7 @@ def test_get_beacon_proposer_index(
         )
 
     monkeypatch.setattr(
-        helpers,
+        committee_helpers,
         'get_crosslink_committees_at_slot',
         mock_get_crosslink_committees_at_slot
     )
@@ -550,7 +554,7 @@ def test_get_attestation_participants(
         sample_attestation_data_params):
     shard = 1
 
-    from eth2.beacon import helpers
+    from eth2.beacon import committee_helpers
 
     def mock_get_crosslink_committees_at_slot(state,
                                               slot,
@@ -563,7 +567,7 @@ def test_get_attestation_participants(
         )
 
     monkeypatch.setattr(
-        helpers,
+        committee_helpers,
         'get_crosslink_committees_at_slot',
         mock_get_crosslink_committees_at_slot
     )
@@ -624,7 +628,7 @@ def test_get_attesting_validator_indices(
     shard = 1
     committee = tuple([i for i in range(target_committee_size)])
 
-    from eth2.beacon import helpers
+    from eth2.beacon import committee_helpers
 
     def mock_get_crosslink_committees_at_slot(state,
                                               slot,
@@ -637,7 +641,7 @@ def test_get_attesting_validator_indices(
         )
 
     monkeypatch.setattr(
-        helpers,
+        committee_helpers,
         'get_crosslink_committees_at_slot',
         mock_get_crosslink_committees_at_slot
     )
@@ -814,7 +818,7 @@ def test_get_winning_root(
     shard = 1
     committee = tuple([i for i in range(target_committee_size)])
 
-    from eth2.beacon import helpers
+    from eth2.beacon import committee_helpers
 
     def mock_get_crosslink_committees_at_slot(state,
                                               slot,
@@ -827,7 +831,7 @@ def test_get_winning_root(
         )
 
     monkeypatch.setattr(
-        helpers,
+        committee_helpers,
         'get_crosslink_committees_at_slot',
         mock_get_crosslink_committees_at_slot
     )
