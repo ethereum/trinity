@@ -370,7 +370,7 @@ class BasePeer(BaseService):
             try:
                 cmd, msg = await self.read_msg()
             except (PeerConnectionLost, TimeoutError) as err:
-                self.logger.debug(
+                self.logger.warning(
                     "%s stopped responding (%r), disconnecting", self.remote, err)
                 return
             except DecryptionError as err:

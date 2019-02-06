@@ -4,6 +4,8 @@ from abc import (
 import asyncio
 import operator
 from pathlib import Path
+import time
+import toml
 from typing import (
     AsyncIterator,
     AsyncIterable,
@@ -50,6 +52,8 @@ from p2p.exceptions import (
     MalformedMessage,
     PeerConnectionLost,
     UnreachablePeer,
+    WrongNetworkFailure,
+    WrongGenesisFailure,
 )
 from p2p.kademlia import (
     from_uris,
@@ -73,9 +77,136 @@ from p2p.service import (
 
 class PeerInfoPersistence:
     def __init__(self, path: Path, logger: ExtendedDebugLogger):
+        # TODO: implement some kind of exponential backoff?
         self.path = path
         self.logger = logger.getChild('PeerInfo')
         self.logger.debug('Reading from %s', path)
+
+    def _load(self):
+        # TODO: Use aiofiles?
+        try:
+            with open(self.path, 'r') as config_file:
+                return toml.load(config_file)
+        except FileNotFoundError:
+            return dict()
+
+    def _write(self, contents):
+        with open(self.path, 'w') as config_file:
+            toml.dump(contents, config_file)
+
+    def too_many_peers(self, remote: Node) -> None:
+        self._fail(
+            remote,
+            timeout=60,  # try again in a minute
+            reason='too_many_peers',
+        )
+
+    def unreachable_peer(self, remote: Node) -> None:
+        self._fail(
+            remote,
+            timeout=60 * 10,  # try again in 10 minutes
+            reason='UnreachablePeer',
+        )
+
+    def wrong_network_failure(self, remote: Node, failure: WrongNetworkFailure):
+        self._fail(
+            remote,
+            timeout=60 * 60 * 24,  # re-attempt once a day
+            reason='WrongNetwork',
+            network=failure.network,
+        )
+
+    def wrong_genesis_failure(self, remote: Node, failure: WrongGenesisFailure):
+        self._fail(
+            remote,
+            timeout=60 * 60 * 24,  # re-attempt once a day
+            reason='WrongGenesis',
+            genesis_hash=failure.genesis,
+        )
+
+    def handshake_failure(self, remote: Node, failure: HandshakeFailure):
+        self._fail(
+            remote,
+            timeout=60 * 10,  # try again in 10 minutes
+            reason='HandshakeFailure',
+            messsage=str(failure),
+        )
+
+    def _fail(self, remote: Node, *, timeout: int, reason: str, **kwargs):
+        self.logger.info("Recording %s for %s", reason, remote)
+        contents = self._load()
+        key = remote.uri()
+        if key in contents:
+            error_count = contents[key].get('consecutive-error-count', 0) + 1
+            contents[key].update({
+                'consecutive-error-count': error_count,
+                'until': int(time.time()) + timeout*error_count,
+                'reason': reason,
+                **kwargs
+            })
+            self.logger.info(
+                "%s failed again with reason: %s", remote, reason
+            )
+            self._write(contents)
+            return
+        contents[key] = {
+            'status': 'do-not-use',
+            'until': int(time.time()) + timeout,
+            'reason': reason,
+            'consecutive-error-count': 1,
+            **kwargs
+        }
+        self._write(contents)
+
+    def can_connect_to(self, remote: Node) -> bool:
+        contents = self._load()
+        key = remote.uri()
+        if key not in contents:
+            self.logger.debug("Can connect to %s", remote)
+            return True
+        node = contents[key]
+        if node['status'] == 'preferred':
+            self.logger.info("%s is a preferred node because %s", remote, node['reason'])
+            return True
+        if node['status'] == 'do-not-use':
+            if time.time() < node['until']:
+                self.logger.info("Cannot connect to %s because: %s", remote, node['reason'])
+                return False
+
+            self.logger.info("Reattempting failed node: %s", remote)
+            return True
+        assert False
+
+    def connect_success(self, remote: Node) -> None:
+        "Record a successful connection to this node"
+        contents = self._load()
+        key = remote.uri()
+        if key not in contents:
+            self.logger.info("Successful connection with %s", remote)
+            contents[key] = {
+                'status': 'preferred',
+                'when': int(time.time()),
+                'reason': 'successful-connection',
+            }
+            self._write(contents)
+            return
+
+        self.logger.info("Successful connection with %s: %s", remote, contents[key])
+        contents[key].update({
+            'status': 'preferred',
+            'consecutive-error-count': 0,
+            'when': int(time.time()),
+            'reason': 'successful-connection',
+        })
+        self._write(contents)
+
+    def get_preferred_peers(self) -> Iterator[Node]:
+        contents = self._load()
+        return list(
+            Node.from_uri(key)
+            for key, value in contents.items()
+            if value['status'] == 'preferred'
+        )
 
 
 class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
@@ -119,6 +250,11 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                 self.event_bus.broadcast(PeerCountResponse(len(self)), req.broadcast_config())
 
     async def maybe_connect_more_peers(self) -> None:
+        preferred_nodes = self.peer_info.get_preferred_peers()
+        if len(preferred_nodes):
+            self.logger.debug("Connecting to known-good nodes (%s)", preferred_nodes)
+            await self.connect_to_nodes(preferred_nodes)
+
         while self.is_operational:
             await self.sleep(DISOVERY_INTERVAL)
 
@@ -152,7 +288,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                         )
                         continue
 
-                self.logger.debug2("Received candidates to connect to (%s)", response.candidates)
+                self.logger.debug("Received candidates to connect to (%s)", response.candidates)
                 await self.connect_to_nodes(from_uris(response.candidates))
 
     def __len__(self) -> int:
@@ -222,8 +358,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         Appart from adding it to our list of connected nodes and adding each of our subscriber's
         to the peer, we also add the given messages to our subscriber's queues.
         """
-        self.logger.info('Adding %s to pool', peer)
         self.connected_nodes[peer.remote] = peer
+        self.logger.warning(
+            'Adding %s to pool. Have %s peers', peer, len(self.connected_nodes)
+        )
+        # TODO: I think peer_info should only be called if this was an outgoing connection
+        self.peer_info.connect_success(peer.remote)
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
             subscriber.register_peer(peer)
@@ -259,6 +399,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         if remote in self.connected_nodes:
             self.logger.debug("Skipping %s; already connected to it", remote)
             return None
+        if not self.peer_info.can_connect_to(remote):
+            return None
         expected_exceptions = (
             HandshakeFailure,
             PeerConnectionLost,
@@ -287,17 +429,61 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             self.logger.error('Got malformed response from %r during handshake', remote)
             # dump the full stacktrace in the debug logs
             self.logger.debug('Got malformed response from %r', remote, exc_info=True)
+        except WrongNetworkFailure as e:
+            self.peer_info.wrong_network_failure(remote, e)
+        except WrongGenesisFailure as e:
+            self.peer_info.wrong_genesis_failure(remote, e)
+        except HandshakeFailure as e:
+            if 'too_many_peers' in repr(e):
+                # TODO: this should become a separate exception?
+                self.peer_info.too_many_peers(remote)
+            else:
+                self.peer_info.handshake_failure(remote, e)
+                self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
+        except UnreachablePeer as e:
+            self.peer_info.unreachable_peer(remote)
         except expected_exceptions as e:
+            # TODO: should TimeoutError also be added to peer_info?
             self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
         except Exception:
             self.logger.exception("Unexpected error during auth/p2p handshake with %r", remote)
         return None
 
     async def connect_to_nodes(self, nodes: Iterator[Node]) -> None:
-        for node in nodes:
+        # To save on resources only attempt to connect to a few nodes at a time
+        max_connect_concurrency = 10
+
+        # TODO: turn this into a method on BaseService / CancelToken
+        # TODO: this spams the log with unretrieved exceptions when we cancel
+        async def wait_first(tasks: set):
+            # TODO: we're turning a future which was turned into a coro into a future
+            token_wait = asyncio.create_task(self.cancel_token.wait())
+            try:
+                done, remaining = await asyncio.wait(
+                    tasks.union({token_wait}),
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            except asyncio.futures.CancelledError:
+                for task in tasks:
+                    task.cancel()
+                raise
+            token_wait.cancel()
+            return done, remaining.difference({token_wait})
+
+        async def bounded_wait(coros, concurrency: int):
+            tasks = set()
+            while coros or tasks:
+                additional_tasks_required = concurrency - len(tasks)
+                new_tasks, coros = (
+                    coros[:additional_tasks_required], coros[additional_tasks_required:]
+                )
+                tasks = tasks.union(asyncio.create_task(coro) for coro in new_tasks)
+                #_, tasks = await wait_first(tasks)
+                _, tasks = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+
+        async def connect(node):
             if self.is_full or not self.is_operational:
                 return
-
             # TODO: Consider changing connect() to raise an exception instead of returning None,
             # as discussed in
             # https://github.com/ethereum/py-evm/pull/139#discussion_r152067425
@@ -305,14 +491,20 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             if peer is not None:
                 await self.start_peer(peer)
 
+        coros = [connect(node) for node in nodes]
+        await bounded_wait(coros, concurrency=max_connect_concurrency)
+
     def _peer_finished(self, peer: BaseService) -> None:
         """Remove the given peer from our list of connected nodes.
         This is passed as a callback to be called when a peer finishes.
         """
         peer = cast(BasePeer, peer)
         if peer.remote in self.connected_nodes:
-            self.logger.info("%s finished, removing from pool", peer)
             self.connected_nodes.pop(peer.remote)
+            self.logger.warning(
+                "%s finished, removing from pool. Have %s peers",
+                peer, len(self.connected_nodes),
+            )
         else:
             self.logger.warning(
                 "%s finished but was not found in connected_nodes (%s)", peer, self.connected_nodes)

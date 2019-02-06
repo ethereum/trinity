@@ -31,6 +31,18 @@ class HandshakeFailure(BaseP2PError):
     pass
 
 
+class WrongNetworkFailure(HandshakeFailure):
+    def __init__(self, message, network):
+        super().__init__(message)
+        self.network = network
+
+
+class WrongGenesisFailure(HandshakeFailure):
+    def __init__(self, message, genesis):
+        super().__init__(message)
+        self.genesis = genesis
+
+
 class MalformedMessage(BaseP2PError):
     """
     Raised when a p2p command is received with a malformed message
