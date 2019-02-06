@@ -4,6 +4,7 @@ from abc import (
 import asyncio
 import operator
 from pathlib import Path
+import sqlite3
 import time
 import toml
 from typing import (
@@ -82,17 +83,22 @@ class PeerInfoPersistence:
         self.logger = logger.getChild('PeerInfo')
         self.logger.debug('Reading from %s', path)
 
-    def _load(self):
-        # TODO: Use aiofiles?
-        try:
-            with open(self.path, 'r') as config_file:
-                return toml.load(config_file)
-        except FileNotFoundError:
-            return dict()
+        # TODO: aiosqlite
+        self.db = sqlite3.connect(self.path)
+        self.db.row_factory = sqlite3.Row
+        self._setup_schema()
 
-    def _write(self, contents):
-        with open(self.path, 'w') as config_file:
-            toml.dump(contents, config_file)
+    def _setup_schema(self) -> None:
+        # TODO: add some scripts to scripts/ to make inspecting this db easier
+        cur = self.db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        if len(cur.fetchall()):
+            self.logger.debug('database already existed')
+            return
+        self.logger.debug('creating tables')
+        with self.db:
+            self.db.execute('create table bad_nodes (enode, until, reason, error_count, kwargs)')
+            self.db.execute('create table good_nodes (enode)')
+            self.db.execute('create table events (enode, event, kwargs)')
 
     def too_many_peers(self, remote: Node) -> None:
         self._fail(
@@ -134,51 +140,45 @@ class PeerInfoPersistence:
 
     def _fail(self, remote: Node, *, timeout: int, reason: str, **kwargs):
         self.logger.info("Recording %s for %s", reason, remote)
-        contents = self._load()
-        key = remote.uri()
-        if key in contents:
-            error_count = contents[key].get('consecutive-error-count', 0) + 1
-            contents[key].update({
-                'consecutive-error-count': error_count,
-                'until': int(time.time()) + timeout*error_count,
-                'reason': reason,
-                **kwargs
-            })
+        enode = remote.uri()
+        cursor = self.db.execute('SELECT * from bad_nodes WHERE enode = ?', (enode,))
+        row = cursor.fetchone()
+        if row:
+            error_count = row['error_count'] + 1
+            self.db.execute(
+                'UPDATE bad_nodes SET until = ?, reason = ?, error_count = ? WHERE enode = ?',
+                (int(time.time()) + timeout*error_count, reason, error_count, enode),
+            )
+            self.db.commit()
             self.logger.info(
                 "%s failed again with reason: %s", remote, reason
             )
-            self._write(contents)
             return
-        contents[key] = {
-            'status': 'do-not-use',
-            'until': int(time.time()) + timeout,
-            'reason': reason,
-            'consecutive-error-count': 1,
-            **kwargs
-        }
-        self._write(contents)
+        with self.db:
+            self.db.execute(
+                'INSERT INTO bad_nodes VALUES (?, ?, ?, ?, ?)',
+                (enode, int(time.time()) + timeout, reason, 1, ""),
+            )
 
     def can_connect_to(self, remote: Node) -> bool:
-        contents = self._load()
-        key = remote.uri()
-        if key not in contents:
+        enode = remote.uri()
+        cursor = self.db.execute('SELECT * from bad_nodes WHERE enode = ?', (enode,))
+        row = cursor.fetchone()
+
+        if not row:
             self.logger.debug("Can connect to %s", remote)
             return True
-        node = contents[key]
-        if node['status'] == 'preferred':
-            self.logger.info("%s is a preferred node because %s", remote, node['reason'])
-            return True
-        if node['status'] == 'do-not-use':
-            if time.time() < node['until']:
-                self.logger.info("Cannot connect to %s because: %s", remote, node['reason'])
-                return False
 
-            self.logger.info("Reattempting failed node: %s", remote)
-            return True
-        assert False
+        if time.time() < row['until']:
+            self.logger.info("Cannot connect to %s because: %s", remote, row['reason'])
+            return False
+
+        self.logger.info("Reattempting failed node: %s", remote)
+        return True
 
     def connect_success(self, remote: Node) -> None:
         "Record a successful connection to this node"
+        pass
         contents = self._load()
         key = remote.uri()
         if key not in contents:
@@ -201,12 +201,8 @@ class PeerInfoPersistence:
         self._write(contents)
 
     def get_preferred_peers(self) -> Iterator[Node]:
-        contents = self._load()
-        return list(
-            Node.from_uri(key)
-            for key, value in contents.items()
-            if value['status'] == 'preferred'
-        )
+        rows = self.db.execute('SELECT enode from good_nodes').fetchall()
+        return [Node.from_uri(row['enode']) for row in rows]
 
 
 class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
