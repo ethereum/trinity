@@ -1142,7 +1142,7 @@ def _corrupt_validator_indices(params):
     corrupt_validator_indices = (
         params["validator_indices"][1],
         params["validator_indices"][0],
-    ) + tuple(params["validator_indices"][1:])
+    ) + tuple(params["validator_indices"][2:])
 
     return assoc(params, "validator_indices", corrupt_validator_indices)
 
