@@ -2,6 +2,7 @@ from typing import (
     Iterable,
     Sequence,
     Tuple,
+    TYPE_CHECKING,
 )
 
 from eth_utils import (
@@ -38,6 +39,11 @@ from eth2.beacon.validation import (
     validate_bitfield,
     validate_epoch_for_current_epoch,
 )
+
+if TYPE_CHECKING:
+    from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
+    from eth2.beacon.types.states import BeaconState  # noqa: F401
+    from eth2.beacon.types.validator_records import ValidatorRecord  # noqa: F401
 
 
 def get_epoch_committee_count(
