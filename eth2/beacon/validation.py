@@ -86,7 +86,6 @@ def validate_bitfield(bitfield: bytes, committee_size: int) -> None:
             f"where committee_size={committee_size}"
         )
 
-    if committee_size % 8 != 0:
-        for i in range(committee_size, committee_size - committee_size % 8 + 8):
-            if has_voted(bitfield, i):
-                raise ValidationError(f"bit ({i}) should be zero")
+    for i in range(committee_size, len(bitfield) * 8):
+        if has_voted(bitfield, i):
+            raise ValidationError(f"bit ({i}) should be zero")
