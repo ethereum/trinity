@@ -161,7 +161,7 @@ def get_initial_beacon_state(*,
         state.validator_registry,
         genesis_epoch,
     )
-    index_root = hash_eth2(
+    genesis_active_index_root = hash_eth2(
         b''.join(
             [
                 index.to_bytes(32, 'big')
@@ -169,10 +169,9 @@ def get_initial_beacon_state(*,
             ]
         )
     )
-    latest_index_roots = update_tuple_item(
-        state.latest_index_roots,
-        genesis_epoch % latest_index_roots_length,
-        index_root,
+    latest_index_roots = tuple(
+        genesis_active_index_root
+        for index in latest_index_roots_length
     )
     state = state.copy(
         latest_index_roots=latest_index_roots,

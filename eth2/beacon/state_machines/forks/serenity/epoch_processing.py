@@ -164,38 +164,6 @@ def update_validator_registry(state: BeaconState) -> BeaconState:
     return state
 
 
-def _update_latest_index_roots(state: BeaconState,
-                               config: BeaconConfig) -> BeaconState:
-    """
-    Return the BeaconState with updated `latest_index_roots`.
-    """
-    next_epoch = state.next_epoch(config.EPOCH_LENGTH)
-
-    # TODO: chanege to hash_tree_root
-    active_validator_indices = get_active_validator_indices(
-        state.validator_registry,
-        next_epoch,
-    )
-    index_root = hash_eth2(
-        b''.join(
-            [
-                index.to_bytes(32, 'big')
-                for index in active_validator_indices
-            ]
-        )
-    )
-
-    latest_index_roots = update_tuple_item(
-        state.latest_index_roots,
-        next_epoch % config.LATEST_INDEX_ROOTS_LENGTH,
-        index_root,
-    )
-
-    return state.copy(
-        latest_index_roots=latest_index_roots,
-    )
-
-
 def process_validator_registry(state: BeaconState,
                                config: BeaconConfig) -> BeaconState:
     state = state.copy(
@@ -203,7 +171,6 @@ def process_validator_registry(state: BeaconState,
         previous_epoch_start_shard=state.current_epoch_start_shard,
         previous_epoch_seed=state.current_epoch_seed,
     )
-    state = _update_latest_index_roots(state, config)
 
     need_to_update, num_shards_in_committees = _check_if_update_validator_registry(state, config)
 
@@ -269,10 +236,43 @@ def process_validator_registry(state: BeaconState,
 #
 # Final updates
 #
+def _update_latest_index_roots(state: BeaconState,
+                               config: BeaconConfig) -> BeaconState:
+    """
+    Return the BeaconState with updated `latest_index_roots`.
+    """
+    next_epoch = state.next_epoch(config.EPOCH_LENGTH)
+
+    # TODO: chanege to hash_tree_root
+    active_validator_indices = get_active_validator_indices(
+        state.validator_registry,
+        next_epoch,
+    )
+    index_root = hash_eth2(
+        b''.join(
+            [
+                index.to_bytes(32, 'big')
+                for index in active_validator_indices
+            ]
+        )
+    )
+
+    latest_index_roots = update_tuple_item(
+        state.latest_index_roots,
+        (next_epoch + config.ENTRY_EXIT_DELAY) % config.LATEST_INDEX_ROOTS_LENGTH,
+        index_root,
+    )
+
+    return state.copy(
+        latest_index_roots=latest_index_roots,
+    )
+
 def process_final_updates(state: BeaconState,
                           config: BeaconConfig) -> BeaconState:
     current_epoch = state.current_epoch(config.EPOCH_LENGTH)
     next_epoch = state.next_epoch(config.EPOCH_LENGTH)
+
+    state = _update_latest_index_roots(state, config)
 
     state = state.copy(
         latest_penalized_balances=update_tuple_item(

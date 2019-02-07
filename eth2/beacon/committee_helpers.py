@@ -16,11 +16,15 @@ from eth_typing import (
 from eth2._utils.bitfield import (
     has_voted,
 )
+from eth2._utils.numeric import (
+    is_power_of_two,
+)
 from eth2.beacon._utils.random import (
     shuffle,
     split,
 )
 from eth2.beacon.helpers import (
+    generate_seed,
     get_active_validator_indices,
     slot_to_epoch,
 )
@@ -41,6 +45,19 @@ if TYPE_CHECKING:
     from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
     from eth2.beacon.types.states import BeaconState  # noqa: F401
     from eth2.beacon.types.validator_records import ValidatorRecord  # noqa: F401
+
+
+class CommitteeConfig:
+    def __init__(self, config):
+        self.genesis_epoch = config.genesis_epoch
+        self.shard_count = config.SHARD_COUNT
+        self.epoch_length = config.EPOCH_LENGTH
+        self.target_committee_size = config.TARGET_COMMITTEE_SIZE
+
+        self.seed_lookahead = config.SEED_LOOKAHEAD
+        self.entry_exit_delay = config.ENTRY_EXIT_DELAY
+        self.latest_index_roots_length = config.LATEST_INDEX_ROOTS_LENGTH
+        self.latest_randao_mixes_length = config.LATEST_INDEX_ROOTS_LENGTH
 
 
 def get_epoch_committee_count(
@@ -130,30 +147,54 @@ def get_current_epoch_committee_count(
     )
 
 
+def get_next_epoch_committee_count(
+        state: 'BeaconState',
+        shard_count: int,
+        epoch_length: int,
+        target_committee_size: int) -> int:
+    next_active_validators = get_active_validator_indices(
+        state.validator_registry,
+        state.current_calculation_epoch + 1,
+    )
+    return get_epoch_committee_count(
+        active_validator_count=len(next_active_validators),
+        shard_count=shard_count,
+        epoch_length=epoch_length,
+        target_committee_size=target_committee_size,
+    )
+
+
 @to_tuple
 def get_crosslink_committees_at_slot(
         state: 'BeaconState',
         slot: SlotNumber,
-        genesis_epoch: EpochNumber,
-        epoch_length: int,
-        target_committee_size: int,
-        shard_count: int) -> Iterable[Tuple[Iterable[ValidatorIndex], ShardNumber]]:
+        committee_config: CommitteeConfig,
+        registry_change: bool=False) -> Iterable[Tuple[Iterable[ValidatorIndex], ShardNumber]]:
     """
     Return the list of ``(committee, shard)`` tuples for the ``slot``.
     """
 
+    genesis_epoch = committee_config.genesis_epoch
+    epoch_length = committee_config.epoch_length
+    target_committee_size = committee_config.target_committee_size
+    shard_count = committee_config.shard_count
+    seed_lookahead = committee_config.seed_lookahead
+    entry_exit_delay = committee_config.entry_exit_delay
+    latest_index_roots_length = committee_config.latest_index_roots_length
+    latest_randao_mixes_length = committee_config.latest_randao_mixes_length
+
     epoch = slot_to_epoch(slot, epoch_length)
     current_epoch = state.current_epoch(epoch_length)
+    previous_epoch = state.previous_epoch(epoch_length, genesis_epoch)
+    next_epoch = current_epoch + 1
 
     validate_epoch_for_current_epoch(
         current_epoch=current_epoch,
         given_epoch=epoch,
         genesis_epoch=genesis_epoch,
-        epoch_length=epoch_length,
     )
 
-    # TODO: need to update according to https://github.com/ethereum/eth2.0-specs/pull/520
-    if epoch < current_epoch:
+    if epoch == previous_epoch:
         committees_per_epoch = get_previous_epoch_committee_count(
             state=state,
             shard_count=shard_count,
@@ -163,7 +204,7 @@ def get_crosslink_committees_at_slot(
         seed = state.previous_epoch_seed
         shuffling_epoch = state.previous_calculation_epoch
         shuffling_start_shard = state.previous_epoch_start_shard
-    else:
+    elif epoch == current_epoch:
         committees_per_epoch = get_current_epoch_committee_count(
             state=state,
             shard_count=shard_count,
@@ -173,6 +214,46 @@ def get_crosslink_committees_at_slot(
         seed = state.current_epoch_seed
         shuffling_epoch = state.current_calculation_epoch
         shuffling_start_shard = state.current_epoch_start_shard
+    elif epoch == next_epoch:
+        current_committees_per_epoch = get_current_epoch_committee_count(
+            state=state,
+            shard_count=shard_count,
+            epoch_length=epoch_length,
+            target_committee_size=target_committee_size,
+        )
+        committees_per_epoch = get_next_epoch_committee_count(
+            state=state,
+            shard_count=shard_count,
+            epoch_length=epoch_length,
+            target_committee_size=target_committee_size,
+        )
+        shuffling_epoch = next_epoch
+        epochs_since_last_registry_update = current_epoch - state.validator_registry_update_epoch
+        if registry_change:
+            seed = generate_seed(
+                state=state,
+                epoch=next_epoch,
+                epoch_length=epoch_length,
+                seed_lookahead=seed_lookahead,
+                entry_exit_delay=entry_exit_delay,
+                latest_index_roots_length=latest_index_roots_length,
+                latest_randao_mixes_length=latest_randao_mixes_length,
+            )
+            shuffling_start_shard = (state.current_epoch_start_shard + current_committees_per_epoch) % SHARD_COUNT
+        elif epochs_since_last_registry_update > 1 and is_power_of_two(epochs_since_last_registry_update):
+            seed = generate_seed(
+                state=state,
+                epoch=next_epoch,
+                epoch_length=epoch_length,
+                seed_lookahead=seed_lookahead,
+                entry_exit_delay=entry_exit_delay,
+                latest_index_roots_length=latest_index_roots_length,
+                latest_randao_mixes_length=latest_randao_mixes_length,
+            )
+            shuffling_start_shard = state.current_epoch_start_shard
+        else:
+            seed = state.current_epoch_seed
+            shuffling_start_shard = state.current_epoch_start_shard
 
     shuffling = get_shuffling(
         seed=seed,

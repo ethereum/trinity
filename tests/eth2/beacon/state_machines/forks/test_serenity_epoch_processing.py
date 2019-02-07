@@ -24,6 +24,7 @@ from eth2._utils.bitfield import (
 from eth2.beacon.committee_helpers import (
     get_crosslink_committees_at_slot,
     get_current_epoch_committee_count,
+    get_next_epoch_committee_count,
 )
 from eth2.beacon.helpers import (
     get_active_validator_indices,
@@ -132,7 +133,8 @@ def test_update_latest_index_roots(genesis_state,
                                    config,
                                    state_slot,
                                    epoch_length,
-                                   latest_index_roots_length):
+                                   latest_index_roots_length,
+                                   entry_exit_delay):
     state = genesis_state.copy(
         slot=state_slot,
     )
@@ -154,7 +156,7 @@ def test_update_latest_index_roots(genesis_state,
     )
 
     assert result_state.latest_index_roots[
-        state.next_epoch(epoch_length) % latest_index_roots_length
+        (state.next_epoch(epoch_length) + entry_exit_delay) % latest_index_roots_length
     ] == index_root
 
 
