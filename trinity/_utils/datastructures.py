@@ -436,7 +436,7 @@ class OrderedTaskPreparation(Generic[TTask, TTaskID, TPrerequisite]):
     _dependency_of: StaticMethod[Callable[[TTask], TTaskID]]
 
     # by default, how long should the integrator wait before pruning?
-    _default_max_depth = 10000  # not sure how to pick a good default here
+    _default_max_depth = 10  # not sure how to pick a good default here
 
     _prereq_tracker: Type[BaseTaskPrerequisites[TTask, TPrerequisite]]
 
