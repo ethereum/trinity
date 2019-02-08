@@ -28,6 +28,8 @@ from eth2.beacon.epoch_processing_helpers import (
     get_current_epoch_attestations,
     get_previous_epoch_attestations,
     get_winning_root,
+    get_total_balance,
+    get_epoch_boundary_attesting_balances,
 )
 from eth2.beacon.helpers import (
     get_active_validator_indices,
@@ -36,7 +38,10 @@ from eth2.beacon.helpers import (
     get_randao_mix,
     slot_to_epoch,
 )
-from eth2.beacon.typing import ShardNumber
+from eth2.beacon.typing import (
+    EpochNumber,
+    ShardNumber,
+)
 from eth2.beacon._utils.hash import (
     hash_eth2,
 )
@@ -46,6 +51,87 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     EpochNumber,
 )
+
+
+#
+# Justification
+#
+
+
+def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconState:
+    EPOCH_LENGTH = config.EPOCH_LENGTH
+
+    current_epoch = slot_to_epoch(state.slot, EPOCH_LENGTH)
+    previous_epoch = (
+        EpochNumber(current_epoch - 1) if current_epoch > config.GENESIS_EPOCH else current_epoch
+    )
+
+    current_total_balance = get_total_balance(
+        state.validator_registry,
+        state.validator_balances,
+        current_epoch,
+        config.MAX_DEPOSIT_AMOUNT,
+    )
+    previous_total_balance = get_total_balance(
+        state.validator_registry,
+        state.validator_balances,
+        previous_epoch,
+        config.MAX_DEPOSIT_AMOUNT,
+    )
+    (
+        previous_epoch_boundary_attesting_balance,
+        current_epoch_boundary_attesting_balance
+    ) = get_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config)
+
+    new_justified_epoch = state.justified_epoch
+    justification_bitfield = state.justification_bitfield << 1
+
+    previous_epoch_justifiable = (
+        3 * previous_epoch_boundary_attesting_balance >= 2 * previous_total_balance
+    )
+    current_epoch_justifiable = (
+        3 * current_epoch_boundary_attesting_balance >= 2 * current_total_balance
+    )
+
+    # TODO: refactor this
+    if previous_epoch_justifiable:
+        justification_bitfield |= 2
+        new_justified_epoch = previous_epoch
+
+    if current_epoch_justifiable:
+        justification_bitfield |= 1
+        new_justified_epoch = current_epoch
+
+    # TODO: refactor this
+    if (
+        (justification_bitfield >> 1) % 8 == 0b111 and
+        state.previous_justified_epoch == previous_epoch - 2
+    ):
+        finalized_epoch = state.previous_justified_epoch
+    elif (
+        (justification_bitfield >> 1) % 4 == 0b11 and
+        state.previous_justified_epoch == previous_epoch - 1
+    ):
+        finalized_epoch = state.previous_justified_epoch
+    elif (
+        (justification_bitfield >> 0) % 8 == 0b111 and
+        state.justified_epoch == previous_epoch - 1
+    ):
+        finalized_epoch = state.justified_epoch
+    elif (
+        (justification_bitfield >> 0) % 4 == 0b11 and
+        state.justified_epoch == previous_epoch
+    ):
+        finalized_epoch = state.justified_epoch
+    else:
+        finalized_epoch = state.finalized_epoch
+
+    return state.copy(
+        previous_justified_epoch=state.justified_epoch,
+        justified_epoch=new_justified_epoch,
+        justification_bitfield=justification_bitfield,
+        finalized_epoch=finalized_epoch,
+    )
 
 
 #
