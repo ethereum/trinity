@@ -333,11 +333,7 @@ def is_surround_vote(attestation_data_1: 'AttestationData',
     source_epoch_2 = attestation_data_2.justified_epoch
     target_epoch_1 = slot_to_epoch(attestation_data_1.slot, epoch_length)
     target_epoch_2 = slot_to_epoch(attestation_data_2.slot, epoch_length)
-    return (
-        (source_epoch_1 < source_epoch_2) and
-        (source_epoch_2 + 1 == target_epoch_2) and
-        (target_epoch_2 < target_epoch_1)
-    )
+    return source_epoch_1 < source_epoch_2 and target_epoch_2 < target_epoch_1
 
 
 def get_entry_exit_effect_epoch(

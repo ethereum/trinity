@@ -653,8 +653,6 @@ def test_is_double_vote(sample_attestation_data_params, epoch_length):
         (1, 0, 0, 0, 0, False),
         # not (attestation_1_justified_epoch < attestation_2_justified_epoch
         (1, 4, 3, 3, 2, False),
-        # not (attestation_2_justified_epoch + 1 == attestation_2_slot)
-        (1, 4, 0, 3, 1, False),
         # not (slot_to_epoch(attestation_2_slot) < slot_to_epoch(attestation_1_slot))
         (1, 4, 0, 4, 3, False),
         (1, 4, 0, 3, 2, True),
