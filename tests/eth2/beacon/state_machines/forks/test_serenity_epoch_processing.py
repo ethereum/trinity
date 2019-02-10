@@ -46,6 +46,146 @@ from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
     process_final_updates,
     process_validator_registry,
 )
+from eth2.beacon.state_machines.forks.serenity.epoch_processing import process_justification
+from eth2.beacon.types.states import BeaconState
+
+
+@pytest.fixture
+def mock_justification_state_without_validators(sample_beacon_state_params,
+                                                latest_block_roots_length):
+    return BeaconState(**sample_beacon_state_params).copy(
+        latest_block_roots=tuple(ZERO_HASH32 for _ in range(latest_block_roots_length)),
+        justification_bitfield=0b0,
+    )
+
+
+def test_justification_without_validators(
+        mock_justification_state_without_validators,
+        config):
+    state = process_justification(mock_justification_state_without_validators, config)
+    assert state.justification_bitfield == 0b11
+
+
+@pytest.mark.parametrize(
+    "slot,"
+    "previous_epoch_boundary_attesting_balance,"
+    "current_epoch_boundary_attesting_balance,"
+    "total_balance,"
+
+    # Key state variables before process_justification
+    "previous_justified_epoch_before,"
+    "justified_epoch_before,"
+    "justification_bitfield_before,"
+    "finalized_epoch_before,"
+
+    # Key state variables after process_justification
+    "previous_justified_epoch_after,"
+    "justified_epoch_after,"
+    "justification_bitfield_after,"
+    "finalized_epoch_after,",
+    (
+        (
+            # Epoch 0: justify epoch 0
+            # No finalize
+            63, 0, 10, 10,
+            0, 0, 0b0, 0,
+            0, 0, 0b1, 0,
+        ),
+        (
+            # Epoch 1: justify epoch 0 and 1
+            # R4: finalize B3, epoch 0
+            127, 10, 10, 15,
+            0, 0, 0b1, 0,
+            0, 1, 0b11, 0,
+        ),
+        (
+            # Epoch 2: justify epoch 1 and 2
+            # R2: finalize B2, epoch 0
+            191, 10, 10, 15,
+            0, 1, 0b11, 0,
+            1, 2, 0b111, 0,
+        ),
+        (
+            # Epoch 3:
+            # due to network delay
+            # insufficient current boundary attestations to justify epoch 3
+            # R2: finalize B2, epoch 1
+            255, 10, 5, 15,
+            1, 2, 0b111, 0,
+            2, 2, 0b1110, 1,
+        ),
+        (
+            # Epoch 4:
+            # boundary attestations for epoch 3 arrived, and
+            # no delay in boundary attestations for epoch 4.
+            # Resulting epoch 3 and 4 are justified, and 2 finalized.
+            # No finalize
+            319, 5, 10, 15,
+            2, 2, 0b1110, 1,
+            2, 4, 0b11101, 1,
+        ),
+        (
+            # Epoch 5:
+            # R4: finalize B3, epoch 4
+            383, 10, 10, 15,
+            2, 4, 0b11101, 1,
+            4, 5, 0b111011, 4,
+        ),
+    ),
+)
+def test_process_justification(monkeypatch,
+                               config,
+                               sample_beacon_state_params,
+                               previous_epoch_boundary_attesting_balance,
+                               current_epoch_boundary_attesting_balance,
+                               total_balance,
+                               slot,
+                               previous_justified_epoch_before,
+                               justified_epoch_before,
+                               justification_bitfield_before,
+                               finalized_epoch_before,
+                               previous_justified_epoch_after,
+                               justified_epoch_after,
+                               justification_bitfield_after,
+                               finalized_epoch_after,
+                               genesis_epoch=0):
+    from eth2.beacon.state_machines.forks.serenity import epoch_processing
+
+    def mock_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config):
+        return previous_epoch_boundary_attesting_balance, current_epoch_boundary_attesting_balance
+
+    def mock_get_total_balance(validator_registry,
+                               validator_balances,
+                               epoch,
+                               max_deposit_amount):
+        return total_balance
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            epoch_processing,
+            'get_epoch_boundary_attesting_balances',
+            mock_epoch_boundary_attesting_balances,
+        )
+        m.setattr(
+            epoch_processing,
+            'get_total_balance',
+            mock_get_total_balance,
+        )
+
+        state_before = BeaconState(**sample_beacon_state_params).copy(
+            slot=slot,
+            previous_justified_epoch=previous_justified_epoch_before,
+            justified_epoch=justified_epoch_before,
+            justification_bitfield=justification_bitfield_before,
+            finalized_epoch=finalized_epoch_before,
+        )
+
+        state_after = process_justification(state_before, config)
+
+        assert state_after.previous_justified_epoch == previous_justified_epoch_after
+        assert state_after.justified_epoch == justified_epoch_after
+        assert state_after.justification_bitfield == justification_bitfield_after
+        assert state_after.finalized_epoch == finalized_epoch_after
 
 
 @pytest.mark.parametrize(
