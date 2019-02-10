@@ -211,7 +211,7 @@ def get_epoch_boundary_attesting_balances(
     previous_epoch_justified_attestations = tuple(
         attestation
         for attestation in current_epoch_attestations + previous_epoch_attestations
-        if attestation.justified_epoch == previous_justified_epoch
+        if attestation.data.justified_epoch == previous_justified_epoch
     )
 
     previous_epoch_boundary_root = get_block_root(
@@ -222,7 +222,7 @@ def get_epoch_boundary_attesting_balances(
     previous_epoch_boundary_attestations = tuple(
         attestation
         for attestation in previous_epoch_justified_attestations
-        if attestation.epoch_boundary_root == previous_epoch_boundary_root
+        if attestation.data.epoch_boundary_root == previous_epoch_boundary_root
     )
 
     sets_of_previous_epoch_boundary_participants = tuple(
@@ -259,7 +259,7 @@ def get_epoch_boundary_attesting_balances(
     current_epoch_boundary_attestations = tuple(
         attestation
         for attestation in current_epoch_attestations
-        if attestation.epoch_boundary_root == current_epoch_boundary_root and
+        if attestation.data.epoch_boundary_root == current_epoch_boundary_root and
         attestation.data.justified_epoch == justified_epoch
     )
 
