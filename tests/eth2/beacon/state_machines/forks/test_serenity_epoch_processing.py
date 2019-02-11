@@ -67,7 +67,7 @@ def test_justification_without_validators(
 
 
 @pytest.mark.parametrize(
-    "slot,"
+    "current_epoch,"
     "previous_epoch_boundary_attesting_balance,"
     "current_epoch_boundary_attesting_balance,"
     "total_balance,"
@@ -87,21 +87,21 @@ def test_justification_without_validators(
         (
             # Epoch 0: justify epoch 0
             # No finalize
-            63, 0, 10, 10,
+            0, 0, 10, 10,
             0, 0, 0b0, 0,
             0, 0, 0b1, 0,
         ),
         (
             # Epoch 1: justify epoch 0 and 1
             # R4: finalize B3, epoch 0
-            127, 10, 10, 15,
+            1, 10, 10, 15,
             0, 0, 0b1, 0,
             0, 1, 0b11, 0,
         ),
         (
             # Epoch 2: justify epoch 1 and 2
             # R2: finalize B2, epoch 0
-            191, 10, 10, 15,
+            2, 10, 10, 15,
             0, 1, 0b11, 0,
             1, 2, 0b111, 0,
         ),
@@ -110,7 +110,7 @@ def test_justification_without_validators(
             # due to network delay
             # insufficient current boundary attestations to justify epoch 3
             # R2: finalize B2, epoch 1
-            255, 10, 5, 15,
+            3, 10, 5, 15,
             1, 2, 0b111, 0,
             2, 2, 0b1110, 1,
         ),
@@ -120,16 +120,34 @@ def test_justification_without_validators(
             # no delay in boundary attestations for epoch 4.
             # Resulting epoch 3 and 4 are justified, and 2 finalized.
             # No finalize
-            319, 5, 10, 15,
+            4, 5, 10, 15,
             2, 2, 0b1110, 1,
             2, 4, 0b11101, 1,
         ),
         (
             # Epoch 5:
             # R4: finalize B3, epoch 4
-            383, 10, 10, 15,
+            5, 10, 10, 15,
             2, 4, 0b11101, 1,
             4, 5, 0b111011, 4,
+        ),
+        (
+
+            6, 10, 5, 15,
+            4, 5, 0b111011, 4,
+            5, 5, 0b1110110, 4,
+        ),
+        (
+            # R2
+            7, 10, 5, 15,
+            5, 5, 0b1110110, 4,
+            5, 6, 0b11101110, 5,
+        ),
+        (
+            # R1
+            8, 10, 5, 15,
+            5, 6, 0b11101110, 5,
+            6, 7, 0b111011110, 5,
         ),
     ),
 )
@@ -139,7 +157,7 @@ def test_process_justification(monkeypatch,
                                previous_epoch_boundary_attesting_balance,
                                current_epoch_boundary_attesting_balance,
                                total_balance,
-                               slot,
+                               current_epoch,
                                previous_justified_epoch_before,
                                justified_epoch_before,
                                justification_bitfield_before,
@@ -172,6 +190,7 @@ def test_process_justification(monkeypatch,
             mock_get_total_balance,
         )
 
+        slot = (current_epoch + 1) * config.EPOCH_LENGTH - 1
         state_before = BeaconState(**sample_beacon_state_params).copy(
             slot=slot,
             previous_justified_epoch=previous_justified_epoch_before,
