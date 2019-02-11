@@ -17,6 +17,7 @@ from eth2.beacon.exceptions import (
     NoWinningRootError,
 )
 from eth2.beacon.committee_helpers import (
+    CommitteeConfig,
     get_crosslink_committees_at_slot,
     get_current_epoch_committee_count,
 )
@@ -83,10 +84,7 @@ def process_crosslinks(state: BeaconState, config: BeaconConfig) -> BeaconState:
         crosslink_committees_at_slot = get_crosslink_committees_at_slot(
             state,
             slot,
-            config.GENESIS_EPOCH,
-            config.EPOCH_LENGTH,
-            config.TARGET_COMMITTEE_SIZE,
-            config.SHARD_COUNT,
+            CommitteeConfig(config),
         )
         for crosslink_committee, shard in crosslink_committees_at_slot:
             try:
@@ -100,11 +98,8 @@ def process_crosslinks(state: BeaconState, config: BeaconConfig) -> BeaconState:
                         previous_epoch_attestations + current_epoch_attestations,
                         shard,
                     ),
-                    genesis_epoch=config.GENESIS_EPOCH,
-                    epoch_length=config.EPOCH_LENGTH,
                     max_deposit_amount=config.MAX_DEPOSIT_AMOUNT,
-                    target_committee_size=config.TARGET_COMMITTEE_SIZE,
-                    shard_count=config.SHARD_COUNT,
+                    committee_config=CommitteeConfig(config),
                 )
             except NoWinningRootError:
                 # No winning shard block root found for this shard.
@@ -266,6 +261,7 @@ def _update_latest_index_roots(state: BeaconState,
     return state.copy(
         latest_index_roots=latest_index_roots,
     )
+
 
 def process_final_updates(state: BeaconState,
                           config: BeaconConfig) -> BeaconState:

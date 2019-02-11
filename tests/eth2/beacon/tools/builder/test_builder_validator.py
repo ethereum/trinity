@@ -12,6 +12,7 @@ from eth2._utils.bitfield import (
 )
 from eth2.beacon.tools.builder.validator import (
     aggregate_votes,
+    get_next_epoch_committee_assignments,
     verify_votes,
 )
 
@@ -71,3 +72,33 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
 
     aggregated_pubs = bls.aggregate_pubkeys(pubs)
     assert bls.verify(message, aggregated_pubs, sigs, domain)
+
+
+@pytest.mark.parametrize(
+    (
+        'num_validators,'
+        'epoch_length,'
+        'target_committee_size,'
+        'shard_count,'
+    ),
+    [
+        (40, 16, 1, 2),
+    ]
+)
+def test_get_next_epoch_committee_assignments(genesis_state, epoch_length, config, num_validators):
+    state = genesis_state
+    print('')
+    for validator_index in range(num_validators):
+        print('#######')
+        print(f'validator_index={validator_index}')
+        result = get_next_epoch_committee_assignments(state, config, validator_index)
+
+        for epoch in result:
+            committee = epoch[0]
+            shard = epoch[1]
+            slot = epoch[2]
+            is_proposer = epoch[3]
+
+            print(
+                f"   committee={committee}, shard={shard}, slot={slot}, is_proposer={is_proposer}"
+            )

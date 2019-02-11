@@ -22,9 +22,10 @@ from eth2._utils.bitfield import (
     get_empty_bitfield,
 )
 from eth2.beacon.committee_helpers import (
+    CommitteeConfig,
     get_crosslink_committees_at_slot,
     get_current_epoch_committee_count,
-    get_next_epoch_committee_count,
+    # get_next_epoch_committee_count,
 )
 from eth2.beacon.helpers import (
     get_active_validator_indices,
@@ -402,10 +403,7 @@ def test_process_crosslinks(
         for committee, _shard in get_crosslink_committees_at_slot(
             state,
             slot_in_cur_epoch,
-            config.GENESIS_EPOCH,
-            config.EPOCH_LENGTH,
-            target_committee_size,
-            shard_count,
+            CommitteeConfig(config),
         ):
             if _shard == shard:
                 # Sample validators attesting to this shard.

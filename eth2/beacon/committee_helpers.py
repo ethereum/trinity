@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 
 class CommitteeConfig:
     def __init__(self, config):
-        self.genesis_epoch = config.genesis_epoch
+        self.genesis_epoch = config.GENESIS_EPOCH
         self.shard_count = config.SHARD_COUNT
         self.epoch_length = config.EPOCH_LENGTH
         self.target_committee_size = config.TARGET_COMMITTEE_SIZE
@@ -173,7 +173,6 @@ def get_crosslink_committees_at_slot(
     """
     Return the list of ``(committee, shard)`` tuples for the ``slot``.
     """
-
     genesis_epoch = committee_config.genesis_epoch
     epoch_length = committee_config.epoch_length
     target_committee_size = committee_config.target_committee_size
@@ -239,8 +238,13 @@ def get_crosslink_committees_at_slot(
                 latest_index_roots_length=latest_index_roots_length,
                 latest_randao_mixes_length=latest_randao_mixes_length,
             )
-            shuffling_start_shard = (state.current_epoch_start_shard + current_committees_per_epoch) % SHARD_COUNT
-        elif epochs_since_last_registry_update > 1 and is_power_of_two(epochs_since_last_registry_update):
+            shuffling_start_shard = (
+                state.current_epoch_start_shard + current_committees_per_epoch
+            ) % shard_count
+        elif (
+            epochs_since_last_registry_update > 1 and
+            is_power_of_two(epochs_since_last_registry_update)
+        ):
             seed = generate_seed(
                 state=state,
                 epoch=next_epoch,
@@ -280,20 +284,14 @@ def get_crosslink_committees_at_slot(
 
 def get_beacon_proposer_index(state: 'BeaconState',
                               slot: SlotNumber,
-                              genesis_epoch: EpochNumber,
-                              epoch_length: int,
-                              target_committee_size: int,
-                              shard_count: int) -> ValidatorIndex:
+                              committee_config: CommitteeConfig) -> ValidatorIndex:
     """
     Return the beacon proposer index for the ``slot``.
     """
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
         state=state,
         slot=slot,
-        genesis_epoch=genesis_epoch,
-        epoch_length=epoch_length,
-        target_committee_size=target_committee_size,
-        shard_count=shard_count,
+        committee_config=committee_config,
     )
     try:
         first_crosslink_committee = crosslink_committees_at_slot[0]
@@ -322,10 +320,7 @@ def _get_committee_for_shard(
 def get_attestation_participants(state: 'BeaconState',
                                  attestation_data: 'AttestationData',
                                  bitfield: Bitfield,
-                                 genesis_epoch: EpochNumber,
-                                 epoch_length: int,
-                                 target_committee_size: int,
-                                 shard_count: int) -> Iterable[ValidatorIndex]:
+                                 committee_config: CommitteeConfig) -> Iterable[ValidatorIndex]:
     """
     Return the participant indices at for the ``attestation_data`` and ``bitfield``.
     """
@@ -333,10 +328,7 @@ def get_attestation_participants(state: 'BeaconState',
     crosslink_committees = get_crosslink_committees_at_slot(
         state=state,
         slot=attestation_data.slot,
-        genesis_epoch=genesis_epoch,
-        epoch_length=epoch_length,
-        target_committee_size=target_committee_size,
-        shard_count=shard_count,
+        committee_config=committee_config,
     )
 
     if attestation_data.shard not in set([shard for _, shard in crosslink_committees]):

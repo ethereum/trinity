@@ -11,7 +11,6 @@ from eth.constants import (
     ZERO_HASH32,
 )
 
-from eth2._utils.tuple import update_tuple_item
 from eth2.beacon.constants import (
     EMPTY_SIGNATURE,
 )

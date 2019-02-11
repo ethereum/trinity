@@ -2,6 +2,7 @@ import pytest
 
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.committee_helpers import (
+    CommitteeConfig,
     get_beacon_proposer_index,
 )
 from eth2.beacon.state_machines.forks.serenity.blocks import (
@@ -91,10 +92,7 @@ def test_per_slot_transition(base_db,
     beacon_proposer_index = get_beacon_proposer_index(
         state,
         state.slot + 1,
-        st.config.GENESIS_EPOCH,
-        st.config.EPOCH_LENGTH,
-        st.config.TARGET_COMMITTEE_SIZE,
-        st.config.SHARD_COUNT,
+        CommitteeConfig(st.config),
     )
     for validator_index, _ in enumerate(updated_state.validator_registry):
         if validator_index != beacon_proposer_index:

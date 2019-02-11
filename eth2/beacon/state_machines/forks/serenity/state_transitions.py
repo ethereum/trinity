@@ -4,6 +4,7 @@ from eth_typing import (
 
 from eth2._utils.merkle import get_merkle_root
 from eth2.beacon.committee_helpers import (
+    CommitteeConfig,
     get_beacon_proposer_index,
 )
 from eth2.beacon.state_machines.configs import BeaconConfig
@@ -48,10 +49,6 @@ class SerenityStateTransition(BaseStateTransition):
                             state: BeaconState,
                             previous_block_root: Hash32) -> BeaconState:
         LATEST_BLOCK_ROOTS_LENGTH = self.config.LATEST_BLOCK_ROOTS_LENGTH
-        GENESIS_EPOCH = self.config.GENESIS_EPOCH
-        EPOCH_LENGTH = self.config.EPOCH_LENGTH
-        TARGET_COMMITTEE_SIZE = self.config.TARGET_COMMITTEE_SIZE
-        SHARD_COUNT = self.config.SHARD_COUNT
 
         # Update state.slot
         state = state.copy(
@@ -63,10 +60,7 @@ class SerenityStateTransition(BaseStateTransition):
         beacon_proposer_index = get_beacon_proposer_index(
             state,
             state.slot,
-            GENESIS_EPOCH,
-            EPOCH_LENGTH,
-            TARGET_COMMITTEE_SIZE,
-            SHARD_COUNT,
+            CommitteeConfig(self.config),
         )
         old_validator_record = updated_validator_registry[beacon_proposer_index]
         updated_validator_record = old_validator_record.copy(

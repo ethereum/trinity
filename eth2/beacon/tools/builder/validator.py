@@ -28,6 +28,7 @@ from eth2.beacon.enums import (
     SignatureDomain,
 )
 from eth2.beacon.committee_helpers import (
+    CommitteeConfig,
     get_crosslink_committees_at_slot,
 )
 from eth2.beacon.helpers import (
@@ -50,6 +51,7 @@ from eth2.beacon.typing import (
     BLSSignature,
     Bitfield,
     CommitteeIndex,
+    ShardNumber,
     SlotNumber,
     ValidatorIndex,
 )
@@ -223,11 +225,8 @@ def create_mock_signed_attestations_at_slot(
         state.copy(
             slot=state.slot + 1,
         ),
-        slot=attestation_slot,
-        genesis_epoch=config.GENESIS_EPOCH,
-        epoch_length=config.EPOCH_LENGTH,
-        target_committee_size=config.TARGET_COMMITTEE_SIZE,
-        shard_count=config.SHARD_COUNT,
+        attestation_slot,
+        CommitteeConfig(config),
     )
     for crosslink_committee in crosslink_committees_at_slot:
         committee, shard = crosslink_committee
@@ -258,3 +257,46 @@ def create_mock_signed_attestations_at_slot(
             keymap,
             config.EPOCH_LENGTH,
         )
+
+
+def get_next_epoch_committee_assignment(
+        state: BeaconState,
+        config: BeaconConfig,
+        validator_index: ValidatorIndex
+) -> Tuple[Iterable[ValidatorIndex], ShardNumber, SlotNumber, bool]:
+    """
+    Return the committee assignment in the next epoch for ``validator_index``
+    and ``registry_change``.
+    ``assignment`` returned is a tuple of the following form:
+        * ``assignment[0]`` is the list of validators in the committee
+        * ``assignment[1]`` is the shard to which the committee is assigned
+        * ``assignment[2]`` is the slot at which the committee is assigned
+        * ``assignment[3]`` is a bool signalling if the validator is expected to propose
+            a beacon block at the assigned slot.
+    """
+    current_epoch = state.current_epoch(config.EPOCH_LENGTH)
+    next_epoch = current_epoch + 1
+    next_epoch_start_slot = get_epoch_start_slot(next_epoch, config.EPOCH_LENGTH)
+    for registry_change in [False, True]:
+        for slot in range(next_epoch_start_slot, next_epoch_start_slot + config.EPOCH_LENGTH):
+            crosslink_committees = get_crosslink_committees_at_slot(
+                state,
+                slot,
+                CommitteeConfig(config),
+                registry_change=registry_change,
+            )
+            selected_committees = [
+                committee
+                for committee in crosslink_committees
+                if validator_index in committee[0]
+            ]
+            if len(selected_committees) > 0:
+                validators = selected_committees[0][0]
+                shard = selected_committees[0][1]
+                first_committee_at_slot = crosslink_committees[0][0]  # List[ValidatorIndex]
+                is_proposer = first_committee_at_slot[
+                    slot % len(first_committee_at_slot)
+                ] == validator_index
+
+                assignment = (validators, shard, slot, is_proposer)
+                return assignment

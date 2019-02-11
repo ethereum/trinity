@@ -1,3 +1,7 @@
+from eth2.beacon.committee_helpers import (
+    CommitteeConfig,
+)
+
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.pending_attestation_records import PendingAttestationRecord
 from eth2.beacon.types.states import BeaconState
@@ -24,12 +28,9 @@ def process_attestations(state: BeaconState,
         validate_attestation(
             state,
             attestation,
-            config.GENESIS_EPOCH,
-            config.EPOCH_LENGTH,
             config.MIN_ATTESTATION_INCLUSION_DELAY,
             config.LATEST_BLOCK_ROOTS_LENGTH,
-            config.TARGET_COMMITTEE_SIZE,
-            config.SHARD_COUNT,
+            CommitteeConfig(config),
         )
 
     # update_latest_attestations

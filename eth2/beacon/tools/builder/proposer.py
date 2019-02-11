@@ -13,6 +13,7 @@ from eth2.beacon.enums import (
     SignatureDomain,
 )
 from eth2.beacon.committee_helpers import (
+    CommitteeConfig,
     get_beacon_proposer_index,
 )
 from eth2.beacon.exceptions import (
@@ -53,10 +54,7 @@ def validate_proposer_index(state: BeaconState,
             slot=slot,
         ),
         slot,
-        config.GENESIS_EPOCH,
-        config.EPOCH_LENGTH,
-        config.TARGET_COMMITTEE_SIZE,
-        config.SHARD_COUNT,
+        CommitteeConfig(config),
     )
 
     if validator_index != beacon_proposer_index:
@@ -146,10 +144,7 @@ def create_mock_block(*,
             slot=slot,
         ),
         slot,
-        config.GENESIS_EPOCH,
-        config.EPOCH_LENGTH,
-        config.TARGET_COMMITTEE_SIZE,
-        config.SHARD_COUNT,
+        CommitteeConfig(config),
     )
     proposer_pubkey = state.validator_registry[proposer_index].pubkey
     proposer_privkey = keymap[proposer_pubkey]
