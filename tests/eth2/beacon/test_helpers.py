@@ -708,8 +708,8 @@ def test_generate_seed(monkeypatch,
                             latest_randao_mixes_length):
         return hash_eth2(
             state.root +
-            abs(epoch).to_bytes(32, byteorder='big') +
-            latest_randao_mixes_length.to_bytes(32, byteorder='big')
+            abs(epoch).to_bytes(32, byteorder='little') +
+            latest_randao_mixes_length.to_bytes(32, byteorder='little')
         )
 
     def mock_get_active_index_root(state,
@@ -719,9 +719,9 @@ def test_generate_seed(monkeypatch,
                                    latest_index_roots_length):
         return hash_eth2(
             state.root +
-            abs(epoch).to_bytes(32, byteorder='big') +
-            epoch_length.to_bytes(32, byteorder='big') +
-            latest_index_roots_length.to_bytes(32, byteorder='big')
+            abs(epoch).to_bytes(32, byteorder='little') +
+            epoch_length.to_bytes(32, byteorder='little') +
+            latest_index_roots_length.to_bytes(32, byteorder='little')
         )
 
     monkeypatch.setattr(
