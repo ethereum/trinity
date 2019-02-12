@@ -67,131 +67,86 @@ def test_justification_without_validators(
 
 
 @pytest.mark.parametrize(
-    "current_epoch,"
-    "current_epoch_justifiable,"
-    "previous_epoch_justifiable,"
-
-    # Key state variables before process_justification
-    "previous_justified_epoch_before,"
-    "justified_epoch_before,"
-    "justification_bitfield_before,"
-    "finalized_epoch_before,"
-
-    # Key state variables after process_justification
-    "previous_justified_epoch_after,"
-    "justified_epoch_after,"
-    "justification_bitfield_after,"
-    "finalized_epoch_after,",
+    # Each state contains epoch, current_epoch_justifiable, previous_epoch_justifiable,
+    # previous_justified_epoch, justified_epoch, justification_bitfield, and finalized_epoch.
+    # Specify the last epoch processed state at the end of the items.
+    "states,",
     (
         (
-            # Epoch 0: justify epoch 0
-            # No finalize
-            0, True, False,
-            0, 0, 0b0, 0,
-            0, 0, 0b1, 0,
+            # Trigger R2 to finalize epoch 1
+            (0, True, False, 0, 0, 0b0, 0),
+            (1, True, True, 0, 0, 0b1, 0),  # R4 finalize 0
+            (2, True, True, 0, 1, 0b11, 0),  # R2 finalize 0
+            (3, False, True, 1, 2, 0b111, 0),  # R2 finalize 1
+            (2, 2, 0b1110, 1),
         ),
         (
-            # Epoch 1: justify epoch 0 and 1
-            # R4: finalize B3, epoch 0
-            1, True, True,
-            0, 0, 0b1, 0,
-            0, 1, 0b11, 0,
+            # Trigger R4 to finalize epoch 4
+            (4, True, False, 2, 2, 0b1110, 1),
+            (5, True, True, 2, 4, 0b11101, 1),  # R4 finalize 4
+            (4, 5, 0b111011, 4),
         ),
         (
-            # Epoch 2: justify epoch 1 and 2
-            # R2: finalize B2, epoch 0
-            2, True, True,
-            0, 1, 0b11, 0,
-            1, 2, 0b111, 0,
-        ),
-        (
-            # Epoch 3:
-            # due to network delay
-            # insufficient current boundary attestations to justify epoch 3
-            # R2: finalize B2, epoch 1
-            3, False, True,
-            1, 2, 0b111, 0,
-            2, 2, 0b1110, 1,
-        ),
-        (
-            # Epoch 4:
-            # boundary attestations for epoch 3 arrived, and
-            # no delay in boundary attestations for epoch 4.
-            # Resulting epoch 3 and 4 are justified, and 2 finalized.
-            # No finalize
-            4, True, False,
-            2, 2, 0b1110, 1,
-            2, 4, 0b11101, 1,
-        ),
-        (
-            # Epoch 5:
-            # R4: finalize B3, epoch 4
-            5, True, True,
-            2, 4, 0b11101, 1,
-            4, 5, 0b111011, 4,
-        ),
-        (
-
-            6, False, True,
-            4, 5, 0b111011, 4,
-            5, 5, 0b1110110, 4,
-        ),
-        (
-            # R2
-            7, False, True,
-            5, 5, 0b1110110, 4,
-            5, 6, 0b11101110, 5,
-        ),
-        (
-            # R1
-            8, False, True,
-            5, 6, 0b11101110, 5,
-            6, 7, 0b111011110, 5,
+            # Trigger R1 to finalize epoch 2
+            (2, True, True, 0, 1, 0b11, 0),
+            (3, False, True, 1, 2, 0b111, 0),  # R2 finalize 1
+            (4, False, True, 2, 2, 0b1110, 1),  # R2 finalize 2
+            (5, False, True, 2, 3, 0b11110, 2),  # R1 finalize 2
+            (3, 4, 0b111110, 2)
         ),
     ),
 )
 def test_process_justification(monkeypatch,
                                config,
                                sample_beacon_state_params,
-                               current_epoch,
-                               current_epoch_justifiable,
-                               previous_epoch_justifiable,
-                               previous_justified_epoch_before,
-                               justified_epoch_before,
-                               justification_bitfield_before,
-                               finalized_epoch_before,
-                               previous_justified_epoch_after,
-                               justified_epoch_after,
-                               justification_bitfield_after,
-                               finalized_epoch_after,
+                               states,
                                genesis_epoch=0):
     from eth2.beacon.state_machines.forks.serenity import epoch_processing
 
-    def mock_current_previous_epochs_justifiable(current_epoch, previous_epoch, state, config):
-        return current_epoch_justifiable, previous_epoch_justifiable
+    for i in range(len(states) - 1):
+        (
+            current_epoch,
+            current_epoch_justifiable,
+            previous_epoch_justifiable,
+            previous_justified_epoch_before,
+            justified_epoch_before,
+            justification_bitfield_before,
+            finalized_epoch_before,
+        ) = states[i]
 
-    with monkeypatch.context() as m:
-        m.setattr(
-            epoch_processing,
-            'current_previous_epochs_justifiable',
-            mock_current_previous_epochs_justifiable,
-        )
-
+        (
+            previous_justified_epoch_after,
+            justified_epoch_after,
+            justification_bitfield_after,
+            finalized_epoch_after,
+        ) = states[i + 1][-4:]
         slot = (current_epoch + 1) * config.EPOCH_LENGTH - 1
-        state_before = BeaconState(**sample_beacon_state_params).copy(
-            slot=slot,
-            previous_justified_epoch=previous_justified_epoch_before,
-            justified_epoch=justified_epoch_before,
-            justification_bitfield=justification_bitfield_before,
-            finalized_epoch=finalized_epoch_before,
-        )
+        print("Epoch", current_epoch)
 
-        state_after = process_justification(state_before, config)
+        def mock_current_previous_epochs_justifiable(current_epoch, previous_epoch, state, config):
+            return current_epoch_justifiable, previous_epoch_justifiable
 
-        assert state_after.previous_justified_epoch == previous_justified_epoch_after
-        assert state_after.justified_epoch == justified_epoch_after
-        assert state_after.justification_bitfield == justification_bitfield_after
-        assert state_after.finalized_epoch == finalized_epoch_after
+        with monkeypatch.context() as m:
+            m.setattr(
+                epoch_processing,
+                'current_previous_epochs_justifiable',
+                mock_current_previous_epochs_justifiable,
+            )
+
+            state = BeaconState(**sample_beacon_state_params).copy(
+                slot=slot,
+                previous_justified_epoch=previous_justified_epoch_before,
+                justified_epoch=justified_epoch_before,
+                justification_bitfield=justification_bitfield_before,
+                finalized_epoch=finalized_epoch_before,
+            )
+
+            state = process_justification(state, config)
+
+            assert state.previous_justified_epoch == previous_justified_epoch_after
+            assert state.justified_epoch == justified_epoch_after
+            assert state.justification_bitfield == justification_bitfield_after
+            assert state.finalized_epoch == finalized_epoch_after
 
 
 @pytest.mark.parametrize(
