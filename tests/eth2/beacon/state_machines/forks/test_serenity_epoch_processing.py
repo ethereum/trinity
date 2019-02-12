@@ -68,9 +68,8 @@ def test_justification_without_validators(
 
 @pytest.mark.parametrize(
     "current_epoch,"
-    "previous_epoch_boundary_attesting_balance,"
-    "current_epoch_boundary_attesting_balance,"
-    "total_balance,"
+    "current_epoch_justifiable,"
+    "previous_epoch_justifiable,"
 
     # Key state variables before process_justification
     "previous_justified_epoch_before,"
@@ -87,21 +86,21 @@ def test_justification_without_validators(
         (
             # Epoch 0: justify epoch 0
             # No finalize
-            0, 0, 10, 10,
+            0, True, False,
             0, 0, 0b0, 0,
             0, 0, 0b1, 0,
         ),
         (
             # Epoch 1: justify epoch 0 and 1
             # R4: finalize B3, epoch 0
-            1, 10, 10, 15,
+            1, True, True,
             0, 0, 0b1, 0,
             0, 1, 0b11, 0,
         ),
         (
             # Epoch 2: justify epoch 1 and 2
             # R2: finalize B2, epoch 0
-            2, 10, 10, 15,
+            2, True, True,
             0, 1, 0b11, 0,
             1, 2, 0b111, 0,
         ),
@@ -110,7 +109,7 @@ def test_justification_without_validators(
             # due to network delay
             # insufficient current boundary attestations to justify epoch 3
             # R2: finalize B2, epoch 1
-            3, 10, 5, 15,
+            3, False, True,
             1, 2, 0b111, 0,
             2, 2, 0b1110, 1,
         ),
@@ -120,32 +119,32 @@ def test_justification_without_validators(
             # no delay in boundary attestations for epoch 4.
             # Resulting epoch 3 and 4 are justified, and 2 finalized.
             # No finalize
-            4, 5, 10, 15,
+            4, True, False,
             2, 2, 0b1110, 1,
             2, 4, 0b11101, 1,
         ),
         (
             # Epoch 5:
             # R4: finalize B3, epoch 4
-            5, 10, 10, 15,
+            5, True, True,
             2, 4, 0b11101, 1,
             4, 5, 0b111011, 4,
         ),
         (
 
-            6, 10, 5, 15,
+            6, False, True,
             4, 5, 0b111011, 4,
             5, 5, 0b1110110, 4,
         ),
         (
             # R2
-            7, 10, 5, 15,
+            7, False, True,
             5, 5, 0b1110110, 4,
             5, 6, 0b11101110, 5,
         ),
         (
             # R1
-            8, 10, 5, 15,
+            8, False, True,
             5, 6, 0b11101110, 5,
             6, 7, 0b111011110, 5,
         ),
@@ -154,10 +153,9 @@ def test_justification_without_validators(
 def test_process_justification(monkeypatch,
                                config,
                                sample_beacon_state_params,
-                               previous_epoch_boundary_attesting_balance,
-                               current_epoch_boundary_attesting_balance,
-                               total_balance,
                                current_epoch,
+                               current_epoch_justifiable,
+                               previous_epoch_justifiable,
                                previous_justified_epoch_before,
                                justified_epoch_before,
                                justification_bitfield_before,
@@ -169,25 +167,14 @@ def test_process_justification(monkeypatch,
                                genesis_epoch=0):
     from eth2.beacon.state_machines.forks.serenity import epoch_processing
 
-    def mock_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config):
-        return previous_epoch_boundary_attesting_balance, current_epoch_boundary_attesting_balance
-
-    def mock_get_total_balance(validator_registry,
-                               validator_balances,
-                               epoch,
-                               max_deposit_amount):
-        return total_balance
+    def mock_current_previous_epochs_justifiable(current_epoch, previous_epoch, state, config):
+        return current_epoch_justifiable, previous_epoch_justifiable
 
     with monkeypatch.context() as m:
         m.setattr(
             epoch_processing,
-            'get_epoch_boundary_attesting_balances',
-            mock_epoch_boundary_attesting_balances,
-        )
-        m.setattr(
-            epoch_processing,
-            'get_total_balance',
-            mock_get_total_balance,
+            'current_previous_epochs_justifiable',
+            mock_current_previous_epochs_justifiable,
         )
 
         slot = (current_epoch + 1) * config.EPOCH_LENGTH - 1

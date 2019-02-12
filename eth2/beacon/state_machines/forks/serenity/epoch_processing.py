@@ -57,15 +57,11 @@ from eth2.beacon.typing import (
 # Justification
 #
 
-
-def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconState:
-    EPOCH_LENGTH = config.EPOCH_LENGTH
-
-    current_epoch = slot_to_epoch(state.slot, EPOCH_LENGTH)
-    previous_epoch = (
-        EpochNumber(current_epoch - 1) if current_epoch > config.GENESIS_EPOCH else current_epoch
-    )
-
+def current_previous_epochs_justifiable(
+        current_epoch: EpochNumber,
+        previous_epoch: EpochNumber,
+        state: BeaconState,
+        config: BeaconConfig) -> Tuple[bool, bool]:
     current_total_balance = get_total_balance(
         state.validator_registry,
         state.validator_balances,
@@ -83,48 +79,83 @@ def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconSta
         current_epoch_boundary_attesting_balance
     ) = get_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config)
 
-    new_justified_epoch = state.justified_epoch
-    justification_bitfield = state.justification_bitfield << 1
-
     previous_epoch_justifiable = (
         3 * previous_epoch_boundary_attesting_balance >= 2 * previous_total_balance
     )
     current_epoch_justifiable = (
         3 * current_epoch_boundary_attesting_balance >= 2 * current_total_balance
     )
+    return current_epoch_justifiable, previous_epoch_justifiable
 
-    # TODO: refactor this
-    if previous_epoch_justifiable:
-        justification_bitfield |= 2
-        new_justified_epoch = previous_epoch
 
-    if current_epoch_justifiable:
-        justification_bitfield |= 1
-        new_justified_epoch = current_epoch
-
-    # TODO: refactor this
+def get_finalized_epoch(
+        justification_bitfield: int,
+        previous_justified_epoch: EpochNumber,
+        justified_epoch: EpochNumber,
+        finalized_epoch: EpochNumber,
+        previous_epoch: EpochNumber) -> EpochNumber:
     if (
         (justification_bitfield >> 1) % 8 == 0b111 and
-        state.previous_justified_epoch == previous_epoch - 2
+        previous_justified_epoch == previous_epoch - 2
     ):
-        finalized_epoch = state.previous_justified_epoch
+        return previous_justified_epoch
     elif (
         (justification_bitfield >> 1) % 4 == 0b11 and
-        state.previous_justified_epoch == previous_epoch - 1
+        previous_justified_epoch == previous_epoch - 1
     ):
-        finalized_epoch = state.previous_justified_epoch
+        return previous_justified_epoch
     elif (
         (justification_bitfield >> 0) % 8 == 0b111 and
-        state.justified_epoch == previous_epoch - 1
+        justified_epoch == previous_epoch - 1
     ):
-        finalized_epoch = state.justified_epoch
+        return justified_epoch
     elif (
         (justification_bitfield >> 0) % 4 == 0b11 and
-        state.justified_epoch == previous_epoch
+        justified_epoch == previous_epoch
     ):
-        finalized_epoch = state.justified_epoch
+        return justified_epoch
     else:
-        finalized_epoch = state.finalized_epoch
+        return finalized_epoch
+
+
+def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconState:
+    EPOCH_LENGTH = config.EPOCH_LENGTH
+
+    current_epoch = slot_to_epoch(state.slot, EPOCH_LENGTH)
+    previous_epoch = (
+        EpochNumber(current_epoch - 1) if current_epoch > config.GENESIS_EPOCH else current_epoch
+    )
+
+    current_epoch_justifiable, previous_epoch_justifiable = current_previous_epochs_justifiable(
+        current_epoch,
+        previous_epoch,
+        state,
+        config,
+    )
+
+    if previous_epoch_justifiable and current_epoch_justifiable:
+        justification_bitfield = (state.justification_bitfield << 1) | 3
+    elif previous_epoch_justifiable:
+        justification_bitfield = (state.justification_bitfield << 1) | 2
+    elif current_epoch_justifiable:
+        justification_bitfield = (state.justification_bitfield << 1) | 1
+    else:
+        justification_bitfield = state.justification_bitfield << 1
+
+    if current_epoch_justifiable:
+        new_justified_epoch = current_epoch
+    elif previous_epoch_justifiable:
+        new_justified_epoch = previous_epoch
+    else:
+        new_justified_epoch = state.justified_epoch
+
+    finalized_epoch = get_finalized_epoch(
+        justification_bitfield,
+        state.previous_justified_epoch,
+        state.justified_epoch,
+        state.finalized_epoch,
+        previous_epoch,
+    )
 
     return state.copy(
         previous_justified_epoch=state.justified_epoch,

@@ -195,15 +195,11 @@ def get_epoch_boundary_attesting_balances(
     SHARD_COUNT = config.SHARD_COUNT
     TARGET_COMMITTEE_SIZE = config.TARGET_COMMITTEE_SIZE
 
-    current_epoch_attestations = tuple(
-        attestation
-        for attestation in state.latest_attestations
-        if current_epoch == slot_to_epoch(attestation.data.slot, EPOCH_LENGTH)
-    )
-    previous_epoch_attestations = tuple(
-        attestation
-        for attestation in state.latest_attestations
-        if previous_epoch <= slot_to_epoch(attestation.data.slot, EPOCH_LENGTH)
+    current_epoch_attestations = get_current_epoch_attestations(state, EPOCH_LENGTH)
+    previous_epoch_attestations = get_previous_epoch_attestations(
+        state,
+        EPOCH_LENGTH,
+        GENESIS_EPOCH,
     )
 
     previous_justified_epoch = state.previous_justified_epoch
