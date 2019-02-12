@@ -738,6 +738,8 @@ def test_generate_seed(monkeypatch,
     state = genesis_state
     epoch = 1
 
+    epoch_as_bytes = epoch.to_bytes(32, 'little')
+
     seed = generate_seed(
         state=state,
         epoch=epoch,
@@ -759,5 +761,5 @@ def test_generate_seed(monkeypatch,
             epoch_length=epoch_length,
             entry_exit_delay=entry_exit_delay,
             latest_index_roots_length=latest_index_roots_length,
-        )
+        ) + epoch_as_bytes
     )
