@@ -17,9 +17,12 @@ from eth2.beacon.exceptions import (
     NoWinningRootError,
 )
 from eth2.beacon.committee_helpers import (
-    CommitteeConfig,
     get_crosslink_committees_at_slot,
     get_current_epoch_committee_count,
+)
+from eth2.beacon.configs import (
+    BeaconConfig,
+    CommitteeConfig,
 )
 from eth2.beacon.epoch_processing_helpers import (
     get_current_epoch_attestations,
@@ -40,7 +43,6 @@ from eth2.beacon._utils.hash import (
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.state_machines.configs import BeaconConfig
 
 
 #

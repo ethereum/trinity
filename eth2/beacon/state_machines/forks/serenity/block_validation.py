@@ -12,9 +12,11 @@ from eth.constants import (
 from eth2._utils import bls as bls
 
 from eth2.beacon.committee_helpers import (
-    CommitteeConfig,
     get_beacon_proposer_index,
     get_attestation_participants,
+)
+from eth2.beacon.configs import (
+    CommitteeConfig,
 )
 from eth2.beacon.enums import (
     SignatureDomain,
@@ -55,7 +57,7 @@ def validate_block_slot(state: BeaconState,
 def validate_proposer_signature(state: BeaconState,
                                 block: BaseBeaconBlock,
                                 beacon_chain_shard_number: ShardNumber,
-                                committee_config=CommitteeConfig) -> None:
+                                committee_config: CommitteeConfig) -> None:
     block_without_signature_root = block.block_without_signature_root
 
     # TODO: Replace this root with tree hash root

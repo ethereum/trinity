@@ -22,10 +22,12 @@ from eth2._utils.bitfield import (
     get_empty_bitfield,
 )
 from eth2.beacon.committee_helpers import (
-    CommitteeConfig,
     get_crosslink_committees_at_slot,
     get_current_epoch_committee_count,
-    # get_next_epoch_committee_count,
+    # get_next_epoch_committee_count,  TODO
+)
+from eth2.beacon.configs import (
+    CommitteeConfig,
 )
 from eth2.beacon.helpers import (
     get_active_validator_indices,

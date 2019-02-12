@@ -4,10 +4,12 @@ from eth_typing import (
 
 from eth2._utils.merkle import get_merkle_root
 from eth2.beacon.committee_helpers import (
-    CommitteeConfig,
     get_beacon_proposer_index,
 )
-from eth2.beacon.state_machines.configs import BeaconConfig
+from eth2.beacon.configs import (
+    BeaconConfig,
+    CommitteeConfig,
+)
 from eth2.beacon.state_machines.state_transitions import BaseStateTransition
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
@@ -94,10 +96,7 @@ class SerenityStateTransition(BaseStateTransition):
                 state,
                 block,
                 beacon_chain_shard_number=self.config.BEACON_CHAIN_SHARD_NUMBER,
-                genesis_epoch=self.config.GENESIS_EPOCH,
-                epoch_length=self.config.EPOCH_LENGTH,
-                target_committee_size=self.config.TARGET_COMMITTEE_SIZE,
-                shard_count=self.config.SHARD_COUNT
+                committee_config=CommitteeConfig(self.config),
             )
         # TODO: state = process_randao(state, block, self.config)
         # TODO: state = process_eth1_data(state, block, self.config)

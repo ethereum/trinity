@@ -1,11 +1,10 @@
-from eth2.beacon.committee_helpers import (
+from eth2.beacon.configs import (
+    BeaconConfig,
     CommitteeConfig,
 )
-
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.pending_attestation_records import PendingAttestationRecord
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.state_machines.configs import BeaconConfig
 
 from .block_validation import (
     validate_attestation,

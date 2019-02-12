@@ -226,7 +226,8 @@ def test_get_crosslink_committees_at_slot(
         epoch_length,
         target_committee_size,
         shard_count,
-        genesis_epoch):
+        genesis_epoch,
+        committee_config):
 
     state = n_validators_state.copy(
         slot=current_slot,
@@ -235,10 +236,7 @@ def test_get_crosslink_committees_at_slot(
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
         state=state,
         slot=slot,
-        genesis_epoch=genesis_epoch,
-        epoch_length=epoch_length,
-        target_committee_size=target_committee_size,
-        shard_count=shard_count,
+        committee_config=committee_config,
     )
     assert len(crosslink_committees_at_slot) > 0
     for crosslink_committee in crosslink_committees_at_slot:
@@ -282,16 +280,14 @@ def test_get_beacon_proposer_index(
         sample_state,
         genesis_epoch,
         target_committee_size,
-        shard_count):
+        shard_count,
+        committee_config):
 
     from eth2.beacon import committee_helpers
 
     def mock_get_crosslink_committees_at_slot(state,
                                               slot,
-                                              genesis_epoch,
-                                              epoch_length,
-                                              target_committee_size,
-                                              shard_count):
+                                              committee_config):
         return (
             (committee, 1,),
         )
@@ -305,10 +301,7 @@ def test_get_beacon_proposer_index(
         proposer_index = get_beacon_proposer_index(
             sample_state,
             slot,
-            genesis_epoch,
-            epoch_length,
-            target_committee_size,
-            shard_count,
+            committee_config,
         )
         assert proposer_index == committee[slot % len(committee)]
     else:
@@ -316,10 +309,7 @@ def test_get_beacon_proposer_index(
             get_beacon_proposer_index(
                 sample_state,
                 slot,
-                genesis_epoch,
-                epoch_length,
-                target_committee_size,
-                shard_count,
+                committee_config,
             )
 
 
@@ -373,6 +363,7 @@ def test_get_attestation_participants(
         genesis_epoch,
         target_committee_size,
         shard_count,
+        committee_config,
         sample_attestation_data_params):
     shard = 1
 
@@ -380,10 +371,7 @@ def test_get_attestation_participants(
 
     def mock_get_crosslink_committees_at_slot(state,
                                               slot,
-                                              genesis_epoch,
-                                              epoch_length,
-                                              target_committee_size,
-                                              shard_count):
+                                              committee_config):
         return (
             (committee, shard,),
         )
@@ -404,20 +392,14 @@ def test_get_attestation_participants(
                 state=sample_state,
                 attestation_data=attestation_data,
                 bitfield=aggregation_bitfield,
-                genesis_epoch=genesis_epoch,
-                epoch_length=epoch_length,
-                target_committee_size=target_committee_size,
-                shard_count=shard_count,
+                committee_config=committee_config,
             )
     else:
         result = get_attestation_participants(
             state=sample_state,
             attestation_data=attestation_data,
             bitfield=aggregation_bitfield,
-            genesis_epoch=genesis_epoch,
-            epoch_length=epoch_length,
-            target_committee_size=target_committee_size,
-            shard_count=shard_count,
+            committee_config=committee_config,
         )
 
         assert result == expected

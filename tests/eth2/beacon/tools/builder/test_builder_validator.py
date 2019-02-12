@@ -12,7 +12,7 @@ from eth2._utils.bitfield import (
 )
 from eth2.beacon.tools.builder.validator import (
     aggregate_votes,
-    get_next_epoch_committee_assignments,
+    get_next_epoch_committee_assignment,
     verify_votes,
 )
 
@@ -85,20 +85,16 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
         (40, 16, 1, 2),
     ]
 )
-def test_get_next_epoch_committee_assignments(genesis_state, epoch_length, config, num_validators):
+def test_get_next_epoch_committee_assignment(genesis_state, epoch_length, config, num_validators):
     state = genesis_state
-    print('')
+    proposer_count = 0
     for validator_index in range(num_validators):
-        print('#######')
-        print(f'validator_index={validator_index}')
-        result = get_next_epoch_committee_assignments(state, config, validator_index)
-
-        for epoch in result:
-            committee = epoch[0]
-            shard = epoch[1]
-            slot = epoch[2]
-            is_proposer = epoch[3]
-
+        assignment = get_next_epoch_committee_assignment(state, config, validator_index)
+        if assignment is not None:
+            committee, shard, slot, is_proposer = assignment
             print(
                 f"   committee={committee}, shard={shard}, slot={slot}, is_proposer={is_proposer}"
             )
+        if is_proposer:
+            proposer_count += 1
+    assert proposer_count == epoch_length

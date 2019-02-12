@@ -14,9 +14,12 @@ from eth_utils import (
     to_tuple,
 )
 
+
 from eth2.beacon.committee_helpers import (
-    CommitteeConfig,
     get_attestation_participants,
+)
+from eth2.beacon.configs import (
+    CommitteeConfig,
 )
 from eth2.beacon.exceptions import (
     NoWinningRootError,
@@ -116,7 +119,7 @@ def get_winning_root(
         shard: ShardNumber,
         attestations: Sequence[PendingAttestationRecord],
         max_deposit_amount: Gwei,
-        committee_config=CommitteeConfig) -> Tuple[Hash32, Gwei]:
+        committee_config: CommitteeConfig) -> Tuple[Hash32, Gwei]:
     winning_root = None
     winning_root_balance: Gwei = Gwei(0)
     shard_block_roots = set(

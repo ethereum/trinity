@@ -170,7 +170,7 @@ def get_initial_beacon_state(*,
     )
     latest_index_roots = tuple(
         genesis_active_index_root
-        for index in latest_index_roots_length
+        for _ in range(latest_index_roots_length)
     )
     state = state.copy(
         latest_index_roots=latest_index_roots,

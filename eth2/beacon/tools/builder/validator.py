@@ -28,8 +28,11 @@ from eth2.beacon.enums import (
     SignatureDomain,
 )
 from eth2.beacon.committee_helpers import (
-    CommitteeConfig,
     get_crosslink_committees_at_slot,
+)
+from eth2.beacon.configs import (
+    BeaconConfig,
+    CommitteeConfig,
 )
 from eth2.beacon.helpers import (
     get_block_root,
@@ -37,7 +40,6 @@ from eth2.beacon.helpers import (
     get_epoch_start_slot,
     slot_to_epoch,
 )
-from eth2.beacon.state_machines.configs import BeaconConfig
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestation_data_and_custody_bits import (
@@ -300,3 +302,4 @@ def get_next_epoch_committee_assignment(
 
                 assignment = (validators, shard, slot, is_proposer)
                 return assignment
+    return None

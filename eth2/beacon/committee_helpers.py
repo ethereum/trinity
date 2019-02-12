@@ -23,6 +23,9 @@ from eth2.beacon._utils.random import (
     shuffle,
     split,
 )
+from eth2.beacon.configs import (
+    CommitteeConfig,
+)
 from eth2.beacon.helpers import (
     generate_seed,
     get_active_validator_indices,
@@ -45,19 +48,6 @@ if TYPE_CHECKING:
     from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
     from eth2.beacon.types.states import BeaconState  # noqa: F401
     from eth2.beacon.types.validator_records import ValidatorRecord  # noqa: F401
-
-
-class CommitteeConfig:
-    def __init__(self, config):
-        self.genesis_epoch = config.GENESIS_EPOCH
-        self.shard_count = config.SHARD_COUNT
-        self.epoch_length = config.EPOCH_LENGTH
-        self.target_committee_size = config.TARGET_COMMITTEE_SIZE
-
-        self.seed_lookahead = config.SEED_LOOKAHEAD
-        self.entry_exit_delay = config.ENTRY_EXIT_DELAY
-        self.latest_index_roots_length = config.LATEST_INDEX_ROOTS_LENGTH
-        self.latest_randao_mixes_length = config.LATEST_INDEX_ROOTS_LENGTH
 
 
 def get_epoch_committee_count(
@@ -185,7 +175,7 @@ def get_crosslink_committees_at_slot(
     epoch = slot_to_epoch(slot, epoch_length)
     current_epoch = state.current_epoch(epoch_length)
     previous_epoch = state.previous_epoch(epoch_length, genesis_epoch)
-    next_epoch = current_epoch + 1
+    next_epoch = EpochNumber(current_epoch + 1)
 
     validate_epoch_for_current_epoch(
         current_epoch=current_epoch,

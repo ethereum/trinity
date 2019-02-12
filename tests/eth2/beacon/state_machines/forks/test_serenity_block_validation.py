@@ -6,7 +6,7 @@ from eth_utils import (
 
 from eth2._utils import bls
 
-from eth2.beacon.committee_helpers import (
+from eth2.beacon.configs import (
     CommitteeConfig,
 )
 from eth2.beacon.enums import (

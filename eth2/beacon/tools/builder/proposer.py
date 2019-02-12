@@ -13,8 +13,11 @@ from eth2.beacon.enums import (
     SignatureDomain,
 )
 from eth2.beacon.committee_helpers import (
-    CommitteeConfig,
     get_beacon_proposer_index,
+)
+from eth2.beacon.configs import (
+    BeaconConfig,
+    CommitteeConfig,
 )
 from eth2.beacon.exceptions import (
     ProposerIndexError,
@@ -27,7 +30,6 @@ from eth2.beacon.helpers import (
 from eth2.beacon.state_machines.base import (
     BaseBeaconStateMachine,
 )
-from eth2.beacon.state_machines.configs import BeaconConfig
 
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import (
