@@ -32,7 +32,7 @@ class NoWinningRootError(PyEVMError):
     pass
 
 
-class NoValidatorAssignment(PyEVMError):
+class NoCommitteeAssignment(PyEVMError):
     """
     Raised when no potential crosslink committee assignment.
     """

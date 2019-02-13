@@ -11,7 +11,7 @@ from eth2._utils.bitfield import (
     has_voted,
 )
 from eth2.beacon.exceptions import (
-    NoValidatorAssignment,
+    NoCommitteeAssignment,
 )
 from eth2.beacon.helpers import (
     get_epoch_start_slot,
@@ -108,16 +108,13 @@ def test_get_next_epoch_committee_assignment(genesis_state,
 
     for validator_index in range(num_validators):
         assignment = get_next_epoch_committee_assignment(state, config, validator_index)
-        assert len(assignment) == 4
-        committee, shard, slot, is_proposer = assignment
-        assert len(committee) > 0
-        assert slot >= next_epoch_start
-        assert slot < next_epoch_start + epoch_length
-        if is_proposer:
+        assert assignment.slot >= next_epoch_start
+        assert assignment.slot < next_epoch_start + epoch_length
+        if assignment.is_proposer:
             proposer_count += 1
 
-        shard_validator_count[shard] += 1
-        slots.append(slot)
+        shard_validator_count[assignment.shard] += 1
+        slots.append(assignment.slot)
 
     assert proposer_count == epoch_length
     assert sum(shard_validator_count) == num_validators
@@ -146,5 +143,5 @@ def test_get_next_epoch_committee_assignment_no_assignment(genesis_state,
         )
     )
 
-    with pytest.raises(NoValidatorAssignment):
+    with pytest.raises(NoCommitteeAssignment):
         get_next_epoch_committee_assignment(state, config, validator_index)

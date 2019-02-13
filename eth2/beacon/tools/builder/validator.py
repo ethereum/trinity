@@ -35,7 +35,7 @@ from eth2.beacon.configs import (
     CommitteeConfig,
 )
 from eth2.beacon.exceptions import (
-    NoValidatorAssignment,
+    NoCommitteeAssignment,
 )
 from eth2.beacon.helpers import (
     get_block_root,
@@ -56,9 +56,12 @@ from eth2.beacon.typing import (
     BLSSignature,
     Bitfield,
     CommitteeIndex,
-    ShardNumber,
     SlotNumber,
     ValidatorIndex,
+)
+
+from .committee_assignment import (
+    CommitteeAssignment,
 )
 
 
@@ -268,16 +271,15 @@ def get_next_epoch_committee_assignment(
         state: BeaconState,
         config: BeaconConfig,
         validator_index: ValidatorIndex
-) -> Tuple[Iterable[ValidatorIndex], ShardNumber, SlotNumber, bool]:
+) -> CommitteeAssignment:
     """
-    Return the committee assignment in the next epoch for ``validator_index``
+    Return the ``CommitteeAssignment`` in the next epoch for ``validator_index``
     and ``registry_change``.
-    ``assignment`` returned is a tuple of the following form:
-        * ``assignment[0]`` is the list of validators in the committee
-        * ``assignment[1]`` is the shard to which the committee is assigned
-        * ``assignment[2]`` is the slot at which the committee is assigned
-        * ``assignment[3]`` is a bool signalling if the validator is expected to propose
-            a beacon block at the assigned slot.
+    ``CommitteeAssignment.committee`` is the tuple array of validators in the committee
+    ``CommitteeAssignment.shard`` is the shard to which the committee is assigned
+    ``CommitteeAssignment.slot`` is the slot at which the committee is assigned
+    ``CommitteeAssignment.is_proposer`` is a bool signalling if the validator is expected to
+        propose a beacon block at the assigned slot.
     """
     current_epoch = state.current_epoch(config.EPOCH_LENGTH)
     next_epoch = current_epoch + 1
@@ -303,6 +305,6 @@ def get_next_epoch_committee_assignment(
                     slot % len(first_committee_at_slot)
                 ] == validator_index
 
-                assignment = (validators, shard, slot, is_proposer)
-                return assignment
-    raise NoValidatorAssignment
+                return CommitteeAssignment(validators, shard, slot, is_proposer)
+
+    raise NoCommitteeAssignment
