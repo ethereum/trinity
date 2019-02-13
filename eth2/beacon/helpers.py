@@ -24,6 +24,7 @@ from eth2.beacon.enums import (
 )
 from eth2.beacon.typing import (
     BLSPubkey,
+    EpochNumber,
     Gwei,
     SlotNumber,
     ValidatorIndex,

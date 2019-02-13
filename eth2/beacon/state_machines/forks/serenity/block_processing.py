@@ -18,8 +18,10 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 )
 
 from eth2.beacon.helpers import (
-    get_beacon_proposer_index,
     get_randao_mix,
+)
+from eth2.beacon.committee_helpers import (
+    get_beacon_proposer_index,
 )
 
 
@@ -51,17 +53,13 @@ def process_eth1_data(state: BeaconState,
     return state
 
 
-from eth2.beacon.typing import (
-    SlotNumber,
-)
-
-
 def process_randao(state: BeaconState,
                    block: BaseBeaconBlock,
                    config: BeaconConfig) -> BeaconState:
     proposer_index = get_beacon_proposer_index(
         state=state,
         slot=state.slot,
+        genesis_epoch=config.GENESIS_EPOCH,
         epoch_length=config.EPOCH_LENGTH,
         target_committee_size=config.TARGET_COMMITTEE_SIZE,
         shard_count=config.SHARD_COUNT,
@@ -78,10 +76,13 @@ def process_randao(state: BeaconState,
     )
 
     randao_mix_index = epoch % config.LATEST_RANDAO_MIXES_LENGTH
-    # FIXME: remove this once get_randao_mix is updated to accept epochs instead of slots
-    slot = SlotNumber(epoch)
     new_randao_mix = bitwise_xor(
-        get_randao_mix(state, slot, config.LATEST_RANDAO_MIXES_LENGTH),
+        get_randao_mix(
+            state=state,
+            epoch=epoch,
+            epoch_length=config.EPOCH_LENGTH,
+            latest_randao_mixes_length=config.LATEST_RANDAO_MIXES_LENGTH,
+        ),
         hash_eth2(block.randao_reveal),
     )
 
