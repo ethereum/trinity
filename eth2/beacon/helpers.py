@@ -183,6 +183,15 @@ def get_effective_balance(
     return min(validator_balances[index], max_deposit_amount)
 
 
+def get_total_balance(validator_balances: Sequence[Gwei],
+                      validator_indices: Sequence[ValidatorIndex],
+                      max_deposit_amount: Gwei) -> Gwei:
+    return Gwei(sum(
+        get_effective_balance(validator_balances, index, max_deposit_amount)
+        for index in validator_indices
+    ))
+
+
 def get_fork_version(fork: 'Fork',
                      epoch: EpochNumber) -> int:
     """

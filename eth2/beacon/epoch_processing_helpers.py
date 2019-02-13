@@ -1,5 +1,4 @@
 from typing import (
-    FrozenSet,
     Iterable,
     Sequence,
     Tuple,
@@ -26,11 +25,10 @@ from eth2.beacon.exceptions import (
     NoWinningRootError,
 )
 from eth2.beacon.helpers import (
-    get_active_validator_indices,
-    get_effective_balance,
     get_epoch_start_slot,
     slot_to_epoch,
     get_block_root,
+    get_total_balance,
 )
 from eth2.beacon.typing import (
     EpochNumber,
@@ -105,17 +103,17 @@ def get_total_attesting_balance(
         attestations: Sequence[PendingAttestationRecord],
         max_deposit_amount: Gwei,
         committee_config: CommitteeConfig) -> Gwei:
-    return Gwei(
-        sum(
-            get_effective_balance(state.validator_balances, i, max_deposit_amount)
-            for i in get_attesting_validator_indices(
-                state=state,
-                attestations=attestations,
-                shard=shard,
-                shard_block_root=shard_block_root,
-                committee_config=committee_config,
-            )
-        )
+    validator_indices = get_attesting_validator_indices(
+        state=state,
+        attestations=attestations,
+        shard=shard,
+        shard_block_root=shard_block_root,
+        committee_config=committee_config,
+    )
+    return get_total_balance(
+        state.validator_balances,
+        validator_indices,
+        max_deposit_amount,
     )
 
 
@@ -155,27 +153,13 @@ def get_winning_root(
     return (winning_root, winning_root_balance)
 
 
-def get_total_balance(
-        validator_registry: Sequence['ValidatorRecord'],
-        validator_balances: Sequence[Gwei],
-        epoch: EpochNumber,
-        max_deposit_amount: Gwei) -> Gwei:
-
-    active_validator_indices = get_active_validator_indices(validator_registry, epoch)
-
-    return Gwei(sum(
-        get_effective_balance(validator_balances, index, max_deposit_amount)
-        for index in active_validator_indices
-    ))
-
-
 def get_epoch_boundary_attester_indices(
         boundary_attestations: 'Attestation',
         state: 'BeaconState',
         genesis_epoch: EpochNumber,
         epoch_length: int,
         target_committee_size: int,
-        shard_count: int) -> FrozenSet[ValidatorIndex]:
+        shard_count: int) -> Sequence[ValidatorIndex]:
     sets_of_epoch_boundary_participants = tuple(
         frozenset(get_attestation_participants(
             state,
@@ -193,7 +177,7 @@ def get_epoch_boundary_attester_indices(
         frozenset(),
         *sets_of_epoch_boundary_participants,
     )
-    return epoch_boundary_attester_indices
+    return tuple(epoch_boundary_attester_indices)
 
 
 def get_epoch_boundary_attesting_balances(
@@ -253,10 +237,11 @@ def get_epoch_boundary_attesting_balances(
         SHARD_COUNT,
     )
 
-    previous_epoch_boundary_attesting_balance = Gwei(sum(
-        get_effective_balance(state, index, MAX_DEPOSIT_AMOUNT)
-        for index in previous_epoch_boundary_attester_indices
-    ))
+    previous_epoch_boundary_attesting_balance = get_total_balance(
+        state.validator_balances,
+        previous_epoch_boundary_attester_indices,
+        MAX_DEPOSIT_AMOUNT,
+    )
 
     current_epoch_start_slot = get_epoch_start_slot(current_epoch, EPOCH_LENGTH)
     current_epoch_boundary_root = get_block_root(
@@ -282,8 +267,9 @@ def get_epoch_boundary_attesting_balances(
         SHARD_COUNT,
     )
 
-    current_epoch_boundary_attesting_balance = Gwei(sum(
-        get_effective_balance(state, index, MAX_DEPOSIT_AMOUNT)
-        for index in current_epoch_boundary_attester_indices
-    ))
+    current_epoch_boundary_attesting_balance = get_total_balance(
+        state.validator_balances,
+        current_epoch_boundary_attester_indices,
+        MAX_DEPOSIT_AMOUNT,
+    )
     return previous_epoch_boundary_attesting_balance, current_epoch_boundary_attesting_balance

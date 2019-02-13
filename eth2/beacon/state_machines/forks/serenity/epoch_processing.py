@@ -62,18 +62,26 @@ def current_previous_epochs_justifiable(
         previous_epoch: EpochNumber,
         state: BeaconState,
         config: BeaconConfig) -> Tuple[bool, bool]:
-    current_total_balance = get_total_balance(
+
+    current_epoch_active_validator_indices = get_active_validator_indices(
         state.validator_registry,
-        state.validator_balances,
         current_epoch,
+    )
+    previous_epoch_active_validator_indices = get_active_validator_indices(
+        state.validator_registry,
+        previous_epoch,
+    )
+    current_total_balance = get_total_balance(
+        state.validator_balances,
+        current_epoch_active_validator_indices,
         config.MAX_DEPOSIT_AMOUNT,
     )
     previous_total_balance = get_total_balance(
-        state.validator_registry,
         state.validator_balances,
-        previous_epoch,
+        previous_epoch_active_validator_indices,
         config.MAX_DEPOSIT_AMOUNT,
     )
+
     (
         previous_epoch_boundary_attesting_balance,
         current_epoch_boundary_attesting_balance
