@@ -708,7 +708,7 @@ def test_generate_seed(monkeypatch,
                             latest_randao_mixes_length):
         return hash_eth2(
             state.root +
-            abs(epoch).to_bytes(32, byteorder='little') +
+            epoch.to_bytes(32, byteorder='little') +
             latest_randao_mixes_length.to_bytes(32, byteorder='little')
         )
 
@@ -719,7 +719,7 @@ def test_generate_seed(monkeypatch,
                                    latest_index_roots_length):
         return hash_eth2(
             state.root +
-            abs(epoch).to_bytes(32, byteorder='little') +
+            epoch.to_bytes(32, byteorder='little') +
             epoch_length.to_bytes(32, byteorder='little') +
             latest_index_roots_length.to_bytes(32, byteorder='little')
         )
