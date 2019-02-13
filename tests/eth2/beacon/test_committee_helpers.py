@@ -14,8 +14,9 @@ from eth2.beacon.committee_helpers import (
     get_current_epoch_committee_count,
     get_crosslink_committees_at_slot,
     get_epoch_committee_count,
-    get_shuffling,
+    get_next_epoch_committee_count,
     get_previous_epoch_committee_count,
+    get_shuffling,
 )
 from eth2.beacon.types.attestation_data import (
     AttestationData,
@@ -50,6 +51,65 @@ def test_get_epoch_committee_count(
         epoch_length=epoch_length,
         target_committee_size=target_committee_size,
     )
+
+
+@pytest.mark.parametrize(
+    (
+        'n,'
+        'epoch_length,'
+        'target_committee_size,'
+        'shard_count,'
+        'expected_committee_count'
+    ),
+    [
+        (64, 2, 2, 1024, 32),
+    ]
+)
+def test_get_next_epoch_committee_count(n_validators_state,
+                                        shard_count,
+                                        epoch_length,
+                                        target_committee_size,
+                                        expected_committee_count):
+    state = n_validators_state
+
+    current_epoch_committee_count = get_current_epoch_committee_count(
+        state,
+        shard_count,
+        epoch_length,
+        target_committee_size,
+    )
+    next_epoch_committee_count = get_next_epoch_committee_count(
+        state,
+        shard_count,
+        epoch_length,
+        target_committee_size,
+    )
+    assert current_epoch_committee_count == expected_committee_count
+    assert next_epoch_committee_count == expected_committee_count
+
+    # Exit all validators
+    for index, validator in enumerate(state.validator_registry):
+        state = state.update_validator_registry(
+            validator_index=index,
+            validator=validator.copy(
+                exit_epoch=state.current_epoch(epoch_length) + 1,
+            ),
+        )
+
+    current_epoch_committee_count = get_current_epoch_committee_count(
+        state,
+        shard_count,
+        epoch_length,
+        target_committee_size,
+    )
+    next_epoch_committee_count = get_next_epoch_committee_count(
+        state,
+        shard_count,
+        epoch_length,
+        target_committee_size,
+    )
+    assert current_epoch_committee_count == expected_committee_count
+    assert next_epoch_committee_count == epoch_length
 
 
 @pytest.mark.parametrize(
