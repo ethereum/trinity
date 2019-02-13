@@ -26,8 +26,8 @@ from eth2.beacon._utils.random import (
 from eth2.beacon.configs import (
     CommitteeConfig,
 )
+from eth2.beacon import helpers
 from eth2.beacon.helpers import (
-    generate_seed,
     get_active_validator_indices,
     slot_to_epoch,
 )
@@ -218,8 +218,14 @@ def get_crosslink_committees_at_slot(
         )
         shuffling_epoch = next_epoch
         epochs_since_last_registry_update = current_epoch - state.validator_registry_update_epoch
+        should_reseed = (
+            epochs_since_last_registry_update > 1 and
+            is_power_of_two(epochs_since_last_registry_update)
+        )
+
         if registry_change:
-            seed = generate_seed(
+            # for mocking this out in tests.
+            seed = helpers.generate_seed(
                 state=state,
                 epoch=next_epoch,
                 epoch_length=epoch_length,
@@ -231,11 +237,9 @@ def get_crosslink_committees_at_slot(
             shuffling_start_shard = (
                 state.current_epoch_start_shard + current_committees_per_epoch
             ) % shard_count
-        elif (
-            epochs_since_last_registry_update > 1 and
-            is_power_of_two(epochs_since_last_registry_update)
-        ):
-            seed = generate_seed(
+        elif should_reseed:
+            # for mocking this out in tests.
+            seed = helpers.generate_seed(
                 state=state,
                 epoch=next_epoch,
                 epoch_length=epoch_length,
