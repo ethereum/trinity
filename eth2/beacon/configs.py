@@ -76,4 +76,4 @@ class CommitteeConfig:
         self.seed_lookahead = config.SEED_LOOKAHEAD
         self.entry_exit_delay = config.ENTRY_EXIT_DELAY
         self.latest_index_roots_length = config.LATEST_INDEX_ROOTS_LENGTH
-        self.latest_randao_mixes_length = config.LATEST_INDEX_ROOTS_LENGTH
+        self.latest_randao_mixes_length = config.LATEST_RANDAO_MIXES_LENGTH
