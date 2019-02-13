@@ -34,6 +34,9 @@ from eth2.beacon.configs import (
     BeaconConfig,
     CommitteeConfig,
 )
+from eth2.beacon.exceptions import (
+    NoValidatorAssignment,
+)
 from eth2.beacon.helpers import (
     get_block_root,
     get_domain,
@@ -302,4 +305,4 @@ def get_next_epoch_committee_assignment(
 
                 assignment = (validators, shard, slot, is_proposer)
                 return assignment
-    return None
+    raise NoValidatorAssignment

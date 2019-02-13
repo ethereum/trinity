@@ -10,6 +10,13 @@ from eth2._utils.bitfield import (
     get_empty_bitfield,
     has_voted,
 )
+from eth2.beacon.exceptions import (
+    NoValidatorAssignment,
+)
+from eth2.beacon.helpers import (
+    get_epoch_start_slot,
+)
+
 from eth2.beacon.tools.builder.validator import (
     aggregate_votes,
     get_next_epoch_committee_assignment,
@@ -85,16 +92,59 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
         (40, 16, 1, 2),
     ]
 )
-def test_get_next_epoch_committee_assignment(genesis_state, epoch_length, config, num_validators):
+def test_get_next_epoch_committee_assignment(genesis_state,
+                                             epoch_length,
+                                             shard_count,
+                                             config,
+                                             num_validators):
     state = genesis_state
     proposer_count = 0
+    shard_validator_count = [
+        0
+        for _ in range(shard_count)
+    ]
+    slots = []
+    next_epoch_start = get_epoch_start_slot(state.current_epoch(epoch_length) + 1, epoch_length)
+
     for validator_index in range(num_validators):
         assignment = get_next_epoch_committee_assignment(state, config, validator_index)
-        if assignment is not None:
-            committee, shard, slot, is_proposer = assignment
-            print(
-                f"   committee={committee}, shard={shard}, slot={slot}, is_proposer={is_proposer}"
-            )
+        assert len(assignment) == 4
+        committee, shard, slot, is_proposer = assignment
+        assert len(committee) > 0
+        assert slot >= next_epoch_start
+        assert slot < next_epoch_start + epoch_length
         if is_proposer:
             proposer_count += 1
+
+        shard_validator_count[shard] += 1
+        slots.append(slot)
+
     assert proposer_count == epoch_length
+    assert sum(shard_validator_count) == num_validators
+
+
+@pytest.mark.parametrize(
+    (
+        'num_validators,'
+        'epoch_length,'
+        'target_committee_size,'
+        'shard_count,'
+    ),
+    [
+        (40, 16, 1, 2),
+    ]
+)
+def test_get_next_epoch_committee_assignment_no_assignment(genesis_state,
+                                                           genesis_epoch,
+                                                           config):
+    state = genesis_state
+    validator_index = 1
+    state = state.update_validator_registry(
+        validator_index,
+        validator=state.validator_registry[validator_index].copy(
+            exit_epoch=genesis_epoch,
+        )
+    )
+
+    with pytest.raises(NoValidatorAssignment):
+        get_next_epoch_committee_assignment(state, config, validator_index)
