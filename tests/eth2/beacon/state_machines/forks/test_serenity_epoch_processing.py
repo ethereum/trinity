@@ -46,8 +46,43 @@ from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
     process_final_updates,
     process_validator_registry,
 )
-from eth2.beacon.state_machines.forks.serenity.epoch_processing import process_justification
+from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
+    get_finalized_epoch,
+    process_justification,
+)
+
 from eth2.beacon.types.states import BeaconState
+
+
+@pytest.mark.parametrize(
+    "justification_bitfield,"
+    "previous_justified_epoch,"
+    "justified_epoch,"
+    "expected",
+    (
+        # Rule 1
+        (0b111110, 3, 3, 3),
+        # Rule 2
+        (0b111110, 4, 4, 4),
+        # Rule 3
+        (0b110111, 3, 4, 4),
+        # Rule 4
+        (0b110111, 3, 4, 4),
+        # No finalize
+        (0b110000, 2, 2, 1),
+    )
+)
+def test_get_finalized_epoch(justification_bitfield,
+                             previous_justified_epoch,
+                             justified_epoch,
+                             expected):
+    previous_epoch = 5
+    finalized_epoch = 1
+    assert get_finalized_epoch(justification_bitfield,
+                               previous_justified_epoch,
+                               justified_epoch,
+                               finalized_epoch,
+                               previous_epoch,) == expected
 
 
 def test_justification_without_mock(sample_beacon_state_params,
