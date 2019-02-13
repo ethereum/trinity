@@ -127,12 +127,9 @@ def get_finalized_epoch(
 
 
 def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconState:
-    EPOCH_LENGTH = config.EPOCH_LENGTH
 
-    current_epoch = slot_to_epoch(state.slot, EPOCH_LENGTH)
-    previous_epoch = (
-        EpochNumber(current_epoch - 1) if current_epoch > config.GENESIS_EPOCH else current_epoch
-    )
+    current_epoch = state.current_epoch(config.EPOCH_LENGTH)
+    previous_epoch = state.previous_epoch(config.EPOCH_LENGTH, config.GENESIS_EPOCH)
 
     current_epoch_justifiable, previous_epoch_justifiable = current_previous_epochs_justifiable(
         current_epoch,
