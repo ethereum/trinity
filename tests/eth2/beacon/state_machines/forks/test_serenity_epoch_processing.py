@@ -24,7 +24,6 @@ from eth2._utils.bitfield import (
 from eth2.beacon.committee_helpers import (
     get_crosslink_committees_at_slot,
     get_current_epoch_committee_count,
-    # get_next_epoch_committee_count,  TODO
 )
 from eth2.beacon.configs import (
     CommitteeConfig,
@@ -133,7 +132,7 @@ def test_check_if_update_validator_registry(genesis_state,
     ]
 )
 def test_update_latest_index_roots(genesis_state,
-                                   config,
+                                   committee_config,
                                    state_slot,
                                    epoch_length,
                                    latest_index_roots_length,
@@ -142,7 +141,7 @@ def test_update_latest_index_roots(genesis_state,
         slot=state_slot,
     )
 
-    result_state = _update_latest_index_roots(state, config)
+    result_state = _update_latest_index_roots(state, committee_config)
 
     # TODO: chanege to hash_tree_root
     index_root = hash_eth2(

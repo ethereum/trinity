@@ -43,6 +43,9 @@ from eth2.beacon._utils.hash import (
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import (
+    EpochNumber,
+)
 
 
 #
@@ -234,16 +237,16 @@ def process_validator_registry(state: BeaconState,
 # Final updates
 #
 def _update_latest_index_roots(state: BeaconState,
-                               config: BeaconConfig) -> BeaconState:
+                               committee_config: CommitteeConfig) -> BeaconState:
     """
     Return the BeaconState with updated `latest_index_roots`.
     """
-    next_epoch = state.next_epoch(config.EPOCH_LENGTH)
+    next_epoch = state.next_epoch(committee_config.epoch_length)
 
     # TODO: chanege to hash_tree_root
     active_validator_indices = get_active_validator_indices(
         state.validator_registry,
-        next_epoch,
+        EpochNumber(next_epoch + committee_config.entry_exit_delay),
     )
     index_root = hash_eth2(
         b''.join(
@@ -256,7 +259,10 @@ def _update_latest_index_roots(state: BeaconState,
 
     latest_index_roots = update_tuple_item(
         state.latest_index_roots,
-        (next_epoch + config.ENTRY_EXIT_DELAY) % config.LATEST_INDEX_ROOTS_LENGTH,
+        (
+            (next_epoch + committee_config.entry_exit_delay) %
+            committee_config.latest_index_roots_length
+        ),
         index_root,
     )
 
@@ -270,7 +276,7 @@ def process_final_updates(state: BeaconState,
     current_epoch = state.current_epoch(config.EPOCH_LENGTH)
     next_epoch = state.next_epoch(config.EPOCH_LENGTH)
 
-    state = _update_latest_index_roots(state, config)
+    state = _update_latest_index_roots(state, CommitteeConfig(config))
 
     state = state.copy(
         latest_penalized_balances=update_tuple_item(
