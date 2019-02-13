@@ -50,19 +50,15 @@ from eth2.beacon.state_machines.forks.serenity.epoch_processing import process_j
 from eth2.beacon.types.states import BeaconState
 
 
-@pytest.fixture
-def mock_justification_state_without_validators(sample_beacon_state_params,
-                                                latest_block_roots_length):
-    return BeaconState(**sample_beacon_state_params).copy(
+def test_justification_without_mock(sample_beacon_state_params,
+                                    latest_block_roots_length,
+                                    config):
+
+    state = BeaconState(**sample_beacon_state_params).copy(
         latest_block_roots=tuple(ZERO_HASH32 for _ in range(latest_block_roots_length)),
         justification_bitfield=0b0,
     )
-
-
-def test_justification_without_validators(
-        mock_justification_state_without_validators,
-        config):
-    state = process_justification(mock_justification_state_without_validators, config)
+    state = process_justification(state, config)
     assert state.justification_bitfield == 0b11
 
 
