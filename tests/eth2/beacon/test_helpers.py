@@ -51,6 +51,7 @@ from eth2.beacon.helpers import (
     get_entry_exit_effect_epoch,
     get_fork_version,
     get_pubkey_for_indices,
+    get_total_balance,
     is_double_vote,
     is_surround_vote,
     slot_to_epoch,
@@ -189,6 +190,48 @@ def test_get_effective_balance(balance,
     balances = (balance,)
     result = get_effective_balance(balances, 0, max_deposit_amount)
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    (
+        'validator_balances,'
+        'validator_indices,'
+        'max_deposit_amount,'
+        'expected'
+    ),
+    [
+        (
+            tuple(),
+            tuple(),
+            1 * GWEI_PER_ETH,
+            0,
+        ),
+        (
+            (32 * GWEI_PER_ETH, 32 * GWEI_PER_ETH),
+            (0, 1),
+            32 * GWEI_PER_ETH,
+            64 * GWEI_PER_ETH,
+        ),
+        (
+            (32 * GWEI_PER_ETH, 32 * GWEI_PER_ETH),
+            (1,),
+            32 * GWEI_PER_ETH,
+            32 * GWEI_PER_ETH,
+        ),
+        (
+            (32 * GWEI_PER_ETH, 32 * GWEI_PER_ETH),
+            (0, 1),
+            16 * GWEI_PER_ETH,
+            32 * GWEI_PER_ETH,
+        ),
+    ]
+)
+def test_get_total_balance(validator_balances,
+                           validator_indices,
+                           max_deposit_amount,
+                           expected):
+    total_balance = get_total_balance(validator_balances, validator_indices, max_deposit_amount)
+    assert total_balance == expected
 
 
 @pytest.mark.parametrize(
