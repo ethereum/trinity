@@ -1,4 +1,5 @@
 from typing import (
+    FrozenSet,
     Iterable,
     Sequence,
     Tuple,
@@ -42,6 +43,7 @@ from eth2.beacon.types.pending_attestation_records import (
     PendingAttestationRecord,
 )
 if TYPE_CHECKING:
+    from eth2.beacon.types.attestation import Attestation  # noqa: F401
     from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
     from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
     from eth2.beacon.types.states import BeaconState  # noqa: F401
@@ -167,6 +169,33 @@ def get_total_balance(
     ))
 
 
+def get_epoch_boundary_attester_indices(
+        boundary_attestations: 'Attestation',
+        state: 'BeaconState',
+        genesis_epoch: EpochNumber,
+        epoch_length: int,
+        target_committee_size: int,
+        shard_count: int) -> FrozenSet[ValidatorIndex]:
+    sets_of_epoch_boundary_participants = tuple(
+        frozenset(get_attestation_participants(
+            state,
+            attestation.data,
+            attestation.participation_bitfield,
+            genesis_epoch,
+            epoch_length,
+            target_committee_size,
+            shard_count,
+        ))
+        for attestation in boundary_attestations
+    )
+
+    epoch_boundary_attester_indices = frozenset.union(
+        frozenset(),
+        *sets_of_epoch_boundary_participants,
+    )
+    return epoch_boundary_attester_indices
+
+
 def get_epoch_boundary_attesting_balances(
         current_epoch: EpochNumber,
         previous_epoch: EpochNumber,
@@ -203,13 +232,6 @@ def get_epoch_boundary_attesting_balances(
     )
 
     previous_justified_epoch = state.previous_justified_epoch
-
-    previous_epoch_justified_attestations = tuple(
-        attestation
-        for attestation in current_epoch_attestations + previous_epoch_attestations
-        if attestation.data.justified_epoch == previous_justified_epoch
-    )
-
     previous_epoch_boundary_root = get_block_root(
         state,
         get_epoch_start_slot(previous_epoch, EPOCH_LENGTH),
@@ -217,26 +239,18 @@ def get_epoch_boundary_attesting_balances(
     )
     previous_epoch_boundary_attestations = tuple(
         attestation
-        for attestation in previous_epoch_justified_attestations
-        if attestation.data.epoch_boundary_root == previous_epoch_boundary_root
+        for attestation in current_epoch_attestations + previous_epoch_attestations
+        if attestation.data.justified_epoch == previous_justified_epoch and
+        attestation.data.epoch_boundary_root == previous_epoch_boundary_root
     )
 
-    sets_of_previous_epoch_boundary_participants = tuple(
-        frozenset(get_attestation_participants(
-            state,
-            attestation.data,
-            attestation.participation_bitfield,
-            GENESIS_EPOCH,
-            EPOCH_LENGTH,
-            TARGET_COMMITTEE_SIZE,
-            SHARD_COUNT,
-        ))
-        for attestation in previous_epoch_boundary_attestations
-    )
-
-    previous_epoch_boundary_attester_indices = frozenset.union(
-        frozenset(),
-        *sets_of_previous_epoch_boundary_participants,
+    previous_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
+        previous_epoch_boundary_attestations,
+        state,
+        GENESIS_EPOCH,
+        EPOCH_LENGTH,
+        TARGET_COMMITTEE_SIZE,
+        SHARD_COUNT,
     )
 
     previous_epoch_boundary_attesting_balance = Gwei(sum(
@@ -259,22 +273,13 @@ def get_epoch_boundary_attesting_balances(
         attestation.data.justified_epoch == justified_epoch
     )
 
-    sets_of_current_epoch_boundary_participants = tuple(
-        frozenset(get_attestation_participants(
-            state,
-            attestation.data,
-            attestation.participation_bitfield,
-            GENESIS_EPOCH,
-            EPOCH_LENGTH,
-            TARGET_COMMITTEE_SIZE,
-            SHARD_COUNT,
-        ))
-        for attestation in current_epoch_boundary_attestations
-    )
-
-    current_epoch_boundary_attester_indices = frozenset.union(
-        frozenset(),
-        *sets_of_current_epoch_boundary_participants,
+    current_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
+        current_epoch_boundary_attestations,
+        state,
+        GENESIS_EPOCH,
+        EPOCH_LENGTH,
+        TARGET_COMMITTEE_SIZE,
+        SHARD_COUNT,
     )
 
     current_epoch_boundary_attesting_balance = Gwei(sum(
