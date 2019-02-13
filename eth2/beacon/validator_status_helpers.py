@@ -111,7 +111,7 @@ def _settle_penality_to_validator_and_whistleblower(
     state.validator_balances[index] -= whistleblower_reward
     validator.penalized_epoch = slot_to_epoch(state.slot)
     """
-    EPOCH_LENGTH = committee_config.epoch_length
+    EPOCH_LENGTH = committee_config.EPOCH_LENGTH
 
     # Update `state.latest_penalized_balances`
     current_epoch_penalization_index = state.current_epoch(
@@ -174,8 +174,8 @@ def penalize_validator(state: BeaconState,
 
     Exit the validator, penalize the validator, and reward the whistleblower.
     """
-    EPOCH_LENGTH = committee_config.epoch_length
-    ENTRY_EXIT_DELAY = committee_config.entry_exit_delay
+    EPOCH_LENGTH = committee_config.EPOCH_LENGTH
+    ENTRY_EXIT_DELAY = committee_config.ENTRY_EXIT_DELAY
     state = exit_validator(state, index, EPOCH_LENGTH, ENTRY_EXIT_DELAY)
     state = _settle_penality_to_validator_and_whistleblower(
         state=state,

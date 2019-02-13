@@ -163,14 +163,15 @@ def get_crosslink_committees_at_slot(
     """
     Return the list of ``(committee, shard)`` tuples for the ``slot``.
     """
-    genesis_epoch = committee_config.genesis_epoch
-    epoch_length = committee_config.epoch_length
-    target_committee_size = committee_config.target_committee_size
-    shard_count = committee_config.shard_count
-    seed_lookahead = committee_config.seed_lookahead
-    entry_exit_delay = committee_config.entry_exit_delay
-    latest_index_roots_length = committee_config.latest_index_roots_length
-    latest_randao_mixes_length = committee_config.latest_randao_mixes_length
+    genesis_epoch = committee_config.GENESIS_EPOCH
+    shard_count = committee_config.SHARD_COUNT
+    epoch_length = committee_config.EPOCH_LENGTH
+    target_committee_size = committee_config.TARGET_COMMITTEE_SIZE
+
+    seed_lookahead = committee_config.SEED_LOOKAHEAD
+    entry_exit_delay = committee_config.ENTRY_EXIT_DELAY
+    latest_index_roots_length = committee_config.LATEST_INDEX_ROOTS_LENGTH
+    latest_randao_mixes_length = committee_config.LATEST_RANDAO_MIXES_LENGTH
 
     epoch = slot_to_epoch(slot, epoch_length)
     current_epoch = state.current_epoch(epoch_length)

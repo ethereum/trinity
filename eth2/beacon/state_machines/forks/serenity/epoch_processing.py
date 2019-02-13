@@ -241,12 +241,12 @@ def _update_latest_index_roots(state: BeaconState,
     """
     Return the BeaconState with updated `latest_index_roots`.
     """
-    next_epoch = state.next_epoch(committee_config.epoch_length)
+    next_epoch = state.next_epoch(committee_config.EPOCH_LENGTH)
 
     # TODO: chanege to hash_tree_root
     active_validator_indices = get_active_validator_indices(
         state.validator_registry,
-        EpochNumber(next_epoch + committee_config.entry_exit_delay),
+        EpochNumber(next_epoch + committee_config.ENTRY_EXIT_DELAY),
     )
     index_root = hash_eth2(
         b''.join(
@@ -260,8 +260,8 @@ def _update_latest_index_roots(state: BeaconState,
     latest_index_roots = update_tuple_item(
         state.latest_index_roots,
         (
-            (next_epoch + committee_config.entry_exit_delay) %
-            committee_config.latest_index_roots_length
+            (next_epoch + committee_config.ENTRY_EXIT_DELAY) %
+            committee_config.LATEST_INDEX_ROOTS_LENGTH
         ),
         index_root,
     )

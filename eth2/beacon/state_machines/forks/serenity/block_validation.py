@@ -76,7 +76,7 @@ def validate_proposer_signature(state: BeaconState,
     proposer_pubkey = state.validator_registry[beacon_proposer_index].pubkey
     domain = get_domain(
         state.fork,
-        state.current_epoch(committee_config.epoch_length),
+        state.current_epoch(committee_config.EPOCH_LENGTH),
         SignatureDomain.DOMAIN_PROPOSAL
     )
 
@@ -107,20 +107,21 @@ def validate_attestation(state: BeaconState,
     Validate the given ``attestation``.
     Raise ``ValidationError`` if it's invalid.
     """
+    epoch_length = committee_config.EPOCH_LENGTH
 
     validate_attestation_slot(
         attestation.data,
         state.slot,
-        committee_config.epoch_length,
+        epoch_length,
         min_attestation_inclusion_delay,
     )
 
     validate_attestation_justified_epoch(
         attestation.data,
-        state.current_epoch(committee_config.epoch_length),
+        state.current_epoch(epoch_length),
         state.previous_justified_epoch,
         state.justified_epoch,
-        committee_config.epoch_length,
+        epoch_length,
     )
 
     validate_attestation_justified_block_root(
@@ -129,7 +130,7 @@ def validate_attestation(state: BeaconState,
             state=state,
             slot=get_epoch_start_slot(
                 attestation.data.justified_epoch,
-                committee_config.epoch_length,
+                epoch_length,
             ),
             latest_block_roots_length=latest_block_roots_length,
         ),
@@ -301,7 +302,7 @@ def validate_attestation_aggregate_signature(state: BeaconState,
     message = AttestationDataAndCustodyBit.create_attestation_message(attestation.data)
     domain = get_domain(
         fork=state.fork,
-        epoch=slot_to_epoch(attestation.data.slot, committee_config.epoch_length),
+        epoch=slot_to_epoch(attestation.data.slot, committee_config.EPOCH_LENGTH),
         domain_type=SignatureDomain.DOMAIN_ATTESTATION,
     )
 
