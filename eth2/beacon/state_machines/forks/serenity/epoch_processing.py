@@ -102,26 +102,32 @@ def get_finalized_epoch(
         justified_epoch: EpochNumber,
         finalized_epoch: EpochNumber,
         previous_epoch: EpochNumber) -> EpochNumber:
-    if (
+
+    rule_1 = (
         (justification_bitfield >> 1) % 8 == 0b111 and
         previous_justified_epoch == previous_epoch - 2
-    ):
-        return previous_justified_epoch
-    elif (
+    )
+    rule_2 = (
         (justification_bitfield >> 1) % 4 == 0b11 and
         previous_justified_epoch == previous_epoch - 1
-    ):
-        return previous_justified_epoch
-    elif (
-        (justification_bitfield >> 0) % 8 == 0b111 and
+    )
+    rule_3 = (
+        justification_bitfield % 8 == 0b111 and
         justified_epoch == previous_epoch - 1
-    ):
-        return justified_epoch
-    elif (
-        (justification_bitfield >> 0) % 4 == 0b11 and
+    )
+    rule_4 = (
+        justification_bitfield % 4 == 0b11 and
         justified_epoch == previous_epoch
-    ):
+    )
+    # Check the rule in the order that can finalize higher epoch possible
+    if rule_4:
         return justified_epoch
+    elif rule_3:
+        return justified_epoch
+    elif rule_2:
+        return previous_justified_epoch
+    elif rule_1:
+        return previous_justified_epoch
     else:
         return finalized_epoch
 

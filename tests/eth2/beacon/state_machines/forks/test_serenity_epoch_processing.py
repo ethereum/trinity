@@ -104,25 +104,26 @@ def test_justification_without_mock(sample_beacon_state_params,
     "states,",
     (
         (
-            # Trigger R2 to finalize epoch 1
+            # Trigger R4 to finalize epoch 1
             (0, True, False, 0, 0, 0b0, 0),
             (1, True, True, 0, 0, 0b1, 0),  # R4 finalize 0
-            (2, True, True, 0, 1, 0b11, 0),  # R2 finalize 0
-            (3, False, True, 1, 2, 0b111, 0),  # R2 finalize 1
-            (2, 2, 0b1110, 1),
+            (2, True, True, 0, 1, 0b11, 0),  # R4 finalize 1
+            (1, 2, 0b111, 1),
         ),
         (
-            # Trigger R4 to finalize epoch 4
-            (4, True, False, 2, 2, 0b1110, 1),
-            (5, True, True, 2, 4, 0b11101, 1),  # R4 finalize 4
-            (4, 5, 0b111011, 4),
+            # Trigger R2 to finalize epoch 1
+            # Trigger R3 to finalize epoch 2
+            (2, False, True, 0, 1, 0b11, 0),  # R2 finalize 0
+            (3, False, True, 1, 1, 0b110, 0),  # R2 finalize 1
+            (4, True, True, 1, 2, 0b1110, 1),  # R3 finalize 2
+            (2, 4, 0b11111, 2)
         ),
         (
             # Trigger R1 to finalize epoch 2
-            (2, True, True, 0, 1, 0b11, 0),
-            (3, False, True, 1, 2, 0b111, 0),  # R2 finalize 1
-            (4, False, True, 2, 2, 0b1110, 1),  # R2 finalize 2
-            (5, False, True, 2, 3, 0b11110, 2),  # R1 finalize 2
+            (2, False, True, 0, 1, 0b11, 0),  # R2 finalize 0
+            (3, False, True, 1, 1, 0b110, 0),  # R2 finalize 1
+            (4, False, True, 1, 2, 0b1110, 1),  # R1 finalize 1
+            (5, False, True, 2, 3, 0b11110, 1),  # R1 finalize 2
             (3, 4, 0b111110, 2)
         ),
     ),
