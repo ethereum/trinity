@@ -92,7 +92,7 @@ def get_initial_beacon_state(*,
         validator_registry_update_epoch=genesis_epoch,
 
         # Randomness and committees
-        latest_randao_mixes=tuple(ZERO_HASH32 for _ in range(latest_randao_mixes_length)),
+        latest_randao_mixes=(ZERO_HASH32,) * latest_randao_mixes_length,
         previous_epoch_start_shard=genesis_start_shard,
         current_epoch_start_shard=genesis_start_shard,
         previous_calculation_epoch=genesis_epoch,
@@ -107,16 +107,12 @@ def get_initial_beacon_state(*,
         finalized_epoch=genesis_epoch,
 
         # Recent state
-        latest_crosslinks=tuple([
-            CrosslinkRecord(epoch=genesis_epoch, shard_block_root=ZERO_HASH32)
-            for _ in range(shard_count)
-        ]),
-        latest_block_roots=tuple(ZERO_HASH32 for _ in range(latest_block_roots_length)),
-        latest_index_roots=tuple(ZERO_HASH32 for _ in range(latest_index_roots_length)),
-        latest_penalized_balances=tuple(
-            Gwei(0)
-            for _ in range(latest_penalized_exit_length)
+        latest_crosslinks=(
+            (CrosslinkRecord(epoch=genesis_epoch, shard_block_root=ZERO_HASH32),) * shard_count
         ),
+        latest_block_roots=(ZERO_HASH32,) * latest_block_roots_length,
+        latest_index_roots=(ZERO_HASH32,) * latest_index_roots_length,
+        latest_penalized_balances=(Gwei(0),) * latest_penalized_exit_length,
         latest_attestations=(),
         batched_block_roots=(),
 
@@ -168,10 +164,7 @@ def get_initial_beacon_state(*,
             ]
         )
     )
-    latest_index_roots = tuple(
-        genesis_active_index_root
-        for _ in range(latest_index_roots_length)
-    )
+    latest_index_roots = (genesis_active_index_root,) * latest_index_roots_length
     state = state.copy(
         latest_index_roots=latest_index_roots,
     )

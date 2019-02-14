@@ -111,11 +111,11 @@ def _settle_penality_to_validator_and_whistleblower(
     state.validator_balances[index] -= whistleblower_reward
     validator.penalized_epoch = slot_to_epoch(state.slot)
     """
-    EPOCH_LENGTH = committee_config.EPOCH_LENGTH
+    epoch_length = committee_config.EPOCH_LENGTH
 
     # Update `state.latest_penalized_balances`
     current_epoch_penalization_index = state.current_epoch(
-        EPOCH_LENGTH) % latest_penalized_exit_length
+        epoch_length) % latest_penalized_exit_length
     effective_balance = get_effective_balance(
         state.validator_balances,
         validator_index,
@@ -152,7 +152,7 @@ def _settle_penality_to_validator_and_whistleblower(
     # Update validator's balance and `penalized_epoch` field
     validator = state.validator_registry[validator_index]
     validator = validator.copy(
-        penalized_epoch=state.current_epoch(EPOCH_LENGTH),
+        penalized_epoch=state.current_epoch(epoch_length),
     )
     state = state.update_validator(
         validator_index,
@@ -174,9 +174,9 @@ def penalize_validator(state: BeaconState,
 
     Exit the validator, penalize the validator, and reward the whistleblower.
     """
-    EPOCH_LENGTH = committee_config.EPOCH_LENGTH
-    ENTRY_EXIT_DELAY = committee_config.ENTRY_EXIT_DELAY
-    state = exit_validator(state, index, EPOCH_LENGTH, ENTRY_EXIT_DELAY)
+    epoch_length = committee_config.EPOCH_LENGTH
+    entry_exit_delay = committee_config.ENTRY_EXIT_DELAY
+    state = exit_validator(state, index, epoch_length, entry_exit_delay)
     state = _settle_penality_to_validator_and_whistleblower(
         state=state,
         validator_index=index,
