@@ -201,25 +201,18 @@ def get_epoch_boundary_attesting_balances(
         - epoch_boundary_root is exactly 1 epoch ago
     """
 
-    EPOCH_LENGTH = config.EPOCH_LENGTH
-    MAX_DEPOSIT_AMOUNT = config.MAX_DEPOSIT_AMOUNT
-    LATEST_BLOCK_ROOTS_LENGTH = config.LATEST_BLOCK_ROOTS_LENGTH
-    GENESIS_EPOCH = config.GENESIS_EPOCH
-    SHARD_COUNT = config.SHARD_COUNT
-    TARGET_COMMITTEE_SIZE = config.TARGET_COMMITTEE_SIZE
-
-    current_epoch_attestations = get_current_epoch_attestations(state, EPOCH_LENGTH)
+    current_epoch_attestations = get_current_epoch_attestations(state, config.EPOCH_LENGTH)
     previous_epoch_attestations = get_previous_epoch_attestations(
         state,
-        EPOCH_LENGTH,
-        GENESIS_EPOCH,
+        config.EPOCH_LENGTH,
+        config.GENESIS_EPOCH,
     )
 
     previous_justified_epoch = state.previous_justified_epoch
     previous_epoch_boundary_root = get_block_root(
         state,
-        get_epoch_start_slot(previous_epoch, EPOCH_LENGTH),
-        LATEST_BLOCK_ROOTS_LENGTH,
+        get_epoch_start_slot(previous_epoch, config.EPOCH_LENGTH),
+        config.LATEST_BLOCK_ROOTS_LENGTH,
     )
     previous_epoch_boundary_attestations = tuple(
         attestation
@@ -231,23 +224,23 @@ def get_epoch_boundary_attesting_balances(
     previous_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
         previous_epoch_boundary_attestations,
         state,
-        GENESIS_EPOCH,
-        EPOCH_LENGTH,
-        TARGET_COMMITTEE_SIZE,
-        SHARD_COUNT,
+        config.GENESIS_EPOCH,
+        config.EPOCH_LENGTH,
+        config.TARGET_COMMITTEE_SIZE,
+        config.SHARD_COUNT,
     )
 
     previous_epoch_boundary_attesting_balance = get_total_balance(
         state.validator_balances,
         previous_epoch_boundary_attester_indices,
-        MAX_DEPOSIT_AMOUNT,
+        config.MAX_DEPOSIT_AMOUNT,
     )
 
-    current_epoch_start_slot = get_epoch_start_slot(current_epoch, EPOCH_LENGTH)
+    current_epoch_start_slot = get_epoch_start_slot(current_epoch, config.EPOCH_LENGTH)
     current_epoch_boundary_root = get_block_root(
         state,
         current_epoch_start_slot,
-        LATEST_BLOCK_ROOTS_LENGTH,
+        config.LATEST_BLOCK_ROOTS_LENGTH,
     )
 
     justified_epoch = state.justified_epoch
@@ -261,15 +254,15 @@ def get_epoch_boundary_attesting_balances(
     current_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
         current_epoch_boundary_attestations,
         state,
-        GENESIS_EPOCH,
-        EPOCH_LENGTH,
-        TARGET_COMMITTEE_SIZE,
-        SHARD_COUNT,
+        config.GENESIS_EPOCH,
+        config.EPOCH_LENGTH,
+        config.TARGET_COMMITTEE_SIZE,
+        config.SHARD_COUNT,
     )
 
     current_epoch_boundary_attesting_balance = get_total_balance(
         state.validator_balances,
         current_epoch_boundary_attester_indices,
-        MAX_DEPOSIT_AMOUNT,
+        config.MAX_DEPOSIT_AMOUNT,
     )
     return previous_epoch_boundary_attesting_balance, current_epoch_boundary_attesting_balance
