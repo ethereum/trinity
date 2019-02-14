@@ -47,7 +47,7 @@ from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
     process_validator_registry,
 )
 from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
-    get_finalized_epoch,
+    _get_finalized_epoch,
     process_justification,
 )
 
@@ -78,11 +78,11 @@ def test_get_finalized_epoch(justification_bitfield,
                              expected):
     previous_epoch = 5
     finalized_epoch = 1
-    assert get_finalized_epoch(justification_bitfield,
-                               previous_justified_epoch,
-                               justified_epoch,
-                               finalized_epoch,
-                               previous_epoch,) == expected
+    assert _get_finalized_epoch(justification_bitfield,
+                                previous_justified_epoch,
+                                justified_epoch,
+                                finalized_epoch,
+                                previous_epoch,) == expected
 
 
 def test_justification_without_mock(sample_beacon_state_params,
@@ -161,7 +161,7 @@ def test_process_justification(monkeypatch,
         with monkeypatch.context() as m:
             m.setattr(
                 epoch_processing,
-                'current_previous_epochs_justifiable',
+                '_current_previous_epochs_justifiable',
                 mock_current_previous_epochs_justifiable,
             )
 

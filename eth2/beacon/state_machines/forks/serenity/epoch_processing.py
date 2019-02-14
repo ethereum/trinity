@@ -57,7 +57,7 @@ from eth2.beacon.typing import (
 # Justification
 #
 
-def current_previous_epochs_justifiable(
+def _current_previous_epochs_justifiable(
         current_epoch: EpochNumber,
         previous_epoch: EpochNumber,
         state: BeaconState,
@@ -96,7 +96,7 @@ def current_previous_epochs_justifiable(
     return current_epoch_justifiable, previous_epoch_justifiable
 
 
-def get_finalized_epoch(
+def _get_finalized_epoch(
         justification_bitfield: int,
         previous_justified_epoch: EpochNumber,
         justified_epoch: EpochNumber,
@@ -137,7 +137,7 @@ def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconSta
     current_epoch = state.current_epoch(config.EPOCH_LENGTH)
     previous_epoch = state.previous_epoch(config.EPOCH_LENGTH, config.GENESIS_EPOCH)
 
-    current_epoch_justifiable, previous_epoch_justifiable = current_previous_epochs_justifiable(
+    current_epoch_justifiable, previous_epoch_justifiable = _current_previous_epochs_justifiable(
         current_epoch,
         previous_epoch,
         state,
@@ -160,7 +160,7 @@ def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconSta
     else:
         new_justified_epoch = state.justified_epoch
 
-    finalized_epoch = get_finalized_epoch(
+    finalized_epoch = _get_finalized_epoch(
         justification_bitfield,
         state.previous_justified_epoch,
         state.justified_epoch,
