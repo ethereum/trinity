@@ -87,16 +87,19 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
         'epoch_length,'
         'target_committee_size,'
         'shard_count,'
+        'registry_change,'
     ),
     [
-        (40, 16, 1, 2),
+        (40, 16, 1, 2, True),
+        (40, 16, 1, 2, False),
     ]
 )
 def test_get_next_epoch_committee_assignment(genesis_state,
                                              epoch_length,
                                              shard_count,
                                              config,
-                                             num_validators):
+                                             num_validators,
+                                             registry_change):
     state = genesis_state
     proposer_count = 0
     shard_validator_count = [
@@ -107,7 +110,12 @@ def test_get_next_epoch_committee_assignment(genesis_state,
     next_epoch_start = get_epoch_start_slot(state.current_epoch(epoch_length) + 1, epoch_length)
 
     for validator_index in range(num_validators):
-        assignment = get_next_epoch_committee_assignment(state, config, validator_index)
+        assignment = get_next_epoch_committee_assignment(
+            state,
+            config,
+            validator_index,
+            registry_change,
+        )
         assert assignment.slot >= next_epoch_start
         assert assignment.slot < next_epoch_start + epoch_length
         if assignment.is_proposer:
@@ -144,4 +152,4 @@ def test_get_next_epoch_committee_assignment_no_assignment(genesis_state,
     )
 
     with pytest.raises(NoCommitteeAssignment):
-        get_next_epoch_committee_assignment(state, config, validator_index)
+        get_next_epoch_committee_assignment(state, config, validator_index, True)

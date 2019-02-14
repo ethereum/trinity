@@ -270,7 +270,8 @@ def create_mock_signed_attestations_at_slot(
 def get_next_epoch_committee_assignment(
         state: BeaconState,
         config: BeaconConfig,
-        validator_index: ValidatorIndex
+        validator_index: ValidatorIndex,
+        registry_change: bool
 ) -> CommitteeAssignment:
     """
     Return the ``CommitteeAssignment`` in the next epoch for ``validator_index``
@@ -284,27 +285,26 @@ def get_next_epoch_committee_assignment(
     current_epoch = state.current_epoch(config.EPOCH_LENGTH)
     next_epoch = current_epoch + 1
     next_epoch_start_slot = get_epoch_start_slot(next_epoch, config.EPOCH_LENGTH)
-    for registry_change in [False, True]:
-        for slot in range(next_epoch_start_slot, next_epoch_start_slot + config.EPOCH_LENGTH):
-            crosslink_committees = get_crosslink_committees_at_slot(
-                state,
-                slot,
-                CommitteeConfig(config),
-                registry_change=registry_change,
-            )
-            selected_committees = [
-                committee
-                for committee in crosslink_committees
-                if validator_index in committee[0]
-            ]
-            if len(selected_committees) > 0:
-                validators = selected_committees[0][0]
-                shard = selected_committees[0][1]
-                first_committee_at_slot = crosslink_committees[0][0]  # List[ValidatorIndex]
-                is_proposer = first_committee_at_slot[
-                    slot % len(first_committee_at_slot)
-                ] == validator_index
+    for slot in range(next_epoch_start_slot, next_epoch_start_slot + config.EPOCH_LENGTH):
+        crosslink_committees = get_crosslink_committees_at_slot(
+            state,
+            slot,
+            CommitteeConfig(config),
+            registry_change=registry_change,
+        )
+        selected_committees = [
+            committee
+            for committee in crosslink_committees
+            if validator_index in committee[0]
+        ]
+        if len(selected_committees) > 0:
+            validators = selected_committees[0][0]
+            shard = selected_committees[0][1]
+            first_committee_at_slot = crosslink_committees[0][0]  # List[ValidatorIndex]
+            is_proposer = first_committee_at_slot[
+                slot % len(first_committee_at_slot)
+            ] == validator_index
 
-                return CommitteeAssignment(validators, shard, slot, is_proposer)
+            return CommitteeAssignment(validators, shard, slot, is_proposer)
 
     raise NoCommitteeAssignment
