@@ -1,5 +1,9 @@
 import pytest
 
+from eth_utils import (
+    ValidationError,
+)
+
 from eth2.beacon.constants import (
     FAR_FUTURE_EPOCH,
 )
@@ -14,11 +18,12 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.validator_status_helpers import (
     _settle_penality_to_validator_and_whistleblower,
+    _validate_withdrawal_epoch,
     activate_validator,
     exit_validator,
     initiate_validator_exit,
     prepare_validator_for_withdrawal,
-    penalize_validator,
+    slash_validator,
 )
 
 
@@ -252,19 +257,19 @@ def test_settle_penality_to_validator_and_whistleblower(monkeypatch,
         (10, [4, 5, 6, 7]),
     ],
 )
-def test_penalize_validator(monkeypatch,
-                            num_validators,
-                            committee,
-                            n_validators_state,
-                            genesis_epoch,
-                            epoch_length,
-                            latest_penalized_exit_length,
-                            whistleblower_reward_quotient,
-                            entry_exit_delay,
-                            max_deposit_amount,
-                            target_committee_size,
-                            shard_count,
-                            committee_config):
+def test_slash_validator(monkeypatch,
+                         num_validators,
+                         committee,
+                         n_validators_state,
+                         genesis_epoch,
+                         epoch_length,
+                         latest_penalized_exit_length,
+                         whistleblower_reward_quotient,
+                         entry_exit_delay,
+                         max_deposit_amount,
+                         target_committee_size,
+                         shard_count,
+                         committee_config):
     from eth2.beacon import committee_helpers
 
     def mock_get_crosslink_committees_at_slot(state,
@@ -283,7 +288,7 @@ def test_penalize_validator(monkeypatch,
     state = n_validators_state
     index = 1
 
-    result_state = penalize_validator(
+    result_state = slash_validator(
         state=state,
         index=index,
         latest_penalized_exit_length=latest_penalized_exit_length,
@@ -318,3 +323,25 @@ def test_prepare_validator_for_withdrawal(n_validators_state):
     assert result_state.validator_registry[index].status_flags == (
         old_validator_status_flags | ValidatorStatusFlags.WITHDRAWABLE
     )
+
+
+@pytest.mark.parametrize(
+    (
+        'epoch_length',
+        'state_slot',
+        'validate_withdrawal_epoch',
+        'success'
+    ),
+    [
+        (4, 8, 1, False),
+        (4, 8, 2, False),
+        (4, 7, 2, True),
+        (4, 8, 3, True),
+    ]
+)
+def test_validate_withdrawal_epoch(epoch_length, state_slot, validate_withdrawal_epoch, success):
+    if success:
+        _validate_withdrawal_epoch(state_slot, validate_withdrawal_epoch, epoch_length)
+    else:
+        with pytest.raises(ValidationError):
+            _validate_withdrawal_epoch(state_slot, validate_withdrawal_epoch, epoch_length)
