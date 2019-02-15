@@ -186,6 +186,9 @@ def get_effective_balance(
 def get_total_balance(validator_balances: Sequence[Gwei],
                       validator_indices: Sequence[ValidatorIndex],
                       max_deposit_amount: Gwei) -> Gwei:
+    """
+    Return the combined effective balance of an array of validators.
+    """
     return Gwei(sum(
         get_effective_balance(validator_balances, index, max_deposit_amount)
         for index in validator_indices
