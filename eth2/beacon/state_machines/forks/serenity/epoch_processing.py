@@ -58,10 +58,14 @@ from eth2.beacon.typing import (
 #
 
 def _current_previous_epochs_justifiable(
+        state: BeaconState,
         current_epoch: EpochNumber,
         previous_epoch: EpochNumber,
-        state: BeaconState,
         config: BeaconConfig) -> Tuple[bool, bool]:
+    """
+    Determine if epoch boundary attesting balance is greater than 2/3 of current_total_balance
+    for current and previous epochs.
+    """
 
     current_epoch_active_validator_indices = get_active_validator_indices(
         state.validator_registry,
@@ -101,7 +105,7 @@ def _get_finalized_epoch(
         previous_justified_epoch: EpochNumber,
         justified_epoch: EpochNumber,
         finalized_epoch: EpochNumber,
-        previous_epoch: EpochNumber) -> EpochNumber:
+        previous_epoch: EpochNumber) -> Tuple[EpochNumber, int]:
 
     rule_1 = (
         (justification_bitfield >> 1) % 8 == 0b111 and
@@ -120,16 +124,17 @@ def _get_finalized_epoch(
         justified_epoch == previous_epoch
     )
     # Check the rule in the order that can finalize higher epoch possible
+    # The second output indicating what rule triggered is for testing purpose
     if rule_4:
-        return justified_epoch
+        return justified_epoch, 4
     elif rule_3:
-        return justified_epoch
+        return justified_epoch, 3
     elif rule_2:
-        return previous_justified_epoch
+        return previous_justified_epoch, 2
     elif rule_1:
-        return previous_justified_epoch
+        return previous_justified_epoch, 1
     else:
-        return finalized_epoch
+        return finalized_epoch, 0
 
 
 def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconState:
@@ -138,20 +143,21 @@ def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconSta
     previous_epoch = state.previous_epoch(config.EPOCH_LENGTH, config.GENESIS_EPOCH)
 
     current_epoch_justifiable, previous_epoch_justifiable = _current_previous_epochs_justifiable(
+        state,
         current_epoch,
         previous_epoch,
-        state,
         config,
     )
 
+    _justification_bitfield = state.justification_bitfield << 1
     if previous_epoch_justifiable and current_epoch_justifiable:
-        justification_bitfield = (state.justification_bitfield << 1) | 3
+        justification_bitfield = _justification_bitfield | 3
     elif previous_epoch_justifiable:
-        justification_bitfield = (state.justification_bitfield << 1) | 2
+        justification_bitfield = _justification_bitfield | 2
     elif current_epoch_justifiable:
-        justification_bitfield = (state.justification_bitfield << 1) | 1
+        justification_bitfield = _justification_bitfield | 1
     else:
-        justification_bitfield = state.justification_bitfield << 1
+        justification_bitfield = _justification_bitfield
 
     if current_epoch_justifiable:
         new_justified_epoch = current_epoch
@@ -160,7 +166,7 @@ def process_justification(state: BeaconState, config: BeaconConfig) -> BeaconSta
     else:
         new_justified_epoch = state.justified_epoch
 
-    finalized_epoch = _get_finalized_epoch(
+    finalized_epoch, _ = _get_finalized_epoch(
         justification_bitfield,
         state.previous_justified_epoch,
         state.justified_epoch,

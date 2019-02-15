@@ -58,18 +58,18 @@ from eth2.beacon.types.states import BeaconState
     "justification_bitfield,"
     "previous_justified_epoch,"
     "justified_epoch,"
-    "expected",
+    "expected,",
     (
         # Rule 1
-        (0b111110, 3, 3, 3),
+        (0b111110, 3, 3, (3, 1)),
         # Rule 2
-        (0b111110, 4, 4, 4),
+        (0b111110, 4, 4, (4, 2)),
         # Rule 3
-        (0b110111, 3, 4, 4),
+        (0b110111, 3, 4, (4, 3)),
         # Rule 4
-        (0b110111, 3, 4, 4),
+        (0b110011, 2, 5, (5, 4)),
         # No finalize
-        (0b110000, 2, 2, 1),
+        (0b110000, 2, 2, (1, 0)),
     )
 )
 def test_get_finalized_epoch(justification_bitfield,
@@ -153,7 +153,6 @@ def test_process_justification(monkeypatch,
             finalized_epoch_after,
         ) = states[i + 1][-4:]
         slot = (current_epoch + 1) * config.EPOCH_LENGTH - 1
-        print("Epoch", current_epoch)
 
         def mock_current_previous_epochs_justifiable(current_epoch, previous_epoch, state, config):
             return current_epoch_justifiable, previous_epoch_justifiable
