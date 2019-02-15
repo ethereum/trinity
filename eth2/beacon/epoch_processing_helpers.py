@@ -41,7 +41,6 @@ from eth2.beacon.types.pending_attestation_records import (
     PendingAttestationRecord,
 )
 if TYPE_CHECKING:
-    from eth2.beacon.types.attestation import Attestation  # noqa: F401
     from eth2.beacon.types.attestation_data import AttestationData  # noqa: F401
     from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
     from eth2.beacon.types.states import BeaconState  # noqa: F401
@@ -153,31 +152,28 @@ def get_winning_root(
     return (winning_root, winning_root_balance)
 
 
+@to_tuple
+@to_set
 def get_epoch_boundary_attester_indices(
-        boundary_attestations: 'Attestation',
         state: 'BeaconState',
+        attestations: Sequence[PendingAttestationRecord],
+        epoch: EpochNumber,
+        root: Hash32,
         genesis_epoch: EpochNumber,
         epoch_length: int,
         target_committee_size: int,
-        shard_count: int) -> Sequence[ValidatorIndex]:
-    sets_of_epoch_boundary_participants = tuple(
-        frozenset(get_attestation_participants(
-            state,
-            attestation.data,
-            attestation.participation_bitfield,
-            genesis_epoch,
-            epoch_length,
-            target_committee_size,
-            shard_count,
-        ))
-        for attestation in boundary_attestations
-    )
-
-    epoch_boundary_attester_indices = frozenset.union(
-        frozenset(),
-        *sets_of_epoch_boundary_participants,
-    )
-    return tuple(epoch_boundary_attester_indices)
+        shard_count: int) -> Iterable[ValidatorIndex]:
+    for a in attestations:
+        if a.data.justified_epoch == epoch and a.data.epoch_boundary_root == root:
+            yield from get_attestation_participants(
+                state,
+                a.data,
+                a.aggregation_bitfields,
+                genesis_epoch,
+                epoch_length,
+                target_committee_size,
+                shard_count,
+            )
 
 
 def get_epoch_boundary_attesting_balances(
@@ -185,21 +181,6 @@ def get_epoch_boundary_attesting_balances(
         previous_epoch: EpochNumber,
         state: 'BeaconState',
         config: 'BeaconConfig') -> Tuple[Gwei, Gwei]:
-    """
-    Return attesting balances for previous epoch boundary and current epoch boundary.
-    They are sum of balances, of unique validators, who have sent attestations
-    satisfying these constraints:
-
-    Previous epoch boundary attestations:
-        - slot in latest 2 epochs, and
-        - justified_epoch is previous_justified_epoch, and
-        - epoch_boundary_root is exactly 2 epoch ago
-
-    Current epoch boundary attestations:
-        - slot in latest 1 epoch, and
-        - justified_epoch is justified_epoch, and
-        - epoch_boundary_root is exactly 1 epoch ago
-    """
 
     current_epoch_attestations = get_current_epoch_attestations(state, config.EPOCH_LENGTH)
     previous_epoch_attestations = get_previous_epoch_attestations(
@@ -208,22 +189,17 @@ def get_epoch_boundary_attesting_balances(
         config.GENESIS_EPOCH,
     )
 
-    previous_justified_epoch = state.previous_justified_epoch
     previous_epoch_boundary_root = get_block_root(
         state,
         get_epoch_start_slot(previous_epoch, config.EPOCH_LENGTH),
         config.LATEST_BLOCK_ROOTS_LENGTH,
     )
-    previous_epoch_boundary_attestations = tuple(
-        attestation
-        for attestation in current_epoch_attestations + previous_epoch_attestations
-        if attestation.data.justified_epoch == previous_justified_epoch and
-        attestation.data.epoch_boundary_root == previous_epoch_boundary_root
-    )
 
     previous_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
-        previous_epoch_boundary_attestations,
         state,
+        current_epoch_attestations + previous_epoch_attestations,
+        state.previous_justified_epoch,
+        previous_epoch_boundary_root,
         config.GENESIS_EPOCH,
         config.EPOCH_LENGTH,
         config.TARGET_COMMITTEE_SIZE,
@@ -236,24 +212,17 @@ def get_epoch_boundary_attesting_balances(
         config.MAX_DEPOSIT_AMOUNT,
     )
 
-    current_epoch_start_slot = get_epoch_start_slot(current_epoch, config.EPOCH_LENGTH)
     current_epoch_boundary_root = get_block_root(
         state,
-        current_epoch_start_slot,
+        get_epoch_start_slot(current_epoch, config.EPOCH_LENGTH),
         config.LATEST_BLOCK_ROOTS_LENGTH,
     )
 
-    justified_epoch = state.justified_epoch
-    current_epoch_boundary_attestations = tuple(
-        attestation
-        for attestation in current_epoch_attestations
-        if attestation.data.epoch_boundary_root == current_epoch_boundary_root and
-        attestation.data.justified_epoch == justified_epoch
-    )
-
     current_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
-        current_epoch_boundary_attestations,
         state,
+        current_epoch_attestations,
+        state.justified_epoch,
+        current_epoch_boundary_root,
         config.GENESIS_EPOCH,
         config.EPOCH_LENGTH,
         config.TARGET_COMMITTEE_SIZE,
