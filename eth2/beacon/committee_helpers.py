@@ -176,7 +176,7 @@ def get_crosslink_committees_at_slot(
     epoch = slot_to_epoch(slot, epoch_length)
     current_epoch = state.current_epoch(epoch_length)
     previous_epoch = state.previous_epoch(epoch_length, genesis_epoch)
-    next_epoch = EpochNumber(current_epoch + 1)
+    next_epoch = state.next_epoch(epoch_length)
 
     validate_epoch_for_current_epoch(
         current_epoch=current_epoch,

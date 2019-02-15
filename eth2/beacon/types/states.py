@@ -296,7 +296,10 @@ class BeaconState(rlp.Serializable):
 
     def previous_epoch(self, epoch_length: int, genesis_epoch: int) -> EpochNumber:
         current_epoch: EpochNumber = self.current_epoch(epoch_length)
-        return EpochNumber(current_epoch - 1) if current_epoch > genesis_epoch else current_epoch
+        if current_epoch == genesis_epoch:
+            return current_epoch
+        else:
+            return EpochNumber(current_epoch - 1)
 
     def next_epoch(self, epoch_length: int) -> EpochNumber:
         return EpochNumber(self.current_epoch(epoch_length) + 1)
