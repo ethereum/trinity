@@ -133,15 +133,17 @@ def sign_proof_of_possession(deposit_input: DepositInput,
     )
 
 
-def sign_attestation(message: bytes,
+def sign_transaction(*,
+                     message: bytes,
                      privkey: int,
                      fork: Fork,
                      slot: SlotNumber,
+                     signature_domain: SignatureDomain,
                      epoch_length: int) -> BLSSignature:
     domain = get_domain(
         fork,
         slot_to_epoch(slot, epoch_length),
-        SignatureDomain.DOMAIN_ATTESTATION,
+        signature_domain,
     )
     return bls.sign(
         message=message,
@@ -191,7 +193,7 @@ def create_mock_signed_attestation(state: BeaconState,
 
     # Use privkeys to sign the attestation
     signatures = [
-        sign_attestation(
+        sign_transaction(
             message=message,
             privkey=keymap[
                 state.validator_registry[
@@ -200,6 +202,7 @@ def create_mock_signed_attestation(state: BeaconState,
             ],
             fork=state.fork,
             slot=attestation_data.slot,
+            signature_domain=SignatureDomain.DOMAIN_ATTESTATION,
             epoch_length=epoch_length,
         )
         for committee_index in voting_committee_indices

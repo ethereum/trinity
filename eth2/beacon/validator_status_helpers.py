@@ -219,7 +219,7 @@ def prepare_validator_for_withdrawal(state: BeaconState, index: ValidatorIndex) 
 #
 def _validate_withdrawal_epoch(state_slot: SlotNumber,
                                validator_withdrawal_epoch: EpochNumber,
-                               epoch_length: int):
+                               epoch_length: int) -> None:
     # TODO: change to `validate_withdrawable_epoch`
     if state_slot >= get_epoch_start_slot(validator_withdrawal_epoch, epoch_length):
         raise ValidationError(

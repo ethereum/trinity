@@ -297,7 +297,7 @@ def sample_validator_record_params():
         'activation_epoch': FAR_FUTURE_EPOCH,
         'exit_epoch': FAR_FUTURE_EPOCH,
         'withdrawal_epoch': FAR_FUTURE_EPOCH,
-        'penalized_epoch': FAR_FUTURE_EPOCH,
+        'slashed_epoch': FAR_FUTURE_EPOCH,
         'status_flags': 0,
     }
 
