@@ -7,6 +7,7 @@ from eth.chains.base import BaseChain
 from eth.rlp.blocks import BaseBlock
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
+from eth.rlp.transactions import BaseTransaction
 
 
 # This class is a work in progress; its main purpose is to define the API of an asyncio-compatible
@@ -46,6 +47,16 @@ class BaseAsyncChainAPI(ABC):
     @abstractmethod
     async def coro_get_canonical_block_by_number(self,
                                                  block_number: BlockNumber) -> BaseBlock:
+        pass
+
+    @abstractmethod
+    async def coro_get_canonical_transaction(self,
+                                             transaction_hash: Hash32) -> BaseTransaction:
+        pass
+
+    @abstractmethod
+    async def coro_get_transaction_receipt(self,
+                                           transaction_hash: Hash32) -> Receipt:
         pass
 
 

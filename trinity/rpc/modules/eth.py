@@ -253,20 +253,14 @@ class Eth(Eth1ChainRPCModule):
 
     @format_params(decode_hex)
     async def getTransactionByHash(self, transaction_hash: Hash32) -> Dict[str, str]:
-        transaction = self.chain.get_canonical_transaction(transaction_hash)
+        transaction = self.chain.coro_get_canonical_transaction(transaction_hash)
         return transaction_to_dict(transaction)
 
     @format_params(decode_hex)
     async def getTransactionReceipt(
             self,
             transaction_hash: Hash32) -> Dict[str, Union[str, List[Log]]]:
-        transaction_block_number, transaction_index = self.chain.chaindb.get_transaction_index(
-            transaction_hash
-        )
-        receipt = self.chain.chaindb.get_receipt_by_index(
-            block_number=transaction_block_number,
-            receipt_index=transaction_index,
-        )
+        receipt = self.chain.coro_get_transaction_receipt(transaction_hash)
         return receipt_to_dict(receipt)
 
     @format_params(decode_hex)

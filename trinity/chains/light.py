@@ -174,7 +174,7 @@ class LightDispatchChain(BaseAsyncChain):
         Raises HeaderNotFound if it is not found.
         """
         header = self._headerdb.get_canonical_block_header_by_number(block_number)
-        return await self.get_block_by_header(header)
+        return await self.coro_get_block_by_header(header)
 
     def get_canonical_block_hash(self, block_number: BlockNumber) -> Hash32:
         return self._headerdb.get_canonical_block_hash(block_number)
@@ -201,6 +201,15 @@ class LightDispatchChain(BaseAsyncChain):
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
     def get_canonical_transaction(self, transaction_hash: Hash32) -> BaseTransaction:
+        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
+
+    async def coro_get_canonical_transaction(self, transaction_hash: Hash32) -> BaseTransaction:
+        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
+
+    def get_transaction_receipt(self, transaction_hash: Hash32) -> Receipt:
+        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
+
+    async def coro_get_transaction_receipt(self, transaction_hash: Hash32) -> Receipt:
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
     #
