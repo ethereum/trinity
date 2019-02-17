@@ -143,17 +143,21 @@ def validate_proposer_slashing(state: BeaconState,
         state.current_epoch(epoch_length),
     )
 
-    validate_signature(proposal_signed_data=proposer_slashing.proposal_data_1,
-                       proposal_signature=proposer_slashing.proposal_signature_1,
-                       pubkey=proposer.pubkey,
-                       fork=state.fork,
-                       epoch_length=epoch_length)
+    validate_proposal_signature(
+        proposal_signed_data=proposer_slashing.proposal_data_1,
+        proposal_signature=proposer_slashing.proposal_signature_1,
+        pubkey=proposer.pubkey,
+        fork=state.fork,
+        epoch_length=epoch_length,
+    )
 
-    validate_signature(proposal_signed_data=proposer_slashing.proposal_data_2,
-                       proposal_signature=proposer_slashing.proposal_signature_2,
-                       pubkey=proposer.pubkey,
-                       fork=state.fork,
-                       epoch_length=epoch_length)
+    validate_proposal_signature(
+        proposal_signed_data=proposer_slashing.proposal_data_2,
+        proposal_signature=proposer_slashing.proposal_signature_2,
+        pubkey=proposer.pubkey,
+        fork=state.fork,
+        epoch_length=epoch_length,
+    )
 
 
 def validate_proposer_slashing_slot(proposer_slashing: ProposerSlashing) -> None:
@@ -192,11 +196,11 @@ def validate_proposer_slashing_slashed_epoch(proposer_slashed_epoch: EpochNumber
         )
 
 
-def validate_signature(proposal_signed_data: ProposalSignedData,
-                       proposal_signature: BLSSignature,
-                       pubkey: BLSPubkey,
-                       fork: Fork,
-                       epoch_length: int) -> None:
+def validate_proposal_signature(proposal_signed_data: ProposalSignedData,
+                                proposal_signature: BLSSignature,
+                                pubkey: BLSPubkey,
+                                fork: Fork,
+                                epoch_length: int) -> None:
     proposal_signature_is_valid = bls.verify(
         pubkey=pubkey,
         message=proposal_signed_data.root,  # TODO: use hash_tree_root
