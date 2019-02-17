@@ -36,7 +36,6 @@ def create_mock_genesis_validator_deposits(
         keymap: Dict[BLSPubkey, int]) -> Tuple[Deposit, ...]:
     # Mock data
     withdrawal_credentials = b'\x22' * 32
-    randao_commitment = b'\x33' * 32
     deposit_timestamp = 0
     fork = Fork(
         previous_version=config.GENESIS_FORK_VERSION,
@@ -55,12 +54,10 @@ def create_mock_genesis_validator_deposits(
                 deposit_input=DepositInput(
                     pubkey=pubkeys[i],
                     withdrawal_credentials=withdrawal_credentials,
-                    randao_commitment=randao_commitment,
                     proof_of_possession=sign_proof_of_possession(
                         deposit_input=DepositInput(
                             pubkey=pubkeys[i],
                             withdrawal_credentials=withdrawal_credentials,
-                            randao_commitment=randao_commitment,
                         ),
                         privkey=keymap[pubkeys[i]],
                         fork=fork,
