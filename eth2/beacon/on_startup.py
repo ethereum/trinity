@@ -59,8 +59,8 @@ def get_genesis_block(startup_state_root: Hash32,
     )
 
 
-def get_initial_beacon_state(*,
-                             initial_validator_deposits: Sequence[Deposit],
+def get_genesis_beacon_state(*,
+                             genesis_validator_deposits: Sequence[Deposit],
                              genesis_time: Timestamp,
                              latest_eth1_data: Eth1Data,
                              genesis_slot: SlotNumber,
@@ -122,7 +122,7 @@ def get_initial_beacon_state(*,
     )
 
     # Process initial deposits
-    for deposit in initial_validator_deposits:
+    for deposit in genesis_validator_deposits:
         state = process_deposit(
             state=state,
             pubkey=deposit.deposit_data.deposit_input.pubkey,

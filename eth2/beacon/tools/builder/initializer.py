@@ -8,7 +8,7 @@ from typing import (
 from eth2.beacon.configs import BeaconConfig
 from eth2.beacon.on_startup import (
     get_genesis_block,
-    get_initial_beacon_state,
+    get_genesis_beacon_state,
 )
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
@@ -29,7 +29,7 @@ from eth2.beacon.tools.builder.validator import (
 )
 
 
-def create_mock_initial_validator_deposits(
+def create_mock_genesis_validator_deposits(
         num_validators: int,
         config: BeaconConfig,
         pubkeys: Sequence[BLSPubkey],
@@ -44,7 +44,7 @@ def create_mock_initial_validator_deposits(
         epoch=config.GENESIS_EPOCH,
     )
 
-    initial_validator_deposits = tuple(
+    genesis_validator_deposits = tuple(
         Deposit(
             branch=(
                 b'\x11' * 32
@@ -75,7 +75,7 @@ def create_mock_initial_validator_deposits(
         for i in range(num_validators)
     )
 
-    return initial_validator_deposits
+    return genesis_validator_deposits
 
 
 def create_mock_genesis(
@@ -90,14 +90,14 @@ def create_mock_genesis(
 
     pubkeys = list(keymap)[:num_validators]
 
-    initial_validator_deposits = create_mock_initial_validator_deposits(
+    genesis_validator_deposits = create_mock_genesis_validator_deposits(
         num_validators=num_validators,
         config=config,
         pubkeys=pubkeys,
         keymap=keymap,
     )
-    state = get_initial_beacon_state(
-        initial_validator_deposits=initial_validator_deposits,
+    state = get_genesis_beacon_state(
+        genesis_validator_deposits=genesis_validator_deposits,
         genesis_time=genesis_time,
         latest_eth1_data=latest_eth1_data,
         genesis_slot=config.GENESIS_SLOT,

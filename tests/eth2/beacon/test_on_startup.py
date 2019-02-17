@@ -17,7 +17,7 @@ from eth2.beacon.types.forks import Fork
 
 from eth2.beacon.on_startup import (
     get_genesis_block,
-    get_initial_beacon_state,
+    get_genesis_beacon_state,
 )
 from eth2.beacon.tools.builder.validator import (
     sign_proof_of_possession,
@@ -48,7 +48,7 @@ def test_get_genesis_block():
         (10)
     ]
 )
-def test_get_initial_beacon_state(
+def test_get_genesis_beacon_state(
         privkeys,
         pubkeys,
         num_validators,
@@ -76,7 +76,7 @@ def test_get_initial_beacon_state(
 
     validator_count = 5
 
-    initial_validator_deposits = (
+    genesis_validator_deposits = (
         Deposit(
             branch=(
                 b'\x11' * 32
@@ -109,8 +109,8 @@ def test_get_initial_beacon_state(
     genesis_time = 10
     latest_eth1_data = Eth1Data(**sample_eth1_data_params)
 
-    state = get_initial_beacon_state(
-        initial_validator_deposits=initial_validator_deposits,
+    state = get_genesis_beacon_state(
+        genesis_validator_deposits=genesis_validator_deposits,
         genesis_time=genesis_time,
         latest_eth1_data=latest_eth1_data,
         genesis_epoch=genesis_epoch,
