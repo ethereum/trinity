@@ -76,7 +76,7 @@ def test_get_genesis_beacon_state(
 
     validator_count = 5
 
-    genesis_validator_deposits = (
+    genesis_validator_deposits = tuple(
         Deposit(
             branch=(
                 b'\x11' * 32
@@ -171,5 +171,6 @@ def test_get_genesis_beacon_state(
     # Ethereum 1.0 chain data
     assert state.latest_eth1_data == latest_eth1_data
     assert len(state.eth1_data_votes) == 0
+    assert state.deposit_index == len(genesis_validator_deposits)
 
     assert state.validator_registry[0].is_active(genesis_epoch)

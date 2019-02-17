@@ -169,6 +169,7 @@ def sample_beacon_state_params(sample_fork_params, sample_eth1_data_params):
         'batched_block_roots': (),
         'latest_eth1_data': Eth1Data(**sample_eth1_data_params),
         'eth1_data_votes': (),
+        'deposit_index': 0,
     }
 
 

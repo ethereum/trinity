@@ -119,6 +119,7 @@ def get_genesis_beacon_state(*,
         # Ethereum 1.0 chain data
         latest_eth1_data=latest_eth1_data,
         eth1_data_votes=(),
+        deposit_index=len(genesis_validator_deposits),
     )
 
     # Process initial deposits
