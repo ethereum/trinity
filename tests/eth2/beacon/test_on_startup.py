@@ -34,7 +34,7 @@ def test_get_genesis_block():
     assert genesis_block.slot == genesis_slot
     assert genesis_block.parent_root == ZERO_HASH32
     assert genesis_block.state_root == startup_state_root
-    assert genesis_block.randao_reveal == ZERO_HASH32
+    assert genesis_block.randao_reveal == EMPTY_SIGNATURE
     assert genesis_block.eth1_data == Eth1Data.create_empty_data()
     assert genesis_block.signature == EMPTY_SIGNATURE
     assert genesis_block.body.is_empty
@@ -67,7 +67,6 @@ def test_get_genesis_beacon_state(
         entry_exit_delay,
         sample_eth1_data_params):
     withdrawal_credentials = b'\x22' * 32
-    randao_commitment = b'\x33' * 32
     fork = Fork(
         previous_version=genesis_fork_version,
         current_version=genesis_fork_version,
@@ -87,12 +86,10 @@ def test_get_genesis_beacon_state(
                 deposit_input=DepositInput(
                     pubkey=pubkeys[i],
                     withdrawal_credentials=withdrawal_credentials,
-                    randao_commitment=randao_commitment,
                     proof_of_possession=sign_proof_of_possession(
                         deposit_input=DepositInput(
                             pubkey=pubkeys[i],
                             withdrawal_credentials=withdrawal_credentials,
-                            randao_commitment=randao_commitment,
                         ),
                         privkey=privkeys[i],
                         fork=fork,

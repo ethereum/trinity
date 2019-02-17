@@ -134,7 +134,7 @@ def sample_beacon_block_params(sample_beacon_block_body_params,
         'slot': 10,
         'parent_root': ZERO_HASH32,
         'state_root': b'\x55' * 32,
-        'randao_reveal': b'\x55' * 32,
+        'randao_reveal': EMPTY_SIGNATURE,
         'eth1_data': Eth1Data(**sample_eth1_data_params),
         'signature': EMPTY_SIGNATURE,
         'body': BeaconBlockBody(**sample_beacon_block_body_params)
@@ -202,7 +202,6 @@ def sample_deposit_input_params():
     return {
         'pubkey': 123,
         'withdrawal_credentials': b'\11' * 32,
-        'randao_commitment': b'\11' * 32,
         'proof_of_possession': (0, 0),
     }
 
@@ -295,8 +294,6 @@ def sample_validator_record_params():
     return {
         'pubkey': 123,
         'withdrawal_credentials': b'\x01' * 32,
-        'randao_commitment': b'\x01' * 32,
-        'randao_layers': 1,
         'activation_epoch': FAR_FUTURE_EPOCH,
         'exit_epoch': FAR_FUTURE_EPOCH,
         'withdrawal_epoch': FAR_FUTURE_EPOCH,
