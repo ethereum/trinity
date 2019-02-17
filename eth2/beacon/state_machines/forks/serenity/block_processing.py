@@ -8,7 +8,10 @@ from eth2._utils.numeric import (
 )
 from eth2.beacon._utils.hash import hash_eth2
 
-from eth2.beacon.configs import BeaconConfig
+from eth2.beacon.configs import (
+    BeaconConfig,
+    CommitteeConfig,
+)
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.eth1_data_vote import Eth1DataVote
@@ -59,10 +62,7 @@ def process_randao(state: BeaconState,
     proposer_index = get_beacon_proposer_index(
         state=state,
         slot=state.slot,
-        genesis_epoch=config.GENESIS_EPOCH,
-        epoch_length=config.EPOCH_LENGTH,
-        target_committee_size=config.TARGET_COMMITTEE_SIZE,
-        shard_count=config.SHARD_COUNT,
+        committee_config=CommitteeConfig(config),
     )
     proposer = state.validator_registry[proposer_index]
 
