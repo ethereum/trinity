@@ -27,6 +27,7 @@ def get_valid_proposer_slashing(state,
         keymap,
         block_root_1=b'\x11' * 32,
         block_root_2=b'\x22' * 32,
+        proposer_index=proposer_index,
     )
 
 

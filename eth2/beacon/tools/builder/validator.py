@@ -191,11 +191,10 @@ def create_mock_proposer_slashing_at_block(state: BeaconState,
                                            config: BeaconConfig,
                                            keymap: Dict[BLSPubkey, int],
                                            block_root_1: Hash32,
-                                           block_root_2: Hash32):
+                                           block_root_2: Hash32,
+                                           proposer_index: ValidatorIndex):
     epoch_length = config.EPOCH_LENGTH
     beacon_chain_shard_number = config.BEACON_CHAIN_SHARD_NUMBER
-
-    proposer_index = 0
 
     proposal_data_1, proposal_signature_1 = create_proposal_data_and_signature(
         state,
