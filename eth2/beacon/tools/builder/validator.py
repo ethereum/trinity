@@ -11,6 +11,9 @@ from cytoolz import (
     pipe,
 )
 
+from eth_typing import (
+    Hash32,
+)
 from eth_utils import (
     to_tuple,
 )
@@ -50,6 +53,8 @@ from eth2.beacon.types.attestation_data_and_custody_bits import (
 )
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.forks import Fork
+from eth2.beacon.types.proposal_signed_data import ProposalSignedData
+from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     BLSPubkey,
@@ -151,9 +156,74 @@ def sign_transaction(*,
         domain=domain,
     )
 
-
+#
 #
 # Only for test/simulation
+#
+#
+
+
+#
+# ProposerSlashing
+#
+def create_proposal_data_and_signature(state: BeaconState,
+                                       block_root: Hash32,
+                                       privkey: int,
+                                       epoch_length: int,
+                                       beacon_chain_shard_number: int):
+    proposal_data = ProposalSignedData(
+        state.slot,
+        beacon_chain_shard_number,
+        block_root,
+    )
+    proposal_signature = sign_transaction(
+        message=proposal_data.root,
+        privkey=privkey,
+        fork=state.fork,
+        slot=proposal_data.slot,
+        signature_domain=SignatureDomain.DOMAIN_PROPOSAL,
+        epoch_length=epoch_length,
+    )
+    return proposal_data, proposal_signature
+
+
+def create_mock_proposer_slashing_at_block(state: BeaconState,
+                                           config: BeaconConfig,
+                                           keymap: Dict[BLSPubkey, int],
+                                           block_root_1: Hash32,
+                                           block_root_2: Hash32):
+    epoch_length = config.EPOCH_LENGTH
+    beacon_chain_shard_number = config.BEACON_CHAIN_SHARD_NUMBER
+
+    proposer_index = 0
+
+    proposal_data_1, proposal_signature_1 = create_proposal_data_and_signature(
+        state,
+        block_root_1,
+        keymap[state.validator_registry[proposer_index].pubkey],
+        epoch_length,
+        beacon_chain_shard_number,
+    )
+
+    proposal_data_2, proposal_signature_2 = create_proposal_data_and_signature(
+        state,
+        block_root_2,
+        keymap[state.validator_registry[proposer_index].pubkey],
+        epoch_length,
+        beacon_chain_shard_number,
+    )
+
+    return ProposerSlashing(
+        proposer_index=proposer_index,
+        proposal_data_1=proposal_data_1,
+        proposal_data_2=proposal_data_2,
+        proposal_signature_1=proposal_signature_1,
+        proposal_signature_2=proposal_signature_2,
+    )
+
+
+#
+# Attestation
 #
 def _get_mock_message_and_voting_committee_indices(
         attestation_data: AttestationData,
@@ -273,6 +343,16 @@ def create_mock_signed_attestations_at_slot(
         )
 
 
+#
+#
+# Validator guide
+#
+#
+
+
+#
+# Lookahead
+#
 def get_next_epoch_committee_assignment(
         state: BeaconState,
         config: BeaconConfig,
