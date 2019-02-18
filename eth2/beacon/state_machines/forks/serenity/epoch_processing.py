@@ -48,9 +48,6 @@ from eth2.beacon._utils.hash import (
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import (
-    EpochNumber,
-)
 
 
 #

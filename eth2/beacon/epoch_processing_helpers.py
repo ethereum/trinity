@@ -159,20 +159,14 @@ def get_epoch_boundary_attester_indices(
         attestations: Sequence[PendingAttestationRecord],
         epoch: EpochNumber,
         root: Hash32,
-        genesis_epoch: EpochNumber,
-        epoch_length: int,
-        target_committee_size: int,
-        shard_count: int) -> Iterable[ValidatorIndex]:
+        committee_config: CommitteeConfig) -> Iterable[ValidatorIndex]:
     for a in attestations:
         if a.data.justified_epoch == epoch and a.data.epoch_boundary_root == root:
             yield from get_attestation_participants(
                 state,
                 a.data,
                 a.aggregation_bitfields,
-                genesis_epoch,
-                epoch_length,
-                target_committee_size,
-                shard_count,
+                committee_config,
             )
 
 
@@ -200,10 +194,7 @@ def get_epoch_boundary_attesting_balances(
         current_epoch_attestations + previous_epoch_attestations,
         state.previous_justified_epoch,
         previous_epoch_boundary_root,
-        config.GENESIS_EPOCH,
-        config.EPOCH_LENGTH,
-        config.TARGET_COMMITTEE_SIZE,
-        config.SHARD_COUNT,
+        CommitteeConfig(config),
     )
 
     previous_epoch_boundary_attesting_balance = get_total_balance(
@@ -223,10 +214,7 @@ def get_epoch_boundary_attesting_balances(
         current_epoch_attestations,
         state.justified_epoch,
         current_epoch_boundary_root,
-        config.GENESIS_EPOCH,
-        config.EPOCH_LENGTH,
-        config.TARGET_COMMITTEE_SIZE,
-        config.SHARD_COUNT,
+        CommitteeConfig(config),
     )
 
     current_epoch_boundary_attesting_balance = get_total_balance(
