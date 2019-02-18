@@ -113,7 +113,7 @@ class BaseBeaconBlock(rlp.Serializable, Configurable, ABC):
         ('slot', uint64),
         ('parent_root', hash32),
         ('state_root', hash32),
-        ('randao_reveal', binary),
+        ('randao_reveal', binary),  # TODO: should be bytes96 once we transition to SSZ
         ('eth1_data', Eth1Data),
         ('signature', binary),
 
