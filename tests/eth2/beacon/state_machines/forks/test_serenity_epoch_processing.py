@@ -45,13 +45,70 @@ from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
     process_crosslinks,
     process_final_updates,
     process_validator_registry,
-)
-from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
+    _current_previous_epochs_justifiable,
     _get_finalized_epoch,
     process_justification,
 )
 
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.constants import GWEI_PER_ETH
+
+
+@pytest.mark.parametrize(
+    "total_balance,"
+    "current_epoch_boundary_attesting_balance,"
+    "previous_epoch_boundary_attesting_balance,"
+    "expected,",
+    (
+        (
+            1500 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, (True, True),
+        ),
+        (
+            1500 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, (True, False),
+        ),
+        (
+            1500 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, (False, True),
+        ),
+        (
+            1500 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, (False, False),
+        ),
+    )
+)
+def test_current_previous_epochs_justifiable(
+        monkeypatch,
+        sample_state,
+        config,
+        expected,
+        total_balance,
+        previous_epoch_boundary_attesting_balance,
+        current_epoch_boundary_attesting_balance):
+    current_epoch = 5
+    previous_epoch = 4
+
+    from eth2.beacon.state_machines.forks.serenity import epoch_processing
+
+    def mock_get_total_balance(validators, epoch, max_deposit_amount):
+        return total_balance
+
+    def mock_get_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config):
+        return previous_epoch_boundary_attesting_balance, current_epoch_boundary_attesting_balance
+
+    with monkeypatch.context() as m:
+        m.setattr(
+            epoch_processing,
+            'get_total_balance',
+            mock_get_total_balance,
+        )
+        m.setattr(
+            epoch_processing,
+            'get_epoch_boundary_attesting_balances',
+            mock_get_epoch_boundary_attesting_balances,
+        )
+
+        assert _current_previous_epochs_justifiable(sample_state,
+                                                    current_epoch,
+                                                    previous_epoch,
+                                                    config) == expected
 
 
 @pytest.mark.parametrize(

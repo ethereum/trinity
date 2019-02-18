@@ -165,7 +165,7 @@ def get_epoch_boundary_attester_indices(
             yield from get_attestation_participants(
                 state,
                 a.data,
-                a.aggregation_bitfields,
+                a.aggregation_bitfield,
                 committee_config,
             )
 
