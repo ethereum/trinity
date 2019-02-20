@@ -223,6 +223,6 @@ def _validate_withdrawal_epoch(state_slot: SlotNumber,
     # TODO: change to `validate_withdrawable_epoch`
     if state_slot >= get_epoch_start_slot(validator_withdrawal_epoch, epoch_length):
         raise ValidationError(
-            f"state.slot ({state_slot}) should be than "
+            f"state.slot ({state_slot}) should be less than "
             f"validator.withdrawal_epoch ({validator_withdrawal_epoch})"
         )
