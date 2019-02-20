@@ -167,15 +167,6 @@ def sign_transaction(*,
     )
 
 
-#
-#
-# Only for test/simulation
-#
-#
-
-#
-# ProposerSlashing
-#
 def create_proposal_data_and_signature(
         state: BeaconState,
         block_root: Hash32,
@@ -198,6 +189,16 @@ def create_proposal_data_and_signature(
     return proposal_data, proposal_signature
 
 
+#
+#
+# Only for test/simulation
+#
+#
+
+
+#
+# ProposerSlashing
+#
 def create_mock_proposer_slashing_at_block(
         state: BeaconState,
         config: BeaconConfig,
@@ -236,10 +237,10 @@ def create_mock_proposer_slashing_at_block(
 #
 # AttesterSlashing
 #
-def _create_mock_slashable_attestation(state: BeaconState,
-                                       config: BeaconConfig,
-                                       keymap: Dict[BLSPubkey, int],
-                                       attestation_slot: Slot) -> SlashableAttestation:
+def create_mock_slashable_attestation(state: BeaconState,
+                                      config: BeaconConfig,
+                                      keymap: Dict[BLSPubkey, int],
+                                      attestation_slot: Slot) -> SlashableAttestation:
     """
     Create `SlashableAttestation` that is signed by one attester.
     """
@@ -282,7 +283,7 @@ def _create_mock_slashable_attestation(state: BeaconState,
     )
 
 
-def create_mock_double_voted_attester_slashing(
+def create_mock_attester_slashing_is_double_vote(
         state: BeaconState,
         config: BeaconConfig,
         keymap: Dict[BLSPubkey, int],
@@ -290,14 +291,48 @@ def create_mock_double_voted_attester_slashing(
     attestation_slot_1 = get_epoch_start_slot(attestation_epoch, config.SLOTS_PER_EPOCH)
     attestation_slot_2 = attestation_slot_1 + 1
 
-    slashable_attestation_1 = _create_mock_slashable_attestation(
+    slashable_attestation_1 = create_mock_slashable_attestation(
         state,
         config,
         keymap,
         attestation_slot_1,
     )
-    slashable_attestation_2 = _create_mock_slashable_attestation(
+    slashable_attestation_2 = create_mock_slashable_attestation(
         state,
+        config,
+        keymap,
+        attestation_slot_2,
+    )
+
+    return AttesterSlashing(
+        slashable_attestation_1=slashable_attestation_1,
+        slashable_attestation_2=slashable_attestation_2,
+    )
+
+
+def create_mock_attester_slashing_is_surround_vote(
+        state: BeaconState,
+        config: BeaconConfig,
+        keymap: Dict[BLSPubkey, int],
+        attestation_epoch: Slot) -> AttesterSlashing:
+    # target_epoch_2 < target_epoch_1
+    attestation_slot_2 = get_epoch_start_slot(attestation_epoch, config.SLOTS_PER_EPOCH)
+    attestation_slot_1 = attestation_slot_2 + config.SLOTS_PER_EPOCH
+
+    slashable_attestation_1 = create_mock_slashable_attestation(
+        state.copy(
+            slot=attestation_slot_1,
+            previous_justified_epoch=config.GENESIS_EPOCH,
+        ),
+        config,
+        keymap,
+        attestation_slot_1,
+    )
+    slashable_attestation_2 = create_mock_slashable_attestation(
+        state.copy(
+            slot=attestation_slot_1,
+            previous_justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
+        ),
         config,
         keymap,
         attestation_slot_2,

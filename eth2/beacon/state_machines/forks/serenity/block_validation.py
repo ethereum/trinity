@@ -228,20 +228,11 @@ def validate_attester_slashing(state: BeaconState,
 
     validate_attester_slashing_different_data(slashable_attestation_1, slashable_attestation_2)
 
-    is_double_vote_slashing = is_double_vote(
-        slashable_attestation_1.data,
-        slashable_attestation_2.data,
+    validate_attester_slashing_slashing_conditions(
+        slashable_attestation_1,
+        slashable_attestation_2,
         slots_per_epoch,
     )
-    is_surround_vote_slashing = is_surround_vote(
-        slashable_attestation_1.data,
-        slashable_attestation_2.data,
-        slots_per_epoch,
-    )
-    if not (is_double_vote_slashing or is_surround_vote_slashing):
-        raise ValidationError(
-            "The `AttesterSlashing` object doesn't meet `is_double_vote` or `is_surround_vote`"
-        )
 
     validate_slashable_attestation(
         state,
@@ -267,6 +258,26 @@ def validate_attester_slashing_different_data(
             f"({slashable_attestation_1.data}) "
             "should not be equal to slashable_attestation_2.data "
             f"({slashable_attestation_2.data})"
+        )
+
+
+def validate_attester_slashing_slashing_conditions(
+        slashable_attestation_1: SlashableAttestation,
+        slashable_attestation_2: SlashableAttestation,
+        slots_per_epoch: int) -> None:
+    is_double_vote_slashing = is_double_vote(
+        slashable_attestation_1.data,
+        slashable_attestation_2.data,
+        slots_per_epoch,
+    )
+    is_surround_vote_slashing = is_surround_vote(
+        slashable_attestation_1.data,
+        slashable_attestation_2.data,
+        slots_per_epoch,
+    )
+    if not (is_double_vote_slashing or is_surround_vote_slashing):
+        raise ValidationError(
+            "The `AttesterSlashing` object doesn't meet `is_double_vote` or `is_surround_vote`"
         )
 
 
