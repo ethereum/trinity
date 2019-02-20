@@ -52,10 +52,12 @@ from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestation_data_and_custody_bits import (
     AttestationDataAndCustodyBit,
 )
+from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.proposal_signed_data import ProposalSignedData
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
+from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     BLSPubkey,
@@ -164,12 +166,12 @@ def sign_transaction(*,
         domain=domain,
     )
 
+
 #
 #
 # Only for test/simulation
 #
 #
-
 
 #
 # ProposerSlashing
@@ -196,12 +198,13 @@ def create_proposal_data_and_signature(
     return proposal_data, proposal_signature
 
 
-def create_mock_proposer_slashing_at_block(state: BeaconState,
-                                           config: BeaconConfig,
-                                           keymap: Dict[BLSPubkey, int],
-                                           block_root_1: Hash32,
-                                           block_root_2: Hash32,
-                                           proposer_index: ValidatorIndex)-> ProposerSlashing:
+def create_mock_proposer_slashing_at_block(
+        state: BeaconState,
+        config: BeaconConfig,
+        keymap: Dict[BLSPubkey, int],
+        block_root_1: Hash32,
+        block_root_2: Hash32,
+        proposer_index: ValidatorIndex) -> ProposerSlashing:
     slots_per_epoch = config.SLOTS_PER_EPOCH
     beacon_chain_shard_number = config.BEACON_CHAIN_SHARD_NUMBER
 
@@ -227,6 +230,82 @@ def create_mock_proposer_slashing_at_block(state: BeaconState,
         proposal_data_2=proposal_data_2,
         proposal_signature_1=proposal_signature_1,
         proposal_signature_2=proposal_signature_2,
+    )
+
+
+#
+# AttesterSlashing
+#
+def _create_mock_slashable_attestation(state: BeaconState,
+                                       config: BeaconConfig,
+                                       keymap: Dict[BLSPubkey, int],
+                                       attestation_slot: Slot) -> SlashableAttestation:
+    """
+    Create `SlashableAttestation` that is signed by one attester.
+    """
+    committee, shard = get_crosslink_committees_at_slot(
+        state=state,
+        slot=attestation_slot,
+        committee_config=CommitteeConfig(config),
+    )[0]
+    attestation_data = create_mock_attestation_data_at_slot(
+        state,
+        config,
+        attestation_slot,
+        shard,
+    )
+
+    message_hash, voting_committee_indices = _get_mock_message_and_voting_committee_indices(
+        attestation_data,
+        committee,
+        num_voted_attesters=1,
+    )
+
+    signature = sign_transaction(
+        message_hash=message_hash,
+        privkey=keymap[
+            state.validator_registry[
+                voting_committee_indices[0]
+            ].pubkey
+        ],
+        fork=state.fork,
+        slot=attestation_slot,
+        signature_domain=SignatureDomain.DOMAIN_ATTESTATION,
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+    )
+
+    return SlashableAttestation(
+        validator_indices=sorted(voting_committee_indices),
+        data=attestation_data,
+        custody_bitfield=get_empty_bitfield(len(voting_committee_indices)),
+        aggregate_signature=signature,
+    )
+
+
+def create_mock_double_voted_attester_slashing(
+        state: BeaconState,
+        config: BeaconConfig,
+        keymap: Dict[BLSPubkey, int],
+        attestation_epoch: Slot) -> AttesterSlashing:
+    attestation_slot_1 = get_epoch_start_slot(attestation_epoch, config.SLOTS_PER_EPOCH)
+    attestation_slot_2 = attestation_slot_1 + 1
+
+    slashable_attestation_1 = _create_mock_slashable_attestation(
+        state,
+        config,
+        keymap,
+        attestation_slot_1,
+    )
+    slashable_attestation_2 = _create_mock_slashable_attestation(
+        state,
+        config,
+        keymap,
+        attestation_slot_2,
+    )
+
+    return AttesterSlashing(
+        slashable_attestation_1=slashable_attestation_1,
+        slashable_attestation_2=slashable_attestation_2,
     )
 
 
@@ -305,6 +384,29 @@ def create_mock_signed_attestation(state: BeaconState,
     )
 
 
+def create_mock_attestation_data_at_slot(
+        state: BeaconState,
+        config: BeaconConfig,
+        attestation_slot: Slot,
+        shard: Shard) -> AttestationData:
+    latest_crosslink_root = state.latest_crosslinks[shard].crosslink_data_root
+
+    return AttestationData(
+        slot=attestation_slot,
+        shard=shard,
+        beacon_block_root=ZERO_HASH32,
+        epoch_boundary_root=ZERO_HASH32,
+        crosslink_data_root=ZERO_HASH32,
+        latest_crosslink_root=latest_crosslink_root,
+        justified_epoch=state.previous_justified_epoch,
+        justified_block_root=get_block_root(
+            state,
+            get_epoch_start_slot(state.previous_justified_epoch, config.SLOTS_PER_EPOCH),
+            config.LATEST_BLOCK_ROOTS_LENGTH,
+        ),
+    )
+
+
 @to_tuple
 def create_mock_signed_attestations_at_slot(
         state: BeaconState,
@@ -364,6 +466,8 @@ def create_mock_signed_attestations_at_slot(
             justified_epoch=state.justified_epoch,
             justified_block_root=justified_block_root,
         )
+
+        num_voted_attesters = int(len(committee) * voted_attesters_ratio)
 
         yield create_mock_signed_attestation(
             state,

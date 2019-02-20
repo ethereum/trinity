@@ -13,6 +13,7 @@ from eth2.beacon.validator_status_helpers import (
 
 from .block_validation import (
     validate_attestation,
+    validate_attester_slashing,
     validate_proposer_slashing,
 )
 
@@ -38,6 +39,46 @@ def process_proposer_slashings(state: BeaconState,
             max_deposit_amount=config.MAX_DEPOSIT_AMOUNT,
             committee_config=CommitteeConfig(config),
         )
+
+    return state
+
+
+def process_attester_slashings(state: BeaconState,
+                               block: BaseBeaconBlock,
+                               config: BeaconConfig) -> BeaconState:
+    if len(block.body.attester_slashings) > config.MAX_ATTESTER_SLASHINGS:
+        raise ValidationError(
+            f"The block ({block}) has too many attester slashings:\n"
+            f"\tFound {len(block.body.attester_slashings)} attester slashings, "
+            f"maximum: {config.MAX_ATTESTER_SLASHINGS}"
+        )
+
+    for attester_slashing in block.body.attester_slashings:
+        validate_attester_slashing(
+            state,
+            attester_slashing,
+            config.MAX_INDICES_PER_SLASHABLE_VOTE,
+            config.SLOTS_PER_EPOCH,
+        )
+
+        current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
+        slashable_indices = tuple(
+            index
+            for index in attester_slashing.slashable_attestation_1.validator_indices
+            if index in (
+                attester_slashing.slashable_attestation_2.validator_indices and
+                state.validator_registry[index].slashed_epoch > current_epoch
+            )
+        )
+        for index in slashable_indices:
+            state = slash_validator(
+                state=state,
+                index=index,
+                latest_slashed_exit_length=config.LATEST_SLASHED_EXIT_LENGTH,
+                whistleblower_reward_quotient=config.WHISTLEBLOWER_REWARD_QUOTIENT,
+                max_deposit_amount=config.MAX_DEPOSIT_AMOUNT,
+                committee_config=CommitteeConfig(config),
+            )
 
     return state
 
