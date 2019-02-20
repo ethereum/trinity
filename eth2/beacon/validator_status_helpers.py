@@ -198,16 +198,29 @@ def slash_validator(*,
         max_deposit_amount=max_deposit_amount,
         committee_config=committee_config,
     )
+
+    # Update validator
+    current_epoch = state.current_epoch(epoch_length)
+    validator = validator.copy(
+        slashed_epoch=current_epoch,
+        withdrawal_epoch=current_epoch + latest_penalized_exit_length,
+    )
+    state.update_validator_registry(index, validator)
+
     return state
 
 
-def prepare_validator_for_withdrawal(state: BeaconState, index: ValidatorIndex) -> BeaconState:
+def prepare_validator_for_withdrawal(state: BeaconState,
+                                     index: ValidatorIndex,
+                                     epoch_length: int,
+                                     min_validator_withdrawability_delay: int) -> BeaconState:
     """
     Set the validator with the given ``index`` with ``WITHDRAWABLE`` flag.
     """
     validator = state.validator_registry[index]
     validator = validator.copy(
-        status_flags=validator.status_flags | ValidatorStatusFlags.WITHDRAWABLE
+        status_flags=validator.status_flags | ValidatorStatusFlags.WITHDRAWABLE,
+        withdrawal_epoch=state.current_epoch(epoch_length) + min_validator_withdrawability_delay
     )
     state = state.update_validator_registry(index, validator)
 

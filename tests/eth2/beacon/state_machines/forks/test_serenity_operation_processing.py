@@ -87,7 +87,7 @@ def test_process_proposer_slashings(genesis_state,
     )
 
     proposer_index = 0
-    propsoer_slashing = create_mock_proposer_slashing_at_block(
+    proposer_slashing = create_mock_proposer_slashing_at_block(
         state,
         config,
         keymap,
@@ -95,7 +95,7 @@ def test_process_proposer_slashings(genesis_state,
         block_root_2=block_root_2,
         proposer_index=proposer_index,
     )
-    proposer_slashings = (propsoer_slashing,)
+    proposer_slashings = (proposer_slashing,)
 
     block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
         proposer_slashings=proposer_slashings,

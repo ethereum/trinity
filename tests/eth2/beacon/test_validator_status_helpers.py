@@ -307,21 +307,35 @@ def test_slash_validator(monkeypatch,
         max_deposit_amount=max_deposit_amount,
         committee_config=committee_config,
     )
+    current_epoch = state.current_epoch(epoch_length)
+    validator = state.validator_registry[index].copy(
+        slashed_epoch=current_epoch,
+        withdrawal_epoch=current_epoch + latest_penalized_exit_length,
+    )
+    expected_state.update_validator_registry(index, validator)
 
     assert result_state == expected_state
 
 
-def test_prepare_validator_for_withdrawal(n_validators_state):
+def test_prepare_validator_for_withdrawal(n_validators_state,
+                                          epoch_length,
+                                          min_validator_withdrawability_delay):
     state = n_validators_state
     index = 1
     old_validator_status_flags = state.validator_registry[index].status_flags
     result_state = prepare_validator_for_withdrawal(
         state,
         index,
+        epoch_length,
+        min_validator_withdrawability_delay,
     )
 
-    assert result_state.validator_registry[index].status_flags == (
+    result_validator = result_state.validator_registry[index]
+    assert result_validator.status_flags == (
         old_validator_status_flags | ValidatorStatusFlags.WITHDRAWABLE
+    )
+    assert result_validator.withdrawal_epoch == (
+        state.current_epoch(epoch_length) + min_validator_withdrawability_delay
     )
 
 

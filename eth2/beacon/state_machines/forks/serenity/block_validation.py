@@ -182,8 +182,8 @@ def validate_proposer_slashing_block_root(proposer_slashing: ProposerSlashing) -
         raise ValidationError(
             "proposer_slashing.proposal_data_1.block_root "
             f"({proposer_slashing.proposal_data_1.block_root}) "
-            " should not equal to proposer_slashing.proposal_data_2.block_root"
-            f" ({proposer_slashing.proposal_data_2.block_root})"
+            "should not be equal to proposer_slashing.proposal_data_2.block_root "
+            f"({proposer_slashing.proposal_data_2.block_root})"
         )
 
 
@@ -192,7 +192,7 @@ def validate_proposer_slashing_slashed_epoch(proposer_slashed_epoch: EpochNumber
     if proposer_slashed_epoch <= state_current_epoch:
         raise ValidationError(
             f"proposer.slashed_epoch ({proposer_slashed_epoch}) "
-            f" should be greater than current epoch ({state_current_epoch})"
+            f"should be greater than current epoch ({state_current_epoch})"
         )
 
 
@@ -213,10 +213,9 @@ def validate_proposal_signature(proposal_signed_data: ProposalSignedData,
     )
     if not proposal_signature_is_valid:
         raise ValidationError(
-            "Proposal signature is invalid:"
-            f"\tProposer pubkey: {pubkey}"
-            f"\tMessage: {proposal_signed_data.root}"
-            f"\tSignature: {proposal_signature}"
+            "Proposal signature is invalid: "
+            f"proposer pubkey: {pubkey}, message: {proposal_signed_data.root}, "
+            f"signature: {proposal_signature}"
         )
 
 
