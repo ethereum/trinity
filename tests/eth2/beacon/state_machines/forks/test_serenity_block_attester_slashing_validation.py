@@ -12,6 +12,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_attester_slashing,
     validate_attester_slashing_different_data,
     validate_attester_slashing_slashing_conditions,
+    validate_slashable_indices,
 )
 from eth2.beacon.tools.builder.validator import (
     create_mock_attester_slashing_is_double_vote,
@@ -193,3 +194,22 @@ def test_validate_attester_slashing_slashing_conditions(
             slashable_attestation_2,
             slots_per_epoch,
         )
+
+
+@pytest.mark.parametrize(
+    (
+        'slashable_indices',
+        'success',
+    ),
+    [
+        ((), False),
+        ((1,), True),
+        ((1, 2), True),
+    ]
+)
+def test_validate_slashable_indices(slashable_indices, success):
+    if success:
+        validate_slashable_indices(slashable_indices)
+    else:
+        with pytest.raises(ValidationError):
+            validate_slashable_indices(slashable_indices)

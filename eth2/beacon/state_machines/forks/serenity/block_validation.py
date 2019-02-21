@@ -281,6 +281,13 @@ def validate_attester_slashing_slashing_conditions(
         )
 
 
+def validate_slashable_indices(slashable_indices: Sequence[ValidatorIndex]) -> None:
+    if len(slashable_indices) < 1:
+        raise ValidationError(
+            "len(slashable_indices) should be greater or equal to 1"
+        )
+
+
 #
 # Attestation validation
 #

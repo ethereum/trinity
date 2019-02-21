@@ -1,20 +1,31 @@
-from eth_utils import ValidationError
+from typing import (
+    Iterable,
+)
+from eth_utils import (
+    to_tuple,
+    ValidationError,
+)
 
 from eth2.beacon.configs import (
     BeaconConfig,
     CommitteeConfig,
 )
+from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.pending_attestation_records import PendingAttestationRecord
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.validator_status_helpers import (
     slash_validator,
 )
+from eth2.beacon.typing import (
+    ValidatorIndex,
+)
 
 from .block_validation import (
     validate_attestation,
     validate_attester_slashing,
     validate_proposer_slashing,
+    validate_slashable_indices,
 )
 
 
@@ -43,6 +54,20 @@ def process_proposer_slashings(state: BeaconState,
     return state
 
 
+@to_tuple
+def _get_slashable_indices(state: BeaconState,
+                           config: BeaconConfig,
+                           attester_slashing: AttesterSlashing) -> Iterable[ValidatorIndex]:
+    current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
+    for index in attester_slashing.slashable_attestation_1.validator_indices:
+        should_be_slashed = (
+            index in attester_slashing.slashable_attestation_2.validator_indices and
+            state.validator_registry[index].slashed_epoch > current_epoch
+        )
+        if should_be_slashed:
+            yield index
+
+
 def process_attester_slashings(state: BeaconState,
                                block: BaseBeaconBlock,
                                config: BeaconConfig) -> BeaconState:
@@ -61,15 +86,9 @@ def process_attester_slashings(state: BeaconState,
             config.SLOTS_PER_EPOCH,
         )
 
-        current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-        slashable_indices = tuple(
-            index
-            for index in attester_slashing.slashable_attestation_1.validator_indices
-            if index in (
-                attester_slashing.slashable_attestation_2.validator_indices and
-                state.validator_registry[index].slashed_epoch > current_epoch
-            )
-        )
+        slashable_indices = _get_slashable_indices(state, config, attester_slashing)
+
+        validate_slashable_indices(slashable_indices)
         for index in slashable_indices:
             state = slash_validator(
                 state=state,

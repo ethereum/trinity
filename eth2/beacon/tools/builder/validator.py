@@ -244,11 +244,9 @@ def create_mock_slashable_attestation(state: BeaconState,
     """
     Create `SlashableAttestation` that is signed by one attester.
     """
-    committee, shard = get_crosslink_committees_at_slot(
-        state=state,
-        slot=attestation_slot,
-        committee_config=CommitteeConfig(config),
-    )[0]
+    attester_index = ValidatorIndex(0)
+    committee = (attester_index,)
+    shard = Shard(0)
     attestation_data = create_mock_attestation_data_at_slot(
         state,
         config,
