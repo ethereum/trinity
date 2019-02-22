@@ -362,7 +362,7 @@ def get_committee_assignment(
         registry_change: bool=False
 ) -> CommitteeAssignment:
     """
-    Return the ``CommitteeAssignment`` in the  ``epoch`` epoch for ``validator_index``
+    Return the ``CommitteeAssignment`` in the ``epoch`` for ``validator_index``
     and ``registry_change``.
     ``CommitteeAssignment.committee`` is the tuple array of validators in the committee
     ``CommitteeAssignment.shard`` is the shard to which the committee is assigned
