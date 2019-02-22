@@ -113,7 +113,6 @@ def test_validate_attestation_justified_epoch(
     )
 
     if is_valid:
-        # slot_to_epoch(attestation_data.slot + 1, slots_per_epoch) >= current_epoch
         validate_attestation_justified_epoch(
             attestation_data,
             current_epoch,
