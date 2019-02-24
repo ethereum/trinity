@@ -247,11 +247,29 @@ def create_mock_slashable_attestation(state: BeaconState,
     attester_index = ValidatorIndex(0)
     committee = (attester_index,)
     shard = Shard(0)
-    attestation_data = create_mock_attestation_data_at_slot(
+
+    # Use genesis block root as `beacon_block_root`, only for tests.
+    beacon_block_root = get_block_root(state, 0, config.LATEST_BLOCK_ROOTS_LENGTH)
+
+    # Get `epoch_boundary_root`
+    epoch_boundary_root = _get_epoch_boundary_root(state, config, beacon_block_root)
+    # Get `justified_block_root`
+    justified_block_root = get_block_root(
         state,
-        config,
-        attestation_slot,
-        shard,
+        get_epoch_start_slot(state.justified_epoch, config.SLOTS_PER_EPOCH),
+        config.LATEST_BLOCK_ROOTS_LENGTH,
+    )
+    latest_crosslink_root = state.latest_crosslinks[shard].crosslink_data_root
+
+    attestation_data = attestation_data = AttestationData(
+        slot=attestation_slot,
+        shard=shard,
+        beacon_block_root=beacon_block_root,
+        epoch_boundary_root=epoch_boundary_root,
+        crosslink_data_root=ZERO_HASH32,
+        latest_crosslink_root=latest_crosslink_root,
+        justified_epoch=state.justified_epoch,
+        justified_block_root=justified_block_root,
     )
 
     message_hash, voting_committee_indices = _get_mock_message_and_voting_committee_indices(
@@ -320,7 +338,7 @@ def create_mock_attester_slashing_is_surround_vote(
     slashable_attestation_1 = create_mock_slashable_attestation(
         state.copy(
             slot=attestation_slot_1,
-            previous_justified_epoch=config.GENESIS_EPOCH,
+            justified_epoch=config.GENESIS_EPOCH,
         ),
         config,
         keymap,
@@ -329,7 +347,7 @@ def create_mock_attester_slashing_is_surround_vote(
     slashable_attestation_2 = create_mock_slashable_attestation(
         state.copy(
             slot=attestation_slot_1,
-            previous_justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
+            justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
         ),
         config,
         keymap,
@@ -345,6 +363,23 @@ def create_mock_attester_slashing_is_surround_vote(
 #
 # Attestation
 #
+def _get_epoch_boundary_root(state: BeaconState,
+                             config: BeaconConfig,
+                             beacon_block_root: Hash32) -> Hash32:
+    epoch_start_slot = get_epoch_start_slot(
+        slot_to_epoch(state.slot, config.SLOTS_PER_EPOCH),
+        config.SLOTS_PER_EPOCH,
+    )
+    if epoch_start_slot == state.slot:
+        return beacon_block_root
+    else:
+        return get_block_root(
+            state,
+            epoch_start_slot,
+            config.LATEST_BLOCK_ROOTS_LENGTH,
+        )
+
+
 def _get_mock_message_and_voting_committee_indices(
         attestation_data: AttestationData,
         committee: Sequence[ValidatorIndex],
@@ -417,29 +452,6 @@ def create_mock_signed_attestation(state: BeaconState,
     )
 
 
-def create_mock_attestation_data_at_slot(
-        state: BeaconState,
-        config: BeaconConfig,
-        attestation_slot: Slot,
-        shard: Shard) -> AttestationData:
-    latest_crosslink_root = state.latest_crosslinks[shard].crosslink_data_root
-
-    return AttestationData(
-        slot=attestation_slot,
-        shard=shard,
-        beacon_block_root=ZERO_HASH32,
-        epoch_boundary_root=ZERO_HASH32,
-        crosslink_data_root=ZERO_HASH32,
-        latest_crosslink_root=latest_crosslink_root,
-        justified_epoch=state.previous_justified_epoch,
-        justified_block_root=get_block_root(
-            state,
-            get_epoch_start_slot(state.previous_justified_epoch, config.SLOTS_PER_EPOCH),
-            config.LATEST_BLOCK_ROOTS_LENGTH,
-        ),
-    )
-
-
 @to_tuple
 def create_mock_signed_attestations_at_slot(
         state: BeaconState,
@@ -463,18 +475,7 @@ def create_mock_signed_attestations_at_slot(
     )
 
     # Get `epoch_boundary_root`
-    epoch_start_slot = get_epoch_start_slot(
-        slot_to_epoch(state.slot, slots_per_epoch),
-        slots_per_epoch,
-    )
-    if epoch_start_slot == state.slot:
-        epoch_boundary_root = beacon_block_root
-    else:
-        epoch_boundary_root = get_block_root(
-            state,
-            epoch_start_slot,
-            config.LATEST_BLOCK_ROOTS_LENGTH,
-        )
+    epoch_boundary_root = _get_epoch_boundary_root(state, config, beacon_block_root)
 
     # Get `justified_block_root`
     justified_block_root = get_block_root(
