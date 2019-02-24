@@ -57,7 +57,7 @@ def privkeys():
     Rationales:
     1. Making the privkeys be small integers to make multiplying easier for tests.
     2. Using ``2**i`` instead of ``i``:
-        The combinations of validators would not lead to unique pubkeys.
+        If using ``i``, the combinations of privkeys would not lead to unique pubkeys.
     """
     return [2 ** i for i in range(100)]
 
