@@ -143,6 +143,26 @@ async def event_bus(event_loop):
         endpoint.stop()
 
 
+@pytest.fixture(scope='module')
+async def other_event_bus(event_loop):
+    # This is giving us another endpoint that tests can use to simulate
+    # an entirely different client that should operate in its independent
+    # space.
+    endpoint = TrinityEventBusEndpoint()
+    # Tests run concurrently, therefore we need unique IPC paths
+    ipc_path = Path(f"networking-{uuid.uuid4()}.ipc")
+    networking_connection_config = ConnectionConfig(
+        name=NETWORKING_EVENTBUS_ENDPOINT,
+        path=ipc_path
+    )
+    await endpoint.start_serving(networking_connection_config, event_loop)
+    await endpoint.connect_to_endpoints(networking_connection_config)
+    try:
+        yield endpoint
+    finally:
+        endpoint.stop()
+
+
 @pytest.fixture(scope='session')
 def jsonrpc_ipc_pipe_path():
     with tempfile.TemporaryDirectory() as temp_dir:

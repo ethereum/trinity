@@ -1,18 +1,32 @@
 from typing import (
     List,
     Tuple,
+    Type,
 )
 
 from eth.rlp.blocks import BaseBlock
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
+from eth_typing import (
+    BlockIdentifier,
+    Hash32,
+)
 from lahja import (
     BaseEvent,
+    BaseRequestResponseEvent,
 )
 from p2p.peer import (
     IdentifiablePeer,
 )
 
+from trinity.protocol.common.types import (
+    BlockBodyBundles,
+    NodeDataBundles,
+    ReceiptsBundles,
+)
+
+
+# RAW PROTOCOL EVENTS
 
 class SendBlockHeadersEvent(BaseEvent):
     """
@@ -52,3 +66,99 @@ class SendReceiptsEvent(BaseEvent):
     def __init__(self, dto_peer: IdentifiablePeer, receipts: List[List[Receipt]]) -> None:
         self.dto_peer = dto_peer
         self.receipts = receipts
+
+
+# EXCHANGE HANDLER REQUEST / RESPONSE PAIRS
+
+class GetBlockHeadersResponse(BaseEvent):
+
+    def __init__(self,
+                 headers: Tuple[BlockHeader, ...]) -> None:
+        self.headers = headers
+
+
+class GetBlockHeadersRequest(BaseRequestResponseEvent[GetBlockHeadersResponse]):
+
+    def __init__(self,
+                 dto_peer: IdentifiablePeer,
+                 block_number_or_hash: BlockIdentifier,
+                 max_headers: int,
+                 skip: int,
+                 reverse: bool,
+                 timeout: float) -> None:
+        self.dto_peer = dto_peer
+        self.block_number_or_hash = block_number_or_hash
+        self.max_headers = max_headers
+        self.skip = skip
+        self.reverse = reverse
+        self.timeout = timeout
+
+    @staticmethod
+    def expected_response_type() -> Type[GetBlockHeadersResponse]:
+        return GetBlockHeadersResponse
+
+
+class GetBlockBodiesResponse(BaseEvent):
+
+    def __init__(self,
+                 bundles: BlockBodyBundles) -> None:
+        self.bundles = bundles
+
+
+class GetBlockBodiesRequest(BaseRequestResponseEvent[GetBlockBodiesResponse]):
+
+    def __init__(self,
+                 dto_peer: IdentifiablePeer,
+                 headers: Tuple[BlockHeader, ...],
+                 timeout: float) -> None:
+        self.dto_peer = dto_peer
+        self.headers = headers
+        self.timeout = timeout
+
+    @staticmethod
+    def expected_response_type() -> Type[GetBlockBodiesResponse]:
+        return GetBlockBodiesResponse
+
+
+class GetNodeDataResponse(BaseEvent):
+
+    def __init__(self,
+                 bundles: NodeDataBundles) -> None:
+        self.bundles = bundles
+
+
+class GetNodeDataRequest(BaseRequestResponseEvent[GetNodeDataResponse]):
+
+    def __init__(self,
+                 dto_peer: IdentifiablePeer,
+                 node_hashes: Tuple[Hash32, ...],
+                 timeout: float) -> None:
+        self.dto_peer = dto_peer
+        self.node_hashes = node_hashes
+        self.timeout = timeout
+
+    @staticmethod
+    def expected_response_type() -> Type[GetNodeDataResponse]:
+        return GetNodeDataResponse
+
+
+class GetReceiptsResponse(BaseEvent):
+
+    def __init__(self,
+                 bundles: ReceiptsBundles) -> None:
+        self.bundles = bundles
+
+
+class GetReceiptsRequest(BaseRequestResponseEvent[GetReceiptsResponse]):
+
+    def __init__(self,
+                 dto_peer: IdentifiablePeer,
+                 headers: Tuple[BlockHeader, ...],
+                 timeout: float) -> None:
+        self.dto_peer = dto_peer
+        self.headers = headers
+        self.timeout = timeout
+
+    @staticmethod
+    def expected_response_type() -> Type[GetReceiptsResponse]:
+        return GetReceiptsResponse

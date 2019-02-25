@@ -45,9 +45,25 @@ from .events import (
     SendBlockHeadersEvent,
     SendNodeDataEvent,
     SendReceiptsEvent,
+    GetBlockHeadersRequest,
+    GetBlockHeadersResponse,
+    GetBlockBodiesRequest,
+    GetBlockBodiesResponse,
+    GetNodeDataRequest,
+    GetNodeDataResponse,
+    GetReceiptsRequest,
+    GetReceiptsResponse,
 )
-from .proto import ETHProtocol, ETHProtocolLike, ProxyETHProtocol
-from .handlers import ETHExchangeHandler
+from .proto import (
+    ETHProtocol,
+    ETHProtocolLike,
+    ProxyETHProtocol,
+)
+from .handlers import (
+    ETHExchangeHandler,
+    ETHExchangeHandlerLike,
+    ProxyETHExchangeHandler,
+)
 
 
 class ETHPeerLike(typing_extensions.Protocol):
@@ -55,6 +71,11 @@ class ETHPeerLike(typing_extensions.Protocol):
     @property
     @abstractmethod
     def sub_proto(self) -> ETHProtocolLike:
+        pass
+
+    @property
+    @abstractmethod
+    def requests(self) -> ETHExchangeHandlerLike:
         pass
 
     @property
@@ -126,8 +147,12 @@ class ETHProxyPeer:
     to the actual peer in the pool.
     """
 
-    def __init__(self, sub_proto: ProxyETHProtocol):
+    def __init__(self,
+                 sub_proto: ProxyETHProtocol,
+                 requests: ProxyETHExchangeHandler):
+
         self.sub_proto = sub_proto
+        self.requests = requests
 
     @property
     def is_operational(self) -> bool:
@@ -144,7 +169,10 @@ class ETHProxyPeer:
                       dto_peer: IdentifiablePeer,
                       event_bus: Endpoint,
                       broadcast_config: BroadcastConfig) -> 'ETHProxyPeer':
-        return cls(ProxyETHProtocol(dto_peer, event_bus, broadcast_config))
+        return cls(
+            ProxyETHProtocol(dto_peer, event_bus, broadcast_config),
+            ProxyETHExchangeHandler(dto_peer, event_bus, broadcast_config),
+        )
 
 
 class ETHPeerFactory(BaseChainPeerFactory):
@@ -162,6 +190,10 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
         self.run_daemon_task(self.handle_send_block_bodies_events())
         self.run_daemon_task(self.handle_send_nodes_events())
         self.run_daemon_task(self.handle_send_receipts_events())
+        self.run_daemon_task(self.handle_get_block_headers_requests())
+        self.run_daemon_task(self.handle_get_block_bodies_requests())
+        self.run_daemon_task(self.handle_get_node_data_requests())
+        self.run_daemon_task(self.handle_get_receipts_requests())
         await super()._run()
 
     async def handle_send_blockheader_events(self) -> None:
@@ -191,6 +223,71 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
             if peer is None:
                 continue
             peer.sub_proto.send_receipts(ev.receipts)
+
+    async def handle_get_block_headers_requests(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(GetBlockHeadersRequest)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+
+            if peer is None:
+                continue
+
+            try:
+                headers = await peer.requests.get_block_headers(
+                    ev.block_number_or_hash,
+                    ev.max_headers,
+                    ev.skip,
+                    ev.reverse,
+                    ev.timeout,
+                )
+            except TimeoutError:
+                self.logger.debug("Timed out waiting on %s from %s", GetBlockHeadersRequest, peer)
+            else:
+                self._event_bus.broadcast(GetBlockHeadersResponse(headers), ev.broadcast_config())
+
+    async def handle_get_block_bodies_requests(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(GetBlockBodiesRequest)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+
+            if peer is None:
+                continue
+
+            try:
+                bundles = await peer.requests.get_block_bodies(
+                    ev.headers,
+                    ev.timeout,
+                )
+            except TimeoutError:
+                self.logger.debug("Timed out waiting on %s from %s", GetBlockBodiesRequest, peer)
+            else:
+                self._event_bus.broadcast(GetBlockBodiesResponse(bundles), ev.broadcast_config())
+
+    async def handle_get_node_data_requests(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(GetNodeDataRequest)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+
+            if peer is None:
+                continue
+
+            try:
+                bundles = await peer.requests.get_node_data(ev.node_hashes, ev.timeout)
+            except TimeoutError:
+                self.logger.debug("Timed out waiting on %s from %s", GetBlockBodiesRequest, peer)
+            else:
+                self._event_bus.broadcast(GetNodeDataResponse(bundles), ev.broadcast_config())
+
+    async def handle_get_receipts_requests(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(GetReceiptsRequest)):
+            peer = self.maybe_return_peer(ev.dto_peer)
+
+            if peer is None:
+                continue
+
+            try:
+                bundles = await peer.requests.get_receipts(ev.headers, ev.timeout)
+            except TimeoutError:
+                self.logger.debug("Timed out waiting on %s from %s", GetReceiptsRequest, peer)
+            else:
+                self._event_bus.broadcast(GetReceiptsResponse(bundles), ev.broadcast_config())
 
 
 class ETHPeerPool(BaseChainPeerPool):
