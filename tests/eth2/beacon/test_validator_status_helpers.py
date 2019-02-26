@@ -14,7 +14,7 @@ from eth2.beacon.enums import (
     ValidatorStatusFlags,
 )
 from eth2.beacon.helpers import (
-    get_entry_exit_effect_epoch,
+    get_delayed_activation_exit_epoch,
 )
 from eth2.beacon.validator_status_helpers import (
     _settle_penality_to_validator_and_whistleblower,
@@ -79,7 +79,7 @@ def test_activate_validator(is_genesis,
     else:
         assert (
             result_state.validator_registry[index].activation_epoch ==
-            get_entry_exit_effect_epoch(
+            get_delayed_activation_exit_epoch(
                 state.current_epoch(slots_per_epoch),
                 activation_exit_delay,
             )

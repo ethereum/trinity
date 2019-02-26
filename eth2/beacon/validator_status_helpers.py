@@ -15,7 +15,7 @@ from eth2.beacon.enums import (
     ValidatorStatusFlags,
 )
 from eth2.beacon.helpers import (
-    get_entry_exit_effect_epoch,
+    get_delayed_activation_exit_epoch,
     get_effective_balance,
     get_epoch_start_slot,
 )
@@ -43,7 +43,7 @@ def activate_validator(state: BeaconState,
     """
     # Update validator.activation_epoch
     validator = state.validator_registry[index].copy(
-        activation_epoch=genesis_epoch if is_genesis else get_entry_exit_effect_epoch(
+        activation_epoch=genesis_epoch if is_genesis else get_delayed_activation_exit_epoch(
             state.current_epoch(slots_per_epoch),
             activation_exit_delay,
         )
@@ -78,7 +78,7 @@ def exit_validator(state: BeaconState,
     """
     validator = state.validator_registry[index]
 
-    entry_exit_effect_epoch = get_entry_exit_effect_epoch(
+    entry_exit_effect_epoch = get_delayed_activation_exit_epoch(
         state.current_epoch(slots_per_epoch),
         activation_exit_delay,
     )
