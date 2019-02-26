@@ -3,6 +3,7 @@ from eth_typing import (
 )
 import ssz
 from ssz.sedes import (
+    boolean,
     bytes32,
     bytes48,
     uint64,
@@ -30,10 +31,10 @@ class ValidatorRecord(ssz.Serializable):
         ('exit_epoch', uint64),
         # Epoch when validator withdrew
         ('withdrawable_epoch', uint64),
-        # Epoch when validator was slashed
-        ('slashed_epoch', uint64),
-        # Status flags
-        ('status_flags', uint64),
+        # Did the validator initiate an exit
+        ('initiated_exit', boolean),
+        # Was the validator slashed
+        ('slashed', boolean),
     ]
 
     def __init__(self,
@@ -42,16 +43,16 @@ class ValidatorRecord(ssz.Serializable):
                  activation_epoch: Epoch,
                  exit_epoch: Epoch,
                  withdrawable_epoch: Epoch,
-                 slashed_epoch: Epoch,
-                 status_flags: int) -> None:
+                 initiated_exit: bool,
+                 slashed: bool) -> None:
         super().__init__(
             pubkey=pubkey,
             withdrawal_credentials=withdrawal_credentials,
             activation_epoch=activation_epoch,
             exit_epoch=exit_epoch,
             withdrawable_epoch=withdrawable_epoch,
-            slashed_epoch=slashed_epoch,
-            status_flags=status_flags,
+            initiated_exit=initiated_exit,
+            slashed=slashed,
         )
 
     def is_active(self, epoch: Epoch) -> bool:
@@ -73,6 +74,6 @@ class ValidatorRecord(ssz.Serializable):
             activation_epoch=FAR_FUTURE_EPOCH,
             exit_epoch=FAR_FUTURE_EPOCH,
             withdrawable_epoch=FAR_FUTURE_EPOCH,
-            slashed_epoch=FAR_FUTURE_EPOCH,
-            status_flags=0,
+            initiated_exit=False,
+            slashed=False,
         )

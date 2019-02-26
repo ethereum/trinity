@@ -302,8 +302,8 @@ def sample_validator_record_params():
         'activation_epoch': FAR_FUTURE_EPOCH,
         'exit_epoch': FAR_FUTURE_EPOCH,
         'withdrawable_epoch': FAR_FUTURE_EPOCH,
-        'slashed_epoch': FAR_FUTURE_EPOCH,
-        'status_flags': 0,
+        'initiated_exit': False,
+        'slashed': False,
     }
 
 
@@ -617,8 +617,6 @@ def genesis_validators(init_validator_pubkeys,
         mock_validator_record(
             pubkey=pubkey,
             withdrawal_credentials=ZERO_HASH32,
-            randao_commitment=init_randao,
-            status_flags=0,
             is_active=False,
         )
         for pubkey in init_validator_pubkeys

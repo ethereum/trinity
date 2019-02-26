@@ -14,8 +14,6 @@ from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 
 def mock_validator_record(pubkey,
                           withdrawal_credentials=ZERO_HASH32,
-                          randao_commitment=ZERO_HASH32,
-                          status_flags=0,
                           is_active=True):
     return ValidatorRecord(
         pubkey=pubkey,
@@ -23,8 +21,8 @@ def mock_validator_record(pubkey,
         activation_epoch=SERENITY_CONFIG.GENESIS_EPOCH if is_active else FAR_FUTURE_EPOCH,
         exit_epoch=FAR_FUTURE_EPOCH,
         withdrawable_epoch=FAR_FUTURE_EPOCH,
-        slashed_epoch=FAR_FUTURE_EPOCH,
-        status_flags=status_flags,
+        initiated_exit=False,
+        slashed=False,
     )
 
 

@@ -10,9 +10,7 @@ from eth2.beacon.constants import (
 from eth2.beacon.committee_helpers import (
     get_beacon_proposer_index,
 )
-from eth2.beacon.enums import (
-    ValidatorStatusFlags,
-)
+
 from eth2.beacon.helpers import (
     get_delayed_activation_exit_epoch,
 )
@@ -89,19 +87,13 @@ def test_activate_validator(is_genesis,
 def test_initiate_validator_exit(n_validators_state):
     state = n_validators_state
     index = 1
-    assert not (
-        state.validator_registry[index].status_flags &
-        ValidatorStatusFlags.INITIATED_EXIT
-    )
-    old_validator_status_flags = state.validator_registry[index].status_flags
+    assert state.validator_registry[index].initiated_exit is False
+
     result_state = initiate_validator_exit(
         state,
         index,
     )
-
-    assert result_state.validator_registry[index].status_flags == (
-        old_validator_status_flags | ValidatorStatusFlags.INITIATED_EXIT
-    )
+    assert result_state.validator_registry[index].initiated_exit is True
 
 
 @pytest.mark.parametrize(
@@ -169,8 +161,10 @@ def test_exit_validator(num_validators,
     else:
         assert validator.exit_epoch > state.current_epoch(slots_per_epoch) + activation_exit_delay
         result_validator = result_state.validator_registry[index]
-        current_epoch = state.current_epoch(slots_per_epoch)
-        assert result_validator.exit_epoch == current_epoch + activation_exit_delay
+        assert result_validator.exit_epoch == get_delayed_activation_exit_epoch(
+            state.current_epoch(slots_per_epoch),
+            activation_exit_delay,
+        )
 
 
 @pytest.mark.parametrize(
@@ -310,7 +304,7 @@ def test_slash_validator(monkeypatch,
     )
     current_epoch = state.current_epoch(slots_per_epoch)
     validator = state.validator_registry[index].copy(
-        slashed_epoch=current_epoch,
+        slashed=False,
         withdrawable_epoch=current_epoch + latest_slashed_exit_length,
     )
     expected_state.update_validator_registry(index, validator)

@@ -11,9 +11,6 @@ from eth2.beacon.committee_helpers import (
 from eth2.beacon.configs import (
     CommitteeConfig,
 )
-from eth2.beacon.enums import (
-    ValidatorStatusFlags,
-)
 from eth2.beacon.helpers import (
     get_delayed_activation_exit_epoch,
     get_effective_balance,
@@ -61,7 +58,7 @@ def initiate_validator_exit(state: BeaconState,
     """
     validator = state.validator_registry[index]
     validator = validator.copy(
-        status_flags=validator.status_flags | ValidatorStatusFlags.INITIATED_EXIT
+        initiated_exit=True,
     )
     state = state.update_validator_registry(index, validator)
 
@@ -78,17 +75,17 @@ def exit_validator(state: BeaconState,
     """
     validator = state.validator_registry[index]
 
-    entry_exit_effect_epoch = get_delayed_activation_exit_epoch(
+    delayed_activation_exit_epoch = get_delayed_activation_exit_epoch(
         state.current_epoch(slots_per_epoch),
         activation_exit_delay,
     )
 
     # The following updates only occur if not previous exited
-    if validator.exit_epoch <= entry_exit_effect_epoch:
+    if validator.exit_epoch <= delayed_activation_exit_epoch:
         return state
 
     validator = validator.copy(
-        exit_epoch=state.current_epoch(slots_per_epoch) + activation_exit_delay,
+        exit_epoch=delayed_activation_exit_epoch,
     )
     state = state.update_validator_registry(index, validator)
 
@@ -115,7 +112,8 @@ def _settle_penality_to_validator_and_whistleblower(
     whistleblower_reward = get_effective_balance(state, index) // WHISTLEBLOWER_REWARD_QUOTIENT
     state.validator_balances[whistleblower_index] += whistleblower_reward
     state.validator_balances[index] -= whistleblower_reward
-    validator.slashed_epoch = slot_to_epoch(state.slot)
+    validator.slashed = True
+    validator.withdrawable_epoch = get_current_epoch(state) + LATEST_SLASHED_EXIT_LENGTH
     """
     slots_per_epoch = committee_config.SLOTS_PER_EPOCH
 
@@ -155,10 +153,10 @@ def _settle_penality_to_validator_and_whistleblower(
         state.validator_balances[whistleblower_index] + whistleblower_reward,
     )
 
-    # Update validator's balance and `slashed_epoch` field
-    validator = state.validator_registry[validator_index]
-    validator = validator.copy(
-        slashed_epoch=state.current_epoch(slots_per_epoch),
+    # Update validator's balance and `slashed`, `withdrawable_epoch` field
+    validator = state.validator_registry[validator_index].copy(
+        slashed=True,
+        withdrawable_epoch=state.current_epoch(slots_per_epoch) + latest_slashed_exit_length,
     )
     state = state.update_validator(
         validator_index,
@@ -198,15 +196,6 @@ def slash_validator(*,
         max_deposit_amount=max_deposit_amount,
         committee_config=committee_config,
     )
-
-    # Update validator
-    current_epoch = state.current_epoch(slots_per_epoch)
-    validator = validator.copy(
-        slashed_epoch=current_epoch,
-        withdrawable_epoch=current_epoch + latest_slashed_exit_length,
-    )
-    state.update_validator_registry(index, validator)
-
     return state
 
 
