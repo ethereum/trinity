@@ -1,4 +1,5 @@
 from typing import (
+    Any,
     Callable,
     Dict,
     Iterable,
@@ -23,6 +24,9 @@ from eth2._utils.numeric import (
 )
 from eth2._utils.tuple import (
     update_tuple_item,
+)
+from eth2.beacon.constants import (
+    FAR_FUTURE_EPOCH,
 )
 from eth2.beacon.exceptions import (
     NoWinningRootError,
@@ -57,6 +61,7 @@ from eth2.beacon.helpers import (
     slot_to_epoch,
 )
 from eth2.beacon.validator_status_helpers import (
+    activate_validator,
     exit_validator,
 )
 from eth2.beacon._utils.hash import (
@@ -894,8 +899,183 @@ def _update_shuffling_seed(state: BeaconState,
     )
 
 
-def update_validator_registry(state: BeaconState) -> BeaconState:
-    # TODO
+def is_ready_to_active(state: BeaconState,
+                       config: BeaconConfig,
+                       index: ValidatorIndex) -> bool:
+    validator = state.validator_registry[index]
+    balance = state.validator_balances[index]
+    return validator.activation_epoch == FAR_FUTURE_EPOCH and balance >= config.MAX_DEPOSIT_AMOUNT
+
+
+def is_ready_to_exit(state: BeaconState,
+                     config: BeaconConfig,
+                     index: ValidatorIndex) -> bool:
+    validator = state.validator_registry[index]
+    return validator.exit_epoch == FAR_FUTURE_EPOCH and validator.initiated_exit
+
+
+def churn_validators(state: BeaconState,
+                     config: BeaconConfig,
+                     check_should_churn_fn: Callable[..., Any],
+                     churn_fn: Callable[..., Any],
+                     max_balance_churn: int,
+                     **churn_fn_kwargs: Any) -> BeaconState:
+    balance_churn = 0
+    for index in range(len(state.validator_registry)):
+        index = ValidatorIndex(index)
+        should_churn = check_should_churn_fn(
+            state,
+            config,
+            index,
+        )
+        if should_churn:
+            # Check the balance churn would be within the allowance
+            balance_churn += get_effective_balance(
+                state.validator_balances,
+                index,
+                config.MAX_DEPOSIT_AMOUNT,
+            )
+            if balance_churn > max_balance_churn:
+                break
+
+            state = churn_fn(
+                state,
+                index,
+                **churn_fn_kwargs,
+            )
+    return state
+
+
+def update_validator_registry(state: BeaconState, config: BeaconConfig) -> BeaconState:
+    """
+    Update validator registry.
+    Note that this function mutates ``state``.
+    """
+    current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
+    # The active validators
+    active_validator_indices = get_active_validator_indices(state.validator_registry, current_epoch)
+    # The total effective balance of active validators
+    total_balance = get_total_balance(
+        state.validator_balances,
+        active_validator_indices,
+        config.MAX_DEPOSIT_AMOUNT,
+    )
+
+    # The maximum balance churn in Gwei (for deposits and exits separately)
+    max_balance_churn = max(
+        config.MAX_DEPOSIT_AMOUNT,
+        total_balance // (2 * config.MAX_BALANCE_CHURN_QUOTIENT)
+    )
+
+    # Activate validators within the allowable balance churn
+    state = churn_validators(
+        state=state,
+        config=config,
+        check_should_churn_fn=is_ready_to_active,
+        churn_fn=activate_validator,
+        max_balance_churn=max_balance_churn,
+        # **churn_fn_kwargs
+        is_genesis=False,
+        genesis_epoch=config.GENESIS_EPOCH,
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+        activation_exit_delay=config.ACTIVATION_EXIT_DELAY,
+    )
+
+    # Exit validators within the allowable balance churn
+    state = churn_validators(
+        state=state,
+        config=config,
+        check_should_churn_fn=is_ready_to_exit,
+        churn_fn=exit_validator,
+        max_balance_churn=max_balance_churn,
+        # **churn_fn_kwargs
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+        activation_exit_delay=config.ACTIVATION_EXIT_DELAY,
+    )
+
+    state = state.copy(
+        validator_registry_update_epoch=current_epoch,
+    )
+
+    return state
+
+
+def update_validator_registry_2(state: BeaconState, config: BeaconConfig) -> BeaconState:
+    """
+    Update validator registry.
+    Note that this function mutates ``state``.
+    """
+    current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
+    # The active validators
+    active_validator_indices = get_active_validator_indices(state.validator_registry, current_epoch)
+    # The total effective balance of active validators
+    total_balance = get_total_balance(
+        state.validator_balances,
+        active_validator_indices,
+        config.MAX_DEPOSIT_AMOUNT,
+    )
+
+    # The maximum balance churn in Gwei (for deposits and exits separately)
+    max_balance_churn = max(
+        config.MAX_DEPOSIT_AMOUNT,
+        total_balance // (2 * config.MAX_BALANCE_CHURN_QUOTIENT)
+    )
+
+    # Activate validators within the allowable balance churn
+    balance_churn = 0
+    for index, validator in enumerate(state.validator_registry):
+        index = ValidatorIndex(index)
+        ready_to_active = (
+            validator.activation_epoch == FAR_FUTURE_EPOCH and
+            state.validator_balances[index] >= config.MAX_DEPOSIT_AMOUNT
+        )
+        if ready_to_active:
+            # Check the balance churn would be within the allowance
+            balance_churn += get_effective_balance(
+                state.validator_balances,
+                index,
+                config.MAX_DEPOSIT_AMOUNT,
+            )
+            if balance_churn > max_balance_churn:
+                break
+
+            # Activate validator
+            state = activate_validator(
+                state,
+                index,
+                is_genesis=False,
+                genesis_epoch=config.GENESIS_EPOCH,
+                slots_per_epoch=config.SLOTS_PER_EPOCH,
+                activation_exit_delay=config.ACTIVATION_EXIT_DELAY,
+            )
+
+    # Exit validators within the allowable balance churn
+    balance_churn = 0
+    for index, validator in enumerate(state.validator_registry):
+        index = ValidatorIndex(index)
+        ready_to_exit = validator.exit_epoch == FAR_FUTURE_EPOCH and validator.initiated_exit
+        if ready_to_exit:
+            # Check the balance churn would be within the allowance
+            balance_churn += get_effective_balance(
+                state.validator_balances,
+                index,
+                config.MAX_DEPOSIT_AMOUNT,
+            )
+            if balance_churn > max_balance_churn:
+                break
+
+            # Exit validator
+            state = exit_validator(
+                state,
+                index,
+                slots_per_epoch=config.SLOTS_PER_EPOCH,
+                activation_exit_delay=config.ACTIVATION_EXIT_DELAY,
+            )
+
+    state = state.copy(
+        validator_registry_update_epoch=current_epoch,
+    )
+
     return state
 
 
