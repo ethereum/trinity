@@ -323,7 +323,6 @@ def test_prepare_validator_for_withdrawal(n_validators_state,
                                           min_validator_withdrawability_delay):
     state = n_validators_state
     index = 1
-    old_validator_status_flags = state.validator_registry[index].status_flags
     result_state = prepare_validator_for_withdrawal(
         state,
         index,
@@ -332,9 +331,6 @@ def test_prepare_validator_for_withdrawal(n_validators_state,
     )
 
     result_validator = result_state.validator_registry[index]
-    assert result_validator.status_flags == (
-        old_validator_status_flags | ValidatorStatusFlags.WITHDRAWABLE
-    )
     assert result_validator.withdrawable_epoch == (
         state.current_epoch(slots_per_epoch) + min_validator_withdrawability_delay
     )

@@ -215,11 +215,10 @@ def prepare_validator_for_withdrawal(state: BeaconState,
                                      slots_per_epoch: int,
                                      min_validator_withdrawability_delay: int) -> BeaconState:
     """
-    Set the validator with the given ``index`` with ``WITHDRAWABLE`` flag.
+    Set the validator with the given ``index`` as withdrawable
+    ``MIN_VALIDATOR_WITHDRAWABILITY_DELAY`` after the current epoch.
     """
-    validator = state.validator_registry[index]
-    validator = validator.copy(
-        status_flags=validator.status_flags | ValidatorStatusFlags.WITHDRAWABLE,
+    validator = state.validator_registry[index].copy(
         withdrawable_epoch=(
             state.current_epoch(slots_per_epoch) + min_validator_withdrawability_delay
         )
@@ -235,7 +234,6 @@ def prepare_validator_for_withdrawal(state: BeaconState,
 def _validate_withdrawable_epoch(state_slot: Slot,
                                  validator_withdrawable_epoch: Epoch,
                                  slots_per_epoch: int) -> None:
-    # TODO: change to `validate_withdrawable_epoch`
     if state_slot >= get_epoch_start_slot(validator_withdrawable_epoch, slots_per_epoch):
         raise ValidationError(
             f"state.slot ({state_slot}) should be less than "
