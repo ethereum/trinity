@@ -301,7 +301,7 @@ def sample_validator_record_params():
         'withdrawal_credentials': b'\x01' * 32,
         'activation_epoch': FAR_FUTURE_EPOCH,
         'exit_epoch': FAR_FUTURE_EPOCH,
-        'withdrawal_epoch': FAR_FUTURE_EPOCH,
+        'withdrawable_epoch': FAR_FUTURE_EPOCH,
         'slashed_epoch': FAR_FUTURE_EPOCH,
         'status_flags': 0,
     }

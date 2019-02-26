@@ -187,7 +187,7 @@ def slash_validator(*,
     validator = state.validator_registry[index]
 
     # [TO BE REMOVED IN PHASE 2]
-    _validate_withdrawal_epoch(state.slot, validator.withdrawal_epoch, slots_per_epoch)
+    _validate_withdrawable_epoch(state.slot, validator.withdrawable_epoch, slots_per_epoch)
 
     state = exit_validator(state, index, slots_per_epoch, activation_exit_delay)
     state = _settle_penality_to_validator_and_whistleblower(
@@ -203,7 +203,7 @@ def slash_validator(*,
     current_epoch = state.current_epoch(slots_per_epoch)
     validator = validator.copy(
         slashed_epoch=current_epoch,
-        withdrawal_epoch=current_epoch + latest_slashed_exit_length,
+        withdrawable_epoch=current_epoch + latest_slashed_exit_length,
     )
     state.update_validator_registry(index, validator)
 
@@ -220,7 +220,9 @@ def prepare_validator_for_withdrawal(state: BeaconState,
     validator = state.validator_registry[index]
     validator = validator.copy(
         status_flags=validator.status_flags | ValidatorStatusFlags.WITHDRAWABLE,
-        withdrawal_epoch=state.current_epoch(slots_per_epoch) + min_validator_withdrawability_delay
+        withdrawable_epoch=(
+            state.current_epoch(slots_per_epoch) + min_validator_withdrawability_delay
+        )
     )
     state = state.update_validator_registry(index, validator)
 
@@ -230,12 +232,12 @@ def prepare_validator_for_withdrawal(state: BeaconState,
 #
 # Validation
 #
-def _validate_withdrawal_epoch(state_slot: Slot,
-                               validator_withdrawal_epoch: Epoch,
-                               slots_per_epoch: int) -> None:
+def _validate_withdrawable_epoch(state_slot: Slot,
+                                 validator_withdrawable_epoch: Epoch,
+                                 slots_per_epoch: int) -> None:
     # TODO: change to `validate_withdrawable_epoch`
-    if state_slot >= get_epoch_start_slot(validator_withdrawal_epoch, slots_per_epoch):
+    if state_slot >= get_epoch_start_slot(validator_withdrawable_epoch, slots_per_epoch):
         raise ValidationError(
             f"state.slot ({state_slot}) should be less than "
-            f"validator.withdrawal_epoch ({validator_withdrawal_epoch})"
+            f"validator.withdrawable_epoch ({validator_withdrawable_epoch})"
         )

@@ -18,7 +18,7 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.validator_status_helpers import (
     _settle_penality_to_validator_and_whistleblower,
-    _validate_withdrawal_epoch,
+    _validate_withdrawable_epoch,
     activate_validator,
     exit_validator,
     initiate_validator_exit,
@@ -311,7 +311,7 @@ def test_slash_validator(monkeypatch,
     current_epoch = state.current_epoch(slots_per_epoch)
     validator = state.validator_registry[index].copy(
         slashed_epoch=current_epoch,
-        withdrawal_epoch=current_epoch + latest_slashed_exit_length,
+        withdrawable_epoch=current_epoch + latest_slashed_exit_length,
     )
     expected_state.update_validator_registry(index, validator)
 
@@ -335,7 +335,7 @@ def test_prepare_validator_for_withdrawal(n_validators_state,
     assert result_validator.status_flags == (
         old_validator_status_flags | ValidatorStatusFlags.WITHDRAWABLE
     )
-    assert result_validator.withdrawal_epoch == (
+    assert result_validator.withdrawable_epoch == (
         state.current_epoch(slots_per_epoch) + min_validator_withdrawability_delay
     )
 
@@ -344,7 +344,7 @@ def test_prepare_validator_for_withdrawal(n_validators_state,
     (
         'slots_per_epoch',
         'state_slot',
-        'validate_withdrawal_epoch',
+        'validate_withdrawable_epoch',
         'success'
     ),
     [
@@ -354,9 +354,12 @@ def test_prepare_validator_for_withdrawal(n_validators_state,
         (4, 8, 3, True),
     ]
 )
-def test_validate_withdrawal_epoch(slots_per_epoch, state_slot, validate_withdrawal_epoch, success):
+def test_validate_withdrawable_epoch(slots_per_epoch,
+                                     state_slot,
+                                     validate_withdrawable_epoch,
+                                     success):
     if success:
-        _validate_withdrawal_epoch(state_slot, validate_withdrawal_epoch, slots_per_epoch)
+        _validate_withdrawable_epoch(state_slot, validate_withdrawable_epoch, slots_per_epoch)
     else:
         with pytest.raises(ValidationError):
-            _validate_withdrawal_epoch(state_slot, validate_withdrawal_epoch, slots_per_epoch)
+            _validate_withdrawable_epoch(state_slot, validate_withdrawable_epoch, slots_per_epoch)

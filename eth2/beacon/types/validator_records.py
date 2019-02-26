@@ -29,7 +29,7 @@ class ValidatorRecord(ssz.Serializable):
         # Epoch when validator exited
         ('exit_epoch', uint64),
         # Epoch when validator withdrew
-        ('withdrawal_epoch', uint64),
+        ('withdrawable_epoch', uint64),
         # Epoch when validator was slashed
         ('slashed_epoch', uint64),
         # Status flags
@@ -41,7 +41,7 @@ class ValidatorRecord(ssz.Serializable):
                  withdrawal_credentials: Hash32,
                  activation_epoch: Epoch,
                  exit_epoch: Epoch,
-                 withdrawal_epoch: Epoch,
+                 withdrawable_epoch: Epoch,
                  slashed_epoch: Epoch,
                  status_flags: int) -> None:
         super().__init__(
@@ -49,7 +49,7 @@ class ValidatorRecord(ssz.Serializable):
             withdrawal_credentials=withdrawal_credentials,
             activation_epoch=activation_epoch,
             exit_epoch=exit_epoch,
-            withdrawal_epoch=withdrawal_epoch,
+            withdrawable_epoch=withdrawable_epoch,
             slashed_epoch=slashed_epoch,
             status_flags=status_flags,
         )
@@ -72,7 +72,7 @@ class ValidatorRecord(ssz.Serializable):
             withdrawal_credentials=withdrawal_credentials,
             activation_epoch=FAR_FUTURE_EPOCH,
             exit_epoch=FAR_FUTURE_EPOCH,
-            withdrawal_epoch=FAR_FUTURE_EPOCH,
+            withdrawable_epoch=FAR_FUTURE_EPOCH,
             slashed_epoch=FAR_FUTURE_EPOCH,
             status_flags=0,
         )
