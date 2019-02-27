@@ -70,6 +70,24 @@ async def test_cancel_exits_async_generator():
 
 
 @pytest.mark.asyncio
+async def test_wait_iter_stops_when_generator_is_done():
+    service = WaitService()
+    asyncio.ensure_future(service.run())
+
+    async def async_iterator():
+        yield 1
+        await asyncio.sleep(0.5)
+        yield 1
+
+    count = 0
+    async for val in service.wait_iter(async_iterator()):
+        count += val
+
+    assert count == 2
+    await service.cancel()
+
+
+@pytest.mark.asyncio
 async def test_service_tasks_do_not_leak_memory():
     service = WaitService()
     asyncio.ensure_future(service.run())

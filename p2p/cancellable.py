@@ -35,10 +35,7 @@ class CancellableMixin:
 
         All pending futures are cancelled before returning.
         """
-        if token is None:
-            token_chain = self.cancel_token
-        else:
-            token_chain = token.chain(self.cancel_token)
+        token_chain = self._get_token_chain(token)
         return await token_chain.cancellable_wait(*awaitables, timeout=timeout)
 
     async def wait_iter(
@@ -57,13 +54,35 @@ class CancellableMixin:
 
         See :meth:`CancellableMixin.wait_first` for using arguments ``token`` and ``timeout``
         """
+        token_chain = self._get_token_chain(token)
         aiter = aiterable.__aiter__()
-        while True:
-            try:
-                yield await self.wait(
-                    aiter.__anext__(),
-                    token=token,
-                    timeout=timeout,
-                )
-            except StopAsyncIteration:
+
+        # A CancelToken, only to propagate back the StopAsyncIteration
+        aiter_token = CancelToken('__anext__')
+        while not token_chain.triggered and not aiter_token.triggered:
+            val = await self.wait(
+                self._handle_anext(aiter, aiter_token),
+                token=token,
+                timeout=timeout,
+            )
+
+            if aiter_token.triggered:
                 break
+            else:
+                yield val
+
+    async def _handle_anext(self,
+                            aiter: AsyncIterator[TReturn],
+                            aiter_token: CancelToken) -> TReturn:
+        """
+        Call __anext__ on an AsyncIterator[TReturn] and handle StopAsyncIteration exceptions
+        by triggering the passed aiter_token in order to propagate it back.
+        """
+        try:
+            return await aiter.__anext__()
+        except StopAsyncIteration:
+            aiter_token.trigger()
+            return None  # mypy wants this
+
+    def _get_token_chain(self, token: CancelToken = None) -> CancelToken:
+        return self.cancel_token if token is None else token.chain(self.cancel_token)
