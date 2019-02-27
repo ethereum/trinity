@@ -423,6 +423,8 @@ class OrderedTaskPreparation(Generic[TTask, TTaskID, TPrerequisite]):
     The memory needs of this class would naively be unbounded. Any newly
     registered task might depend on any other task in history. To prevent
     unbounded memory usage, old tasks are pruned after a configurable depth.
+    Pruning is triggered when `ready_tasks()` is called, starting from the
+    tail of the *previous* ready_tasks() result.
 
     Vocab:
 
@@ -487,6 +489,8 @@ class OrderedTaskPreparation(Generic[TTask, TTaskID, TPrerequisite]):
 
         # Declared finished with set_finished_dependency()
         self._declared_finished: Set[TTaskID] = set()
+
+        self._last_yielded_tasks: Tuple[TTask, ...] = tuple()
 
     def set_finished_dependency(self, finished_task: TTask) -> None:
         """
@@ -580,7 +584,12 @@ class OrderedTaskPreparation(Generic[TTask, TTaskID, TPrerequisite]):
         Return the next batch of tasks that are ready to process. If none are ready,
         hang until at least one task becomes ready.
         """
-        return await queue_get_batch(self._ready_tasks)
+        if self._last_yielded_tasks:
+            completed_task = self._last_yielded_tasks[-1]
+            self._prune_finished(self._id_of(completed_task))
+
+        self._last_yielded_tasks = await queue_get_batch(self._ready_tasks)
+        return self._last_yielded_tasks
 
     def _is_ready(self, task: TTask) -> bool:
         dependency = self._dependency_of(task)
@@ -616,9 +625,6 @@ class OrderedTaskPreparation(Generic[TTask, TTaskID, TPrerequisite]):
         # note that this task has been made ready
         self._unready.remove(task_id)
 
-        # prune any completed tasks that are too old
-        self._prune_finished(task_id)
-
         # resolve tasks that depend on this task
         for depending_task_id in self._dependencies[task_id]:
             # we already know that this task is ready, so we only need to check completion
@@ -628,7 +634,22 @@ class OrderedTaskPreparation(Generic[TTask, TTaskID, TPrerequisite]):
     def _prune_finished(self, task_id: TTaskID) -> None:
         """
         This prunes any data starting more than _max_depth in history.
-        It is called when the task becomes ready.
+        It is called when the task has been consumed by the caller via
+        `ready_tasks()` and completed. The workflow looks something like:
+
+        ::
+
+            otp = OrderedTaskPreparation(...)
+            otp.register_tasks(range(3))
+            otp.finish_prereq(OnlyPrereq, (0, 1))
+            assert await otp.ready_tasks() == (0, 1)
+
+            # Do some processing on ready tasks (0, 1) ...
+            # Complete processing on ready tasks (0, 1)
+
+            await otp.ready_tasks()
+            # ^ when this is called, pruning is triggered from
+            # the tip of task 1 (whether or not task 2 is ready)
         """
         try:
             oldest_id = self._find_oldest_unpruned_task_id(task_id)
@@ -665,7 +686,7 @@ class OrderedTaskPreparation(Generic[TTask, TTaskID, TPrerequisite]):
         get_dependency_of_id = compose(self._dependency_of, attrgetter('task'), self._tasks.get)
         # We'll use the maximum saved history (_max_depth) to cap how long the stale cache
         # of history might get, when pruning. Increasing the cap should not be a problem, if needed.
-        for depth in range(0, self._max_depth):
+        for depth in count():
             dependency = get_dependency_of_id(root_candidate)
             if dependency not in self._tasks:
                 return root_candidate, depth

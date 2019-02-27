@@ -69,8 +69,16 @@ async def test_pruning():
     # make a number task depend on the mod10, so 4 and 14 both depend on task 3
     ti = OrderedTaskPreparation(OnePrereq, identity, lambda x: (x % 10) - 1, max_depth=2)
     ti.set_finished_dependency(3)
-    ti.register_tasks((4, 5, 6))
+    ti.register_tasks((4, 5, 6, 7, 8))
     ti.finish_prereq(OnePrereq.one, (4, 5, 6))
+
+    # trigger pruning by requesting the ready tasks through 6, then "finishing" them
+    # by requesting the next batch of ready tasks (7)
+    completed = await wait(ti.ready_tasks())
+    assert completed == (4, 5, 6)
+    ti.finish_prereq(OnePrereq.one, (7, ))
+    completed = await wait(ti.ready_tasks())
+    assert completed == (7, )
 
     # it's fine to prepare a task that depends up to two back in history
     # this depends on 5
@@ -83,9 +91,11 @@ async def test_pruning():
         # this depends on 3
         ti.register_tasks((14, ))
 
-    # test the same concept, but after pruning more than just the starting task...
-    ti.register_tasks((7, ))
-    ti.finish_prereq(OnePrereq.one, (7, ))
+    # test the same concept, but after pruning tasks that weren't the starting tasks
+    # trigger pruning from the head at 7 by completing the one *after* 7
+    ti.finish_prereq(OnePrereq.one, (8, ))
+    completed = await wait(ti.ready_tasks())
+    assert completed == (8, )
 
     ti.register_tasks((26, ))
     ti.register_tasks((27, ))
@@ -285,3 +295,27 @@ async def test_finished_dependency_midstream():
     ti.finish_prereq(TwoPrereqs.Prereq2, (6, ))
     ready = await wait(ti.ready_tasks())
     assert ready == (6, )
+
+
+@pytest.mark.asyncio
+async def test_wait_to_prune_until_yielded():
+    """
+    We need to be able to mark dependencies as finished, after task completion
+    """
+    ti = OrderedTaskPreparation(NoPrerequisites, identity, lambda x: x - 1, max_depth=2)
+    ti.set_finished_dependency(-1)
+    ti.register_tasks(range(10))
+    # the old tasks aren't pruned yet, so duplicates with known parents are fine
+    ti.register_tasks((3, ), ignore_duplicates=True)
+    ready = await wait(ti.ready_tasks())
+    assert ready == tuple(range(10))
+
+    # old tasks STILL aren't pruned, until we indicate that we are finished processing
+    # them by calling ready_tasks on the *next* batch
+    ti.register_tasks((10, ))
+    ready = await wait(ti.ready_tasks())
+    assert ready == (10, )
+
+    # now old tasks are pruned
+    with pytest.raises(MissingDependency):
+        ti.register_tasks((3, ), ignore_duplicates=True)
