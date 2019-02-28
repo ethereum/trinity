@@ -900,15 +900,14 @@ def _update_shuffling_seed(state: BeaconState,
 
 
 def is_ready_to_active(state: BeaconState,
-                       config: BeaconConfig,
-                       index: ValidatorIndex) -> bool:
+                       index: ValidatorIndex,
+                       max_deposit_amount: Gwei) -> bool:
     validator = state.validator_registry[index]
     balance = state.validator_balances[index]
-    return validator.activation_epoch == FAR_FUTURE_EPOCH and balance >= config.MAX_DEPOSIT_AMOUNT
+    return validator.activation_epoch == FAR_FUTURE_EPOCH and balance >= max_deposit_amount
 
 
 def is_ready_to_exit(state: BeaconState,
-                     config: BeaconConfig,
                      index: ValidatorIndex) -> bool:
     validator = state.validator_registry[index]
     return validator.exit_epoch == FAR_FUTURE_EPOCH and validator.initiated_exit
@@ -918,14 +917,12 @@ def churn_validators(state: BeaconState,
                      config: BeaconConfig,
                      check_should_churn_fn: Callable[..., Any],
                      churn_fn: Callable[..., Any],
-                     max_balance_churn: int,
-                     **churn_fn_kwargs: Any) -> BeaconState:
+                     max_balance_churn: int) -> BeaconState:
     balance_churn = 0
     for index in range(len(state.validator_registry)):
         index = ValidatorIndex(index)
         should_churn = check_should_churn_fn(
             state,
-            config,
             index,
         )
         if should_churn:
@@ -938,11 +935,7 @@ def churn_validators(state: BeaconState,
             if balance_churn > max_balance_churn:
                 break
 
-            state = churn_fn(
-                state,
-                index,
-                **churn_fn_kwargs,
-            )
+            state = churn_fn(state, index)
     return state
 
 
@@ -968,29 +961,41 @@ def update_validator_registry(state: BeaconState, config: BeaconConfig) -> Beaco
     )
 
     # Activate validators within the allowable balance churn
-    state = churn_validators(
-        state=state,
-        config=config,
-        check_should_churn_fn=is_ready_to_active,
-        churn_fn=activate_validator,
-        max_balance_churn=max_balance_churn,
-        # **churn_fn_kwargs
+    check_should_churn_fn = lambda state, index: is_ready_to_active(
+        state,
+        index,
+        config.MAX_DEPOSIT_AMOUNT,
+    )
+    churn_fn = lambda state, index: activate_validator(
+        state,
+        index,
         is_genesis=False,
         genesis_epoch=config.GENESIS_EPOCH,
         slots_per_epoch=config.SLOTS_PER_EPOCH,
         activation_exit_delay=config.ACTIVATION_EXIT_DELAY,
     )
-
-    # Exit validators within the allowable balance churn
     state = churn_validators(
         state=state,
         config=config,
-        check_should_churn_fn=is_ready_to_exit,
-        churn_fn=exit_validator,
+        check_should_churn_fn=check_should_churn_fn,
+        churn_fn=churn_fn,
         max_balance_churn=max_balance_churn,
-        # **churn_fn_kwargs
+    )
+
+    # Exit validators within the allowable balance churn
+    check_should_churn_fn = lambda state, index: is_ready_to_exit(state, index)
+    churn_fn = lambda state, index: exit_validator(
+        state,
+        index,
         slots_per_epoch=config.SLOTS_PER_EPOCH,
         activation_exit_delay=config.ACTIVATION_EXIT_DELAY,
+    )
+    state = churn_validators(
+        state=state,
+        config=config,
+        check_should_churn_fn=check_should_churn_fn,
+        churn_fn=churn_fn,
+        max_balance_churn=max_balance_churn,
     )
 
     state = state.copy(
@@ -1086,7 +1091,7 @@ StateUpdaterForConfig = Callable[[BeaconState, BeaconConfig], BeaconState]
 def _process_validator_registry_with_update(current_epoch_committee_count: int,
                                             state: BeaconState,
                                             config: BeaconConfig) -> StateUpdaterForConfig:
-    state = update_validator_registry(state)
+    state = update_validator_registry(state, config)
 
     # Update step-by-step since updated `state.current_shuffling_epoch`
     # is used to calculate other value). Follow the spec tightly now.
