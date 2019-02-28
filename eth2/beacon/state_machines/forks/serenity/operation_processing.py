@@ -58,11 +58,10 @@ def process_proposer_slashings(state: BeaconState,
 def _get_slashable_indices(state: BeaconState,
                            config: BeaconConfig,
                            attester_slashing: AttesterSlashing) -> Iterable[ValidatorIndex]:
-    current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     for index in attester_slashing.slashable_attestation_1.validator_indices:
         should_be_slashed = (
             index in attester_slashing.slashable_attestation_2.validator_indices and
-            state.validator_registry[index].slashed_epoch > current_epoch
+            not state.validator_registry[index].slashed
         )
         if should_be_slashed:
             yield index

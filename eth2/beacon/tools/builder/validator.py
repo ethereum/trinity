@@ -249,7 +249,11 @@ def create_mock_slashable_attestation(state: BeaconState,
     shard = Shard(0)
 
     # Use genesis block root as `beacon_block_root`, only for tests.
-    beacon_block_root = get_block_root(state, 0, config.LATEST_BLOCK_ROOTS_LENGTH)
+    beacon_block_root = get_block_root(
+        state,
+        config.GENESIS_SLOT,
+        config.LATEST_BLOCK_ROOTS_LENGTH,
+    )
 
     # Get `epoch_boundary_root`
     epoch_boundary_root = _get_epoch_boundary_root(state, config, beacon_block_root)
@@ -290,9 +294,10 @@ def create_mock_slashable_attestation(state: BeaconState,
         signature_domain=SignatureDomain.DOMAIN_ATTESTATION,
         slots_per_epoch=config.SLOTS_PER_EPOCH,
     )
+    validator_indices = tuple(committee[i] for i in voting_committee_indices)
 
     return SlashableAttestation(
-        validator_indices=sorted(voting_committee_indices),
+        validator_indices=sorted(validator_indices),
         data=attestation_data,
         custody_bitfield=get_empty_bitfield(len(voting_committee_indices)),
         aggregate_signature=signature,
@@ -303,9 +308,9 @@ def create_mock_attester_slashing_is_double_vote(
         state: BeaconState,
         config: BeaconConfig,
         keymap: Dict[BLSPubkey, int],
-        attestation_epoch: Slot) -> AttesterSlashing:
+        attestation_epoch: Epoch) -> AttesterSlashing:
     attestation_slot_1 = get_epoch_start_slot(attestation_epoch, config.SLOTS_PER_EPOCH)
-    attestation_slot_2 = attestation_slot_1 + 1
+    attestation_slot_2 = Slot(attestation_slot_1 + 1)
 
     slashable_attestation_1 = create_mock_slashable_attestation(
         state,
@@ -330,10 +335,10 @@ def create_mock_attester_slashing_is_surround_vote(
         state: BeaconState,
         config: BeaconConfig,
         keymap: Dict[BLSPubkey, int],
-        attestation_epoch: Slot) -> AttesterSlashing:
+        attestation_epoch: Epoch) -> AttesterSlashing:
     # target_epoch_2 < target_epoch_1
     attestation_slot_2 = get_epoch_start_slot(attestation_epoch, config.SLOTS_PER_EPOCH)
-    attestation_slot_1 = attestation_slot_2 + config.SLOTS_PER_EPOCH
+    attestation_slot_1 = Slot(attestation_slot_2 + config.SLOTS_PER_EPOCH)
 
     slashable_attestation_1 = create_mock_slashable_attestation(
         state.copy(
