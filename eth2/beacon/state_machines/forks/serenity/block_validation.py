@@ -488,7 +488,7 @@ def generate_aggregate_pubkeys_from_indices(
 
 
 def _validate_custody_bitfield(custody_bitfield: Bitfield) -> None:
-    # NOTE: to be removed in phase 1.
+    # TODO: to be removed in phase 1.
     empty_custody_bitfield = b'\x00' * len(custody_bitfield)
     if custody_bitfield != empty_custody_bitfield:
         raise ValidationError(
@@ -641,7 +641,9 @@ def verify_slashable_attestation_signature(state: 'BeaconState',
         SignatureDomain.DOMAIN_ATTESTATION,
     )
 
-    # No custody bit 1 indice
+    # No custody bit 1 indice votes in phase 0, so we only need to process custody bit 0
+    # for efficiency.
+    # TODO: to be removed in phase 1.
     if len(all_indices[1]) == 0:
         pubkeys = pubkeys[:1]
         message_hashes = message_hashes[:1]
