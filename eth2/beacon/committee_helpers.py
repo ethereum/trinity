@@ -158,7 +158,7 @@ def get_next_epoch_committee_count(
     )
 
 
-def _get_shuffling_contextis_current_epoch(
+def _get_shuffling_context_is_current_epoch(
         state: 'BeaconState',
         committee_config: CommitteeConfig) -> ShufflingContext:
     return ShufflingContext(
@@ -174,7 +174,7 @@ def _get_shuffling_contextis_current_epoch(
     )
 
 
-def _get_shuffling_contextis_previous_epoch(
+def _get_shuffling_context_is_previous_epoch(
         state: 'BeaconState',
         committee_config: CommitteeConfig) -> ShufflingContext:
     return ShufflingContext(
@@ -188,6 +188,7 @@ def _get_shuffling_contextis_previous_epoch(
         shuffling_epoch=state.previous_shuffling_epoch,
         shuffling_start_shard=state.previous_shuffling_start_shard,
     )
+
 
 #
 # Helpers for get_crosslink_committees_at_slot
@@ -262,8 +263,8 @@ def _get_shuffling_contextis_next_epoch_no_registry_change_no_reseed(
             slots_per_epoch=committee_config.SLOTS_PER_EPOCH,
             target_committee_size=committee_config.TARGET_COMMITTEE_SIZE,
         ),
-        shuffling_epoch=state.current_shuffling_epoch,
         seed=state.current_shuffling_seed,
+        shuffling_epoch=state.current_shuffling_epoch,
         shuffling_start_shard=state.current_shuffling_start_shard,
     )
 
@@ -294,9 +295,9 @@ def get_crosslink_committees_at_slot(
     )
 
     if epoch == current_epoch:
-        shuffling_context = _get_shuffling_contextis_current_epoch(state, committee_config)
+        shuffling_context = _get_shuffling_context_is_current_epoch(state, committee_config)
     elif epoch == previous_epoch:
-        shuffling_context = _get_shuffling_contextis_previous_epoch(state, committee_config)
+        shuffling_context = _get_shuffling_context_is_previous_epoch(state, committee_config)
     elif epoch == next_epoch:
         epochs_since_last_registry_update = current_epoch - state.validator_registry_update_epoch
         should_reseed = (
