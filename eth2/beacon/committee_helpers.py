@@ -288,7 +288,7 @@ def get_beacon_proposer_index(state: 'BeaconState',
         committee_config.SLOTS_PER_EPOCH,
         committee_config.GENESIS_EPOCH,
     )
-    next_epoch = current_epoch + 1
+    next_epoch = Epoch(current_epoch + 1)
 
     validate_epoch_within_previous_and_next(epoch, previous_epoch, next_epoch)
 
