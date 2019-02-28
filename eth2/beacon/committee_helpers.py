@@ -158,6 +158,10 @@ def get_next_epoch_committee_count(
     )
 
 
+#
+# Helpers for get_crosslink_committees_at_slot
+#
+
 def _get_shuffling_context_is_current_epoch(
         state: 'BeaconState',
         committee_config: CommitteeConfig) -> ShufflingContext:
@@ -190,9 +194,6 @@ def _get_shuffling_context_is_previous_epoch(
     )
 
 
-#
-# Helpers for get_crosslink_committees_at_slot
-#
 def _get_shuffling_contextis_next_epoch_registry_change(
         state: 'BeaconState',
         next_epoch: Epoch,
