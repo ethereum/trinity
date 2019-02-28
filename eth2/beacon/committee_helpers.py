@@ -207,19 +207,6 @@ def get_crosslink_committees_at_slot(
         shuffling_epoch = state.previous_shuffling_epoch
         shuffling_start_shard = state.previous_shuffling_start_shard
     elif epoch == next_epoch:
-        current_committees_per_epoch = get_current_epoch_committee_count(
-            state=state,
-            shard_count=shard_count,
-            slots_per_epoch=slots_per_epoch,
-            target_committee_size=target_committee_size,
-        )
-        committees_per_epoch = get_next_epoch_committee_count(
-            state=state,
-            shard_count=shard_count,
-            slots_per_epoch=slots_per_epoch,
-            target_committee_size=target_committee_size,
-        )
-        shuffling_epoch = next_epoch
         epochs_since_last_registry_update = current_epoch - state.validator_registry_update_epoch
         should_reseed = (
             epochs_since_last_registry_update > 1 and
@@ -227,6 +214,13 @@ def get_crosslink_committees_at_slot(
         )
 
         if registry_change:
+            committees_per_epoch = get_next_epoch_committee_count(
+                state=state,
+                shard_count=shard_count,
+                slots_per_epoch=slots_per_epoch,
+                target_committee_size=target_committee_size,
+            )
+            shuffling_epoch = next_epoch
             # for mocking this out in tests.
             seed = helpers.generate_seed(
                 state=state,
@@ -237,10 +231,23 @@ def get_crosslink_committees_at_slot(
                 latest_active_index_roots_length=latest_active_index_roots_length,
                 latest_randao_mixes_length=latest_randao_mixes_length,
             )
+            current_committees_per_epoch = get_current_epoch_committee_count(
+                state=state,
+                shard_count=shard_count,
+                slots_per_epoch=slots_per_epoch,
+                target_committee_size=target_committee_size,
+            )
             shuffling_start_shard = (
                 state.current_shuffling_start_shard + current_committees_per_epoch
             ) % shard_count
         elif should_reseed:
+            committees_per_epoch = get_next_epoch_committee_count(
+                state=state,
+                shard_count=shard_count,
+                slots_per_epoch=slots_per_epoch,
+                target_committee_size=target_committee_size,
+            )
+            shuffling_epoch = next_epoch
             # for mocking this out in tests.
             seed = helpers.generate_seed(
                 state=state,
@@ -253,6 +260,13 @@ def get_crosslink_committees_at_slot(
             )
             shuffling_start_shard = state.current_shuffling_start_shard
         else:
+            committees_per_epoch = get_current_epoch_committee_count(
+                state=state,
+                shard_count=shard_count,
+                slots_per_epoch=slots_per_epoch,
+                target_committee_size=target_committee_size,
+            )
+            shuffling_epoch = state.current_shuffling_epoch
             seed = state.current_shuffling_seed
             shuffling_start_shard = state.current_shuffling_start_shard
 
