@@ -129,6 +129,7 @@ def sample_beacon_block_body_params():
         'attestations': (),
         'deposits': (),
         'voluntary_exits': (),
+        'transfers': (),
     }
 
 
@@ -577,6 +578,11 @@ def max_voluntary_exits():
     return SERENITY_CONFIG.MAX_VOLUNTARY_EXITS
 
 
+@pytest.fixture
+def max_transfers():
+    return SERENITY_CONFIG.MAX_TRANSFERS
+
+
 #
 # genesis
 #
@@ -694,7 +700,8 @@ def config(
         max_attester_slashings,
         max_attestations,
         max_deposits,
-        max_voluntary_exits
+        max_voluntary_exits,
+        max_transfers
 ):
     return BeaconConfig(
         SHARD_COUNT=shard_count,
@@ -732,6 +739,7 @@ def config(
         MAX_ATTESTATIONS=max_attestations,
         MAX_DEPOSITS=max_deposits,
         MAX_VOLUNTARY_EXITS=max_voluntary_exits,
+        MAX_TRANSFERS=max_transfers,
     )
 
 
