@@ -286,6 +286,19 @@ def sample_slashable_attestation_params(sample_attestation_data_params):
 
 
 @pytest.fixture
+def sample_transfer_params():
+    return {
+        'from_validator_index': 10,
+        'to_validator_index': 12,
+        'amount': 10 * 10**9,
+        'fee': 5 * 10**9,
+        'slot': 5,
+        'pubkey': b'\x67' * 48,
+        'signature': b'\x43' * 96,
+    }
+
+
+@pytest.fixture
 def sample_attester_slashing_params(sample_slashable_attestation_params):
     slashable_attestation = SlashableAttestation(**sample_slashable_attestation_params)
     return {
