@@ -282,7 +282,7 @@ def sample_slashable_attestation_params(sample_attestation_data_params):
         'validator_indices': (10, 11, 12, 15, 28),
         'data': AttestationData(**sample_attestation_data_params),
         'custody_bitfield': b'\00' * 4,
-        'aggregate_signature': EMPTY_SIGNATURE,
+        'aggregate_signature': b'\x65' * 96,
     }
 
 

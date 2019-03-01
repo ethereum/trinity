@@ -11,7 +11,7 @@ from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.voluntary_exits import VoluntaryExit
-
+from eth2.beacon.types.transfers import Transfer
 
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 
@@ -22,7 +22,8 @@ def test_serialize(
         sample_attester_slashing_params,
         sample_attestation_params,
         sample_deposit_params,
-        sample_voluntary_exit_params):
+        sample_voluntary_exit_params,
+        sample_transfer_params):
     count = 10
     for i in range(count):
         test_block_only_header = SerenityBeaconBlock(
@@ -49,9 +50,10 @@ def test_serialize(
                 attestations=(Attestation(**sample_attestation_params), ) * config.MAX_ATTESTATIONS,
                 deposits=(Deposit(**sample_deposit_params), ) * config.MAX_DEPOSITS,
                 voluntary_exits=(
-                    (VoluntaryExit(**sample_voluntary_exit_params), ) *
+                    (VoluntaryExit(**sample_voluntary_exit_params),) *
                     config.MAX_VOLUNTARY_EXITS
                 ),
+                transfers=(Transfer(**sample_transfer_params),) * config.MAX_TRANSFERS,
             )
         )
         ssz.encode(test_block_only_header)

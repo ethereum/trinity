@@ -201,7 +201,7 @@ class BeaconBlock(BaseBeaconBlock):
             attestations=block.body.attestations,
             deposits=block.body.deposits,
             voluntary_exits=block.body.voluntary_exits,
-            transfer=block.body.transfer,
+            transfers=block.body.transfers,
         )
 
         return cls(
