@@ -10,12 +10,17 @@ from typing import (
 import typing_extensions
 
 from eth_utils import encode_hex
+from eth_typing import (
+    BlockNumber,
+    Hash32,
+)
 from lahja import (
     BroadcastConfig,
     Endpoint,
 )
 from p2p.exceptions import (
     HandshakeFailure,
+    NoConnectedPeers,
     WrongNetworkFailure,
     WrongGenesisFailure,
 )
@@ -26,8 +31,12 @@ from p2p.protocol import (
     _DecodedMsgType,
 )
 
+from trinity.endpoint import (
+    TrinityEventBusEndpoint,
+)
 from trinity.protocol.common.peer import (
     BaseChainPeer,
+    BaseChainDTOPeer,
     BaseChainPeerFactory,
     BaseChainPeerPool,
 )
@@ -45,10 +54,14 @@ from .events import (
     SendBlockHeadersEvent,
     SendNodeDataEvent,
     SendReceiptsEvent,
+    GetConnectedPeersRequest,
+    GetConnectedPeersResponse,
     GetBlockHeadersRequest,
     GetBlockHeadersResponse,
     GetBlockBodiesRequest,
     GetBlockBodiesResponse,
+    GetHighestTDPeerRequest,
+    GetHighestTDPeerResponse,
     GetNodeDataRequest,
     GetNodeDataResponse,
     GetReceiptsRequest,
@@ -148,11 +161,33 @@ class ETHProxyPeer:
     """
 
     def __init__(self,
+                 dto_peer: BaseChainDTOPeer,
                  sub_proto: ProxyETHProtocol,
                  requests: ProxyETHExchangeHandler):
 
+        self.dto_peer = dto_peer
         self.sub_proto = sub_proto
         self.requests = requests
+
+    # TODO: Wondering if we should only allow one-time read and throw if code
+    # tries to read again them again. I think the proper fix may be to just group
+    # all of these behind one async API that fetches this info. It just convenient
+    # to try to mimic the API for now.
+    @property
+    def head_td(self) -> int:
+        return self.dto_peer.head_td
+
+    @property
+    def head_hash(self) -> Hash32:
+        return self.dto_peer.head_hash
+
+    @property
+    def header_number(self) -> BlockNumber:
+        return self.dto_peer.head_number
+
+    @property
+    def max_headers_fetch(self) -> int:
+        return self.dto_peer.max_headers_fetch
 
     @property
     def is_operational(self) -> bool:
@@ -170,6 +205,7 @@ class ETHProxyPeer:
                       event_bus: Endpoint,
                       broadcast_config: BroadcastConfig) -> 'ETHProxyPeer':
         return cls(
+            dto_peer,
             ProxyETHProtocol(dto_peer, event_bus, broadcast_config),
             ProxyETHExchangeHandler(dto_peer, event_bus, broadcast_config),
         )
@@ -194,6 +230,8 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
         self.run_daemon_task(self.handle_get_block_bodies_requests())
         self.run_daemon_task(self.handle_get_node_data_requests())
         self.run_daemon_task(self.handle_get_receipts_requests())
+        self.run_daemon_task(self.handle_get_highest_td_peer_requests())
+        self.run_daemon_task(self.handle_connected_peers_requests())
         await super()._run()
 
     async def handle_send_blockheader_events(self) -> None:
@@ -289,6 +327,48 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
             else:
                 self._event_bus.broadcast(GetReceiptsResponse(bundles), ev.broadcast_config())
 
+    async def handle_get_highest_td_peer_requests(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(GetHighestTDPeerRequest)):
+
+            try:
+                highest_td_peer = self._peer_pool.highest_td_peer.to_dto()
+            except NoConnectedPeers:
+                # no peers are available right now
+                highest_td_peer = None
+
+            self._event_bus.broadcast(
+                GetHighestTDPeerResponse(highest_td_peer),
+                ev.broadcast_config()
+            )
+
+    async def handle_connected_peers_requests(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(GetConnectedPeersRequest)):
+
+            peers = self._peer_pool.get_peers(ev.min_td)
+            dto_peers = tuple(peer.to_dto() for peer in peers)
+            self._event_bus.broadcast(
+                GetConnectedPeersResponse(dto_peers),
+                ev.broadcast_config()
+            )
+
 
 class ETHPeerPool(BaseChainPeerPool):
     peer_factory_class = ETHPeerFactory
+
+
+# TODO: Make a base class that handles peer count etc
+class ETHProxyPeerPool:
+
+    def __init__(self, event_bus: TrinityEventBusEndpoint, broadcast_config: BroadcastConfig):
+        self.event_bus = event_bus
+        self.broadcast_config = broadcast_config
+
+    # TODO: Broadcast config, timeout
+    async def get_hightest_td_peer(self) -> ETHProxyPeer:
+        response = await self.event_bus.request(GetHighestTDPeerRequest(2))
+        return ETHProxyPeer.from_dto_peer(response.dto_peer, self.event_bus, self.broadcast_config)
+
+    async def get_connected_peers(self, min_td: int = 0) -> ETHProxyPeer:
+        response = await self.event_bus.request(GetConnectedPeersRequest())
+        proxy_peers = tuple(ETHProxyPeer.from_dto_peer(peer, self.event_bus, self.broadcast_config) for peer in response.dto_peers)
+        return proxy_peers

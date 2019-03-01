@@ -53,3 +53,21 @@ class PeerPoolMessageEvent(BaseEvent):
         self.peer = peer
         self.cmd = cmd
         self.msg = msg
+
+
+class PeerJoinedEvent(BaseEvent):
+    """
+    Event broadcasted when a new peer joined the pool.
+    """
+
+    def __init__(self, peer: IdentifiablePeer) -> None:
+        self.peer = peer
+
+
+class PeerLeftEvent(BaseEvent):
+    """
+    Event broadcasted when a peer left the pool.
+    """
+
+    def __init__(self, peer: IdentifiablePeer) -> None:
+        self.peer = peer

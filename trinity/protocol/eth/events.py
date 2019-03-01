@@ -162,3 +162,40 @@ class GetReceiptsRequest(BaseRequestResponseEvent[GetReceiptsResponse]):
     @staticmethod
     def expected_response_type() -> Type[GetReceiptsResponse]:
         return GetReceiptsResponse
+
+# Other PeerPool events
+
+
+class GetHighestTDPeerResponse(BaseEvent):
+
+    def __init__(self,
+                 dto_peer: IdentifiablePeer) -> None:
+        self.dto_peer = dto_peer
+
+
+class GetHighestTDPeerRequest(BaseRequestResponseEvent[GetHighestTDPeerResponse]):
+
+    def __init__(self,
+                 timeout: float) -> None:
+        self.timeout = timeout
+
+    @staticmethod
+    def expected_response_type() -> Type[GetHighestTDPeerResponse]:
+        return GetHighestTDPeerResponse
+
+
+class GetConnectedPeersResponse(BaseEvent):
+
+    def __init__(self,
+                 dto_peers: Tuple[IdentifiablePeer, ...]) -> None:
+        self.dto_peers = dto_peers
+
+
+class GetConnectedPeersRequest(BaseRequestResponseEvent[GetConnectedPeersResponse]):
+
+    def __init__(self, min_td: int = 0) -> None:
+        self.min_td = min_td
+
+    @staticmethod
+    def expected_response_type() -> Type[GetConnectedPeersResponse]:
+        return GetConnectedPeersResponse

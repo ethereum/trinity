@@ -38,19 +38,24 @@ from eth.rlp.headers import BlockHeader
 from p2p.constants import SEAL_CHECK_RANDOM_SAMPLE_RATE
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.p2p_proto import DisconnectReason
-from p2p.peer import BasePeer, PeerSubscriber
 from p2p.protocol import Command
 from p2p.service import BaseService
 
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.chains.base import BaseAsyncChain
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.common.commands import (
     BaseBlockHeaders,
 )
+from trinity.protocol.common.events import PeerJoinedEvent
 from trinity.protocol.common.monitors import BaseChainTipMonitor
-from trinity.protocol.common.peer import BaseChainPeer, BaseChainPeerPool
+from trinity.protocol.common.peer import BaseChainPeer
 from trinity.protocol.eth.constants import (
     MAX_HEADERS_FETCH,
+)
+from trinity.protocol.eth.peer import (
+    ETHProxyPeer,
 )
 from trinity.sync.common.constants import (
     EMPTY_PEER_RESPONSE_PENALTY,
@@ -507,7 +512,7 @@ class _PeerBehind(Exception):
 HeaderStitcher = OrderedTaskPreparation[BlockHeader, Hash32, OrderedTaskPreparation.NoPrerequisites]
 
 
-class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
+class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
     # We are only interested in peers entering or leaving the pool
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset()
     msg_queue_maxsize = 2000
@@ -517,7 +522,7 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
     def __init__(
             self,
             chain: BaseAsyncChain,
-            peer_pool: BaseChainPeerPool,
+            event_bus: TrinityEventBusEndpoint,
             stitcher: HeaderStitcher,
             token: CancelToken) -> None:
         super().__init__(token=token)
@@ -532,12 +537,7 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
 
         # queue up idle peers, ordered by speed that they return block bodies
         self._waiting_peers: WaitingPeers[TChainPeer] = WaitingPeers(BaseBlockHeaders)
-        self._peer_pool = peer_pool
-
-    def register_peer(self, peer: BasePeer) -> None:
-        super().register_peer(peer)
-        # when a new peer is added to the pool, add it to the idle peer list
-        self._waiting_peers.put_nowait(peer)  # type: ignore
+        self._event_bus = event_bus
 
     async def schedule_segment(
             self,
@@ -555,8 +555,18 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
 
     async def _run(self) -> None:
         self.run_daemon_task(self._display_stats())
-        with self.subscribe(self._peer_pool):
-            await self.wait(self._match_header_dls_to_peers())
+        self.run_daemon_task(self._watch_new_peers())
+
+        await self.wait(self._match_header_dls_to_peers())
+
+    async def _watch_new_peers(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(PeerJoinedEvent)):
+            proxy_peer = ETHProxyPeer.from_dto_peer(
+                ev.dto_peer,
+                self._event_bus,
+                TO_NETWORKING_BROADCAST_CONFIG
+            )
+            self._waiting_peers.put_nowait(proxy_peer)
 
     async def _display_stats(self) -> None:
         q = self._filler_header_tasks
@@ -574,7 +584,6 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
             batch_id, (
                 (parent_header, gap, skeleton_peer),
             ) = await self._filler_header_tasks.get(1)
-
             await self._match_dl_to_peer(batch_id, parent_header, gap, skeleton_peer)
 
     async def _match_dl_to_peer(
@@ -721,13 +730,12 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
     def __init__(self,
                  chain: BaseAsyncChain,
                  db: BaseAsyncHeaderDB,
-                 peer_pool: BaseChainPeerPool,
+                 event_bus: TrinityEventBusEndpoint,
                  token: CancelToken = None) -> None:
         super().__init__(token)
         self._db = db
         self._chain = chain
-        self._peer_pool = peer_pool
-        self._tip_monitor = self.tip_monitor_class(peer_pool, token=self.cancel_token)
+        self._tip_monitor = self.tip_monitor_class(event_bus, token=self.cancel_token)
         self._skeleton: SkeletonSyncer[TChainPeer] = None
         # stitch together headers as they come in
         self._stitcher = OrderedTaskPreparation(
@@ -741,7 +749,7 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
         )
         # When downloading the headers into the gaps left by the syncer, they must be linearized
         # by the stitcher
-        self._meat = HeaderMeatSyncer(chain, peer_pool, self._stitcher, token)
+        self._meat = HeaderMeatSyncer(chain, event_bus, self._stitcher, token)
         self._last_target_header_hash: Hash32 = None
 
         # Track if there is capacity for syncing more headers

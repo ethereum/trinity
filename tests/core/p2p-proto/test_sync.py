@@ -47,24 +47,34 @@ def small_header_batches(monkeypatch):
 @pytest.mark.asyncio
 async def test_fast_syncer_with_isolated_server(request,
                                                 event_bus,
+                                                other_event_bus,
                                                 event_loop,
                                                 chaindb_fresh,
                                                 chaindb_20):
+
+    server_event_bus = event_bus
+    client_event_bus = other_event_bus
     client_peer, server_peer = await get_directly_linked_peers(
         request, event_loop,
         alice_headerdb=FakeAsyncHeaderDB(chaindb_fresh.db),
         bob_headerdb=FakeAsyncHeaderDB(chaindb_20.db))
-    client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer])
-    client = FastChainSyncer(ByzantiumTestChain(chaindb_fresh.db), chaindb_fresh, client_peer_pool)
-    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+    client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
+    await make_peer_pool_answer_event_bus_requests(client_event_bus, client_peer_pool)
+    await make_peer_pool_relay_messages_on_event_bus(client_event_bus, client_peer_pool)
 
-    await make_peer_pool_answer_event_bus_requests(event_bus, server_peer_pool)
-    await make_peer_pool_relay_messages_on_event_bus(event_bus, server_peer_pool)
-    await run_isolated_request_server(event_bus, chaindb_20.db)
+    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
+    await make_peer_pool_answer_event_bus_requests(server_event_bus, server_peer_pool)
+    await make_peer_pool_relay_messages_on_event_bus(server_event_bus, server_peer_pool)
+    await run_isolated_request_server(server_event_bus, chaindb_20.db)
 
     server_peer.logger.info("%s is serving 20 blocks", server_peer)
     client_peer.logger.info("%s is syncing up 20", client_peer)
 
+    client = FastChainSyncer(
+        ByzantiumTestChain(chaindb_fresh.db),
+        chaindb_fresh,
+        client_event_bus,
+    )
     # FastChainSyncer.run() will return as soon as it's caught up with the peer.
     await asyncio.wait_for(client.run(), timeout=2)
 

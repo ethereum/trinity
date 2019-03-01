@@ -34,22 +34,24 @@ class WaitingPeers(Generic[TChainPeer]):
         self._peer_wrapper = SortableTask.orderable_by_func(self._get_peer_rank)
 
     def _get_peer_rank(self, peer: TChainPeer) -> float:
-        relevant_throughputs = [
-            exchange.tracker.items_per_second_ema.value
-            for exchange in peer.requests
-            if issubclass(exchange.response_cmd_type, self._response_command_type)
-        ]
+        return 1.0
+    # def _get_peer_rank(self, peer: TChainPeer) -> float:
+    #     relevant_throughputs = [
+    #         exchange.tracker.items_per_second_ema.value
+    #         for exchange in peer.requests
+    #         if issubclass(exchange.response_cmd_type, self._response_command_type)
+    #     ]
 
-        if len(relevant_throughputs) == 0:
-            raise ValidationError(
-                f"Could not find any exchanges on {peer} "
-                f"with response {self._response_command_type!r}"
-            )
+    #     if len(relevant_throughputs) == 0:
+    #         raise ValidationError(
+    #             f"Could not find any exchanges on {peer} "
+    #             f"with response {self._response_command_type!r}"
+    #         )
 
-        avg_throughput = sum(relevant_throughputs) / len(relevant_throughputs)
+    #     avg_throughput = sum(relevant_throughputs) / len(relevant_throughputs)
 
-        # high throughput peers should pop out of the queue first, so ranked as negative
-        return -1 * avg_throughput
+    #     # high throughput peers should pop out of the queue first, so ranked as negative
+    #     return -1 * avg_throughput
 
     def put_nowait(self, peer: TChainPeer) -> None:
         self._waiting_peers.put_nowait(self._peer_wrapper(peer))

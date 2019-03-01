@@ -25,6 +25,7 @@ from p2p.kademlia import Node
 from p2p.peer import (
     BasePeer,
     BasePeerFactory,
+    IdentifiablePeer,
 )
 from p2p.peer_pool import (
     BasePeerPool,
@@ -42,6 +43,16 @@ class ChainInfo(NamedTuple):
     block_hash: Hash32
     total_difficulty: int
     genesis_hash: Hash32
+
+
+class BaseChainDTOPeer(NamedTuple):
+    # TODO: Calling code might worker under the assumption these values are live
+    # which they aren't for the DTO. Potential footgun?
+    uri: str
+    head_td: int
+    head_hash: Hash32
+    head_number: BlockNumber
+    max_headers_fetch: int
 
 
 class BaseChainPeer(BasePeer):
@@ -90,6 +101,15 @@ class BaseChainPeer(BasePeer):
             block_hash=head.hash,
             total_difficulty=total_difficulty,
             genesis_hash=genesis.hash,
+        )
+
+    def to_dto(self) -> IdentifiablePeer:
+        return BaseChainDTOPeer(
+            self.remote.uri(),
+            self.head_td,
+            self.head_hash,
+            self.head_number,
+            self.max_headers_fetch,
         )
 
 

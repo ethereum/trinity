@@ -33,6 +33,8 @@ from .events import (
     PeerCountRequest,
     PeerCountResponse,
     PeerPoolMessageEvent,
+    PeerJoinedEvent,
+    PeerLeftEvent,
 )
 
 
@@ -50,6 +52,7 @@ class BasePeerPoolEventBusRequestHandler(BaseService, Generic[TPeer]):
                  peer_pool: BasePeerPool,
                  token: CancelToken = None) -> None:
         super().__init__(token)
+        # TODO: Make both plublic (intended to use in derived classes)
         self._peer_pool = peer_pool
         self._event_bus = event_bus
 
@@ -118,3 +121,9 @@ class BasePeerPoolMessageRelayer(BaseService, PeerSubscriber):
             while self.is_operational:
                 peer, cmd, msg = await self.wait(self.msg_queue.get())
                 self._event_bus.broadcast(PeerPoolMessageEvent(peer.to_dto(), cmd, msg))
+
+    def register_peer(self, peer: BasePeer) -> None:
+        self._event_bus.broadcast(PeerJoinedEvent(peer.to_dto()))
+
+    def deregister_peer(self, peer: BasePeer) -> None:
+        self._event_bus.broadcast(PeerLeftEvent(peer.to_dto()))
