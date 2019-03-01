@@ -95,7 +95,7 @@ def sample_attestation_params(sample_attestation_data_params):
         'data': AttestationData(**sample_attestation_data_params),
         'aggregation_bitfield': b'\12' * 16,
         'custody_bitfield': b'\34' * 16,
-        'aggregate_signature': [0, 0],
+        'aggregate_signature': EMPTY_SIGNATURE,
     }
 
 
@@ -205,9 +205,9 @@ def sample_crosslink_record_params():
 @pytest.fixture
 def sample_deposit_input_params():
     return {
-        'pubkey': 123,
-        'withdrawal_credentials': b'\11' * 32,
-        'proof_of_possession': (0, 0),
+        'pubkey': b'\x43' * 48,
+        'withdrawal_credentials': ZERO_HASH32,
+        'proof_of_possession': EMPTY_SIGNATURE,
     }
 
 
