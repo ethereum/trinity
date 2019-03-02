@@ -367,7 +367,7 @@ def validate_attestation_slot(attestation_data: AttestationData,
     if state_slot >= attestation_data.slot + slots_per_epoch:
         raise ValidationError(
             "Attestation slot plus `SLOTS_PER_EPOCH` is too low; "
-            "must equal or exceed the current state:\n"
+            "must exceed the current state:\n"
             f"\tFound: {attestation_data.slot + slots_per_epoch} "
             f"({attestation_data.slot} + {slots_per_epoch}), "
             f"Needed greater than: {state_slot}"
