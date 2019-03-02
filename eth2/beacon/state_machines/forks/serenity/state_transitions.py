@@ -9,6 +9,7 @@ from eth2.beacon.configs import (
 from eth2.beacon.state_machines.state_transitions import BaseStateTransition
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import Slot
 
 from .block_processing import (
     process_eth1_data,
@@ -54,6 +55,21 @@ class SerenityStateTransition(BaseStateTransition):
             if (state.slot + 1) % self.config.SLOTS_PER_EPOCH == 0:
                 state = self.per_epoch_transition(state)
 
+        return state
+
+    def apply_state_transition_without_block(self,
+                                             state: BeaconState,
+                                             slot: Slot,
+                                             parent_root: Hash32) -> BeaconState:
+        """
+        Advances the ``state`` to the requested ``slot``. Returns the resulting state at that slot
+        assuming there are no intervening blocks. See docs for :meth:`eth2.beacon.state_machines.state_transitions.BaseStateTransition.apply_state_transition_without_block`
+        for more information about the behavior of this method.
+        """
+        for _ in range(state.slot, slot):
+            state = self.per_slot_transition(state, parent_root)
+            if (state.slot + 1) % self.config.SLOTS_PER_EPOCH == 0:
+                state = self.per_epoch_transition(state)
         return state
 
     def per_slot_transition(self,

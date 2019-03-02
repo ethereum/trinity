@@ -13,6 +13,7 @@ from eth._utils.datatypes import (
 from eth2.beacon.configs import BeaconConfig
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import Slot
 
 
 class BaseStateTransition(Configurable, ABC):
@@ -26,6 +27,22 @@ class BaseStateTransition(Configurable, ABC):
                                state: BeaconState,
                                block: BaseBeaconBlock,
                                check_proposer_signature: bool=True) -> BeaconState:
+        pass
+
+    @abstractmethod
+    def apply_state_transition_without_block(self,
+                                             state: BeaconState,
+                                             slot: Slot,
+                                             parent_root: Hash32) -> BeaconState:
+        """
+        Advances the ``state`` to the requested ``slot``. Returns the resulting state at that slot
+        assuming there are no intervening blocks. This method provides callers with some
+        lookahead into the future state of the chain, useful for generating RANDAO reveals or
+        computing future committee assignments.
+
+        NOTE: Inserting blocks in intervening slots will (among other things) change the
+        ``parent_root``, invalidating the returned state.
+        """
         pass
 
     @abstractmethod
