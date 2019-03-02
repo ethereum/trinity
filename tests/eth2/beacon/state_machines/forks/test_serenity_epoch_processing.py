@@ -1011,8 +1011,10 @@ def test_update_validator_registry(n,
         config.ACTIVATION_EXIT_DELAY,
     )
 
-    assert state.validator_registry[exiting_index].exit_epoch == entry_exit_effect_epoch
+    # Check if the activating_validator is activated
     assert state.validator_registry[activating_index].activation_epoch == entry_exit_effect_epoch
+    # Check if the activating_validator is exited
+    assert state.validator_registry[exiting_index].exit_epoch == entry_exit_effect_epoch
 
 
 @pytest.mark.parametrize(

@@ -899,24 +899,32 @@ def _update_shuffling_seed(state: BeaconState,
     )
 
 
-def is_ready_to_activate(state: BeaconState,
-                         index: ValidatorIndex,
-                         max_deposit_amount: Gwei) -> bool:
+def _is_ready_to_activate(state: BeaconState,
+                          index: ValidatorIndex,
+                          max_deposit_amount: Gwei) -> bool:
     validator = state.validator_registry[index]
     balance = state.validator_balances[index]
     return validator.activation_epoch == FAR_FUTURE_EPOCH and balance >= max_deposit_amount
 
 
-def is_ready_to_exit(state: BeaconState, index: ValidatorIndex) -> bool:
+def _is_ready_to_exit(state: BeaconState, index: ValidatorIndex) -> bool:
     validator = state.validator_registry[index]
     return validator.exit_epoch == FAR_FUTURE_EPOCH and validator.initiated_exit
 
 
-def churn_validators(state: BeaconState,
-                     config: BeaconConfig,
-                     check_should_churn_fn: Callable[..., Any],
-                     churn_fn: Callable[..., Any],
-                     max_balance_churn: int) -> BeaconState:
+def _churn_validators(state: BeaconState,
+                      config: BeaconConfig,
+                      check_should_churn_fn: Callable[..., Any],
+                      churn_fn: Callable[..., Any],
+                      max_balance_churn: int) -> BeaconState:
+    """
+    Churn the validators. The number of the churning validators is based on
+    the given ``max_balance_churn``.
+
+    :param check_should_churn_fn: the funcation to determine if the validator should be churn
+    :param churn_fn``: the function to churn the validators; it could be ``activate_validator`` or
+    ``exit_validator``
+    """
     balance_churn = 0
     for index in range(len(state.validator_registry)):
         index = ValidatorIndex(index)
@@ -960,10 +968,10 @@ def update_validator_registry(state: BeaconState, config: BeaconConfig) -> Beaco
 
     # Activate validators within the allowable balance churn
     # linter didn't like a bare lambda
-    state = churn_validators(
+    state = _churn_validators(
         state=state,
         config=config,
-        check_should_churn_fn=lambda state, index: is_ready_to_activate(
+        check_should_churn_fn=lambda state, index: _is_ready_to_activate(
             state,
             index,
             max_deposit_amount=config.MAX_DEPOSIT_AMOUNT,
@@ -981,10 +989,10 @@ def update_validator_registry(state: BeaconState, config: BeaconConfig) -> Beaco
 
     # Exit validators within the allowable balance churn
     # linter didn't like a bare lambda
-    state = churn_validators(
+    state = _churn_validators(
         state=state,
         config=config,
-        check_should_churn_fn=lambda state, index: is_ready_to_exit(state, index),
+        check_should_churn_fn=lambda state, index: _is_ready_to_exit(state, index),
         churn_fn=lambda state, index: exit_validator(
             state,
             index,
