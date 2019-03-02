@@ -961,7 +961,6 @@ def test_check_if_update_validator_registry(genesis_state,
         'slots_per_epoch',
         'target_committee_size',
         'shard_count',
-        'update_validator_registry_fn'
     ),
     [
         (
@@ -969,15 +968,14 @@ def test_check_if_update_validator_registry(genesis_state,
             10,
             9,
             10,
-            update_validator_registry,
         ),
-        (
-            10,
-            10,
-            9,
-            10,
-            update_validator_registry_2,
-        )
+    ]
+)
+@pytest.mark.parametrize(
+    ('update_validator_registry_fn'),
+    [
+        (update_validator_registry),
+        (update_validator_registry_2)
     ]
 )
 def test_update_validator_registry(n,
@@ -990,8 +988,8 @@ def test_update_validator_registry(n,
     exiting_index = 0
 
     activating_validator = ValidatorRecord.create_pending_validator(
-        b'\x10' * 48,
-        b'\x11' * 32,
+        pubkey=b'\x10' * 48,
+        withdrawal_credentials=b'\x11' * 32,
     )
 
     exiting_validator = n_validators_state.validator_registry[exiting_index].copy(
