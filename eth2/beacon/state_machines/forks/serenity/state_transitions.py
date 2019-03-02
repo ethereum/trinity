@@ -64,7 +64,7 @@ class SerenityStateTransition(BaseStateTransition):
                                              parent_root: Hash32) -> BeaconState:
         """
         Advances the ``state`` to the requested ``slot``. Returns the resulting state at that slot
-        assuming there are no intervening blocks. See docs for :meth:`eth2.beacon.state_machines.state_transitions.BaseStateTransition.apply_state_transition_without_block`
+        assuming there are no intervening blocks. See docs for :meth:`eth2.beacon.state_machines.state_transitions.BaseStateTransition.apply_state_transition_without_block`  # noqa: E501
         for more information about the behavior of this method.
         """
         for _ in range(state.slot, slot):
