@@ -66,7 +66,6 @@ from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
     process_justification,
     process_validator_registry,
     update_validator_registry,
-    update_validator_registry_2,
 )
 
 from eth2.beacon.types.states import BeaconState
@@ -971,18 +970,10 @@ def test_check_if_update_validator_registry(genesis_state,
         ),
     ]
 )
-@pytest.mark.parametrize(
-    ('update_validator_registry_fn'),
-    [
-        (update_validator_registry),
-        (update_validator_registry_2)
-    ]
-)
 def test_update_validator_registry(n,
                                    n_validators_state,
                                    config,
-                                   slots_per_epoch,
-                                   update_validator_registry_fn):
+                                   slots_per_epoch):
     validator_registry = list(n_validators_state.validator_registry)
     activating_index = n
     exiting_index = 0
@@ -1004,7 +995,7 @@ def test_update_validator_registry(n,
         validator_balances=n_validators_state.validator_balances + (config.MAX_DEPOSIT_AMOUNT,),
     )
 
-    state = update_validator_registry_fn(state, config)
+    state = update_validator_registry(state, config)
 
     entry_exit_effect_epoch = get_delayed_activation_exit_epoch(
         state.current_epoch(slots_per_epoch),
