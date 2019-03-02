@@ -80,7 +80,7 @@ def test_validate_slot(slot, is_valid):
         ),
     ]
 )
-def test_validate_epoch_for_current_epoch(
+def test_validate_epoch_within_previous_and_next(
         epoch,
         previous_epoch,
         next_epoch,
