@@ -13,6 +13,7 @@ from eth2.beacon.typing import Slot
 
 from .block_processing import (
     process_eth1_data,
+    process_randao,
 )
 from .block_validation import (
     validate_block_slot,
@@ -91,7 +92,7 @@ class SerenityStateTransition(BaseStateTransition):
                 committee_config=CommitteeConfig(self.config),
             )
 
-        # TODO: state = process_randao(state, block, self.config)
+        state = process_randao(state, block, self.config)
         state = process_eth1_data(state, block)
 
         # Operations
