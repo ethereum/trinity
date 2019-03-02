@@ -195,7 +195,7 @@ class BasePeer(BaseService):
         self.privkey = privkey
 
         # The self-identifying string that the remote names itself.
-        self.client_version_string = None
+        self.client_version_string = ''
 
         # Networking reader and writer objects for communication
         self.reader = connection.reader
