@@ -4,6 +4,8 @@ from typing import (
     Type,
 )
 
+from eth_typing import Hash32
+
 from eth2.beacon.enums import (
     SignatureDomain,
 )
@@ -14,11 +16,11 @@ from eth2.beacon.configs import (
     BeaconConfig,
     CommitteeConfig,
 )
-from eth2.beacon.constants import (
-    EMPTY_SIGNATURE,
-)
 from eth2.beacon.exceptions import (
     ProposerIndexError,
+)
+from eth2.beacon.helpers import (
+    slot_to_epoch,
 )
 from eth2.beacon.state_machines.base import (
     BaseBeaconStateMachine,
@@ -30,10 +32,12 @@ from eth2.beacon.types.blocks import (
     BeaconBlockBody,
 )
 from eth2.beacon.types.eth1_data import Eth1Data
+from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.proposal import Proposal
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     BLSPubkey,
+    BLSSignature,
     FromBlockParams,
     Slot,
     ValidatorIndex,
@@ -42,6 +46,31 @@ from eth2.beacon.typing import (
 from eth2.beacon.tools.builder.validator import (
     sign_transaction,
 )
+
+
+def _generate_randao_reveal(privkey: int,
+                            slot: Slot,
+                            fork: Fork,
+                            config: BeaconConfig) -> BLSSignature:
+    """
+    Return the RANDAO reveal for the validator represented by ``privkey``.
+    The current implementation requires a validator to provide the BLS signature
+    over the SSZ-serialized epoch in which they are proposing a block.
+    """
+    epoch = slot_to_epoch(slot, config.SLOTS_PER_EPOCH)
+
+    # FIXME: move to little endian: https://github.com/ethereum/trinity/issues/303
+    message_hash = Hash32(epoch.to_bytes(32, byteorder='big'))
+
+    randao_reveal = sign_transaction(
+        message_hash=message_hash,
+        privkey=privkey,
+        fork=fork,
+        slot=slot,
+        signature_domain=SignatureDomain.DOMAIN_RANDAO,
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+    )
+    return randao_reveal
 
 
 def validate_proposer_index(state: BeaconState,
@@ -86,7 +115,7 @@ def create_block_on_state(
     )
 
     # TODO: Add more operations
-    randao_reveal = EMPTY_SIGNATURE
+    randao_reveal = _generate_randao_reveal(privkey, slot, state.fork, config)
     eth1_data = Eth1Data.create_empty_data()
     body = BeaconBlockBody.create_empty_body().copy(
         attestations=attestations,
@@ -135,17 +164,20 @@ def create_mock_block(*,
                       slot: Slot=None,
                       attestations: Sequence[Attestation]=()) -> BaseBeaconBlock:
     """
-    Create a mocking block with the given block parameters and ``keymap``.
+    Create a mocking block at ``slot`` with the given block parameters and ``keymap``.
 
     Note that it doesn't return the correct ``state_root``.
     """
+    # advance the state to the ``slot``.
+    state_transition = state_machine.state_transition
+    state = state_transition.apply_state_transition_without_block(state, slot, parent_block.root)
+
     proposer_index = get_beacon_proposer_index(
-        state.copy(
-            slot=slot,
-        ),
+        state,
         slot,
         CommitteeConfig(config),
     )
+
     proposer_pubkey = state.validator_registry[proposer_index].pubkey
     proposer_privkey = keymap[proposer_pubkey]
 
@@ -159,7 +191,7 @@ def create_mock_block(*,
         validator_index=proposer_index,
         privkey=proposer_privkey,
         attestations=attestations,
-        check_proposer_index=False,
+        check_proposer_index=True,
     )
 
     return result_block
