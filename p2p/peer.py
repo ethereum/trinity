@@ -486,10 +486,12 @@ class BasePeer(BaseService):
 
         # limit number of chars to be displayed, and try to keep printable ones only
         # MAGIC 256: arbitrary, "should be enough for everybody"
-        client_version_string = msg['client_version_string'][:256].strip('\t\n\r\x0b\x0c')
-        if not client_version_string.isprintable():
-            client_version_string = client_version_string.encode("utf-8", "replace").decode()
-        self.client_version_string = client_version_string
+        original_version = msg['client_version_string']
+        client_version_string = original_version[:256] + ('...' if original_version[256:] else '')
+        if client_version_string.isprintable():
+            self.client_version_string = client_version_string.strip('\t\n\r\x0b\x0c')
+        else:
+            self.client_version_string = repr(client_version_string)
 
         # Check whether to support Snappy Compression or not
         # based on other peer's p2p protocol version
