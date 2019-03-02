@@ -42,5 +42,5 @@ class BaseStateTransition(Configurable, ABC):
         pass
 
     @abstractmethod
-    def per_epoch_transition(self, state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
+    def per_epoch_transition(self, state: BeaconState) -> BeaconState:
         pass
