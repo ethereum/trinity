@@ -204,12 +204,12 @@ def test_validate_attestation_justified_block_root(sample_attestation_data_param
         ),
     ]
 )
-def test_validate_attestation_latest_crosslink_root(sample_attestation_data_params,
-                                                    attestation_latest_crosslink,
-                                                    attestation_crosslink_data_root,
-                                                    state_latest_crosslink,
-                                                    slots_per_epoch,
-                                                    is_valid):
+def test_validate_attestation_latest_crosslink(sample_attestation_data_params,
+                                               attestation_latest_crosslink,
+                                               attestation_crosslink_data_root,
+                                               state_latest_crosslink,
+                                               slots_per_epoch,
+                                               is_valid):
     sample_attestation_data_params['latest_crosslink'] = attestation_latest_crosslink
     sample_attestation_data_params['crosslink_data_root'] = attestation_crosslink_data_root
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
