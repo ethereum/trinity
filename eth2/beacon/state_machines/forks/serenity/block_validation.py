@@ -54,7 +54,7 @@ from eth2.beacon.types.proposal_signed_data import ProposalSignedData
 from eth2.beacon.types.slashable_attestations import SlashableAttestation  # noqa: F401
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState  # noqa: F401
-from eth2.beacon.types.voluntary_exit import VoluntaryExit  # noqa: F401
+from eth2.beacon.types.voluntary_exits import VoluntaryExit  # noqa: F401
 from eth2.beacon.typing import (
     Bitfield,
     BLSPubkey,
