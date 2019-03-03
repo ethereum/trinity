@@ -7,7 +7,6 @@ from hypothesis import (
 )
 
 from eth._utils.numeric import (
-    int_to_bytes32,
     integer_squareroot
 )
 
@@ -604,25 +603,25 @@ def test_process_rewards_and_penalties_for_finality(
             100,
             {
                 0: 0,
-                1: 75,  # 3 * (100 // 4)
+                1: 0,
                 2: 0,
                 3: 0,
                 4: 0,
                 5: 0,
                 6: 50,  # 2 * (100 // 4)
                 7: 0,
-                8: 0,
+                8: 75,  # 3 * (100 // 4)
                 9: 0,
                 10: 0,
                 11: 0,
-                12: 0,
+                12: 75,  # 3 * (100 // 4)
                 13: 0,
                 14: 0,
                 15: 0,
-                16: 125,  # 5 * (100 // 4)
+                16: 0,
                 17: 0,
                 18: 0,
-                19: 75,  # 3 * (100 // 4)
+                19: 125,  # 5 * (100 // 4)
             }
         ),
     ]
@@ -934,7 +933,7 @@ def test_check_if_update_validator_registry(genesis_state,
             2,
             True,  # (state.current_epoch - state.validator_registry_update_epoch) is power of two
             0,
-            [int_to_bytes32(i) for i in range(2**10)],
+            [i.to_bytes(32, 'little') for i in range(2**10)],
             5,  # expected current_shuffling_epoch is state.next_epoch
         ),
         (
@@ -945,7 +944,7 @@ def test_check_if_update_validator_registry(genesis_state,
             1,
             False,  # (state.current_epoch - state.validator_registry_update_epoch) != power of two
             0,
-            [int_to_bytes32(i) for i in range(2**10)],
+            [i.to_bytes(32, 'little') for i in range(2**10)],
             0,  # expected_current_shuffling_epoch is current_shuffling_epoch because it will not be updated  # noqa: E501
         ),
     ]
@@ -1054,7 +1053,7 @@ def test_update_latest_active_index_roots(genesis_state,
     index_root = hash_eth2(
         b''.join(
             [
-                index.to_bytes(32, 'big')
+                index.to_bytes(32, 'little')
                 for index in get_active_validator_indices(
                     state.validator_registry,
                     # TODO: change to `per-epoch` version
