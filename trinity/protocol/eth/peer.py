@@ -366,6 +366,9 @@ class ETHProxyPeerPool:
     # TODO: Broadcast config, timeout
     async def get_hightest_td_peer(self) -> ETHProxyPeer:
         response = await self.event_bus.request(GetHighestTDPeerRequest(2))
+        if response.dto_peer is None:
+            return None
+
         return ETHProxyPeer.from_dto_peer(response.dto_peer, self.event_bus, self.broadcast_config)
 
     async def get_connected_peers(self, min_td: int = 0) -> ETHProxyPeer:

@@ -562,7 +562,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
     async def _watch_new_peers(self) -> None:
         async for ev in self.wait_iter(self._event_bus.stream(PeerJoinedEvent)):
             proxy_peer = ETHProxyPeer.from_dto_peer(
-                ev.dto_peer,
+                ev.peer,
                 self._event_bus,
                 TO_NETWORKING_BROADCAST_CONFIG
             )
@@ -611,7 +611,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
             complete_task_fn: Callable[[], None],
             fail_task_fn: Callable[[], None]) -> None:
         try:
-            completed_headers = await peer.wait(self._fetch_segment(peer, parent_header, length))
+            completed_headers = await self.wait(self._fetch_segment(peer, parent_header, length))
         except BaseP2PError as exc:
             self.logger.info("Unexpected p2p err while downloading headers from %s: %s", peer, exc)
             self.logger.debug("Problem downloading headers from peer, dropping...", exc_info=True)

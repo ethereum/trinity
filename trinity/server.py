@@ -55,6 +55,7 @@ from trinity.protocol.common.peer_pool_event_bus import (
     BasePeerPoolMessageRelayer,
 )
 from trinity.protocol.eth.peer import ETHPeerPool
+from trinity.protocol.eth.peer import ETHPeerPoolEventBusRequestHandler
 from trinity.protocol.les.peer import LESPeerPool
 
 
@@ -298,6 +299,14 @@ class FullServer(BaseServer[ETHPeerPool]):
             event_bus=self.event_bus
         )
 
+    def _make_peer_pool_request_handler(
+            self,
+            peer_pool: TPeerPool) -> ETHPeerPoolEventBusRequestHandler:
+        return ETHPeerPoolEventBusRequestHandler(
+            self.event_bus,
+            peer_pool,
+            self.cancel_token
+        )
 
 class LightServer(BaseServer[LESPeerPool]):
     def _make_peer_pool(self) -> LESPeerPool:

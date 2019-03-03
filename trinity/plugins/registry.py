@@ -38,6 +38,9 @@ from trinity.plugins.builtin.tx_pool.plugin import (
 from trinity.plugins.builtin.light_peer_chain_bridge.plugin import (
     LightPeerChainBridgePlugin
 )
+from trinity.plugins.builtin.tmp_sync.plugin import (
+    TmpSyncPlugin,
+)
 
 
 def is_ipython_available() -> bool:
@@ -67,7 +70,8 @@ ETH1_NODE_PLUGINS: Tuple[BasePlugin, ...] = (
         FullSyncStrategy(),
         LightSyncStrategy(),
         NoopSyncStrategy(),
-    ), FastThenFullSyncStrategy),
+    ), NoopSyncStrategy),
+    TmpSyncPlugin(),
     TxPlugin(),
 )
 

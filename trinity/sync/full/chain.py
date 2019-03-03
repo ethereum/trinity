@@ -133,7 +133,7 @@ class BaseBodyChainSyncer(BaseService, ABC):
 
     async def _watch_new_peers(self):
         async for ev in self.wait_iter(self.event_bus.stream(PeerJoinedEvent)):
-            self.register_peer(ev.dto_peer)
+            self.register_peer(ev.peer)
 
     @abstractmethod
     def register_peer(self, peer: IdentifiablePeer) -> None:
