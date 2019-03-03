@@ -15,6 +15,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.pending_attestation_records import PendingAttestationRecord
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.validator_status_helpers import (
+    initiate_validator_exit,
     slash_validator,
 )
 from eth2.beacon.typing import (
@@ -163,5 +164,7 @@ def process_voluntary_exits(state: BeaconState,
             config.SLOTS_PER_EPOCH,
             config.ACTIVATION_EXIT_DELAY,
         )
+        # Run the exit
+        state = initiate_validator_exit(state, voluntary_exit.validator_index)
 
     return state

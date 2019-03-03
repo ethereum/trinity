@@ -526,7 +526,7 @@ def create_mock_voluntary_exit(state: BeaconState,
                                config: BeaconConfig,
                                keymap: Dict[BLSPubkey, int],
                                validator_index: ValidatorIndex,
-                               exit_epoch: Epoch=None):
+                               exit_epoch: Epoch=None) -> VoluntaryExit:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     voluntary_exit = VoluntaryExit(
         epoch=state.current_epoch(config.SLOTS_PER_EPOCH) if exit_epoch is None else exit_epoch,
