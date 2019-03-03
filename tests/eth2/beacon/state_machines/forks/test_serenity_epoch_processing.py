@@ -29,6 +29,9 @@ from eth2.beacon.committee_helpers import (
 from eth2.beacon.configs import (
     CommitteeConfig,
 )
+from eth2.beacon.constants import (
+    FAR_FUTURE_EPOCH,
+)
 from eth2.beacon.helpers import (
     get_active_validator_indices,
     get_block_root,
@@ -866,7 +869,13 @@ def test_process_ejections(genesis_state, config, activation_exit_delay):
     result_validator = result_state.validator_registry[ejecting_validator_index]
     assert result_validator.is_active(current_epoch)
     assert result_validator.exit_epoch == delayed_activation_exit_epoch
+    # The ejecting validator will be inactive at the exit_epoch
     assert not result_validator.is_active(result_validator.exit_epoch)
+    # Other validators are not ejected
+    assert (
+        result_state.validator_registry[ejecting_validator_index + 1].exit_epoch ==
+        FAR_FUTURE_EPOCH
+    )
 
 
 #
