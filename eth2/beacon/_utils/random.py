@@ -38,9 +38,15 @@ def get_permuted_index(index: int,
     See the 'generalized domain' algorithm on page 3.
     """
     if index >= list_size:
-        raise ValidationError()
+        raise ValidationError(
+            f"The given `index` ({index}) should be less than `list_size` ({list_size}"
+        )
+
     if list_size > MAX_LIST_SIZE:
-        raise ValidationError()
+        raise ValidationError(
+            f"The given `list_size` ({list_size}) should be equal to or less than "
+            f"`MAX_LIST_SIZE` ({MAX_LIST_SIZE}"
+        )
 
     for round in range(shuffle_round_count):
         pivot = int.from_bytes(
@@ -71,6 +77,12 @@ def shuffle(values: Sequence[TItem],
     See the 'generalized domain' algorithm on page 3.
     """
     list_size = len(values)
+
+    if list_size > MAX_LIST_SIZE:
+        raise ValidationError(
+            f"The `list_size` ({list_size}) should be equal to or less than "
+            f"`MAX_LIST_SIZE` ({MAX_LIST_SIZE}"
+        )
 
     indices = list(range(list_size))
     for round in range(shuffle_round_count):
