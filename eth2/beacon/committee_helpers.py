@@ -74,7 +74,8 @@ def get_shuffling(*,
                   epoch: Epoch,
                   slots_per_epoch: int,
                   target_committee_size: int,
-                  shard_count: int) -> Tuple[Iterable[ValidatorIndex], ...]:
+                  shard_count: int,
+                  shuffle_round_count: int) -> Tuple[Iterable[ValidatorIndex], ...]:
     """
     Shuffle ``validators`` into crosslink committees seeded by ``seed`` and ``epoch``.
     Return a list of ``committee_per_epoch`` committees where each
@@ -96,7 +97,11 @@ def get_shuffling(*,
     )
 
     # Shuffle
-    shuffled_active_validator_indices = shuffle(active_validator_indices, seed)
+    shuffled_active_validator_indices = shuffle(
+        active_validator_indices,
+        seed,
+        shuffle_round_count=shuffle_round_count,
+    )
 
     # Split the shuffled list into committees_per_epoch pieces
     return tuple(
@@ -283,6 +288,7 @@ def get_crosslink_committees_at_slot(
     shard_count = committee_config.SHARD_COUNT
     slots_per_epoch = committee_config.SLOTS_PER_EPOCH
     target_committee_size = committee_config.TARGET_COMMITTEE_SIZE
+    shuffle_round_count = committee_config.SHUFFLE_ROUND_COUNT
 
     epoch = slot_to_epoch(slot, slots_per_epoch)
     current_epoch = state.current_epoch(slots_per_epoch)
@@ -327,6 +333,7 @@ def get_crosslink_committees_at_slot(
         slots_per_epoch=slots_per_epoch,
         target_committee_size=target_committee_size,
         shard_count=shard_count,
+        shuffle_round_count=shuffle_round_count,
     )
     offset = slot % slots_per_epoch
     committees_per_slot = shuffling_context.committees_per_epoch // slots_per_epoch
