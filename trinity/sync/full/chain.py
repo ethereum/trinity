@@ -153,7 +153,7 @@ class BaseBodyChainSyncer(BaseService, ABC):
             # schedule the body download and move on
             # TODO: Maybe another reason to make ETHProxyPeer a BaseService?
             self.run_task(self._run_body_download_batch(peer, batch_id, headers))
-            #peer.run_task(self._run_body_download_batch(peer, batch_id, headers))
+            # peer.run_task(self._run_body_download_batch(peer, batch_id, headers))
 
     async def _block_body_bundle_processing(self, bundles: Tuple[BlockBodyBundle, ...]) -> None:
         """
@@ -298,7 +298,9 @@ class BaseBodyChainSyncer(BaseService, ABC):
             self.logger.warning("Pending block bodies call to %r operation cancelled", peer)
             return tuple()
         except PeerConnectionLost:
-            self.logger.warning("Peer went away, cancelling the block body request and moving on...")
+            self.logger.warning(
+                "Peer went away, cancelling the block body request and moving on..."
+            )
             return tuple()
         except Exception:
             self.logger.exception("Unknown error when getting block bodies")
@@ -678,7 +680,6 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
             # schedule the receipt download and move on
             self.run_task(self._run_receipt_download_batch(peer, batch_id, headers))
-            #peer.run_task(self._run_receipt_download_batch(peer, batch_id, headers))
 
     def _mark_body_download_complete(
             self,

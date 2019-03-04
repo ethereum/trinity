@@ -1,6 +1,7 @@
 from abc import (
     abstractmethod,
 )
+from concurrent.futures import CancelledError
 from typing import (
     Any,
     cast,
@@ -9,6 +10,7 @@ from typing import (
 )
 import typing_extensions
 
+from cancel_token import OperationCancelled
 from eth_utils import encode_hex
 from eth_typing import (
     BlockNumber,
@@ -21,6 +23,7 @@ from lahja import (
 from p2p.exceptions import (
     HandshakeFailure,
     NoConnectedPeers,
+    PeerConnectionLost,
     WrongNetworkFailure,
     WrongGenesisFailure,
 )
@@ -31,8 +34,14 @@ from p2p.protocol import (
     _DecodedMsgType,
 )
 
+from trinity.constants import (
+    TO_NETWORKING_BROADCAST_CONFIG,
+)
 from trinity.endpoint import (
     TrinityEventBusEndpoint,
+)
+from trinity.protocol.common.events import (
+    DisconnectPeerEvent,
 )
 from trinity.protocol.common.peer import (
     BaseChainPeer,
@@ -162,12 +171,15 @@ class ETHProxyPeer:
 
     def __init__(self,
                  dto_peer: BaseChainDTOPeer,
+                 event_bus: Endpoint,
                  sub_proto: ProxyETHProtocol,
                  requests: ProxyETHExchangeHandler):
 
         self.dto_peer = dto_peer
         self.sub_proto = sub_proto
         self.requests = requests
+        self.event_bus = event_bus
+        self._disconnected = False
 
     # TODO: Wondering if we should only allow one-time read and throw if code
     # tries to read again them again. I think the proper fix may be to just group
@@ -197,7 +209,15 @@ class ETHProxyPeer:
         # would only be a race condition at best.
         # When working with a proxy peer one *must* do the `is_operational` check in the request
         # handler that runs in the peer pool process.
-        return True
+        # The only reason we return `False` here is when we *know* `disconnect` was called on
+        # the proxy directly.
+        return not self._disconnected
+
+    async def disconnect(self, reason: DisconnectReason) -> None:
+        self.event_bus.broadcast(
+            DisconnectPeerEvent(self.dto_peer, reason),
+            TO_NETWORKING_BROADCAST_CONFIG,
+        )
 
     @classmethod
     def from_dto_peer(cls,
@@ -206,6 +226,7 @@ class ETHProxyPeer:
                       broadcast_config: BroadcastConfig) -> 'ETHProxyPeer':
         return cls(
             dto_peer,
+            event_bus,
             ProxyETHProtocol(dto_peer, event_bus, broadcast_config),
             ProxyETHExchangeHandler(dto_peer, event_bus, broadcast_config),
         )
@@ -279,6 +300,8 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
                 )
             except TimeoutError:
                 self.logger.debug("Timed out waiting on %s from %s", GetBlockHeadersRequest, peer)
+            except (CancelledError, OperationCancelled, PeerConnectionLost):
+                self.logger.warning("Error performing action on peer %s. Doing nothing.", peer)
             else:
                 self.logger.warning("Responding from %s from %s", GetBlockHeadersRequest, peer)
                 self._event_bus.broadcast(GetBlockHeadersResponse(headers), ev.broadcast_config())
@@ -297,6 +320,8 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
                 )
             except TimeoutError:
                 self.logger.debug("Timed out waiting on %s from %s", GetBlockBodiesRequest, peer)
+            except (CancelledError, OperationCancelled, PeerConnectionLost):
+                self.logger.warning("Error performing action on peer %s. Doing nothing.", peer)
             else:
                 self.logger.warning("Responding from %s from %s", GetBlockBodiesRequest, peer)
                 self._event_bus.broadcast(GetBlockBodiesResponse(bundles), ev.broadcast_config())
@@ -312,6 +337,8 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
                 bundles = await peer.requests.get_node_data(ev.node_hashes, ev.timeout)
             except TimeoutError:
                 self.logger.debug("Timed out waiting on %s from %s", GetNodeDataRequest, peer)
+            except (CancelledError, OperationCancelled, PeerConnectionLost):
+                self.logger.warning("Error performing action on peer %s. Doing nothing.", peer)
             else:
                 self.logger.warning("Responding from %s from %s", GetNodeDataRequest, peer)
                 self._event_bus.broadcast(GetNodeDataResponse(bundles), ev.broadcast_config())
@@ -327,6 +354,8 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
                 bundles = await peer.requests.get_receipts(ev.headers, ev.timeout)
             except TimeoutError:
                 self.logger.debug("Timed out waiting on %s from %s", GetReceiptsRequest, peer)
+            except (CancelledError, OperationCancelled, PeerConnectionLost):
+                self.logger.warning("Error performing action on peer %s. Doing nothing.", peer)
             else:
                 self.logger.warning("Responding from %s from %s", GetReceiptsRequest, peer)
                 self._event_bus.broadcast(GetReceiptsResponse(bundles), ev.broadcast_config())

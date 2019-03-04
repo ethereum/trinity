@@ -30,6 +30,7 @@ from p2p.service import (
 
 from .events import (
     ConnectToNodeCommand,
+    DisconnectPeerEvent,
     PeerCountRequest,
     PeerCountResponse,
     PeerPoolMessageEvent,
@@ -68,11 +69,19 @@ class BasePeerPoolEventBusRequestHandler(BaseService, Generic[TPeer]):
                 req.broadcast_config()
             )
 
+    async def handle_disconnect_peer_events(self) -> None:
+        async for ev in self.wait_iter(self._event_bus.stream(DisconnectPeerEvent)):
+            peer = self.maybe_return_peer(ev.peer)
+            if peer is None:
+                continue
+            await peer.disconnect(ev.reason)
+
     async def _run(self) -> None:
         self.logger.info("Running BasePeerPoolEventBusRequestHandler")
 
         self.run_daemon_task(self.handle_peer_count_requests())
         self.run_daemon_task(self.accept_connect_commands())
+        self.run_daemon_task(self.handle_disconnect_peer_events())
 
         await self.cancel_token.wait()
 

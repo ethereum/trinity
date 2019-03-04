@@ -10,6 +10,9 @@ from lahja import (
 from p2p.peer import (
     IdentifiablePeer,
 )
+from p2p.p2p_proto import (
+    DisconnectReason,
+)
 from p2p.protocol import (
     Command,
     PayloadType,
@@ -71,3 +74,13 @@ class PeerLeftEvent(BaseEvent):
 
     def __init__(self, peer: IdentifiablePeer) -> None:
         self.peer = peer
+
+
+class DisconnectPeerEvent(BaseEvent):
+    """
+    Event broadcasted when we want to disconnect from a peer
+    """
+
+    def __init__(self, peer: IdentifiablePeer, reason: DisconnectReason) -> None:
+        self.peer = peer
+        self.reason = reason

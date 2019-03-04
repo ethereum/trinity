@@ -50,8 +50,8 @@ async def test_fast_syncer_with_isolated_server(request,
                                                 other_event_bus,
                                                 event_loop,
                                                 chaindb_fresh,
-                                                chaindb_20):
-
+                                                chaindb_1000):
+    chaindb_20 = chaindb_1000
     server_event_bus = event_bus
     client_event_bus = other_event_bus
     client_peer, server_peer = await get_directly_linked_peers(
@@ -76,7 +76,7 @@ async def test_fast_syncer_with_isolated_server(request,
         client_event_bus,
     )
     # FastChainSyncer.run() will return as soon as it's caught up with the peer.
-    await asyncio.wait_for(client.run(), timeout=2)
+    await asyncio.wait_for(client.run(), timeout=20)
 
     head = chaindb_fresh.get_canonical_head()
     assert head == chaindb_20.get_canonical_head()
@@ -84,7 +84,7 @@ async def test_fast_syncer_with_isolated_server(request,
     # # Now download the state for the chain's head.
     state_downloader = StateDownloader(
         chaindb_fresh, chaindb_fresh.db, head.state_root, client_peer_pool)
-    await asyncio.wait_for(state_downloader.run(), timeout=2)
+    await asyncio.wait_for(state_downloader.run(), timeout=20)
 
     assert head.state_root in chaindb_fresh.db
 

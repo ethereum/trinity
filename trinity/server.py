@@ -308,6 +308,7 @@ class FullServer(BaseServer[ETHPeerPool]):
             self.cancel_token
         )
 
+
 class LightServer(BaseServer[LESPeerPool]):
     def _make_peer_pool(self) -> LESPeerPool:
         context = ChainContext(

@@ -56,6 +56,7 @@ from trinity.protocol.eth.constants import (
 )
 from trinity.protocol.eth.peer import (
     ETHProxyPeer,
+    ETHProxyPeerPool,
 )
 from trinity.sync.common.constants import (
     EMPTY_PEER_RESPONSE_PENALTY,
@@ -417,7 +418,11 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
             header_limit = min(max_headers, peer.max_headers_fetch)
 
         try:
-            self.logger.warning("Requsting chain of headers from %s starting at #%d", peer, start_at)
+            self.logger.warning(
+                "Requsting chain of headers from %s starting at #%d",
+                peer,
+                start_at
+            )
 
             headers = await self.wait(peer.requests.get_block_headers(
                 start_at,
@@ -528,6 +533,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
         super().__init__(token=token)
         self._chain = chain
         self._stitcher = stitcher
+        self._proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
         max_pending_fillers = 50
         self._filler_header_tasks = TaskQueue(
             max_pending_fillers,
@@ -555,9 +561,15 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
 
     async def _run(self) -> None:
         self.run_daemon_task(self._display_stats())
+        await self._add_initial_peers()
         self.run_daemon_task(self._watch_new_peers())
 
         await self.wait(self._match_header_dls_to_peers())
+
+    async def _add_initial_peers(self) -> None:
+        peers = await self._proxy_peer_pool.get_connected_peers()
+        for proxy_peer in peers:
+            self._waiting_peers.put_nowait(proxy_peer)
 
     async def _watch_new_peers(self) -> None:
         async for ev in self.wait_iter(self._event_bus.stream(PeerJoinedEvent)):
@@ -612,6 +624,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
             fail_task_fn: Callable[[], None]) -> None:
         try:
             completed_headers = await self.wait(self._fetch_segment(peer, parent_header, length))
+            self.logger.warning("Completed headers %s", completed_headers)
         except BaseP2PError as exc:
             self.logger.info("Unexpected p2p err while downloading headers from %s: %s", peer, exc)
             self.logger.warning("Problem downloading headers from peer, dropping...", exc_info=True)
