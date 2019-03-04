@@ -588,15 +588,15 @@ def test_process_rewards_and_penalties_for_finality(
             {
                 2: 31,  # proposer index for inclusion slot 31: 6
                 3: 31,
-                4: 32,  # proposer index for inclusion slot 32: 19
+                4: 32,  # proposer index for inclusion slot 32: 12
                 5: 32,
                 6: 32,
-                9: 35,  # proposer index for inclusion slot 35: 16
+                9: 35,  # proposer index for inclusion slot 35: 19
                 10: 35,
                 11: 35,
                 12: 35,
                 13: 35,
-                15: 38,  # proposer index for inclusion slot 38: 1
+                15: 38,  # proposer index for inclusion slot 38: 8
                 16: 38,
                 17: 38,
             },
