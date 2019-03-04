@@ -178,7 +178,7 @@ class BaseBodyChainSyncer(BaseService, ABC):
         trivial_headers = tuple(header for header in all_headers if _is_body_empty(header))
 
         if trivial_headers:
-            self.logger.debug2(
+            self.logger.warning(
                 "Found %d/%d trivial block bodies, skipping those requests",
                 len(trivial_headers),
                 len(all_headers),
@@ -197,7 +197,7 @@ class BaseBodyChainSyncer(BaseService, ABC):
 
         except BaseP2PError as exc:
             self.logger.info("Unexpected p2p perror while downloading body from peer: %s", exc)
-            self.logger.debug("Problem downloading body from peer, dropping...", exc_info=True)
+            self.logger.warning("Problem downloading body from peer, dropping...", exc_info=True)
         else:
             if len(non_trivial_headers) == 0:
                 # peer had nothing to do, so have it get back in line for processing
@@ -208,7 +208,7 @@ class BaseBodyChainSyncer(BaseService, ABC):
             else:
                 # peer returned no results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
-                self.logger.debug("Pausing %s for %.1fs, for sending 0 block bodies", peer, delay)
+                self.logger.warning("Pausing %s for %.1fs, for sending 0 block bodies", peer, delay)
                 loop = self.get_event_loop()
                 loop.call_later(delay, partial(self._body_peers.put_nowait, peer))
         finally:
@@ -236,7 +236,7 @@ class BaseBodyChainSyncer(BaseService, ABC):
         block_body_bundles = await self.wait(self._request_block_bodies(peer, headers))
 
         if len(block_body_bundles) == 0:
-            self.logger.debug(
+            self.logger.warning(
                 "Got block bodies for 0/%d headers from %s, from %r..%r",
                 len(headers),
                 peer,
@@ -264,7 +264,7 @@ class BaseBodyChainSyncer(BaseService, ABC):
         }
         self._pending_bodies = merge(self._pending_bodies, pending_bodies)
 
-        self.logger.debug(
+        self.logger.warning(
             "Got block bodies for %d/%d headers from %s, from %r..%r",
             len(completed_header_roots),
             len(headers),
@@ -283,22 +283,22 @@ class BaseBodyChainSyncer(BaseService, ABC):
         Requests the batch of block bodies from the given peer, returning the
         returned block bodies data, or an empty tuple on an error.
         """
-        self.logger.debug("Requesting block bodies for %d headers from %s", len(batch), peer)
+        self.logger.warning("Requesting block bodies for %d headers from %s", len(batch), peer)
         try:
             block_body_bundles = await peer.requests.get_block_bodies(batch)
         except TimeoutError as err:
-            self.logger.debug(
+            self.logger.warning(
                 "Timed out requesting block bodies for %d headers from %s", len(batch), peer,
             )
             return tuple()
         except CancelledError:
-            self.logger.debug("Pending block bodies call to %r future cancelled", peer)
+            self.logger.warning("Pending block bodies call to %r future cancelled", peer)
             return tuple()
         except OperationCancelled:
-            self.logger.debug2("Pending block bodies call to %r operation cancelled", peer)
+            self.logger.warning("Pending block bodies call to %r operation cancelled", peer)
             return tuple()
         except PeerConnectionLost:
-            self.logger.debug("Peer went away, cancelling the block body request and moving on...")
+            self.logger.warning("Peer went away, cancelling the block body request and moving on...")
             return tuple()
         except Exception:
             self.logger.exception("Unknown error when getting block bodies")
@@ -542,22 +542,22 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         try:
             local_header = await self.db.coro_get_canonical_block_header_by_number(block_num)
         except HeaderNotFound as exc:
-            self.logger.debug("Could not find canonical header at #%d: %s", block_num, exc)
+            self.logger.warning("Could not find canonical header at #%d: %s", block_num, exc)
             local_header = None
 
         try:
             local_parent = await self.db.coro_get_canonical_block_header_by_number(block_num - 1)
         except HeaderNotFound as exc:
-            self.logger.debug("Could not find canonical header parent at #%d: %s", block_num, exc)
+            self.logger.warning("Could not find canonical header parent at #%d: %s", block_num, exc)
             local_parent = None
 
         try:
             canonical_tip = await self.db.coro_get_canonical_head()
         except HeaderNotFound as exc:
-            self.logger.debug("Could not find canonical tip: %s", exc)
+            self.logger.warning("Could not find canonical tip: %s", exc)
             canonical_tip = None
 
-        self.logger.debug(
+        self.logger.warning(
             "Header syncer returned header %s, which is not in our DB. "
             "Instead at #%d, our header is %s, whose parent is %s, with canonical tip %s",
             first_header,
@@ -570,7 +570,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
     async def _display_stats(self) -> None:
         while self.is_operational:
             await self.sleep(5)
-            self.logger.debug(
+            self.logger.warning(
                 "(in progress, queued, max size) of bodies, receipts: %r",
                 [(q.num_in_progress(), len(q), q._maxsize) for q in (
                     self._block_body_tasks,
@@ -712,7 +712,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             )
         except BaseP2PError as exc:
             self.logger.info("Unexpected p2p perror while downloading receipt from peer: %s", exc)
-            self.logger.debug("Problem downloading receipt from peer, dropping...", exc_info=True)
+            self.logger.warning("Problem downloading receipt from peer, dropping...", exc_info=True)
         else:
             # peer completed successfully, so have it get back in line for processing
             if len(completed_headers) > 0:
@@ -721,7 +721,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             else:
                 # peer returned no results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
-                self.logger.debug("Pausing %s for %.1fs, for sending 0 receipts", peer, delay)
+                self.logger.warning("Pausing %s for %.1fs, for sending 0 receipts", peer, delay)
                 self.call_later(delay, self._receipt_peers.put_nowait, peer)
         finally:
             self._receipt_tasks.complete(batch_id, completed_headers)
@@ -796,7 +796,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         )
         newly_completed_headers = tuple(concat(completed_header_groups))
 
-        self.logger.debug(
+        self.logger.warning(
             "Got receipts for %d/%d headers from %s, %d trivial, from request for %r..%r",
             len(newly_completed_headers),
             len(all_headers) - len(trivial_headers),
@@ -838,22 +838,22 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         Requests the batch of receipts from the given peer, returning the
         received receipt data.
         """
-        self.logger.debug("Requesting receipts for %d headers from %s", len(batch), peer)
+        self.logger.warning("Requesting receipts for %d headers from %s", len(batch), peer)
         try:
             receipt_bundles = await peer.requests.get_receipts(batch)
         except TimeoutError as err:
-            self.logger.debug(
+            self.logger.warning(
                 "Timed out requesting receipts for %d headers from %s", len(batch), peer,
             )
             return tuple()
         except CancelledError:
-            self.logger.debug("Pending receipts call to %r future cancelled", peer)
+            self.logger.warning("Pending receipts call to %r future cancelled", peer)
             return tuple()
         except OperationCancelled:
-            self.logger.debug2("Pending receipts call to %r operation cancelled", peer)
+            self.logger.warning("Pending receipts call to %r operation cancelled", peer)
             return tuple()
         except PeerConnectionLost:
-            self.logger.debug("Peer went away, cancelling the receipts request and moving on...")
+            self.logger.warning("Peer went away, cancelling the receipts request and moving on...")
             return tuple()
         except Exception:
             self.logger.exception("Unknown error when getting receipts")

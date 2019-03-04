@@ -90,7 +90,7 @@ class PeerHeaderSyncer(BaseService):
                 peer.head_td, peer, head_td)
             return
         else:
-            self.logger.debug(
+            self.logger.warning(
                 "%s announced Head TD %d, which is higher than ours (%d), starting sync",
                 peer, peer.head_td, head_td)
         self.sync_progress = SyncProgress(head.block_number, head.block_number, peer.head_number)
@@ -122,7 +122,7 @@ class PeerHeaderSyncer(BaseService):
                             all_headers[-1].block_number + 1,
                             head.block_number - MAX_REORG_DEPTH
                         )
-                        self.logger.debug(
+                        self.logger.warning(
                             "All %d headers redundant, head at %s, fetching from #%d",
                             len(all_headers),
                             head,
@@ -131,7 +131,7 @@ class PeerHeaderSyncer(BaseService):
                         continue
                 else:
                     headers = all_headers
-                self.logger.debug2('sync received new headers: %s', headers)
+                self.logger.warning('sync received new headers: %s', headers)
             except OperationCancelled:
                 self.logger.info("Sync with %s completed", peer)
                 break
@@ -191,7 +191,7 @@ class PeerHeaderSyncer(BaseService):
                 )
                 break
 
-            self.logger.debug(
+            self.logger.warning(
                 "Got new header chain from %s: %s..%s",
                 peer,
                 first,
@@ -224,7 +224,7 @@ class PeerHeaderSyncer(BaseService):
     async def _request_headers(
             self, peer: BaseChainPeer, start_at: BlockNumber) -> Tuple[BlockHeader, ...]:
         """Fetch a batch of headers starting at start_at and return the ones we're missing."""
-        self.logger.debug("Requsting chain of headers from %s starting at #%d", peer, start_at)
+        self.logger.warning("Requsting chain of headers from %s starting at #%d", peer, start_at)
 
         return await peer.requests.get_block_headers(
             start_at,
@@ -245,7 +245,7 @@ class PeerHeaderSyncer(BaseService):
         for header in iter_headers:
             is_present = await self.wait(self.db.coro_header_exists(header.hash))
             if is_present:
-                self.logger.debug("Discarding header that we already have: %s", header)
+                self.logger.warning("Discarding header that we already have: %s", header)
             else:
                 yield header
                 break

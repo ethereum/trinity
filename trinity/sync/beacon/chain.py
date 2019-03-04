@@ -143,7 +143,7 @@ class BeaconChainSyncer(BaseService):
                               ) -> AsyncGenerator[Tuple[BaseBeaconBlock, ...], None]:
         slot = start_slot
         while True:
-            self.logger.debug(
+            self.logger.warning(
                 "Requesting blocks from %s starting at #%d",
                 self.sync_peer,
                 slot,

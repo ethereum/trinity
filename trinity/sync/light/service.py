@@ -165,7 +165,7 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
     @service_timeout(COMPLETION_TIMEOUT)
     async def coro_get_block_body_by_hash(self, block_hash: Hash32) -> BlockBody:
         peer = cast(LESPeer, self.peer_pool.highest_td_peer)
-        self.logger.debug("Fetching block %s from %s", encode_hex(block_hash), peer)
+        self.logger.warning("Fetching block %s from %s", encode_hex(block_hash), peer)
         request_id = peer.sub_proto.send_get_block_bodies([block_hash])
         reply = await self._wait_for_reply(request_id)
         if not reply['bodies']:
@@ -178,7 +178,7 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
     @service_timeout(COMPLETION_TIMEOUT)
     async def coro_get_receipts(self, block_hash: Hash32) -> List[Receipt]:
         peer = cast(LESPeer, self.peer_pool.highest_td_peer)
-        self.logger.debug("Fetching %s receipts from %s", encode_hex(block_hash), peer)
+        self.logger.warning("Fetching %s receipts from %s", encode_hex(block_hash), peer)
         request_id = peer.sub_proto.send_get_receipts(block_hash)
         reply = await self._wait_for_reply(request_id)
         if not reply['receipts']:
@@ -340,7 +340,7 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
 
         :raise BadLESResponse: if the peer replies with a header that has a different hash
         """
-        self.logger.debug("Fetching header %s from %s", encode_hex(block_hash), peer)
+        self.logger.warning("Fetching header %s from %s", encode_hex(block_hash), peer)
         max_headers = 1
 
         # TODO: Figure out why mypy thinks the first parameter to `get_block_headers`

@@ -117,13 +117,13 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
         queue = self._fetched_headers
         while self.is_operational:
             await self.sleep(5)
-            self.logger.debug("Skeleton header queue is %d/%d full", queue.qsize(), queue.maxsize)
+            self.logger.warning("Skeleton header queue is %d/%d full", queue.qsize(), queue.maxsize)
 
     async def _quietly_fetch_full_skeleton(self) -> None:
         try:
             await self._fetch_full_skeleton()
         except ValidationError as exc:
-            self.logger.debug(
+            self.logger.warning(
                 "Exiting sync and booting %s due to validation error: %s",
                 self.peer,
                 exc,
@@ -189,7 +189,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
 
             previous_lead_header = segments[0][0]
             previous_tail_header = segments[-1][-1]
-            self.logger.debug(
+            self.logger.warning(
                 "Got new header bones from %s: %s-%s",
                 peer,
                 previous_lead_header,
@@ -288,7 +288,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
             [header async for header in self.wait_iter(self._get_missing_tail(launch_headers))]
         )
         if len(new_headers) == 0:
-            self.logger.debug(
+            self.logger.warning(
                 "Canonical head updated while finding new head from %s, returning old %s instead",
                 peer,
                 launch_headers[-1],
@@ -417,7 +417,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
             header_limit = min(max_headers, peer.max_headers_fetch)
 
         try:
-            self.logger.debug("Requsting chain of headers from %s starting at #%d", peer, start_at)
+            self.logger.warning("Requsting chain of headers from %s starting at #%d", peer, start_at)
 
             headers = await self.wait(peer.requests.get_block_headers(
                 start_at,
@@ -426,7 +426,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
                 reverse=False,
             ))
 
-            self.logger.debug2('sync received new headers: %s', headers)
+            self.logger.warning('sync received new headers: %s', headers)
         except OperationCancelled:
             self.logger.info("Skeleteon sync with %s cancelled", peer)
             return tuple()
@@ -460,7 +460,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
         for header in iter_headers:
             is_present = await self.wait(self._db.coro_header_exists(header.hash))
             if is_present:
-                self.logger.debug("Discarding header that we already have: %s", header)
+                self.logger.warning("Discarding header that we already have: %s", header)
             else:
                 yield header
                 break
@@ -474,11 +474,11 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
         try:
             local_header = await self._db.coro_get_canonical_block_header_by_number(block_num)
         except HeaderNotFound as exc:
-            self.logger.debug("Could not find any header at #%d: %s", block_num, exc)
+            self.logger.warning("Could not find any header at #%d: %s", block_num, exc)
             local_header = None
 
         # Canonical header at same number may or may not be in the database. Either way log an error
-        self.logger.debug(
+        self.logger.warning(
             "%s returned starting header %s, which is not in our DB. "
             "Instead at #%d, our is header %s",
             peer,
@@ -572,7 +572,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
         q = self._filler_header_tasks
         while self.is_operational:
             await self.sleep(5)
-            self.logger.debug(
+            self.logger.warning(
                 "Header Skeleton Gaps: active=%d queued=%d max=%d",
                 q.num_in_progress(),
                 len(q),
@@ -614,10 +614,10 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
             completed_headers = await self.wait(self._fetch_segment(peer, parent_header, length))
         except BaseP2PError as exc:
             self.logger.info("Unexpected p2p err while downloading headers from %s: %s", peer, exc)
-            self.logger.debug("Problem downloading headers from peer, dropping...", exc_info=True)
+            self.logger.warning("Problem downloading headers from peer, dropping...", exc_info=True)
             fail_task_fn()
         except OperationCancelled:
-            self.logger.debug(
+            self.logger.warning(
                 "Service cancellation while fetching segment, dropping %s from queue",
                 peer,
                 exc_info=True,
@@ -626,7 +626,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
             raise
         except Exception as exc:
             self.logger.info("Unexpected err while downloading headers from %s: %s", peer, exc)
-            self.logger.debug("Problem downloading headers from peer, dropping...", exc_info=True)
+            self.logger.warning("Problem downloading headers from peer, dropping...", exc_info=True)
             fail_task_fn()
         else:
             if len(completed_headers) == length:
@@ -636,7 +636,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
             else:
                 # peer didn't return enough results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
-                self.logger.debug(
+                self.logger.warning(
                     "Pausing %s for %.1fs, for sending %d headers",
                     peer,
                     delay,
@@ -669,7 +669,7 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
             )
             return tuple()
         elif len(headers) != length:
-            self.logger.debug(
+            self.logger.warning(
                 "Ignoring %d headers from %s, because wanted %d",
                 len(headers),
                 peer,
@@ -700,20 +700,20 @@ class HeaderMeatSyncer(BaseService, Generic[TChainPeer]):
 
     async def _request_headers(
             self, peer: TChainPeer, start_at: BlockNumber, length: int) -> Tuple[BlockHeader, ...]:
-        self.logger.debug("Requesting %d headers from %s", length, peer)
+        self.logger.warning("Requesting %d headers from %s", length, peer)
         try:
             return await peer.requests.get_block_headers(start_at, length, skip=0, reverse=False)
         except TimeoutError as err:
-            self.logger.debug("Timed out requesting %d headers from %s", length, peer)
+            self.logger.warning("Timed out requesting %d headers from %s", length, peer)
             return tuple()
         except CancelledError:
-            self.logger.debug("Pending headers call to %r future cancelled", peer)
+            self.logger.warning("Pending headers call to %r future cancelled", peer)
             return tuple()
         except OperationCancelled:
-            self.logger.debug2("Pending headers call to %r operation cancelled", peer)
+            self.logger.warning("Pending headers call to %r operation cancelled", peer)
             return tuple()
         except PeerConnectionLost:
-            self.logger.debug("Peer went away, cancelling the headers request and moving on...")
+            self.logger.warning("Peer went away, cancelling the headers request and moving on...")
             return tuple()
         except Exception:
             self.logger.exception("Unknown error when getting headers")
@@ -797,6 +797,7 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
         async for peer in self._tip_monitor.wait_tip_info():
             try:
                 await self._validate_peer_is_ahead(peer)
+                self.logger.warning("Peer is good %s", peer)
             except _PeerBehind:
                 self.logger.info("At or behind peer %s, skipping skeleton sync", peer)
             else:
@@ -837,14 +838,15 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
         skeleton_generator = skeleton_syncer.next_skeleton_segment()
         try:
             first_segment = await skeleton_generator.__anext__()
+            self.logger.warning("Got segment")
         except StopAsyncIteration:
-            self.logger.debug(
+            self.logger.warning(
                 "Skeleton %s was cancelled before first header was returned",
                 skeleton_syncer.peer,
             )
             return
 
-        self.logger.debug(
+        self.logger.warning(
             "Skeleton syncer asserts that parent (%s) of the first header (%s) is already present",
             humanize_hash(first_segment[0].parent_hash),
             first_segment[0],
@@ -897,7 +899,7 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
                 peer.head_td, peer, head_td)
             raise _PeerBehind(f"{peer} is behind us, not a valid target for sync")
         else:
-            self.logger.debug(
+            self.logger.warning(
                 "%s announced Head TD %d, which is higher than ours (%d), starting sync",
                 peer, peer.head_td, head_td)
             pass

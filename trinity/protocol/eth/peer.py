@@ -280,6 +280,7 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
             except TimeoutError:
                 self.logger.debug("Timed out waiting on %s from %s", GetBlockHeadersRequest, peer)
             else:
+                self.logger.warning("Responding from %s from %s", GetBlockHeadersRequest, peer)
                 self._event_bus.broadcast(GetBlockHeadersResponse(headers), ev.broadcast_config())
 
     async def handle_get_block_bodies_requests(self) -> None:
@@ -297,6 +298,7 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
             except TimeoutError:
                 self.logger.debug("Timed out waiting on %s from %s", GetBlockBodiesRequest, peer)
             else:
+                self.logger.warning("Responding from %s from %s", GetBlockBodiesRequest, peer)
                 self._event_bus.broadcast(GetBlockBodiesResponse(bundles), ev.broadcast_config())
 
     async def handle_get_node_data_requests(self) -> None:
@@ -309,8 +311,9 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
             try:
                 bundles = await peer.requests.get_node_data(ev.node_hashes, ev.timeout)
             except TimeoutError:
-                self.logger.debug("Timed out waiting on %s from %s", GetBlockBodiesRequest, peer)
+                self.logger.debug("Timed out waiting on %s from %s", GetNodeDataRequest, peer)
             else:
+                self.logger.warning("Responding from %s from %s", GetNodeDataRequest, peer)
                 self._event_bus.broadcast(GetNodeDataResponse(bundles), ev.broadcast_config())
 
     async def handle_get_receipts_requests(self) -> None:
@@ -325,6 +328,7 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
             except TimeoutError:
                 self.logger.debug("Timed out waiting on %s from %s", GetReceiptsRequest, peer)
             else:
+                self.logger.warning("Responding from %s from %s", GetReceiptsRequest, peer)
                 self._event_bus.broadcast(GetReceiptsResponse(bundles), ev.broadcast_config())
 
     async def handle_get_highest_td_peer_requests(self) -> None:
@@ -336,6 +340,7 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
                 # no peers are available right now
                 highest_td_peer = None
 
+            self.logger.warning("Responding from %s from %s", GetHighestTDPeerRequest, highest_td_peer)
             self._event_bus.broadcast(
                 GetHighestTDPeerResponse(highest_td_peer),
                 ev.broadcast_config()
@@ -346,6 +351,8 @@ class ETHPeerPoolEventBusRequestHandler(BasePeerPoolEventBusRequestHandler[ETHPe
 
             peers = self._peer_pool.get_peers(ev.min_td)
             dto_peers = tuple(peer.to_dto() for peer in peers)
+
+            self.logger.warning("Responding from %s from %s", GetHighestTDPeerRequest, dto_peers)
             self._event_bus.broadcast(
                 GetConnectedPeersResponse(dto_peers),
                 ev.broadcast_config()

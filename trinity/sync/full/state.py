@@ -125,11 +125,11 @@ class StateDownloader(BaseService, PeerSubscriber):
         async for peer in self.peer_pool:
             peer = cast(ETHPeer, peer)
             if self._peer_missing_nodes[peer].issuperset(node_keys):
-                self.logger.debug2("%s doesn't have any of the nodes we want, skipping it", peer)
+                self.logger.warning("%s doesn't have any of the nodes we want, skipping it", peer)
                 continue
             has_eligible_peers = True
             if peer in self.request_tracker.active_requests:
-                self.logger.debug2("%s is not idle, skipping it", peer)
+                self.logger.warning("%s is not idle, skipping it", peer)
                 continue
             return peer
 
@@ -157,7 +157,7 @@ class StateDownloader(BaseService, PeerSubscriber):
             try:
                 peer = await self.get_peer_for_request(not_yet_requested)
             except NoIdlePeers:
-                self.logger.debug2(
+                self.logger.warning(
                     "No idle peers have any of the %d trie nodes we want, sleeping a bit",
                     len(not_yet_requested),
                 )
@@ -165,7 +165,7 @@ class StateDownloader(BaseService, PeerSubscriber):
                 continue
             except NoEligiblePeers:
                 self.request_tracker.missing[time.time()] = list(not_yet_requested)
-                self.logger.debug(
+                self.logger.warning(
                     "No peers have any of the %d trie nodes in this batch, will retry later",
                     len(not_yet_requested),
                 )
@@ -179,11 +179,11 @@ class StateDownloader(BaseService, PeerSubscriber):
             self.run_task(self._request_and_process_nodes(peer, batch))
 
     async def _request_and_process_nodes(self, peer: ETHPeer, batch: Tuple[Hash32, ...]) -> None:
-        self.logger.debug("Requesting %d trie nodes from %s", len(batch), peer)
+        self.logger.warning("Requesting %d trie nodes from %s", len(batch), peer)
         try:
             node_data = await peer.requests.get_node_data(batch)
         except TimeoutError as err:
-            self.logger.debug(
+            self.logger.warning(
                 "Timed out waiting for %s trie nodes from %s: %s",
                 len(batch),
                 peer,
@@ -201,7 +201,7 @@ class StateDownloader(BaseService, PeerSubscriber):
         except KeyError:
             self.logger.warning("Unexpected error removing peer from active requests: %s", peer)
 
-        self.logger.debug("Got %d NodeData entries from %s", len(node_data), peer)
+        self.logger.warning("Got %d NodeData entries from %s", len(node_data), peer)
 
         if node_data:
             node_keys, _ = zip(*node_data)
@@ -217,7 +217,7 @@ class StateDownloader(BaseService, PeerSubscriber):
         # not requesting this node from this peer again.
         if missing:
             self._peer_missing_nodes[peer].update(missing)
-            self.logger.debug(
+            self.logger.warning(
                 "Re-requesting %d/%d NodeData entries not returned by %s",
                 len(missing),
                 len(batch),
@@ -232,13 +232,13 @@ class StateDownloader(BaseService, PeerSubscriber):
         while self.is_operational:
             timed_out = self.request_tracker.get_timed_out()
             if timed_out:
-                self.logger.debug("Re-requesting %d timed out trie nodes", len(timed_out))
+                self.logger.warning("Re-requesting %d timed out trie nodes", len(timed_out))
                 self._total_timeouts += len(timed_out)
                 await self.request_nodes(timed_out)
 
             retriable_missing = self.request_tracker.get_retriable_missing()
             if retriable_missing:
-                self.logger.debug("Re-requesting %d missing trie nodes", len(retriable_missing))
+                self.logger.warning("Re-requesting %d missing trie nodes", len(retriable_missing))
                 await self.request_nodes(retriable_missing)
 
             # Finally, sleep until the time either our oldest request is scheduled to timeout or
@@ -268,7 +268,7 @@ class StateDownloader(BaseService, PeerSubscriber):
                     # received nodes (scheduling new requests), there may be cases when the
                     # pending nodes take a while to arrive thus causing the scheduler to run out
                     # of new requests for a while.
-                    self.logger.debug("Scheduler queue is empty, sleeping a bit")
+                    self.logger.warning("Scheduler queue is empty, sleeping a bit")
                     await self.sleep(0.5)
                     continue
 
@@ -304,7 +304,7 @@ class TrieNodeRequestTracker:
         timed_out = eth_utils.toolz.valfilter(
             lambda v: time.time() - v[0] > self.reply_timeout, self.active_requests)
         for peer, (_, node_keys) in timed_out.items():
-            self.logger.debug(
+            self.logger.warning(
                 "Timed out waiting for %d nodes from %s", len(node_keys), peer)
         self.active_requests = eth_utils.toolz.dissoc(self.active_requests, *timed_out.keys())
         return list(eth_utils.toolz.concat(node_keys for _, node_keys in timed_out.values()))
@@ -352,8 +352,8 @@ def _test() -> None:
     args = parser.parse_args()
 
     log_level = logging.INFO
-    if args.debug:
-        log_level = logging.DEBUG
+    if args.warning:
+        log_level = logging.warning
 
     db = FakeAsyncLevelDB(args.db)
     chaindb = FakeAsyncChainDB(db)
