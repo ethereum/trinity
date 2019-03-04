@@ -20,7 +20,7 @@ class Attestation(ssz.Serializable):
     fields = [
         # Attester aggregation bitfield
         ('aggregation_bitfield', bytes_sedes),
-        # Attester aggregation bitfield
+        # Attestation data
         ('data', AttestationData),
         # Proof of custody bitfield
         ('custody_bitfield', bytes_sedes),
