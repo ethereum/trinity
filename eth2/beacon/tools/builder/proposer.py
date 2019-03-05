@@ -153,6 +153,19 @@ def create_block_on_state(
     return block
 
 
+def _get_proposer_index(state_machine, state, slot, previous_block_root, config):
+    # advance the state to the ``slot``.
+    state_transition = state_machine.state_transition
+    state = state_transition.apply_state_transition_without_block(state, slot, previous_block_root)
+
+    proposer_index = get_beacon_proposer_index(
+        state,
+        slot,
+        CommitteeConfig(config),
+    )
+    return proposer_index
+
+
 def create_mock_block(*,
                       state: BeaconState,
                       config: BeaconConfig,
@@ -167,16 +180,7 @@ def create_mock_block(*,
 
     Note that it doesn't return the correct ``state_root``.
     """
-    # advance the state to the ``slot``.
-    state_transition = state_machine.state_transition
-    state = state_transition.apply_state_transition_without_block(state, slot, parent_block.root)
-
-    proposer_index = get_beacon_proposer_index(
-        state,
-        slot,
-        CommitteeConfig(config),
-    )
-
+    proposer_index = _get_proposer_index(state_machine, state, slot, parent_block.root, config)
     proposer_pubkey = state.validator_registry[proposer_index].pubkey
     proposer_privkey = keymap[proposer_pubkey]
 
