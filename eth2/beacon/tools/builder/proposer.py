@@ -153,7 +153,11 @@ def create_block_on_state(
     return block
 
 
-def _get_proposer_index(state_machine, state, slot, previous_block_root, config):
+def _get_proposer_index(state_machine: BaseBeaconStateMachine,
+                        state: BeaconState,
+                        slot: Slot,
+                        previous_block_root: Hash32,
+                        config: BeaconConfig) -> ValidatorIndex:
     # advance the state to the ``slot``.
     state_transition = state_machine.state_transition
     state = state_transition.apply_state_transition_without_block(state, slot, previous_block_root)
