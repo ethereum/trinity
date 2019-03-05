@@ -68,7 +68,11 @@ class SerenityStateTransition(BaseStateTransition):
         See docs for :meth:`eth2.beacon.state_machines.state_transitions.BaseStateTransition.apply_state_transition_without_block`  # noqa: E501
         for more information about the behavior of this method.
         """
-        for _ in range(state.slot, slot):
+        # the loop body yields the state *after* applying the state transition
+        # to uphold the claims of this function, we want to range to one *before*
+        # the requested slot
+        target_slot = slot - 1
+        for _ in range(state.slot, target_slot):
             state = self.per_slot_transition(state, parent_root)
             if (state.slot + 1) % self.config.SLOTS_PER_EPOCH == 0:
                 state = self.per_epoch_transition(state)
