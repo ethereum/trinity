@@ -59,8 +59,7 @@ def _generate_randao_reveal(privkey: int,
     """
     epoch = slot_to_epoch(slot, config.SLOTS_PER_EPOCH)
 
-    # FIXME: move to little endian: https://github.com/ethereum/trinity/issues/303
-    message_hash = Hash32(epoch.to_bytes(32, byteorder='big'))
+    message_hash = Hash32(epoch.to_bytes(32, byteorder='little'))
 
     randao_reveal = sign_transaction(
         message_hash=message_hash,
