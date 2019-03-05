@@ -194,7 +194,7 @@ def create_mock_block(*,
         validator_index=proposer_index,
         privkey=proposer_privkey,
         attestations=attestations,
-        check_proposer_index=True,
+        check_proposer_index=False,
     )
 
     return result_block
