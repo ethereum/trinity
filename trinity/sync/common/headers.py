@@ -144,7 +144,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
         """
         peer = self.peer
 
-        self.logging.warning("Starting skeleton sync with %s", peer)
+        self.logger.warning("Starting skeleton sync with %s", peer)
 
         # launch the skeleton sync by finding a segment that has a parent header in the DB
         launch_headers = await self.wait(self._find_launch_headers(peer))

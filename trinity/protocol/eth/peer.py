@@ -214,10 +214,14 @@ class ETHProxyPeer:
         return not self._disconnected
 
     async def disconnect(self, reason: DisconnectReason) -> None:
+        self._disconnected = True
         self.event_bus.broadcast(
             DisconnectPeerEvent(self.dto_peer, reason),
             TO_NETWORKING_BROADCAST_CONFIG,
         )
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__} {self.dto_peer.uri}"
 
     @classmethod
     def from_dto_peer(cls,
