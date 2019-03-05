@@ -35,9 +35,10 @@ class BaseStateTransition(Configurable, ABC):
                                              slot: Slot,
                                              parent_root: Hash32) -> BeaconState:
         """
-        Advances the ``state`` to the requested ``slot``. Returns the resulting state at that slot
-        assuming there are no intervening blocks. This method provides callers with some
-        lookahead into the future state of the chain, useful for generating RANDAO reveals or
+        Advance the ``state`` to the beginning of the requested ``slot``.
+        Return the resulting state at that slot assuming there are no
+        intervening blocks. This method provides callers with some lookahead into
+        the future state of the chain, useful for generating RANDAO reveals or
         computing future committee assignments.
 
         NOTE: Inserting blocks in intervening slots will (among other things) change the
