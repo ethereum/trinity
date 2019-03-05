@@ -108,6 +108,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
                 self._fetched_headers.task_done()
 
     async def _run(self) -> None:
+        self.logger.info("Running Skeleton Sync with %s", self.peer)
         self.run_daemon_task(self._display_stats())
         await self.wait(self._quietly_fetch_full_skeleton())
         self.logger.info("Skeleton %s stopped responding, waiting for sync to complete", self.peer)
@@ -118,7 +119,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
         queue = self._fetched_headers
         while self.is_operational:
             await self.sleep(5)
-            self.logger.warning("Skeleton header queue is %d/%d full", queue.qsize(), queue.maxsize)
+            self.logger.warning("Skeleton header queue is %d/%d full (peer %s)", queue.qsize(), queue.maxsize, self.peer)
 
     async def _quietly_fetch_full_skeleton(self) -> None:
         try:
@@ -142,6 +143,8 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
         There are some exceptions where more than two headers are returned consecutively.
         """
         peer = self.peer
+
+        self.logging.warning("Starting skeleton sync with %s", peer)
 
         # launch the skeleton sync by finding a segment that has a parent header in the DB
         launch_headers = await self.wait(self._find_launch_headers(peer))
