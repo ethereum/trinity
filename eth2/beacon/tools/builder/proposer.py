@@ -191,7 +191,7 @@ def create_mock_block(*,
     # TODO: set registry_change to True if there's any registry change.
     # TODO: Lookahead can be done within on call for the epoch, before calling `create_mock_block`.
     registry_change = False
-    for index in range(state.validator_registry):
+    for index in range(len(state.validator_registry)):
         index = ValidatorIndex(index)
         assignment = get_committee_assignment(
             state,
