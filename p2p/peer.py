@@ -489,7 +489,7 @@ class BasePeer(BaseService):
         original_version = msg['client_version_string']
         client_version_string = original_version[:256] + ('...' if original_version[256:] else '')
         if client_version_string.isprintable():
-            self.client_version_string = client_version_string.strip('\t\n\r\x0b\x0c')
+            self.client_version_string = client_version_string.strip()
         else:
             self.client_version_string = repr(client_version_string)
 
