@@ -1173,8 +1173,7 @@ def test_compute_individual_penalty(genesis_state,
         slot=get_epoch_start_slot(current_epoch, slots_per_epoch),
     )
     validator_index = 0
-    total_penalties = 10 ** 9  # 1 ETH
-    penalty = penalty = _compute_individual_penalty(
+    penalty = _compute_individual_penalty(
         state=state,
         config=config,
         validator_index=validator_index,
@@ -1217,14 +1216,13 @@ def test_process_slashings(genesis_state,
         slot=get_epoch_start_slot(current_epoch, slots_per_epoch),
         latest_slashed_balances=latest_slashed_balances,
     )
-    validator_index = 0
-    validator = state.validator_registry[validator_index].copy(
+    slashing_validator_index = 0
+    validator = state.validator_registry[slashing_validator_index].copy(
         slashed=True,
         withdrawable_epoch=current_epoch + latest_slashed_exit_length // 2
     )
-    state = state.update_validator_registry(validator_index, validator)
+    state = state.update_validator_registry(slashing_validator_index, validator)
 
-    slashing_validator_index = 0
     result_state = process_slashings(state, config)
     penalty = (
         state.validator_balances[slashing_validator_index] -
