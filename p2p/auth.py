@@ -55,8 +55,8 @@ async def handshake(
     the remote.
     """
     use_eip8 = False
-    initiator = HandshakeInitiator(remote, privkey, use_eip8, token)
-    reader, writer = await initiator.connect()
+    initiator = HandshakeInitiator(remote, privkey, use_eip8)
+    reader, writer = await token.cancellable_wait(initiator.connect())
     try:
         aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
             initiator, reader, writer, token)
@@ -114,12 +114,11 @@ class HandshakeBase:
 
     def __init__(
             self, remote: kademlia.Node, privkey: datatypes.PrivateKey,
-            use_eip8: bool, token: CancelToken) -> None:
+            use_eip8: bool) -> None:
         self.remote = remote
         self.privkey = privkey
         self.ephemeral_privkey = ecies.generate_privkey()
         self.use_eip8 = use_eip8
-        self.cancel_token = token
 
     @property
     def ephemeral_pubkey(self) -> datatypes.PublicKey:
@@ -130,9 +129,9 @@ class HandshakeBase:
         return self.privkey.public_key
 
     async def connect(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        return await self.cancel_token.cancellable_wait(
-            asyncio.open_connection(host=self.remote.address.ip, port=self.remote.address.tcp_port),
-            timeout=REPLY_TIMEOUT)
+        return await asyncio.open_connection(
+            host=self.remote.address.ip, port=self.remote.address.tcp_port
+        )
 
     def derive_secrets(self,
                        initiator_nonce: bytes,

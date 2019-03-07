@@ -97,7 +97,7 @@ async def server():
 async def test_server_incoming_connection(monkeypatch, server, event_loop):
     use_eip8 = False
     token = CancelToken("initiator")
-    initiator = HandshakeInitiator(RECEIVER_REMOTE, INITIATOR_PRIVKEY, use_eip8, token)
+    initiator = HandshakeInitiator(RECEIVER_REMOTE, INITIATOR_PRIVKEY, use_eip8)
     reader, writer = await initiator.connect()
     # Send auth init message to the server, then read and decode auth ack
     aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
