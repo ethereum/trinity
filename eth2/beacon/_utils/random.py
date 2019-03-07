@@ -29,9 +29,10 @@ TItem = TypeVar('TItem')
 def get_permuted_index(index: int,
                        list_size: int,
                        seed: Hash32,
-                       shuffle_round_count: int=90) -> int:
+                       shuffle_round_count: int) -> int:
     """
-    Return `p(index)` in a pseudorandom permutation `p` of `0...list_size-1` with ``seed`` as entropy.
+    Return `p(index)` in a pseudorandom permutation `p` of `0...list_size-1`
+    with ``seed`` as entropy.
 
     Utilizes 'swap or not' shuffling found in
     https://link.springer.com/content/pdf/10.1007%2F978-3-642-32009-5_1.pdf
@@ -48,20 +49,21 @@ def get_permuted_index(index: int,
             f"`MAX_LIST_SIZE` ({MAX_LIST_SIZE}"
         )
 
+    new_index = index
     for round in range(shuffle_round_count):
         pivot = int.from_bytes(
             hash_eth2(seed + round.to_bytes(1, 'little'))[0:8],
             'little',
         ) % list_size
 
-        flip = (pivot - index) % list_size
-        hash_pos = max(index, flip)
+        flip = (pivot - new_index) % list_size
+        hash_pos = max(new_index, flip)
         h = hash_eth2(seed + round.to_bytes(1, 'little') + (hash_pos // 256).to_bytes(4, 'little'))
         byte = h[(hash_pos % 256) // 8]
         bit = (byte >> (hash_pos % 8)) % 2
-        index = flip if bit else index
+        new_index = flip if bit else new_index
 
-    return index
+    return new_index
 
 
 @to_tuple

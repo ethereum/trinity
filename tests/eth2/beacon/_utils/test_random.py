@@ -14,7 +14,7 @@ def slow_shuffle(items, seed, shuffle_round_count):
     length = len(items)
     return tuple(
         [
-            items[get_permuted_index(i, length, seed, shuffle_round_count=shuffle_round_count)]
+            items[get_permuted_index(i, length, seed, shuffle_round_count)]
             for i in range(length)
         ]
     )
@@ -44,6 +44,6 @@ def test_shuffle_consistent(values, seed, shuffle_round_count):
     assert shuffle(values, seed, shuffle_round_count) == expect
 
 
-def test_get_permuted_index_invalid():
+def test_get_permuted_index_invalid(shuffle_round_count):
     with pytest.raises(ValidationError):
-        get_permuted_index(2, 2, b'\x12' * 32)
+        get_permuted_index(2, 2, b'\x12' * 32, shuffle_round_count)
