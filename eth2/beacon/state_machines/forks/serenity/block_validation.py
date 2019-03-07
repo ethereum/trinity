@@ -310,7 +310,7 @@ def validate_attestation(state: BeaconState,
         state.slot,
         slots_per_epoch,
         min_attestation_inclusion_delay,
-        get_epoch_start_slot(committee_config.GENESIS_EPOCH, committee_config.SLOTS_PER_EPOCH),
+        committee_config.GENESIS_SLOT,
     )
 
     validate_attestation_justified_epoch(
