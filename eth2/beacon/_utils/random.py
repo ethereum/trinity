@@ -31,7 +31,7 @@ def get_permuted_index(index: int,
                        seed: Hash32,
                        shuffle_round_count: int=90) -> int:
     """
-    Return a pseudorandom permutation of `0...list_size-1` with ``seed`` as entropy.
+    Return `p(index)` in a pseudorandom permutation `p` of `0...list_size-1` with ``seed`` as entropy.
 
     Utilizes 'swap or not' shuffling found in
     https://link.springer.com/content/pdf/10.1007%2F978-3-642-32009-5_1.pdf
