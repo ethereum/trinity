@@ -25,6 +25,7 @@ from eth.vm.forks.spurious_dragon import SpuriousDragonVM
 
 from lahja import (
     ConnectionConfig,
+    ListenerConfig,
 )
 
 from trinity.config import (
@@ -136,7 +137,9 @@ async def event_bus(event_loop):
         path=ipc_path
     )
     await endpoint.start_serving(networking_connection_config, event_loop)
-    await endpoint.connect_to_endpoints(networking_connection_config)
+    await endpoint.add_listener_endpoints(
+        ListenerConfig.from_connection_config(networking_connection_config)
+    )
     try:
         yield endpoint
     finally:

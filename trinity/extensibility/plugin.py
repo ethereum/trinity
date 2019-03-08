@@ -24,6 +24,7 @@ from typing import (
 
 from lahja import (
     ConnectionConfig,
+    ListenerConfig,
 )
 
 from trinity.config import (
@@ -34,6 +35,9 @@ from trinity.constants import (
 )
 from trinity.endpoint import (
     TrinityEventBusEndpoint,
+)
+from trinity.events import (
+    AvailableEndpointsUpdated,
 )
 from trinity.extensibility.events import (
     BaseEvent,
@@ -280,6 +284,19 @@ class BaseIsolatedPlugin(BasePlugin):
         """
         return self._process
 
+    @staticmethod
+    def should_receive_broadcast(event: BaseEvent) -> bool:
+        """
+        Default ``filter_predicate`` that prevents events that aren't deliberately send
+        to the endpoint of this plugin to get pushed into it. Plugins can overwrite this
+        to control fine-grained access about the events it wants to receive.
+        """
+
+        if isinstance(event, AvailableEndpointsUpdated):
+            return True
+
+        return False
+
     def start(self) -> None:
         """
         Prepare the plugin to get started and eventually call ``do_start`` in a separate process.
@@ -300,19 +317,19 @@ class BaseIsolatedPlugin(BasePlugin):
             self.normalized_name, self.context.trinity_config.ipc_dir
         )
         self.event_bus.start_serving_nowait(connection_config)
-        self.event_bus.connect_to_endpoints_blocking(
-            ConnectionConfig.from_name(MAIN_EVENTBUS_ENDPOINT, self.context.trinity_config.ipc_dir)
+        self.event_bus.add_listener_endpoints_blocking(
+            ListenerConfig.from_name(MAIN_EVENTBUS_ENDPOINT, self.context.trinity_config.ipc_dir)
         )
         # This makes the `main` process aware of this Endpoint which will then propagate the info
         # so that every other Endpoint can connect directly to the plugin Endpoint
-        self.event_bus.announce_endpoint()
+        self.event_bus.announce_endpoint(self.should_receive_broadcast)
         self.event_bus.broadcast(
             PluginStartedEvent(type(self))
         )
 
         # Whenever new EventBus Endpoints come up the `main` process broadcasts this event
         # and we connect to every Endpoint directly
-        self.event_bus.auto_connect_new_announced_endpoints()
+        self.event_bus.auto_add_announced_listener_endpoints()
 
         with self.context.trinity_config.process_id_file(self.normalized_name):
             self.do_start()

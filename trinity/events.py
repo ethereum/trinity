@@ -4,7 +4,7 @@ from typing import (
 
 from lahja import (
     BaseEvent,
-    ConnectionConfig,
+    ListenerConfig,
 )
 
 
@@ -24,8 +24,8 @@ class EventBusConnected(BaseEvent):
     :class:`~lahja.endpoint.Endpoint`, making them aware of other endpoints they can connect to.
     """
 
-    def __init__(self, connection_config: ConnectionConfig) -> None:
-        self.connection_config = connection_config
+    def __init__(self, listener_config: ListenerConfig) -> None:
+        self.listener_config = listener_config
 
 
 class AvailableEndpointsUpdated(BaseEvent):
@@ -35,5 +35,5 @@ class AvailableEndpointsUpdated(BaseEvent):
     lists all available endpoints that are known at the time when the event is raised.
     """
 
-    def __init__(self, available_endpoints: Tuple[ConnectionConfig, ...]) -> None:
+    def __init__(self, available_endpoints: Tuple[ListenerConfig, ...]) -> None:
         self.available_endpoints = available_endpoints

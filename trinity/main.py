@@ -11,6 +11,7 @@ from typing import (
 
 from lahja import (
     ConnectionConfig,
+    ListenerConfig,
 )
 
 from eth.db.backends.base import BaseDB
@@ -178,12 +179,12 @@ def launch_node(args: Namespace, trinity_config: TrinityConfig) -> None:
             networking_connection_config,
             loop,
         )
-        endpoint.auto_connect_new_announced_endpoints()
-        endpoint.connect_to_endpoints_blocking(
-            ConnectionConfig.from_name(MAIN_EVENTBUS_ENDPOINT, trinity_config.ipc_dir),
+        endpoint.auto_add_announced_listener_endpoints()
+        endpoint.add_listener_endpoints_blocking(
+            ListenerConfig.from_name(MAIN_EVENTBUS_ENDPOINT, trinity_config.ipc_dir),
             # Plugins that run within the networking process broadcast and receive on the
             # the same endpoint
-            networking_connection_config,
+            ListenerConfig.from_connection_config(networking_connection_config),
         )
         endpoint.announce_endpoint()
         # This is a second PluginManager instance governing plugins in a shared process.

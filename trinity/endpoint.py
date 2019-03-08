@@ -1,10 +1,13 @@
 from typing import (
+    Callable,
     Tuple,
 )
 from lahja import (
+    BaseEvent,
     BroadcastConfig,
-    ConnectionConfig,
     Endpoint,
+    filter_none,
+    ListenerConfig,
 )
 
 from trinity.constants import (
@@ -31,8 +34,8 @@ class TrinityEventBusEndpoint(Endpoint):
             BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT)
         )
 
-    def connect_to_other_endpoints(self,
-                                   ev: AvailableEndpointsUpdated) -> None:
+    def add_other_listener_endpoints(self,
+                                     ev: AvailableEndpointsUpdated) -> None:
 
         for connection_config in ev.available_endpoints:
             if connection_config.name == self.name:
@@ -45,21 +48,25 @@ class TrinityEventBusEndpoint(Endpoint):
                     self.name,
                     connection_config.name
                 )
-                self.connect_to_endpoints_nowait(connection_config)
+                self.add_listener_endpoints_nowait(connection_config)
 
-    def auto_connect_new_announced_endpoints(self) -> None:
+    def auto_add_announced_listener_endpoints(self) -> None:
         """
         Connect this endpoint to all new endpoints that are announced
         """
-        self.subscribe(AvailableEndpointsUpdated, self.connect_to_other_endpoints)
+        self.subscribe(AvailableEndpointsUpdated, self.add_other_listener_endpoints)
 
-    def announce_endpoint(self) -> None:
+    def announce_endpoint(self, filter_predicate: Callable[[BaseEvent], bool]=filter_none) -> None:
         """
         Announce this endpoint to the :class:`~trinity.endpoint.TrinityMainEventBusEndpoint` so
         that it will be further propagated to all other endpoints, allowing them to connect to us.
         """
         self.broadcast(
-            EventBusConnected(ConnectionConfig(name=self.name, path=self.ipc_path)),
+            EventBusConnected(ListenerConfig(
+                name=self.name,
+                path=self.ipc_path,
+                filter_predicate=filter_predicate
+            )),
             BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT)
         )
 
@@ -70,7 +77,7 @@ class TrinityMainEventBusEndpoint(TrinityEventBusEndpoint):
     endpoint, connects to it by default and uses it to advertise itself to other endpoints.
     """
 
-    available_endpoints: Tuple[ConnectionConfig, ...]
+    available_endpoints: Tuple[ListenerConfig, ...]
 
     def track_and_propagate_available_endpoints(self) -> None:
         """
@@ -84,14 +91,14 @@ class TrinityMainEventBusEndpoint(TrinityEventBusEndpoint):
             # it could happen that a (buggy, malicious) plugin raises the `EventBusConnected`
             # event multiple times which would then raise an exception if we are already connected
             # to that endpoint.
-            if not self.is_connected_to(ev.connection_config.name):
-                self.logger.info(
-                    "EventBus of main process connecting to EventBus %s", ev.connection_config.name
+            if not self.is_connected_to(ev.listener_config.name):
+                self.logger.error(
+                    "EventBus of main process connecting to EventBus %s", ev.listener_config.name
                 )
-                self.connect_to_endpoints_blocking(ev.connection_config)
+                self.add_listener_endpoints_blocking(ev.listener_config)
 
-            self.available_endpoints = self.available_endpoints + (ev.connection_config,)
-            self.logger.debug("New EventBus Endpoint connected %s", ev.connection_config.name)
+            self.available_endpoints = self.available_endpoints + (ev.listener_config,)
+            self.logger.debug("New EventBus Endpoint connected %s", ev.listener_config.name)
             # Broadcast available endpoints to all connected endpoints, giving them
             # a chance to cross connect
             self.broadcast(AvailableEndpointsUpdated(self.available_endpoints))

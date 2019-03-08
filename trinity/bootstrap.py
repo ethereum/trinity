@@ -12,6 +12,7 @@ from typing import (
 
 from lahja import (
     ConnectionConfig,
+    ListenerConfig,
 )
 
 from trinity.exceptions import (
@@ -203,7 +204,9 @@ def main_entry(trinity_boot: BootFn,
 
         # We listen on events such as `ShutdownRequested` which may or may not originate on
         # the `main_endpoint` which is why we connect to our own endpoint here
-        main_endpoint.connect_to_endpoints_blocking(main_connection_config)
+        main_endpoint.add_listener_endpoints_blocking(
+            ListenerConfig.from_connection_config(main_connection_config)
+        )
         trinity_boot(
             args,
             trinity_config,
