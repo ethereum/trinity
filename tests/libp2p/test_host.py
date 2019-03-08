@@ -1,6 +1,13 @@
-import io
+import asyncio
+from io import (
+    BytesIO,
+)
 from typing import (
     NamedTuple,
+)
+from collections import (
+    UserDict,
+    MutableMapping,
 )
 import uuid
 
@@ -14,32 +21,87 @@ from libp2p.host import (
 
 from libp2p.p2pclient.datastructures import (
     PeerID,
+    PeerInfo,
     StreamInfo,
+)
+from libp2p.p2pclient.exceptions import (
+    ControlFailure,
+    DispatchFailure,
 )
 from libp2p.p2pclient.p2pclient import (
     read_pbmsg_safe,
     write_pbmsg,
 )
 from libp2p.p2pclient.pb import p2pd_pb2 as p2pd_pb
-from libp2p.p2pclient.exceptions import (
-    DispatchFailure,
-)
 
 
-class MockStreamReader(io.BytesIO):
+class MockStreamReaderWriter:
+    _buf: bytes
+
+    def __init__(self):
+        self._buf = b""
+
+    def write(self, data):
+        self._buf = self._buf + data
+
+    async def read(self, n=-1):
+        if n == -1:
+            n = len(self._buf)
+        data = self._buf[:n]
+        self._buf = self._buf[n:]
+        return data
+
     async def readexactly(self, n):
-        return self.read(n)
+        data = await self.read(n)
+        if len(data) != n:
+            raise asyncio.IncompleteReadError(partial=data, expected=n)
+        return data
 
-
-class MockStreamWriter(io.BytesIO):
     async def drain(self):
         # do nothing
         pass
 
+    def close(self):
+        pass
 
-class MockConn(NamedTuple):
-    reader: MockStreamReader
-    writer: MockStreamWriter
+
+def test_mock_stream_reader_writer_write():
+    rwtor = MockStreamReaderWriter()
+    rwtor.write(b'123')
+    rwtor.write(b'')
+    rwtor.write(b'456')
+    rwtor.write(b'\n')
+    rwtor._buf == b'123456\n'
+
+
+@pytest.mark.asyncio
+async def test_mock_stream_reader_writer_read():
+    rwtor = MockStreamReaderWriter()
+    rwtor._buf = b"123\n456\n"
+    assert await rwtor.read(4) == b"123\n"
+    assert await rwtor.read() == b"456\n"
+
+
+@pytest.mark.asyncio
+async def test_mock_stream_reader_writer_readexactly():
+    rwtor = MockStreamReaderWriter()
+    rwtor._buf = b"123\n456\n"
+    assert await rwtor.readexactly(1) == b'1'
+    assert await rwtor.readexactly(3) == b'23\x0a'
+    assert await rwtor.readexactly(3) == b'456'
+    with pytest.raises(asyncio.IncompleteReadError):
+        await rwtor.readexactly(3)
+
+
+@pytest.mark.asyncio
+async def test_mock_stream_reader_writer_interleaving_read_and_write():
+    rwtor = MockStreamReaderWriter()
+    rwtor.write(b'1234')
+    assert await rwtor.read(2) == b'12'
+    assert await rwtor.read(1) == b'3'
+    rwtor.write(b'5')
+    rwtor.write(b'67')
+    assert await rwtor.read() == b'4567'
 
 
 class MockNetwork:
@@ -50,76 +112,54 @@ class MockNetwork:
         self._nodes = set()
         self._conns = set()
 
-    @staticmethod
-    def _to_internal_peer_id(peer_id):
-        return peer_id.to_bytes()
-
-    @staticmethod
-    def _to_peer_id(peer_id_internal):
-        return PeerID(peer_id_internal)
-
     def add_node(self, peer_id):
-        peer_id_internal = self._to_internal_peer_id(peer_id)
-        self._nodes.add(peer_id_internal)
+        self._nodes.add(peer_id)
 
     def remove_node(self, peer_id):
-        peer_id_internal = self._to_internal_peer_id(peer_id)
         try:
-            self._nodes.remove(peer_id_internal)
+            self._nodes.remove(peer_id)
         except KeyError:
             pass
         conns_without_peer = set([
             conn
             for conn in self._conns
-            if (conn[0] != peer_id_internal) and (conn[1] != peer_id_internal)
+            if (conn[0] != peer_id) and (conn[1] != peer_id)
         ])
         self._conns = conns_without_peer
 
     @property
     def nodes(self):
-        return tuple(
-            self._to_peer_id(peer)
-            for peer in self._nodes
-        )
+        return tuple(self._nodes)
 
     @staticmethod
-    def _to_internal_tuple(peer_id_0_internal, peer_id_1_internal):
+    def _to_internal_tuple(peer_id_0, peer_id_1):
         # ensure the order
-        return tuple(set([peer_id_0_internal, peer_id_1_internal]))
+        return tuple(set([peer_id_0, peer_id_1]))
 
-    def _can_establish_conn(self, peer_id_0_internal, peer_id_1_internal):
-        if peer_id_0_internal == peer_id_1_internal:
+    def _can_establish_conn(self, peer_id_0, peer_id_1):
+        if peer_id_0 == peer_id_1:
             return False
-        if (peer_id_0_internal not in self._nodes) or (peer_id_1_internal not in self._nodes):
+        if (peer_id_0 not in self._nodes) or (peer_id_1 not in self._nodes):
             return False
         return True
 
     def connect(self, peer_id_0, peer_id_1):
-        peer_id_0_internal = self._to_internal_peer_id(peer_id_0)
-        peer_id_1_internal = self._to_internal_peer_id(peer_id_1)
-        if not self._can_establish_conn(peer_id_0_internal, peer_id_1_internal):
+        if not self._can_establish_conn(peer_id_0, peer_id_1):
             return
-        self._conns.add(self._to_internal_tuple(peer_id_0_internal, peer_id_1_internal))
+        self._conns.add(self._to_internal_tuple(peer_id_0, peer_id_1))
 
     def disconnect(self, peer_id_0, peer_id_1):
-        peer_id_0_internal = self._to_internal_peer_id(peer_id_0)
-        peer_id_1_internal = self._to_internal_peer_id(peer_id_1)
-        if not self._can_establish_conn(peer_id_0_internal, peer_id_1_internal):
+        if not self._can_establish_conn(peer_id_0, peer_id_1):
             return
         try:
-            self._conns.remove(self._to_internal_tuple(peer_id_0_internal, peer_id_1_internal))
+            self._conns.remove(self._to_internal_tuple(peer_id_0, peer_id_1))
         except KeyError:
             pass
 
     def list_peers(self, peer_id):
-        peer_id_internal = self._to_internal_peer_id(peer_id)
-        lefts = tuple(conn[0] for conn in self._conns if conn[1] == peer_id_internal)
-        rights = tuple([conn[1] for conn in self._conns if conn[0] == peer_id_internal])
-        peers_id_internal_set = set(lefts + rights)
-        return tuple(
-            self._to_peer_id(value)
-            for value in peers_id_internal_set
-        )
+        lefts = tuple(conn[0] for conn in self._conns if conn[1] == peer_id)
+        rights = tuple([conn[1] for conn in self._conns if conn[0] == peer_id])
+        return tuple(set(lefts + rights))
 
 
 peer_id_0 = PeerID(b'\x00' * 32)
@@ -131,7 +171,7 @@ def test_mock_network_add_node():
     n = MockNetwork()
     assert len(n._nodes) == 0
     n.add_node(peer_id_0)
-    assert len(n._nodes) == 1 and tuple(n._nodes)[0] == peer_id_0
+    assert len(n._nodes) == 1
     n.add_node(peer_id_1)
     assert len(n._nodes) == 2
 
@@ -218,20 +258,35 @@ def test_mock_network_disconnect():
 
 class MockControlClient:
 
-    map_conn = None
+    _network = None
+    _map_peer_id_to_control_client = None
+    _uuid = None
+    _peer_id = None
+    _maddrs = None
+
     handlers = None
     control_maddr = None
     listen_maddr = None
 
-    def __init__(self, network):
-        self._network = network
+    def __init__(self, network, map_peer_id_to_control_client):
+        """
+        Args:
+            network (MockNetwork): The mock network
+            map_peer_id_to_control_client (dict): The mutable mapping from
+                `peer_id_to_immutable(peer_id)` to its corresponding `MockControlClient` object.
+        """
         self._uuid = uuid.uuid1()
-        self._peer_id = PeerID(self._uuid.bytes.rjust(32, b'\x00'))
+        self._peer_id = PeerID(self._uuid.bytes.ljust(32, b'\x00'))
         self._maddrs = [Multiaddr(f"/unix/maddr_{self._uuid}")]
+
+        self._network = network
+        self._network.add_node(self._peer_id)
+        self._map_peer_id_to_control_client = map_peer_id_to_control_client
+        self._map_peer_id_to_control_client[self._peer_id] = self
+
         self.control_maddr = f"/unix/control_{self._uuid}"
         self.listen_maddr = f"/unix/listen__{self._uuid}"
         self.handlers = {}
-        self.map_conn = {}
 
     async def _dispatcher(self, reader, writer):
         pb_stream_info = p2pd_pb.StreamInfo()
@@ -255,98 +310,89 @@ class MockControlClient:
         return self._peer_id, self._maddrs
 
     async def connect(self, peer_id, maddrs):
-        reader, writer = await self.client.open_connection()
-
-        maddrs_bytes = [binascii.unhexlify(i.to_bytes()) for i in maddrs]
-        connect_req = p2pd_pb.ConnectRequest(
-            peer=peer_id.to_bytes(),
-            addrs=maddrs_bytes,
-        )
-        req = p2pd_pb.Request(
-            type=p2pd_pb.Request.CONNECT,
-            connect=connect_req,
-        )
-        await write_pbmsg(writer, req)
-
-        resp = p2pd_pb.Response()
-        await read_pbmsg_safe(reader, resp)
-        writer.close()
-        raise_if_failed(resp)
+        self._network.connect(self._peer_id, peer_id)
 
     async def list_peers(self):
-        req = p2pd_pb.Request(
-            type=p2pd_pb.Request.LIST_PEERS,
+        peer_ids = self._network.list_peers(self._peer_id)
+        return tuple(
+            PeerInfo(
+                peer_id,
+                self._map_peer_id_to_control_client[peer_id],
+            )
+            for peer_id in peer_ids
         )
-        reader, writer = await self.client.open_connection()
-        await write_pbmsg(writer, req)
-        resp = p2pd_pb.Response()
-        await read_pbmsg_safe(reader, resp)
-        writer.close()
-        raise_if_failed(resp)
-
-        peers = tuple(PeerInfo.from_pb(pinfo) for pinfo in resp.peers)
-        return peers
 
     async def disconnect(self, peer_id):
-        disconnect_req = p2pd_pb.DisconnectRequest(
-            peer=peer_id.to_bytes(),
-        )
-        req = p2pd_pb.Request(
-            type=p2pd_pb.Request.DISCONNECT,
-            disconnect=disconnect_req,
-        )
-        reader, writer = await self.client.open_connection()
-        await write_pbmsg(writer, req)
-        resp = p2pd_pb.Response()
-        await read_pbmsg_safe(reader, resp)
-        writer.close()
-        raise_if_failed(resp)
+        self._network.disconnect(self._peer_id, peer_id)
 
     async def stream_open(self, peer_id, protocols):
-        reader, writer = await self.client.open_connection()
+        if len(protocols) == 0:
+            raise ControlFailure(f'len(protocols) should not be 0, protocols={protocols}')
 
-        stream_open_req = p2pd_pb.StreamOpenRequest(
-            peer=peer_id.to_bytes(),
-            proto=list(protocols),
+        protocol_chosen = protocols[0]
+
+        reader = MockStreamReaderWriter()
+        writer = MockStreamReaderWriter()
+
+        stream_info_pb = StreamInfo(
+            peer_id=self._peer_id,
+            addr=self._maddrs[0],
+            proto=protocol_chosen,
+        ).to_pb()
+        await write_pbmsg(writer, stream_info_pb)
+
+        if peer_id not in self._map_peer_id_to_control_client:
+            raise ControlFailure(f"failed to find the peer {peer_id}")
+        peer_control_client = self._map_peer_id_to_control_client[peer_id]
+
+        # schedule `_dispatcher` of the target peer
+        # your reader is its writer, vice versa.
+        asyncio.ensure_future(
+            peer_control_client._dispatcher(reader=writer, writer=reader)
         )
-        req = p2pd_pb.Request(
-            type=p2pd_pb.Request.STREAM_OPEN,
-            streamOpen=stream_open_req,
+        # and yield to it
+        await asyncio.sleep(0.01)
+
+        stream_info_peer = StreamInfo(
+            peer_id=peer_id,
+            addr=peer_control_client._maddrs,
+            proto=protocol_chosen,
         )
-        await write_pbmsg(writer, req)
-
-        resp = p2pd_pb.Response()
-        await read_pbmsg_safe(reader, resp)
-        raise_if_failed(resp)
-
-        pb_stream_info = resp.streamInfo
-        stream_info = StreamInfo.from_pb(pb_stream_info)
-
-        return stream_info, reader, writer
+        return stream_info_peer, reader, writer
 
     async def stream_handler(self, proto, handler_cb):
-        reader, writer = await self.client.open_connection()
-
-        listen_path_maddr_bytes = binascii.unhexlify(self.listen_maddr.to_bytes())
-        stream_handler_req = p2pd_pb.StreamHandlerRequest(
-            addr=listen_path_maddr_bytes,
-            proto=[proto],
-        )
-        req = p2pd_pb.Request(
-            type=p2pd_pb.Request.STREAM_HANDLER,
-            streamHandler=stream_handler_req,
-        )
-        await write_pbmsg(writer, req)
-
-        resp = p2pd_pb.Response()
-        await read_pbmsg_safe(reader, resp)
-        writer.close()
-        raise_if_failed(resp)
-
-        # if success, add the handler to the dict
         self.handlers[proto] = handler_cb
 
 
 @pytest.mark.asyncio
 async def test_daemon_host():
-    pass
+    n = MockNetwork()
+    map_pid_client = {}
+    c0 = MockControlClient(network=n, map_peer_id_to_control_client=map_pid_client)
+    c1 = MockControlClient(network=n, map_peer_id_to_control_client=map_pid_client)
+    peer_id_0, _ = await c0.identify()
+    peer_id_1, maddrs_1 = await c1.identify()
+    assert len(await c0.list_peers()) == 0
+    await c0.connect(peer_id_1, maddrs_1)
+    assert len(await c0.list_peers()) == 1
+    await c0.disconnect(peer_id_1)
+    assert len(await c0.list_peers()) == 0
+
+    assert len(map_pid_client) == 2
+
+    proto = "proto_123"
+    data = b'data_123'
+
+    event = asyncio.Event()
+
+    async def handler_cb(stream_info, reader, writer):
+        # received_data = await reader.read(len(data))
+        # print("!@#", await reader.read(), ", ", reader._buf)
+        # assert data == received_data
+        event.set()
+
+    await c0.stream_handler(proto, handler_cb)
+    _, _, writer = await c1.stream_open(peer_id_0, [proto])
+    # writer.write(data)
+    await event.wait()
+    writer.close()

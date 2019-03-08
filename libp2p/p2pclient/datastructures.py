@@ -1,6 +1,7 @@
 import binascii
 from typing import (
     Any,
+    Iterable,
     List,
 )
 
@@ -28,6 +29,9 @@ class PeerID:
 
     def __repr__(self) -> str:
         return f"<PeerID {self.to_string()[2:10]}>"
+
+    def __hash__(self):
+        return int.from_bytes(self._bytes, "big")
 
     def to_bytes(self) -> bytes:
         return self._bytes
@@ -77,7 +81,7 @@ class PeerInfo:
     peer_id: PeerID
     addrs: List[Multiaddr]
 
-    def __init__(self, peer_id: PeerID, addrs: List[Multiaddr]):
+    def __init__(self, peer_id: PeerID, addrs: Iterable[Multiaddr]):
         self.peer_id = peer_id
         self.addrs = addrs
 

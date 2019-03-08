@@ -54,7 +54,7 @@ class DaemonPubSub(BasePubSub):
 
     @abstractmethod
     def subscribe(self, topic: str):
-        self.pubsub_client.
+        self.pubsub_client.subscribe
 
     @abstractmethod
     def get_topics(self):
