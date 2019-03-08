@@ -1205,7 +1205,7 @@ def process_exit_queue(state: BeaconState,
     """
     Process the exit queue.
     """
-    def eligible(index):
+    def eligible(index: ValidatorIndex) -> bool:
         validator = state.validator_registry[index]
         # Filter out dequeued validators
         if validator.withdrawable_epoch != FAR_FUTURE_EPOCH:
@@ -1217,7 +1217,10 @@ def process_exit_queue(state: BeaconState,
                 validator.exit_epoch + config.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
             )
 
-    eligible_indices = filter(eligible, tuple(range(len(state.validator_registry))))
+    eligible_indices = filter(
+        eligible,
+        tuple([ValidatorIndex(i) for i in range(len(state.validator_registry))])
+    )
     # Sort in order of exit epoch, and validators that exit withinthe same epoch exit
     # in order of validator index
     sorted_indices = sorted(
@@ -1229,7 +1232,7 @@ def process_exit_queue(state: BeaconState,
             break
         state = prepare_validator_for_withdrawal(
             state,
-            index,
+            ValidatorIndex(index),
             slots_per_epoch=config.SLOTS_PER_EPOCH,
             min_validator_withdrawability_delay=config.MIN_VALIDATOR_WITHDRAWABILITY_DELAY,
         )
