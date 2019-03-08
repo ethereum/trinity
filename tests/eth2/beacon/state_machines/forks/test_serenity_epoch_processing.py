@@ -1382,14 +1382,14 @@ def test_process_exit_queue_eligible(genesis_state,
         (3, 4, (7, 6, 5, 4)),
     ]
 )
-def test_process_exit(genesis_state,
-                      config,
-                      current_epoch,
-                      num_validators,
-                      max_exit_dequeues_per_epoch,
-                      min_validator_withdrawability_delay,
-                      num_eligible_validators,
-                      validator_exit_epochs):
+def test_process_exit_queue(genesis_state,
+                            config,
+                            current_epoch,
+                            num_validators,
+                            max_exit_dequeues_per_epoch,
+                            min_validator_withdrawability_delay,
+                            num_eligible_validators,
+                            validator_exit_epochs):
     state = genesis_state.copy(
         slot=get_epoch_start_slot(current_epoch, config.SLOTS_PER_EPOCH)
     )
@@ -1413,7 +1413,7 @@ def test_process_exit(genesis_state,
     )
     filtered_indices = sorted_indices[:min(max_exit_dequeues_per_epoch, num_eligible_validators)]
 
-    for i in range(filtered_indices):
+    for i in range(num_validators):
         if i in set(filtered_indices):
             # Check if they got prepared for withdrawal
             assert (
