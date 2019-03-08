@@ -44,7 +44,6 @@ from eth2.beacon.typing import (
 )
 
 from eth2.beacon.tools.builder.validator import (
-    get_committee_assignment,
     sign_transaction,
 )
 
@@ -185,26 +184,7 @@ def create_mock_block(*,
 
     Note that it doesn't return the correct ``state_root``.
     """
-    epoch = slot_to_epoch(slot, config.SLOTS_PER_EPOCH)
-
-    # Lookahead
-    # TODO: set registry_change to True if there's any registry change.
-    # TODO: Lookahead can be done within on call for the epoch, before calling `create_mock_block`.
-    registry_change = False
-    for index in range(len(state.validator_registry)):
-        index = ValidatorIndex(index)
-        assignment = get_committee_assignment(
-            state,
-            config,
-            epoch,
-            index,
-            registry_change=registry_change,
-        )
-        if assignment.is_proposer:
-            if assignment.slot == slot:
-                proposer_index = index
-                break
-
+    proposer_index = _get_proposer_index(state_machine, state, slot, parent_block.root, config)
     proposer_pubkey = state.validator_registry[proposer_index].pubkey
     proposer_privkey = keymap[proposer_pubkey]
 
