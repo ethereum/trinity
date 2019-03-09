@@ -1221,7 +1221,7 @@ def process_exit_queue(state: BeaconState,
         eligible,
         tuple([ValidatorIndex(i) for i in range(len(state.validator_registry))])
     )
-    # Sort in order of exit epoch, and validators that exit withinthe same epoch exit
+    # Sort in order of exit epoch, and validators that exit within the same epoch exit
     # in order of validator index
     sorted_indices = sorted(
         eligible_indices,
