@@ -17,9 +17,6 @@ from .p2pclient.datastructures import (
     PeerInfo,
     StreamInfo,
 )
-from .p2pclient.exceptions import (
-    ControlFailure,
-)
 from .p2pclient.p2pclient import (
     ControlClient,
     StreamHandler,

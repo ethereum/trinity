@@ -1,9 +1,16 @@
 import asyncio
 
+from typing import (
+    Dict,
+    MutableSet,
+)
 import uuid
 
 from multiaddr import Multiaddr
 
+from libp2p.mock import (
+    MockStreamReaderWriter,
+)
 from libp2p.p2pclient.datastructures import (
     PeerID,
     PeerInfo,
@@ -177,3 +184,40 @@ class MockControlClient:
 
     async def stream_handler(self, proto, handler_cb):
         self.handlers[proto] = handler_cb
+
+
+class MockSimplePubSubClient:
+    _peer_id: PeerID
+    _topics: MutableSet[str]
+    _topic_peers: Dict[str, List[PeerID]]
+    _topic_subscribed_streams: Tuple[asyncio.StreamReader, asyncio.StreamWriter]
+
+    def __init__(
+            self,
+            peer_id: PeerID,
+            _map_peer_id_to_pubsub_client: Dict[PeerID, 'SimpleMockPubSubClient']):
+        self._peer_id = peer_id
+        self._topics = set()
+        self._topic_peers = {}
+        self._topic_subscribe_streams = {}
+        self._map_peer_id_to_pubsub_client = _map_peer_id_to_pubsub_client
+        self._map_peer_id_to_pubsub_client[peer_id] = self
+
+    def _has_subscribed(self, topic):
+        return topic in self._topics
+
+    def subscribe(self, topic):
+        if self._has_subscribed(topic):
+            return
+        self._topics.add(topic)
+        self._topic_peers[topic] = {}
+        self._topic_subscribe_streams[topic] = (MockStreamReaderWriter(), MockStreamReaderWriter())
+
+    def unsubscribe(self, topic):
+        if not self._has_subscribed(topic):
+            return
+        self._topics.remove(topic)
+        del self._topic_peers[topic]
+        del self._topic_subscribe_streams[topic]
+
+    def publish(self, )

@@ -11,6 +11,7 @@ from .pubsub import (
     BasePubSub,
 )
 
+
 class Node:
     """
     Reference:

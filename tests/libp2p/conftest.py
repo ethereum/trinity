@@ -154,10 +154,6 @@ class DaemonTuple(NamedTuple):
     pubsub: PubSubClient
 
 
-class ConnectionFailure(Exception):
-    pass
-
-
 async def make_p2pd_pair_unix(
         serial_no,
         is_control_enabled,

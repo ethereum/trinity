@@ -100,6 +100,10 @@ async def test_control_client_connect_failure(peer_id_random, p2pds):
         await c0.connect(peer_id_1, [Multiaddr("/ip4/127.0.0.1/udp/0")])
 
 
+class ConnectionFailure(Exception):
+    pass
+
+
 async def _connect_and_check(p2pd_tuple_0, p2pd_tuple_1):
     peer_id_0, _ = await p2pd_tuple_0.control.identify()
     peer_id_1, maddrs_1 = await p2pd_tuple_1.control.identify()
