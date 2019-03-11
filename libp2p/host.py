@@ -17,6 +17,9 @@ from .p2pclient.datastructures import (
     PeerInfo,
     StreamInfo,
 )
+from .p2pclient.exceptions import (
+    ControlFailure,
+)
 from .p2pclient.p2pclient import (
     ControlClient,
     StreamHandler,
@@ -60,15 +63,7 @@ class BaseHost(ABC):
         pass
 
     @abstractmethod
-    def stream_open(
-            self,
-            peer_id: PeerID,
-            protocols: Sequence[str]) -> Tuple[
-            StreamInfo, asyncio.StreamReader, asyncio.StreamWriter]:
-        pass
-
-    @abstractmethod
-    def set_stream_handler(self, proto: str, handler_cb: StreamHandler) -> None:
+    def set_stream_handler(self, protocol_id: str, stream_handler: StreamHandler) -> None:
         pass
 
     # ignore network and mux now
@@ -81,6 +76,9 @@ class BaseHost(ABC):
     # def get_mux(self):
     #     pass
 
+
+# TODO: leave the exceptions handling for now
+#   we need uniform exceptions to work with both `DaemonHost` and `Libp2p.Host`
 
 class DaemonHost(BaseHost):
     """
@@ -99,11 +97,11 @@ class DaemonHost(BaseHost):
         return self.peer_info
 
     async def get_id(self) -> PeerID:
-        peer_info = self.get_peer_info()
+        peer_info = await self.get_peer_info()
         return peer_info.peer_id
 
     async def get_addrs(self) -> Sequence[Multiaddr]:
-        peer_info = self.get_peer_info()
+        peer_info = await self.get_peer_info()
         return peer_info.addrs
 
     async def new_stream(
@@ -111,23 +109,25 @@ class DaemonHost(BaseHost):
             peer_id: PeerID,
             protocol_ids: Sequence[str]) -> Tuple[
             StreamInfo, asyncio.StreamReader, asyncio.StreamWriter]:
-        pass
+        return await self.control_client.stream_open(
+            peer_id=peer_id,
+            protocols=protocol_ids,
+        )
 
     async def connect(self, peer_info: PeerInfo) -> None:
-        pass
+        await self.control_client.connect(
+            peer_id=peer_info.peer_id,
+            maddrs=peer_info.addrs,
+        )
 
     async def list_peers(self) -> Tuple[PeerInfo, ...]:
-        pass
+        return await self.control_client.list_peers()
 
     async def disconnect(self, peer_id: PeerID) -> None:
-        pass
+        await self.control_client.disconnect(peer_id=peer_id)
 
-    async def stream_open(
-            self,
-            peer_id: PeerID,
-            protocols: Sequence[str]) -> Tuple[
-            StreamInfo, asyncio.StreamReader, asyncio.StreamWriter]:
-        pass
-
-    async def set_stream_handler(self, proto: str, handler_cb: StreamHandler) -> None:
-        pass
+    async def set_stream_handler(self, protocol_id: str, stream_handler: StreamHandler) -> None:
+        await self.control_client.stream_handler(
+            proto=protocol_id,
+            handler_cb=stream_handler,
+        )

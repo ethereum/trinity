@@ -2,13 +2,7 @@ import asyncio
 
 import uuid
 
-import pytest
-
 from multiaddr import Multiaddr
-
-from libp2p.host import (
-    DaemonHost,
-)
 
 from libp2p.p2pclient.datastructures import (
     PeerID,
@@ -17,7 +11,6 @@ from libp2p.p2pclient.datastructures import (
 )
 from libp2p.p2pclient.exceptions import (
     ControlFailure,
-    DispatchFailure,
 )
 from libp2p.p2pclient.p2pclient import (
     read_pbmsg_safe,
@@ -61,80 +54,21 @@ class MockStreamReaderWriter:
         pass
 
 
-class MockNetwork:
-    _nodes = None
-    _conns = None
-
-    def __init__(self):
-        self._nodes = set()
-        self._conns = set()
-
-    def add_node(self, peer_id):
-        self._nodes.add(peer_id)
-
-    def remove_node(self, peer_id):
-        try:
-            self._nodes.remove(peer_id)
-        except KeyError:
-            pass
-        conns_without_peer = set([
-            conn
-            for conn in self._conns
-            if (conn[0] != peer_id) and (conn[1] != peer_id)
-        ])
-        self._conns = conns_without_peer
-
-    @property
-    def nodes(self):
-        return tuple(self._nodes)
-
-    @staticmethod
-    def _to_internal_tuple(peer_id_0, peer_id_1):
-        # ensure the order
-        return tuple(set([peer_id_0, peer_id_1]))
-
-    def _can_establish_conn(self, peer_id_0, peer_id_1):
-        if peer_id_0 == peer_id_1:
-            return False
-        if (peer_id_0 not in self._nodes) or (peer_id_1 not in self._nodes):
-            return False
-        return True
-
-    def connect(self, peer_id_0, peer_id_1):
-        if not self._can_establish_conn(peer_id_0, peer_id_1):
-            return
-        self._conns.add(self._to_internal_tuple(peer_id_0, peer_id_1))
-
-    def disconnect(self, peer_id_0, peer_id_1):
-        if not self._can_establish_conn(peer_id_0, peer_id_1):
-            return
-        try:
-            self._conns.remove(self._to_internal_tuple(peer_id_0, peer_id_1))
-        except KeyError:
-            pass
-
-    def list_peers(self, peer_id):
-        lefts = tuple(conn[0] for conn in self._conns if conn[1] == peer_id)
-        rights = tuple([conn[1] for conn in self._conns if conn[0] == peer_id])
-        return tuple(set(lefts + rights))
-
-
 class MockControlClient:
 
-    _network = None
     _map_peer_id_to_control_client = None
     _uuid = None
     _peer_id = None
     _maddrs = None
+    _peers = None
 
     handlers = None
     control_maddr = None
     listen_maddr = None
 
-    def __init__(self, network, map_peer_id_to_control_client):
+    def __init__(self, map_peer_id_to_control_client):
         """
         Args:
-            network (MockNetwork): The mock network
             map_peer_id_to_control_client (dict): The mutable mapping from
                 `peer_id_to_immutable(peer_id)` to its corresponding `MockControlClient` object.
         """
@@ -142,8 +76,7 @@ class MockControlClient:
         self._peer_id = PeerID(self._uuid.bytes.ljust(32, b'\x00'))
         self._maddrs = [Multiaddr(f"/unix/maddr_{self._uuid}")]
 
-        self._network = network
-        self._network.add_node(self._peer_id)
+        self._peers = set()
         self._map_peer_id_to_control_client = map_peer_id_to_control_client
         self._map_peer_id_to_control_client[self._peer_id] = self
 
@@ -167,34 +100,39 @@ class MockControlClient:
         pass
 
     async def close(self):
-        pass
+        self._map_peer_id_to_control_client.remove(self._peer_id)
 
     async def identify(self):
         return self._peer_id, self._maddrs
 
     async def connect(self, peer_id, maddrs):
-        if peer_id not in self._network.nodes:
+        if peer_id not in self._map_peer_id_to_control_client:
             raise ControlFailure
+        peer_client = self._map_peer_id_to_control_client[peer_id]
         if len(maddrs) == 0:
             raise ControlFailure
-        correct_maddrs = self._map_peer_id_to_control_client[peer_id]._maddrs
+        correct_maddrs = peer_client._maddrs
         is_found = all([target_maddr in correct_maddrs for target_maddr in maddrs])
         if not is_found:
             raise ControlFailure
-        self._network.connect(self._peer_id, peer_id)
+        self._peers.add(peer_id)
+        peer_client._peers.add(self._peer_id)
 
     async def list_peers(self):
-        peer_ids = self._network.list_peers(self._peer_id)
         return tuple(
             PeerInfo(
                 peer_id,
-                self._map_peer_id_to_control_client[peer_id],
+                self._map_peer_id_to_control_client[peer_id]._maddrs,
             )
-            for peer_id in peer_ids
+            for peer_id in self._peers
         )
 
     async def disconnect(self, peer_id):
-        self._network.disconnect(self._peer_id, peer_id)
+        if peer_id not in self._map_peer_id_to_control_client:
+            return
+        peer = self._map_peer_id_to_control_client[peer_id]
+        self._peers.remove(peer_id)
+        peer._peers.remove(self._peer_id)
 
     async def stream_open(self, peer_id, protocols):
         if len(protocols) == 0:
