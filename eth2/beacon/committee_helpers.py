@@ -1,3 +1,4 @@
+import functools
 from typing import (
     Iterable,
     Sequence,
@@ -68,6 +69,7 @@ def get_epoch_committee_count(
     ) * slots_per_epoch
 
 
+@functools.lru_cache(maxsize=128)
 def get_shuffling(*,
                   seed: Hash32,
                   validators: Sequence['ValidatorRecord'],
