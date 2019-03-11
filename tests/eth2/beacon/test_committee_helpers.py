@@ -226,6 +226,8 @@ def test_get_shuffling_cache(activated_genesis_validators,
         )
     one_hundred_shuffles_time = time.time() - start_time
     assert one_hundred_shuffles_time < one_shuffle_time * 2
+    print('one_shuffle_time', one_shuffle_time)
+    print('one_hundred_shuffles_time', one_hundred_shuffles_time)
 
 
 @pytest.mark.parametrize(
