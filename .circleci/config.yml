@@ -201,7 +201,7 @@ jobs:
     docker:
       - image: circleci/python:3.6
         environment:
-          TOXENV: py36-eth2
+          TOXENV: py36-eth2-demo
   py36-wheel-cli:
     <<: *common
     docker:
@@ -238,7 +238,7 @@ jobs:
     docker:
       - image: circleci/python:3.7
         environment:
-          TOXENV: py37-eth2
+          TOXENV: py37-eth2-demo
   py37-wheel-cli:
     <<: *common
     docker:
