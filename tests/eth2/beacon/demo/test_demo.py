@@ -4,9 +4,6 @@ from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
-from eth2.beacon.tools.builder.initializer import (
-    create_mock_genesis,
-)
 from eth2.beacon.tools.builder.proposer import (
     create_mock_block,
 )
@@ -32,17 +29,13 @@ def test_demo(base_db,
               num_validators,
               config,
               keymap,
-              fixture_sm_class):
+              fixture_sm_class,
+              demo_genesis_state_and_block):
     genesis_slot = config.GENESIS_SLOT
     genesis_epoch = config.GENESIS_EPOCH
     chaindb = BeaconChainDB(base_db)
 
-    genesis_state, genesis_block = create_mock_genesis(
-        num_validators=num_validators,
-        config=config,
-        keymap=keymap,
-        genesis_block_class=SerenityBeaconBlock,
-    )
+    genesis_state, genesis_block = demo_genesis_state_and_block
     for i in range(num_validators):
         assert genesis_state.validator_registry[i].is_active(genesis_slot)
 
