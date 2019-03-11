@@ -13,6 +13,17 @@ from multiaddr import (
     protocols,
 )
 
+from libp2p.mock import (
+    MockControlClient,
+    MockPubSubClient,
+)
+from libp2p.host import (
+    DaemonHost,
+)
+from libp2p.pubsub import (
+    DaemonPubSub,
+)
+
 from libp2p.p2pclient.datastructures import (
     PeerID,
 )
@@ -265,3 +276,45 @@ async def p2pds(request, is_control_enabled, is_connmgr_enabled, is_dht_enabled,
             p2pd_tuple.daemon.close()
         if p2pd_tuple.control.listener is not None:
             await p2pd_tuple.control.close()
+
+
+@pytest.fixture('module')
+def num_hosts():
+    return 3
+
+
+@pytest.fixture
+def daemon_hosts(num_hosts):
+    map_peer_id_to_control_client = {}
+    return tuple(
+        DaemonHost(
+            MockControlClient(
+                map_peer_id_to_control_client=map_peer_id_to_control_client,
+            )
+        )
+        for _ in range(num_hosts)
+    )
+
+
+@pytest.fixture
+def pubsubcs(daemon_hosts):
+    map_pid_to_pubsubc = {}
+    pubsubc_list = []
+    for host in daemon_hosts:
+        pubsubc_list.append(
+            MockPubSubClient(host.control_client, map_pid_to_pubsubc)
+        )
+    return pubsubc_list
+
+
+@pytest.fixture
+async def daemon_pubsubs(pubsubcs):
+    pubsubs = tuple(
+        DaemonPubSub(pubsub_client=pubsubc)
+        for pubsubc in pubsubcs
+    )
+    yield pubsubs
+    for daemon_pubsub in pubsubs:
+        topics = await daemon_pubsub.get_topics()
+        for topic in topics:
+            await daemon_pubsub.unsubscribe(topic)

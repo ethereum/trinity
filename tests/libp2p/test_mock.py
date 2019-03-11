@@ -7,10 +7,6 @@ from libp2p.mock import (
     MockStreamReaderWriter,
 )
 
-from libp2p.p2pclient.datastructures import (
-    PeerID,
-)
-
 
 def test_mock_stream_reader_writer_write():
     rwtor = MockStreamReaderWriter()
@@ -82,3 +78,39 @@ async def test_mock_control_client():
     writer.write(data)
     await event.wait()
     writer.close()
+
+
+@pytest.mark.asyncio
+async def test_mock_pubsub_client(pubsubcs):
+    assert len(pubsubcs[0].topics) == 0
+    assert pubsubcs[0].peer_id == pubsubcs[0]._control_client._peer_id
+    # 0 <-> 1 <-> 2
+    await pubsubcs[0]._control_client.connect(*(await pubsubcs[1]._control_client.identify()))
+    await pubsubcs[1]._control_client.connect(*(await pubsubcs[2]._control_client.identify()))
+    assert len(pubsubcs[0]._map_peer_id_to_pubsub_client) == 3
+    topic = "topic_123"
+    # test case: `list_peers`
+    assert len(await pubsubcs[0].list_peers(topic)) == 0
+    assert len(await pubsubcs[1].list_peers(topic)) == 0
+    assert len(await pubsubcs[2].list_peers(topic)) == 0
+    # test case: `subscribe`
+    stream_pair_0 = await pubsubcs[0].subscribe(topic)
+    assert len(await pubsubcs[0].list_peers(topic)) == 0
+    assert len(await pubsubcs[1].list_peers(topic)) == 1
+    assert len(await pubsubcs[2].list_peers(topic)) == 0
+    stream_pair_1 = await pubsubcs[1].subscribe(topic)
+    stream_pair_2 = await pubsubcs[2].subscribe(topic)
+    assert len(await pubsubcs[0].list_peers(topic)) == 1
+    assert len(await pubsubcs[1].list_peers(topic)) == 2
+    assert len(await pubsubcs[2].list_peers(topic)) == 1
+    # test case: `get_topics`
+    assert await pubsubcs[0].get_topics() == (topic,)
+    # test case: `publish`
+    data = b'123'
+    await pubsubcs[0].publish(topic, data)
+    assert (await stream_pair_0.reader.read(len(data))) == data
+    assert (await stream_pair_1.reader.read(len(data))) == data
+    assert (await stream_pair_2.reader.read(len(data))) == data
+    # test case: unsubscribe by `writer.close`
+    stream_pair_0.writer.close()
+    assert len(await pubsubcs[0].get_topics()) == 0

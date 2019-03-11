@@ -78,23 +78,26 @@ class DaemonPubSub(BasePubSub):
     def register_topic_validator(self, topic: str, validator: Validator):
         self._validators[topic] = validator
 
-    async def subscribe(self, topic: str):
+    async def subscribe(self, topic: str) -> None:
         if topic in self._map_topic_stream:
             raise ValueError(f"Topic {topic} has been subscribed. Unsubscribe it first.")
         reader, writer = await self.pubsub_client.subscribe(topic=topic)
         self._map_topic_stream[topic] = (reader, writer)
         self._map_topic_task_listener[topic] = asyncio.ensure_future(
-            self._topic_listener(topic, reader, writer)
+            self._topic_listener(
+                topic=topic,
+                reader=reader,
+                writer=writer,
+            )
         )
         # yield to the `_topic_listener`
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.001)
 
-    async def unsubscribe(self, topic: str):
+    async def unsubscribe(self, topic: str) -> None:
         if topic not in self._map_topic_stream:
             raise ValueError(f"Topic {topic} is not subscribed.")
         _, writer = self._map_topic_stream[topic]
         writer.close()
-        await writer.closed()
         task_listener = self._map_topic_task_listener[topic]
         task_listener.cancel()
         if not task_listener.cancelled() or not task_listener.done():
@@ -118,7 +121,7 @@ class DaemonPubSub(BasePubSub):
             validator: Validator,
             src_peer: PeerID,
             ps_msg: p2pd_pb.PSMessage,
-            writer: asyncio.StreamWriter):
+            writer: asyncio.StreamWriter) -> None:
         await validator(
             src_peer,
             ps_msg,
@@ -129,18 +132,18 @@ class DaemonPubSub(BasePubSub):
             self,
             topic: str,
             reader: asyncio.StreamReader,
-            writer: asyncio.StreamWriter):
+            writer: asyncio.StreamWriter) -> None:
         while True:
             ps_msg = p2pd_pb.PSMessage()
             await read_pbmsg_safe(reader, ps_msg)
-            if topic not in self._validators:
+            if topic in self._validators:
                 asyncio.ensure_future(
                     # FIXME: temporarily fill this with `from_field`(the origin of the message),
                     #   but it is not available in the upstream. This should be `src` instead.
                     self._call_validator(
+                        topic,
                         self._validators[topic],
-                        ps_msg,
-                        p2pd_pb.PSMessage.from_field,
+                        ps_msg.from_field,
                         ps_msg,
                         writer,
                     )

@@ -1,16 +1,15 @@
 import asyncio
-
+import functools
 from typing import (
     Dict,
-    MutableSet,
+    List,
+    NamedTuple,
+    Tuple,
 )
 import uuid
 
 from multiaddr import Multiaddr
 
-from libp2p.mock import (
-    MockStreamReaderWriter,
-)
 from libp2p.p2pclient.datastructures import (
     PeerID,
     PeerInfo,
@@ -186,38 +185,85 @@ class MockControlClient:
         self.handlers[proto] = handler_cb
 
 
-class MockSimplePubSubClient:
-    _peer_id: PeerID
-    _topics: MutableSet[str]
-    _topic_peers: Dict[str, List[PeerID]]
-    _topic_subscribed_streams: Tuple[asyncio.StreamReader, asyncio.StreamWriter]
+class MockPubSubClient:
+    _topic_subscribed_streams: Dict[str, Tuple[MockStreamReaderWriter, MockStreamReaderWriter]]
+    _control_client: MockControlClient
+    _map_peer_id_to_pubsub_client: Dict[PeerID, 'MockPubSubClient']
 
     def __init__(
             self,
-            peer_id: PeerID,
-            _map_peer_id_to_pubsub_client: Dict[PeerID, 'SimpleMockPubSubClient']):
-        self._peer_id = peer_id
-        self._topics = set()
-        self._topic_peers = {}
-        self._topic_subscribe_streams = {}
-        self._map_peer_id_to_pubsub_client = _map_peer_id_to_pubsub_client
-        self._map_peer_id_to_pubsub_client[peer_id] = self
+            control_client: MockControlClient,
+            map_peer_id_to_pubsub_client: Dict[PeerID, 'MockPubSubClient']):
+        self._topic_subscribed_streams = {}
+        self._control_client = control_client
+        self._map_peer_id_to_pubsub_client = map_peer_id_to_pubsub_client
+        self._map_peer_id_to_pubsub_client[self._control_client._peer_id] = self
 
-    def _has_subscribed(self, topic):
-        return topic in self._topics
+    @property
+    def peer_id(self) -> PeerID:
+        return self._control_client._peer_id
 
-    def subscribe(self, topic):
-        if self._has_subscribed(topic):
+    @property
+    def topics(self) -> Tuple[str, ...]:
+        return tuple(self._topic_subscribed_streams.keys())
+
+    async def get_topics(self) -> Tuple[str, ...]:
+        return self.topics
+
+    async def list_peers(self, topic: str) -> Tuple[PeerID, ...]:
+        pinfos = await self._control_client.list_peers()
+        peers_control = tuple(
+            pinfo.peer_id
+            for pinfo in pinfos
+        )
+        return tuple(
+            peer_id
+            for peer_id in peers_control
+            if topic in self._map_peer_id_to_pubsub_client[peer_id].topics
+        )
+
+    async def publish(self, topic: str, data: bytes) -> None:
+        nodes_to_publish = self._simple_bfs(topic)
+        for peer_id in nodes_to_publish:
+            pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
+            stream_pair = pubsubc._topic_subscribed_streams[topic]
+            ps_msg = p2pd_pb.PSMessage(
+                data=data,
+                topicIDs=[topic],
+            )
+            setattr(ps_msg, 'from', self.peer_id.to_bytes())
+            await write_pbmsg(stream_pair[0], ps_msg)
+
+    def _simple_bfs(self, topic: str) -> Tuple[PeerID, ...]:
+        visited_topic_nodes = set()
+        queue = []
+        queue.append(self.peer_id)
+        while len(queue) != 0:
+            current_peer_id = queue.pop(0)
+            visited_topic_nodes.add(current_peer_id)
+            pubsubc = self._map_peer_id_to_pubsub_client[current_peer_id]
+            controlc = pubsubc._control_client
+            for peer_id in tuple(controlc._peers):
+                if peer_id in visited_topic_nodes:
+                    continue
+                # check if the peer runs pubsub
+                if peer_id not in self._map_peer_id_to_pubsub_client:
+                    continue
+                peer_pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
+                # go through the peer only if it subscribes to the topic
+                if topic in peer_pubsubc.topics:
+                    queue.append(peer_id)
+        return tuple(visited_topic_nodes)
+
+    def _unsubscribe(self, topic):
+        del self._topic_subscribed_streams[topic]
+
+    async def subscribe(self, topic: str) -> Tuple[MockStreamReaderWriter, MockStreamReaderWriter]:
+        if topic in self.topics:
             return
-        self._topics.add(topic)
-        self._topic_peers[topic] = {}
-        self._topic_subscribe_streams[topic] = (MockStreamReaderWriter(), MockStreamReaderWriter())
-
-    def unsubscribe(self, topic):
-        if not self._has_subscribed(topic):
-            return
-        self._topics.remove(topic)
-        del self._topic_peers[topic]
-        del self._topic_subscribe_streams[topic]
-
-    def publish(self, )
+        reader = MockStreamReaderWriter()
+        writer = MockStreamReaderWriter()
+        setattr(writer, 'close', functools.partial(self._unsubscribe, topic=topic))
+        stream_pair = (reader, writer)
+        self._topic_subscribed_streams[topic] = stream_pair
+        return stream_pair
