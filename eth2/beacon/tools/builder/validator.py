@@ -635,9 +635,8 @@ def get_committee_assignment(
     ``CommitteeAssignment.is_proposer`` is a bool signalling if the validator is expected to
         propose a beacon block at the assigned slot.
     """
-    current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    next_epoch = Epoch(current_epoch + 1)
     previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
+    next_epoch = state.next_epoch(config.SLOTS_PER_EPOCH)
 
     validate_epoch_within_previous_and_next(epoch, previous_epoch, next_epoch)
 

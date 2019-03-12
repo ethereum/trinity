@@ -471,8 +471,8 @@ def test_get_crosslink_committees_at_slot(
     #
     epoch = slot_to_epoch(slot, slots_per_epoch)
     current_epoch = state.current_epoch(slots_per_epoch)
-    next_epoch = current_epoch + 1
     previous_epoch = state.previous_epoch(slots_per_epoch)
+    next_epoch = state.next_epoch(slots_per_epoch)
 
     if epoch == current_epoch:
         seed = state.current_shuffling_seed
