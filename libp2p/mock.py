@@ -231,6 +231,7 @@ class MockPubSubClient:
                 data=data,
                 topicIDs=[topic],
             )
+            # TODO: the setter of `PSMessage.from_field` doesn't work, workaround with `setattr`
             setattr(ps_msg, 'from', self.peer_id.to_bytes())
             await write_pbmsg(stream_pair[0], ps_msg)
 
