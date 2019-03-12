@@ -167,7 +167,7 @@ def get_epoch_boundary_attester_indices(
                 state,
                 a.data,
                 a.aggregation_bitfield,
-                config,
+                CommitteeConfig(config),
             )
 
 
