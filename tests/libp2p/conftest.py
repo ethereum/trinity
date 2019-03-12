@@ -16,6 +16,7 @@ from multiaddr import (
 from libp2p.mock import (
     MockControlClient,
     MockPubSubClient,
+    MockDHTClient,
 )
 from libp2p.host import (
     DaemonHost,
@@ -318,3 +319,13 @@ async def daemon_pubsubs(pubsubcs):
         topics = await daemon_pubsub.get_topics()
         for topic in topics:
             await daemon_pubsub.unsubscribe(topic)
+
+
+@pytest.fixture
+def dhtcs(daemon_hosts):
+    dhtc_list = []
+    for host in daemon_hosts:
+        dhtc_list.append(
+            MockDHTClient(control_client=host.control_client)
+        )
+    return dhtc_list

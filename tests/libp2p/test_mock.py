@@ -6,6 +6,10 @@ from libp2p.mock import (
     MockControlClient,
     MockStreamReaderWriter,
 )
+from libp2p.p2pclient.p2pclient import (
+    read_pbmsg_safe,
+)
+from libp2p.p2pclient.pb import p2pd_pb2 as p2pd_pb
 
 
 def test_mock_stream_reader_writer_write():
@@ -108,9 +112,21 @@ async def test_mock_pubsub_client(pubsubcs):
     # test case: `publish`
     data = b'123'
     await pubsubcs[0].publish(topic, data)
-    assert (await stream_pair_0.reader.read(len(data))) == data
-    assert (await stream_pair_1.reader.read(len(data))) == data
-    assert (await stream_pair_2.reader.read(len(data))) == data
+    ps_msg_0 = p2pd_pb.PSMessage()
+    await read_pbmsg_safe(stream_pair_0[0], ps_msg_0)
+    assert ps_msg_0.data == data
+    ps_msg_1 = p2pd_pb.PSMessage()
+    await read_pbmsg_safe(stream_pair_1[0], ps_msg_1)
+    assert ps_msg_1.data == data
+    ps_msg_2 = p2pd_pb.PSMessage()
+    await read_pbmsg_safe(stream_pair_2[0], ps_msg_2)
+    assert ps_msg_2.data == data
     # test case: unsubscribe by `writer.close`
-    stream_pair_0.writer.close()
+    stream_pair_0[1].close()
     assert len(await pubsubcs[0].get_topics()) == 0
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_find_peer(dhtcs):
+    # dhtcs[0].find_peer()
+    pass

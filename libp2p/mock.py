@@ -2,8 +2,6 @@ import asyncio
 import functools
 from typing import (
     Dict,
-    List,
-    NamedTuple,
     Tuple,
 )
 import uuid
@@ -184,6 +182,22 @@ class MockControlClient:
     async def stream_handler(self, proto, handler_cb):
         self.handlers[proto] = handler_cb
 
+    def _bfs(self, peer_filter) -> Tuple[PeerID, ...]:
+        visited_topic_nodes = set()
+        queue = []
+        queue.append(self._peer_id)
+        while len(queue) != 0:
+            current_peer_id = queue.pop(0)
+            visited_topic_nodes.add(current_peer_id)
+            peer_controlc = self._map_peer_id_to_control_client[current_peer_id]
+            unvisited_peers = tuple(
+                peer_id
+                for peer_id in peer_controlc._peers
+                if peer_id not in visited_topic_nodes
+            )
+            queue.extend(filter(peer_filter, unvisited_peers))
+        return tuple(visited_topic_nodes)
+
 
 class MockPubSubClient:
     _topic_subscribed_streams: Dict[str, Tuple[MockStreamReaderWriter, MockStreamReaderWriter]]
@@ -223,7 +237,7 @@ class MockPubSubClient:
         )
 
     async def publish(self, topic: str, data: bytes) -> None:
-        nodes_to_publish = self._simple_bfs(topic)
+        nodes_to_publish = self._do_bfs(topic)
         for peer_id in nodes_to_publish:
             pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
             stream_pair = pubsubc._topic_subscribed_streams[topic]
@@ -235,26 +249,19 @@ class MockPubSubClient:
             setattr(ps_msg, 'from', self.peer_id.to_bytes())
             await write_pbmsg(stream_pair[0], ps_msg)
 
-    def _simple_bfs(self, topic: str) -> Tuple[PeerID, ...]:
-        visited_topic_nodes = set()
-        queue = []
-        queue.append(self.peer_id)
-        while len(queue) != 0:
-            current_peer_id = queue.pop(0)
-            visited_topic_nodes.add(current_peer_id)
-            pubsubc = self._map_peer_id_to_pubsub_client[current_peer_id]
-            controlc = pubsubc._control_client
-            for peer_id in tuple(controlc._peers):
-                if peer_id in visited_topic_nodes:
-                    continue
-                # check if the peer runs pubsub
-                if peer_id not in self._map_peer_id_to_pubsub_client:
-                    continue
-                peer_pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
-                # go through the peer only if it subscribes to the topic
-                if topic in peer_pubsubc.topics:
-                    queue.append(peer_id)
-        return tuple(visited_topic_nodes)
+    def _pubsub_peer_filter(self, peer_id: PeerID, topic: str) -> bool:
+        # check if the peer runs pubsub
+        if peer_id not in self._map_peer_id_to_pubsub_client:
+            return False
+        peer_pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
+        # go through the peer only if it subscribes to the topic
+        if topic not in peer_pubsubc.topics:
+            return False
+        return True
+
+    def _do_bfs(self, topic):
+        peer_filter = functools.partial(self._pubsub_peer_filter, topic=topic)
+        return self._control_client._bfs(peer_filter)
 
     def _unsubscribe(self, topic):
         del self._topic_subscribed_streams[topic]
@@ -268,3 +275,172 @@ class MockPubSubClient:
         stream_pair = (reader, writer)
         self._topic_subscribed_streams[topic] = stream_pair
         return stream_pair
+
+
+class MockDHTClient:
+
+    _control_client: MockControlClient
+
+    def __init__(self, control_client: MockControlClient) -> None:
+        self._control_client = control_client
+
+    async def find_peer(self, peer_id: PeerID) -> PeerInfo:
+        try:
+            peer_controlc = self._control_client._map_peer_id_to_control_client[peer_id]
+        except KeyError as e:
+            raise ControlFailure(e)
+        return PeerInfo(
+            peer_id=peer_controlc._peer_id,
+            addrs=peer_controlc._maddrs,
+        )
+
+    # async def find_peers_connected_to_peer(self, peer_id: PeerID) -> Tuple[PeerInfo, ...]:
+    #     """FIND_PEERS_CONNECTED_TO_PEER
+    #     """
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.FIND_PEERS_CONNECTED_TO_PEER,
+    #         peer=peer_id.to_bytes(),
+    #     )
+    #     resps = await self._do_dht(dht_req)
+    #     try:
+    #         pinfos = tuple(
+    #             PeerInfo.from_pb(dht_resp.peer)
+    #             for dht_resp in resps
+    #         )
+    #     except AttributeError as e:
+    #         raise ControlFailure(
+    #             f"dht_resp should contains peer info: resps={resps}, e={e}"
+    #         )
+    #     return pinfos
+
+    # async def find_providers(self, content_id_bytes: bytes, count: int) -> Tuple[PeerInfo, ...]:
+    #     """FIND_PROVIDERS
+    #     """
+    #     # TODO: should have another class ContendID
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.FIND_PROVIDERS,
+    #         cid=content_id_bytes,
+    #         count=count,
+    #     )
+    #     resps = await self._do_dht(dht_req)
+    #     try:
+    #         pinfos = tuple(
+    #             PeerInfo.from_pb(dht_resp.peer)
+    #             for dht_resp in resps
+    #         )
+    #     except AttributeError as e:
+    #         raise ControlFailure(
+    #             f"dht_resp should contains peer info: resps={resps}, e={e}"
+    #         )
+    #     return pinfos
+
+    # async def get_closest_peers(self, key: bytes) -> Tuple[PeerID, ...]:
+    #     """GET_CLOSEST_PEERS
+    #     """
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.GET_CLOSEST_PEERS,
+    #         key=key,
+    #     )
+    #     resps = await self._do_dht(dht_req)
+    #     try:
+    #         peer_ids = tuple(
+    #             PeerID(dht_resp.value)
+    #             for dht_resp in resps
+    #         )
+    #     except AttributeError as e:
+    #         raise ControlFailure(
+    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
+    #         )
+    #     return peer_ids
+
+    # async def get_public_key(self, peer_id: PeerID) -> crypto_pb.PublicKey:
+    #     """GET_PUBLIC_KEY
+    #     """
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.GET_PUBLIC_KEY,
+    #         peer=peer_id.to_bytes(),
+    #     )
+    #     resps = await self._do_dht(dht_req)
+    #     if len(resps) != 1:
+    #         raise ControlFailure(f"should only get one response, resps={resps}")
+    #     try:
+    #         # TODO: parse the public key with another class?
+    #         public_key_pb_bytes = resps[0].value
+    #     except AttributeError as e:
+    #         raise ControlFailure(
+    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
+    #         )
+    #     public_key_pb = crypto_pb.PublicKey()
+    #     public_key_pb.ParseFromString(public_key_pb_bytes)
+    #     return public_key_pb
+
+    # async def get_value(self, key: bytes) -> bytes:
+    #     """GET_VALUE
+    #     """
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.GET_VALUE,
+    #         key=key,
+    #     )
+    #     resps = await self._do_dht(dht_req)
+    #     if len(resps) != 1:
+    #         raise ControlFailure(f"should only get one response, resps={resps}")
+    #     try:
+    #         value = resps[0].value
+    #     except AttributeError as e:
+    #         raise ControlFailure(
+    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
+    #         )
+    #     return value
+
+    # async def search_value(self, key: bytes) -> Tuple[bytes, ...]:
+    #     """SEARCH_VALUE
+    #     """
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.SEARCH_VALUE,
+    #         key=key,
+    #     )
+    #     resps = await self._do_dht(dht_req)
+    #     try:
+    #         values = tuple(resp.value for resp in resps)
+    #     except AttributeError as e:
+    #         raise ControlFailure(
+    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
+    #         )
+    #     return values
+
+    # async def put_value(self, key: bytes, value: bytes) -> None:
+    #     """PUT_VALUE
+    #     """
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.PUT_VALUE,
+    #         key=key,
+    #         value=value,
+    #     )
+    #     req = p2pd_pb.Request(
+    #         type=p2pd_pb.Request.DHT,
+    #         dht=dht_req,
+    #     )
+    #     reader, writer = await self.client.open_connection()
+    #     await write_pbmsg(writer, req)
+    #     resp = p2pd_pb.Response()
+    #     await read_pbmsg_safe(reader, resp)
+    #     writer.close()
+    #     raise_if_failed(resp)
+
+    # async def provide(self, cid: bytes) -> None:
+    #     """PROVIDE
+    #     """
+    #     dht_req = p2pd_pb.DHTRequest(
+    #         type=p2pd_pb.DHTRequest.PROVIDE,
+    #         cid=cid,
+    #     )
+    #     req = p2pd_pb.Request(
+    #         type=p2pd_pb.Request.DHT,
+    #         dht=dht_req,
+    #     )
+    #     reader, writer = await self.client.open_connection()
+    #     await write_pbmsg(writer, req)
+    #     resp = p2pd_pb.Response()
+    #     await read_pbmsg_safe(reader, resp)
+    #     writer.close()
+    #     raise_if_failed(resp)
