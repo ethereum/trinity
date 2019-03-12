@@ -6,10 +6,21 @@ from libp2p.mock import (
     MockControlClient,
     MockStreamReaderWriter,
 )
+from libp2p.p2pclient.datastructures import (
+    PeerID,
+)
+from libp2p.p2pclient.exceptions import (
+    ControlFailure,
+)
 from libp2p.p2pclient.p2pclient import (
     read_pbmsg_safe,
 )
 from libp2p.p2pclient.pb import p2pd_pb2 as p2pd_pb
+
+
+@pytest.fixture("module")
+def content_id_bytes_example():
+    return b'\x01r\x12 \xc0F\xc8\xechB\x17\xf0\x1b$\xb9\xecw\x11\xde\x11Cl\x8eF\xd8\x9a\xf1\xaeLa?\xb0\xaf\xe6K\x8b'  # noqa: E501
 
 
 def test_mock_stream_reader_writer_write():
@@ -127,6 +138,48 @@ async def test_mock_pubsub_client(pubsubcs):
 
 
 @pytest.mark.asyncio
-async def test_mock_dht_client_find_peer(dhtcs):
-    # dhtcs[0].find_peer()
-    pass
+async def test_mock_dht_client_find_peer(controlcs, dhtcs):
+    # test case: peer doesn't exist
+    with pytest.raises(ControlFailure):
+        await dhtcs[0].find_peer(PeerID(b'\x11' * 32))
+    # test case: peer with no connections
+    with pytest.raises(ControlFailure):
+        await dhtcs[0].find_peer(dhtcs[1].peer_id)
+    # 0 <-> 1 <-> 2
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+    await dhtcs[0].find_peer(dhtcs[2].peer_id)
+    await dhtcs[0].find_peer(dhtcs[1].peer_id)
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_find_peers_connected_to_peer(controlcs, dhtcs):
+    pinfo_0_to_2 = await dhtcs[0].find_peers_connected_to_peer(dhtcs[2].peer_id)
+    assert len(pinfo_0_to_2) == 0
+
+    # 0 <-> 1 <-> 2
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+
+    pinfo_0_to_1 = await dhtcs[0].find_peers_connected_to_peer(dhtcs[1].peer_id)
+    assert len(pinfo_0_to_1) == 2
+    pinfo_0_to_2_second = await dhtcs[0].find_peers_connected_to_peer(dhtcs[2].peer_id)
+    assert len(pinfo_0_to_2_second) == 1
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_find_providers(controlcs, dhtcs, content_id_bytes_example):
+    dhtcs[2]._provides.add(content_id_bytes_example)
+    # test case: no route to the provider
+    assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=10)) == 0
+
+    # 0 <-> 1 <-> 2
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+    # test case: with route to the provider
+    assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=10)) == 1
+    # test case: multiple providers
+    dhtcs[1]._provides.add(content_id_bytes_example)
+    assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=10)) == 2
+    # test case: with `count` set to limit the number of the returned peer info
+    assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=1)) == 1

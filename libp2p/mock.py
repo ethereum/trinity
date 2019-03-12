@@ -2,6 +2,7 @@ import asyncio
 import functools
 from typing import (
     Dict,
+    MutableSet,
     Tuple,
 )
 import uuid
@@ -87,6 +88,9 @@ class MockControlClient:
         self.control_maddr = f"/unix/control_{self._uuid}"
         self.listen_maddr = f"/unix/listen__{self._uuid}"
         self.handlers = {}
+
+    def __del__(self):
+        del self._map_peer_id_to_control_client[self._peer_id]
 
     async def _dispatcher(self, reader, writer):
         pb_stream_info = p2pd_pb.StreamInfo()
@@ -213,6 +217,9 @@ class MockPubSubClient:
         self._map_peer_id_to_pubsub_client = map_peer_id_to_pubsub_client
         self._map_peer_id_to_pubsub_client[self._control_client._peer_id] = self
 
+    def __del__(self):
+        del self._map_peer_id_to_pubsub_client[self.peer_id]
+
     @property
     def peer_id(self) -> PeerID:
         return self._control_client._peer_id
@@ -259,11 +266,11 @@ class MockPubSubClient:
             return False
         return True
 
-    def _do_bfs(self, topic):
+    def _do_bfs(self, topic: str) -> Tuple[PeerID, ...]:
         peer_filter = functools.partial(self._pubsub_peer_filter, topic=topic)
         return self._control_client._bfs(peer_filter)
 
-    def _unsubscribe(self, topic):
+    def _unsubscribe(self, topic: str) -> None:
         del self._topic_subscribed_streams[topic]
 
     async def subscribe(self, topic: str) -> Tuple[MockStreamReaderWriter, MockStreamReaderWriter]:
@@ -280,59 +287,60 @@ class MockPubSubClient:
 class MockDHTClient:
 
     _control_client: MockControlClient
+    _provides: MutableSet[bytes]
+    _map_peer_id_to_dht_client: Dict[PeerID, 'MockDHTClient']
 
-    def __init__(self, control_client: MockControlClient) -> None:
+    def __init__(
+            self,
+            control_client: MockControlClient,
+            map_peer_id_to_dht_client: Dict[PeerID, 'MockDHTClient']) -> None:
         self._control_client = control_client
+        self._provides = set()
+        self._map_peer_id_to_dht_client = map_peer_id_to_dht_client
+        self._map_peer_id_to_dht_client[self._control_client._peer_id] = self
+
+    @property
+    def peer_id(self) -> PeerID:
+        return self._control_client._peer_id
 
     async def find_peer(self, peer_id: PeerID) -> PeerInfo:
-        try:
-            peer_controlc = self._control_client._map_peer_id_to_control_client[peer_id]
-        except KeyError as e:
-            raise ControlFailure(e)
+        if peer_id not in self._control_client._map_peer_id_to_control_client:
+            raise ControlFailure(f"peer {peer_id} does not exist")
+        if not self._has_path(peer_id):
+            raise ControlFailure(f"no route to peer {peer_id}")
+        peer_controlc = self._control_client._map_peer_id_to_control_client[peer_id]
         return PeerInfo(
             peer_id=peer_controlc._peer_id,
             addrs=peer_controlc._maddrs,
         )
 
-    # async def find_peers_connected_to_peer(self, peer_id: PeerID) -> Tuple[PeerInfo, ...]:
-    #     """FIND_PEERS_CONNECTED_TO_PEER
-    #     """
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.FIND_PEERS_CONNECTED_TO_PEER,
-    #         peer=peer_id.to_bytes(),
-    #     )
-    #     resps = await self._do_dht(dht_req)
-    #     try:
-    #         pinfos = tuple(
-    #             PeerInfo.from_pb(dht_resp.peer)
-    #             for dht_resp in resps
-    #         )
-    #     except AttributeError as e:
-    #         raise ControlFailure(
-    #             f"dht_resp should contains peer info: resps={resps}, e={e}"
-    #         )
-    #     return pinfos
+    async def find_peers_connected_to_peer(self, peer_id: PeerID) -> Tuple[PeerInfo, ...]:
+        """FIND_PEERS_CONNECTED_TO_PEER
+        """
+        if peer_id not in self._control_client._map_peer_id_to_control_client:
+            return tuple()
+        peer_controlc = self._control_client._map_peer_id_to_control_client[peer_id]
+        pinfos = tuple(
+            PeerInfo(
+                peer_id_neighbor,
+                self._control_client._map_peer_id_to_control_client[peer_id_neighbor]._maddrs,
+            )
+            for peer_id_neighbor in peer_controlc._peers
+        )
+        return pinfos
 
-    # async def find_providers(self, content_id_bytes: bytes, count: int) -> Tuple[PeerInfo, ...]:
-    #     """FIND_PROVIDERS
-    #     """
-    #     # TODO: should have another class ContendID
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.FIND_PROVIDERS,
-    #         cid=content_id_bytes,
-    #         count=count,
-    #     )
-    #     resps = await self._do_dht(dht_req)
-    #     try:
-    #         pinfos = tuple(
-    #             PeerInfo.from_pb(dht_resp.peer)
-    #             for dht_resp in resps
-    #         )
-    #     except AttributeError as e:
-    #         raise ControlFailure(
-    #             f"dht_resp should contains peer info: resps={resps}, e={e}"
-    #         )
-    #     return pinfos
+    async def find_providers(self, content_id_bytes: bytes, count: int) -> Tuple[PeerInfo, ...]:
+        """FIND_PROVIDERS
+        """
+        pinfos = tuple(
+            PeerInfo(
+                peer_id,
+                self._control_client._map_peer_id_to_control_client[peer_id]._maddrs,
+            )
+            for peer_id in self.reachable_nodes
+            if content_id_bytes in self._map_peer_id_to_dht_client[peer_id]._provides
+        )
+        return pinfos[:count]
 
     # async def get_closest_peers(self, key: bytes) -> Tuple[PeerID, ...]:
     #     """GET_CLOSEST_PEERS
@@ -444,3 +452,14 @@ class MockDHTClient:
     #     await read_pbmsg_safe(reader, resp)
     #     writer.close()
     #     raise_if_failed(resp)
+
+    @property
+    def reachable_nodes(self) -> Tuple[PeerID, ...]:
+
+        def _dht_peer_filter(peer_id: PeerID) -> bool:
+            # lets assume everyone runs dht client
+            return True
+        return self._control_client._bfs(_dht_peer_filter)
+
+    def _has_path(self, peer_id: PeerID):
+        return peer_id in self.reachable_nodes

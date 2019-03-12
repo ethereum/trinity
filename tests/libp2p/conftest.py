@@ -280,32 +280,36 @@ async def p2pds(request, is_control_enabled, is_connmgr_enabled, is_dht_enabled,
 
 
 @pytest.fixture('module')
-def num_hosts():
+def num_nodes():
     return 3
 
 
 @pytest.fixture
-def daemon_hosts(num_hosts):
+def controlcs(num_nodes):
     map_peer_id_to_control_client = {}
     return tuple(
-        DaemonHost(
-            MockControlClient(
-                map_peer_id_to_control_client=map_peer_id_to_control_client,
-            )
+        MockControlClient(
+            map_peer_id_to_control_client=map_peer_id_to_control_client,
         )
-        for _ in range(num_hosts)
+        for _ in range(num_nodes)
     )
 
 
 @pytest.fixture
-def pubsubcs(daemon_hosts):
+def daemon_hosts(controlcs):
+    return tuple(
+        DaemonHost(controlc)
+        for controlc in controlcs
+    )
+
+
+@pytest.fixture
+def pubsubcs(controlcs):
     map_pid_to_pubsubc = {}
-    pubsubc_list = []
-    for host in daemon_hosts:
-        pubsubc_list.append(
-            MockPubSubClient(host.control_client, map_pid_to_pubsubc)
-        )
-    return pubsubc_list
+    return tuple(
+        MockPubSubClient(control_client, map_pid_to_pubsubc)
+        for control_client in controlcs
+    )
 
 
 @pytest.fixture
@@ -315,6 +319,7 @@ async def daemon_pubsubs(pubsubcs):
         for pubsubc in pubsubcs
     )
     yield pubsubs
+    # clean up
     for daemon_pubsub in pubsubs:
         topics = await daemon_pubsub.get_topics()
         for topic in topics:
@@ -322,10 +327,12 @@ async def daemon_pubsubs(pubsubcs):
 
 
 @pytest.fixture
-def dhtcs(daemon_hosts):
-    dhtc_list = []
-    for host in daemon_hosts:
-        dhtc_list.append(
-            MockDHTClient(control_client=host.control_client)
+def dhtcs(controlcs):
+    map_peer_id_to_dht_client = {}
+    return tuple(
+        MockDHTClient(
+            control_client=control_client,
+            map_peer_id_to_dht_client=map_peer_id_to_dht_client,
         )
-    return dhtc_list
+        for control_client in controlcs
+    )

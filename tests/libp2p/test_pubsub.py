@@ -80,7 +80,7 @@ async def test_daemon_pubsub_unsubscribe(daemon_pubsubs):
 
 
 @pytest.mark.parametrize(
-    'num_hosts',
+    'num_nodes',
     (4,),
 )
 @pytest.mark.asyncio
