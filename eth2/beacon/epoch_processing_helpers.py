@@ -147,16 +147,27 @@ def get_winning_root_and_participants(
 def get_epoch_boundary_attester_indices(
         state: 'BeaconState',
         attestations: Sequence[PendingAttestationRecord],
-        epoch: Epoch,
-        root: Hash32,
-        committee_config: CommitteeConfig) -> Iterable[ValidatorIndex]:
+        expected_justified_epoch: Epoch,
+        epoch_for_root: Epoch,
+        config: 'BeaconConfig') -> Iterable[ValidatorIndex]:
     for a in attestations:
-        if a.data.justified_epoch == epoch and a.data.epoch_boundary_root == root:
+        root = get_block_root(
+            state,
+            get_epoch_start_slot(
+                epoch_for_root,
+                config.SLOTS_PER_EPOCH
+            ),
+            config.LATEST_BLOCK_ROOTS_LENGTH
+        )
+        is_expected_justified_epoch = a.data.justified_epoch == expected_justified_epoch
+        is_expected_root = a.data.epoch_boundary_root == root
+        should_yield_attestation = is_expected_justified_epoch and is_expected_root
+        if should_yield_attestation:
             yield from get_attestation_participants(
                 state,
                 a.data,
                 a.aggregation_bitfield,
-                committee_config,
+                config,
             )
 
 
@@ -165,18 +176,12 @@ def get_epoch_boundary_attesting_balances(
         previous_epoch: Epoch,
         state: 'BeaconState',
         config: 'BeaconConfig') -> Tuple[Gwei, Gwei]:
-    previous_epoch_boundary_root = get_block_root(
-        state,
-        get_epoch_start_slot(previous_epoch, config.SLOTS_PER_EPOCH),
-        config.LATEST_BLOCK_ROOTS_LENGTH,
-    )
-
     previous_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
         state,
         state.current_epoch_attestations + state.previous_epoch_attestations,
         state.previous_justified_epoch,
-        previous_epoch_boundary_root,
-        CommitteeConfig(config),
+        previous_epoch,
+        config,
     )
 
     previous_epoch_boundary_attesting_balance = get_total_balance(
@@ -185,18 +190,12 @@ def get_epoch_boundary_attesting_balances(
         config.MAX_DEPOSIT_AMOUNT,
     )
 
-    current_epoch_boundary_root = get_block_root(
-        state,
-        get_epoch_start_slot(current_epoch, config.SLOTS_PER_EPOCH),
-        config.LATEST_BLOCK_ROOTS_LENGTH,
-    )
-
     current_epoch_boundary_attester_indices = get_epoch_boundary_attester_indices(
         state,
         state.current_epoch_attestations,
         state.justified_epoch,
-        current_epoch_boundary_root,
-        CommitteeConfig(config),
+        current_epoch,
+        config,
     )
 
     current_epoch_boundary_attesting_balance = get_total_balance(
