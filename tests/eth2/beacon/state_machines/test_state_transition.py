@@ -16,7 +16,8 @@ from eth2._utils.merkle.normal import get_merkle_root
         'genesis_slot,'
     ),
     [
-        (0),
+        # start high enough so that we do not end up with negative numbers
+        (104),
     ]
 )
 @pytest.mark.parametrize(
@@ -54,6 +55,8 @@ def test_per_slot_transition(base_db,
                              config,
                              state_slot,
                              keymap):
+    state_slot += config.GENESIS_SLOT
+
     chaindb = BeaconChainDB(base_db)
     chaindb.persist_block(genesis_block, SerenityBeaconBlock)
     chaindb.persist_state(genesis_state)
