@@ -159,10 +159,10 @@ def get_epoch_boundary_attester_indices(
             ),
             config.LATEST_BLOCK_ROOTS_LENGTH
         )
-        is_expected_justified_epoch = a.data.justified_epoch == expected_justified_epoch
-        is_expected_root = a.data.epoch_boundary_root == root
-        should_yield_attestation = is_expected_justified_epoch and is_expected_root
-        if should_yield_attestation:
+        matches_justified_epoch = a.data.justified_epoch == expected_justified_epoch
+        matches_block_root = a.data.epoch_boundary_root == root
+        should_include = matches_justified_epoch and matches_block_root
+        if should_include:
             yield from get_attestation_participants(
                 state,
                 a.data,
