@@ -86,14 +86,14 @@ def test_per_slot_transition(base_db,
     # Get state transition instance
     st = sm.state_transition_class(sm.config)
 
-    updated_state = st.per_slot_transition(state, block.parent_root)
+    updated_state = st.per_slot_transition(state, block.previous_block_root)
 
     # Ensure that slot gets increased by 1
     assert updated_state.slot == state.slot + 1
 
     # latest_block_roots
     latest_block_roots_index = (updated_state.slot - 1) % st.config.LATEST_BLOCK_ROOTS_LENGTH
-    assert updated_state.latest_block_roots[latest_block_roots_index] == block.parent_root
+    assert updated_state.latest_block_roots[latest_block_roots_index] == block.previous_block_root
 
     # batched_block_roots
     if updated_state.slot % st.config.LATEST_BLOCK_ROOTS_LENGTH == 0:
