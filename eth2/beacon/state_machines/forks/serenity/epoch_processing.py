@@ -638,6 +638,11 @@ def process_rewards_and_penalties(state: BeaconState, config: BeaconConfig) -> B
             state.previous_epoch(config.SLOTS_PER_EPOCH)
         )
     )
+
+    # do not proceed if there are no validators in the previous epoch
+    if not previous_epoch_active_validator_indices:
+        return state
+
     previous_total_balance: Gwei = get_total_balance(
         state.validator_balances,
         tuple(previous_epoch_active_validator_indices),
