@@ -44,8 +44,6 @@ def create_test_block(parent=None, **kwargs):
         "slot": 0,
         "previous_block_root": ZERO_HASH32,
         "state_root": ZERO_HASH32,  # note: not the actual genesis state root
-        "randao_reveal": EMPTY_SIGNATURE,
-        "eth1_data": Eth1Data.create_empty_data(),
         "signature": EMPTY_SIGNATURE,
         "body": BeaconBlockBody.create_empty_body()
     }
