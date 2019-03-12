@@ -30,6 +30,7 @@ from eth2.beacon.epoch_processing_helpers import (
 from eth2.beacon.helpers import (
     get_effective_balance,
     get_epoch_start_slot,
+    slot_to_epoch,
 )
 from eth2.beacon.types.attestations import (
     Attestation,
@@ -335,6 +336,14 @@ def test_get_winning_root_and_participants(
             assert set(attesting_validator_indices) == set(block_root_1_participants)
 
 
+@pytest.mark.parametrize(
+    (
+        'genesis_slot,'
+    ),
+    [
+        0,
+    ],
+)
 @settings(max_examples=1)
 @given(random=st.randoms())
 def test_get_epoch_boundary_attester_indices(monkeypatch,
@@ -342,11 +351,15 @@ def test_get_epoch_boundary_attester_indices(monkeypatch,
                                              sample_attestation_params,
                                              sample_attestation_data_params,
                                              sample_state,
-                                             committee_config):
+                                             config):
     target_committee_size = 16
     committee = tuple([i for i in range(target_committee_size)])
 
+    block_root_1 = hash_eth2(b'block_root_1')
+    block_root_2 = hash_eth2(b'block_root_2')
+
     from eth2.beacon import committee_helpers
+    from eth2.beacon import helpers
 
     def mock_get_crosslink_committees_at_slot(state,
                                               slot,
@@ -356,14 +369,23 @@ def test_get_epoch_boundary_attester_indices(monkeypatch,
             (committee, sample_attestation_data_params['shard'],),
         )
 
+    def mock_get_block_root(state, epoch_start_slot, latest_block_roots_length):
+        if slot_to_epoch(epoch_start_slot, config.SLOTS_PER_EPOCH) == 1:
+            return block_root_1
+        else:
+            return block_root_2
+
     monkeypatch.setattr(
         committee_helpers,
         'get_crosslink_committees_at_slot',
         mock_get_crosslink_committees_at_slot
     )
 
-    block_root_1 = hash_eth2(b'block_root_1')
-    block_root_2 = hash_eth2(b'block_root_2')
+    monkeypatch.setattr(
+        helpers,
+        'get_block_root',
+        mock_get_block_root
+    )
 
     (
         attestation_participants_1,
@@ -415,9 +437,9 @@ def test_get_epoch_boundary_attester_indices(monkeypatch,
     block_root_1_attesting_validator = get_epoch_boundary_attester_indices(
         state=sample_state,
         attestations=attestations,
-        epoch=1,
-        root=block_root_1,
-        committee_config=committee_config,
+        expected_justified_epoch=1,
+        epoch_for_root=1,
+        config=config,
     )
     # Check that result is the union of two participants set
     # `attestation_participants_1` and `attestation_participants_2`
@@ -429,9 +451,9 @@ def test_get_epoch_boundary_attester_indices(monkeypatch,
     block_root_2_attesting_validator = get_epoch_boundary_attester_indices(
         state=sample_state,
         attestations=attestations,
-        epoch=2,
-        root=block_root_2,
-        committee_config=committee_config,
+        expected_justified_epoch=2,
+        epoch_for_root=2,
+        config=config,
     )
     # Check that result is the `not_attestation_participants_1` set
     assert set(block_root_2_attesting_validator) == set(not_attestation_participants_1)
