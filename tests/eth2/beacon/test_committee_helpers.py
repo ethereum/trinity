@@ -326,10 +326,9 @@ def test_get_prev_or_cur_epoch_committee_count(
 @pytest.mark.parametrize(
     (
         'genesis_slot,'
-        'genesis_epoch,'
     ),
     [
-        (0, 0),
+        0,
     ],
 )
 @pytest.mark.parametrize(
@@ -387,7 +386,6 @@ def test_get_crosslink_committees_at_slot(
         slots_per_epoch,
         target_committee_size,
         shard_count,
-        genesis_epoch,
         committee_config,
         registry_change,
         should_reseed,
@@ -473,8 +471,8 @@ def test_get_crosslink_committees_at_slot(
     #
     epoch = slot_to_epoch(slot, slots_per_epoch)
     current_epoch = state.current_epoch(slots_per_epoch)
-    previous_epoch = state.previous_epoch(slots_per_epoch, genesis_epoch)
     next_epoch = current_epoch + 1
+    previous_epoch = state.previous_epoch(slots_per_epoch)
 
     if epoch == current_epoch:
         seed = state.current_shuffling_seed
@@ -507,10 +505,9 @@ def test_get_crosslink_committees_at_slot(
 @pytest.mark.parametrize(
     (
         'genesis_slot,'
-        'genesis_epoch,'
     ),
     [
-        (0, 0),
+        0,
     ],
 )
 @pytest.mark.parametrize(
@@ -547,7 +544,6 @@ def test_get_beacon_proposer_index(
         registry_change,
         success,
         sample_state,
-        genesis_epoch,
         target_committee_size,
         shard_count,
         committee_config):
@@ -632,7 +628,6 @@ def test_get_attestation_participants(
         aggregation_bitfield,
         expected,
         sample_state,
-        genesis_epoch,
         target_committee_size,
         shard_count,
         committee_config,

@@ -56,12 +56,11 @@ if TYPE_CHECKING:
 def get_previous_epoch_boundary_attestations(
         state: 'BeaconState',
         slots_per_epoch: int,
-        genesis_epoch: Epoch,
         latest_block_roots_length: int) -> Iterable[PendingAttestationRecord]:
     beacon_block_root = get_block_root(
         state,
         get_epoch_start_slot(
-            state.previous_epoch(slots_per_epoch, genesis_epoch),
+            state.previous_epoch(slots_per_epoch),
             slots_per_epoch,
         ),
         latest_block_roots_length,
@@ -75,7 +74,6 @@ def get_previous_epoch_boundary_attestations(
 def get_previous_epoch_matching_head_attestations(
         state: 'BeaconState',
         slots_per_epoch: int,
-        genesis_epoch: Epoch,
         latest_block_roots_length: int) -> Iterable[PendingAttestationRecord]:
     for attestation in state.previous_epoch_attestations:
         beacon_block_root = get_block_root(
@@ -167,7 +165,6 @@ def get_epoch_boundary_attesting_balances(
         previous_epoch: Epoch,
         state: 'BeaconState',
         config: 'BeaconConfig') -> Tuple[Gwei, Gwei]:
-
     previous_epoch_boundary_root = get_block_root(
         state,
         get_epoch_start_slot(previous_epoch, config.SLOTS_PER_EPOCH),
