@@ -399,7 +399,7 @@ def _process_rewards_and_penalties_for_finality(
                 state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH),
                 config.SLOTS_PER_EPOCH,
             ),
-            config.LATEST_BLOCK_ROOTS_LENGTH,
+            config.SLOTS_PER_HISTORICAL_ROOT,
         )
     )
     previous_epoch_boundary_attester_indices = get_attester_indices_from_attesttion(
@@ -412,7 +412,7 @@ def _process_rewards_and_penalties_for_finality(
         state,
         config.SLOTS_PER_EPOCH,
         config.GENESIS_EPOCH,
-        config.LATEST_BLOCK_ROOTS_LENGTH,
+        config.SLOTS_PER_HISTORICAL_ROOT,
     )
     previous_epoch_head_attester_indices = get_attester_indices_from_attesttion(
         state=state,
