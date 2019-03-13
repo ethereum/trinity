@@ -169,7 +169,7 @@ async def test_mock_dht_client_find_peers_connected_to_peer(controlcs, dhtcs):
 
 @pytest.mark.asyncio
 async def test_mock_dht_client_find_providers(controlcs, dhtcs, content_id_bytes_example):
-    dhtcs[2]._provides.add(content_id_bytes_example)
+    dhtcs[2]._provides_store.add(content_id_bytes_example)
     # test case: no route to the provider
     assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=10)) == 0
 
@@ -179,7 +179,124 @@ async def test_mock_dht_client_find_providers(controlcs, dhtcs, content_id_bytes
     # test case: with route to the provider
     assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=10)) == 1
     # test case: multiple providers
-    dhtcs[1]._provides.add(content_id_bytes_example)
+    dhtcs[1]._provides_store.add(content_id_bytes_example)
     assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=10)) == 2
     # test case: with `count` set to limit the number of the returned peer info
     assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=1)) == 1
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_provide(controlcs, dhtcs, content_id_bytes_example):
+    assert len(dhtcs[1]._provides_store) == 0
+    await dhtcs[1].provide(content_id_bytes_example)
+    assert len(dhtcs[1]._provides_store) == 1
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    # test case: `find_providers` should work
+    assert len(await dhtcs[0].find_providers(content_id_bytes_example, count=10)) == 1
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_get_closest_peers(controlcs, dhtcs):
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+    mock_kvalue = 2
+    dhtcs[0].KVALUE = mock_kvalue
+
+    peer_id_bytes_2 = dhtcs[2].peer_id.to_bytes()
+    lsb = peer_id_bytes_2[-1]
+    if lsb % 2 == 0:
+        lsb_flipped = lsb + 1
+    else:
+        lsb_flipped = lsb - 1
+    key_nearest_peer_2 = peer_id_bytes_2[:-1] + bytes([lsb_flipped])
+    closet_peers = await dhtcs[0].get_closest_peers(key_nearest_peer_2)
+    # test case: `len(mock_routing_table_peers) > mock_kvalue`,
+    #   so `len(closet_peers)` becomes `mock_kvalue`.
+    assert len(closet_peers) == mock_kvalue
+    assert closet_peers[0] == dhtcs[2].peer_id
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_get_value(controlcs, dhtcs):
+    key_0 = b'key_0'
+    value_0 = b'value_0'
+
+    # test case: not found
+    with pytest.raises(ControlFailure):
+        assert (await dhtcs[0].get_value(key_0)) == value_0
+
+    # test case: key stored in local
+    dhtcs[0]._values_store[key_0] = value_0
+    assert (await dhtcs[0].get_value(key_0)) == value_0
+
+    key_1 = b'key_1'
+    value_1 = b'value_1'
+    # test case: key stored in remote peer without paths to it
+    dhtcs[2]._values_store[key_1] = value_1
+    with pytest.raises(ControlFailure):
+        await dhtcs[0].get_value(key_1)
+
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+    # test case: with paths to the remote node which stores the key
+    assert (await dhtcs[0].get_value(key_1)) == value_1
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_search_value(controlcs, dhtcs):
+    key_0 = b'key_0'
+    value_0 = b'value_0'
+    value_1 = b'456789'
+    value_2 = b'abcdefg'
+    dhtcs[0]._values_store[key_0] = value_0
+    dhtcs[1]._values_store[key_0] = value_1
+    dhtcs[2]._values_store[key_0] = value_2
+
+    assert len(await dhtcs[0].search_value(key_0)) == 1
+
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+
+    assert len(await dhtcs[0].search_value(key_0)) == 3
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_put_value(controlcs, dhtcs):
+    key_0 = b'key_0'
+    value_0 = b'value_0'
+
+    # test case: with no connections, only store to itself
+    await dhtcs[0].put_value(key_0, value_0)
+    assert key_0 in dhtcs[0]._values_store
+    assert key_0 not in dhtcs[1]._values_store
+    assert key_0 not in dhtcs[2]._values_store
+
+    key_1 = b'key_1'
+    value_1 = b'value_1'
+    # test case: with connections, store to other nodes as well
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+    await dhtcs[0].put_value(key_1, value_1)
+    assert key_1 in dhtcs[0]._values_store
+    assert key_1 in dhtcs[1]._values_store
+    assert key_1 in dhtcs[2]._values_store
+
+
+@pytest.mark.asyncio
+async def test_mock_dht_client_get_public_key(controlcs, dhtcs):
+    # peer 0 store its public key
+    key_for_pubkey = dhtcs[0]._make_key_for_peer_id(dhtcs[0].peer_id)
+    pubkey_bytes = dhtcs[0]._control_client._privkey.public_key.to_bytes()
+    dhtcs[0]._values_store[key_for_pubkey] = pubkey_bytes
+    # test case: local
+    pubkey_0 = await dhtcs[0].get_public_key(dhtcs[0].peer_id)
+    assert pubkey_0.Data == pubkey_bytes
+    # test case: remote nodes without paths fail to get it
+    with pytest.raises(ControlFailure):
+        await dhtcs[2].get_public_key(dhtcs[0].peer_id)
+
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+    # test case: remote nodes with paths should be able to get it
+    pubkey_0_from_remote = await dhtcs[2].get_public_key(dhtcs[0].peer_id)
+    assert pubkey_0_from_remote.Data == pubkey_bytes

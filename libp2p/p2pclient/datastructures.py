@@ -1,8 +1,7 @@
 import binascii
 from typing import (
     Any,
-    Iterable,
-    List,
+    Sequence,
 )
 
 import base58
@@ -79,9 +78,9 @@ class StreamInfo:
 
 class PeerInfo:
     peer_id: PeerID
-    addrs: List[Multiaddr]
+    addrs: Sequence[Multiaddr]
 
-    def __init__(self, peer_id: PeerID, addrs: Iterable[Multiaddr]):
+    def __init__(self, peer_id: PeerID, addrs: Sequence[Multiaddr]):
         self.peer_id = peer_id
         self.addrs = addrs
 

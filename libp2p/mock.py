@@ -7,6 +7,8 @@ from typing import (
 )
 import uuid
 
+from eth_keys import keys
+
 from multiaddr import Multiaddr
 
 from libp2p.p2pclient.datastructures import (
@@ -22,6 +24,7 @@ from libp2p.p2pclient.p2pclient import (
     write_pbmsg,
 )
 from libp2p.p2pclient.pb import p2pd_pb2 as p2pd_pb
+from libp2p.p2pclient.pb import crypto_pb2 as crypto_pb
 
 
 class MockStreamReaderWriter:
@@ -78,7 +81,8 @@ class MockControlClient:
                 `peer_id_to_immutable(peer_id)` to its corresponding `MockControlClient` object.
         """
         self._uuid = uuid.uuid1()
-        self._peer_id = PeerID(self._uuid.bytes.ljust(32, b'\x00'))
+        self._privkey = keys.PrivateKey(self._uuid.bytes.ljust(32, b'\x00'))
+        self._peer_id = PeerID(self._privkey.public_key.to_bytes())
         self._maddrs = [Multiaddr(f"/unix/maddr_{self._uuid}")]
 
         self._peers = set()
@@ -286,8 +290,11 @@ class MockPubSubClient:
 
 class MockDHTClient:
 
+    KVALUE = 20
+
     _control_client: MockControlClient
-    _provides: MutableSet[bytes]
+    _provides_store = MutableSet[bytes]
+    _values_store: Dict[bytes, bytes]
     _map_peer_id_to_dht_client: Dict[PeerID, 'MockDHTClient']
 
     def __init__(
@@ -295,7 +302,8 @@ class MockDHTClient:
             control_client: MockControlClient,
             map_peer_id_to_dht_client: Dict[PeerID, 'MockDHTClient']) -> None:
         self._control_client = control_client
-        self._provides = set()
+        self._provides_store = set()
+        self._values_store = {}
         self._map_peer_id_to_dht_client = map_peer_id_to_dht_client
         self._map_peer_id_to_dht_client[self._control_client._peer_id] = self
 
@@ -303,10 +311,19 @@ class MockDHTClient:
     def peer_id(self) -> PeerID:
         return self._control_client._peer_id
 
+    @property
+    def reachable_nodes(self) -> Tuple[PeerID, ...]:
+
+        def _dht_peer_filter(peer_id: PeerID) -> bool:
+            # only go through the nodes who run dht
+            # return peer_id in self._map_peer_id_to_dht_client
+            return True
+        return self._control_client._bfs(_dht_peer_filter)
+
     async def find_peer(self, peer_id: PeerID) -> PeerInfo:
         if peer_id not in self._control_client._map_peer_id_to_control_client:
             raise ControlFailure(f"peer {peer_id} does not exist")
-        if not self._has_path(peer_id):
+        if peer_id not in self.reachable_nodes:
             raise ControlFailure(f"no route to peer {peer_id}")
         peer_controlc = self._control_client._map_peer_id_to_control_client[peer_id]
         return PeerInfo(
@@ -315,8 +332,6 @@ class MockDHTClient:
         )
 
     async def find_peers_connected_to_peer(self, peer_id: PeerID) -> Tuple[PeerInfo, ...]:
-        """FIND_PEERS_CONNECTED_TO_PEER
-        """
         if peer_id not in self._control_client._map_peer_id_to_control_client:
             return tuple()
         peer_controlc = self._control_client._map_peer_id_to_control_client[peer_id]
@@ -330,136 +345,66 @@ class MockDHTClient:
         return pinfos
 
     async def find_providers(self, content_id_bytes: bytes, count: int) -> Tuple[PeerInfo, ...]:
-        """FIND_PROVIDERS
-        """
         pinfos = tuple(
             PeerInfo(
                 peer_id,
                 self._control_client._map_peer_id_to_control_client[peer_id]._maddrs,
             )
             for peer_id in self.reachable_nodes
-            if content_id_bytes in self._map_peer_id_to_dht_client[peer_id]._provides
+            if content_id_bytes in self._map_peer_id_to_dht_client[peer_id]._provides_store
         )
         return pinfos[:count]
 
-    # async def get_closest_peers(self, key: bytes) -> Tuple[PeerID, ...]:
-    #     """GET_CLOSEST_PEERS
-    #     """
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.GET_CLOSEST_PEERS,
-    #         key=key,
-    #     )
-    #     resps = await self._do_dht(dht_req)
-    #     try:
-    #         peer_ids = tuple(
-    #             PeerID(dht_resp.value)
-    #             for dht_resp in resps
-    #         )
-    #     except AttributeError as e:
-    #         raise ControlFailure(
-    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
-    #         )
-    #     return peer_ids
+    async def provide(self, cid: bytes) -> None:
+        # ignore `ProvRecord`
+        self._provides_store.add(cid)
 
-    # async def get_public_key(self, peer_id: PeerID) -> crypto_pb.PublicKey:
-    #     """GET_PUBLIC_KEY
-    #     """
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.GET_PUBLIC_KEY,
-    #         peer=peer_id.to_bytes(),
-    #     )
-    #     resps = await self._do_dht(dht_req)
-    #     if len(resps) != 1:
-    #         raise ControlFailure(f"should only get one response, resps={resps}")
-    #     try:
-    #         # TODO: parse the public key with another class?
-    #         public_key_pb_bytes = resps[0].value
-    #     except AttributeError as e:
-    #         raise ControlFailure(
-    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
-    #         )
-    #     public_key_pb = crypto_pb.PublicKey()
-    #     public_key_pb.ParseFromString(public_key_pb_bytes)
-    #     return public_key_pb
+    async def get_closest_peers(self, key: bytes) -> Tuple[PeerID, ...]:
+        peers_sorted = sorted(
+            self.reachable_nodes,
+            key=lambda x: self._distance(x.to_bytes(), key),
+        )
+        return tuple(peers_sorted)[:self.KVALUE]
 
-    # async def get_value(self, key: bytes) -> bytes:
-    #     """GET_VALUE
-    #     """
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.GET_VALUE,
-    #         key=key,
-    #     )
-    #     resps = await self._do_dht(dht_req)
-    #     if len(resps) != 1:
-    #         raise ControlFailure(f"should only get one response, resps={resps}")
-    #     try:
-    #         value = resps[0].value
-    #     except AttributeError as e:
-    #         raise ControlFailure(
-    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
-    #         )
-    #     return value
+    @staticmethod
+    def _make_key_for_peer_id(peer_id: PeerID) -> bytes:
+        return b"/pk/" + peer_id.to_bytes()
 
-    # async def search_value(self, key: bytes) -> Tuple[bytes, ...]:
-    #     """SEARCH_VALUE
-    #     """
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.SEARCH_VALUE,
-    #         key=key,
-    #     )
-    #     resps = await self._do_dht(dht_req)
-    #     try:
-    #         values = tuple(resp.value for resp in resps)
-    #     except AttributeError as e:
-    #         raise ControlFailure(
-    #             f"dht_resp should contains `value`: resps={resps}, e={e}"
-    #         )
-    #     return values
+    async def get_public_key(self, peer_id: PeerID) -> crypto_pb.PublicKey:
+        key = self._make_key_for_peer_id(peer_id)
+        closest_peers = await self.get_closest_peers(key)
+        for peer_id in closest_peers:
+            peer_dhtc = self._map_peer_id_to_dht_client[peer_id]
+            if key in peer_dhtc._values_store:
+                return crypto_pb.PublicKey(
+                    Type=crypto_pb.Secp256k1,
+                    Data=peer_dhtc._values_store[key],
+                )
+        raise ControlFailure(f"public key of peer {peer_id} is not found")
 
-    # async def put_value(self, key: bytes, value: bytes) -> None:
-    #     """PUT_VALUE
-    #     """
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.PUT_VALUE,
-    #         key=key,
-    #         value=value,
-    #     )
-    #     req = p2pd_pb.Request(
-    #         type=p2pd_pb.Request.DHT,
-    #         dht=dht_req,
-    #     )
-    #     reader, writer = await self.client.open_connection()
-    #     await write_pbmsg(writer, req)
-    #     resp = p2pd_pb.Response()
-    #     await read_pbmsg_safe(reader, resp)
-    #     writer.close()
-    #     raise_if_failed(resp)
+    async def get_value(self, key: bytes) -> bytes:
+        matched_values = await self.search_value(key)
+        if len(matched_values) == 0:
+            raise ControlFailure(f"key={key} is not found")
+        return matched_values[0]
 
-    # async def provide(self, cid: bytes) -> None:
-    #     """PROVIDE
-    #     """
-    #     dht_req = p2pd_pb.DHTRequest(
-    #         type=p2pd_pb.DHTRequest.PROVIDE,
-    #         cid=cid,
-    #     )
-    #     req = p2pd_pb.Request(
-    #         type=p2pd_pb.Request.DHT,
-    #         dht=dht_req,
-    #     )
-    #     reader, writer = await self.client.open_connection()
-    #     await write_pbmsg(writer, req)
-    #     resp = p2pd_pb.Response()
-    #     await read_pbmsg_safe(reader, resp)
-    #     writer.close()
-    #     raise_if_failed(resp)
+    async def search_value(self, key: bytes) -> Tuple[bytes, ...]:
+        values = set()
+        closest_peers = await self.get_closest_peers(key)
+        for peer_id in closest_peers:
+            peer_dhtc = self._map_peer_id_to_dht_client[peer_id]
+            if key in peer_dhtc._values_store:
+                values.add(peer_dhtc._values_store[key])
+        # there is a way to select the best value, but here we just sort it by value
+        return tuple(sorted(values))
 
-    @property
-    def reachable_nodes(self) -> Tuple[PeerID, ...]:
+    async def put_value(self, key: bytes, value: bytes) -> None:
+        closet_peers = await self.get_closest_peers(key)
+        for peer_id in closet_peers:
+            self._map_peer_id_to_dht_client[peer_id]._values_store[key] = value
 
-        def _dht_peer_filter(peer_id: PeerID) -> bool:
-            # lets assume everyone runs dht client
-            return True
-        return self._control_client._bfs(_dht_peer_filter)
-
-    def _has_path(self, peer_id: PeerID):
-        return peer_id in self.reachable_nodes
+    @staticmethod
+    def _distance(bytes_0: bytes, bytes_1: bytes) -> int:
+        int_0 = int.from_bytes(bytes_0, 'big')
+        int_1 = int.from_bytes(bytes_1, 'big')
+        return int_0 ^ int_1
