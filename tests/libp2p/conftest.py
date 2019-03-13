@@ -18,6 +18,7 @@ from libp2p.dht import (
 )
 from libp2p.mock import (
     MockControlClient,
+    MockConnectionManagerClient,
     MockPubSubClient,
     MockDHTClient,
 )
@@ -347,3 +348,23 @@ async def daemon_dhts(dhtcs):
         DaemonDHT(dht_client=dhtc)
         for dhtc in dhtcs
     )
+
+
+@pytest.fixture
+def connmgrcs(controlcs):
+    return tuple(
+        MockConnectionManagerClient(
+            control_client=control_client,
+            low_water_mark=1,
+            high_water_mark=3,
+        )
+        for control_client in controlcs
+    )
+
+
+# @pytest.fixture
+# async def daemon_connmgrs(connmgrcs):
+#     return tuple(
+#         DaemonConnectionManagerClient(connmgr_client=dhtc)
+#         for connmgrc in connmgrcs
+#     )

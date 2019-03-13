@@ -1,4 +1,7 @@
 import asyncio
+from collections import (
+    defaultdict,
+)
 import functools
 from typing import (
     Dict,
@@ -416,3 +419,41 @@ class MockDHTClient:
         int_0 = int.from_bytes(bytes_0, 'big')
         int_1 = int.from_bytes(bytes_1, 'big')
         return int_0 ^ int_1
+
+
+class MockConnectionManagerClient:
+    _control_client: MockControlClient
+    _map_peer_tag_weight: Dict[PeerID, Dict[str, int]]
+    _low_water_mark: int
+    _high_water_mark: int
+
+    def __init__(
+            self,
+            control_client: MockControlClient,
+            low_water_mark: int,
+            high_water_mark: int) -> None:
+        self._control_client = control_client
+        self._map_peer_tag_weight = defaultdict(lambda: defaultdict(dict))
+        self._low_water_mark = low_water_mark
+        self._high_water_mark = high_water_mark
+
+    async def tag_peer(self, peer_id: PeerID, tag: str, weight: int) -> None:
+        self._map_peer_tag_weight[peer_id][tag] = weight
+
+    async def untag_peer(self, peer_id: PeerID, tag: str) -> None:
+        if peer_id in self._map_peer_tag_weight and tag in self._map_peer_tag_weight[peer_id]:
+            del self._map_peer_tag_weight[peer_id][tag]
+
+    def _count_weight(self, peer_id: PeerID) -> int:
+        value = 0
+        for map_tag_weight in self._map_peer_tag_weight.values():
+            value += sum(map_tag_weight.values())
+        return value
+
+    # NOTE: leave the "autotrim" undone here, which needs `notify` feature in `ControlClient`
+    async def trim(self) -> None:
+        peers = self._control_client._peers
+        peers_sorted = sorted(peers, key=self._count_weight)
+        peers_to_trim = peers_sorted[:-self._low_water_mark]
+        for peer_id in peers_to_trim:
+            await self._control_client.disconnect(peer_id)

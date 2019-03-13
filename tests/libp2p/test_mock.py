@@ -298,3 +298,77 @@ async def test_mock_dht_client_get_public_key(controlcs, dhtcs):
     await controlcs[1].connect(*(await controlcs[2].identify()))
     # test case: remote nodes with paths should be able to get it
     await dhtcs[2].get_public_key(dhtcs[0].peer_id)
+
+
+@pytest.mark.asyncio
+async def test_mock_connmgr_client_tag_peer(controlcs, connmgrcs):
+    tag = "tag_123"
+    await connmgrcs[0].tag_peer(
+        controlcs[1]._peer_id,
+        tag,
+        1,
+    )
+    assert controlcs[1]._peer_id in connmgrcs[0]._map_peer_tag_weight
+    assert tag in connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id]
+    assert connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id][tag] == 1
+    # test case: multiple tags
+    tag_another = "tag_another"
+    await connmgrcs[0].tag_peer(
+        controlcs[1]._peer_id,
+        tag_another,
+        2,
+    )
+    assert controlcs[1]._peer_id in connmgrcs[0]._map_peer_tag_weight
+    assert tag_another in connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id]
+    assert connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id][tag_another] == 2
+    # test case: multiple peers
+    await connmgrcs[0].tag_peer(
+        controlcs[2]._peer_id,
+        tag,
+        3,
+    )
+    assert controlcs[1]._peer_id in connmgrcs[0]._map_peer_tag_weight
+    assert tag in connmgrcs[0]._map_peer_tag_weight[controlcs[2]._peer_id]
+    assert connmgrcs[0]._map_peer_tag_weight[controlcs[2]._peer_id][tag] == 3
+
+
+@pytest.mark.asyncio
+async def test_mock_connmgr_client_untag_peer(controlcs, connmgrcs):
+    tag = "tag_123"
+    connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id][tag] = 1
+    tag_another = "tag_another"
+    connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id][tag_another] = 2
+    await connmgrcs[0].untag_peer(
+        controlcs[1]._peer_id,
+        tag,
+    )
+    assert tag not in connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id]
+    assert tag_another in connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id]
+    assert connmgrcs[0]._map_peer_tag_weight[controlcs[1]._peer_id][tag_another] == 2
+
+
+@pytest.mark.asyncio
+async def test_mock_connmgr_client_trim(controlcs, connmgrcs):
+    # 0 <-> 1 <-> 2
+    await controlcs[0].connect(*(await controlcs[1].identify()))
+    await controlcs[1].connect(*(await controlcs[2].identify()))
+
+    tag = "tag_123"
+    await connmgrcs[1].tag_peer(
+        controlcs[0]._peer_id,
+        tag,
+        1,
+    )
+    tag_another = "tag_another"
+    await connmgrcs[1].tag_peer(
+        controlcs[2]._peer_id,
+        tag_another,
+        2,
+    )
+
+    # ensure #peers will be trimmed down to 1
+    connmgrcs[1].low_water_mark = 1
+    await connmgrcs[1].trim()
+
+    peers_1 = await controlcs[1].list_peers()
+    assert len(peers_1) == 1 and peers_1[0].peer_id == controlcs[2]._peer_id

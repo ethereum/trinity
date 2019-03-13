@@ -23,4 +23,3 @@ class Node:
     dht: BaseDHT
     pubsub: BasePubSub
     connmgr: BaseConnectionManager
-
