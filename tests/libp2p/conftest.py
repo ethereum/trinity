@@ -13,6 +13,9 @@ from multiaddr import (
     protocols,
 )
 
+from libp2p.dht import (
+    DaemonDHT,
+)
 from libp2p.mock import (
     MockControlClient,
     MockPubSubClient,
@@ -335,4 +338,12 @@ def dhtcs(controlcs):
             map_peer_id_to_dht_client=map_peer_id_to_dht_client,
         )
         for control_client in controlcs
+    )
+
+
+@pytest.fixture
+async def daemon_dhts(dhtcs):
+    return tuple(
+        DaemonDHT(dht_client=dhtc)
+        for dhtc in dhtcs
     )

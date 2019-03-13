@@ -2,6 +2,8 @@ import asyncio
 
 import pytest
 
+import multihash
+
 from libp2p.mock import (
     MockControlClient,
     MockStreamReaderWriter,
@@ -284,13 +286,10 @@ async def test_mock_dht_client_put_value(controlcs, dhtcs):
 
 @pytest.mark.asyncio
 async def test_mock_dht_client_get_public_key(controlcs, dhtcs):
-    # peer 0 store its public key
-    key_for_pubkey = dhtcs[0]._make_key_for_peer_id(dhtcs[0].peer_id)
-    pubkey_bytes = dhtcs[0]._control_client._privkey.public_key.to_bytes()
-    dhtcs[0]._values_store[key_for_pubkey] = pubkey_bytes
     # test case: local
     pubkey_0 = await dhtcs[0].get_public_key(dhtcs[0].peer_id)
-    assert pubkey_0.Data == pubkey_bytes
+    mh_digest_bytes = multihash.digest(pubkey_0.Data, multihash.Func.sha2_256).encode()
+    assert dhtcs[0].peer_id.to_bytes() == mh_digest_bytes
     # test case: remote nodes without paths fail to get it
     with pytest.raises(ControlFailure):
         await dhtcs[2].get_public_key(dhtcs[0].peer_id)
@@ -298,5 +297,4 @@ async def test_mock_dht_client_get_public_key(controlcs, dhtcs):
     await controlcs[0].connect(*(await controlcs[1].identify()))
     await controlcs[1].connect(*(await controlcs[2].identify()))
     # test case: remote nodes with paths should be able to get it
-    pubkey_0_from_remote = await dhtcs[2].get_public_key(dhtcs[0].peer_id)
-    assert pubkey_0_from_remote.Data == pubkey_bytes
+    await dhtcs[2].get_public_key(dhtcs[0].peer_id)

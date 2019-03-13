@@ -11,6 +11,8 @@ from eth_keys import keys
 
 from multiaddr import Multiaddr
 
+import multihash
+
 from libp2p.p2pclient.datastructures import (
     PeerID,
     PeerInfo,
@@ -82,7 +84,11 @@ class MockControlClient:
         """
         self._uuid = uuid.uuid1()
         self._privkey = keys.PrivateKey(self._uuid.bytes.ljust(32, b'\x00'))
-        self._peer_id = PeerID(self._privkey.public_key.to_bytes())
+        peer_id_bytes = multihash.digest(
+            self._privkey.public_key.to_bytes(),
+            multihash.Func.sha2_256,
+        ).encode()
+        self._peer_id = PeerID(peer_id_bytes)
         self._maddrs = [Multiaddr(f"/unix/maddr_{self._uuid}")]
 
         self._peers = set()
@@ -304,6 +310,8 @@ class MockDHTClient:
         self._control_client = control_client
         self._provides_store = set()
         self._values_store = {}
+        key_for_pubkey = self._make_key_for_peer_id(self.peer_id)
+        self._values_store[key_for_pubkey] = self._control_client._privkey.public_key.to_bytes()
         self._map_peer_id_to_dht_client = map_peer_id_to_dht_client
         self._map_peer_id_to_dht_client[self._control_client._peer_id] = self
 
