@@ -126,13 +126,13 @@ async def test_mock_pubsub_client(pubsubcs):
     data = b'123'
     await pubsubcs[0].publish(topic, data)
     ps_msg_0 = p2pd_pb.PSMessage()
-    await read_pbmsg_safe(stream_pair_0[0], ps_msg_0)
+    await read_pbmsg_safe(stream_pair_0.reader, ps_msg_0)
     assert ps_msg_0.data == data
     ps_msg_1 = p2pd_pb.PSMessage()
-    await read_pbmsg_safe(stream_pair_1[0], ps_msg_1)
+    await read_pbmsg_safe(stream_pair_1.reader, ps_msg_1)
     assert ps_msg_1.data == data
     ps_msg_2 = p2pd_pb.PSMessage()
-    await read_pbmsg_safe(stream_pair_2[0], ps_msg_2)
+    await read_pbmsg_safe(stream_pair_2.reader, ps_msg_2)
     assert ps_msg_2.data == data
     # test case: unsubscribe by `writer.close`
     stream_pair_0[1].close()

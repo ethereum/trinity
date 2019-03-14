@@ -4,8 +4,11 @@ from collections import (
 )
 import functools
 from typing import (
+    Awaitable,
     Dict,
+    List,
     MutableSet,
+    NamedTuple,
     Tuple,
 )
 import uuid
@@ -65,6 +68,11 @@ class MockStreamReaderWriter:
 
     def close(self):
         pass
+
+
+class MockStreamPair(NamedTuple):
+    reader: MockStreamReaderWriter
+    writer: MockStreamReaderWriter
 
 
 class MockControlClient:
@@ -216,10 +224,18 @@ class MockControlClient:
         return tuple(visited_topic_nodes)
 
 
+class PSMessageTuple(NamedTuple):
+    src_peer_id: PeerID
+    topic: str
+    ps_msg: p2pd_pb.PSMessage
+
+
 class MockPubSubClient:
-    _topic_subscribed_streams: Dict[str, Tuple[MockStreamReaderWriter, MockStreamReaderWriter]]
+    _topic_subscribed_streams: Dict[str, MockStreamPair]
     _control_client: MockControlClient
     _map_peer_id_to_pubsub_client: Dict[PeerID, 'MockPubSubClient']
+    _inbox: asyncio.Queue = None
+    _inbox_listener: Awaitable[None] = None
 
     def __init__(
             self,
@@ -232,6 +248,19 @@ class MockPubSubClient:
 
     def __del__(self):
         del self._map_peer_id_to_pubsub_client[self.peer_id]
+
+    async def listen(self):
+        if self._inbox_listener is None:
+            self._inbox = asyncio.Queue()
+            self._inbox_listener = asyncio.ensure_future(
+                self._listen_inbox(),
+                loop=asyncio.get_event_loop(),
+            )
+            await asyncio.sleep(0.001)
+
+    async def close_listener(self):
+        if self._inbox_listener is not None:
+            self._inbox_listener.cancel()
 
     @property
     def peer_id(self) -> PeerID:
@@ -256,18 +285,52 @@ class MockPubSubClient:
             if topic in self._map_peer_id_to_pubsub_client[peer_id].topics
         )
 
-    async def publish(self, topic: str, data: bytes) -> None:
-        nodes_to_publish = self._do_bfs(topic)
-        for peer_id in nodes_to_publish:
-            pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
-            stream_pair = pubsubc._topic_subscribed_streams[topic]
-            ps_msg = p2pd_pb.PSMessage(
-                data=data,
-                topicIDs=[topic],
+    async def _listen_inbox(self):
+        """
+        Make use of the reader/writer pair for each subscription.
+        """
+        while True:
+            ps_msg_pair = await self._inbox.get()
+            stream_pair = self._topic_subscribed_streams[ps_msg_pair.topic]
+            await write_pbmsg(stream_pair.reader, ps_msg_pair.ps_msg)
+            # TODO: read the validation result from the upstream
+            # res = await stream_pair.writer.read(1)
+            res_validation = True
+            if res_validation:
+                await self._relay(
+                    src_peer_id=ps_msg_pair.src_peer_id,
+                    ps_msg=ps_msg_pair.ps_msg,
+                )
+
+    async def _push_msg(self, peer_id: PeerID, topic: str, ps_msg: p2pd_pb.PSMessage):
+        pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
+        ps_msg_pair = PSMessageTuple(
+            src_peer_id=self.peer_id,
+            topic=topic,
+            ps_msg=ps_msg,
+        )
+        await pubsubc._inbox.put(ps_msg_pair)
+
+    async def _relay(self, src_peer_id: PeerID, ps_msg: p2pd_pb.PSMessage):
+        for topic in ps_msg.topicIDs:
+            peer_filter = functools.partial(self._pubsub_peer_filter, topic=topic)
+            peers_pubsub = filter(peer_filter, self._control_client._peers)
+            peers_to_publish = tuple(
+                peer_id
+                for peer_id in peers_pubsub
+                if peer_id != src_peer_id
             )
-            # TODO: the setter of `PSMessage.from_field` doesn't work, workaround with `setattr`
-            setattr(ps_msg, 'from', self.peer_id.to_bytes())
-            await write_pbmsg(stream_pair[0], ps_msg)
+            for peer_id in peers_to_publish:
+                await self._push_msg(peer_id, topic, ps_msg)
+
+    async def publish(self, topic: str, data: bytes) -> None:
+        ps_msg = p2pd_pb.PSMessage(
+            data=data,
+            topicIDs=[topic],
+        )
+        # TODO: the setter of `PSMessage.from_field` doesn't work, workaround with `setattr`
+        setattr(ps_msg, 'from', self.peer_id.to_bytes())
+        await self._push_msg(self.peer_id, topic, ps_msg)
 
     def _pubsub_peer_filter(self, peer_id: PeerID, topic: str) -> bool:
         # check if the peer runs pubsub
@@ -286,13 +349,13 @@ class MockPubSubClient:
     def _unsubscribe(self, topic: str) -> None:
         del self._topic_subscribed_streams[topic]
 
-    async def subscribe(self, topic: str) -> Tuple[MockStreamReaderWriter, MockStreamReaderWriter]:
+    async def subscribe(self, topic: str) -> MockStreamPair:
         if topic in self.topics:
             return
         reader = MockStreamReaderWriter()
         writer = MockStreamReaderWriter()
         setattr(writer, 'close', functools.partial(self._unsubscribe, topic=topic))
-        stream_pair = (reader, writer)
+        stream_pair = MockStreamPair(reader, writer)
         self._topic_subscribed_streams[topic] = stream_pair
         return stream_pair
 
@@ -433,7 +496,7 @@ class MockConnectionManagerClient:
             low_water_mark: int,
             high_water_mark: int) -> None:
         self._control_client = control_client
-        self._map_peer_tag_weight = defaultdict(lambda: defaultdict(dict))
+        self._map_peer_tag_weight = defaultdict(lambda: defaultdict(lambda: 0))
         self._low_water_mark = low_water_mark
         self._high_water_mark = high_water_mark
 
@@ -445,10 +508,7 @@ class MockConnectionManagerClient:
             del self._map_peer_tag_weight[peer_id][tag]
 
     def _count_weight(self, peer_id: PeerID) -> int:
-        value = 0
-        for map_tag_weight in self._map_peer_tag_weight.values():
-            value += sum(map_tag_weight.values())
-        return value
+        return sum(self._map_peer_tag_weight[peer_id].values())
 
     # NOTE: leave the "autotrim" undone here, which needs `notify` feature in `ControlClient`
     async def trim(self) -> None:

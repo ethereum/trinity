@@ -1,7 +1,6 @@
 import pytest
 
 
-
 @pytest.mark.asyncio
 async def test_daemon_dht(daemon_hosts, daemon_dhts):
     # 0 <-> 1 <-> 2

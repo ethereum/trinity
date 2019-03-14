@@ -13,6 +13,9 @@ from multiaddr import (
     protocols,
 )
 
+from libp2p.connmgr import (
+    DaemonConnectionManager,
+)
 from libp2p.dht import (
     DaemonDHT,
 )
@@ -308,12 +311,17 @@ def daemon_hosts(controlcs):
 
 
 @pytest.fixture
-def pubsubcs(controlcs):
+async def pubsubcs(controlcs):
     map_pid_to_pubsubc = {}
-    return tuple(
+    pscs = tuple(
         MockPubSubClient(control_client, map_pid_to_pubsubc)
         for control_client in controlcs
     )
+    for psc in pscs:
+        await psc.listen()
+    yield pscs
+    for psc in pscs:
+        await psc.close_listener()
 
 
 @pytest.fixture
@@ -362,9 +370,9 @@ def connmgrcs(controlcs):
     )
 
 
-# @pytest.fixture
-# async def daemon_connmgrs(connmgrcs):
-#     return tuple(
-#         DaemonConnectionManagerClient(connmgr_client=dhtc)
-#         for connmgrc in connmgrcs
-#     )
+@pytest.fixture
+async def daemon_connmgrs(connmgrcs):
+    return tuple(
+        DaemonConnectionManager(connmgr_client=connmgrc)
+        for connmgrc in connmgrcs
+    )
