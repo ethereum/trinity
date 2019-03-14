@@ -113,7 +113,7 @@ def get_genesis_beacon_state(*,
         latest_active_index_roots=(ZERO_HASH32,) * latest_active_index_roots_length,
         latest_slashed_balances=(Gwei(0),) * latest_slashed_exit_length,
         latest_attestations=(),
-        batched_block_roots=(),
+        historical_roots=(),
 
         # Ethereum 1.0 chain data
         latest_eth1_data=latest_eth1_data,
