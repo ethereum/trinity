@@ -29,7 +29,7 @@ class Node:
             host: BaseHost,
             dht: BaseDHT,
             pubsub: BasePubSub,
-            connmgr: BaseConnectionManager):
+            connmgr: BaseConnectionManager) -> None:
         self.host = host
         self.dht = dht
         self.pubsub = pubsub
