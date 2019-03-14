@@ -29,7 +29,7 @@ class PeerID:
     def __repr__(self) -> str:
         return f"<PeerID {self.to_string()[2:10]}>"
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return int.from_bytes(self._bytes, "big")
 
     def to_bytes(self) -> bytes:

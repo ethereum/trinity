@@ -4,12 +4,14 @@ from collections import (
 )
 import functools
 from typing import (
-    Awaitable,
+    Callable,
     Dict,
     List,
     MutableSet,
     NamedTuple,
+    Sequence,
     Tuple,
+    cast,
 )
 import uuid
 
@@ -28,6 +30,7 @@ from libp2p.p2pclient.exceptions import (
     ControlFailure,
 )
 from libp2p.p2pclient.p2pclient import (
+    StreamHandler,
     read_pbmsg_safe,
     write_pbmsg,
 )
@@ -35,16 +38,19 @@ from libp2p.p2pclient.pb import p2pd_pb2 as p2pd_pb
 from libp2p.p2pclient.pb import crypto_pb2 as crypto_pb
 
 
+PeerFilter = Callable[[PeerID], bool]
+
+
 class MockStreamReaderWriter:
     _buf: bytes
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._buf = b""
 
-    def write(self, data):
+    def write(self, data: bytes) -> None:
         self._buf = self._buf + data
 
-    async def read(self, n=-1):
+    async def read(self, n: int = -1) -> bytes:
         if n == 0:
             raise ValueError
         if n == -1:
@@ -56,17 +62,17 @@ class MockStreamReaderWriter:
         self._buf = self._buf[n:]
         return data
 
-    async def readexactly(self, n):
+    async def readexactly(self, n: int) -> bytes:
         data = await self.read(n)
         if len(data) != n:
             raise asyncio.IncompleteReadError(partial=data, expected=n)
         return data
 
-    async def drain(self):
+    async def drain(self) -> None:
         # do nothing
         pass
 
-    def close(self):
+    def close(self) -> None:
         pass
 
 
@@ -77,17 +83,17 @@ class MockStreamPair(NamedTuple):
 
 class MockControlClient:
 
-    _map_peer_id_to_control_client = None
-    _uuid = None
-    _peer_id = None
-    _maddrs = None
-    _peers = None
+    _map_peer_id_to_control_client: Dict[PeerID, 'MockControlClient']
+    _uuid: uuid.UUID
+    _peer_id: PeerID
+    _maddrs: List[Multiaddr]
+    _peers: MutableSet[PeerID]
 
-    handlers = None
-    control_maddr = None
-    listen_maddr = None
+    handlers: Dict[str, StreamHandler]
+    control_maddr: Multiaddr
+    listen_maddr: Multiaddr
 
-    def __init__(self, map_peer_id_to_control_client):
+    def __init__(self, map_peer_id_to_control_client: Dict[PeerID, 'MockControlClient']) -> None:
         """
         Args:
             map_peer_id_to_control_client (dict): The mutable mapping from
@@ -110,12 +116,15 @@ class MockControlClient:
         self.listen_maddr = f"/unix/listen__{self._uuid}"
         self.handlers = {}
 
-    def __del__(self):
+    def __del__(self) -> None:
         del self._map_peer_id_to_control_client[self._peer_id]
 
-    async def _dispatcher(self, reader, writer):
+    async def _dispatcher(
+            self,
+            reader: MockStreamReaderWriter,
+            writer: MockStreamReaderWriter) -> None:
         pb_stream_info = p2pd_pb.StreamInfo()
-        await read_pbmsg_safe(reader, pb_stream_info)
+        await read_pbmsg_safe(cast(asyncio.StreamReader, reader), pb_stream_info)
         stream_info = StreamInfo.from_pb(pb_stream_info)
         try:
             handler = self.handlers[stream_info.proto]
@@ -123,18 +132,22 @@ class MockControlClient:
             # simulate that the daemon has rejected the stream for us,
             # so we shouldn't be called here.
             return
-        await handler(stream_info, reader, writer)
+        await handler(
+            stream_info,
+            cast(asyncio.StreamReader, reader),
+            cast(asyncio.StreamWriter, writer),
+        )
 
-    async def listen(self):
+    async def listen(self) -> None:
         pass
 
-    async def close(self):
-        self._map_peer_id_to_control_client.remove(self._peer_id)
+    async def close(self) -> None:
+        del self._map_peer_id_to_control_client[self._peer_id]
 
-    async def identify(self):
-        return self._peer_id, self._maddrs
+    async def identify(self) -> Tuple[PeerID, Tuple[Multiaddr, ...]]:
+        return self._peer_id, tuple(self._maddrs)
 
-    async def connect(self, peer_id, maddrs):
+    async def connect(self, peer_id: PeerID, maddrs: Sequence[Multiaddr]) -> None:
         if peer_id not in self._map_peer_id_to_control_client:
             raise ControlFailure
         peer_client = self._map_peer_id_to_control_client[peer_id]
@@ -147,7 +160,7 @@ class MockControlClient:
         self._peers.add(peer_id)
         peer_client._peers.add(self._peer_id)
 
-    async def list_peers(self):
+    async def list_peers(self) -> Tuple[PeerInfo, ...]:
         return tuple(
             PeerInfo(
                 peer_id,
@@ -156,14 +169,18 @@ class MockControlClient:
             for peer_id in self._peers
         )
 
-    async def disconnect(self, peer_id):
+    async def disconnect(self, peer_id: PeerID) -> None:
         if peer_id not in self._map_peer_id_to_control_client:
             return
         peer = self._map_peer_id_to_control_client[peer_id]
         self._peers.remove(peer_id)
         peer._peers.remove(self._peer_id)
 
-    async def stream_open(self, peer_id, protocols):
+    async def stream_open(
+            self,
+            peer_id: PeerID,
+            protocols: Sequence[str]) -> Tuple[
+            StreamInfo, MockStreamReaderWriter, MockStreamReaderWriter]:
         if len(protocols) == 0:
             raise ControlFailure(f'len(protocols) should not be 0, protocols={protocols}')
 
@@ -177,7 +194,7 @@ class MockControlClient:
             addr=self._maddrs[0],
             proto=protocol_chosen,
         ).to_pb()
-        await write_pbmsg(writer, stream_info_pb)
+        await write_pbmsg(cast(asyncio.StreamWriter, writer), stream_info_pb)
 
         if peer_id not in self._map_peer_id_to_control_client:
             raise ControlFailure(f"failed to find the peer {peer_id}")
@@ -204,10 +221,10 @@ class MockControlClient:
         )
         return stream_info_peer, reader, writer
 
-    async def stream_handler(self, proto, handler_cb):
+    async def stream_handler(self, proto: str, handler_cb: StreamHandler) -> None:
         self.handlers[proto] = handler_cb
 
-    def _bfs(self, peer_filter) -> Tuple[PeerID, ...]:
+    def _bfs(self, peer_filter: PeerFilter) -> Tuple[PeerID, ...]:
         visited_topic_nodes = set()
         queue = []
         queue.append(self._peer_id)
@@ -234,22 +251,22 @@ class MockPubSubClient:
     _topic_subscribed_streams: Dict[str, MockStreamPair]
     _control_client: MockControlClient
     _map_peer_id_to_pubsub_client: Dict[PeerID, 'MockPubSubClient']
-    _inbox: asyncio.Queue = None
-    _inbox_listener: Awaitable[None] = None
+    _inbox: "asyncio.Queue[PSMessageTuple]" = None
+    _inbox_listener: "asyncio.Future[None]" = None
 
     def __init__(
             self,
             control_client: MockControlClient,
-            map_peer_id_to_pubsub_client: Dict[PeerID, 'MockPubSubClient']):
+            map_peer_id_to_pubsub_client: Dict[PeerID, 'MockPubSubClient']) -> None:
         self._topic_subscribed_streams = {}
         self._control_client = control_client
         self._map_peer_id_to_pubsub_client = map_peer_id_to_pubsub_client
         self._map_peer_id_to_pubsub_client[self._control_client._peer_id] = self
 
-    def __del__(self):
+    def __del__(self) -> None:
         del self._map_peer_id_to_pubsub_client[self.peer_id]
 
-    async def listen(self):
+    async def listen(self) -> None:
         if self._inbox_listener is None:
             self._inbox = asyncio.Queue()
             self._inbox_listener = asyncio.ensure_future(
@@ -258,7 +275,7 @@ class MockPubSubClient:
             )
             await asyncio.sleep(0.001)
 
-    async def close_listener(self):
+    async def close_listener(self) -> None:
         if self._inbox_listener is not None:
             self._inbox_listener.cancel()
 
@@ -285,14 +302,17 @@ class MockPubSubClient:
             if topic in self._map_peer_id_to_pubsub_client[peer_id].topics
         )
 
-    async def _listen_inbox(self):
+    async def _listen_inbox(self) -> None:
         """
         Make use of the reader/writer pair for each subscription.
         """
         while True:
             ps_msg_pair = await self._inbox.get()
             stream_pair = self._topic_subscribed_streams[ps_msg_pair.topic]
-            await write_pbmsg(stream_pair.reader, ps_msg_pair.ps_msg)
+            await write_pbmsg(
+                cast(asyncio.StreamWriter, stream_pair.reader),
+                ps_msg_pair.ps_msg,
+            )
             # TODO: read the validation result from the upstream
             # res = await stream_pair.writer.read(1)
             res_validation = True
@@ -302,7 +322,7 @@ class MockPubSubClient:
                     ps_msg=ps_msg_pair.ps_msg,
                 )
 
-    async def _push_msg(self, peer_id: PeerID, topic: str, ps_msg: p2pd_pb.PSMessage):
+    async def _push_msg(self, peer_id: PeerID, topic: str, ps_msg: p2pd_pb.PSMessage) -> None:
         pubsubc = self._map_peer_id_to_pubsub_client[peer_id]
         ps_msg_pair = PSMessageTuple(
             src_peer_id=self.peer_id,
@@ -311,7 +331,7 @@ class MockPubSubClient:
         )
         await pubsubc._inbox.put(ps_msg_pair)
 
-    async def _relay(self, src_peer_id: PeerID, ps_msg: p2pd_pb.PSMessage):
+    async def _relay(self, src_peer_id: PeerID, ps_msg: p2pd_pb.PSMessage) -> None:
         for topic in ps_msg.topicIDs:
             peer_filter = functools.partial(self._pubsub_peer_filter, topic=topic)
             peers_pubsub = filter(peer_filter, self._control_client._peers)
@@ -351,7 +371,7 @@ class MockPubSubClient:
 
     async def subscribe(self, topic: str) -> MockStreamPair:
         if topic in self.topics:
-            return
+            raise ValueError(f"topic {topic} has been subscribed before")
         reader = MockStreamReaderWriter()
         writer = MockStreamReaderWriter()
         setattr(writer, 'close', functools.partial(self._unsubscribe, topic=topic))
@@ -365,7 +385,7 @@ class MockDHTClient:
     KVALUE = 20
 
     _control_client: MockControlClient
-    _provides_store = MutableSet[bytes]
+    _provides_store: MutableSet[bytes]
     _values_store: Dict[bytes, bytes]
     _map_peer_id_to_dht_client: Dict[PeerID, 'MockDHTClient']
 

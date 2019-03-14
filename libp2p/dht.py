@@ -63,7 +63,7 @@ class BaseDHT(ABC):
 class DaemonDHT(BaseDHT):
     dht_client: DHTClient
 
-    def __init__(self, dht_client):
+    def __init__(self, dht_client: DHTClient) -> None:
         self.dht_client = dht_client
 
     async def find_peer(self, peer_id: PeerID) -> PeerInfo:

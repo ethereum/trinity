@@ -32,15 +32,15 @@ class BaseHost(ABC):
     """
 
     @abstractmethod
-    def get_id(self) -> PeerID:
+    async def get_id(self) -> PeerID:
         pass
 
     @abstractmethod
-    def get_addrs(self) -> Sequence[Multiaddr]:
+    async def get_addrs(self) -> Sequence[Multiaddr]:
         pass
 
     @abstractmethod
-    def new_stream(
+    async def new_stream(
             self,
             peer_id: PeerID,
             protocol_ids: Sequence[str]) -> Tuple[
@@ -48,19 +48,19 @@ class BaseHost(ABC):
         pass
 
     @abstractmethod
-    def connect(self, peer_info: PeerInfo) -> None:
+    async def connect(self, peer_info: PeerInfo) -> None:
         pass
 
     @abstractmethod
-    def list_peers(self) -> Tuple[PeerInfo, ...]:
+    async def list_peers(self) -> Tuple[PeerInfo, ...]:
         pass
 
     @abstractmethod
-    def disconnect(self, peer_id: PeerID) -> None:
+    async def disconnect(self, peer_id: PeerID) -> None:
         pass
 
     @abstractmethod
-    def set_stream_handler(self, protocol_id: str, stream_handler: StreamHandler) -> None:
+    async def set_stream_handler(self, protocol_id: str, stream_handler: StreamHandler) -> None:
         pass
 
     # ignore network and mux now
@@ -87,7 +87,7 @@ class DaemonHost(BaseHost):
     def __init__(self, control_client: ControlClient):
         self.control_client = control_client
 
-    async def get_peer_info(self):
+    async def get_peer_info(self) -> PeerInfo:
         if self.peer_info is None:
             peer_id, maddrs = await self.control_client.identify()
             self.peer_info = PeerInfo(peer_id, maddrs)

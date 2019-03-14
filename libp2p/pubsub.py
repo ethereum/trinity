@@ -26,19 +26,19 @@ class BasePubSub(ABC):
     """
 
     @abstractmethod
-    def subscribe(self, topic: str):
+    async def subscribe(self, topic: str) -> None:
         pass
 
     @abstractmethod
-    def get_topics(self):
+    async def get_topics(self) -> Tuple[str, ...]:
         pass
 
     @abstractmethod
-    def publish(self, topic, data):
+    async def publish(self, topic: str, data: bytes) -> None:
         pass
 
     @abstractmethod
-    def list_peers(self, topic):
+    async def list_peers(self, topic: str) -> Tuple[PeerID, ...]:
         pass
 
     # @abstractmethod
@@ -66,16 +66,16 @@ class DaemonPubSub(BasePubSub):
     """
     pubsub_client: PubSubClient
     _map_topic_stream: Dict[str, Tuple[asyncio.StreamReader, asyncio.StreamWriter]]
-    _map_topic_task_listener: Dict[str, asyncio.Task]
+    _map_topic_task_listener: Dict[str, "asyncio.Future[None]"]
     _validators: Dict[str, Validator]
 
-    def __init__(self, pubsub_client: PubSubClient):
+    def __init__(self, pubsub_client: PubSubClient) -> None:
         self.pubsub_client = pubsub_client
         self._map_topic_stream = {}
         self._map_topic_task_listener = {}
         self._validators = {}
 
-    def register_topic_validator(self, topic: str, validator: Validator):
+    def register_topic_validator(self, topic: str, validator: Validator) -> None:
         self._validators[topic] = validator
 
     async def subscribe(self, topic: str) -> None:
@@ -143,7 +143,7 @@ class DaemonPubSub(BasePubSub):
                     self._call_validator(
                         topic,
                         self._validators[topic],
-                        ps_msg.from_field,
+                        PeerID(ps_msg.from_field),
                         ps_msg,
                         writer,
                     )

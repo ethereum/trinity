@@ -23,3 +23,14 @@ class Node:
     dht: BaseDHT
     pubsub: BasePubSub
     connmgr: BaseConnectionManager
+
+    def __init__(
+            self,
+            host: BaseHost,
+            dht: BaseDHT,
+            pubsub: BasePubSub,
+            connmgr: BaseConnectionManager):
+        self.host = host
+        self.dht = dht
+        self.pubsub = pubsub
+        self.connmgr = connmgr

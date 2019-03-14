@@ -17,7 +17,7 @@ class BaseConnectionManager(ABC):
     """
 
     @abstractmethod
-    def tag_peer(self, peer_id: PeerID, tag: str, weight: int) -> None:
+    async def tag_peer(self, peer_id: PeerID, tag: str, weight: int) -> None:
         pass
 
     @abstractmethod
@@ -25,7 +25,7 @@ class BaseConnectionManager(ABC):
         pass
 
     @abstractmethod
-    def trim(self) -> None:
+    async def trim(self) -> None:
         pass
 
     # @abstractmethod
