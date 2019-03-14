@@ -3,6 +3,7 @@ from collections import (
     defaultdict,
 )
 import functools
+import time
 from typing import (
     Callable,
     Dict,
@@ -253,6 +254,8 @@ class MockPubSubClient:
     _map_peer_id_to_pubsub_client: Dict[PeerID, 'MockPubSubClient']
     _inbox: "asyncio.Queue[PSMessageTuple]" = None
     _inbox_listener: "asyncio.Future[None]" = None
+    _counter: int
+    _seen_msg_ids: MutableSet[bytes]  # it should be timecache, but ignore this for now
 
     def __init__(
             self,
@@ -262,6 +265,8 @@ class MockPubSubClient:
         self._control_client = control_client
         self._map_peer_id_to_pubsub_client = map_peer_id_to_pubsub_client
         self._map_peer_id_to_pubsub_client[self._control_client._peer_id] = self
+        self._counter = int(time.time())
+        self._seen_msg_ids = set()
 
     def __del__(self) -> None:
         del self._map_peer_id_to_pubsub_client[self.peer_id]
@@ -302,6 +307,27 @@ class MockPubSubClient:
             if topic in self._map_peer_id_to_pubsub_client[peer_id].topics
         )
 
+    async def publish(self, topic: str, data: bytes) -> None:
+        from_field = self.peer_id.to_bytes()
+        ps_msg = p2pd_pb.PSMessage(
+            seqno=self._next_seqno(),
+            data=data,
+            topicIDs=[topic],
+        )
+        # TODO: the setter of `PSMessage.from_field` doesn't work, workaround with `setattr`
+        setattr(ps_msg, 'from', from_field)
+        await self._push_msg(self.peer_id, topic, ps_msg)
+
+    async def subscribe(self, topic: str) -> MockStreamPair:
+        if topic in self.topics:
+            raise ValueError(f"topic {topic} has been subscribed before")
+        reader = MockStreamReaderWriter()
+        writer = MockStreamReaderWriter()
+        setattr(writer, 'close', functools.partial(self._unsubscribe, topic=topic))
+        stream_pair = MockStreamPair(reader, writer)
+        self._topic_subscribed_streams[topic] = stream_pair
+        return stream_pair
+
     async def _listen_inbox(self) -> None:
         """
         Make use of the reader/writer pair for each subscription.
@@ -313,6 +339,10 @@ class MockPubSubClient:
                 cast(asyncio.StreamWriter, stream_pair.reader),
                 ps_msg_pair.ps_msg,
             )
+            msg_id = self._get_msg_id(ps_msg_pair.ps_msg)
+            if msg_id in self._seen_msg_ids:
+                continue
+            self._seen_msg_ids.add(msg_id)
             # TODO: read the validation result from the upstream
             # res = await stream_pair.writer.read(1)
             res_validation = True
@@ -343,14 +373,8 @@ class MockPubSubClient:
             for peer_id in peers_to_publish:
                 await self._push_msg(peer_id, topic, ps_msg)
 
-    async def publish(self, topic: str, data: bytes) -> None:
-        ps_msg = p2pd_pb.PSMessage(
-            data=data,
-            topicIDs=[topic],
-        )
-        # TODO: the setter of `PSMessage.from_field` doesn't work, workaround with `setattr`
-        setattr(ps_msg, 'from', self.peer_id.to_bytes())
-        await self._push_msg(self.peer_id, topic, ps_msg)
+    def _unsubscribe(self, topic: str) -> None:
+        del self._topic_subscribed_streams[topic]
 
     def _pubsub_peer_filter(self, peer_id: PeerID, topic: str) -> bool:
         # check if the peer runs pubsub
@@ -362,22 +386,12 @@ class MockPubSubClient:
             return False
         return True
 
-    def _do_bfs(self, topic: str) -> Tuple[PeerID, ...]:
-        peer_filter = functools.partial(self._pubsub_peer_filter, topic=topic)
-        return self._control_client._bfs(peer_filter)
+    def _next_seqno(self) -> bytes:
+        self._counter += 1
+        return self._counter.to_bytes(length=8, byteorder='big')
 
-    def _unsubscribe(self, topic: str) -> None:
-        del self._topic_subscribed_streams[topic]
-
-    async def subscribe(self, topic: str) -> MockStreamPair:
-        if topic in self.topics:
-            raise ValueError(f"topic {topic} has been subscribed before")
-        reader = MockStreamReaderWriter()
-        writer = MockStreamReaderWriter()
-        setattr(writer, 'close', functools.partial(self._unsubscribe, topic=topic))
-        stream_pair = MockStreamPair(reader, writer)
-        self._topic_subscribed_streams[topic] = stream_pair
-        return stream_pair
+    def _get_msg_id(self, ps_msg: p2pd_pb.PSMessage) -> bytes:
+        return ps_msg.from_field + ps_msg.seqno
 
 
 class MockDHTClient:

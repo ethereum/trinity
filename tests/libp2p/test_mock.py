@@ -7,6 +7,7 @@ import multihash
 from libp2p.mock import (
     MockControlClient,
     MockStreamReaderWriter,
+    PSMessageTuple,
 )
 from libp2p.p2pclient.datastructures import (
     PeerID,
@@ -134,6 +135,11 @@ async def test_mock_pubsub_client(pubsubcs):
     ps_msg_2 = p2pd_pb.PSMessage()
     await read_pbmsg_safe(stream_pair_2.reader, ps_msg_2)
     assert ps_msg_2.data == data
+    # test case: pubsub should not relay seen messages
+    await pubsubcs[0]._push_msg(pubsubcs[0].peer_id, topic, ps_msg_0)
+    assert len(stream_pair_0.reader._buf) == 0
+    assert len(stream_pair_1.reader._buf) == 0
+    assert len(stream_pair_2.reader._buf) == 0
     # test case: unsubscribe by `writer.close`
     stream_pair_0[1].close()
     assert len(await pubsubcs[0].get_topics()) == 0
