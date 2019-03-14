@@ -7,7 +7,6 @@ import multihash
 from libp2p.mock import (
     MockControlClient,
     MockStreamReaderWriter,
-    PSMessageTuple,
 )
 from libp2p.p2pclient.datastructures import (
     PeerID,
