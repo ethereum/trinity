@@ -164,7 +164,7 @@ def get_epoch_boundary_attester_indices(
 def get_attesting_indices(state: 'BeaconState',
                           attestations: Sequence[PendingAttestationRecord],
                           config: CommitteeConfig) -> Sequence[ValidatorIndex]:
-    output = set()
+    output: Set[ValidatorIndex] = set()
     for a in attestations:
         participants = get_attestation_participants(state, a.data, a.aggregation_bitfield, config)
         output = output.union(participants)
