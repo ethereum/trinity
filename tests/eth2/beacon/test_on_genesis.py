@@ -102,12 +102,12 @@ def test_get_genesis_beacon_state(
         for i in range(validator_count)
     )
     genesis_time = 10
-    latest_eth1_data = Eth1Data(**sample_eth1_data_params)
+    genesis_eth1_data = Eth1Data(**sample_eth1_data_params)
 
     state = get_genesis_beacon_state(
         genesis_validator_deposits=genesis_validator_deposits,
         genesis_time=genesis_time,
-        latest_eth1_data=latest_eth1_data,
+        genesis_eth1_data=genesis_eth1_data,
         genesis_epoch=genesis_epoch,
         genesis_slot=genesis_slot,
         genesis_fork_version=genesis_fork_version,

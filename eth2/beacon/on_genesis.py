@@ -60,7 +60,7 @@ def get_genesis_block(genesis_state_root: Hash32,
 def get_genesis_beacon_state(*,
                              genesis_validator_deposits: Sequence[Deposit],
                              genesis_time: Timestamp,
-                             latest_eth1_data: Eth1Data,
+                             genesis_eth1_data: Eth1Data,
                              genesis_slot: Slot,
                              genesis_epoch: Epoch,
                              genesis_fork_version: int,
@@ -116,7 +116,7 @@ def get_genesis_beacon_state(*,
         historical_roots=(),
 
         # Ethereum 1.0 chain data
-        latest_eth1_data=latest_eth1_data,
+        latest_eth1_data=genesis_eth1_data,
         eth1_data_votes=(),
         deposit_index=len(genesis_validator_deposits),
     )
