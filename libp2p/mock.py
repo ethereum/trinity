@@ -308,14 +308,13 @@ class MockPubSubClient:
         )
 
     async def publish(self, topic: str, data: bytes) -> None:
-        from_field = self.peer_id.to_bytes()
         ps_msg = p2pd_pb.PSMessage(
             seqno=self._next_seqno(),
             data=data,
             topicIDs=[topic],
         )
         # TODO: the setter of `PSMessage.from_field` doesn't work, workaround with `setattr`
-        setattr(ps_msg, 'from', from_field)
+        setattr(ps_msg, 'from', self.peer_id.to_bytes())
         await self._push_msg(self.peer_id, topic, ps_msg)
 
     async def subscribe(self, topic: str) -> MockStreamPair:
@@ -323,6 +322,7 @@ class MockPubSubClient:
             raise ValueError(f"topic {topic} has been subscribed before")
         reader = MockStreamReaderWriter()
         writer = MockStreamReaderWriter()
+        # for users to unsubscribe by calling `writer.close`
         setattr(writer, 'close', functools.partial(self._unsubscribe, topic=topic))
         stream_pair = MockStreamPair(reader, writer)
         self._topic_subscribed_streams[topic] = stream_pair
