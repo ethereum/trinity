@@ -226,6 +226,9 @@ class MockControlClient:
         self.handlers[proto] = handler_cb
 
     def _bfs(self, peer_filter: PeerFilter) -> Tuple[PeerID, ...]:
+        """
+        Find the reachable nodes, i.e. the nodes that we have paths to.
+        """
         visited_topic_nodes = set()
         queue = []
         queue.append(self._peer_id)
@@ -395,6 +398,11 @@ class MockPubSubClient:
 
 
 class MockDHTClient:
+    """
+    `_map_peer_id_to_dht_client` stores all nodes information globally. Nodes can communicate to
+    each other only if they have paths between.
+    No Kademlia routing tables here, and XOR distance is used.
+    """
 
     KVALUE = 20
 
@@ -424,8 +432,7 @@ class MockDHTClient:
 
         def _dht_peer_filter(peer_id: PeerID) -> bool:
             # only go through the nodes who run dht
-            # return peer_id in self._map_peer_id_to_dht_client
-            return True
+            return peer_id in self._map_peer_id_to_dht_client
         return self._control_client._bfs(_dht_peer_filter)
 
     async def find_peer(self, peer_id: PeerID) -> PeerInfo:
@@ -484,8 +491,9 @@ class MockDHTClient:
         for peer_id in closest_peers:
             peer_dhtc = self._map_peer_id_to_dht_client[peer_id]
             if key in peer_dhtc._values_store:
+                # TODO: make sure it is consistent with the ECDSA in eth_key
                 return crypto_pb.PublicKey(
-                    Type=crypto_pb.Secp256k1,
+                    Type=crypto_pb.ECDSA,
                     Data=peer_dhtc._values_store[key],
                 )
         raise ControlFailure(f"public key of peer {peer_id} is not found")
