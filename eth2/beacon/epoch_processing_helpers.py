@@ -168,7 +168,7 @@ def get_attesting_indices(state: 'BeaconState',
     for a in attestations:
         participants = get_attestation_participants(state, a.data, a.aggregation_bitfield, config)
         output = output.union(participants)
-    return sorted(list(output))
+    return sorted(output)
 
 
 def get_attesting_balance(state: 'BeaconState',
