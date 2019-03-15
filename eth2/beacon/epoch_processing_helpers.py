@@ -163,12 +163,13 @@ def get_epoch_boundary_attester_indices(
 @to_tuple
 def get_attesting_indices(state: 'BeaconState',
                           attestations: Sequence[PendingAttestationRecord],
-                          config: CommitteeConfig) -> Tuple[ValidatorIndex]:
+                          config: CommitteeConfig) -> Iterable[ValidatorIndex]:
     output: Set[ValidatorIndex] = set()
     for a in attestations:
         participants = get_attestation_participants(state, a.data, a.aggregation_bitfield, config)
         output = output.union(participants)
-    return sorted(output)
+    for result in sorted(output):
+        yield result
 
 
 def get_attesting_balance(state: 'BeaconState',
@@ -181,21 +182,22 @@ def get_attesting_balance(state: 'BeaconState',
     )
 
 
+@to_tuple
 def _get_boundary_attestations_in_epoch(
         *,
         state: 'BeaconState',
         attestations: Sequence[PendingAttestationRecord],
         epoch: Epoch,
-        config: 'BeaconConfig') -> Tuple[PendingAttestationRecord]:
+        config: 'BeaconConfig') -> Iterable[PendingAttestationRecord]:
     slot = get_epoch_start_slot(epoch, config.SLOTS_PER_EPOCH)
-    return tuple(
-        a for a in attestations
-        if a.data.epoch_boundary_root == get_block_root(
+    for a in attestations:
+        block_root = get_block_root(
             state,
             slot,
             config.LATEST_BLOCK_ROOTS_LENGTH
         )
-    )
+        if a.data.epoch_boundary_root == block_root:
+            yield a
 
 
 def _get_current_epoch_boundary_attestations(
