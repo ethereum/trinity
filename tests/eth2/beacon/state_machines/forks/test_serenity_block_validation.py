@@ -531,8 +531,8 @@ def test_verify_slashable_attestation_after_fork(
     # Test that slashable data is still valid after fork
     # Slashable data slot = 10, fork slot = 15, current slot = 20
     past_fork_params = {
-        'previous_version': 0,
-        'current_version': 1,
+        'previous_version': (0).to_bytes(4, 'little'),
+        'current_version': (1).to_bytes(4, 'little'),
         'epoch': 15,
     }
 
