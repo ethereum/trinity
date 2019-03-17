@@ -5,12 +5,16 @@ from eth_utils import (
     ValidationError,
 )
 
+from eth2.beacon.constants import (
+    FAR_FUTURE_EPOCH,
+)
 from eth2.beacon.helpers import (
     get_epoch_start_slot,
 )
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_voluntary_exit,
     validate_voluntary_exit_epoch,
+    validate_voluntary_exit_initiated_exit,
     validate_voluntary_exit_signature,
     validate_voluntary_exit_validator_exit_epoch,
 )
@@ -61,26 +65,19 @@ def test_validate_voluntary_exit(
 )
 @pytest.mark.parametrize(
     (
-        'activation_exit_delay',
-        'current_epoch',
         'validator_exit_epoch',
         'success',
     ),
     [
-        (4, 8, 4 + 8 + 1 + 1, True),
-        (4, 8, 4 + 8 + 1, False),
+        (FAR_FUTURE_EPOCH, True),
+        (FAR_FUTURE_EPOCH - 1, False),
     ]
 )
 def test_validate_voluntary_validator_exit_epoch(
         genesis_state,
-        current_epoch,
         validator_exit_epoch,
-        slots_per_epoch,
-        activation_exit_delay,
         success):
-    state = genesis_state.copy(
-        slot=get_epoch_start_slot(current_epoch, slots_per_epoch),
-    )
+    state = genesis_state
 
     validator_index = 0
 
@@ -89,22 +86,39 @@ def test_validate_voluntary_validator_exit_epoch(
     )
 
     if success:
-        validate_voluntary_exit_validator_exit_epoch(
-            state,
-            validator,
-            current_epoch,
-            slots_per_epoch,
-            activation_exit_delay,
-        )
+        validate_voluntary_exit_validator_exit_epoch(validator)
     else:
         with pytest.raises(ValidationError):
-            validate_voluntary_exit_validator_exit_epoch(
-                state,
-                validator,
-                current_epoch,
-                slots_per_epoch,
-                activation_exit_delay,
-            )
+            validate_voluntary_exit_validator_exit_epoch(validator)
+
+
+@pytest.mark.parametrize(
+    (
+        'initiated_exit',
+        'success',
+    ),
+    [
+        (False, True),
+        (True, False),
+    ]
+)
+def test_validate_voluntary_exit_initiated_exit(
+        genesis_state,
+        initiated_exit,
+        success):
+    state = genesis_state
+
+    validator_index = 0
+
+    validator = state.validator_registry[validator_index].copy(
+        initiated_exit=initiated_exit,
+    )
+
+    if success:
+        validate_voluntary_exit_initiated_exit(validator)
+    else:
+        with pytest.raises(ValidationError):
+            validate_voluntary_exit_initiated_exit(validator)
 
 
 @pytest.mark.parametrize(
