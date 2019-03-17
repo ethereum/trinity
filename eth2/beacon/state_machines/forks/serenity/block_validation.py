@@ -714,7 +714,7 @@ def validate_slashable_attestation(state: 'BeaconState',
 def validate_voluntary_exit(state: 'BeaconState',
                             voluntary_exit: 'VoluntaryExit',
                             slots_per_epoch: int,
-                            activation_exit_delay: int) -> None:
+                            persistent_committee_period: int) -> None:
     validator = state.validator_registry[voluntary_exit.validator_index]
     current_epoch = state.current_epoch(slots_per_epoch)
 
@@ -723,6 +723,8 @@ def validate_voluntary_exit(state: 'BeaconState',
     validate_voluntary_exit_initiated_exit(validator)
 
     validate_voluntary_exit_epoch(voluntary_exit, current_epoch)
+
+    validate_voluntary_exit_persistent(validator, current_epoch, persistent_committee_period)
 
     validate_voluntary_exit_signature(state, voluntary_exit, validator)
 
@@ -757,6 +759,20 @@ def validate_voluntary_exit_epoch(voluntary_exit: 'VoluntaryExit',
         raise ValidationError(
             f"voluntary_exit.epoch ({voluntary_exit.epoch}) should be less than or equal to "
             f"current epoch ({current_epoch})"
+        )
+
+
+def validate_voluntary_exit_persistent(validator: 'ValidatorRecord',
+                                       current_epoch: Epoch,
+                                       persistent_committee_period: int) -> None:
+    """
+    # Must have been in the validator set long enough
+    """
+    if current_epoch - validator.activation_epoch < persistent_committee_period:
+        raise ValidationError(
+            "current_epoch - validator.activation_epoch "
+            f"({current_epoch} - {validator.activation_epoch}) should be greater than or equal to "
+            f"PERSISTENT_COMMITTEE_PERIOD ({persistent_committee_period})"
         )
 
 
