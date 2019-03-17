@@ -326,7 +326,6 @@ def test_process_voluntary_exits(genesis_state,
                                  sample_beacon_block_body_params,
                                  config,
                                  keymap,
-                                 min_attestation_inclusion_delay,
                                  success):
     state = genesis_state.copy(
         slot=get_epoch_start_slot(
