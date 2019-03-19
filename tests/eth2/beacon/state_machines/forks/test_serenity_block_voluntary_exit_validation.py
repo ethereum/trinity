@@ -29,11 +29,10 @@ from eth2.beacon.tools.builder.validator import (
         'num_validators',
         'slots_per_epoch',
         'target_committee_size',
-        'activation_exit_delay',
         'persistent_committee_period',
     ),
     [
-        (40, 2, 2, 2, 16),
+        (40, 2, 2, 16),
     ]
 )
 def test_validate_voluntary_exit(
@@ -219,8 +218,6 @@ def test_validate_voluntary_exit_persistent(
         activation_epoch=activation_epoch,
     )
     state = state.update_validator_registry(validator_index, validator)
-
-    validator_index = 0
 
     if success:
         validate_voluntary_exit_persistent(
