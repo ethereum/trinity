@@ -235,6 +235,16 @@ class BaseBeaconBlock(ssz.Serializable, Configurable, ABC):
             signature=EMPTY_SIGNATURE
         ).root
 
+    @property
+    def header(self) -> BeaconBlockHeader:
+        return BeaconBlockHeader(
+            slot=self.slot,
+            previous_block_root=self.previous_block_root,
+            state_root=self.state_root,
+            block_body_root=self.body.root,
+            signature=self.signature,
+        )
+
     @classmethod
     @abstractmethod
     def from_root(cls, root: Hash32, chaindb: 'BaseBeaconChainDB') -> 'BaseBeaconBlock':
