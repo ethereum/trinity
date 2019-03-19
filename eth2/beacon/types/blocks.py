@@ -235,6 +235,17 @@ class BaseBeaconBlock(ssz.Serializable, Configurable, ABC):
             signature=EMPTY_SIGNATURE
         ).root
 
+    _signed_root = None
+
+    @property
+    # TODO: should supercede `block_without_signature_root`
+    # TODO,cont: unify these methods once we have settled on signing scheme
+    def signed_root(self) -> Hash32:
+        # TODO Use SSZ built-in function
+        if self._signed_root is None:
+            self._signed_root = hash_eth2(ssz.encode(self.copy(signature=EMPTY_SIGNATURE)))
+        return self._signed_root
+
     @property
     def header(self) -> BeaconBlockHeader:
         return BeaconBlockHeader(
