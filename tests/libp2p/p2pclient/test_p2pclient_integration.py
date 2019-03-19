@@ -36,6 +36,7 @@ import libp2p.p2pclient.pb.p2pd_pb2 as p2pd_pb
 
 
 NUM_P2PDS = 4
+TIMEOUT_DURATION = 30  # seconds
 
 
 @pytest.fixture(scope="module")
@@ -120,7 +121,7 @@ class Daemon:
         )
 
     async def wait_until_ready(self):
-        timeout = 10  # seconds
+        timeout = TIMEOUT_DURATION
         lines_head_pattern = (
             b'Control socket:',
             b'Peer ID:',
@@ -376,7 +377,7 @@ async def _connect_and_check(p2pd_tuple_0, p2pd_tuple_1):
 
 
 async def try_connect_until_success(p2pd_tuple_0, p2pd_tuple_1):
-    timeout = 30  # seconds
+    timeout = TIMEOUT_DURATION
     t_start = time.time()
     while True:
         try:
