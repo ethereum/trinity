@@ -19,7 +19,7 @@ from eth_utils.toolz import (
 )
 
 from eth2.beacon import helpers
-from eth2._utils.merkle import get_merkle_root
+from eth2._utils.merkle.normal import get_merkle_root
 from eth2._utils.numeric import (
     integer_squareroot,
     is_power_of_two,
