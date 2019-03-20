@@ -63,7 +63,8 @@ def test_get_genesis_beacon_state(
         latest_slashed_exit_length,
         latest_randao_mixes_length,
         activation_exit_delay,
-        sample_eth1_data_params):
+        sample_eth1_data_params,
+        sample_genesis_block_class):
     withdrawal_credentials = b'\x22' * 32
     fork = Fork(
         previous_version=genesis_fork_version.to_bytes(4, 'little'),
@@ -121,6 +122,7 @@ def test_get_genesis_beacon_state(
         latest_slashed_exit_length=latest_slashed_exit_length,
         latest_randao_mixes_length=latest_randao_mixes_length,
         activation_exit_delay=activation_exit_delay,
+        block_class=sample_genesis_block_class,
     )
 
     # Misc
