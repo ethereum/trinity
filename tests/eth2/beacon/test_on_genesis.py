@@ -14,7 +14,6 @@ from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.forks import Fork
-
 from eth2.beacon.on_genesis import (
     get_genesis_block,
     get_genesis_beacon_state,
