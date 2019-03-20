@@ -52,7 +52,7 @@ async def test_unidirectional_handshake():
         bob_chain_db=get_genesis_chain_db(),
     )
     alice_chain_db = alice.context.chain_db
-    alice_genesis_hash = alice_chain_db.get_canonical_block_by_slot(0, BeaconBlock).hash
+    alice_genesis_root = alice_chain_db.get_canonical_block_by_slot(0, BeaconBlock).root
     alice_head_slot = alice_chain_db.get_canonical_head(BeaconBlock).slot
 
     await asyncio.gather(alice.do_p2p_handshake(), bob.do_p2p_handshake())
@@ -64,7 +64,7 @@ async def test_unidirectional_handshake():
 
     assert msg["protocol_version"] == BCCProtocol.version
     assert msg["network_id"] == alice.context.network_id
-    assert msg["genesis_hash"] == alice_genesis_hash
+    assert msg["genesis_hash"] == alice_genesis_root
     assert msg["head_slot"] == alice_head_slot
 
     await bob.process_sub_proto_handshake(cmd, msg)
