@@ -19,6 +19,33 @@ from trinity.db.beacon.manager import (
 )
 
 
+async def _get_current_slot(genesis_time, seconds_per_slot):
+    import time
+    now = int(time.time())
+    return max((now - genesis_time) // seconds_per_slot, 0)
+
+
+class SlotTicker:
+    def __init__(self, genesis_time, seconds_per_slot, validator, state_machine):
+        self._genesis_time = genesis_time
+        self._seconds_per_slot = seconds_per_slot
+        self._validator = validator
+        self._state_machine = state_machine
+        self._task = asyncio.ensure_future(self._job())
+        self.latest_slot = 0
+
+    async def _job(self):
+        await asyncio.sleep(self._seconds_per_slot)
+        slot = await self._get_current_slot(self._genesis_time, self._seconds_per_slot)
+        if slot > self.latest_slot:
+            self.latest_slot = slot
+            self._validator.new_slot(slot)
+            self._state_machine.new_slot(slot)
+
+    def cancel(self):
+        self._task.cancel()
+
+
 class BeaconNodePlugin(BaseIsolatedPlugin):
 
     @property
@@ -76,9 +103,17 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
             server.cancel_token,
         )
 
+        slot_ticker = SlotTicker(
+            genesis_time=chain_config.genesis_time,
+            seconds_per_slot=6,
+            validator=validator,
+            state_machine=state_machine,
+        )
+
         loop = asyncio.get_event_loop()
         asyncio.ensure_future(exit_with_service_and_endpoint(server, self.context.event_bus))
         asyncio.ensure_future(server.run())
         asyncio.ensure_future(syncer.run())
+        asyncio.ensure_future(slot_ticker._job())
         loop.run_forever()
         loop.close()
