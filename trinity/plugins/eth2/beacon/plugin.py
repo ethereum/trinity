@@ -1,3 +1,13 @@
+from trinity.config import BeaconChainConfig
+from eth2.beacon.types.blocks import (
+    BeaconBlock,
+)
+from eth2.beacon.tools.builder.proposer import (
+    _get_proposer_index,
+    create_block_on_state,
+)
+from eth2.beacon.chains.base import BeaconChain
+from eth_keys.datatypes import PrivateKey
 import asyncio
 from argparse import (
     ArgumentParser,
@@ -31,6 +41,7 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
 
+
 class BeaconNodePlugin(BaseIsolatedPlugin):
 
     @property
@@ -60,8 +71,6 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         args = self.context.args
         trinity_config = self.context.trinity_config
         beacon_config = trinity_config.get_app_config(BeaconAppConfig)
-
-        
 
         db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
         base_db = db_manager.get_db()  # type: ignore
@@ -99,8 +108,9 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         loop = asyncio.get_event_loop()
         asyncio.ensure_future(exit_with_service_and_endpoint(server, self.context.event_bus))
 
+        blocks = get_ten_blocks_context(chain, args.mock_blocks)
+
         if args.mock_blocks:
-            config, genesis_state, genesis_block, blocks = get_ten_blocks_context()
             asyncio.ensure_future(
                 chain_db.coro_persist_block_chain(blocks, SerenityBeaconBlock)
             )
@@ -109,19 +119,6 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         asyncio.ensure_future(syncer.run())
         loop.run_forever()
         loop.close()
-
-
-from eth_keys.datatypes import PrivateKey
-
-from eth2.beacon.chains.base import BeaconChain
-from eth2.beacon.tools.builder.proposer import (
-    _get_proposer_index,
-    create_block_on_state,
-)
-from eth2.beacon.types.blocks import (
-    BeaconBlock,
-)
-from trinity.config import BeaconChainConfig
 
 
 SlotTicker = NewType('SlotTicker', object)

@@ -47,75 +47,48 @@ config = config._replace(
 )
 
 
-def generate_genesis_state(config, pubkeys, num_validators):
-    state, block = create_mock_genesis(
-        num_validators=num_validators,
-        config=config,
-        keymap=keymap,
-        genesis_block_class=SerenityBeaconBlock,
-    )
-    return state, block
 
-
-def get_ten_blocks_context():
-    base_db = AtomicDB()
+def get_ten_blocks_context(chain, gen_blocks):
+    chaindb = chain.chaindb
+    genesis_slot = config.GENESIS_SLOT
+    # genesis
+    block = chain.get_canonical_block_by_slot(genesis_slot)
+    state = chain.get_state_machine(block).state
     sm_class = SerenityStateMachine.configure(
         __name__='SerenityStateMachineForTesting',
         config=config,
     )
-    num_validators = p.NUM_VALIDATORS
-
-    genesis_slot = config.GENESIS_SLOT
-    chaindb = BeaconChainDB(base_db)
-
-    # 1. Create genesis state
-    print('Creating genesis state')
-    genesis_state, genesis_block = create_mock_genesis(
-        num_validators=num_validators,
-        config=config,
-        keymap=keymap,
-        genesis_block_class=SerenityBeaconBlock,
-    )
-    for i in range(num_validators):
-        assert genesis_state.validator_registry[i].is_active(genesis_slot)
-
-    chaindb.persist_block(genesis_block, SerenityBeaconBlock)
-    chaindb.persist_state(genesis_state)
-
-    state = genesis_state
-    block = genesis_block
-
-    chain_length = 10
     blocks = (block,)
+    if gen_blocks:
+        chain_length = 3
+        for current_slot in range(genesis_slot + 1, genesis_slot + chain_length):
+            print(f'current_slot: {current_slot}')
+            attestations = ()
 
-    for current_slot in range(genesis_slot + 1, genesis_slot + chain_length):
-        print(f'current_slot: {current_slot}')
-        attestations = ()
+            block = create_mock_block(
+                state=state,
+                config=config,
+                state_machine=sm_class(
+                    chaindb,
+                    blocks[-1],
+                ),
+                block_class=SerenityBeaconBlock,
+                parent_block=block,
+                keymap=keymap,
+                slot=current_slot,
+                attestations=attestations,
+            )
 
-        block = create_mock_block(
-            state=state,
-            config=config,
-            state_machine=sm_class(
+            # Get state machine instance
+            sm = sm_class(
                 chaindb,
                 blocks[-1],
-            ),
-            block_class=SerenityBeaconBlock,
-            parent_block=block,
-            keymap=keymap,
-            slot=current_slot,
-            attestations=attestations,
-        )
+            )
+            state, _ = sm.import_block(block)
 
-        # Get state machine instance
-        sm = sm_class(
-            chaindb,
-            blocks[-1],
-        )
-        state, _ = sm.import_block(block)
+            chaindb.persist_state(state)
+            chaindb.persist_block(block, SerenityBeaconBlock)
 
-        chaindb.persist_state(state)
-        chaindb.persist_block(block, SerenityBeaconBlock)
+            blocks += (block,)
 
-        blocks += (block,)
-
-    return config, genesis_state, genesis_block, blocks
+    return blocks

@@ -91,6 +91,8 @@ from eth2.beacon.typing import (
     Timestamp,
 )
 
+from trinity.plugins.eth2.beacon.testing_blocks_generators import config, keymap
+
 if TYPE_CHECKING:
     # avoid circular import
     from trinity.nodes.base import Node  # noqa: F401
@@ -624,14 +626,8 @@ class BeaconChainConfig:
 
     def initialize_chain(self,
                          base_db: BaseAtomicDB) -> 'BeaconChain':
-        config = SERENITY_CONFIG
-
         # Only used for testing
-        num_validators = 10
-        privkeys = tuple(2 ** i for i in range(num_validators))
-        keymap = {}
-        for k in privkeys:
-            keymap[bls.privtopub(k)] = k
+        num_validators = 8
         state, block = create_mock_genesis(
             num_validators=num_validators,
             config=config,
