@@ -46,7 +46,6 @@ from trinity.initialization import (
 )
 from trinity.plugins.registry import (
     BASE_PLUGINS,
-    ETH2_NODE_PLUGINS,
 )
 from trinity._utils.ipc import (
     wait_for_ipc,
@@ -67,12 +66,7 @@ from trinity._utils.proxy import (
 
 
 def main_beacon() -> None:
-    main_entry(
-        trinity_boot,
-        APP_IDENTIFIER_BEACON,
-        BASE_PLUGINS + ETH2_NODE_PLUGINS,
-        (BeaconAppConfig,),
-    )
+    main_entry(trinity_boot, APP_IDENTIFIER_BEACON, BASE_PLUGINS, (BeaconAppConfig,))
 
 
 def trinity_boot(args: Namespace,

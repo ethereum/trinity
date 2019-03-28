@@ -30,7 +30,6 @@ from trinity.plugins.builtin.syncer.plugin import (
     SyncerPlugin,
 )
 from trinity.plugins.eth2.beacon.plugin import BeaconNodePlugin
-from trinity.plugins.eth2.validator.plugin import ValidatorPlugin
 from trinity.plugins.builtin.tx_pool.plugin import (
     TxPlugin,
 )
@@ -53,6 +52,7 @@ BASE_PLUGINS: Tuple[BasePlugin, ...] = (
     FixUncleanShutdownPlugin(),
     JsonRpcServerPlugin(),
     PeerDiscoveryPlugin(),
+    BeaconNodePlugin(),
 )
 
 
@@ -67,12 +67,6 @@ ETH1_NODE_PLUGINS: Tuple[BasePlugin, ...] = (
         NoopSyncStrategy(),
     ), FastThenFullSyncStrategy),
     TxPlugin(),
-)
-
-
-ETH2_NODE_PLUGINS: Tuple[BasePlugin, ...] = (
-    BeaconNodePlugin(),
-    ValidatorPlugin(),
 )
 
 
