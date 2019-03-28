@@ -119,7 +119,3 @@ def get_ten_blocks_context():
         blocks += (block,)
 
     return config, genesis_state, genesis_block, blocks
-
-
-if __name__ == "__main__":
-    config, genesis_state, genesis_block, blocks = get_ten_blocks_context()

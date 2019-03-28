@@ -17,6 +17,9 @@ from trinity.sync.beacon.chain import BeaconChainSyncer
 from trinity.db.beacon.manager import (
     create_db_consumer_manager
 )
+from trinity.plugins.eth2.beacon.testing_blocks_generators import (
+    get_ten_blocks_context,
+)
 
 
 class BeaconNodePlugin(BaseIsolatedPlugin):
@@ -42,6 +45,8 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
     def do_start(self) -> None:
         trinity_config = self.context.trinity_config
         beacon_config = trinity_config.get_app_config(BeaconAppConfig)
+
+        config, genesis_state, genesis_block, blocks = get_ten_blocks_context()
 
         db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
         base_db = db_manager.get_db()  # type: ignore
