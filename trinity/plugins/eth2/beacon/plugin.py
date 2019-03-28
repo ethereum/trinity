@@ -25,7 +25,11 @@ from trinity.db.beacon.manager import (
 from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     get_ten_blocks_context,
 )
+from eth2.beacon.tools.builder.proposer import create_block_on_state
 
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+)
 
 class BeaconNodePlugin(BaseIsolatedPlugin):
 
@@ -42,16 +46,22 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
             "--beacon-nodekey",
             help="0xabcd",
         )
+        arg_parser.add_argument(
+            "--mock-blocks",
+            type=bool, required=False,
+        )
 
     def on_ready(self, manager_eventbus: TrinityEventBusEndpoint) -> None:
         if self.context.trinity_config.has_app_config(BeaconAppConfig):
             self.start()
 
     def do_start(self) -> None:
+
+        args = self.context.args
         trinity_config = self.context.trinity_config
         beacon_config = trinity_config.get_app_config(BeaconAppConfig)
 
-        config, genesis_state, genesis_block, blocks = get_ten_blocks_context()
+        
 
         db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
         base_db = db_manager.get_db()  # type: ignore
@@ -88,6 +98,13 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
 
         loop = asyncio.get_event_loop()
         asyncio.ensure_future(exit_with_service_and_endpoint(server, self.context.event_bus))
+
+        if args.mock_blocks:
+            config, genesis_state, genesis_block, blocks = get_ten_blocks_context()
+            asyncio.ensure_future(
+                chain_db.coro_persist_block_chain(blocks, SerenityBeaconBlock)
+            )
+
         asyncio.ensure_future(server.run())
         asyncio.ensure_future(syncer.run())
         loop.run_forever()

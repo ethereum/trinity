@@ -596,11 +596,11 @@ class Eth1AppConfig(BaseAppConfig):
 class BeaconChainConfig:
     def __init__(self,
                  chain_name: str=None,
-                 genesis_time: Timestamp=Timestamp(0)) -> None:
+                 trinity_config: TrinityConfig=None) -> None:
         self._chain_name = chain_name
         self.chain_id = 5566
         self.network_id = 5567
-        self.genesis_time = genesis_time
+        self.genesis_time = trinity_config.genesis_time
 
         self.sm_configuration = (
             (SERENITY_CONFIG.GENESIS_SLOT, SerenityStateMachine),
@@ -653,9 +653,9 @@ class BeaconAppConfig(BaseAppConfig):
                          args: argparse.Namespace,
                          trinity_config: TrinityConfig) -> 'BaseAppConfig':
         if "genesis_time" in args:
-            trinity_config.genesis_time = args.genesis_time
+            trinity_config.genesis_time = int(args.genesis_time)
         else:
-            trinity_config.genesis_time = time.time()
+            trinity_config.genesis_time = 1553765789
 
         if args is not None:
             # This is quick and dirty way to get bootstrap_nodes
@@ -678,4 +678,4 @@ class BeaconAppConfig(BaseAppConfig):
         return self.trinity_config.with_app_suffix(path) / "full"
 
     def get_chain_config(self) -> BeaconChainConfig:
-        return BeaconChainConfig("TestnetChain", self.trinity_config.genesis_time)
+        return BeaconChainConfig("TestnetChain", self.trinity_config)
