@@ -15,6 +15,7 @@ from trinity._utils.shutdown import (
 from trinity.config import BeaconAppConfig
 from trinity.endpoint import TrinityEventBusEndpoint
 from trinity.extensibility import BaseIsolatedPlugin
+from trinity.protocol.bcc.peer import BCCPeerPool
 from trinity.server import BCCServer
 from trinity.sync.beacon.chain import BeaconChainSyncer
 
@@ -110,6 +111,7 @@ class Validator:
     """
     beacon_config: BeaconChainConfig
     chain: BeaconChain
+    peer_pool: BCCPeerPool
     privkey: PrivateKey
     slot_ticker: SlotTicker
 
@@ -117,14 +119,20 @@ class Validator:
             self,
             beacon_config: BeaconChainConfig,
             chain: BeaconChain,
+            peer_pool: BCCPeerPool,
             privkey: PrivateKey,
             slot_ticker: SlotTicker) -> None:
         self.beacon_config = beacon_config
         self.chain = chain
+        self.peer_pool = peer_pool
         self.privkey = privkey
         self.slot_ticker = slot_ticker
 
-    def propose_block(self) -> BeaconBlock:
+    def propose_block(self):
+        block = self._make_proposing_block()
+        # TODO: broadcast the block to the peers in `self.peer_pool`
+
+    def _make_proposing_block(self) -> BeaconBlock:
         parent_block = self.chain.get_canonical_head()
         slot = self.slot_ticker.next_slot()
         state_machine = self.chain.get_state_machine()
