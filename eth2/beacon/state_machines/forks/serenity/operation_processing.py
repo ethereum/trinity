@@ -18,12 +18,16 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 from eth2.beacon.committee_helpers import (
+    get_beacon_proposer_index,
+)
+from eth2.beacon.helpers import (
     slot_to_epoch,
 )
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.pending_attestation_records import PendingAttestationRecord
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.transfers import Transfer
 from eth2.beacon.deposit_helpers import (
     process_deposit,
 )
@@ -33,6 +37,7 @@ from .block_validation import (
     validate_attester_slashing,
     validate_proposer_slashing,
     validate_slashable_indices,
+    validate_transfer,
     validate_voluntary_exit,
 )
 
@@ -214,5 +219,51 @@ def process_deposits(state: BeaconState,
             slots_per_epoch=config.SLOTS_PER_EPOCH,
             deposit_contract_tree_depth=config.DEPOSIT_CONTRACT_TREE_DEPTH,
         )
+
+    return state
+
+
+def process_transfers(state: BeaconState,
+                      block: BaseBeaconBlock,
+                      config: Eth2Config) -> BeaconState:
+    if len(block.body.transfers) > config.MAX_TRANSFERS:
+        raise ValidationError(
+            f"The block ({block}) has too many transfers:\n"
+            f"\tFound {len(block.body.transfers)} transfers, "
+            f"maximum: {config.MAX_TRANSFERS}"
+        )
+
+    for transfer in block.body.transfers:
+        state = process_transfer(state, config, transfer)
+
+    return state
+
+
+def process_transfer(state: BeaconState, config: Eth2Config, transfer: Transfer) -> BeaconState:
+    """
+    Process ``Transfer`` transaction.
+    """
+    validate_transfer(
+        state=state,
+        transfer=transfer,
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+        min_deposit_amount=config.MIN_DEPOSIT_AMOUNT,
+        bls_withdrawal_prefix_byte=config.BLS_WITHDRAWAL_PREFIX_BYTE,
+    )
+
+    # Process the transfer
+    proposer_index = get_beacon_proposer_index(state, state.slot, CommitteeConfig(config))
+    state = state.update_validator_balance(
+        transfer.sender,
+        state.validator_balances[transfer.sender] - (transfer.amount + transfer.fee),
+    )
+    state = state.update_validator_balance(
+        transfer.recipient,
+        state.validator_balances[transfer.recipient] + transfer.amount,
+    )
+    state = state.update_validator_balance(
+        proposer_index,
+        state.validator_balances[proposer_index] + transfer.fee,
+    )
 
     return state

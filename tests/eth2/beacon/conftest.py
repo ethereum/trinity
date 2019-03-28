@@ -8,6 +8,9 @@ from eth_utils import (
 )
 
 from py_ecc import bls
+from eth2.beacon._utils.hash import (
+    hash_eth2,
+)
 from eth2.configs import (
     Eth2Config,
     CommitteeConfig,
@@ -666,7 +669,7 @@ def genesis_validators(init_validator_pubkeys,
         mock_validator_record(
             pubkey=pubkey,
             config=config,
-            withdrawal_credentials=ZERO_HASH32,
+            withdrawal_credentials=config.BLS_WITHDRAWAL_PREFIX_BYTE + hash_eth2(pubkey)[1:],
             is_active=False,
         )
         for pubkey in init_validator_pubkeys

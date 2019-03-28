@@ -21,6 +21,8 @@ from eth_utils import (
     to_tuple,
 )
 
+from py_ecc import bls
+
 from eth.constants import (
     ZERO_HASH32,
 )
@@ -29,8 +31,6 @@ from eth2._utils.bitfield import (
     get_empty_bitfield,
     set_voted,
 )
-from py_ecc import bls
-
 from eth2.configs import (
     CommitteeConfig,
     Eth2Config,
@@ -67,6 +67,7 @@ from eth2.beacon.types.proposal import Proposal
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.transfers import Transfer
 from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.beacon.typing import (
     Bitfield,
@@ -160,13 +161,13 @@ def sign_proof_of_possession(deposit_input: DepositInput,
     )
 
 
-def sign_transaction(*,
-                     message_hash: Hash32,
-                     privkey: int,
-                     fork: Fork,
-                     slot: Slot,
-                     signature_domain: SignatureDomain,
-                     slots_per_epoch: int) -> BLSSignature:
+def sign_operation(*,
+                   message_hash: Hash32,
+                   privkey: int,
+                   fork: Fork,
+                   slot: Slot,
+                   signature_domain: SignatureDomain,
+                   slots_per_epoch: int) -> BLSSignature:
     domain = get_domain(
         fork,
         slot_to_epoch(slot, slots_per_epoch),
@@ -190,7 +191,7 @@ def create_proposal_data_and_signature(
         beacon_chain_shard_number,
         block_root,
     )
-    proposal_signature = sign_transaction(
+    proposal_signature = sign_operation(
         message_hash=proposal.signed_root,
         privkey=privkey,
         fork=state.fork,
@@ -293,7 +294,7 @@ def create_mock_slashable_attestation(state: BeaconState,
         num_voted_attesters=1,
     )
 
-    signature = sign_transaction(
+    signature = sign_operation(
         message_hash=message_hash,
         privkey=keymap[
             state.validator_registry[
@@ -436,7 +437,7 @@ def create_mock_signed_attestation(state: BeaconState,
 
     # Use privkeys to sign the attestation
     signatures = [
-        sign_transaction(
+        sign_operation(
             message_hash=message_hash,
             privkey=keymap[
                 state.validator_registry[
@@ -543,7 +544,7 @@ def create_mock_voluntary_exit(state: BeaconState,
         validator_index=validator_index,
     )
     return voluntary_exit.copy(
-        signature=sign_transaction(
+        signature=sign_operation(
             message_hash=voluntary_exit.signed_root,
             privkey=keymap[state.validator_registry[validator_index].pubkey],
             fork=state.fork,
@@ -606,6 +607,61 @@ def create_mock_deposit_data(*,
         withdrawal_credentials=withdrawal_credentials,
         fork=fork,
         deposit_timestamp=deposit_timestamp,
+    )
+
+
+#
+# Transfer
+#
+def create_transfer(*,
+                    state: BeaconState,
+                    config: Eth2Config,
+                    privkey: int,
+                    sender: ValidatorIndex,
+                    recipient: ValidatorIndex,
+                    amount: Gwei,
+                    fee: Gwei,
+                    slot: Slot) -> Transfer:
+    pubkey = state.validator_registry[sender].pubkey
+    transfer = Transfer(
+        sender=sender,
+        recipient=recipient,
+        amount=amount,
+        fee=fee,
+        slot=slot,
+        pubkey=pubkey,
+    )
+    transfer_signature = sign_operation(
+        message_hash=transfer.signed_root,
+        privkey=privkey,
+        fork=state.fork,
+        slot=transfer.slot,
+        signature_domain=SignatureDomain.DOMAIN_TRANSFER,
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+    )
+    return transfer.copy(
+        signature=transfer_signature,
+    )
+
+
+def create_mock_transfer(
+        state: BeaconState,
+        config: Eth2Config,
+        keymap: Dict[BLSPubkey, int],
+        sender: ValidatorIndex,
+        recipient: ValidatorIndex,
+        amount: Gwei,
+        fee: Gwei,
+        slot: Slot) -> Transfer:
+    return create_transfer(
+        state=state,
+        config=config,
+        privkey=keymap[state.validator_registry[sender].pubkey],
+        sender=sender,
+        recipient=recipient,
+        amount=amount,
+        fee=fee,
+        slot=slot,
     )
 
 

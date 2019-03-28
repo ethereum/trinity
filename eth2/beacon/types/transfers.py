@@ -57,9 +57,17 @@ class Transfer(ssz.Serializable):
         )
 
     _root = None
+    _signed_root = None
 
     @property
     def root(self) -> Hash32:
         if self._root is None:
             self._root = hash_eth2(ssz.encode(self))
         return self._root
+
+    @property
+    def signed_root(self) -> Hash32:
+        # Use SSZ built-in function
+        if self._signed_root is None:
+            self._signed_root = hash_eth2(ssz.encode(self.copy(signature=EMPTY_SIGNATURE)))
+        return self._signed_root

@@ -27,6 +27,9 @@ from eth2._utils import (
 from eth2.configs import (
     CommitteeConfig,
 )
+from eth2.beacon._utils.hash import (
+    hash_eth2,
+)
 from eth2.beacon.committee_helpers import (
     get_beacon_proposer_index,
     get_crosslink_committee_for_attestation,
@@ -57,11 +60,13 @@ from eth2.beacon.types.proposal import Proposal
 from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.types.voluntary_exits import VoluntaryExit
+from eth2.beacon.types.transfers import Transfer
 from eth2.beacon.types.validator_records import ValidatorRecord
+from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.beacon.typing import (
     Bitfield,
     Epoch,
+    Gwei,
     Shard,
     Slot,
     ValidatorIndex,
@@ -795,4 +800,128 @@ def validate_voluntary_exit_signature(state: BeaconState,
             f"Invalid VoluntaryExit signature, validator_index={voluntary_exit.validator_index}, "
             f"pubkey={validator.pubkey}, message_hash={voluntary_exit.signed_root},"
             f"signature={voluntary_exit.signature}, domain={domain}"
+        )
+
+
+#
+# Transfer
+#
+def validate_transfer(state: BeaconState,
+                      transfer: Transfer,
+                      slots_per_epoch: int,
+                      min_deposit_amount: Gwei,
+                      bls_withdrawal_prefix_byte: bytes) -> None:
+    validate_transfer_balance(state, transfer, min_deposit_amount)
+
+    validate_transfer_slot(state, transfer)
+
+    validate_transfer_validator_status(state, transfer, slots_per_epoch)
+
+    validate_transfer_pubkey(state, transfer, bls_withdrawal_prefix_byte)
+
+    validate_transfer_signature(state, transfer, slots_per_epoch)
+
+
+def validate_transfer_balance(state: BeaconState,
+                              transfer: Transfer,
+                              min_deposit_amount: Gwei) -> None:
+    """
+    Validate that the sender has enough balance
+    """
+    # Verify the amount and fee aren't individually too big (for anti-overflow purposes)
+    if state.validator_balances[transfer.sender] < max(transfer.amount, transfer.fee):
+        raise ValidationError(
+            f"sender's balance '{state.validator_balances[transfer.sender]} should be "
+            f"greater than or equal to max(transfer.amount, transfer.fee) = "
+            f"max({transfer.amount}, {transfer.fee})"
+        )
+
+    # Verify that we have enough ETH to send, and that after the transfer the balance will be either
+    # exactly zero or at least MIN_DEPOSIT_AMOUNT
+    is_valid_balance = (
+        state.validator_balances[transfer.sender] == transfer.amount + transfer.fee or
+        state.validator_balances[transfer.sender] >= (
+            transfer.amount + transfer.fee + min_deposit_amount
+        )
+    )
+    if not is_valid_balance:
+        raise ValidationError(
+            f"After the transfer the balance will be either exactly zero or "
+            f"at least MIN_DEPOSIT_AMOUNT ({min_deposit_amount}"
+            f"\tsender's balance: {state.validator_balances[transfer.sender]}"
+        )
+
+
+def validate_transfer_slot(state: BeaconState, transfer: Transfer) -> None:
+    # A transfer is valid in only one slot
+    if state.slot != transfer.slot:
+        raise ValidationError(
+            f"state.slot {state.slot} should be equal to transfer.slot {transfer.slot}"
+        )
+
+
+def validate_transfer_validator_status(state: BeaconState,
+                                       transfer: Transfer,
+                                       slots_per_epoch: int) -> None:
+    """
+    Validate that only withdrawn or not-yet-deposited accounts can transfer
+    """
+    is_withdrawn = (
+        state.current_epoch(slots_per_epoch) >=
+        state.validator_registry[transfer.sender].withdrawable_epoch
+    )
+    is_not_activated = (
+        state.validator_registry[transfer.sender].activation_epoch == FAR_FUTURE_EPOCH
+    )
+    if not (is_withdrawn or is_not_activated):
+        raise ValidationError(
+            f"Only withdrawn or not-yet-deposited accounts can transfer."
+            f"\tsender {transfer.sender}'s status: is_withdrawn={is_withdrawn}, "
+            f"is_not_activated={is_not_activated}"
+        )
+
+
+def validate_transfer_pubkey(state: BeaconState,
+                             transfer: Transfer,
+                             bls_withdrawal_prefix_byte: bytes) -> None:
+    """
+    Validate that the pubkey is valid
+    """
+    is_valid_pubkey = (
+        state.validator_registry[transfer.sender].withdrawal_credentials ==
+        bls_withdrawal_prefix_byte + hash_eth2(transfer.pubkey)[1:]
+    )
+
+    if not is_valid_pubkey:
+        raise ValidationError(
+            f"Sender's withdrawal_credentials "
+            f"({state.validator_registry[transfer.sender].withdrawal_credentials.hex()}) "
+            f"doesn't match bls_withdrawal_prefix_byte + hash_eth2(transfer.pubkey)[1:] = "
+            f"{bls_withdrawal_prefix_byte.hex} + {hash_eth2(transfer.pubkey)[1:].hex()}"
+        )
+
+
+def validate_transfer_signature(state: BeaconState,
+                                transfer: Transfer,
+                                slots_per_epoch: int) -> None:
+    """
+    Validate that the signature is valid.
+    """
+    domain = get_domain(
+        state.fork,
+        slot_to_epoch(transfer.slot, slots_per_epoch),
+        SignatureDomain.DOMAIN_TRANSFER,
+    )
+    is_valid_signature = bls.verify(
+        message_hash=transfer.signed_root,
+        pubkey=transfer.pubkey,
+        signature=transfer.signature,
+        domain=domain,
+    )
+
+    if not is_valid_signature:
+        raise ValidationError(
+            f"Invalid Senser Signature on block, sender_index={transfer.sender}, "
+            f"pubkey={transfer.pubkey}, message_hash={transfer.signed_root}, "
+            f"block.signature={transfer.signature}, domain={domain}"
         )

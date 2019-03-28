@@ -46,7 +46,7 @@ from eth2.beacon.typing import (
 )
 
 from eth2.beacon.tools.builder.validator import (
-    sign_transaction,
+    sign_operation,
 )
 
 
@@ -63,7 +63,7 @@ def _generate_randao_reveal(privkey: int,
 
     message_hash = Hash32(epoch.to_bytes(32, byteorder='little'))
 
-    randao_reveal = sign_transaction(
+    randao_reveal = sign_operation(
         message_hash=message_hash,
         privkey=privkey,
         fork=fork,
@@ -139,7 +139,7 @@ def create_block_on_state(
         empty_signature_block_root,
     ).root
 
-    signature = sign_transaction(
+    signature = sign_operation(
         message_hash=proposal_root,
         privkey=privkey,
         fork=state.fork,
