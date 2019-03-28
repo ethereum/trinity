@@ -80,7 +80,7 @@ from eth2.beacon.tools.builder.initializer import (
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
-from trinity.plugins.eth2.beacon.testing_blocks_generators import config, keymap
+from trinity.plugins.eth2.beacon.testing_blocks_generators import config as testing_config, keymap
 
 if TYPE_CHECKING:
     # avoid circular import
@@ -619,7 +619,7 @@ class BeaconChainConfig:
         num_validators = 8
         state, block = create_mock_genesis(
             num_validators=num_validators,
-            config=config,
+            config=testing_config,
             keymap=keymap,
             genesis_block_class=SerenityBeaconBlock,
             genesis_time=self.genesis_time,
