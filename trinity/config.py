@@ -85,6 +85,7 @@ from eth2.beacon.tools.builder.initializer import (
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
+import time
 
 
 if TYPE_CHECKING:
@@ -591,10 +592,12 @@ class Eth1AppConfig(BaseAppConfig):
 
 class BeaconChainConfig:
     def __init__(self,
-                 chain_name: str=None) -> None:
+                 chain_name: str=None,
+                 genesis_time: Timestamp=Timestamp(0)) -> None:
         self._chain_name = chain_name
         self.chain_id = 5566
         self.network_id = 5567
+        self.genesis_time = genesis_time
 
         self.sm_configuration = (
             (SERENITY_CONFIG.GENESIS_SLOT, SerenityStateMachine),
@@ -631,7 +634,7 @@ class BeaconChainConfig:
             config=config,
             keymap=keymap,
             genesis_block_class=SerenityBeaconBlock,
-            genesis_time=ZERO_TIMESTAMP,
+            genesis_time=self.genesis_time,
         )
         return cast('BeaconChain', self.beacon_chain_class.from_genesis(
             base_db=base_db,
@@ -646,6 +649,11 @@ class BeaconAppConfig(BaseAppConfig):
     def from_parser_args(cls,
                          args: argparse.Namespace,
                          trinity_config: TrinityConfig) -> 'BaseAppConfig':
+        if args.genesis_time:
+            trinity_config.genesis_time = args.genesis_time
+        else:
+            trinity_config.genesis_time = time.time()
+
         if args is not None:
             # This is quick and dirty way to get bootstrap_nodes
             trinity_config.bootstrap_nodes = tuple(
@@ -667,4 +675,4 @@ class BeaconAppConfig(BaseAppConfig):
         return self.trinity_config.with_app_suffix(path) / "full"
 
     def get_chain_config(self) -> BeaconChainConfig:
-        return BeaconChainConfig("TestnetChain")
+        return BeaconChainConfig("TestnetChain", self.genesis_time)
