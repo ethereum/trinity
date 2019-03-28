@@ -35,7 +35,6 @@ from trinity.db.beacon.manager import (
 from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     get_ten_blocks_context,
 )
-from eth2.beacon.tools.builder.proposer import create_block_on_state
 
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,

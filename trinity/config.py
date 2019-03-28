@@ -32,8 +32,6 @@ from eth_keys.datatypes import PrivateKey
 from eth.db.backends.base import BaseAtomicDB
 from eth.typing import VMConfiguration
 
-from py_ecc import bls
-
 from p2p.kademlia import Node as KademliaNode
 from p2p.constants import (
     MAINNET_BOOTNODES,
@@ -72,9 +70,6 @@ from trinity._utils.xdg import (
     get_xdg_trinity_root,
 )
 
-from eth2.beacon.constants import (
-    ZERO_TIMESTAMP,
-)
 from eth2.beacon.state_machines.forks.serenity import (
     SERENITY_CONFIG,
     SerenityStateMachine,
@@ -85,12 +80,6 @@ from eth2.beacon.tools.builder.initializer import (
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
-import time
-
-from eth2.beacon.typing import (
-    Timestamp,
-)
-
 from trinity.plugins.eth2.beacon.testing_blocks_generators import config, keymap
 
 if TYPE_CHECKING:

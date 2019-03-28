@@ -1,15 +1,7 @@
-from eth.db.atomic import AtomicDB
 
 from py_ecc import bls
 from eth2.beacon._utils.hash import (
     hash_eth2,
-)
-from eth2.beacon.db.chain import BeaconChainDB
-from eth2.beacon.state_machines.forks.serenity.blocks import (
-    SerenityBeaconBlock,
-)
-from eth2.beacon.tools.builder.initializer import (
-    create_mock_genesis,
 )
 from eth2.beacon.tools.builder.proposer import (
     create_mock_block,
@@ -45,7 +37,6 @@ config = config._replace(
     SHARD_COUNT=2,
     MIN_ATTESTATION_INCLUSION_DELAY=2,
 )
-
 
 
 def get_ten_blocks_context(chain, gen_blocks):
