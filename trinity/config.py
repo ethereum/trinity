@@ -87,6 +87,9 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
 )
 import time
 
+from eth2.beacon.typing import (
+    Timestamp,
+)
 
 if TYPE_CHECKING:
     # avoid circular import
@@ -649,7 +652,7 @@ class BeaconAppConfig(BaseAppConfig):
     def from_parser_args(cls,
                          args: argparse.Namespace,
                          trinity_config: TrinityConfig) -> 'BaseAppConfig':
-        if args.genesis_time:
+        if "genesis_time" in args:
             trinity_config.genesis_time = args.genesis_time
         else:
             trinity_config.genesis_time = time.time()
@@ -675,4 +678,4 @@ class BeaconAppConfig(BaseAppConfig):
         return self.trinity_config.with_app_suffix(path) / "full"
 
     def get_chain_config(self) -> BeaconChainConfig:
-        return BeaconChainConfig("TestnetChain", self.genesis_time)
+        return BeaconChainConfig("TestnetChain", self.trinity_config.genesis_time)
