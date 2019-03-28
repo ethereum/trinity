@@ -3,6 +3,10 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
+from typing import (
+    NewType,
+)
+
 from p2p import ecies
 from p2p.constants import DEFAULT_MAX_PEERS
 from trinity._utils.shutdown import (
@@ -82,3 +86,63 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         asyncio.ensure_future(syncer.run())
         loop.run_forever()
         loop.close()
+
+
+from eth_keys.datatypes import PrivateKey
+
+from eth2.beacon.chains.base import BeaconChain
+from eth2.beacon.tools.builder.proposer import (
+    _get_proposer_index,
+    create_block_on_state,
+)
+from eth2.beacon.types.blocks import (
+    BeaconBlock,
+)
+from trinity.config import BeaconChainConfig
+
+
+SlotTicker = NewType('SlotTicker', object)
+
+
+class Validator:
+    """
+    Reference: https://github.com/ethereum/trinity/blob/master/eth2/beacon/tools/builder/proposer.py#L175  # noqa: E501
+    """
+    beacon_config: BeaconChainConfig
+    chain: BeaconChain
+    privkey: PrivateKey
+    slot_ticker: SlotTicker
+
+    def __init__(
+            self,
+            beacon_config: BeaconChainConfig,
+            chain: BeaconChain,
+            privkey: PrivateKey,
+            slot_ticker: SlotTicker) -> None:
+        self.beacon_config = beacon_config
+        self.chain = chain
+        self.privkey = privkey
+        self.slot_ticker = slot_ticker
+
+    def propose_block(self) -> BeaconBlock:
+        parent_block = self.chain.get_canonical_head()
+        slot = self.slot_ticker.next_slot()
+        state_machine = self.chain.get_state_machine()
+        proposer_index = _get_proposer_index(
+            state_machine,
+            self.chain.state,
+            slot,
+            parent_block.root,
+            self.beacon_config,
+        )
+        return create_block_on_state(
+            state=self.chain.state,
+            config=self.beacon_config,
+            state_machine=state_machine,
+            block_class=self.chain.get_block_class(),
+            parent_block=parent_block,
+            slot=self.slot_ticker.next_slot(),
+            validator_index=proposer_index,
+            privkey=self.privkey,
+            attestations=[],
+        )
