@@ -10,7 +10,9 @@ from eth2.beacon.state_machines.forks.serenity import (
     SerenityStateMachine,
 )
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
-
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+)
 
 from trinity.plugins.eth2.beacon.testing_config import Config as p
 

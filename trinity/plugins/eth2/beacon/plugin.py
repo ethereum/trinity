@@ -43,6 +43,9 @@ from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     get_ten_blocks_context,
 )
 
+from eth2.beacon.configs import BeaconConfig
+from trinity.plugins.eth2.beacon.testing_blocks_generators import config as testing_config
+
 
 class BeaconNodePlugin(BaseIsolatedPlugin):
 
@@ -108,7 +111,7 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         )
 
         validator = Validator(
-            beacon_config=beacon_config,
+            beacon_config=testing_config,
             chain=chain,
             peer_pool=server.peer_pool,
             privkey=privkey,
@@ -142,14 +145,10 @@ class Validator:
     """
     Reference: https://github.com/ethereum/trinity/blob/master/eth2/beacon/tools/builder/proposer.py#L175  # noqa: E501
     """
-    beacon_config: BeaconChainConfig
-    chain: BeaconChain
-    peer_pool: BCCPeerPool
-    privkey: PrivateKey
 
     def __init__(
             self,
-            beacon_config: BeaconChainConfig,
+            beacon_config: BeaconConfig,
             chain: BeaconChain,
             peer_pool: BCCPeerPool,
             privkey: PrivateKey) -> None:
@@ -162,6 +161,7 @@ class Validator:
         """
         The callback for `SlotTicker`, to be called whenever new slot is ticked.
         """
+        print("New slot", slot)
         self.propose_block(slot=slot)
 
     def propose_block(self, slot: int) -> None:
@@ -229,12 +229,13 @@ class SlotTicker:
         self.latest_slot = 0
 
     async def _job(self) -> None:
-        await asyncio.sleep(self._seconds_per_slot)
-        slot = await _get_current_slot(self._genesis_time, self._seconds_per_slot)
-        if slot > self.latest_slot:
-            self.latest_slot = slot
-            self._validator.new_slot(slot)
-            # self._state_machine.new_slot(slot)
+        while True:
+            await asyncio.sleep(self._seconds_per_slot)
+            slot = await _get_current_slot(self._genesis_time, self._seconds_per_slot)
+            if slot > self.latest_slot:
+                self.latest_slot = slot
+                self._validator.new_slot(slot)
+                # self._state_machine.new_slot(slot)
 
     def cancel(self) -> None:
         self._task.cancel()
