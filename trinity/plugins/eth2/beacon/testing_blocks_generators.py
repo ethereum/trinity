@@ -21,8 +21,10 @@ privkeys = tuple(int.from_bytes(
     hash_eth2(str(i).encode('utf-8'))[:4], 'big')
     for i in range(p.NUM_VALIDATORS)
 )
+index_to_pubkey = {}
 keymap = {}  # pub -> priv
-for k in privkeys:
+for i, k in enumerate(privkeys):
+    index_to_pubkey[i] = bls.privtopub(k)
     keymap[bls.privtopub(k)] = k
 
 pubkeys = list(keymap)
