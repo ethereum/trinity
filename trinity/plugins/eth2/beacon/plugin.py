@@ -210,6 +210,7 @@ class Validator:
             for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
                 peer.sub_proto.send_blocks((block,), request_id=i)
 
+
     def _get_caononical_head(self) -> BaseBeaconBlock:
         return self.chain.get_canonical_head()
 
