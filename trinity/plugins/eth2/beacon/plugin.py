@@ -11,6 +11,9 @@ from eth_keys.datatypes import PrivateKey
 
 
 from eth2.beacon.chains.base import BeaconChain
+from eth2.beacon.state_machines.forks.serenity import (
+    SerenityStateMachine,
+)
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
@@ -48,7 +51,11 @@ from trinity.plugins.eth2.beacon.testing_blocks_generators import (
 )
 
 from eth2.beacon.configs import BeaconConfig
-from trinity.plugins.eth2.beacon.testing_blocks_generators import config as testing_config
+from trinity.plugins.eth2.beacon.testing_blocks_generators import (
+    config as testing_config,
+    index_to_pubkey,
+    keymap,
+)
 
 
 class BeaconNodePlugin(BaseIsolatedPlugin):
@@ -174,12 +181,34 @@ class Validator:
         """
         The callback for `SlotTicker`, to be called whenever new slot is ticked.
         """
-        print("New slot", slot)
         self.propose_block(slot=slot)
 
     def propose_block(self, slot: int) -> None:
-        block = self._make_proposing_block(slot)
-        # TODO: broadcast the block to the peers in `self.peer_pool`
+        assert slot > self.beacon_config.GENESIS_SLOT
+        parent_block = self._get_caononical_head()
+        # state_machine = self._get_head_state_machine()
+        # state = self._get_head_state()
+        sm_class = SerenityStateMachine.configure(
+            __name__='SerenityStateMachineForTesting',
+            config=self.beacon_config,
+        )
+        state_machine = sm_class(
+            self.chain.chaindb,
+            parent_block,
+        )
+        state = state_machine.state
+        # return
+        proposer_index = _get_proposer_index(
+            state_machine,
+            state,
+            slot,
+            parent_block.root,
+            self.beacon_config,
+        )
+        if self.validator_index == proposer_index:
+            block = self._make_proposing_block(slot, state, state_machine, parent_block)
+            for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
+                peer.sub_proto.send_blocks((block,), request_id=i)
 
     def _get_caononical_head(self) -> BaseBeaconBlock:
         return self.chain.get_canonical_head()
@@ -190,25 +219,19 @@ class Validator:
     def _get_head_state(self) -> BeaconState:
         return self._get_head_state_machine().state
 
-    def _make_proposing_block(self, slot: int) -> BaseBeaconBlock:
-        parent_block = self._get_caononical_head()
-        state_machine = self._get_head_state_machine()
-        state = self._get_head_state()
-        proposer_index = _get_proposer_index(
-            state_machine,
-            state,
-            slot,
-            parent_block.root,
-            self.beacon_config,
-        )
+    def _make_proposing_block(self,
+                              slot: int,
+                              state: BeaconState,
+                              state_machine: BaseBeaconStateMachine,
+                              parent_block: BaseBeaconBlock) -> BaseBeaconBlock:
         return create_block_on_state(
             state=state,
             config=self.beacon_config,
             state_machine=state_machine,
-            block_class=self.chain.get_block_class(),
+            block_class=SerenityBeaconBlock,
             parent_block=parent_block,
             slot=slot,
-            validator_index=proposer_index,
+            validator_index=self.validator_index,
             privkey=self.privkey,
             attestations=[],
         )
