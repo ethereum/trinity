@@ -59,6 +59,10 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
 
     def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
         arg_parser.add_argument(
+            "--validator_index",
+            type=int, required=True,
+        )
+        arg_parser.add_argument(
             "--bootstrap_nodes",
             help="enode://node1@0.0.0.0:1234,enode://node2@0.0.0.0:5678",
         )
@@ -114,11 +118,13 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
             server.cancel_token,
         )
 
+        validator_privkey = keymap[index_to_pubkey[self.context.args.validator_index]]
         validator = Validator(
+            validator_index=self.context.args.validator_index,
             beacon_config=testing_config,
             chain=chain,
             peer_pool=server.peer_pool,
-            privkey=privkey,
+            privkey=validator_privkey,
         )
 
         slot_ticker = SlotTicker(
@@ -153,10 +159,12 @@ class Validator:
 
     def __init__(
             self,
+            validator_index: int,
             beacon_config: BeaconConfig,
             chain: BeaconChain,
             peer_pool: BCCPeerPool,
             privkey: PrivateKey) -> None:
+        self.validator_index = validator_index
         self.beacon_config = beacon_config
         self.chain = chain
         self.peer_pool = peer_pool
