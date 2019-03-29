@@ -21,6 +21,10 @@ from eth2.beacon.tools.builder.proposer import (
 )
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import (
+    Slot,
+)
+
 from p2p import ecies
 from p2p.constants import DEFAULT_MAX_PEERS
 from trinity._utils.shutdown import (
@@ -118,6 +122,7 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         )
 
         slot_ticker = SlotTicker(
+            genesis_slot=testing_config.GENESIS_SLOT,
             genesis_time=chain_config.genesis_time,
             seconds_per_slot=6,
             validator=validator,
@@ -201,10 +206,10 @@ class Validator:
         )
 
 
-async def _get_current_slot(genesis_time, seconds_per_slot):
+async def _get_current_slot(genesis_slot, genesis_time, seconds_per_slot):
     import time
     now = int(time.time())
-    return max((now - genesis_time) // seconds_per_slot, 0)
+    return max((now - genesis_time) // seconds_per_slot, 0) + genesis_slot
 
 
 class SlotTicker:
@@ -217,21 +222,26 @@ class SlotTicker:
 
     def __init__(
             self,
+            genesis_slot: Slot,
             genesis_time: int,
             seconds_per_slot: int,
             validator: Validator,
             state_machine: BaseBeaconStateMachine) -> None:
+        self._genesis_slot = genesis_slot
         self._genesis_time = genesis_time
         self._seconds_per_slot = seconds_per_slot
         self._validator = validator
         self._state_machine = state_machine
-        self._task = asyncio.ensure_future(self._job())
         self.latest_slot = 0
 
     async def _job(self) -> None:
         while True:
             await asyncio.sleep(self._seconds_per_slot)
-            slot = await _get_current_slot(self._genesis_time, self._seconds_per_slot)
+            slot = await _get_current_slot(
+                self._genesis_slot,
+                self._genesis_time,
+                self._seconds_per_slot,
+            )
             if slot > self.latest_slot:
                 self.latest_slot = slot
                 self._validator.new_slot(slot)
