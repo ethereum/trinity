@@ -652,10 +652,10 @@ class BeaconAppConfig(BaseAppConfig):
     def from_parser_args(cls,
                          args: argparse.Namespace,
                          trinity_config: TrinityConfig) -> 'BaseAppConfig':
-        import os
         # Assume genesis file in `trinity_root_dir`
-        file_path = os.path.join(trinity_config.trinity_root_dir, 'genesis.json')
-        genesis = json.loads(open(file_path).read())
+        file_path = trinity_config.trinity_root_dir / 'genesis.json'
+        with open(file_path) as f:
+            genesis = json.load(f)
         trinity_config.genesis_time = genesis['genesis_time']
 
         if args is not None:
