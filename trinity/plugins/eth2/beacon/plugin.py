@@ -1,5 +1,6 @@
 import asyncio
 import time
+import logging
 from argparse import (
     ArgumentParser,
     _SubParsersAction,
@@ -217,6 +218,7 @@ class SlotTicker:
     _state_machine: BaseBeaconStateMachine
     _task: asyncio.Task
     latest_slot: int
+    logger = logging.getLogger('SlotTicker')
 
     def __init__(
             self,
@@ -239,6 +241,7 @@ class SlotTicker:
             if elapse_time >= (0 + self._seconds_per_slot):
                 slot = elapse_time // self._seconds_per_slot + self._genesis_slot
                 if slot > self.latest_slot:
+                    self.logger.info("New slot: %s\tElapse time: %s" % (slot, elapse_time))
                     self.latest_slot = slot
                     self._validator.new_slot(slot)
                     # self._state_machine.new_slot(slot)
