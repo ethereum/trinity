@@ -46,11 +46,12 @@ from trinity.sync.common.chain import (
 from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     get_ten_blocks_context,
 )
-
-from trinity.plugins.eth2.beacon.testing_blocks_generators import (
-    config as testing_config,
+from trinity.plugins.eth2.beacon.testing_config import (
     index_to_pubkey,
     keymap,
+)
+from eth2.beacon.state_machines.forks.testnet.configs import (
+    TESTNET_CONFIG,
 )
 
 
@@ -125,18 +126,17 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         validator_privkey = keymap[index_to_pubkey[self.context.args.validator_index]]
         validator = Validator(
             validator_index=self.context.args.validator_index,
-            eth2_config=testing_config,
             chain=chain,
             peer_pool=server.peer_pool,
             privkey=validator_privkey,
         )
 
         slot_ticker = SlotTicker(
-            genesis_slot=testing_config.GENESIS_SLOT,
+            genesis_slot=chain_config.genesis_slot,
             genesis_time=chain_config.genesis_time,
-            seconds_per_slot=6,
+            # TODO: seconds_per_slot should be acquired from the current state machine
+            seconds_per_slot=TESTNET_CONFIG.SECONDS_PER_SLOT,
             validator=validator,
-            state_machine=chain.get_state_machine(at_block=chain.get_canonical_head()),
         )
 
         loop = asyncio.get_event_loop()
@@ -164,12 +164,10 @@ class Validator:
     def __init__(
             self,
             validator_index: int,
-            eth2_config: Eth2Config,
             chain: BeaconChain,
             peer_pool: BCCPeerPool,
             privkey: PrivateKey) -> None:
         self.validator_index = validator_index
-        self.eth2_config = eth2_config
         self.chain = chain
         self.peer_pool = peer_pool
         self.privkey = privkey
@@ -178,7 +176,6 @@ class Validator:
         """
         The callback for `SlotTicker`, to be called whenever new slot is ticked.
         """
-        assert slot > self.eth2_config.GENESIS_SLOT
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine(at_block=head)
         state = state_machine.state
@@ -187,7 +184,7 @@ class Validator:
             state,
             slot,
             head.root,
-            self.eth2_config,
+            state_machine.config,
         )
         if self.validator_index == proposer_index:
             self.propose_block(slot=slot, state=state, state_machine=state_machine, head_block=head)
@@ -217,7 +214,7 @@ class Validator:
                               parent_block: BaseBeaconBlock) -> BaseBeaconBlock:
         return create_block_on_state(
             state=state,
-            config=self.eth2_config,
+            config=state_machine.config,
             state_machine=state_machine,
             block_class=SerenityBeaconBlock,
             parent_block=parent_block,
@@ -244,12 +241,6 @@ class Validator:
 
 
 class SlotTicker:
-    _genesis_time: int
-    _seconds_per_slot: int
-    _validator: Validator
-    _state_machine: BaseBeaconStateMachine
-    _task: asyncio.Task
-    latest_slot: int
     logger = logging.getLogger('SlotTicker')
 
     def __init__(
@@ -257,8 +248,7 @@ class SlotTicker:
             genesis_slot: Slot,
             genesis_time: int,
             seconds_per_slot: int,
-            validator: Validator,
-            state_machine: BaseBeaconStateMachine) -> None:
+            validator: Validator) -> None:
         self._genesis_slot = genesis_slot
         self._genesis_time = genesis_time
         self._seconds_per_slot = seconds_per_slot
@@ -276,7 +266,3 @@ class SlotTicker:
                     self.logger.info("New slot: %s\tElapse time: %s" % (slot, elapse_time))
                     self.latest_slot = slot
                     self._validator.new_slot(slot)
-                    # self._state_machine.new_slot(slot)
-
-    def cancel(self) -> None:
-        self._task.cancel()

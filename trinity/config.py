@@ -15,6 +15,7 @@ from typing import (
     cast,
     Dict,
     Iterable,
+    NamedTuple,
     TYPE_CHECKING,
     Tuple,
     Type,
@@ -70,20 +71,21 @@ from trinity._utils.xdg import (
     get_xdg_trinity_root,
 )
 
-from eth2.beacon.state_machines.forks.serenity import (
-    SerenityStateMachine,
-)
-from eth2.beacon.state_machines.base import (
-    BeaconStateMachine,
+from eth2.beacon.state_machines.forks.testnet import (
+    TestnetStateMachine,
 )
 from eth2.beacon.tools.builder.initializer import (
     create_mock_genesis,
 )
-from eth2.beacon.state_machines.forks.serenity.blocks import (
-    SerenityBeaconBlock,
+from eth2.beacon.state_machines.base import BaseBeaconStateMachine
+from eth2.beacon.typing import (
+    Timestamp,
+    Slot,
 )
-from trinity.plugins.eth2.beacon.testing_blocks_generators import config as testing_config, keymap
-
+from trinity.plugins.eth2.beacon.testing_config import (
+    Config as testing_config,
+    keymap,
+)
 if TYPE_CHECKING:
     # avoid circular import
     from trinity.nodes.base import Node  # noqa: F401
@@ -586,29 +588,34 @@ class Eth1AppConfig(BaseAppConfig):
         return config.with_app_suffix(config.data_dir / "nodedb")
 
 
+class BeaconGenesisData(NamedTuple):
+    genesis_time: Timestamp
+    genesis_slot: Slot
+    sm_configuration: Tuple[Tuple[int, Type[BaseBeaconStateMachine]], ...]
+    # TODO: Maybe Validator deposit data
+
+
 class BeaconChainConfig:
     def __init__(self,
                  chain_name: str=None,
-                 trinity_config: TrinityConfig=None) -> None:
+                 genesis_data: BeaconGenesisData=None) -> None:
         self._chain_name = chain_name
         self.chain_id = 5566
         self.network_id = 5567
-        self.genesis_time = trinity_config.genesis_time
-        self.eth2_config = testing_config
-        self._sm_configuration = None
+        self.genesis_data = genesis_data
         self._beacon_chain_class = None
 
     @property
-    def sm_configuration(self) -> BeaconStateMachine:
-        if self._sm_configuration is None:
-            serenity_state_machine = SerenityStateMachine.configure(
-                __name__='SerenityStateMachineForTesting',
-                config=self.eth2_config,
-            )
-            self._sm_configuration = (
-                (self.eth2_config.GENESIS_SLOT, serenity_state_machine),
-            )
-        return self._sm_configuration
+    def genesis_time(self):
+        return self.genesis_data.genesis_time
+
+    @property
+    def genesis_slot(self):
+        return self.genesis_data.genesis_slot
+
+    @property
+    def sm_configuration(self):
+        return self.genesis_data.sm_configuration
 
     @property
     def chain_name(self) -> str:
@@ -631,12 +638,11 @@ class BeaconChainConfig:
     def initialize_chain(self,
                          base_db: BaseAtomicDB) -> 'BeaconChain':
         # Only used for testing
-        num_validators = 8
         state, block = create_mock_genesis(
-            num_validators=num_validators,
-            config=self.eth2_config,
+            num_validators=testing_config.NUM_VALIDATORS,
+            config=TestnetStateMachine.config,
             keymap=keymap,
-            genesis_block_class=SerenityBeaconBlock,
+            genesis_block_class=TestnetStateMachine.block_class,
             genesis_time=self.genesis_time,
         )
         return cast('BeaconChain', self.beacon_chain_class.from_genesis(
@@ -656,7 +662,14 @@ class BeaconAppConfig(BaseAppConfig):
         file_path = trinity_config.trinity_root_dir / 'genesis.json'
         with open(file_path) as f:
             genesis = json.load(f)
-        trinity_config.genesis_time = genesis['genesis_time']
+
+        trinity_config.genesis_data = BeaconGenesisData(
+            genesis_time=genesis['genesis_time'],
+            genesis_slot=2**32,
+            sm_configuration=(
+                (0, TestnetStateMachine),
+            ),
+        )
 
         if args is not None:
             # This is quick and dirty way to get bootstrap_nodes
@@ -679,4 +692,4 @@ class BeaconAppConfig(BaseAppConfig):
         return self.trinity_config.with_app_suffix(path) / "full"
 
     def get_chain_config(self) -> BeaconChainConfig:
-        return BeaconChainConfig("TestnetChain", self.trinity_config)
+        return BeaconChainConfig("TestnetChain", self.trinity_config.genesis_data)

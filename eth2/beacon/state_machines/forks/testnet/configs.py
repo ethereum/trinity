@@ -1,0 +1,15 @@
+from eth2.beacon.state_machines.forks.serenity.configs import (
+    SERENITY_CONFIG,
+)
+
+SLOTS_PER_EPOCH = 4
+
+
+TESTNET_CONFIG = SERENITY_CONFIG._replace(
+    SLOTS_PER_EPOCH=SLOTS_PER_EPOCH,
+    GENESIS_SLOT=2**32,
+    GENESIS_EPOCH=2**32 // SLOTS_PER_EPOCH,
+    TARGET_COMMITTEE_SIZE=2,
+    SHARD_COUNT=2,
+    MIN_ATTESTATION_INCLUSION_DELAY=2,
+)
