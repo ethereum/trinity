@@ -1,4 +1,5 @@
 import asyncio
+import time
 from argparse import (
     ArgumentParser,
     _SubParsersAction,
@@ -47,7 +48,6 @@ from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     index_to_pubkey,
     keymap,
 )
-import time
 
 
 class BeaconNodePlugin(BaseIsolatedPlugin):
@@ -176,7 +176,8 @@ class Validator:
         self.propose_block(slot=slot)
 
     def propose_block(self, slot: int) -> None:
-        assert slot > self.eth2_config.GENESIS_SLOT
+        # FIXME: Should the case current slot equals genesis slot be treated as edge case?
+        assert slot >= self.eth2_config.GENESIS_SLOT
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine(at_block=head)
         state = state_machine.state
@@ -210,11 +211,6 @@ class Validator:
         )
 
 
-def _get_current_slot(genesis_slot, genesis_time, seconds_per_slot):
-    now = int(time.time())
-    return max((now - genesis_time) // seconds_per_slot, 0) + genesis_slot
-
-
 class SlotTicker:
     _genesis_time: int
     _seconds_per_slot: int
@@ -239,15 +235,15 @@ class SlotTicker:
     async def _job(self) -> None:
         while True:
             await asyncio.sleep(self._seconds_per_slot)
-            slot = _get_current_slot(
-                self._genesis_slot,
-                self._genesis_time,
-                self._seconds_per_slot,
-            )
-            if slot > self.latest_slot:
-                print("new slot", slot)
-                self.latest_slot = slot
-                self._validator.new_slot(slot)
+            now = int(time.time())
+            elapse_time = now - self._genesis_time
+            # FIXME: Should `elapse_time == 0` be treated as edge case?
+            if elapse_time >= 0:
+                slot = elapse_time // self._seconds_per_slot + self._genesis_slot
+                if slot > self.latest_slot:
+                    self.latest_slot = slot
+                    self._validator.new_slot(slot)
+                    # self._state_machine.new_slot(slot)
 
     def cancel(self) -> None:
         self._task.cancel()
