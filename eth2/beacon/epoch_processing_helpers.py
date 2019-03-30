@@ -168,7 +168,7 @@ def get_epoch_boundary_attesting_balances(
         state: 'BeaconState',
         config: Eth2Config) -> Tuple[Gwei, Gwei]:
 
-    previous_target_root = get_block_root(
+    previous_epoch_boundary_root = get_block_root(
         state,
         get_epoch_start_slot(previous_epoch, config.SLOTS_PER_EPOCH),
         config.SLOTS_PER_HISTORICAL_ROOT,
@@ -178,7 +178,7 @@ def get_epoch_boundary_attesting_balances(
         state,
         state.current_epoch_attestations + state.previous_epoch_attestations,
         state.previous_justified_epoch,
-        previous_target_root,
+        previous_epoch_boundary_root,
         CommitteeConfig(config),
     )
 
@@ -188,7 +188,7 @@ def get_epoch_boundary_attesting_balances(
         config.MAX_DEPOSIT_AMOUNT,
     )
 
-    current_target_root = get_block_root(
+    current_epoch_boundary_root = get_block_root(
         state,
         get_epoch_start_slot(current_epoch, config.SLOTS_PER_EPOCH),
         config.SLOTS_PER_HISTORICAL_ROOT,
@@ -198,7 +198,7 @@ def get_epoch_boundary_attesting_balances(
         state,
         state.current_epoch_attestations,
         state.justified_epoch,
-        current_target_root,
+        current_epoch_boundary_root,
         CommitteeConfig(config),
     )
 
