@@ -176,8 +176,7 @@ class Validator:
         self.propose_block(slot=slot)
 
     def propose_block(self, slot: int) -> None:
-        # FIXME: Should the case current slot equals genesis slot be treated as edge case?
-        assert slot >= self.eth2_config.GENESIS_SLOT
+        assert slot > self.eth2_config.GENESIS_SLOT
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine(at_block=head)
         state = state_machine.state
@@ -237,8 +236,7 @@ class SlotTicker:
             await asyncio.sleep(self._seconds_per_slot)
             now = int(time.time())
             elapse_time = now - self._genesis_time
-            # FIXME: Should `elapse_time == 0` be treated as edge case?
-            if elapse_time >= 0:
+            if elapse_time >= (0 + self._seconds_per_slot):
                 slot = elapse_time // self._seconds_per_slot + self._genesis_slot
                 if slot > self.latest_slot:
                     self.latest_slot = slot
