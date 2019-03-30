@@ -3,17 +3,9 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-from typing import (
-    NewType,
-)
-
 from eth_keys.datatypes import PrivateKey
 
-
 from eth2.beacon.chains.base import BeaconChain
-from eth2.beacon.state_machines.forks.serenity import (
-    SerenityStateMachine,
-)
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
@@ -35,7 +27,6 @@ from trinity._utils.shutdown import (
 )
 from trinity.config import (
     BeaconAppConfig,
-    BeaconChainConfig,
 )
 from trinity.endpoint import TrinityEventBusEndpoint
 from trinity.extensibility import BaseIsolatedPlugin
@@ -56,6 +47,7 @@ from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     index_to_pubkey,
     keymap,
 )
+import time
 
 
 class BeaconNodePlugin(BaseIsolatedPlugin):
@@ -185,39 +177,20 @@ class Validator:
 
     def propose_block(self, slot: int) -> None:
         assert slot > self.beacon_config.GENESIS_SLOT
-        parent_block = self._get_caononical_head()
-        # state_machine = self._get_head_state_machine()
-        # state = self._get_head_state()
-        sm_class = SerenityStateMachine.configure(
-            __name__='SerenityStateMachineForTesting',
-            config=self.beacon_config,
-        )
-        state_machine = sm_class(
-            self.chain.chaindb,
-            parent_block,
-        )
+        head = self.chain.get_canonical_head()
+        state_machine = self.chain.get_state_machine(at_block=head)
         state = state_machine.state
-        # return
         proposer_index = _get_proposer_index(
             state_machine,
             state,
             slot,
-            parent_block.root,
+            head.root,
             self.beacon_config,
         )
         if self.validator_index == proposer_index:
-            block = self._make_proposing_block(slot, state, state_machine, parent_block)
+            block = self._make_proposing_block(slot, state, state_machine, head)
             for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
                 peer.sub_proto.send_blocks((block,), request_id=i)
-
-    def _get_caononical_head(self) -> BaseBeaconBlock:
-        return self.chain.get_canonical_head()
-
-    def _get_head_state_machine(self) -> BaseBeaconStateMachine:
-        return self.chain.get_state_machine(at_block=self._get_caononical_head())
-
-    def _get_head_state(self) -> BeaconState:
-        return self._get_head_state_machine().state
 
     def _make_proposing_block(self,
                               slot: int,
@@ -237,8 +210,7 @@ class Validator:
         )
 
 
-async def _get_current_slot(genesis_slot, genesis_time, seconds_per_slot):
-    import time
+def _get_current_slot(genesis_slot, genesis_time, seconds_per_slot):
     now = int(time.time())
     return max((now - genesis_time) // seconds_per_slot, 0) + genesis_slot
 
@@ -262,21 +234,20 @@ class SlotTicker:
         self._genesis_time = genesis_time
         self._seconds_per_slot = seconds_per_slot
         self._validator = validator
-        self._state_machine = state_machine
         self.latest_slot = 0
 
     async def _job(self) -> None:
         while True:
             await asyncio.sleep(self._seconds_per_slot)
-            slot = await _get_current_slot(
+            slot = _get_current_slot(
                 self._genesis_slot,
                 self._genesis_time,
                 self._seconds_per_slot,
             )
             if slot > self.latest_slot:
+                print("new slot", slot)
                 self.latest_slot = slot
                 self._validator.new_slot(slot)
-                # self._state_machine.new_slot(slot)
 
     def cancel(self) -> None:
         self._task.cancel()

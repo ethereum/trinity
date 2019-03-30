@@ -71,8 +71,10 @@ from trinity._utils.xdg import (
 )
 
 from eth2.beacon.state_machines.forks.serenity import (
-    SERENITY_CONFIG,
     SerenityStateMachine,
+)
+from eth2.beacon.state_machines.base import (
+    BeaconStateMachine,
 )
 from eth2.beacon.tools.builder.initializer import (
     create_mock_genesis,
@@ -592,10 +594,21 @@ class BeaconChainConfig:
         self.chain_id = 5566
         self.network_id = 5567
         self.genesis_time = trinity_config.genesis_time
+        self.eth2_config = testing_config
+        self._sm_configuration = None
+        self._beacon_chain_class = None
 
-        self.sm_configuration = (
-            (SERENITY_CONFIG.GENESIS_SLOT, SerenityStateMachine),
-        )
+    @property
+    def sm_configuration(self) -> BeaconStateMachine:
+        if self._sm_configuration is None:
+            serenity_state_machine = SerenityStateMachine.configure(
+                __name__='SerenityStateMachineForTesting',
+                config=self.eth2_config,
+            )
+            self._sm_configuration = (
+                (self.eth2_config.GENESIS_SLOT, serenity_state_machine),
+            )
+        return self._sm_configuration
 
     @property
     def chain_name(self) -> str:
@@ -606,12 +619,14 @@ class BeaconChainConfig:
 
     @property
     def beacon_chain_class(self) -> Type['BeaconChain']:
-        from eth2.beacon.chains.base import BeaconChain  # noqa: F811
-        return BeaconChain.configure(
-            __name__=self.chain_name,
-            sm_configuration=self.sm_configuration,
-            chain_id=self.chain_id,
-        )
+        if self._beacon_chain_class is None:
+            from eth2.beacon.chains.base import BeaconChain  # noqa: F811
+            self._beacon_chain_class = BeaconChain.configure(
+                __name__=self.chain_name,
+                sm_configuration=self.sm_configuration,
+                chain_id=self.chain_id,
+            )
+        return self._beacon_chain_class
 
     def initialize_chain(self,
                          base_db: BaseAtomicDB) -> 'BeaconChain':
@@ -619,7 +634,7 @@ class BeaconChainConfig:
         num_validators = 8
         state, block = create_mock_genesis(
             num_validators=num_validators,
-            config=testing_config,
+            config=self.eth2_config,
             keymap=keymap,
             genesis_block_class=SerenityBeaconBlock,
             genesis_time=self.genesis_time,
