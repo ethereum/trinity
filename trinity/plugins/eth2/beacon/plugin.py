@@ -7,6 +7,7 @@ from argparse import (
 )
 from eth_keys.datatypes import PrivateKey
 
+
 from eth2.beacon.chains.base import BeaconChain
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
@@ -21,7 +22,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     Slot,
 )
-
+from eth2.configs import Eth2Config
 from p2p import ecies
 from p2p.constants import DEFAULT_MAX_PEERS
 from trinity._utils.shutdown import (
@@ -39,11 +40,13 @@ from trinity.sync.beacon.chain import BeaconChainSyncer
 from trinity.db.beacon.manager import (
     create_db_consumer_manager
 )
+from trinity.sync.common.chain import (
+    SyncBlockImporter,
+)
 from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     get_ten_blocks_context,
 )
 
-from eth2.configs import Eth2Config
 from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     config as testing_config,
     index_to_pubkey,
@@ -115,6 +118,7 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         syncer = BeaconChainSyncer(
             chain_db,
             server.peer_pool,
+            SyncBlockImporter(chain),
             server.cancel_token,
         )
 

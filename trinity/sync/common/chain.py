@@ -28,6 +28,8 @@ from eth.rlp.headers import (
     BlockHeader,
 )
 
+from eth2.beacon.types.blocks import BaseBeaconBlock
+
 from p2p.constants import (
     MAX_REORG_DEPTH,
     SEAL_CHECK_RANDOM_SAMPLE_RATE,
@@ -274,3 +276,14 @@ class SimpleBlockImporter(BaseBlockImporter):
             self,
             block: BaseBlock) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
         return await self._chain.coro_import_block(block, perform_validation=True)
+
+
+class SyncBlockImporter:
+    def __init__(self, chain: 'BeaconChain') -> None:
+        self._chain = chain
+
+    def import_block(
+            self,
+            block: BaseBeaconBlock
+    ) -> Tuple[BaseBeaconBlock, Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]]:
+        return self._chain.import_block(block, perform_validation=True)
