@@ -2,7 +2,7 @@
 import json
 import time
 
-genesis_time = int(time.time())
+genesis_time = int(time.time()) + 60
 genesis_json = {
     "genesis_time": genesis_time
 }
