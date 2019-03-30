@@ -637,10 +637,12 @@ class BeaconAppConfig(BaseAppConfig):
     def from_parser_args(cls,
                          args: argparse.Namespace,
                          trinity_config: TrinityConfig) -> 'BaseAppConfig':
-        if "genesis_time" in args:
-            trinity_config.genesis_time = int(args.genesis_time)
-        else:
-            trinity_config.genesis_time = 1553765789
+        # Read `genesis_time` from genesis.json in the trinity root directory
+        import os
+        DIR = os.path.dirname(__file__)
+        file_path = os.path.join(DIR, '../genesis.json')
+        genesis = json.loads(open(file_path).read())
+        trinity_config.genesis_time = genesis['genesis_time']
 
         if args is not None:
             # This is quick and dirty way to get bootstrap_nodes
