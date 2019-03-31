@@ -168,38 +168,6 @@ def test_validate_attestation_source_epoch_and_root(
             )
 
 
-# @pytest.mark.parametrize(
-#     (
-#         'attestation_source_root,'
-#         'source_root,'
-#         'is_valid,'
-#     ),
-#     [
-#         (b'\x33' * 32, b'\x22' * 32, False),  # attestation.source_root != source_root # noqa: E501
-#         (b'\x33' * 32, b'\x33' * 32, True),
-#     ]
-# )
-# def test_validate_attestation_source_root(sample_attestation_data_params,
-#                                           attestation_source_root,
-#                                           source_root,
-#                                           is_valid):
-#     attestation_data = AttestationData(**sample_attestation_data_params).copy(
-#         source_root=attestation_source_root,
-#     )
-
-#     if is_valid:
-#         validate_attestation_source_root(
-#             attestation_data,
-#             source_root
-#         )
-#     else:
-#         with pytest.raises(ValidationError):
-#             validate_attestation_source_root(
-#                 attestation_data,
-#                 source_root
-#             )
-
-
 @pytest.mark.parametrize(
     (
         'attestation_previous_crosslink,'
