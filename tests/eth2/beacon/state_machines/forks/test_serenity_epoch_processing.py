@@ -339,7 +339,7 @@ def test_justification_without_mock(sample_beacon_state_params,
 )
 def test_process_justification(monkeypatch,
                                config,
-                               sample_beacon_state_params,
+                               genesis_state,
                                states,
                                genesis_epoch=0):
     from eth2.beacon.state_machines.forks.serenity import epoch_processing
@@ -373,7 +373,7 @@ def test_process_justification(monkeypatch,
                 mock_current_previous_epochs_justifiable,
             )
 
-            state = BeaconState(**sample_beacon_state_params).copy(
+            state = genesis_state.copy(
                 slot=slot,
                 previous_justified_epoch=previous_justified_epoch_before,
                 current_justified_epoch=justified_epoch_before,

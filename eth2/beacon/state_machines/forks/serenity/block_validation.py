@@ -39,8 +39,6 @@ from eth2.beacon.enums import (
     SignatureDomain,
 )
 from eth2.beacon.helpers import (
-    get_block_root,
-    get_epoch_start_slot,
     get_domain,
     is_double_vote,
     is_surround_vote,
@@ -314,24 +312,11 @@ def validate_attestation(state: BeaconState,
         committee_config.GENESIS_SLOT,
     )
 
-    validate_attestation_source_epoch(
+    validate_attestation_source_epoch_and_root(
+        state,
         attestation.data,
         state.current_epoch(slots_per_epoch),
-        state.previous_justified_epoch,
-        state.current_justified_epoch,
         slots_per_epoch,
-    )
-
-    validate_attestation_source_root(
-        attestation.data,
-        current_justified_epoch=get_block_root(
-            state=state,
-            slot=get_epoch_start_slot(
-                attestation.data.source_epoch,
-                slots_per_epoch,
-            ),
-            slots_per_historical_root=slots_per_historical_root,
-        ),
     )
 
     validate_attestation_previous_crosslink_or_root(
@@ -383,50 +368,44 @@ def validate_attestation_slot(attestation_data: AttestationData,
         )
 
 
-def validate_attestation_source_epoch(attestation_data: AttestationData,
-                                      current_epoch: Epoch,
-                                      previous_justified_epoch: Epoch,
-                                      current_justified_epoch: Epoch,
-                                      slots_per_epoch: int) -> None:
+def validate_attestation_source_epoch_and_root(state: BeaconState,
+                                               attestation_data: AttestationData,
+                                               current_epoch: Epoch,
+                                               slots_per_epoch: int) -> None:
     """
-    Validate ``source_epoch`` field of ``attestation_data``.
+    Validate ``source_epoch`` and ``source_root`` fields of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
     """
     if slot_to_epoch(attestation_data.slot + 1, slots_per_epoch) >= current_epoch:
-        if attestation_data.source_epoch != current_justified_epoch:
+        if attestation_data.source_epoch != state.current_justified_epoch:
             raise ValidationError(
-                "Attestation ``slot`` is after recent epoch transition but attestation"
-                "``source_epoch`` is not targeting the ``state.current_justified_epoch``:\n"
+                "Attestation `slot` is after recent epoch transition but attestation"
+                "`source_epoch` is not targeting the `state.current_justified_epoch`:\n"
                 "\tFound: %s, Expected %s" %
-                (attestation_data.source_epoch, current_justified_epoch)
+                (attestation_data.source_epoch, state.current_justified_epoch)
+            )
+        if attestation_data.source_root != state.current_justified_root:
+            raise ValidationError(
+                "Attestation `slot` is after recent epoch transition but attestation"
+                "`source_root` is not equal to `state.current_justified_root`:\n"
+                "\tFound: %s, Expected %s" %
+                (attestation_data.source_root, state.current_justified_root)
             )
     else:
-        if attestation_data.source_epoch != previous_justified_epoch:
+        if attestation_data.source_epoch != state.previous_justified_epoch:
             raise ValidationError(
-                "Attestation ``slot`` is before recent epoch transition but attestation"
-                "``source_epoch`` is not targeting the ``state.previous_justified_epoch:\n"
+                "Attestation `slot` is before recent epoch transition but attestation"
+                "`source_epoch`` is not targeting the `state.previous_justified_epoch`:\n"
                 "\tFound: %s, Expected %s" %
-                (attestation_data.source_epoch, previous_justified_epoch)
+                (attestation_data.source_epoch, state.previous_justified_epoch)
             )
-
-
-def validate_attestation_source_root(attestation_data: AttestationData,
-                                     current_justified_epoch: Hash32) -> None:
-    """
-    Validate ``source_root`` field of ``attestation_data``.
-    Raise ``ValidationError`` if it's invalid.
-    """
-    if attestation_data.source_root != current_justified_epoch:
-        raise ValidationError(
-            "Attestation ``source_root`` is not equal to the "
-            "block root at the ``state.current_justified_epoch``:\n"
-            "\tFound: %s, Expected %s at slot %s" %
-            (
-                attestation_data.source_root,
-                current_justified_epoch,
-                attestation_data.source_epoch,
+        if attestation_data.source_root != state.previous_justified_root:
+            raise ValidationError(
+                "Attestation `slot` is before recent epoch transition but attestation"
+                "`source_root` is not equal to `state.previous_justified_root`:\n"
+                "\tFound: %s, Expected %s" %
+                (attestation_data.source_root, state.previous_justified_root)
             )
-        )
 
 
 def validate_attestation_previous_crosslink_or_root(attestation_data: AttestationData,

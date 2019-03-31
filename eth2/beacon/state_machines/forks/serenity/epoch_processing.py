@@ -51,6 +51,7 @@ from eth2.beacon.epoch_processing_helpers import (
 )
 from eth2.beacon.helpers import (
     get_active_validator_indices,
+    get_block_root,
     get_effective_balance,
     get_epoch_start_slot,
     get_randao_mix,
@@ -237,7 +238,7 @@ def process_justification(state: BeaconState, config: Eth2Config) -> BeaconState
     else:
         new_justified_epoch = state.current_justified_epoch
 
-    finalized_epoch, _ = _get_finalized_epoch(
+    new_finalized_epoch, _ = _get_finalized_epoch(
         justification_bitfield,
         state.previous_justified_epoch,
         state.current_justified_epoch,
@@ -245,12 +246,34 @@ def process_justification(state: BeaconState, config: Eth2Config) -> BeaconState
         previous_epoch,
     )
 
-    return state.copy(
+    # Update state
+    state = state.copy(
         previous_justified_epoch=state.current_justified_epoch,
-        current_justified_epoch=new_justified_epoch,
+        previous_justified_root=state.current_justified_root,
         justification_bitfield=justification_bitfield,
-        finalized_epoch=finalized_epoch,
     )
+
+    if new_justified_epoch != state.current_justified_epoch:
+        state = state.copy(
+            current_justified_epoch=new_justified_epoch,
+            current_justified_root=get_block_root(
+                state,
+                get_epoch_start_slot(new_justified_epoch, config.SLOTS_PER_EPOCH),
+                config.SLOTS_PER_HISTORICAL_ROOT,
+            ),
+        )
+
+    if new_finalized_epoch != state.finalized_epoch:
+        state = state.copy(
+            finalized_epoch=new_finalized_epoch,
+            finalized_root=get_block_root(
+                state,
+                get_epoch_start_slot(new_finalized_epoch, config.SLOTS_PER_EPOCH),
+                config.SLOTS_PER_HISTORICAL_ROOT,
+            )
+        )
+
+    return state
 
 
 #
