@@ -324,7 +324,7 @@ def validate_attestation(state: BeaconState,
 
     validate_attestation_source_root(
         attestation.data,
-        source_root=get_block_root(
+        justified_epoch=get_block_root(
             state=state,
             slot=get_epoch_start_slot(
                 attestation.data.source_epoch,
