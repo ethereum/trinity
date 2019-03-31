@@ -105,5 +105,5 @@ def test_demo(base_db,
     assert isinstance(sm.block, SerenityBeaconBlock)
 
     # Justification assertions
-    assert state.justified_epoch == 2 + genesis_epoch
+    assert state.current_justified_epoch == 2 + genesis_epoch
     assert state.finalized_epoch == 1 + genesis_epoch

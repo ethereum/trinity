@@ -174,7 +174,7 @@ def _current_previous_epochs_justifiable(
 def _get_finalized_epoch(
         justification_bitfield: int,
         previous_justified_epoch: Epoch,
-        justified_epoch: Epoch,
+        current_justified_epoch: Epoch,
         finalized_epoch: Epoch,
         previous_epoch: Epoch) -> Tuple[Epoch, int]:
 
@@ -188,18 +188,18 @@ def _get_finalized_epoch(
     )
     rule_3 = (
         justification_bitfield % 8 == 0b111 and
-        justified_epoch == previous_epoch - 1
+        current_justified_epoch == previous_epoch - 1
     )
     rule_4 = (
         justification_bitfield % 4 == 0b11 and
-        justified_epoch == previous_epoch
+        current_justified_epoch == previous_epoch
     )
     # Check the rule in the order that can finalize higher epoch possible
     # The second output indicating what rule triggered is for testing purpose
     if rule_4:
-        return justified_epoch, 4
+        return current_justified_epoch, 4
     elif rule_3:
-        return justified_epoch, 3
+        return current_justified_epoch, 3
     elif rule_2:
         return previous_justified_epoch, 2
     elif rule_1:
@@ -235,19 +235,19 @@ def process_justification(state: BeaconState, config: Eth2Config) -> BeaconState
     elif previous_epoch_justifiable:
         new_justified_epoch = previous_epoch
     else:
-        new_justified_epoch = state.justified_epoch
+        new_justified_epoch = state.current_justified_epoch
 
     finalized_epoch, _ = _get_finalized_epoch(
         justification_bitfield,
         state.previous_justified_epoch,
-        state.justified_epoch,
+        state.current_justified_epoch,
         state.finalized_epoch,
         previous_epoch,
     )
 
     return state.copy(
-        previous_justified_epoch=state.justified_epoch,
-        justified_epoch=new_justified_epoch,
+        previous_justified_epoch=state.current_justified_epoch,
+        current_justified_epoch=new_justified_epoch,
         justification_bitfield=justification_bitfield,
         finalized_epoch=finalized_epoch,
     )

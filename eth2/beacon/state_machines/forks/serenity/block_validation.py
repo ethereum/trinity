@@ -318,13 +318,13 @@ def validate_attestation(state: BeaconState,
         attestation.data,
         state.current_epoch(slots_per_epoch),
         state.previous_justified_epoch,
-        state.justified_epoch,
+        state.current_justified_epoch,
         slots_per_epoch,
     )
 
     validate_attestation_source_root(
         attestation.data,
-        justified_epoch=get_block_root(
+        current_justified_epoch=get_block_root(
             state=state,
             slot=get_epoch_start_slot(
                 attestation.data.source_epoch,
@@ -386,19 +386,19 @@ def validate_attestation_slot(attestation_data: AttestationData,
 def validate_attestation_source_epoch(attestation_data: AttestationData,
                                       current_epoch: Epoch,
                                       previous_justified_epoch: Epoch,
-                                      justified_epoch: Epoch,
+                                      current_justified_epoch: Epoch,
                                       slots_per_epoch: int) -> None:
     """
     Validate ``source_epoch`` field of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
     """
     if slot_to_epoch(attestation_data.slot + 1, slots_per_epoch) >= current_epoch:
-        if attestation_data.source_epoch != justified_epoch:
+        if attestation_data.source_epoch != current_justified_epoch:
             raise ValidationError(
                 "Attestation ``slot`` is after recent epoch transition but attestation"
-                "``source_epoch`` is not targeting the ``state.justified_epoch``:\n"
+                "``source_epoch`` is not targeting the ``state.current_justified_epoch``:\n"
                 "\tFound: %s, Expected %s" %
-                (attestation_data.source_epoch, justified_epoch)
+                (attestation_data.source_epoch, current_justified_epoch)
             )
     else:
         if attestation_data.source_epoch != previous_justified_epoch:
@@ -411,19 +411,19 @@ def validate_attestation_source_epoch(attestation_data: AttestationData,
 
 
 def validate_attestation_source_root(attestation_data: AttestationData,
-                                     justified_epoch: Hash32) -> None:
+                                     current_justified_epoch: Hash32) -> None:
     """
     Validate ``source_root`` field of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
     """
-    if attestation_data.source_root != justified_epoch:
+    if attestation_data.source_root != current_justified_epoch:
         raise ValidationError(
             "Attestation ``source_root`` is not equal to the "
-            "block root at the ``state.justified_epoch``:\n"
+            "block root at the ``state.current_justified_epoch``:\n"
             "\tFound: %s, Expected %s at slot %s" %
             (
                 attestation_data.source_root,
-                justified_epoch,
+                current_justified_epoch,
                 attestation_data.source_epoch,
             )
         )

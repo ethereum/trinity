@@ -271,7 +271,7 @@ def create_mock_slashable_attestation(state: BeaconState,
     # Get `source_root`
     source_root = get_block_root(
         state,
-        get_epoch_start_slot(state.justified_epoch, config.SLOTS_PER_EPOCH),
+        get_epoch_start_slot(state.current_justified_epoch, config.SLOTS_PER_EPOCH),
         config.SLOTS_PER_HISTORICAL_ROOT,
     )
     previous_crosslink = state.latest_crosslinks[shard]
@@ -279,7 +279,7 @@ def create_mock_slashable_attestation(state: BeaconState,
     attestation_data = AttestationData(
         slot=attestation_slot,
         beacon_block_root=beacon_block_root,
-        source_epoch=state.justified_epoch,
+        source_epoch=state.current_justified_epoch,
         source_root=source_root,
         target_root=target_root,
         shard=shard,
@@ -354,7 +354,7 @@ def create_mock_attester_slashing_is_surround_vote(
     slashable_attestation_1 = create_mock_slashable_attestation(
         state.copy(
             slot=attestation_slot_1,
-            justified_epoch=config.GENESIS_EPOCH,
+            current_justified_epoch=config.GENESIS_EPOCH,
         ),
         config,
         keymap,
@@ -363,7 +363,7 @@ def create_mock_attester_slashing_is_surround_vote(
     slashable_attestation_2 = create_mock_slashable_attestation(
         state.copy(
             slot=attestation_slot_1,
-            justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
+            current_justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
         ),
         config,
         keymap,
@@ -496,7 +496,7 @@ def create_mock_signed_attestations_at_slot(
     # Get `source_root`
     source_root = get_block_root(
         state,
-        get_epoch_start_slot(state.justified_epoch, slots_per_epoch),
+        get_epoch_start_slot(state.current_justified_epoch, slots_per_epoch),
         config.SLOTS_PER_HISTORICAL_ROOT,
     )
 
@@ -509,7 +509,7 @@ def create_mock_signed_attestations_at_slot(
         attestation_data = AttestationData(
             slot=attestation_slot,
             beacon_block_root=beacon_block_root,
-            source_epoch=state.justified_epoch,
+            source_epoch=state.current_justified_epoch,
             source_root=source_root,
             target_root=target_root,
             shard=shard,

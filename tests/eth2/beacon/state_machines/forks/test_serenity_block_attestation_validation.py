@@ -92,14 +92,16 @@ def test_validate_attestation_slot(sample_attestation_data_params,
         'attestation_source_epoch,'
         'current_epoch,'
         'previous_justified_epoch,'
-        'justified_epoch,'
+        'current_justified_epoch,'
         'slots_per_epoch,'
         'is_valid,'
     ),
     [
         # slot_to_epoch(attestation_data.slot + 1, slots_per_epoch) >= current_epoch
-        (23, 2, 3, 1, 2, 8, True),  # attestation_data.source_epoch == state.justified_epoch
-        (23, 1, 3, 1, 2, 8, False),  # attestation_data.source_epoch != state.justified_epoch
+        # attestation_data.source_epoch == state.current_justified_epoch
+        (23, 2, 3, 1, 2, 8, True),
+        # attestation_data.source_epoch != state.current_justified_epoch
+        (23, 1, 3, 1, 2, 8, False),
         # slot_to_epoch(attestation_data.slot + 1, slots_per_epoch) < current_epoch
         # attestation_data.source_epoch == state.previous_justified_epoch
         (22, 1, 3, 1, 2, 8, True),
@@ -113,7 +115,7 @@ def test_validate_attestation_source_epoch(
         attestation_source_epoch,
         current_epoch,
         previous_justified_epoch,
-        justified_epoch,
+        current_justified_epoch,
         slots_per_epoch,
         is_valid):
     attestation_data = AttestationData(**sample_attestation_data_params).copy(
@@ -126,7 +128,7 @@ def test_validate_attestation_source_epoch(
             attestation_data,
             current_epoch,
             previous_justified_epoch,
-            justified_epoch,
+            current_justified_epoch,
             slots_per_epoch,
         )
     else:
@@ -135,7 +137,7 @@ def test_validate_attestation_source_epoch(
                 attestation_data,
                 current_epoch,
                 previous_justified_epoch,
-                justified_epoch,
+                current_justified_epoch,
                 slots_per_epoch,
             )
 
