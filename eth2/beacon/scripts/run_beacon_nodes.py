@@ -25,8 +25,8 @@ time_bob_wait_for_alice = 30
 
 async def read_log(name, stream_reader):
     while True:
-        line = await stream_reader.readline()
-        print(f"{name}: {line.decode('utf-8')}", end='')
+        line = (await stream_reader.readline()).decode('utf-8').replace('\n', '')
+        print(f"{name}: {line}")
         await asyncio.sleep(0.01)
 
 
