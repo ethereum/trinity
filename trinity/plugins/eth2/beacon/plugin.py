@@ -196,6 +196,8 @@ class Validator:
             block = self._make_proposing_block(slot, state, state_machine, head)
             for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
                 peer.sub_proto.send_blocks((block,), request_id=i)
+            self.chain.import_block(block)
+            self.chain.chaindb.persist_block(block, SerenityBeaconBlock)
 
     def _make_proposing_block(self,
                               slot: int,
