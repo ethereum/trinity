@@ -267,7 +267,7 @@ class SlotTicker:
 
     async def _job(self) -> None:
         while True:
-            await asyncio.sleep(self._seconds_per_slot)
+            await asyncio.sleep(3)
             now = int(time.time())
             elapse_time = now - self._genesis_time
             if elapse_time >= (0 + self._seconds_per_slot):
