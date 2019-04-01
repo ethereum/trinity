@@ -25,12 +25,12 @@ from eth.constants import (
     ZERO_HASH32,
 )
 
+from py_ecc import bls
+
 from eth2._utils.bitfield import (
     get_empty_bitfield,
     set_voted,
 )
-from py_ecc import bls
-
 from eth2.configs import (
     CommitteeConfig,
     Eth2Config,
@@ -77,6 +77,9 @@ from eth2.beacon.typing import (
     Slot,
     Timestamp,
     ValidatorIndex,
+)
+from eth2.beacon.state_machines.base import (
+    BaseBeaconStateMachine,
 )
 from eth2.beacon.validation import (
     validate_epoch_within_previous_and_next,
@@ -472,7 +475,7 @@ def create_mock_signed_attestation(state: BeaconState,
 def create_mock_signed_attestations_at_slot(
         state: BeaconState,
         config: Eth2Config,
-        state_machine,
+        state_machine: BaseBeaconStateMachine,
         attestation_slot: Slot,
         beacon_block_root: Hash32,
         keymap: Dict[BLSPubkey, int],
