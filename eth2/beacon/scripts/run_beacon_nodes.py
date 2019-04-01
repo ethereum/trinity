@@ -15,9 +15,7 @@ port_bob = 30305
 index_alice = 0
 index_bob = 1
 cmd_alice = f"trinity-beacon --validator_index={index_alice} --port={port_alice} --trinity-root-dir={dir_alice} --beacon-nodekey=6b94ffa2d9b8ee85afb9d7153c463ea22789d3bbc5d961cc4f63a41676883c19 --mock-blocks=true -l debug"
-cmd_list_alice = cmd_alice.split(' ')
-cmd_bob = f"trinity-beacon --validator_index={index_bob} --port={port_bob} --trinity-root-dir={dir_bob} --beacon-nodekey=f5ad1c57b5a489fc8f21ad0e5a19c1f1a60b8ab357a2100ff7e75f3fa8a4fd2e --bootstrap_nodes=enode://c289557985d885a3f13830a475d649df434099066fbdc840aafac23144f6ecb70d7cc16c186467f273ad7b29707aa15e6a50ec3fde35ae2e69b07b3ddc7a36c7@0.0.0.0:$PORT_ALICE -l debug"
-cmd_list_bob = cmd_bob.split(' ')
+cmd_bob = f"trinity-beacon --validator_index={index_bob} --port={port_bob} --trinity-root-dir={dir_bob} --beacon-nodekey=f5ad1c57b5a489fc8f21ad0e5a19c1f1a60b8ab357a2100ff7e75f3fa8a4fd2e --bootstrap_nodes=enode://c289557985d885a3f13830a475d649df434099066fbdc840aafac23144f6ecb70d7cc16c186467f273ad7b29707aa15e6a50ec3fde35ae2e69b07b3ddc7a36c7@0.0.0.0:{port_alice} -l debug"
 file_genesis_json = "genesis.json"
 
 time_bob_wait_for_alice = 30
