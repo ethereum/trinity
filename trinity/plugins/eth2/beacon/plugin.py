@@ -178,9 +178,6 @@ class Validator:
         """
         The callback for `SlotTicker`, to be called whenever new slot is ticked.
         """
-        self.propose_block(slot=slot)
-
-    def propose_block(self, slot: int) -> None:
         assert slot > self.eth2_config.GENESIS_SLOT
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine(at_block=head)
@@ -193,11 +190,25 @@ class Validator:
             self.eth2_config,
         )
         if self.validator_index == proposer_index:
-            block = self._make_proposing_block(slot, state, state_machine, head)
-            for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
-                peer.sub_proto.send_blocks((block,), request_id=i)
-            self.chain.import_block(block)
-            self.chain.chaindb.persist_block(block, SerenityBeaconBlock)
+            self.propose_block(slot=slot, state=state, state_machine=state_machine, head_block=head)
+        else:
+            self.skip_block(
+                slot=slot,
+                state=state,
+                state_machine=state_machine,
+                parent_block=head,
+            )
+
+    def propose_block(self,
+                      slot: int,
+                      state: BeaconState,
+                      state_machine: BaseBeaconStateMachine,
+                      head_block: BaseBeaconBlock) -> None:
+        block = self._make_proposing_block(slot, state, state_machine, head_block)
+        for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
+            peer.sub_proto.send_blocks((block,), request_id=i)
+        self.chain.import_block(block)
+        self.chain.chaindb.persist_block(block, SerenityBeaconBlock)
 
     def _make_proposing_block(self,
                               slot: int,
@@ -215,6 +226,21 @@ class Validator:
             privkey=self.privkey,
             attestations=[],
         )
+
+    def skip_block(self,
+                   slot: int,
+                   state: BeaconState,
+                   state_machine: BaseBeaconStateMachine,
+                   parent_block: BaseBeaconBlock) -> None:
+        post_state = state_machine.state_transition.apply_state_transition_without_block(
+            state,
+            # TODO: Change back to `slot` instead of `slot + 1`.
+            # Currently `apply_state_transition_without_block` only returns the post state
+            # of `slot - 1`, so we increment it by one to get the post state of `slot`. 
+            slot + 1,
+            parent_block.root,
+        )
+        self.chain.chaindb.persist_state(post_state)
 
 
 class SlotTicker:
