@@ -71,13 +71,9 @@ from trinity._utils.xdg import (
     get_xdg_trinity_root,
 )
 
-from eth2.beacon.state_machines.forks.testnet import (
-    TestnetStateMachine,
-)
 from eth2.beacon.tools.builder.initializer import (
     create_mock_genesis,
 )
-from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.typing import (
     Timestamp,
     Slot,
@@ -86,6 +82,8 @@ from trinity.plugins.eth2.beacon.testing_config import (
     Config as testing_config,
     keymap,
 )
+from eth2.beacon.chains.testnet import TestnetChain
+
 if TYPE_CHECKING:
     # avoid circular import
     from trinity.nodes.base import Node  # noqa: F401
@@ -591,7 +589,6 @@ class Eth1AppConfig(BaseAppConfig):
 class BeaconGenesisData(NamedTuple):
     genesis_time: Timestamp
     genesis_slot: Slot
-    sm_configuration: Tuple[Tuple[int, Type[BaseBeaconStateMachine]], ...]
     # TODO: Maybe Validator deposit data
 
 
@@ -600,7 +597,6 @@ class BeaconChainConfig:
                  chain_name: str=None,
                  genesis_data: BeaconGenesisData=None) -> None:
         self._chain_name = chain_name
-        self.chain_id = 5566
         self.network_id = 5567
         self.genesis_data = genesis_data
         self._beacon_chain_class = None
@@ -614,10 +610,6 @@ class BeaconChainConfig:
         return self.genesis_data.genesis_slot
 
     @property
-    def sm_configuration(self):
-        return self.genesis_data.sm_configuration
-
-    @property
     def chain_name(self) -> str:
         if self._chain_name is None:
             return "CustomBeaconChain"
@@ -627,25 +619,24 @@ class BeaconChainConfig:
     @property
     def beacon_chain_class(self) -> Type['BeaconChain']:
         if self._beacon_chain_class is None:
-            from eth2.beacon.chains.base import BeaconChain  # noqa: F811
-            self._beacon_chain_class = BeaconChain.configure(
+            self._beacon_chain_class = TestnetChain.configure(
                 __name__=self.chain_name,
-                sm_configuration=self.sm_configuration,
-                chain_id=self.chain_id,
             )
         return self._beacon_chain_class
 
     def initialize_chain(self,
                          base_db: BaseAtomicDB) -> 'BeaconChain':
         # Only used for testing
+        chain_class = self.beacon_chain_class
+        _, state_machine = chain_class.sm_configuration[0]
         state, block = create_mock_genesis(
             num_validators=testing_config.NUM_VALIDATORS,
-            config=TestnetStateMachine.config,
+            config=state_machine.config,
             keymap=keymap,
-            genesis_block_class=TestnetStateMachine.block_class,
+            genesis_block_class=state_machine.block_class,
             genesis_time=self.genesis_time,
         )
-        return cast('BeaconChain', self.beacon_chain_class.from_genesis(
+        return cast('BeaconChain', chain_class.from_genesis(
             base_db=base_db,
             genesis_state=state,
             genesis_block=block,
@@ -666,9 +657,6 @@ class BeaconAppConfig(BaseAppConfig):
         trinity_config.genesis_data = BeaconGenesisData(
             genesis_time=genesis['genesis_time'],
             genesis_slot=2**32,
-            sm_configuration=(
-                (0, TestnetStateMachine),
-            ),
         )
 
         if args is not None:

@@ -22,7 +22,6 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     Slot,
 )
-from eth2.configs import Eth2Config
 from p2p import ecies
 from p2p.constants import DEFAULT_MAX_PEERS
 from trinity._utils.shutdown import (
@@ -50,8 +49,8 @@ from trinity.plugins.eth2.beacon.testing_config import (
     index_to_pubkey,
     keymap,
 )
-from eth2.beacon.state_machines.forks.testnet.configs import (
-    TESTNET_CONFIG,
+from eth2.beacon.chains.base import (
+    BaseBeaconChain,
 )
 
 
@@ -134,8 +133,7 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         slot_ticker = SlotTicker(
             genesis_slot=chain_config.genesis_slot,
             genesis_time=chain_config.genesis_time,
-            # TODO: seconds_per_slot should be acquired from the current state machine
-            seconds_per_slot=TESTNET_CONFIG.SECONDS_PER_SLOT,
+            chain=chain,
             validator=validator,
         )
 
@@ -233,7 +231,7 @@ class Validator:
             state,
             # TODO: Change back to `slot` instead of `slot + 1`.
             # Currently `apply_state_transition_without_block` only returns the post state
-            # of `slot - 1`, so we increment it by one to get the post state of `slot`. 
+            # of `slot - 1`, so we increment it by one to get the post state of `slot`.
             slot + 1,
             parent_block.root,
         )
@@ -247,21 +245,27 @@ class SlotTicker:
             self,
             genesis_slot: Slot,
             genesis_time: int,
-            seconds_per_slot: int,
+            chain: BaseBeaconChain,
             validator: Validator) -> None:
         self._genesis_slot = genesis_slot
         self._genesis_time = genesis_time
-        self._seconds_per_slot = seconds_per_slot
+        self.chain = chain
         self._validator = validator
         self.latest_slot = 0
 
+    def get_seconds_per_slot(self):
+        state_machine = self.chain.get_state_machine()
+        return state_machine.config.SECONDS_PER_SLOT
+
     async def _job(self) -> None:
         while True:
-            await asyncio.sleep(3)
+            seconds_per_slot = self.get_seconds_per_slot()
+            # don't sleep the full seconds_per_slot
+            await asyncio.sleep(seconds_per_slot // 5)
             now = int(time.time())
             elapse_time = now - self._genesis_time
-            if elapse_time >= (0 + self._seconds_per_slot):
-                slot = elapse_time // self._seconds_per_slot + self._genesis_slot
+            if elapse_time >= (0 + seconds_per_slot):
+                slot = elapse_time // seconds_per_slot + self._genesis_slot
                 if slot > self.latest_slot:
                     self.logger.info("New slot: %s\tElapse time: %s" % (slot, elapse_time))
                     self.latest_slot = slot

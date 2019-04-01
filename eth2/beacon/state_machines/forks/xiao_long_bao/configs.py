@@ -5,7 +5,7 @@ from eth2.beacon.state_machines.forks.serenity.configs import (
 SLOTS_PER_EPOCH = 4
 
 
-TESTNET_CONFIG = SERENITY_CONFIG._replace(
+XIAO_LONG_BAO_CONFIG = SERENITY_CONFIG._replace(
     SLOTS_PER_EPOCH=SLOTS_PER_EPOCH,
     GENESIS_SLOT=2**32,
     GENESIS_EPOCH=2**32 // SLOTS_PER_EPOCH,

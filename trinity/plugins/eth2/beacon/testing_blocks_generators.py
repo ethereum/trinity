@@ -2,11 +2,8 @@
 from eth2.beacon.tools.builder.proposer import (
     create_mock_block,
 )
-from eth2.beacon.state_machines.forks.testnet import (
-    TestnetStateMachine,
-)
-from eth2.beacon.state_machines.forks.testnet.configs import (
-    TESTNET_CONFIG,
+from eth2.beacon.chains.testnet.constants import (
+    GENESIS_SLOT,
 )
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
@@ -18,10 +15,11 @@ from .testing_config import (
 
 def get_ten_blocks_context(chain, gen_blocks):
     chaindb = chain.chaindb
-    genesis_slot = TESTNET_CONFIG.GENESIS_SLOT
+    genesis_slot = GENESIS_SLOT
     # genesis
     block = chain.get_canonical_block_by_slot(genesis_slot)
-    state = chain.get_state_machine(block).state
+    sm = chain.get_state_machine(block)
+    state = sm.state
     blocks = (block,)
     if gen_blocks:
         chain_length = 3
@@ -31,11 +29,8 @@ def get_ten_blocks_context(chain, gen_blocks):
 
             block = create_mock_block(
                 state=state,
-                config=TESTNET_CONFIG,
-                state_machine=TestnetStateMachine(
-                    chaindb,
-                    blocks[-1],
-                ),
+                config=sm.config,
+                state_machine=sm,
                 block_class=SerenityBeaconBlock,
                 parent_block=block,
                 keymap=keymap,
@@ -43,11 +38,6 @@ def get_ten_blocks_context(chain, gen_blocks):
                 attestations=attestations,
             )
 
-            # Get state machine instance
-            sm = TestnetStateMachine(
-                chaindb,
-                blocks[-1],
-            )
             state, _ = sm.import_block(block)
 
             chaindb.persist_state(state)
