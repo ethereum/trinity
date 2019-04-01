@@ -472,6 +472,7 @@ def create_mock_signed_attestation(state: BeaconState,
 def create_mock_signed_attestations_at_slot(
         state: BeaconState,
         config: Eth2Config,
+        state_machine,
         attestation_slot: Slot,
         beacon_block_root: Hash32,
         keymap: Dict[BLSPubkey, int],
@@ -479,12 +480,16 @@ def create_mock_signed_attestations_at_slot(
     """
     Create the mocking attestations of the given ``attestation_slot`` slot with ``keymap``.
     """
-    slots_per_epoch = config.SLOTS_PER_EPOCH
-
+    state_transition = state_machine.state_transition
+    state = state_transition.apply_state_transition_without_block(
+        state,
+        attestation_slot,
+        beacon_block_root,
+    )
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
         # To avoid the epoch boundary cases
         state.copy(
-            slot=state.slot + 1,
+            slot=state.slot,
         ),
         attestation_slot,
         CommitteeConfig(config),
@@ -492,13 +497,6 @@ def create_mock_signed_attestations_at_slot(
 
     # Get `target_root`
     target_root = _get_target_root(state, config, beacon_block_root)
-
-    # Get `source_root`
-    source_root = get_block_root(
-        state,
-        get_epoch_start_slot(state.current_justified_epoch, slots_per_epoch),
-        config.SLOTS_PER_HISTORICAL_ROOT,
-    )
 
     for crosslink_committee in crosslink_committees_at_slot:
         committee, shard = crosslink_committee
@@ -510,7 +508,7 @@ def create_mock_signed_attestations_at_slot(
             slot=attestation_slot,
             beacon_block_root=beacon_block_root,
             source_epoch=state.current_justified_epoch,
-            source_root=source_root,
+            source_root=state.current_justified_root,
             target_root=target_root,
             shard=shard,
             previous_crosslink=previous_crosslink,

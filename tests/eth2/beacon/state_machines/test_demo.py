@@ -94,6 +94,10 @@ def test_demo(base_db,
         attestations = create_mock_signed_attestations_at_slot(
             state=state,
             config=config,
+            state_machine=fixture_sm_class(
+                chaindb,
+                block,
+            ),
             attestation_slot=attestation_slot,
             beacon_block_root=block.root,
             keymap=keymap,
