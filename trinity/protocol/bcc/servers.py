@@ -45,7 +45,6 @@ from trinity.protocol.bcc.peer import (
 class BCCRequestServer(BaseRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
         GetBeaconBlocks,
-        BeaconBlocks,
         NewBeaconBlock,
     })
 
@@ -59,6 +58,7 @@ class BCCRequestServer(BaseRequestServer):
     async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
                           msg: protocol._DecodedMsgType) -> None:
         peer = cast(BCCPeer, base_peer)
+        self.logger.debug("cmd %s" % cmd)
         if isinstance(cmd, GetBeaconBlocks):
             await self._handle_get_beacon_blocks(peer, cast(GetBeaconBlocksMessage, msg))
         elif isinstance(cmd, NewBeaconBlock):
