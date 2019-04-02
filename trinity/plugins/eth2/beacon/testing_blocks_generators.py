@@ -1,58 +1,25 @@
 
-from py_ecc import bls
-from eth2.beacon._utils.hash import (
-    hash_eth2,
-)
 from eth2.beacon.tools.builder.proposer import (
     create_mock_block,
 )
-from eth2.beacon.state_machines.forks.serenity import (
-    SerenityStateMachine,
+from eth2.beacon.chains.testnet.constants import (
+    GENESIS_SLOT,
 )
-from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
-
-from trinity.plugins.eth2.beacon.testing_config import Config as p
-
-
-privkeys = tuple(int.from_bytes(
-    hash_eth2(str(i).encode('utf-8'))[:4], 'big')
-    for i in range(p.NUM_VALIDATORS)
-)
-index_to_pubkey = {}
-keymap = {}  # pub -> priv
-for i, k in enumerate(privkeys):
-    index_to_pubkey[i] = bls.privtopub(k)
-    keymap[bls.privtopub(k)] = k
-
-pubkeys = list(keymap)
-
-
-config = SERENITY_CONFIG
-
-# Something bad. :'(
-config = config._replace(
-    SLOTS_PER_EPOCH=p.SLOTS_PER_EPOCH,
-    GENESIS_SLOT=2**32,
-    GENESIS_EPOCH=2**32 // p.SLOTS_PER_EPOCH,
-    TARGET_COMMITTEE_SIZE=2,
-    SHARD_COUNT=2,
-    MIN_ATTESTATION_INCLUSION_DELAY=2,
+from .testing_config import (
+    keymap,
 )
 
 
 def get_ten_blocks_context(chain, gen_blocks):
     chaindb = chain.chaindb
-    genesis_slot = config.GENESIS_SLOT
+    genesis_slot = GENESIS_SLOT
     # genesis
     block = chain.get_canonical_block_by_slot(genesis_slot)
-    state = chain.get_state_machine(block).state
-    sm_class = SerenityStateMachine.configure(
-        __name__='SerenityStateMachineForTesting',
-        config=config,
-    )
+    sm = chain.get_state_machine(block)
+    state = sm.state
     blocks = (block,)
     if gen_blocks:
         chain_length = 3
@@ -62,11 +29,8 @@ def get_ten_blocks_context(chain, gen_blocks):
 
             block = create_mock_block(
                 state=state,
-                config=config,
-                state_machine=sm_class(
-                    chaindb,
-                    blocks[-1],
-                ),
+                config=sm.config,
+                state_machine=sm,
                 block_class=SerenityBeaconBlock,
                 parent_block=block,
                 keymap=keymap,
@@ -74,11 +38,6 @@ def get_ten_blocks_context(chain, gen_blocks):
                 attestations=attestations,
             )
 
-            # Get state machine instance
-            sm = sm_class(
-                chaindb,
-                blocks[-1],
-            )
             state, _ = sm.import_block(block)
 
             chaindb.persist_state(state)
