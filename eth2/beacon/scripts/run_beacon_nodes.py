@@ -15,12 +15,16 @@ from typing import (
     MutableSet,
     NamedTuple,
 )
+from trinity.plugins.eth2.beacon.gen_genesis_json import (
+    generate_genesis_json,
+)
+
+from pathlib import Path
 
 
-dir_root = "/tmp/ttt"
-dir_alice = f"{dir_root}/alice"
-dir_bob = f"{dir_root}/bob"
-exe_gen_genesis = f"{os.path.dirname(sys.argv[0])}/../../../trinity/plugins/eth2/beacon/gen_genesis_json.py"  # noqa: E501
+dir_root = Path("/tmp/ttt")
+dir_alice = dir_root / "alice"
+dir_bob = dir_root / "bob"
 port_alice = 30304
 port_bob = 30305
 index_alice = 0
@@ -154,14 +158,13 @@ async def main():
     )
     await proc.wait()
 
-    proc = await run(
-        f"{exe_gen_genesis} > {dir_alice}/{file_genesis_json}"
-    )
-    await proc.wait()
-    proc = await run(
-        f"{exe_gen_genesis} > {dir_bob}/{file_genesis_json}"
-    )
-    await proc.wait()
+    genesis_json = generate_genesis_json()
+
+    with open(dir_alice / file_genesis_json, "w") as f:
+        f.write(genesis_json)
+
+    with open(dir_bob / file_genesis_json, "w") as f:
+        f.write(genesis_json)
 
     def sigint_handler(sig, frame):
         stop_all_nodes()

@@ -2,11 +2,16 @@
 import json
 import time
 
-genesis_time = int(time.time()) + 60
-genesis_json = {
-    "genesis_time": genesis_time
-}
 
-# Ensure double-quotes, and the other json format.
-formatted_json = json.dumps(genesis_json)
-print(formatted_json)
+def generate_genesis_json():
+    genesis_time = int(time.time()) + 60
+    genesis_json = {
+        "genesis_time": genesis_time
+    }
+
+    # Ensure double-quotes, and the other json format.
+    return json.dumps(genesis_json)
+
+
+if __name__ == '__main__':
+    print(generate_genesis_json())
