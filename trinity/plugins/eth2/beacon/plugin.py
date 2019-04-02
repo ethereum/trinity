@@ -175,7 +175,7 @@ class Validator:
         The callback for `SlotTicker`, to be called whenever new slot is ticked.
         """
         head = self.chain.get_canonical_head()
-        state_machine = self.chain.get_state_machine(at_block=head)
+        state_machine = self.chain.get_state_machine()
         state = state_machine.state
         proposer_index = _get_proposer_index(
             state_machine,
