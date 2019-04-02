@@ -52,6 +52,9 @@ from trinity.plugins.eth2.beacon.testing_config import (
 from eth2.beacon.chains.base import (
     BaseBeaconChain,
 )
+from trinity._utils.shellart import(
+    bold_green,
+)
 
 
 class BeaconNodePlugin(BaseIsolatedPlugin):
@@ -271,6 +274,8 @@ class SlotTicker:
             if elapse_time >= (0 + seconds_per_slot):
                 slot = elapse_time // seconds_per_slot + self._genesis_slot
                 if slot > self.latest_slot:
-                    self.logger.info("New slot: %s\tElapse time: %s" % (slot, elapse_time))
+                    self.logger.info(
+                        bold_green("New slot: %s\tElapse time: %s" % (slot, elapse_time))
+                    )
                     self.latest_slot = slot
                     self._validator.new_slot(slot)
