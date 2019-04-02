@@ -159,6 +159,8 @@ class Validator:
     Reference: https://github.com/ethereum/trinity/blob/master/eth2/beacon/tools/builder/proposer.py#L175  # noqa: E501
     """
 
+    logger = logging.getLogger(f'trinity.plugins.eth2.beacon.Validator')
+
     def __init__(
             self,
             validator_index: int,
@@ -201,7 +203,8 @@ class Validator:
                       head_block: BaseBeaconBlock) -> None:
         block = self._make_proposing_block(slot, state, state_machine, head_block)
         for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
-            peer.sub_proto.send_blocks((block,), request_id=i)
+            self.logger.debug(f"!@# propose_block: i={i}, peer={peer}, block={block}")
+            peer.sub_proto.send_block(block, request_id=i)
         self.chain.import_block(block)
         self.chain.chaindb.persist_block(block, SerenityBeaconBlock)
 
@@ -219,7 +222,8 @@ class Validator:
             slot=slot,
             validator_index=self.validator_index,
             privkey=self.privkey,
-            attestations=[],
+            attestations=(),
+            check_proposer_index=False,
         )
 
     def skip_block(self,

@@ -84,3 +84,16 @@ class BeaconBlocks(Command):
 class AttestationRecords(Command):
     _cmd_id = 3
     structure = sedes.CountableList(sedes.binary)
+
+
+class NewBeaconBlockMessage(TypedDict):
+    request_id: int
+    encoded_block: BeaconBlock
+
+
+class NewBeaconBlock(Command):
+    _cmd_id = 4
+    structure = [
+        ('request_id', sedes.big_endian_int),
+        ('encoded_block', sedes.binary),
+    ]

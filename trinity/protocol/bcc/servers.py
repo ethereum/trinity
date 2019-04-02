@@ -11,6 +11,8 @@ from eth_typing import (
 
 from cancel_token import CancelToken
 
+import ssz
+
 from p2p import protocol
 from p2p.peer import BasePeer
 from p2p.protocol import Command
@@ -28,8 +30,11 @@ from eth2.beacon.typing import (
 
 from trinity.protocol.common.servers import BaseRequestServer
 from trinity.protocol.bcc.commands import (
+    BeaconBlocks,
     GetBeaconBlocks,
     GetBeaconBlocksMessage,
+    NewBeaconBlock,
+    NewBeaconBlockMessage,
 )
 from trinity.protocol.bcc.peer import (
     BCCPeer,
@@ -40,6 +45,8 @@ from trinity.protocol.bcc.peer import (
 class BCCRequestServer(BaseRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
         GetBeaconBlocks,
+        BeaconBlocks,
+        NewBeaconBlock,
     })
 
     def __init__(self,
@@ -52,11 +59,21 @@ class BCCRequestServer(BaseRequestServer):
     async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
                           msg: protocol._DecodedMsgType) -> None:
         peer = cast(BCCPeer, base_peer)
-
         if isinstance(cmd, GetBeaconBlocks):
             await self._handle_get_beacon_blocks(peer, cast(GetBeaconBlocksMessage, msg))
+        elif isinstance(cmd, NewBeaconBlock):
+            await self._handle_new_beacon_block(peer, cast(NewBeaconBlockMessage, msg))
         else:
-            raise Exception("Invariant: Only subscribed to GetBeaconBlocks")
+            raise Exception(f"Invariant: Only subscribed to {self.subscription_msg_types}")
+
+    async def _handle_new_beacon_block(self, peer: BCCPeer, msg: NewBeaconBlockMessage) -> None:
+        if not peer.is_operational:
+            return
+        request_id = msg["request_id"]
+        encoded_block = msg["encoded_block"]
+        block = ssz.decode(encoded_block, BeaconBlock)
+        self.logger.debug(f"!@# _handle_new_beacon_block: received request_id={request_id}, block={block}")  # noqa: E501
+        # TODO: validate the block with db, and broadcast it if it's valid.
 
     async def _handle_get_beacon_blocks(self, peer: BCCPeer, msg: GetBeaconBlocksMessage) -> None:
         if not peer.is_operational:
