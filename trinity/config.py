@@ -3,52 +3,62 @@ from abc import (
     abstractmethod,
 )
 import argparse
-from contextlib import contextmanager
+from contextlib import (
+    contextmanager,
+)
 from enum import (
-    auto,
     Enum,
+    auto,
 )
 import json
-from pathlib import Path
+from pathlib import (
+    Path,
+)
 from typing import (
+    TYPE_CHECKING,
     Any,
-    cast,
     Dict,
     Iterable,
     NamedTuple,
-    TYPE_CHECKING,
     Tuple,
     Type,
     TypeVar,
     Union,
+    cast,
 )
 
+from eth.db.backends.base import (
+    BaseAtomicDB,
+)
+from eth.typing import (
+    VMConfiguration,
+)
+from eth_keys import (
+    keys,
+)
+from eth_keys.datatypes import (
+    PrivateKey,
+)
 from eth_typing import (
     Address,
 )
 
-from eth_keys import keys
-from eth_keys.datatypes import PrivateKey
-
-from eth.db.backends.base import BaseAtomicDB
-from eth.typing import VMConfiguration
-
-from p2p.kademlia import Node as KademliaNode
+from eth2.beacon.chains.testnet import (
+    TestnetChain,
+)
+from eth2.beacon.tools.builder.initializer import (
+    create_mock_genesis,
+)
+from eth2.beacon.typing import (
+    Slot,
+    Timestamp,
+)
 from p2p.constants import (
     MAINNET_BOOTNODES,
     ROPSTEN_BOOTNODES,
 )
-
-from trinity.constants import (
-    ASSETS_DIR,
-    DEFAULT_PREFERRED_NODES,
-    IPC_DIR,
-    LOG_DIR,
-    LOG_FILE,
-    MAINNET_NETWORK_ID,
-    PID_DIR,
-    ROPSTEN_NETWORK_ID,
-    SYNC_LIGHT,
+from p2p.kademlia import (
+    Node as KademliaNode,
 )
 from trinity._utils.chains import (
     construct_trinity_config_params,
@@ -70,19 +80,21 @@ from trinity._utils.filesystem import (
 from trinity._utils.xdg import (
     get_xdg_trinity_root,
 )
-
-from eth2.beacon.tools.builder.initializer import (
-    create_mock_genesis,
-)
-from eth2.beacon.typing import (
-    Timestamp,
-    Slot,
+from trinity.constants import (
+    ASSETS_DIR,
+    DEFAULT_PREFERRED_NODES,
+    IPC_DIR,
+    LOG_DIR,
+    LOG_FILE,
+    MAINNET_NETWORK_ID,
+    PID_DIR,
+    ROPSTEN_NETWORK_ID,
+    SYNC_LIGHT,
 )
 from trinity.plugins.eth2.beacon.testing_config import (
     Config as testing_config,
     keymap,
 )
-from eth2.beacon.chains.testnet import TestnetChain
 
 if TYPE_CHECKING:
     # avoid circular import

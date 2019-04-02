@@ -1,22 +1,36 @@
-from typing import Type  # noqa: F401
+from typing import (  # noqa: F401,
+    Type
+)
 
+from eth2.beacon.state_machines.base import (
+    BeaconStateMachine,
+)
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+    create_serenity_block_from_parent,
+)
+from eth2.beacon.state_machines.forks.serenity.state_transitions import (
+    SerenityStateTransition,
+)
+from eth2.beacon.state_machines.forks.serenity.states import (
+    SerenityBeaconState,
+)
+from eth2.beacon.state_machines.state_transitions import (  # noqa: F401,
+    BaseStateTransition,
+)
+from eth2.beacon.types.blocks import (  # noqa: F401,
+    BaseBeaconBlock,
+)
+from eth2.beacon.types.states import (  # noqa: F401,
+    BeaconState,
+)
 from eth2.beacon.typing import (
     FromBlockParams,
 )
 
-from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
-from eth2.beacon.types.states import BeaconState  # noqa: F401
-
-from eth2.beacon.state_machines.base import BeaconStateMachine
-from eth2.beacon.state_machines.state_transitions import BaseStateTransition  # noqa: F401
-
-from .configs import XIAO_LONG_BAO_CONFIG
-from eth2.beacon.state_machines.forks.serenity.blocks import (
-    create_serenity_block_from_parent,
-    SerenityBeaconBlock,
+from .configs import (
+    XIAO_LONG_BAO_CONFIG,
 )
-from eth2.beacon.state_machines.forks.serenity.states import SerenityBeaconState
-from eth2.beacon.state_machines.forks.serenity.state_transitions import SerenityStateTransition
 
 
 class XiaoLongBaoStateMachine(BeaconStateMachine):
