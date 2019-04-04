@@ -21,6 +21,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     Slot,
+    Second,
 )
 from p2p import ecies
 from p2p.constants import DEFAULT_MAX_PEERS
@@ -52,8 +53,18 @@ from trinity.plugins.eth2.beacon.testing_config import (
 from eth2.beacon.chains.base import (
     BaseBeaconChain,
 )
-from trinity._utils.shellart import(
+from trinity._utils.shellart import (
     bold_green,
+)
+from lahja import (
+    BaseEvent,
+    BroadcastConfig,
+)
+
+from p2p.service import BaseService
+
+from cancel_token import (
+    CancelToken,
 )
 
 
@@ -131,13 +142,16 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
             chain=chain,
             peer_pool=server.peer_pool,
             privkey=validator_privkey,
+            event_bus=self.context.event_bus,
+            token=server.cancel_token,
         )
 
         slot_ticker = SlotTicker(
             genesis_slot=chain_config.genesis_slot,
             genesis_time=chain_config.genesis_time,
             chain=chain,
-            validator=validator,
+            event_bus=self.context.event_bus,
+            token=server.cancel_token,
         )
 
         loop = asyncio.get_event_loop()
@@ -152,12 +166,19 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
 
         asyncio.ensure_future(server.run())
         asyncio.ensure_future(syncer.run())
-        asyncio.ensure_future(slot_ticker._job())
+        asyncio.ensure_future(slot_ticker.run())
+        asyncio.ensure_future(validator.run())
         loop.run_forever()
         loop.close()
 
 
-class Validator:
+class NewSlotEvent(BaseEvent):
+    def __init__(self, slot: Slot, elapse_time: Second):
+        self.slot = slot
+        self.elapse_time = elapse_time
+
+
+class Validator(BaseService):
     """
     Reference: https://github.com/ethereum/trinity/blob/master/eth2/beacon/tools/builder/proposer.py#L175  # noqa: E501
     """
@@ -169,16 +190,30 @@ class Validator:
             validator_index: int,
             chain: BeaconChain,
             peer_pool: BCCPeerPool,
-            privkey: PrivateKey) -> None:
+            privkey: PrivateKey,
+            event_bus: TrinityEventBusEndpoint,
+            token: CancelToken = None) -> None:
+        super().__init__(token)
         self.validator_index = validator_index
         self.chain = chain
         self.peer_pool = peer_pool
         self.privkey = privkey
+        self.event_bus = event_bus
 
-    def new_slot(self, slot: int) -> None:
+    async def _run(self):
+        await self.event_bus.wait_until_serving()
+        self.logger.debug(bold_green("validator running!!!"))
+        self.run_daemon_task(self.handle_new_slot())
+        await self.cancellation()
+
+    async def handle_new_slot(self) -> None:
         """
         The callback for `SlotTicker`, to be called whenever new slot is ticked.
         """
+        async for event in self.event_bus.stream(NewSlotEvent):
+            await self.new_slot(event.slot)
+
+    async def new_slot(self, slot: int) -> None:
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine()
         state = state_machine.state
@@ -190,7 +225,8 @@ class Validator:
             state_machine.config,
         )
         if self.validator_index == proposer_index:
-            self.propose_block(slot=slot, state=state, state_machine=state_machine, head_block=head)
+            self.propose_block(slot=slot, state=state,
+                               state_machine=state_machine, head_block=head)
         else:
             self.skip_block(
                 slot=slot,
@@ -204,6 +240,7 @@ class Validator:
                       state: BeaconState,
                       state_machine: BaseBeaconStateMachine,
                       head_block: BaseBeaconBlock) -> None:
+        self.logger.debug(bold_green("proposing a new block"))
         block = self._make_proposing_block(slot, state, state_machine, head_block)
         for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
             self.logger.debug(f"!@# propose_block: i={i}, peer={peer}, block={block}")
@@ -234,6 +271,7 @@ class Validator:
                    state: BeaconState,
                    state_machine: BaseBeaconStateMachine,
                    parent_block: BaseBeaconBlock) -> None:
+        self.logger.debug(bold_green("skip this slot"))
         post_state = state_machine.state_transition.apply_state_transition_without_block(
             state,
             # TODO: Change back to `slot` instead of `slot + 1`.
@@ -245,7 +283,7 @@ class Validator:
         self.chain.chaindb.persist_state(post_state)
 
 
-class SlotTicker:
+class SlotTicker(BaseService):
     logger = logging.getLogger('SlotTicker')
 
     def __init__(
@@ -253,22 +291,26 @@ class SlotTicker:
             genesis_slot: Slot,
             genesis_time: int,
             chain: BaseBeaconChain,
-            validator: Validator) -> None:
+            event_bus: TrinityEventBusEndpoint,
+            token: CancelToken = None) -> None:
+        super().__init__(token)
         self._genesis_slot = genesis_slot
         self._genesis_time = genesis_time
         self.chain = chain
-        self._validator = validator
         self.latest_slot = 0
+        self.event_bus = event_bus
 
     def get_seconds_per_slot(self):
         state_machine = self.chain.get_state_machine()
         return state_machine.config.SECONDS_PER_SLOT
 
-    async def _job(self) -> None:
-        while True:
+    async def _run(self) -> None:
+        self.run_daemon_task(self._keep_ticking())
+        await self.cancellation()
+
+    async def _keep_ticking(self) -> None:
+        while self.is_operational:
             seconds_per_slot = self.get_seconds_per_slot()
-            # don't sleep the full seconds_per_slot
-            await asyncio.sleep(seconds_per_slot // 5)
             now = int(time.time())
             elapse_time = now - self._genesis_time
             if elapse_time >= (0 + seconds_per_slot):
@@ -278,4 +320,12 @@ class SlotTicker:
                         bold_green("New slot: %s\tElapse time: %s" % (slot, elapse_time))
                     )
                     self.latest_slot = slot
-                    self._validator.new_slot(slot)
+                    self.event_bus.broadcast(
+                        NewSlotEvent(
+                            slot=slot,
+                            elapse_time=elapse_time,
+                        ),
+                        BroadcastConfig(internal=True),
+                    )
+            # don't sleep the full seconds_per_slot
+            await asyncio.sleep(seconds_per_slot // 5)
