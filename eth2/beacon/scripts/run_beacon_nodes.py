@@ -5,7 +5,6 @@ from collections import (
     defaultdict,
 )
 import logging
-import os.path
 import signal
 import sys
 import time
@@ -140,7 +139,6 @@ class Node:
             self._record_happenning_event(from_stream, line)
             print(f"{self.name}.{from_stream}: {line}")
 
-
     def _record_happenning_event(self, from_stream, line):
         for event in self.events_expected[from_stream]:
             if event.pattern in line:
@@ -172,13 +170,13 @@ async def main():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    node_alice = Node('Alice', cmd_alice)
+    node_alice = Node('Alice\tc2895', cmd_alice)
     nodes_to_stop.append(node_alice)
 
     print(f"Sleeping {time_bob_wait_for_alice} seconds to wait until Alice is initialized")
     await asyncio.sleep(time_bob_wait_for_alice)
 
-    node_bob = Node('Bob', cmd_bob)
+    node_bob = Node('Bob\t0e01b', cmd_bob)
     node_bob.add_event("stderr", START_SYNCING)
     nodes_to_stop.append(node_bob)
 
