@@ -177,7 +177,7 @@ async def main():
     await asyncio.sleep(time_bob_wait_for_alice)
 
     node_bob = Node('Bob\t0e01b', cmd_bob)
-    node_bob.add_event("stderr", START_SYNCING)
+    # node_bob.add_event("stderr", START_SYNCING)
     nodes_to_stop.append(node_bob)
 
     await asyncio.sleep(1000000)
