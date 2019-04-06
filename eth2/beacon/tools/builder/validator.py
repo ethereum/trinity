@@ -491,9 +491,7 @@ def create_mock_signed_attestations_at_slot(
     )
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
         # To avoid the epoch boundary cases
-        state.copy(
-            slot=state.slot,
-        ),
+        state,
         attestation_slot,
         CommitteeConfig(config),
     )

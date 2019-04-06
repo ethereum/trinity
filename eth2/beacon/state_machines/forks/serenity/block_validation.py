@@ -377,31 +377,35 @@ def validate_attestation_source_epoch_and_root(state: BeaconState,
     Raise ``ValidationError`` if it's invalid.
     """
     if slot_to_epoch(attestation_data.slot + 1, slots_per_epoch) >= current_epoch:
+        # Case 1: current epoch attestations
         if attestation_data.source_epoch != state.current_justified_epoch:
             raise ValidationError(
-                "Attestation `slot` is after recent epoch transition but attestation"
+                "Current epoch attestation that "
                 "`source_epoch` is not targeting the `state.current_justified_epoch`:\n"
                 "\tFound: %s, Expected %s" %
                 (attestation_data.source_epoch, state.current_justified_epoch)
             )
+
         if attestation_data.source_root != state.current_justified_root:
             raise ValidationError(
-                "Attestation `slot` is after recent epoch transition but attestation"
+                "Current epoch attestation that "
                 "`source_root` is not equal to `state.current_justified_root`:\n"
                 "\tFound: %s, Expected %s" %
                 (attestation_data.source_root, state.current_justified_root)
             )
     else:
+        # Case 2: previous epoch attestations
         if attestation_data.source_epoch != state.previous_justified_epoch:
             raise ValidationError(
-                "Attestation `slot` is before recent epoch transition but attestation"
+                "Previous epoch attestation that "
                 "`source_epoch`` is not targeting the `state.previous_justified_epoch`:\n"
                 "\tFound: %s, Expected %s" %
                 (attestation_data.source_epoch, state.previous_justified_epoch)
             )
+
         if attestation_data.source_root != state.previous_justified_root:
             raise ValidationError(
-                "Attestation `slot` is before recent epoch transition but attestation"
+                "Previous epoch attestation that "
                 "`source_root` is not equal to `state.previous_justified_root`:\n"
                 "\tFound: %s, Expected %s" %
                 (attestation_data.source_root, state.previous_justified_root)
