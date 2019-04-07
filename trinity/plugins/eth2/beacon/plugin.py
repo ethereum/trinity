@@ -55,6 +55,7 @@ from eth2.beacon.chains.base import (
 )
 from trinity._utils.shellart import (
     bold_green,
+    bold_red,
 )
 from lahja import (
     BaseEvent,
@@ -217,6 +218,9 @@ class Validator(BaseService):
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine()
         state = state_machine.state
+        self.logger.debug(
+            bold_green(f"head: slot={head.slot}, state root={head.state_root}")
+        )
         proposer_index = _get_proposer_index(
             state_machine,
             state,
@@ -240,13 +244,16 @@ class Validator(BaseService):
                       state: BeaconState,
                       state_machine: BaseBeaconStateMachine,
                       head_block: BaseBeaconBlock) -> None:
-        self.logger.debug(bold_green("proposing a new block"))
         block = self._make_proposing_block(slot, state, state_machine, head_block)
+        self.logger.debug(
+            bold_green(f"propose block={block}")
+        )
         for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
-            self.logger.debug(f"!@# propose_block: i={i}, peer={peer}, block={block}")
+            self.logger.debug(
+                bold_red(f"send block to: request_id={i}, peer={peer}")
+            )
             peer.sub_proto.send_block(block, request_id=i)
         self.chain.import_block(block)
-        self.chain.chaindb.persist_block(block, SerenityBeaconBlock)
 
     def _make_proposing_block(self,
                               slot: int,
@@ -271,7 +278,6 @@ class Validator(BaseService):
                    state: BeaconState,
                    state_machine: BaseBeaconStateMachine,
                    parent_block: BaseBeaconBlock) -> None:
-        self.logger.debug(bold_green("skip this slot"))
         post_state = state_machine.state_transition.apply_state_transition_without_block(
             state,
             # TODO: Change back to `slot` instead of `slot + 1`.
@@ -279,6 +285,9 @@ class Validator(BaseService):
             # of `slot - 1`, so we increment it by one to get the post state of `slot`.
             slot + 1,
             parent_block.root,
+        )
+        self.logger.debug(
+            bold_green(f"skip block, post state={post_state.root}")
         )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
@@ -318,8 +327,8 @@ class SlotTicker(BaseService):
             if elapse_time >= (0 + seconds_per_slot):
                 slot = elapse_time // seconds_per_slot + self._genesis_slot
                 if slot > self.latest_slot:
-                    self.logger.info(
-                        bold_green("New slot: %s\tElapse time: %s" % (slot, elapse_time))
+                    self.logger.debug(
+                        bold_green(f"New slot: {slot}\tElapse time: {elapse_time}")
                     )
                     self.latest_slot = slot
                     self.event_bus.broadcast(
