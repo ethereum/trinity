@@ -249,10 +249,11 @@ class Validator(BaseService):
             bold_green(f"propose block={block}")
         )
         for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
+            request_id = int.from_bytes(block.root[:4], 'little') + i
             self.logger.debug(
-                bold_red(f"send block to: request_id={i}, peer={peer}")
+                bold_red(f"send block to: request_id={request_id}, peer={peer}")
             )
-            peer.sub_proto.send_block(block, request_id=i)
+            peer.sub_proto.send_block(block, request_id=request_id)
         self.chain.import_block(block)
 
     def _make_proposing_block(self,
