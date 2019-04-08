@@ -1,13 +1,19 @@
 from abc import abstractmethod
+import random
 from typing import (
     cast,
     AsyncIterator,
     FrozenSet,
+    MutableSet,
+    List,
     Type,
 )
 
 from eth_typing import (
     Hash32,
+)
+from eth_utils import (
+    ValidationError,
 )
 
 from cancel_token import CancelToken, OperationCancelled
@@ -15,7 +21,11 @@ from cancel_token import CancelToken, OperationCancelled
 import ssz
 
 from p2p import protocol
-from p2p.peer import BasePeer, PeerSubscriber
+from p2p.peer import (
+    BasePeer,
+    MsgBuffer,
+    PeerSubscriber,
+)
 from p2p.protocol import Command
 from p2p.service import BaseService
 
@@ -35,6 +45,7 @@ from trinity.protocol.common.servers import BaseRequestServer
 from trinity.protocol.common.peer import BasePeerPool
 from trinity.protocol.bcc.commands import (
     BeaconBlocks,
+    BeaconBlocksMessage,
     GetBeaconBlocks,
     GetBeaconBlocksMessage,
     NewBeaconBlock,
@@ -43,6 +54,10 @@ from trinity.protocol.bcc.commands import (
 from trinity.protocol.bcc.peer import (
     BCCPeer,
     BCCPeerPool,
+)
+from trinity._utils.shellart import (
+    bold_green,
+    bold_red,
 )
 
 
@@ -197,7 +212,11 @@ class BaseReceiveServer(BaseService, PeerSubscriber):
 class BCCReceiveServer(BaseReceiveServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
         NewBeaconBlock,
+        BeaconBlocks,
     })
+
+    requested_ids: MutableSet[int]
+    orphan_block_pool: List[NewBeaconBlock]
 
     def __init__(self,
                  chain: BeaconChain,
@@ -205,6 +224,8 @@ class BCCReceiveServer(BaseReceiveServer):
                  token: CancelToken = None) -> None:
         super().__init__(peer_pool, token)
         self.chain = chain
+        self.orphan_block_pool = []
+        self.requested_ids = set()
 
     async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
                           msg: protocol._DecodedMsgType) -> None:
@@ -212,8 +233,24 @@ class BCCReceiveServer(BaseReceiveServer):
         self.logger.debug("cmd %s" % cmd)
         if isinstance(cmd, NewBeaconBlock):
             await self._handle_new_beacon_block(peer, cast(NewBeaconBlockMessage, msg))
+        elif isinstance(cmd, BeaconBlocks):
+            await self._handle_beacon_blocks(peer, cast(BeaconBlocksMessage, msg))
         else:
             raise Exception(f"Invariant: Only subscribed to {self.subscription_msg_types}")
+
+    async def _handle_beacon_blocks(self, peer: BCCPeer, msg: NewBeaconBlockMessage) -> None:
+        if not peer.is_operational:
+            return
+        request_id = msg["request_id"]
+        if request_id not in self.requested_ids:
+            return
+        encoded_blocks = msg["encoded_blocks"]
+        if len(encoded_blocks) != 1:
+            raise Exception("should only receive 1 block from our requests")
+        resp_block = ssz.decode(encoded_blocks[0], BeaconBlock)
+        self.logger.debug(f"!@# _handle_beacon_blocks: received request_id={request_id}, resp_block={resp_block}")  # noqa: E501
+        self._try_import_or_handle_orphan(resp_block)
+        self.requested_ids.remove(request_id)
 
     async def _handle_new_beacon_block(self, peer: BCCPeer, msg: NewBeaconBlockMessage) -> None:
         if not peer.is_operational:
@@ -222,7 +259,42 @@ class BCCReceiveServer(BaseReceiveServer):
         encoded_block = msg["encoded_block"]
         block = ssz.decode(encoded_block, BeaconBlock)
         self.logger.debug(f"!@# _handle_new_beacon_block: received request_id={request_id}, block={block}")  # noqa: E501
-        # TODO: validate the block with db, and broadcast it if it's valid.
+        self._try_import_or_handle_orphan(block)
 
-        # Persist the block and post state into the chain databsse.
-        self.chain.import_block(block)
+    def _try_import_or_handle_orphan(self, block: BeaconBlock) -> None:
+        while True:
+            # try to import the block
+            try:
+                self.logger.debug(f"!@# try to import block={block}")
+                self.chain.import_block(block)
+            except ValidationError:
+                # if failed, add to the orphan block pool and return
+                self.logger.debug(f"!@# failed to import block={block}, add to the orphan pool")
+                self.orphan_block_pool.append(block)
+                self._request_block_by_root(block_root=block.parent_root)
+                return
+            # if succeeded, see if any orphan depends on this block. If any, handle it.
+            self.logger.debug(f"!@# successfully imported block={block}, see if there are orphans depending on it")  # noqa: E501
+            is_child_found = False
+            for orphan_block in self.orphan_block_pool:
+                if orphan_block.parent_root == block.root:
+                    is_child_found = True
+                    self.logger.debug(f"!@# found the orphan={orphan_block}, depending on the block={block}")  # noqa: E501
+                    block = orphan_block
+            if not is_child_found:
+                break
+            else:
+                self.orphan_block_pool.remove(block)
+
+    def _request_block_by_root(self, block_root: Hash32) -> None:
+        for i, peer in enumerate(self._peer_pool.connected_nodes.values()):
+            self.logger.debug(
+                bold_red(f"!@# send block request to: request_id={i}, peer={peer}")
+            )
+            req_request_id = random.randint(0, 32768)
+            self.requested_ids.add(req_request_id)
+            peer.sub_proto.send_get_blocks(
+                block_root,
+                max_blocks=1,
+                request_id=req_request_id,
+            )

@@ -184,6 +184,12 @@ class Validator(BaseService):
     Reference: https://github.com/ethereum/trinity/blob/master/eth2/beacon/tools/builder/proposer.py#L175  # noqa: E501
     """
 
+    validator_index: int
+    chain: BeaconChain
+    peer_pool: BCCPeerPool
+    privkey: PrivateKey
+    event_bus: TrinityEventBusEndpoint
+
     logger = logging.getLogger(f'trinity.plugins.eth2.beacon.Validator')
 
     def __init__(
@@ -201,7 +207,7 @@ class Validator(BaseService):
         self.privkey = privkey
         self.event_bus = event_bus
 
-    async def _run(self):
+    async def _run(self) -> None:
         await self.event_bus.wait_until_serving()
         self.logger.debug(bold_green("validator running!!!"))
         self.run_daemon_task(self.handle_new_slot())
@@ -246,11 +252,11 @@ class Validator(BaseService):
                       head_block: BaseBeaconBlock) -> None:
         block = self._make_proposing_block(slot, state, state_machine, head_block)
         self.logger.debug(
-            bold_green(f"propose block={block}")
+            bold_green(f"!@# propose block={block}")
         )
         for i, peer in enumerate(self.peer_pool.connected_nodes.values()):
             self.logger.debug(
-                bold_red(f"send block to: request_id={i}, peer={peer}")
+                bold_red(f"!@# send block to: request_id={i}, peer={peer}")
             )
             peer.sub_proto.send_block(block, request_id=i)
         self.chain.import_block(block)
@@ -287,7 +293,7 @@ class Validator(BaseService):
             parent_block.root,
         )
         self.logger.debug(
-            bold_green(f"skip block, post state={post_state.root}")
+            bold_green(f"!@# skip block, post state={post_state.root}")
         )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
@@ -295,6 +301,11 @@ class Validator(BaseService):
 
 
 class SlotTicker(BaseService):
+    genesis_slot: Slot
+    genesis_time: int
+    chain: BaseBeaconChain
+    latest_slot: int
+    event_bus: TrinityEventBusEndpoint
     logger = logging.getLogger('SlotTicker')
 
     def __init__(
