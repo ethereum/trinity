@@ -81,10 +81,9 @@ class BCCProtocol(HasExtendedDebugLogger, Protocol):
         header, body = cmd.encode(tuple(ssz.encode(attestation) for attestation in attestations))
         self.send(header, body)
 
-    def send_block(self, block: BaseBeaconBlock, request_id: int) -> None:
+    def send_block(self, block: BaseBeaconBlock) -> None:
         cmd = NewBeaconBlock(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(NewBeaconBlockMessage(
-            request_id=request_id,
             encoded_block=ssz.encode(block),
         ))
         self.send(header, body)
