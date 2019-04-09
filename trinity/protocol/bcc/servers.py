@@ -255,7 +255,6 @@ class BCCReceiveServer(BaseReceiveServer):
     async def _handle_new_beacon_block(self, peer: BCCPeer, msg: NewBeaconBlockMessage) -> None:
         if not peer.is_operational:
             return
-        request_id = msg["request_id"]
         encoded_block = msg["encoded_block"]
         block = ssz.decode(encoded_block, BeaconBlock)
         self.logger.debug(f"!@# _handle_new_beacon_block: received request_id={request_id}, block={block}")  # noqa: E501
