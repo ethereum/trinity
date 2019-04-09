@@ -3,6 +3,7 @@ import random
 from typing import (
     cast,
     AsyncIterator,
+    Dict,
     FrozenSet,
     MutableSet,
     List,
@@ -216,7 +217,9 @@ class BCCReceiveServer(BaseReceiveServer):
     })
 
     requested_ids: MutableSet[int]
-    orphan_block_pool: List[NewBeaconBlock]
+    # TODO: probably use lru-cache or other cache in the future?
+    #   map from `block.parent_root` to `block`
+    orphan_block_pool: List[BeaconBlock]
 
     def __init__(self,
                  chain: BeaconChain,
@@ -261,29 +264,38 @@ class BCCReceiveServer(BaseReceiveServer):
         self._try_import_or_handle_orphan(block)
 
     def _try_import_or_handle_orphan(self, block: BeaconBlock) -> None:
-        while True:
+        blocks_to_be_imported: List[BeaconBlock] = []
+        blocks_failed_to_be_imported: List[BeaconBlock] = []
+
+        blocks_to_be_imported.append(block)
+        while len(blocks_to_be_imported) != 0:
+            block = blocks_to_be_imported.pop()
             # try to import the block
             try:
                 self.logger.debug(f"!@# try to import block={block}")
                 self.chain.import_block(block)
+                self.logger.debug(f"!@# successfully imported block={block}")
             except ValidationError:
-                # if failed, add to the orphan block pool and return
                 self.logger.debug(f"!@# failed to import block={block}, add to the orphan pool")
-                self.orphan_block_pool.append(block)
+                # if failed, add the block and the rest of the queue back to the pool
+                blocks_failed_to_be_imported.append(block)
+                #   and send request for their parents
                 self._request_block_by_root(block_root=block.parent_root)
-                return
-            # if succeeded, see if any orphan depends on this block. If any, handle it.
-            self.logger.debug(f"!@# successfully imported block={block}, see if there are orphans depending on it")  # noqa: E501
-            is_child_found = False
-            for orphan_block in self.orphan_block_pool:
-                if orphan_block.parent_root == block.root:
-                    is_child_found = True
-                    self.logger.debug(f"!@# found the orphan={orphan_block}, depending on the block={block}")  # noqa: E501
-                    block = orphan_block
-            if not is_child_found:
-                break
-            else:
-                self.orphan_block_pool.remove(block)
+            # if succeeded, handle the orphan blocks which depend on this block.
+            matched_orphan_blocks = (
+                orphan_block
+                for orphan_block in self.orphan_block_pool
+                if orphan_block.parent_root == block.root
+            )
+            self.logger.debug(
+                f"!@# blocks {tuple(matched_orphan_blocks)} match their parent {block}"
+            )
+            blocks_to_be_imported.extend(matched_orphan_blocks)
+            self.orphan_block_pool = list(
+                set(self.orphan_block_pool).difference(matched_orphan_blocks)
+            )
+        # add the blocks-failed-to-import back
+        self.orphan_block_pool.extend(blocks_failed_to_be_imported)
 
     def _request_block_by_root(self, block_root: Hash32) -> None:
         for i, peer in enumerate(self._peer_pool.connected_nodes.values()):
