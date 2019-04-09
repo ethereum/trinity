@@ -252,7 +252,7 @@ class Validator(BaseService):
             self.logger.debug(
                 bold_red(f"send block to: peer={peer}")
             )
-            peer.sub_proto.send_block(block)
+            peer.sub_proto.send_new_block(block)
         self.chain.import_block(block)
 
     def _make_proposing_block(self,
