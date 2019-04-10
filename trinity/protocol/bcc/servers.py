@@ -41,6 +41,10 @@ from eth2.beacon.typing import (
     Slot,
 )
 
+from trinity._utils.shellart import (
+    bold_green,
+    bold_red,
+)
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
 from trinity.protocol.common.servers import BaseRequestServer
 from trinity.protocol.common.peer import BasePeerPool
@@ -55,10 +59,6 @@ from trinity.protocol.bcc.commands import (
 from trinity.protocol.bcc.peer import (
     BCCPeer,
     BCCPeerPool,
-)
-from trinity._utils.shellart import (
-    bold_green,
-    bold_red,
 )
 
 
@@ -260,7 +260,7 @@ class BCCReceiveServer(BaseReceiveServer):
             return
         encoded_block = msg["encoded_block"]
         block = ssz.decode(encoded_block, BeaconBlock)
-        self.logger.debug(f"!@# _handle_new_beacon_block: received request_id={request_id}, block={block}")  # noqa: E501
+        self.logger.debug(f"!@# _handle_new_beacon_block: received block={block}")  # noqa: E501
         self._try_import_or_handle_orphan(block)
 
     def _try_import_or_handle_orphan(self, block: BeaconBlock) -> None:
@@ -287,13 +287,14 @@ class BCCReceiveServer(BaseReceiveServer):
                 for orphan_block in self.orphan_block_pool
                 if orphan_block.parent_root == block.root
             )
-            self.logger.debug(
-                f"!@# blocks {tuple(matched_orphan_blocks)} match their parent {block}"
-            )
-            blocks_to_be_imported.extend(matched_orphan_blocks)
-            self.orphan_block_pool = list(
-                set(self.orphan_block_pool).difference(matched_orphan_blocks)
-            )
+            if len(matched_orphan_blocks) > 0:
+                self.logger.debug(
+                    f"!@# blocks {matched_orphan_blocks} match their parent {block}"
+                )
+                blocks_to_be_imported.extend(matched_orphan_blocks)
+                self.orphan_block_pool = list(
+                    set(self.orphan_block_pool).difference(matched_orphan_blocks)
+                )
         # add the blocks-failed-to-import back
         self.orphan_block_pool.extend(blocks_failed_to_be_imported)
 
