@@ -19,6 +19,8 @@ from eth_utils import (
 
 from cancel_token import CancelToken, OperationCancelled
 
+from py_ecc import bls
+
 import ssz
 
 from p2p import protocol
@@ -32,11 +34,24 @@ from p2p.service import BaseService
 
 from eth.exceptions import BlockNotFound
 
+from eth2.configs import CommitteeConfig
+from eth2.beacon.committee_helpers import (
+    get_beacon_proposer_index,
+)
 from eth2.beacon.chains.base import BeaconChain
+from eth2.beacon.enums import SignatureDomain
+from eth2.beacon.helpers import (
+    get_domain,
+    slot_to_epoch,
+)
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_proposer_signature,
+)
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
     BeaconBlock,
 )
+from eth2.beacon.types.proposal import Proposal
 from eth2.beacon.typing import (
     Slot,
 )
@@ -255,13 +270,74 @@ class BCCReceiveServer(BaseReceiveServer):
         self._try_import_or_handle_orphan(resp_block)
         self.requested_ids.remove(request_id)
 
+    def _validate_proposer_signature(self, block):
+        # Validate signature
+        state_machine = self.chain.get_state_machine()
+        state = state_machine.state
+        try:
+            # validate_proposer_signature(
+            #     state,
+            #     block,
+            #     beacon_chain_shard_number=self.config.BEACON_CHAIN_SHARD_NUMBER,
+            #     committee_config=CommitteeConfig(self.config),
+            # )
+            block_without_signature_root = block.block_without_signature_root
+
+            proposal = Proposal(
+                block.slot,
+                state_machine.config.BEACON_CHAIN_SHARD_NUMBER,
+                block_without_signature_root,
+                signature=block.signature,
+            )
+
+            committee_config = CommitteeConfig(state_machine.config)
+            self.logger.debug(
+                bold_red(f"Validate proposal, state slot={state.slot}, block slot={block.slot}")
+            )
+            proposer_index = get_beacon_proposer_index(
+                state,
+                block.slot,
+                committee_config,
+            )
+            self.logger.debug(
+                bold_red(f"Validate proposal, proposer_index={proposer_index}")
+            )
+            proposer_pubkey = state.validator_registry[proposer_index].pubkey
+            domain = get_domain(
+                state.fork,
+                slot_to_epoch(block.slot, committee_config.SLOTS_PER_EPOCH),
+                SignatureDomain.DOMAIN_BEACON_BLOCK
+            )
+
+            assert bls.verify(
+                pubkey=proposer_pubkey,
+                message_hash=proposal.signed_root,
+                signature=proposal.signature,
+                domain=domain,
+            )
+        except ValidationError as e:
+            self.logger.debug(
+                bold_red(f"Fail to get proposer info, block={block}, error={e}")
+            )
+
     async def _handle_new_beacon_block(self, peer: BCCPeer, msg: NewBeaconBlockMessage) -> None:
         if not peer.is_operational:
             return
         encoded_block = msg["encoded_block"]
+        # TODO: Catch ssz decode error.
         block = ssz.decode(encoded_block, BeaconBlock)
         self.logger.debug(f"!@# _handle_new_beacon_block: received block={block}")  # noqa: E501
         self._try_import_or_handle_orphan(block)
+
+        # try:
+        #     self._validate_proposer_signature(block)
+        # except AssertionError:
+        #     self.logger.debug(
+        #         bold_red(f"Invalid proposer signature, block={block}, error={e}")
+        #     )
+        # else:
+        #     # Persist the block and post state into the chain databsse.
+        #     self.chain.import_block(block)
 
     def _try_import_or_handle_orphan(self, block: BeaconBlock) -> None:
         blocks_to_be_imported: List[BeaconBlock] = []
