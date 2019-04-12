@@ -9,6 +9,7 @@ import time
 from typing import (
     Any,
     cast,
+    Dict,
     Iterable,
     Iterator,
     List,
@@ -141,6 +142,14 @@ class Node:
 
     def __hash__(self) -> int:
         return hash(self.pubkey)
+
+    def __getstate__(self) -> Dict[Any, Any]:
+        return {'enode': self.uri()}
+
+    def __setstate__(self, state: Dict[Any, Any]) -> None:
+        enode = state.pop('enode')
+        node = self.from_uri(enode)
+        self.__dict__.update(node.__dict__)
 
 # TODO: check if we can make the nodes pickable and get rid of these
 # https://github.com/ethereum/py-evm/issues/1578

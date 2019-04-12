@@ -1,5 +1,8 @@
 import pathlib
 
+from p2p.exceptions import HandshakeFailure
+from p2p.tracking.connection import register_error
+
 
 class BaseTrinityError(Exception):
     """
@@ -51,3 +54,21 @@ class DAOForkCheckFailure(BaseTrinityError):
     Raised when the DAO fork check with a certain peer is unsuccessful.
     """
     pass
+
+
+class WrongNetworkFailure(BaseTrinityError, HandshakeFailure):
+    """
+    Disconnected from the peer because it's on a different network than we're on
+    """
+    pass
+
+
+class WrongGenesisFailure(BaseTrinityError, HandshakeFailure):
+    """
+    Disconnected from the peer because it has a different genesis than we do
+    """
+    pass
+
+
+register_error(WrongNetworkFailure, 24 * 60 * 60)  # one day
+register_error(WrongGenesisFailure, 24 * 60 * 60)  # one day

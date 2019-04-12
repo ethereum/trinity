@@ -64,15 +64,15 @@ from p2p.peer_backend import (
     DiscoveryPeerBackend,
     BootnodesPeerBackend,
 )
-from p2p.persistence import (
-    BasePeerInfo,
-    NoopPeerInfo,
-)
 from p2p.p2p_proto import (
     DisconnectReason,
 )
 from p2p.service import (
     BaseService,
+)
+from p2p.tracking.connection import (
+    BaseConnectionTracker,
+    NoopTracker,
 )
 
 
@@ -101,21 +101,16 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     """
     _report_interval = 60
     _peer_boot_timeout = DEFAULT_PEER_BOOT_TIMEOUT
+    _event_bus: Endpoint = None
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  context: BasePeerContext,
                  max_peers: int = DEFAULT_MAX_PEERS,
-                 peer_info: BasePeerInfo = None,
                  token: CancelToken = None,
                  event_bus: Endpoint = None,
                  ) -> None:
         super().__init__(token)
-
-        if peer_info is None:
-            peer_info = NoopPeerInfo()
-
-        self.peer_info = peer_info
 
         self.privkey = privkey
         self.max_peers = max_peers
@@ -123,11 +118,32 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         self.connected_nodes: Dict[str, BasePeer] = {}
         self._subscribers: List[PeerSubscriber] = []
-        self.event_bus = event_bus
+        self._event_bus = event_bus
 
+        self.connection_tracker = self.setup_connection_tracker()
         self.peer_backends = self.setup_peer_backends()
 
+        # allow up to 10 concurrent attempts to connect to a peer.
+        self._connection_attempt_lock = asyncio.BoundedSemaphore(10)
+
+    @property
+    def event_bus(self) -> Endpoint:
+        if self._event_bus is None:
+            raise AttributeError("No event bus configured for this peer pool")
+        return self._event_bus
+
+    def setup_connection_tracker(self) -> BaseConnectionTracker:
+        """
+        Return an instance of `p2p.tracking.connection.BaseConnectionTracker`
+        which will be used to track peer connection failures.
+        """
+        return NoopTracker()
+
     def setup_peer_backends(self) -> Tuple[BasePeerBackend, ...]:
+        """
+        Return a tuple of `p2p.peer_backend.BasePeerBackend` instances which
+        the peer pool will use to to source new peer connection candidates.
+        """
         return (
             DiscoveryPeerBackend(self.event_bus),
             BootnodesPeerBackend(self.event_bus),
@@ -136,6 +152,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     async def _add_peers_from_backend(self, backend: BasePeerBackend) -> None:
         available_slots = self.max_peers - len(self)
 
+        self.logger.debug('adding peers from backend %s', backend)
         try:
             candidates = await self.wait(
                 backend.get_peer_candidates(
@@ -148,22 +165,30 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             self.logger.warning("PeerCandidateRequest timed out to backend %s", backend)
             return
         else:
-            self.logger.debug2(
+            self.logger.debug(
                 "Got candidates from backend %s (%s)",
                 backend,
                 candidates,
             )
-            await self.connect_to_nodes(iter(candidates))
+            if candidates:
+                await self.connect_to_nodes(iter(candidates))
+            self.logger.debug('finished backend: %s', backend)
 
     async def maybe_connect_more_peers(self) -> None:
-        # allowed to operate at a maximum rate of 1 check every 2 seconds
-        rate_limiter = token_bucket(1 / PEER_CONNECT_INTERVAL, MAX_SEQUENTIAL_PEER_CONNECT)
-        while True:
+        rate_limiter = token_bucket(
+            rate=1 / PEER_CONNECT_INTERVAL,
+            capacity=MAX_SEQUENTIAL_PEER_CONNECT,
+        )
+
+        while self.is_operational:
             if self.is_full:
                 await self.sleep(PEER_CONNECT_INTERVAL)
                 continue
+
+            self.logger.debug('waiting for token bucket')
             await self.wait(rate_limiter.__anext__())
 
+            self.logger.debug('hitting peer backends')
             await self.wait(asyncio.gather(*(
                 self._add_peers_from_backend(backend)
                 for backend in self.peer_backends
@@ -222,6 +247,9 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             self.logger.debug('Timout waiting for peer to boot: %s', err)
             await peer.disconnect(DisconnectReason.timeout)
             return
+        except HandshakeFailure as err:
+            self.connection_tracker.record_failure(peer.remote, err)
+            raise
         else:
             if peer.is_operational:
                 self._add_peer(peer, buffer.get_messages())
@@ -272,7 +300,17 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         if remote in self.connected_nodes:
             self.logger.debug2("Skipping %s; already connected to it", remote)
             raise IneligiblePeer(f"Already connected to {remote}")
-        if not self.peer_info.should_connect_to(remote):
+
+        try:
+            should_connect = self.wait(
+                self.connection_tracker.coro_should_connect_to(remote),
+                timeout=1,
+            )
+        except TimeoutError:
+            self.logger.warning("ConnectionTracker.coro_should_connect_to request timed out.")
+            raise
+
+        if not should_connect:
             raise IneligiblePeer(f"Peer database rejected peer candidate: {remote}")
 
         try:
@@ -303,7 +341,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             raise
         except HandshakeFailure as e:
             self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
-            self.peer_info.record_failure(remote, e)
+            self.connection_tracker.record_failure(remote, e)
             raise
         except COMMON_PEER_CONNECTION_EXCEPTIONS as e:
             self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
@@ -351,9 +389,14 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             return
 
         try:
-            peer = await self.connect(node)
+            self.logger.debug('acquiring semaphor')
+            async with self._connection_attempt_lock:
+                self.logger.debug('semaphor acquired')
+                peer = await self.connect(node)
         except ALLOWED_PEER_CONNECTION_EXCEPTIONS:
             return
+        finally:
+            self.logger.debug('semaphor released')
 
         # Check again to see if we have *become* full since the previous
         # check.

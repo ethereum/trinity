@@ -22,6 +22,10 @@ from p2p.protocol import (
     _DecodedMsgType,
 )
 
+from trinity.exceptions import (
+    WrongGenesisFailure,
+    WrongNetworkFailure,
+)
 from trinity.protocol.common.peer import (
     BaseChainPeer,
     BaseChainPeerFactory,
@@ -46,7 +50,7 @@ from .handlers import LESExchangeHandler
 class LESPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    _supported_sub_protocols = [LESProtocol, LESProtocolV2]
+    supported_sub_protocols = [LESProtocol, LESProtocolV2]
     sub_proto: LESProtocol = None
 
     _requests: LESExchangeHandler = None
@@ -89,7 +93,7 @@ class LESPeer(BaseChainPeer):
 
         if msg['networkId'] != self.local_network_id:
             await self.disconnect(DisconnectReason.useless_peer)
-            raise HandshakeFailure(
+            raise WrongNetworkFailure(
                 f"{self} network ({msg['networkId']}) does not match ours "
                 f"({self.local_network_id}), disconnecting"
             )
@@ -97,7 +101,7 @@ class LESPeer(BaseChainPeer):
         local_genesis_hash = await self._get_local_genesis_hash()
         if msg['genesisHash'] != local_genesis_hash:
             await self.disconnect(DisconnectReason.useless_peer)
-            raise HandshakeFailure(
+            raise WrongGenesisFailure(
                 f"{self} genesis ({encode_hex(msg['genesisHash'])}) does not "
                 f"match ours ({local_genesis_hash}), disconnecting"
             )

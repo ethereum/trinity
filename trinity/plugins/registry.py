@@ -10,6 +10,9 @@ from trinity.plugins.builtin.attach.plugin import (
     DbShellPlugin,
     AttachPlugin,
 )
+from trinity.plugins.builtin.blacklist.plugin import (
+    BlacklistPlugin,
+)
 from trinity.plugins.builtin.ethstats.plugin import (
     EthstatsPlugin,
 )
@@ -18,6 +21,9 @@ from trinity.plugins.builtin.fix_unclean_shutdown.plugin import (
 )
 from trinity.plugins.builtin.json_rpc.plugin import (
     JsonRpcServerPlugin,
+)
+from trinity.plugins.builtin.peer_db.plugin import (
+    PeerDBPlugin,
 )
 from trinity.plugins.builtin.peer_discovery.plugin import (
     PeerDiscoveryPlugin,
@@ -57,9 +63,11 @@ BASE_PLUGINS: Tuple[BasePlugin, ...] = (
 
 
 ETH1_NODE_PLUGINS: Tuple[BasePlugin, ...] = (
+    BlacklistPlugin(),
     DbShellPlugin(use_ipython=is_ipython_available()),
     EthstatsPlugin(),
     LightPeerChainBridgePlugin(),
+    PeerDBPlugin(),
     SyncerPlugin((
         FastThenFullSyncStrategy(),
         FullSyncStrategy(),
