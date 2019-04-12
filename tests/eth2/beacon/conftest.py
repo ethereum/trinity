@@ -54,6 +54,17 @@ DEFAULT_RANDAO = b'\45' * 32
 DEFAULT_NUM_VALIDATORS = 40
 
 
+# SSZ
+@pytest.fixture(scope="function", autouse=True)
+def override_length(config):
+    BeaconState._meta.container_sedes.field_name_to_sedes["latest_randao_mixes"].length = config.LATEST_RANDAO_MIXES_LENGTH  # noqa: E501
+    BeaconState._meta.container_sedes.field_name_to_sedes["latest_crosslinks"].length = config.SHARD_COUNT  # noqa: E501
+    BeaconState._meta.container_sedes.field_name_to_sedes["latest_block_roots"].length = config.SLOTS_PER_HISTORICAL_ROOT  # noqa: E501
+    BeaconState._meta.container_sedes.field_name_to_sedes["latest_state_roots"].length = config.SLOTS_PER_HISTORICAL_ROOT  # noqa: E501
+    BeaconState._meta.container_sedes.field_name_to_sedes["latest_active_index_roots"].length = config.LATEST_ACTIVE_INDEX_ROOTS_LENGTH  # noqa: E501
+    BeaconState._meta.container_sedes.field_name_to_sedes["latest_slashed_balances"].length = config.LATEST_SLASHED_EXIT_LENGTH  # noqa: E501
+
+
 @pytest.fixture(scope="session")
 def privkeys():
     """
@@ -154,11 +165,13 @@ def sample_genesis_block_class():
 
 
 @pytest.fixture
-def sample_beacon_state_params(genesis_slot,
+def sample_beacon_state_params(config,
+                               genesis_slot,
                                genesis_epoch,
                                sample_fork_params,
                                sample_eth1_data_params,
-                               sample_block_header_params):
+                               sample_block_header_params,
+                               sample_crosslink_record_params):
     return {
         'slot': genesis_slot + 100,
         'genesis_time': 0,
@@ -166,7 +179,7 @@ def sample_beacon_state_params(genesis_slot,
         'validator_registry': (),
         'validator_balances': (),
         'validator_registry_update_epoch': 0,
-        'latest_randao_mixes': (),
+        'latest_randao_mixes': (ZERO_HASH32,) * config.LATEST_RANDAO_MIXES_LENGTH,
         'previous_shuffling_start_shard': 1,
         'current_shuffling_start_shard': 2,
         'previous_shuffling_epoch': genesis_epoch,
@@ -182,11 +195,14 @@ def sample_beacon_state_params(genesis_slot,
         'justification_bitfield': 0,
         'finalized_epoch': 0,
         'finalized_root': b'\x33' * 32,
-        'latest_crosslinks': (),
-        'latest_block_roots': (),
-        'latest_state_roots': (),
-        'latest_active_index_roots': (),
-        'latest_slashed_balances': (),
+        'latest_crosslinks': (
+            (CrosslinkRecord(**sample_crosslink_record_params),) *
+            config.SHARD_COUNT
+        ),
+        'latest_block_roots': (ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
+        'latest_state_roots': (ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
+        'latest_active_index_roots': (ZERO_HASH32,) * config.LATEST_ACTIVE_INDEX_ROOTS_LENGTH,
+        'latest_slashed_balances': (0,) * config.LATEST_SLASHED_EXIT_LENGTH,
         'latest_block_header': BeaconBlockHeader(**sample_block_header_params),
         'historical_roots': (),
         'latest_eth1_data': Eth1Data(**sample_eth1_data_params),
@@ -367,7 +383,6 @@ def filled_beacon_state(genesis_epoch,
         latest_active_index_roots_length=latest_active_index_roots_length,
         latest_randao_mixes_length=latest_randao_mixes_length,
         latest_slashed_exit_length=latest_slashed_exit_length,
-        genesis_block_class=SerenityBeaconBlock,
     )
 
 

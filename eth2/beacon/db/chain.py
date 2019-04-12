@@ -129,7 +129,7 @@ class BaseBeaconChainDB(ABC):
     # Beacon State
     #
     @abstractmethod
-    def get_state_by_root(self, state_root: Hash32) -> BeaconState:
+    def get_state_by_root(self, state_root: Hash32, state_class: Type[BeaconState]) -> BeaconState:
         pass
 
     @abstractmethod
@@ -209,7 +209,7 @@ class BeaconChainDB(BaseBeaconChainDB):
                 "No canonical block for block slot #{0}".format(slot)
             )
         else:
-            return ssz.decode(encoded_key, sedes=ssz.sedes.bytes_sedes)
+            return ssz.decode(encoded_key, sedes=ssz.sedes.byte_list)
 
     def get_canonical_block_by_slot(self,
                                     slot: int,
@@ -546,7 +546,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         )
         db.set(
             block_slot_to_root_key,
-            ssz.encode(block.signed_root, sedes=ssz.sedes.bytes_sedes),
+            ssz.encode(block.signed_root, sedes=ssz.sedes.byte_list),
         )
 
     @staticmethod
@@ -566,11 +566,13 @@ class BeaconChainDB(BaseBeaconChainDB):
     #
     # Beacon State API
     #
-    def get_state_by_root(self, state_root: Hash32) -> BeaconState:
-        return self._get_state_by_root(self.db, state_root)
+    def get_state_by_root(self, state_root: Hash32, state_class: Type[BeaconState]) -> BeaconState:
+        return self._get_state_by_root(self.db, state_root, state_class)
 
     @staticmethod
-    def _get_state_by_root(db: BaseDB, state_root: Hash32) -> BeaconState:
+    def _get_state_by_root(db: BaseDB,
+                           state_root: Hash32,
+                           state_class: Type[BeaconState]) -> BeaconState:
         """
         Return the requested beacon state as specified by state hash.
 
@@ -581,7 +583,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             state_ssz = db[state_root]
         except KeyError:
             raise StateRootNotFound(f"No state with root {encode_hex(state_root)} found")
-        return _decode_state(state_ssz)
+        return _decode_state(state_ssz, state_class)
 
     def persist_state(self,
                       state: BeaconState) -> None:
@@ -625,6 +627,6 @@ def _decode_block(block_ssz: bytes, sedes: Type[BaseBeaconBlock]) -> BaseBeaconB
 
 
 @functools.lru_cache(128)
-def _decode_state(state_ssz: bytes) -> BeaconState:
+def _decode_state(state_ssz: bytes, state_class: Type[BeaconState]) -> BeaconState:
     # TODO: forkable BeaconState fields?
-    return ssz.decode(state_ssz, sedes=BeaconState)
+    return ssz.decode(state_ssz, sedes=state_class)

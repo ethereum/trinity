@@ -6,7 +6,7 @@ from typing import (
 import ssz
 from ssz.sedes import (
     List,
-    bytes_sedes,
+    byte_list,
     bytes96,
     uint64,
 )
@@ -36,7 +36,7 @@ class SlashableAttestation(ssz.Serializable):
         # Attestation data
         ('data', AttestationData),
         # Custody bitfield
-        ('custody_bitfield', bytes_sedes),
+        ('custody_bitfield', byte_list),
         # Aggregate signature
         ('aggregate_signature', bytes96),
     ]

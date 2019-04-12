@@ -120,8 +120,8 @@ def test_chaindb_get_canonical_block_root(chaindb, block):
 
 def test_chaindb_state(chaindb, state):
     chaindb.persist_state(state)
-
-    result_state = chaindb.get_state_by_root(state.root)
+    state_class = BeaconState
+    result_state = chaindb.get_state_by_root(state.root, state_class)
     assert result_state.root == state.root
 
 
