@@ -14,11 +14,15 @@ from p2p.kademlia import Node
 from p2p.validation import validate_enode_uri
 
 from trinity import __version__
+from trinity._utils.eip1085 import validate_raw_eip1085_genesis_config
 from trinity.constants import (
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID,
+    TrackingBackend,
 )
-from trinity._utils.eip1085 import validate_raw_eip1085_genesis_config
+from trinity.tracking import (
+    clear_node_db,
+)
 
 
 class ValidateAndStoreEnodes(argparse.Action):
@@ -240,6 +244,49 @@ network_parser.add_argument(
     ),
     type=int,
 )
+
+
+class NormalizeTrackingBackend(argparse.Action):
+    """
+    Normalized the --enode-tracking-backend CLI arg into the proper Enum type.
+    """
+    def __call__(self,
+                 parser: argparse.ArgumentParser,
+                 namespace: argparse.Namespace,
+                 value: Any,
+                 option_string: str=None) -> None:
+        try:
+            tracking_backend = TrackingBackend(value)
+        except TypeError as err:
+            raise argparse.ArgumentError(
+                self,
+                (
+                    "Unknown option for --enode-tracking-backend.  Must be one of "
+                    "`sqlite3/memory/disabled`.  Got '{value}'"
+                ),
+            )
+
+        setattr(namespace, self.dest, tracking_backend)
+
+
+network_parser.add_argument(
+    '--enode-tracking-backend',
+    help=(
+        "Configure whether nodes are tracked and how. (sqlite3: persistent "
+        "tracking across runs from an on-disk sqlite3 datase, memory: tracking "
+        "only in memory, disabled: no tracking)"
+    ),
+    action=NormalizeTrackingBackend,
+    choices=('sqlite3', 'memory', 'disabled'),
+    default=TrackingBackend.sqlite3,
+    type=str,
+)
+
+attach_parser = subparser.add_parser(
+    'remove-enode-db',
+    help='Remove the on-disk sqlite database that tracks data about node connections',
+)
+attach_parser.set_defaults(func=clear_node_db)
 
 
 #

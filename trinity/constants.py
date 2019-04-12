@@ -1,3 +1,4 @@
+import enum
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -81,3 +82,9 @@ DEFAULT_PREFERRED_NODES: Dict[int, Tuple[Node, ...]] = {
              Address("34.198.237.7", 30303, 30303)),
     ),
 }
+
+
+class TrackingBackend(enum.Enum):
+    sqlite3 = 'sqlite3'
+    memory = 'memory'
+    disabled = 'disabled'

@@ -39,8 +39,18 @@ from p2p.constants import (
     MAINNET_BOOTNODES,
     ROPSTEN_BOOTNODES,
 )
+from p2p.tracking.db import (
+    get_tracking_database,
+)
+from p2p.tracking.connection import (
+    BaseConnectionTracker,
+    SQLiteTracker,
+    MemoryTracker,
+    NoopTracker,
+)
 
 from trinity.constants import (
+    TrackingBackend,
     ASSETS_DIR,
     DEFAULT_PREFERRED_NODES,
     IPC_DIR,
@@ -248,12 +258,14 @@ class TrinityConfig:
                  port: int=30303,
                  use_discv5: bool = False,
                  preferred_nodes: Tuple[KademliaNode, ...]=None,
-                 bootstrap_nodes: Tuple[KademliaNode, ...]=None) -> None:
+                 bootstrap_nodes: Tuple[KademliaNode, ...]=None,
+                 tracking_backend: TrackingBackend=None) -> None:
         self.app_identifier = app_identifier
         self.network_id = network_id
         self.max_peers = max_peers
         self.port = port
         self.use_discv5 = use_discv5
+        self.tracking_backend = tracking_backend
         self._app_configs = {}
 
         if genesis_config is not None:
@@ -451,6 +463,11 @@ class TrinityConfig:
                 f"`PrivateKey` instance: got {type(self._nodekey)}"
             )
 
+    @property
+    def nodedb_path(self) -> Path:
+        base_db_path = self.with_app_suffix(self.data_dir / "nodedb")
+        return base_db_path.with_name(base_db_path.name + ".sqlite3")
+
     @contextmanager
     def process_id_file(self, process_name: str):  # type: ignore
         with PidFile(process_name, self.pid_dir):
@@ -583,10 +600,17 @@ class Eth1AppConfig(BaseAppConfig):
     def sync_mode(self) -> str:
         return self._sync_mode
 
-    @property
-    def nodedb_path(self) -> Path:
+    def get_connection_tracker(self) -> BaseConnectionTracker:
         config = self.trinity_config
-        return config.with_app_suffix(config.data_dir / "nodedb")
+        if config.tracking_backend is TrackingBackend.sqlite3:
+            session = get_tracking_database(config.nodedb_path)
+            return SQLiteTracker(session)
+        elif config.tracking_backend is TrackingBackend.memory:
+            return MemoryTracker()
+        elif config.tracking_backend is TrackingBackend.disabled:
+            return NoopTracker()
+        else:
+            raise Exception(f"INVARIANT: {config.tracking_backend}")
 
 
 class BeaconChainConfig:
