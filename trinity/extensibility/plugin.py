@@ -274,6 +274,16 @@ class BaseIsolatedPlugin(BasePlugin):
 
     _process: Process = None
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._event_bus = None
+
+    @property
+    def event_bus(self) -> TrinityEventBusEndpoint:
+        if self._event_bus is None:
+            self._event_bus = TrinityEventBusEndpoint()
+        return self._event_bus
+
     @property
     def process(self) -> Process:
         """

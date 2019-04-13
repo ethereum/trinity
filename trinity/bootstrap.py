@@ -144,7 +144,6 @@ def main_entry(trinity_boot: BootFn,
     if args.log_levels:
         setup_log_levels(args.log_levels)
 
-    main_endpoint.track_and_propagate_available_endpoints()
     try:
         trinity_config = TrinityConfig.from_parser_args(args, app_identifier, sub_configs)
     except AmbigiousFileSystem:
@@ -203,6 +202,7 @@ def main_entry(trinity_boot: BootFn,
             trinity_config.ipc_dir
         )
         main_endpoint.start_serving_nowait(main_connection_config)
+        main_endpoint.track_and_propagate_available_endpoints()
 
         # We listen on events such as `ShutdownRequested` which may or may not originate on
         # the `main_endpoint` which is why we connect to our own endpoint here

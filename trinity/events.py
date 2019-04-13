@@ -27,6 +27,9 @@ class EventBusConnected(BaseEvent):
     def __init__(self, connection_config: ConnectionConfig) -> None:
         self.connection_config = connection_config
 
+    def __repr__(self) -> str:
+        return f'EventBusConnected({self.connection_config})'
+
 
 class AvailableEndpointsUpdated(BaseEvent):
     """
@@ -37,3 +40,6 @@ class AvailableEndpointsUpdated(BaseEvent):
 
     def __init__(self, available_endpoints: Tuple[ConnectionConfig, ...]) -> None:
         self.available_endpoints = available_endpoints
+
+    def __repr__(self) -> str:
+        return f'AvailableEndpointsUpdated({self.available_endpoints})'
