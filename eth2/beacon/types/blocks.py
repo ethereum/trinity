@@ -86,7 +86,7 @@ class BeaconBlockHeader(ssz.Serializable):
     _hash_tree_root = None
 
     @property
-    def hash_tree_root(self) -> Hash32:
+    def tree_root(self) -> Hash32:
         if self._hash_tree_root is None:
             self._hash_tree_root = ssz.hash_tree_root(self)
         return self._hash_tree_root
@@ -178,7 +178,7 @@ class BeaconBlockBody(ssz.Serializable):
     _hash_tree_root = None
 
     @property
-    def hash_tree_root(self) -> Hash32:
+    def tree_root(self) -> Hash32:
         if self._hash_tree_root is None:
             self._hash_tree_root = ssz.hash_tree_root(self)
         return self._hash_tree_root
@@ -225,7 +225,7 @@ class BaseBeaconBlock(ssz.Serializable, Configurable, ABC):
     _hash_tree_root = None
 
     @property
-    def hash_tree_root(self) -> Hash32:
+    def tree_root(self) -> Hash32:
         # NOTE: this is used in the fork choice calculation
         if self._hash_tree_root is None:
             self._hash_tree_root = ssz.hash_tree_root(self)
@@ -250,7 +250,7 @@ class BaseBeaconBlock(ssz.Serializable, Configurable, ABC):
             slot=self.slot,
             previous_block_root=self.previous_block_root,
             state_root=self.state_root,
-            block_body_root=self.body.hash_tree_root,
+            block_body_root=self.body.tree_root,
             signature=self.signature,
         )
 

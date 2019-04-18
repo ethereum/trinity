@@ -54,7 +54,7 @@ def test_get_temporary_block_header(sample_block):
     assert header.slot == sample_block.slot
     assert header.previous_block_root == sample_block.previous_block_root
     assert header.state_root == ZERO_HASH32
-    assert header.block_body_root == sample_block.body.hash_tree_root
+    assert header.block_body_root == sample_block.body.tree_root
     assert header.signature == sample_block.signature
 
 
