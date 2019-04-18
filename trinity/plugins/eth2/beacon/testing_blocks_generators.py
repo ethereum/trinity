@@ -2,8 +2,8 @@
 from eth2.beacon.tools.builder.proposer import (
     create_mock_block,
 )
-from eth2.beacon.chains.testnet.constants import (
-    GENESIS_SLOT,
+from eth2.beacon.state_machines.forks.serenity.configs import (
+    SERENITY_CONFIG,
 )
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
@@ -15,7 +15,7 @@ from .testing_config import (
 
 def get_ten_blocks_context(chain, gen_blocks):
     chaindb = chain.chaindb
-    genesis_slot = GENESIS_SLOT
+    genesis_slot = SERENITY_CONFIG.GENESIS_SLOT
     # genesis
     block = chain.get_canonical_block_by_slot(genesis_slot)
     sm = chain.get_state_machine(block)

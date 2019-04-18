@@ -3,8 +3,8 @@ import json
 import time
 
 
-def generate_genesis_json():
-    genesis_time = int(time.time()) + 60
+def generate_genesis_json() -> str:
+    genesis_time = int(time.time()) + 30
     genesis_json = {
         "genesis_time": genesis_time
     }

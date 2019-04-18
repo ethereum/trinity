@@ -1,47 +1,64 @@
-import asyncio
-import time
-import logging
 from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-from eth_keys.datatypes import PrivateKey
+import asyncio
 
+from cancel_token import (
+    CancelToken,
+)
+from eth_keys.datatypes import (
+    PrivateKey,
+)
 
-from eth2.beacon.chains.base import BeaconChain
+from eth2.beacon.chains.base import (
+    BeaconChain,
+)
+from eth2.beacon.state_machines.base import (
+    BaseBeaconStateMachine,
+)
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
-from eth2.beacon.state_machines.base import BaseBeaconStateMachine  # noqa: F401
 from eth2.beacon.tools.builder.proposer import (
     _get_proposer_index,
     create_block_on_state,
 )
-from eth2.beacon.types.blocks import BaseBeaconBlock
-from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.blocks import (
+    BaseBeaconBlock,
+)
+from eth2.beacon.types.states import (
+    BeaconState,
+)
 from eth2.beacon.typing import (
     Slot,
-    Second,
+    ValidatorIndex,
 )
 from p2p import ecies
-from p2p.constants import DEFAULT_MAX_PEERS
+from p2p.constants import (
+    DEFAULT_MAX_PEERS,
+)
+from p2p.service import (
+    BaseService,
+)
+from trinity._utils.shellart import (
+    bold_green,
+    bold_red,
+)
 from trinity._utils.shutdown import (
     exit_with_service_and_endpoint,
 )
 from trinity.config import (
     BeaconAppConfig,
 )
-from trinity.endpoint import TrinityEventBusEndpoint
-from trinity.extensibility import BaseIsolatedPlugin
-from trinity.protocol.bcc.peer import BCCPeerPool
-from trinity.server import BCCServer
-from trinity.sync.beacon.chain import BeaconChainSyncer
-
 from trinity.db.beacon.manager import (
-    create_db_consumer_manager
+    create_db_consumer_manager,
 )
-from trinity.sync.common.chain import (
-    SyncBlockImporter,
+from trinity.endpoint import (
+    TrinityEventBusEndpoint,
+)
+from trinity.extensibility import (
+    BaseIsolatedPlugin,
 )
 from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     get_ten_blocks_context,
@@ -50,22 +67,22 @@ from trinity.plugins.eth2.beacon.testing_config import (
     index_to_pubkey,
     keymap,
 )
-from eth2.beacon.chains.base import (
-    BaseBeaconChain,
+from trinity.protocol.bcc.peer import (
+    BCCPeerPool,
 )
-from trinity._utils.shellart import (
-    bold_green,
-    bold_red,
+from trinity.server import (
+    BCCServer,
 )
-from lahja import (
-    BaseEvent,
-    BroadcastConfig,
+from trinity.sync.beacon.chain import (
+    BeaconChainSyncer,
+)
+from trinity.sync.common.chain import (
+    SyncBlockImporter,
 )
 
-from p2p.service import BaseService
-
-from cancel_token import (
-    CancelToken,
+from .slot_ticker import (
+    NewSlotEvent,
+    SlotTicker,
 )
 
 
@@ -139,7 +156,7 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
 
         validator_privkey = keymap[index_to_pubkey[self.context.args.validator_index]]
         validator = Validator(
-            validator_index=self.context.args.validator_index,
+            validator_index=ValidatorIndex(self.context.args.validator_index),
             chain=chain,
             peer_pool=server.peer_pool,
             privkey=validator_privkey,
@@ -147,10 +164,12 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
             token=server.cancel_token,
         )
 
+        state_machine = chain.get_state_machine()
+
         slot_ticker = SlotTicker(
             genesis_slot=chain_config.genesis_slot,
             genesis_time=chain_config.genesis_time,
-            chain=chain,
+            seconds_per_slot=state_machine.config.SECONDS_PER_SLOT,
             event_bus=self.context.event_bus,
             token=server.cancel_token,
         )
@@ -173,28 +192,20 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         loop.close()
 
 
-class NewSlotEvent(BaseEvent):
-    def __init__(self, slot: Slot, elapse_time: Second):
-        self.slot = slot
-        self.elapse_time = elapse_time
-
-
 class Validator(BaseService):
     """
     Reference: https://github.com/ethereum/trinity/blob/master/eth2/beacon/tools/builder/proposer.py#L175  # noqa: E501
     """
 
-    validator_index: int
+    validator_index: ValidatorIndex
     chain: BeaconChain
     peer_pool: BCCPeerPool
     privkey: PrivateKey
     event_bus: TrinityEventBusEndpoint
 
-    logger = logging.getLogger(f'trinity.plugins.eth2.beacon.Validator')
-
     def __init__(
             self,
-            validator_index: int,
+            validator_index: ValidatorIndex,
             chain: BeaconChain,
             peer_pool: BCCPeerPool,
             privkey: PrivateKey,
@@ -220,18 +231,16 @@ class Validator(BaseService):
         async for event in self.event_bus.stream(NewSlotEvent):
             await self.new_slot(event.slot)
 
-    async def new_slot(self, slot: int) -> None:
+    async def new_slot(self, slot: Slot) -> None:
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine()
         state = state_machine.state
         self.logger.debug(
-            bold_green(f"head: slot={head.slot}, state root={head.state_root}")
+            bold_green(f"head: slot={head.slot}, state root={head.state_root.hex()}")
         )
         proposer_index = _get_proposer_index(
-            state_machine,
             state,
             slot,
-            head.root,
             state_machine.config,
         )
         if self.validator_index == proposer_index:
@@ -246,13 +255,13 @@ class Validator(BaseService):
             )
 
     def propose_block(self,
-                      slot: int,
+                      slot: Slot,
                       state: BeaconState,
                       state_machine: BaseBeaconStateMachine,
                       head_block: BaseBeaconBlock) -> None:
         block = self._make_proposing_block(slot, state, state_machine, head_block)
         self.logger.debug(
-            bold_green(f"!@# propose block={block}")
+            bold_green(f"Propose block={block}")
         )
         for _, peer in enumerate(self.peer_pool.connected_nodes.values()):
             self.logger.debug(
@@ -262,7 +271,7 @@ class Validator(BaseService):
         self.chain.import_block(block)
 
     def _make_proposing_block(self,
-                              slot: int,
+                              slot: Slot,
                               state: BeaconState,
                               state_machine: BaseBeaconStateMachine,
                               parent_block: BaseBeaconBlock) -> BaseBeaconBlock:
@@ -289,65 +298,11 @@ class Validator(BaseService):
             # TODO: Change back to `slot` instead of `slot + 1`.
             # Currently `apply_state_transition_without_block` only returns the post state
             # of `slot - 1`, so we increment it by one to get the post state of `slot`.
-            slot + 1,
-            parent_block.root,
+            Slot(slot + 1),
         )
         self.logger.debug(
-            bold_green(f"!@# skip block, post state={post_state.root}")
+            bold_green(f"Skip block, post state={post_state.root.hex()}")
         )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
         self.chain.chaindb.persist_state(post_state)
-
-
-class SlotTicker(BaseService):
-    genesis_slot: Slot
-    genesis_time: int
-    chain: BaseBeaconChain
-    latest_slot: int
-    event_bus: TrinityEventBusEndpoint
-    logger = logging.getLogger('SlotTicker')
-
-    def __init__(
-            self,
-            genesis_slot: Slot,
-            genesis_time: int,
-            chain: BaseBeaconChain,
-            event_bus: TrinityEventBusEndpoint,
-            token: CancelToken = None) -> None:
-        super().__init__(token)
-        self._genesis_slot = genesis_slot
-        self._genesis_time = genesis_time
-        self.chain = chain
-        self.latest_slot = 0
-        self.event_bus = event_bus
-
-    def get_seconds_per_slot(self):
-        state_machine = self.chain.get_state_machine()
-        return state_machine.config.SECONDS_PER_SLOT
-
-    async def _run(self) -> None:
-        self.run_daemon_task(self._keep_ticking())
-        await self.cancellation()
-
-    async def _keep_ticking(self) -> None:
-        while self.is_operational:
-            seconds_per_slot = self.get_seconds_per_slot()
-            now = int(time.time())
-            elapse_time = now - self._genesis_time
-            if elapse_time >= (0 + seconds_per_slot):
-                slot = elapse_time // seconds_per_slot + self._genesis_slot
-                if slot > self.latest_slot:
-                    self.logger.debug(
-                        bold_green(f"New slot: {slot}\tElapse time: {elapse_time}")
-                    )
-                    self.latest_slot = slot
-                    self.event_bus.broadcast(
-                        NewSlotEvent(
-                            slot=slot,
-                            elapse_time=elapse_time,
-                        ),
-                        BroadcastConfig(internal=True),
-                    )
-            # don't sleep the full seconds_per_slot
-            await asyncio.sleep(seconds_per_slot // 5)
