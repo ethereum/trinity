@@ -1,6 +1,5 @@
 from typing import (
     Sequence,
-    Type,
 )
 
 from eth_typing import (
@@ -38,7 +37,7 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 
-from .blocks import BeaconBlockHeader, BaseBeaconBlock, BeaconBlock
+from .blocks import BeaconBlockHeader, BeaconBlock
 from .eth1_data import Eth1Data
 from .eth1_data_vote import Eth1DataVote
 from .crosslink_records import CrosslinkRecord
