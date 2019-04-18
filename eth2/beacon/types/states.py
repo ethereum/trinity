@@ -1,5 +1,6 @@
 from typing import (
     Sequence,
+    Type,
 )
 
 from eth_typing import (
@@ -23,7 +24,10 @@ from eth.constants import (
 from eth2.beacon._utils.hash import (
     hash_eth2,
 )
-from eth2.beacon.helpers import slot_to_epoch
+from eth2.beacon.helpers import (
+    slot_to_epoch,
+    get_temporary_block_header,
+)
 from eth2.beacon.typing import (
     Epoch,
     Gwei,
@@ -33,6 +37,7 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 
+from .blocks import BeaconBlockHeader, BaseBeaconBlock, BeaconBlock
 from .eth1_data import Eth1Data
 from .eth1_data_vote import Eth1DataVote
 from .crosslink_records import CrosslinkRecord
@@ -67,12 +72,14 @@ class BeaconState(ssz.Serializable):
         ('previous_epoch_attestations', List(PendingAttestationRecord)),
         ('current_epoch_attestations', List(PendingAttestationRecord)),
         ('previous_justified_epoch', uint64),
-        ('justified_epoch', uint64),
-
+        ('current_justified_epoch', uint64),
+        ('previous_justified_root', bytes32),
+        ('current_justified_root', bytes32),
         # Note: justification_bitfield is meant to be defined as an integer type,
         # so its bit operation is in Python and is easier to specify and implement.
         ('justification_bitfield', uint64),
         ('finalized_epoch', uint64),
+        ('finalized_root', bytes32),
 
         # Recent state
         ('latest_crosslinks', List(CrosslinkRecord)),
@@ -80,6 +87,7 @@ class BeaconState(ssz.Serializable):
         ('latest_state_roots', List(bytes32)),
         ('latest_active_index_roots', List(bytes32)),
         ('latest_slashed_balances', List(uint64)),  # Balances slashed at every withdrawal period  # noqa: E501
+        ('latest_block_header', BeaconBlockHeader),
         ('historical_roots', List(bytes32)),  # allow for a log-sized Merkle proof from any block to any historical block root"  # noqa: E501
 
         # Ethereum 1.0 chain
@@ -111,15 +119,19 @@ class BeaconState(ssz.Serializable):
             previous_epoch_attestations: Sequence[PendingAttestationRecord],
             current_epoch_attestations: Sequence[PendingAttestationRecord],
             previous_justified_epoch: Epoch,
-            justified_epoch: Epoch,
+            current_justified_epoch: Epoch,
+            previous_justified_root: Hash32,
+            current_justified_root: Hash32,
             justification_bitfield: int,
             finalized_epoch: Epoch,
+            finalized_root: Hash32,
             # Recent state
             latest_crosslinks: Sequence[CrosslinkRecord],
             latest_block_roots: Sequence[Hash32],
             latest_state_roots: Sequence[Hash32],
             latest_active_index_roots: Sequence[Hash32],
             latest_slashed_balances: Sequence[Gwei],
+            latest_block_header: BeaconBlockHeader,
             historical_roots: Sequence[Hash32],
             # Ethereum 1.0 chain
             latest_eth1_data: Eth1Data,
@@ -150,15 +162,19 @@ class BeaconState(ssz.Serializable):
             previous_epoch_attestations=previous_epoch_attestations,
             current_epoch_attestations=current_epoch_attestations,
             previous_justified_epoch=previous_justified_epoch,
-            justified_epoch=justified_epoch,
+            current_justified_epoch=current_justified_epoch,
+            previous_justified_root=previous_justified_root,
+            current_justified_root=current_justified_root,
             justification_bitfield=justification_bitfield,
             finalized_epoch=finalized_epoch,
+            finalized_root=finalized_root,
             # Recent state
             latest_crosslinks=latest_crosslinks,
             latest_block_roots=latest_block_roots,
             latest_state_roots=latest_state_roots,
             latest_active_index_roots=latest_active_index_roots,
             latest_slashed_balances=latest_slashed_balances,
+            latest_block_header=latest_block_header,
             historical_roots=historical_roots,
             # Ethereum 1.0 chain
             latest_eth1_data=latest_eth1_data,
@@ -205,7 +221,8 @@ class BeaconState(ssz.Serializable):
                             latest_randao_mixes_length: int,
                             latest_slashed_exit_length: int,
                             activated_genesis_validators: Sequence[ValidatorRecord]=(),
-                            genesis_balances: Sequence[Gwei]=()) -> 'BeaconState':
+                            genesis_balances: Sequence[Gwei]=(),
+                            genesis_block_class: Type[BaseBeaconBlock]) -> 'BeaconState':
         return cls(
             # Misc
             slot=genesis_slot,
@@ -234,9 +251,12 @@ class BeaconState(ssz.Serializable):
             previous_epoch_attestations=(),
             current_epoch_attestations=(),
             previous_justified_epoch=genesis_epoch,
-            justified_epoch=genesis_epoch,
-            justification_bitfield=genesis_slot,
+            current_justified_epoch=genesis_epoch,
+            previous_justified_root=ZERO_HASH32,
+            current_justified_root=ZERO_HASH32,
+            justification_bitfield=0,
             finalized_epoch=genesis_epoch,
+            finalized_root=ZERO_HASH32,
 
             # Recent state
             latest_crosslinks=(
@@ -251,6 +271,9 @@ class BeaconState(ssz.Serializable):
             latest_state_roots=(ZERO_HASH32,) * slots_per_historical_root,
             latest_active_index_roots=(ZERO_HASH32,) * latest_active_index_roots_length,
             latest_slashed_balances=(Gwei(0),) * latest_slashed_exit_length,
+            latest_block_header=get_temporary_block_header(
+                BeaconBlock.create_empty_block(genesis_slot),
+            ),
             historical_roots=(),
 
             # Ethereum 1.0 chain data
@@ -307,8 +330,8 @@ class BeaconState(ssz.Serializable):
     def current_epoch(self, slots_per_epoch: int) -> Epoch:
         return slot_to_epoch(self.slot, slots_per_epoch)
 
-    def previous_epoch(self, slots_per_epoch: int, genesis_epoch: int) -> Epoch:
-        return Epoch(max(self.current_epoch(slots_per_epoch) - 1, genesis_epoch))
+    def previous_epoch(self, slots_per_epoch: int) -> Epoch:
+        return Epoch(self.current_epoch(slots_per_epoch) - 1)
 
     def next_epoch(self, slots_per_epoch: int) -> Epoch:
         return Epoch(self.current_epoch(slots_per_epoch) + 1)

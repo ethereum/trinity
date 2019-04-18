@@ -39,8 +39,6 @@ from eth2.beacon.enums import (
     SignatureDomain,
 )
 from eth2.beacon.helpers import (
-    get_block_root,
-    get_epoch_start_slot,
     get_domain,
     is_double_vote,
     is_surround_vote,
@@ -50,10 +48,9 @@ from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestation_data_and_custody_bits import AttestationDataAndCustodyBit
 from eth2.beacon.types.attester_slashings import AttesterSlashing
-from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockHeader
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.forks import Fork
-from eth2.beacon.types.proposal import Proposal
 from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
@@ -82,6 +79,17 @@ def validate_block_slot(state: BeaconState,
         )
 
 
+def validate_block_previous_root(state: BeaconState,
+                                 block: BaseBeaconBlock) -> None:
+    expected_root = state.latest_block_header.signed_root
+    previous_root = block.previous_block_root
+    if previous_root != expected_root:
+        raise ValidationError(
+            f"block.previous_block_root ({previous_root}) is not equal to "
+            f"state.latest_block_header.signed_root ({expected_root})"
+        )
+
+
 #
 # Proposer signature validation
 #
@@ -89,15 +97,9 @@ def validate_proposer_signature(state: BeaconState,
                                 block: BaseBeaconBlock,
                                 beacon_chain_shard_number: Shard,
                                 committee_config: CommitteeConfig) -> None:
-    block_without_signature_root = block.block_without_signature_root
 
-    # TODO: Replace this with signed_root
-    proposal = Proposal(
-        state.slot,
-        beacon_chain_shard_number,
-        block_without_signature_root,
-        signature=block.signature,
-    )
+    # TODO: Replace this with real signed_root
+    message_hash = block.signed_root
 
     # Get the public key of proposer
     beacon_proposer_index = get_beacon_proposer_index(
@@ -114,15 +116,15 @@ def validate_proposer_signature(state: BeaconState,
 
     is_valid_signature = bls.verify(
         pubkey=proposer_pubkey,
-        message_hash=proposal.signed_root,
-        signature=proposal.signature,
+        message_hash=message_hash,
+        signature=block.signature,
         domain=domain,
     )
 
     if not is_valid_signature:
         raise ValidationError(
             f"Invalid Proposer Signature on block, beacon_proposer_index={beacon_proposer_index}, "
-            f"pubkey={proposer_pubkey}, message_hash={proposal.signed_root}, "
+            f"pubkey={proposer_pubkey}, message_hash={message_hash}, "
             f"block.signature={block.signature}, domain={domain}"
         )
 
@@ -141,21 +143,19 @@ def validate_proposer_slashing(state: BeaconState,
 
     validate_proposer_slashing_epoch(proposer_slashing, slots_per_epoch)
 
-    validate_proposer_slashing_shard(proposer_slashing)
-
-    validate_proposer_slashing_block_root(proposer_slashing)
+    validate_proposer_slashing_headers(proposer_slashing)
 
     validate_proposer_slashing_is_slashed(proposer.slashed)
 
-    validate_proposal_signature(
-        proposal=proposer_slashing.proposal_1,
+    validate_block_header_signature(
+        header=proposer_slashing.header_1,
         pubkey=proposer.pubkey,
         fork=state.fork,
         slots_per_epoch=slots_per_epoch,
     )
 
-    validate_proposal_signature(
-        proposal=proposer_slashing.proposal_2,
+    validate_block_header_signature(
+        header=proposer_slashing.header_2,
         pubkey=proposer.pubkey,
         fork=state.fork,
         slots_per_epoch=slots_per_epoch,
@@ -164,8 +164,8 @@ def validate_proposer_slashing(state: BeaconState,
 
 def validate_proposer_slashing_epoch(proposer_slashing: ProposerSlashing,
                                      slots_per_epoch: int) -> None:
-    epoch_1 = slot_to_epoch(proposer_slashing.proposal_1.slot, slots_per_epoch)
-    epoch_2 = slot_to_epoch(proposer_slashing.proposal_2.slot, slots_per_epoch)
+    epoch_1 = slot_to_epoch(proposer_slashing.header_1.slot, slots_per_epoch)
+    epoch_2 = slot_to_epoch(proposer_slashing.header_2.slot, slots_per_epoch)
 
     if epoch_1 != epoch_2:
         raise ValidationError(
@@ -174,22 +174,12 @@ def validate_proposer_slashing_epoch(proposer_slashing: ProposerSlashing,
         )
 
 
-def validate_proposer_slashing_shard(proposer_slashing: ProposerSlashing) -> None:
-    if proposer_slashing.proposal_1.shard != proposer_slashing.proposal_2.shard:
+def validate_proposer_slashing_headers(proposer_slashing: ProposerSlashing) -> None:
+    header_1 = proposer_slashing.header_1
+    header_2 = proposer_slashing.header_2
+    if header_1 == header_2:
         raise ValidationError(
-            f"proposer_slashing.proposal_1.shard ({proposer_slashing.proposal_1.shard}) "
-            f"!= proposer_slashing.proposal_2.shard"
-            f" ({proposer_slashing.proposal_2.shard})"
-        )
-
-
-def validate_proposer_slashing_block_root(proposer_slashing: ProposerSlashing) -> None:
-    if proposer_slashing.proposal_1.block_root == proposer_slashing.proposal_2.block_root:
-        raise ValidationError(
-            "proposer_slashing.proposal_1.block_root "
-            f"({proposer_slashing.proposal_1.block_root}) "
-            "should not be equal to proposer_slashing.proposal_2.block_root "
-            f"({proposer_slashing.proposal_2.block_root})"
+            f"proposer_slashing.header_1 ({header_1}) == proposer_slashing.header_2 ({header_2})"
         )
 
 
@@ -198,25 +188,25 @@ def validate_proposer_slashing_is_slashed(slashed: bool) -> None:
         raise ValidationError(f"proposer.slashed is True")
 
 
-def validate_proposal_signature(proposal: Proposal,
-                                pubkey: BLSPubkey,
-                                fork: Fork,
-                                slots_per_epoch: int) -> None:
-    proposal_signature_is_valid = bls.verify(
+def validate_block_header_signature(header: BeaconBlockHeader,
+                                    pubkey: BLSPubkey,
+                                    fork: Fork,
+                                    slots_per_epoch: int) -> None:
+    header_signature_is_valid = bls.verify(
         pubkey=pubkey,
-        message_hash=proposal.signed_root,  # TODO: use signed_root
-        signature=proposal.signature,
+        message_hash=header.signed_root,  # TODO: use signed_root
+        signature=header.signature,
         domain=get_domain(
             fork,
-            slot_to_epoch(proposal.slot, slots_per_epoch),
+            slot_to_epoch(header.slot, slots_per_epoch),
             SignatureDomain.DOMAIN_BEACON_BLOCK,
         )
     )
-    if not proposal_signature_is_valid:
+    if not header_signature_is_valid:
         raise ValidationError(
-            "Proposal signature is invalid: "
-            f"proposer pubkey: {pubkey}, message_hash: {proposal.signed_root}, "
-            f"signature: {proposal.signature}"
+            "Header signature is invalid: "
+            f"proposer pubkey: {pubkey}, message_hash: {header.signed_root}, "
+            f"signature: {header.signature}"
         )
 
 
@@ -314,27 +304,14 @@ def validate_attestation(state: BeaconState,
         committee_config.GENESIS_SLOT,
     )
 
-    validate_attestation_justified_epoch(
+    validate_attestation_source_epoch_and_root(
+        state,
         attestation.data,
         state.current_epoch(slots_per_epoch),
-        state.previous_justified_epoch,
-        state.justified_epoch,
         slots_per_epoch,
     )
 
-    validate_attestation_justified_block_root(
-        attestation.data,
-        justified_block_root=get_block_root(
-            state=state,
-            slot=get_epoch_start_slot(
-                attestation.data.justified_epoch,
-                slots_per_epoch,
-            ),
-            slots_per_historical_root=slots_per_historical_root,
-        ),
-    )
-
-    validate_attestation_latest_crosslink_root(
+    validate_attestation_previous_crosslink_or_root(
         attestation_data=attestation.data,
         state_latest_crosslink=state.latest_crosslinks[attestation.data.shard],
         slots_per_epoch=slots_per_epoch,
@@ -383,57 +360,55 @@ def validate_attestation_slot(attestation_data: AttestationData,
         )
 
 
-def validate_attestation_justified_epoch(attestation_data: AttestationData,
-                                         current_epoch: Epoch,
-                                         previous_justified_epoch: Epoch,
-                                         justified_epoch: Epoch,
-                                         slots_per_epoch: int) -> None:
-    """
-    Validate ``justified_epoch`` field of ``attestation_data``.
-    Raise ``ValidationError`` if it's invalid.
-    """
-    if slot_to_epoch(attestation_data.slot + 1, slots_per_epoch) >= current_epoch:
-        if attestation_data.justified_epoch != justified_epoch:
-            raise ValidationError(
-                "Attestation ``slot`` is after recent epoch transition but attestation"
-                "``justified_epoch`` is not targeting the ``justified_epoch``:\n"
-                "\tFound: %s, Expected %s" %
-                (attestation_data.justified_epoch, justified_epoch)
-            )
-    else:
-        if attestation_data.justified_epoch != previous_justified_epoch:
-            raise ValidationError(
-                "Attestation ``slot`` is before recent epoch transition but attestation"
-                "``justified_epoch`` is not targeting the ``previous_justified_epoch:\n"
-                "\tFound: %s, Expected %s" %
-                (attestation_data.justified_epoch, previous_justified_epoch)
-            )
-
-
-def validate_attestation_justified_block_root(attestation_data: AttestationData,
-                                              justified_block_root: Hash32) -> None:
-    """
-    Validate ``justified_block_root`` field of ``attestation_data``.
-    Raise ``ValidationError`` if it's invalid.
-    """
-    if attestation_data.justified_block_root != justified_block_root:
-        raise ValidationError(
-            "Attestation ``justified_block_root`` is not equal to the "
-            "``justified_block_root`` at the ``justified_epoch``:\n"
-            "\tFound: %s, Expected %s at slot %s" %
-            (
-                attestation_data.justified_block_root,
-                justified_block_root,
-                attestation_data.justified_epoch,
-            )
-        )
-
-
-def validate_attestation_latest_crosslink_root(attestation_data: AttestationData,
-                                               state_latest_crosslink: CrosslinkRecord,
+def validate_attestation_source_epoch_and_root(state: BeaconState,
+                                               attestation_data: AttestationData,
+                                               current_epoch: Epoch,
                                                slots_per_epoch: int) -> None:
     """
-    Validate that either the attestation ``latest_crosslink`` or ``crosslink_data_root``
+    Validate ``source_epoch`` and ``source_root`` fields of ``attestation_data``.
+    Raise ``ValidationError`` if it's invalid.
+    """
+    if slot_to_epoch(attestation_data.slot, slots_per_epoch) >= current_epoch:
+        # Case 1: current epoch attestations
+        if attestation_data.source_epoch != state.current_justified_epoch:
+            raise ValidationError(
+                "Current epoch attestation that "
+                "`source_epoch` is not targeting the `state.current_justified_epoch`:\n"
+                "\tFound: %s, Expected %s" %
+                (attestation_data.source_epoch, state.current_justified_epoch)
+            )
+
+        if attestation_data.source_root != state.current_justified_root:
+            raise ValidationError(
+                "Current epoch attestation that "
+                "`source_root` is not equal to `state.current_justified_root`:\n"
+                "\tFound: %s, Expected %s" %
+                (attestation_data.source_root, state.current_justified_root)
+            )
+    else:
+        # Case 2: previous epoch attestations
+        if attestation_data.source_epoch != state.previous_justified_epoch:
+            raise ValidationError(
+                "Previous epoch attestation that "
+                "`source_epoch`` is not targeting the `state.previous_justified_epoch`:\n"
+                "\tFound: %s, Expected %s" %
+                (attestation_data.source_epoch, state.previous_justified_epoch)
+            )
+
+        if attestation_data.source_root != state.previous_justified_root:
+            raise ValidationError(
+                "Previous epoch attestation that "
+                "`source_root` is not equal to `state.previous_justified_root`:\n"
+                "\tFound: %s, Expected %s" %
+                (attestation_data.source_root, state.previous_justified_root)
+            )
+
+
+def validate_attestation_previous_crosslink_or_root(attestation_data: AttestationData,
+                                                    state_latest_crosslink: CrosslinkRecord,
+                                                    slots_per_epoch: int) -> None:
+    """
+    Validate that either the attestation ``previous_crosslink`` or ``crosslink_data_root``
     field of ``attestation_data`` is the provided ``latest_crosslink``.
     Raise ``ValidationError`` if it's invalid.
     """
@@ -443,7 +418,7 @@ def validate_attestation_latest_crosslink_root(attestation_data: AttestationData
     )
     acceptable_crosslink_data = {
         # Case 1: Latest crosslink matches the one in the state
-        attestation_data.latest_crosslink,
+        attestation_data.previous_crosslink,
         # Case 2: State has already been updated, state's latest crosslink matches the crosslink
         # the attestation is trying to create
         attestation_creating_crosslink,
@@ -451,8 +426,8 @@ def validate_attestation_latest_crosslink_root(attestation_data: AttestationData
     if state_latest_crosslink not in acceptable_crosslink_data:
         raise ValidationError(
             f"State's latests crosslink ({state_latest_crosslink}) doesn't match "
-            " case 1: the `attestation_data.latest_crosslink` "
-            f"({attestation_data.latest_crosslink.root}) or "
+            " case 1: the `attestation_data.previous_crosslink` "
+            f"({attestation_data.previous_crosslink.root}) or "
             "`case 2: the crosslink the attestation is trying to create "
             f"({attestation_creating_crosslink})"
         )

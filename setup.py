@@ -18,7 +18,7 @@ deps = {
         "bloom-filter==1.3",
         "cachetools>=2.1.0,<3.0.0",
         "coincurve>=10.0.0,<11.0.0",
-        "eth-utils>=1.3.0,<2",
+        "eth-utils>=1.5.1,<2",
         "ipython>=6.2.1,<7.0.0",
         "plyvel==1.0.5",
         "py-evm==0.2.0a42",
@@ -34,6 +34,7 @@ deps = {
     'test': [
         "hypothesis==3.69.5",
         "pexpect>=4.6, <5",
+        "factory-boy==2.11.1",
         # pinned to <3.7 until async fixtures work again
         # https://github.com/pytest-dev/pytest-asyncio/issues/89
         "pytest>=3.6,<3.7",

@@ -34,6 +34,7 @@ from eth2.beacon.helpers import (
     get_effective_balance,
     get_delayed_activation_exit_epoch,
     get_fork_version,
+    get_temporary_block_header,
     get_total_balance,
     is_double_vote,
     is_surround_vote,
@@ -42,6 +43,19 @@ from eth2.beacon.helpers import (
 from tests.eth2.beacon.helpers import (
     get_pseudo_chain,
 )
+
+
+#
+# Header helpers
+#
+def test_get_temporary_block_header(sample_block):
+    header = get_temporary_block_header(sample_block)
+
+    assert header.slot == sample_block.slot
+    assert header.previous_block_root == sample_block.previous_block_root
+    assert header.state_root == ZERO_HASH32
+    assert header.block_body_root == sample_block.body.hash_tree_root
+    assert header.signature == sample_block.signature
 
 
 def generate_mock_latest_historical_roots(
@@ -54,7 +68,7 @@ def generate_mock_latest_historical_roots(
     chain_length = (current_slot // slots_per_epoch + 1) * slots_per_epoch
     blocks = get_pseudo_chain(chain_length, genesis_block)
     latest_block_roots = [
-        block.hash
+        block.signed_root
         for block in blocks[:current_slot]
     ] + [
         ZERO_HASH32
@@ -111,7 +125,7 @@ def test_get_block_root(sample_beacon_state_params,
             target_slot,
             slots_per_historical_root,
         )
-        assert block_root == blocks[target_slot].root
+        assert block_root == blocks[target_slot].signed_root
     else:
         with pytest.raises(ValidationError):
             get_block_root(
@@ -166,7 +180,7 @@ def test_get_state_root(sample_beacon_state_params,
             target_slot,
             slots_per_historical_root,
         )
-        assert state_root == blocks[target_slot].root
+        assert state_root == blocks[target_slot].signed_root
     else:
         with pytest.raises(ValidationError):
             get_state_root(
@@ -385,14 +399,14 @@ def test_is_double_vote(sample_attestation_data_params, slots_per_epoch):
     (
         'slots_per_epoch,'
         'attestation_1_slot,'
-        'attestation_1_justified_epoch,'
+        'attestation_1_source_epoch,'
         'attestation_2_slot,'
-        'attestation_2_justified_epoch,'
+        'attestation_2_source_epoch,'
         'expected'
     ),
     [
         (1, 0, 0, 0, 0, False),
-        # not (attestation_1_justified_epoch < attestation_2_justified_epoch
+        # not (attestation_1_source_epoch < attestation_2_source_epoch
         (1, 4, 3, 3, 2, False),
         # not (slot_to_epoch(attestation_2_slot) < slot_to_epoch(attestation_1_slot))
         (1, 4, 0, 4, 3, False),
@@ -402,21 +416,21 @@ def test_is_double_vote(sample_attestation_data_params, slots_per_epoch):
 def test_is_surround_vote(sample_attestation_data_params,
                           slots_per_epoch,
                           attestation_1_slot,
-                          attestation_1_justified_epoch,
+                          attestation_1_source_epoch,
                           attestation_2_slot,
-                          attestation_2_justified_epoch,
+                          attestation_2_source_epoch,
                           expected):
     attestation_data_1_params = {
         **sample_attestation_data_params,
         'slot': attestation_1_slot,
-        'justified_epoch': attestation_1_justified_epoch,
+        'source_epoch': attestation_1_source_epoch,
     }
     attestation_data_1 = AttestationData(**attestation_data_1_params)
 
     attestation_data_2_params = {
         **sample_attestation_data_params,
         'slot': attestation_2_slot,
-        'justified_epoch': attestation_2_justified_epoch,
+        'source_epoch': attestation_2_source_epoch,
     }
     attestation_data_2 = AttestationData(**attestation_data_2_params)
 

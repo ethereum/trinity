@@ -25,12 +25,12 @@ from eth.constants import (
     ZERO_HASH32,
 )
 
+from py_ecc import bls
+
 from eth2._utils.bitfield import (
     get_empty_bitfield,
     set_voted,
 )
-from py_ecc import bls
-
 from eth2.configs import (
     CommitteeConfig,
     Eth2Config,
@@ -60,10 +60,10 @@ from eth2.beacon.types.attestation_data_and_custody_bits import (
     AttestationDataAndCustodyBit,
 )
 from eth2.beacon.types.attester_slashings import AttesterSlashing
+from eth2.beacon.types.blocks import BeaconBlockHeader
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.forks import Fork
-from eth2.beacon.types.proposal import Proposal
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.states import BeaconState
@@ -77,6 +77,9 @@ from eth2.beacon.typing import (
     Slot,
     Timestamp,
     ValidatorIndex,
+)
+from eth2.beacon.state_machines.base import (
+    BaseBeaconStateMachine,
 )
 from eth2.beacon.validation import (
     validate_epoch_within_previous_and_next,
@@ -179,27 +182,28 @@ def sign_transaction(*,
     )
 
 
-def create_proposal_data_and_signature(
+def create_block_header_with_signature(
         state: BeaconState,
-        block_root: Hash32,
+        block_body_root: Hash32,
         privkey: int,
         slots_per_epoch: int,
-        beacon_chain_shard_number: Shard)-> Proposal:
-    proposal = Proposal(
-        state.slot,
-        beacon_chain_shard_number,
-        block_root,
+        previous_block_root: bytes=b'\x11' * 32,
+        state_root: bytes=b'\x22' * 32)-> BeaconBlockHeader:
+    block_header = BeaconBlockHeader(
+        slot=state.slot,
+        previous_block_root=previous_block_root,
+        state_root=state_root,
+        block_body_root=block_body_root,
     )
-    proposal_signature = sign_transaction(
-        message_hash=proposal.signed_root,
+    block_header_signature = sign_transaction(
+        message_hash=block_header.signed_root,
         privkey=privkey,
         fork=state.fork,
-        slot=proposal.slot,
+        slot=block_header.slot,
         signature_domain=SignatureDomain.DOMAIN_BEACON_BLOCK,
         slots_per_epoch=slots_per_epoch,
     )
-    proposal = proposal.copy(signature=proposal_signature)
-    return proposal
+    return block_header.copy(signature=block_header_signature)
 
 
 #
@@ -219,29 +223,32 @@ def create_mock_proposer_slashing_at_block(
         block_root_1: Hash32,
         block_root_2: Hash32,
         proposer_index: ValidatorIndex) -> ProposerSlashing:
-    slots_per_epoch = config.SLOTS_PER_EPOCH
-    beacon_chain_shard_number = config.BEACON_CHAIN_SHARD_NUMBER
+    """
+    Return a `ProposerSlashing` derived from the given block roots.
 
-    proposal_1 = create_proposal_data_and_signature(
+    If the header roots do not match, the `ProposerSlashing` is valid.
+    If the header roots do match, the `ProposerSlashing` is not valid.
+    """
+    slots_per_epoch = config.SLOTS_PER_EPOCH
+
+    block_header_1 = create_block_header_with_signature(
         state,
         block_root_1,
         keymap[state.validator_registry[proposer_index].pubkey],
         slots_per_epoch,
-        beacon_chain_shard_number,
     )
 
-    proposal_2 = create_proposal_data_and_signature(
+    block_header_2 = create_block_header_with_signature(
         state,
         block_root_2,
         keymap[state.validator_registry[proposer_index].pubkey],
         slots_per_epoch,
-        beacon_chain_shard_number,
     )
 
     return ProposerSlashing(
         proposer_index=proposer_index,
-        proposal_1=proposal_1,
-        proposal_2=proposal_2,
+        header_1=block_header_1,
+        header_2=block_header_2,
     )
 
 
@@ -266,25 +273,25 @@ def create_mock_slashable_attestation(state: BeaconState,
         config.SLOTS_PER_HISTORICAL_ROOT,
     )
 
-    # Get `epoch_boundary_root`
-    epoch_boundary_root = _get_epoch_boundary_root(state, config, beacon_block_root)
-    # Get `justified_block_root`
-    justified_block_root = get_block_root(
+    # Get `target_root`
+    target_root = _get_target_root(state, config, beacon_block_root)
+    # Get `source_root`
+    source_root = get_block_root(
         state,
-        get_epoch_start_slot(state.justified_epoch, config.SLOTS_PER_EPOCH),
+        get_epoch_start_slot(state.current_justified_epoch, config.SLOTS_PER_EPOCH),
         config.SLOTS_PER_HISTORICAL_ROOT,
     )
-    latest_crosslink = state.latest_crosslinks[shard]
+    previous_crosslink = state.latest_crosslinks[shard]
 
-    attestation_data = attestation_data = AttestationData(
+    attestation_data = AttestationData(
         slot=attestation_slot,
-        shard=shard,
         beacon_block_root=beacon_block_root,
-        epoch_boundary_root=epoch_boundary_root,
+        source_epoch=state.current_justified_epoch,
+        source_root=source_root,
+        target_root=target_root,
+        shard=shard,
+        previous_crosslink=previous_crosslink,
         crosslink_data_root=ZERO_HASH32,
-        latest_crosslink=latest_crosslink,
-        justified_epoch=state.justified_epoch,
-        justified_block_root=justified_block_root,
     )
 
     message_hash, voting_committee_indices = _get_mock_message_and_voting_committee_indices(
@@ -354,7 +361,7 @@ def create_mock_attester_slashing_is_surround_vote(
     slashable_attestation_1 = create_mock_slashable_attestation(
         state.copy(
             slot=attestation_slot_1,
-            justified_epoch=config.GENESIS_EPOCH,
+            current_justified_epoch=config.GENESIS_EPOCH,
         ),
         config,
         keymap,
@@ -363,7 +370,7 @@ def create_mock_attester_slashing_is_surround_vote(
     slashable_attestation_2 = create_mock_slashable_attestation(
         state.copy(
             slot=attestation_slot_1,
-            justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
+            current_justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
         ),
         config,
         keymap,
@@ -379,9 +386,9 @@ def create_mock_attester_slashing_is_surround_vote(
 #
 # Attestation
 #
-def _get_epoch_boundary_root(state: BeaconState,
-                             config: Eth2Config,
-                             beacon_block_root: Hash32) -> Hash32:
+def _get_target_root(state: BeaconState,
+                     config: Eth2Config,
+                     beacon_block_root: Hash32) -> Hash32:
     epoch_start_slot = get_epoch_start_slot(
         slot_to_epoch(state.slot, config.SLOTS_PER_EPOCH),
         config.SLOTS_PER_EPOCH,
@@ -472,6 +479,7 @@ def create_mock_signed_attestation(state: BeaconState,
 def create_mock_signed_attestations_at_slot(
         state: BeaconState,
         config: Eth2Config,
+        state_machine: BaseBeaconStateMachine,
         attestation_slot: Slot,
         beacon_block_root: Hash32,
         keymap: Dict[BLSPubkey, int],
@@ -479,42 +487,35 @@ def create_mock_signed_attestations_at_slot(
     """
     Create the mocking attestations of the given ``attestation_slot`` slot with ``keymap``.
     """
-    slots_per_epoch = config.SLOTS_PER_EPOCH
-
+    state_transition = state_machine.state_transition
+    state = state_transition.apply_state_transition_without_block(
+        state,
+        attestation_slot,
+    )
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
-        # To avoid the epoch boundary cases
-        state.copy(
-            slot=state.slot + 1,
-        ),
+        state,
         attestation_slot,
         CommitteeConfig(config),
     )
 
-    # Get `epoch_boundary_root`
-    epoch_boundary_root = _get_epoch_boundary_root(state, config, beacon_block_root)
-
-    # Get `justified_block_root`
-    justified_block_root = get_block_root(
-        state,
-        get_epoch_start_slot(state.justified_epoch, slots_per_epoch),
-        config.SLOTS_PER_HISTORICAL_ROOT,
-    )
+    # Get `target_root`
+    target_root = _get_target_root(state, config, beacon_block_root)
 
     for crosslink_committee in crosslink_committees_at_slot:
         committee, shard = crosslink_committee
 
         num_voted_attesters = int(len(committee) * voted_attesters_ratio)
-        latest_crosslink = state.latest_crosslinks[shard]
+        previous_crosslink = state.latest_crosslinks[shard]
 
         attestation_data = AttestationData(
             slot=attestation_slot,
-            shard=shard,
             beacon_block_root=beacon_block_root,
-            epoch_boundary_root=epoch_boundary_root,
+            source_epoch=state.current_justified_epoch,
+            source_root=state.current_justified_root,
+            target_root=target_root,
+            shard=shard,
+            previous_crosslink=previous_crosslink,
             crosslink_data_root=ZERO_HASH32,
-            latest_crosslink=latest_crosslink,
-            justified_epoch=state.justified_epoch,
-            justified_block_root=justified_block_root,
         )
 
         num_voted_attesters = int(len(committee) * voted_attesters_ratio)
@@ -636,7 +637,7 @@ def get_committee_assignment(
         propose a beacon block at the assigned slot.
     """
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
     next_epoch = Epoch(current_epoch + 1)
 
     validate_epoch_within_previous_and_next(epoch, previous_epoch, next_epoch)
@@ -667,6 +668,6 @@ def get_committee_assignment(
                 registry_change=registry_change,
             )
 
-            return CommitteeAssignment(validators, shard, Slot(slot), is_proposer)
+            return CommitteeAssignment(tuple(validators), shard, Slot(slot), is_proposer)
 
     raise NoCommitteeAssignment

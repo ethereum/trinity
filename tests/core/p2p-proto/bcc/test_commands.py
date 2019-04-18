@@ -12,7 +12,6 @@ from eth2.beacon.types.blocks import (
     BeaconBlock,
     BeaconBlockBody,
 )
-from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 
 from p2p.peer import (
@@ -69,10 +68,8 @@ async def test_send_single_block(request, event_loop):
     request_id = 5
     block = BeaconBlock(
         slot=1,
-        parent_root=ZERO_HASH32,
+        previous_block_root=ZERO_HASH32,
         state_root=ZERO_HASH32,
-        randao_reveal=EMPTY_SIGNATURE,
-        eth1_data=Eth1Data.create_empty_data(),
         signature=EMPTY_SIGNATURE,
         body=BeaconBlockBody.create_empty_body(),
     )
@@ -94,10 +91,8 @@ async def test_send_multiple_blocks(request, event_loop):
     blocks = tuple(
         BeaconBlock(
             slot=slot,
-            parent_root=ZERO_HASH32,
+            previous_block_root=ZERO_HASH32,
             state_root=ZERO_HASH32,
-            randao_reveal=EMPTY_SIGNATURE,
-            eth1_data=Eth1Data.create_empty_data(),
             signature=EMPTY_SIGNATURE,
             body=BeaconBlockBody.create_empty_body(),
         )
@@ -164,13 +159,13 @@ async def test_send_single_attestation(request, event_loop):
         aggregation_bitfield=b"\x00\x00\x00",
         data=AttestationData(
             slot=0,
-            shard=1,
             beacon_block_root=ZERO_HASH32,
-            epoch_boundary_root=ZERO_HASH32,
+            source_epoch=SERENITY_CONFIG.GENESIS_EPOCH,
+            target_root=ZERO_HASH32,
+            source_root=ZERO_HASH32,
+            shard=1,
+            previous_crosslink=CrosslinkRecord(SERENITY_CONFIG.GENESIS_EPOCH, ZERO_HASH32),
             crosslink_data_root=ZERO_HASH32,
-            latest_crosslink=CrosslinkRecord(SERENITY_CONFIG.GENESIS_EPOCH, ZERO_HASH32),
-            justified_epoch=SERENITY_CONFIG.GENESIS_EPOCH,
-            justified_block_root=ZERO_HASH32,
         ),
         custody_bitfield=b"\x00\x00\x00",
     )
@@ -191,13 +186,13 @@ async def test_send_multiple_attestations(request, event_loop):
             aggregation_bitfield=b"\x00\x00\x00",
             data=AttestationData(
                 slot=0,
-                shard=shard,
                 beacon_block_root=ZERO_HASH32,
-                epoch_boundary_root=ZERO_HASH32,
+                source_epoch=SERENITY_CONFIG.GENESIS_EPOCH,
+                target_root=ZERO_HASH32,
+                source_root=ZERO_HASH32,
+                shard=shard,
+                previous_crosslink=CrosslinkRecord(SERENITY_CONFIG.GENESIS_EPOCH, ZERO_HASH32),
                 crosslink_data_root=ZERO_HASH32,
-                latest_crosslink=CrosslinkRecord(SERENITY_CONFIG.GENESIS_EPOCH, ZERO_HASH32),
-                justified_epoch=SERENITY_CONFIG.GENESIS_EPOCH,
-                justified_block_root=ZERO_HASH32,
             ),
             custody_bitfield=b"\x00\x00\x00",
         ) for shard in range(10)

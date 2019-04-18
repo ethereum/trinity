@@ -59,8 +59,8 @@ from eth2.beacon.state_machines.forks.serenity.epoch_processing import (
     _check_if_update_validator_registry,
     _compute_individual_penalty,
     _compute_total_penalties,
-    _current_previous_epochs_justifiable,
     _get_finalized_epoch,
+    _is_epoch_justifiable,
     _is_majority_vote,
     _majority_threshold,
     _process_rewards_and_penalties_for_crosslinks,
@@ -200,41 +200,47 @@ def test_only_process_eth1_data_votes_per_period(sample_beacon_state_params, con
 @pytest.mark.parametrize(
     "total_balance,"
     "current_epoch_boundary_attesting_balance,"
-    "previous_epoch_boundary_attesting_balance,"
     "expected,",
     (
         (
-            1500 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, (True, True),
+            1500 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, True,
         ),
         (
-            1500 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, (True, False),
-        ),
-        (
-            1500 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, 1000 * GWEI_PER_ETH, (False, True),
-        ),
-        (
-            1500 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, (False, False),
+            1500 * GWEI_PER_ETH, 999 * GWEI_PER_ETH, False,
         ),
     )
 )
-def test_current_previous_epochs_justifiable(
+def test_is_epoch_justifiable(
         monkeypatch,
         sample_state,
         config,
         expected,
         total_balance,
-        previous_epoch_boundary_attesting_balance,
         current_epoch_boundary_attesting_balance):
     current_epoch = 5
-    previous_epoch = 4
 
     from eth2.beacon.state_machines.forks.serenity import epoch_processing
 
     def mock_get_total_balance(validators, epoch, max_deposit_amount):
         return total_balance
 
-    def mock_get_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config):
-        return previous_epoch_boundary_attesting_balance, current_epoch_boundary_attesting_balance
+    def mock_get_epoch_boundary_attesting_balance(state, attestations, epoch, config):
+        if epoch == current_epoch:
+            return current_epoch_boundary_attesting_balance
+        else:
+            raise Exception("ensure mock is matching on a specific epoch")
+
+    def mock_get_active_validator_indices(validator_registry, epoch):
+        """
+        Use this mock to ensure that `_is_epoch_justifiable` does not return early
+        This is a bit unfortunate as it leaks an implementation detail, but we are
+        already monkeypatching so we will see it through.
+        """
+        indices = tuple(range(3))
+        # The only constraint on this mock is that the following assertion holds
+        # We ensure the sustainability of this test by testing the invariant at runtime.
+        assert indices
+        return indices
 
     with monkeypatch.context() as m:
         m.setattr(
@@ -244,20 +250,29 @@ def test_current_previous_epochs_justifiable(
         )
         m.setattr(
             epoch_processing,
-            'get_epoch_boundary_attesting_balances',
-            mock_get_epoch_boundary_attesting_balances,
+            'get_epoch_boundary_attesting_balance',
+            mock_get_epoch_boundary_attesting_balance,
+        )
+        m.setattr(
+            epoch_processing,
+            'get_active_validator_indices',
+            mock_get_active_validator_indices,
         )
 
-        assert _current_previous_epochs_justifiable(sample_state,
-                                                    current_epoch,
-                                                    previous_epoch,
-                                                    config) == expected
+        epoch_justifiable = _is_epoch_justifiable(
+            sample_state,
+            sample_state.current_epoch_attestations,
+            current_epoch,
+            config,
+        )
+
+        assert epoch_justifiable == expected
 
 
 @pytest.mark.parametrize(
     "justification_bitfield,"
     "previous_justified_epoch,"
-    "justified_epoch,"
+    "current_justified_epoch,"
     "expected,",
     (
         # Rule 1
@@ -274,13 +289,13 @@ def test_current_previous_epochs_justifiable(
 )
 def test_get_finalized_epoch(justification_bitfield,
                              previous_justified_epoch,
-                             justified_epoch,
+                             current_justified_epoch,
                              expected):
     previous_epoch = 5
     finalized_epoch = 1
     assert _get_finalized_epoch(justification_bitfield,
                                 previous_justified_epoch,
-                                justified_epoch,
+                                current_justified_epoch,
                                 finalized_epoch,
                                 previous_epoch,) == expected
 
@@ -294,7 +309,7 @@ def test_justification_without_mock(sample_beacon_state_params,
         justification_bitfield=0b0,
     )
     state = process_justification(state, config)
-    assert state.justification_bitfield == 0b11
+    assert state.justification_bitfield == 0b0
 
 
 @pytest.mark.parametrize(
@@ -307,7 +322,8 @@ def test_justification_without_mock(sample_beacon_state_params,
 )
 @pytest.mark.parametrize(
     # Each state contains epoch, current_epoch_justifiable, previous_epoch_justifiable,
-    # previous_justified_epoch, justified_epoch, justification_bitfield, and finalized_epoch.
+    # previous_justified_epoch, current_justified_epoch,
+    # justification_bitfield, and finalized_epoch.
     # Specify the last epoch processed state at the end of the items.
     "states,",
     (
@@ -338,7 +354,7 @@ def test_justification_without_mock(sample_beacon_state_params,
 )
 def test_process_justification(monkeypatch,
                                config,
-                               sample_beacon_state_params,
+                               genesis_state,
                                states,
                                genesis_epoch=0):
     from eth2.beacon.state_machines.forks.serenity import epoch_processing
@@ -362,20 +378,23 @@ def test_process_justification(monkeypatch,
         ) = states[i + 1][-4:]
         slot = (current_epoch + 1) * config.SLOTS_PER_EPOCH - 1
 
-        def mock_current_previous_epochs_justifiable(current_epoch, previous_epoch, state, config):
-            return current_epoch_justifiable, previous_epoch_justifiable
+        def mock_is_epoch_justifiable(state, attestations, epoch, config):
+            if epoch == current_epoch:
+                return current_epoch_justifiable
+            else:
+                return previous_epoch_justifiable
 
         with monkeypatch.context() as m:
             m.setattr(
                 epoch_processing,
-                '_current_previous_epochs_justifiable',
-                mock_current_previous_epochs_justifiable,
+                '_is_epoch_justifiable',
+                mock_is_epoch_justifiable,
             )
 
-            state = BeaconState(**sample_beacon_state_params).copy(
+            state = genesis_state.copy(
                 slot=slot,
                 previous_justified_epoch=previous_justified_epoch_before,
-                justified_epoch=justified_epoch_before,
+                current_justified_epoch=justified_epoch_before,
                 justification_bitfield=justification_bitfield_before,
                 finalized_epoch=finalized_epoch_before,
             )
@@ -383,7 +402,7 @@ def test_process_justification(monkeypatch,
             state = process_justification(state, config)
 
             assert state.previous_justified_epoch == previous_justified_epoch_after
-            assert state.justified_epoch == justified_epoch_after
+            assert state.current_justified_epoch == justified_epoch_after
             assert state.justification_bitfield == justification_bitfield_after
             assert state.finalized_epoch == finalized_epoch_after
 
@@ -490,7 +509,7 @@ def test_process_crosslinks(
                             slot=slot_in_previous_epoch,
                             shard=shard,
                             crosslink_data_root=previous_epoch_crosslink_data_root,
-                            latest_crosslink=CrosslinkRecord(
+                            previous_crosslink=CrosslinkRecord(
                                 epoch=config.GENESIS_EPOCH,
                                 crosslink_data_root=ZERO_HASH32,
                             ),
@@ -529,7 +548,7 @@ def test_process_crosslinks(
                             slot=slot_in_current_epoch,
                             shard=shard,
                             crosslink_data_root=current_epoch_crosslink_data_root,
-                            latest_crosslink=CrosslinkRecord(
+                            previous_crosslink=CrosslinkRecord(
                                 epoch=config.GENESIS_EPOCH,
                                 crosslink_data_root=ZERO_HASH32,
                             ),
@@ -740,7 +759,7 @@ def test_process_rewards_and_penalties_for_finality(
     }
 
     prev_epoch_start_slot = get_epoch_start_slot(
-        state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH), slots_per_epoch,
+        state.previous_epoch(config.SLOTS_PER_EPOCH), slots_per_epoch,
     )
     prev_epoch_crosslink_committees = [
         get_crosslink_committees_at_slot(
@@ -762,7 +781,7 @@ def test_process_rewards_and_penalties_for_finality(
                 data=AttestationData(**sample_attestation_data_params).copy(
                     slot=(prev_epoch_start_slot + i),
                     shard=shard,
-                    epoch_boundary_root=get_block_root(
+                    target_root=get_block_root(
                         state,
                         prev_epoch_start_slot,
                         config.SLOTS_PER_HISTORICAL_ROOT,
@@ -880,7 +899,7 @@ def test_process_rewards_and_penalties_for_crosslinks(
                 data=AttestationData(**sample_attestation_data_params).copy(
                     slot=data_slot,
                     shard=shard,
-                    latest_crosslink=CrosslinkRecord(
+                    previous_crosslink=CrosslinkRecord(
                         epoch=config.GENESIS_EPOCH,
                         crosslink_data_root=ZERO_HASH32,
                     ),

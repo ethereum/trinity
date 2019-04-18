@@ -74,7 +74,7 @@ def get_shuffling(*,
                   seed: Hash32,
                   validators: Sequence['ValidatorRecord'],
                   epoch: Epoch,
-                  committee_config: CommitteeConfig) -> Tuple[Iterable[ValidatorIndex], ...]:
+                  committee_config: CommitteeConfig) -> Tuple[Sequence[ValidatorIndex], ...]:
     """
     Shuffle ``validators`` into crosslink committees seeded by ``seed`` and ``epoch``.
     Return a list of ``committee_per_epoch`` committees where each
@@ -285,17 +285,16 @@ def get_crosslink_committees_at_slot(
         state: 'BeaconState',
         slot: Slot,
         committee_config: CommitteeConfig,
-        registry_change: bool=False) -> Iterable[Tuple[Iterable[ValidatorIndex], Shard]]:
+        registry_change: bool=False) -> Iterable[Tuple[Sequence[ValidatorIndex], Shard]]:
     """
     Return the list of ``(committee, shard)`` tuples for the ``slot``.
     """
-    genesis_epoch = committee_config.GENESIS_EPOCH
     shard_count = committee_config.SHARD_COUNT
     slots_per_epoch = committee_config.SLOTS_PER_EPOCH
 
     epoch = slot_to_epoch(slot, slots_per_epoch)
     current_epoch = state.current_epoch(slots_per_epoch)
-    previous_epoch = state.previous_epoch(slots_per_epoch, genesis_epoch)
+    previous_epoch = state.previous_epoch(slots_per_epoch)
     next_epoch = state.next_epoch(slots_per_epoch)
 
     validate_epoch_within_previous_and_next(epoch, previous_epoch, next_epoch)
@@ -358,12 +357,8 @@ def get_beacon_proposer_index(state: 'BeaconState',
     Return the beacon proposer index for the ``slot``.
     """
     epoch = slot_to_epoch(slot, committee_config.SLOTS_PER_EPOCH)
-    current_epoch = state.current_epoch(committee_config.SLOTS_PER_EPOCH)
-    previous_epoch = state.previous_epoch(
-        committee_config.SLOTS_PER_EPOCH,
-        committee_config.GENESIS_EPOCH,
-    )
-    next_epoch = Epoch(current_epoch + 1)
+    previous_epoch = state.previous_epoch(committee_config.SLOTS_PER_EPOCH)
+    next_epoch = state.next_epoch(committee_config.SLOTS_PER_EPOCH)
 
     validate_epoch_within_previous_and_next(epoch, previous_epoch, next_epoch)
 

@@ -57,7 +57,7 @@ def test_demo(base_db,
 
     attestations_map = {}  # Dict[Slot, Sequence[Attestation]]
 
-    for current_slot in range(genesis_slot + 1, genesis_slot + chain_length):
+    for current_slot in range(genesis_slot + 1, genesis_slot + chain_length + 1):
         if current_slot > genesis_slot + config.MIN_ATTESTATION_INCLUSION_DELAY:
             attestations = attestations_map[current_slot - config.MIN_ATTESTATION_INCLUSION_DELAY]
         else:
@@ -94,16 +94,20 @@ def test_demo(base_db,
         attestations = create_mock_signed_attestations_at_slot(
             state=state,
             config=config,
+            state_machine=fixture_sm_class(
+                chaindb,
+                block,
+            ),
             attestation_slot=attestation_slot,
-            beacon_block_root=block.root,
+            beacon_block_root=block.signed_root,
             keymap=keymap,
             voted_attesters_ratio=1.0,
         )
         attestations_map[attestation_slot] = attestations
 
-    assert state.slot == chain_length - 1 + genesis_slot
+    assert state.slot == chain_length + genesis_slot
     assert isinstance(sm.block, SerenityBeaconBlock)
 
     # Justification assertions
-    assert state.justified_epoch == 2 + genesis_epoch
+    assert state.current_justified_epoch == 2 + genesis_epoch
     assert state.finalized_epoch == 1 + genesis_epoch

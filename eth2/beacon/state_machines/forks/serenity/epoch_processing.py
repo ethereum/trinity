@@ -4,7 +4,6 @@ from typing import (
     Dict,
     Iterable,
     Sequence,
-    Set,
     Tuple,
 )
 
@@ -17,7 +16,6 @@ from eth_utils.toolz import (
 )
 
 from eth2.beacon import helpers
-from eth2._utils.merkle.normal import get_merkle_root
 from eth2._utils.numeric import (
     is_power_of_two,
 )
@@ -40,17 +38,18 @@ from eth2.beacon.committee_helpers import (
 )
 from eth2.beacon.epoch_processing_helpers import (
     get_base_reward,
+    get_epoch_boundary_attesting_balance,
     get_inactivity_penalty,
     get_inclusion_infos,
     get_previous_epoch_boundary_attestations,
     get_previous_epoch_matching_head_attestations,
-    get_winning_root_and_participants,
     get_total_balance,
     get_total_balance_from_effective_balances,
-    get_epoch_boundary_attesting_balances,
+    get_winning_root_and_participants,
 )
 from eth2.beacon.helpers import (
     get_active_validator_indices,
+    get_block_root,
     get_effective_balance,
     get_epoch_start_slot,
     get_randao_mix,
@@ -65,8 +64,10 @@ from eth2.beacon._utils.hash import (
 )
 from eth2.beacon.datastructures.inclusion_info import InclusionInfo
 from eth2.beacon.types.attestations import Attestation
+from eth2.beacon.types.pending_attestation_records import PendingAttestationRecord
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
 from eth2.beacon.types.eth1_data_vote import Eth1DataVote
+from eth2.beacon.types.historical_batch import HistoricalBatch
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     Epoch,
@@ -128,53 +129,37 @@ def process_eth1_data_votes(state: BeaconState, config: Eth2Config) -> BeaconSta
 # Justification
 #
 
-def _current_previous_epochs_justifiable(
-        state: BeaconState,
-        current_epoch: Epoch,
-        previous_epoch: Epoch,
-        config: Eth2Config) -> Tuple[bool, bool]:
+def _is_epoch_justifiable(state: BeaconState,
+                          attestations: Sequence[PendingAttestationRecord],
+                          epoch: Epoch,
+                          config: Eth2Config) -> bool:
     """
-    Determine if epoch boundary attesting balance is greater than 2/3 of current_total_balance
-    for current and previous epochs.
+    Determine if epoch boundary attesting balance is greater than 2/3 of total_balance
+    for the given ``epoch``.
     """
+    active_validator_indices = get_active_validator_indices(
+        state.validator_registry,
+        epoch,
+    )
 
-    current_epoch_active_validator_indices = get_active_validator_indices(
-        state.validator_registry,
-        current_epoch,
-    )
-    previous_epoch_active_validator_indices = get_active_validator_indices(
-        state.validator_registry,
-        previous_epoch,
-    )
-    current_total_balance = get_total_balance(
+    if not active_validator_indices:
+        return False
+
+    total_balance = get_total_balance(
         state.validator_balances,
-        current_epoch_active_validator_indices,
-        config.MAX_DEPOSIT_AMOUNT,
-    )
-    previous_total_balance = get_total_balance(
-        state.validator_balances,
-        previous_epoch_active_validator_indices,
+        active_validator_indices,
         config.MAX_DEPOSIT_AMOUNT,
     )
 
-    (
-        previous_epoch_boundary_attesting_balance,
-        current_epoch_boundary_attesting_balance
-    ) = get_epoch_boundary_attesting_balances(current_epoch, previous_epoch, state, config)
+    attesting_balance = get_epoch_boundary_attesting_balance(state, attestations, epoch, config)
 
-    previous_epoch_justifiable = (
-        3 * previous_epoch_boundary_attesting_balance >= 2 * previous_total_balance
-    )
-    current_epoch_justifiable = (
-        3 * current_epoch_boundary_attesting_balance >= 2 * current_total_balance
-    )
-    return current_epoch_justifiable, previous_epoch_justifiable
+    return 3 * attesting_balance >= 2 * total_balance
 
 
 def _get_finalized_epoch(
         justification_bitfield: int,
         previous_justified_epoch: Epoch,
-        justified_epoch: Epoch,
+        current_justified_epoch: Epoch,
         finalized_epoch: Epoch,
         previous_epoch: Epoch) -> Tuple[Epoch, int]:
 
@@ -188,18 +173,18 @@ def _get_finalized_epoch(
     )
     rule_3 = (
         justification_bitfield % 8 == 0b111 and
-        justified_epoch == previous_epoch - 1
+        current_justified_epoch == previous_epoch - 1
     )
     rule_4 = (
         justification_bitfield % 4 == 0b11 and
-        justified_epoch == previous_epoch
+        current_justified_epoch == previous_epoch
     )
     # Check the rule in the order that can finalize higher epoch possible
     # The second output indicating what rule triggered is for testing purpose
     if rule_4:
-        return justified_epoch, 4
+        return current_justified_epoch, 4
     elif rule_3:
-        return justified_epoch, 3
+        return current_justified_epoch, 3
     elif rule_2:
         return previous_justified_epoch, 2
     elif rule_1:
@@ -209,13 +194,18 @@ def _get_finalized_epoch(
 
 
 def process_justification(state: BeaconState, config: Eth2Config) -> BeaconState:
-
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
 
-    current_epoch_justifiable, previous_epoch_justifiable = _current_previous_epochs_justifiable(
+    current_epoch_justifiable = _is_epoch_justifiable(
         state,
+        state.current_epoch_attestations,
         current_epoch,
+        config,
+    )
+    previous_epoch_justifiable = _is_epoch_justifiable(
+        state,
+        state.previous_epoch_attestations,
         previous_epoch,
         config,
     )
@@ -235,22 +225,44 @@ def process_justification(state: BeaconState, config: Eth2Config) -> BeaconState
     elif previous_epoch_justifiable:
         new_justified_epoch = previous_epoch
     else:
-        new_justified_epoch = state.justified_epoch
+        new_justified_epoch = state.current_justified_epoch
 
-    finalized_epoch, _ = _get_finalized_epoch(
+    new_finalized_epoch, _ = _get_finalized_epoch(
         justification_bitfield,
         state.previous_justified_epoch,
-        state.justified_epoch,
+        state.current_justified_epoch,
         state.finalized_epoch,
         previous_epoch,
     )
 
-    return state.copy(
-        previous_justified_epoch=state.justified_epoch,
-        justified_epoch=new_justified_epoch,
+    # Update state
+    state = state.copy(
+        previous_justified_epoch=state.current_justified_epoch,
+        previous_justified_root=state.current_justified_root,
         justification_bitfield=justification_bitfield,
-        finalized_epoch=finalized_epoch,
     )
+
+    if new_justified_epoch != state.current_justified_epoch:
+        state = state.copy(
+            current_justified_epoch=new_justified_epoch,
+            current_justified_root=get_block_root(
+                state,
+                get_epoch_start_slot(new_justified_epoch, config.SLOTS_PER_EPOCH),
+                config.SLOTS_PER_HISTORICAL_ROOT,
+            ),
+        )
+
+    if new_finalized_epoch != state.finalized_epoch:
+        state = state.copy(
+            finalized_epoch=new_finalized_epoch,
+            finalized_root=get_block_root(
+                state,
+                get_epoch_start_slot(new_finalized_epoch, config.SLOTS_PER_EPOCH),
+                config.SLOTS_PER_HISTORICAL_ROOT,
+            )
+        )
+
+    return state
 
 
 #
@@ -276,7 +288,7 @@ def process_crosslinks(state: BeaconState, config: Eth2Config) -> BeaconState:
         for index in range(len(state.validator_registry))
     }
     previous_epoch_start_slot = get_epoch_start_slot(
-        state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH),
+        state.previous_epoch(config.SLOTS_PER_EPOCH),
         config.SLOTS_PER_EPOCH,
     )
     next_epoch_start_slot = get_epoch_start_slot(
@@ -337,11 +349,11 @@ def _update_rewards_or_penalies(
 def _compute_normal_justification_and_finalization_deltas(
         state: BeaconState,
         config: Eth2Config,
-        previous_epoch_active_validator_indices: Set[ValidatorIndex],
+        previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
         previous_total_balance: Gwei,
-        previous_epoch_attester_indices: Set[ValidatorIndex],
-        previous_epoch_boundary_attester_indices: Set[ValidatorIndex],
-        previous_epoch_head_attester_indices: Set[ValidatorIndex],
+        previous_epoch_attester_indices: Sequence[ValidatorIndex],
+        previous_epoch_boundary_attester_indices: Sequence[ValidatorIndex],
+        previous_epoch_head_attester_indices: Sequence[ValidatorIndex],
         inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
         effective_balances: Dict[ValidatorIndex, Gwei],
         base_rewards: Dict[ValidatorIndex, Gwei]) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
@@ -435,10 +447,10 @@ def _compute_normal_justification_and_finalization_deltas(
 def _compute_inactivity_leak_deltas(
         state: BeaconState,
         config: Eth2Config,
-        previous_epoch_active_validator_indices: Set[ValidatorIndex],
-        previous_epoch_attester_indices: Set[ValidatorIndex],
-        previous_epoch_boundary_attester_indices: Set[ValidatorIndex],
-        previous_epoch_head_attester_indices: Set[ValidatorIndex],
+        previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
+        previous_epoch_attester_indices: Sequence[ValidatorIndex],
+        previous_epoch_boundary_attester_indices: Sequence[ValidatorIndex],
+        previous_epoch_head_attester_indices: Sequence[ValidatorIndex],
         inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
         effective_balances: Dict[ValidatorIndex, Gwei],
         base_rewards: Dict[ValidatorIndex, Gwei],
@@ -514,17 +526,16 @@ def _compute_inactivity_leak_deltas(
 def _process_rewards_and_penalties_for_finality(
         state: BeaconState,
         config: Eth2Config,
-        previous_epoch_active_validator_indices: Set[ValidatorIndex],
+        previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
         previous_total_balance: Gwei,
         previous_epoch_attestations: Sequence[Attestation],
-        previous_epoch_attester_indices: Set[ValidatorIndex],
+        previous_epoch_attester_indices: Sequence[ValidatorIndex],
         inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
         effective_balances: Dict[ValidatorIndex, Gwei],
         base_rewards: Dict[ValidatorIndex, Gwei]) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
     previous_epoch_boundary_attestations = get_previous_epoch_boundary_attestations(
         state,
         config.SLOTS_PER_EPOCH,
-        config.GENESIS_EPOCH,
         config.SLOTS_PER_HISTORICAL_ROOT,
     )
     previous_epoch_boundary_attester_indices = get_attester_indices_from_attestations(
@@ -536,7 +547,6 @@ def _process_rewards_and_penalties_for_finality(
     previous_epoch_head_attestations = get_previous_epoch_matching_head_attestations(
         state,
         config.SLOTS_PER_EPOCH,
-        config.GENESIS_EPOCH,
         config.SLOTS_PER_HISTORICAL_ROOT,
     )
     previous_epoch_head_attester_indices = get_attester_indices_from_attestations(
@@ -583,7 +593,7 @@ def _process_rewards_and_penalties_for_crosslinks(
         effective_balances: Dict[ValidatorIndex, Gwei],
         base_rewards: Dict[ValidatorIndex, Gwei]) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
     previous_epoch_start_slot = get_epoch_start_slot(
-        state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH),
+        state.previous_epoch(config.SLOTS_PER_EPOCH),
         config.SLOTS_PER_EPOCH,
     )
     current_epoch_start_slot = get_epoch_start_slot(
@@ -638,7 +648,7 @@ def process_rewards_and_penalties(state: BeaconState, config: Eth2Config) -> Bea
     previous_epoch_active_validator_indices = set(
         get_active_validator_indices(
             state.validator_registry,
-            state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH)
+            state.previous_epoch(config.SLOTS_PER_EPOCH)
         )
     )
     previous_total_balance: Gwei = get_total_balance(
@@ -1178,8 +1188,12 @@ def _update_historical_roots(state: BeaconState,
     epochs_per_historical_root = config.SLOTS_PER_HISTORICAL_ROOT // config.SLOTS_PER_EPOCH
     should_update_historical_roots = next_epoch % epochs_per_historical_root == 0
     if should_update_historical_roots:
-        roots = state.latest_block_roots + state.latest_state_roots
-        updated_historical_roots += (get_merkle_root(roots),)
+        historical_batch = HistoricalBatch(
+            block_roots=state.latest_block_roots,
+            state_roots=state.latest_state_roots,
+            slots_per_historical_root=config.SLOTS_PER_HISTORICAL_ROOT,
+        )
+        updated_historical_roots += (historical_batch.hash_tree_root,)
 
     return state.copy(
         historical_roots=updated_historical_roots

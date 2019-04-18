@@ -30,7 +30,7 @@ from eth_keys import (
 
 from eth_hash.auto import keccak
 
-from trinity._utils.validation import validate_enode_uri
+from p2p.validation import validate_enode_uri
 
 k_b = 8  # 8 bits per hop
 
@@ -90,7 +90,7 @@ class Address:
         return [self._ip.packed, enc_port(self.udp_port), enc_port(self.tcp_port)]
 
     @classmethod
-    def from_endpoint(cls, ip: str, udp_port: str, tcp_port: str = '\x00\x00') -> 'Address':
+    def from_endpoint(cls, ip: str, udp_port: bytes, tcp_port: bytes = b'\x00\x00') -> 'Address':
         return cls(ip, big_endian_to_int(udp_port), big_endian_to_int(tcp_port))
 
 
