@@ -41,6 +41,7 @@ from eth_keys.datatypes import (
 )
 from eth_typing import (
     Address,
+    BLSPubkey,
 )
 
 from eth2.beacon.chains.testnet import (
@@ -93,7 +94,6 @@ from trinity.constants import (
 )
 from trinity.plugins.eth2.beacon.testing_config import (
     Config as testing_config,
-    keymap,
 )
 
 if TYPE_CHECKING:
@@ -601,6 +601,7 @@ class Eth1AppConfig(BaseAppConfig):
 class BeaconGenesisData(NamedTuple):
     genesis_time: Timestamp
     genesis_slot: Slot
+    keymap: Dict[BLSPubkey, int]
     # TODO: Maybe Validator deposit data
 
 
@@ -644,7 +645,7 @@ class BeaconChainConfig:
         state, block = create_mock_genesis(
             num_validators=testing_config.NUM_VALIDATORS,
             config=state_machine.config,
-            keymap=keymap,
+            keymap=self.genesis_data.keymap,
             genesis_block_class=state_machine.block_class,
             genesis_time=self.genesis_time,
         )
@@ -662,14 +663,29 @@ class BeaconAppConfig(BaseAppConfig):
                          args: argparse.Namespace,
                          trinity_config: TrinityConfig) -> 'BaseAppConfig':
         # Assume genesis file in `trinity_root_dir`
-        file_path = trinity_config.trinity_root_dir / 'genesis.json'
-        with open(file_path) as f:
-            genesis = json.load(f)
+        genesis_file_path = trinity_config.trinity_root_dir / 'genesis.json'
+        with open(genesis_file_path) as f1:
+            genesis = json.load(f1)
 
+        from py_ecc import bls
+        keymap = {}  # pub -> priv
+        for privkey in genesis['privkeys']:
+            keymap[bls.privtopub(privkey)] = privkey
         trinity_config.genesis_data = BeaconGenesisData(
             genesis_time=genesis['genesis_time'],
             genesis_slot=2**32,
+            # keymap=genesis['keymap'],
+            keymap=keymap,
         )
+
+        validators_file_path = trinity_config.trinity_root_dir / 'validators.json'
+        with open(validators_file_path) as f2:
+            validators = json.load(f2)
+        # trinity_config.validator_pubkeys = validators['pubkeys']
+        validator_pubkeys = []
+        for privkey in validators['privkeys']:
+            validator_pubkeys.append(bls.privtopub(privkey))
+        trinity_config.validator_pubkeys = validator_pubkeys
 
         if args is not None:
             # This is quick and dirty way to get bootstrap_nodes
