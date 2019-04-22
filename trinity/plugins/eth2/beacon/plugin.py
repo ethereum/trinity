@@ -4,6 +4,10 @@ from argparse import (
 )
 import asyncio
 
+from typing import (
+    Dict,
+    Sequence,
+)
 from cancel_token import (
     CancelToken,
 )
@@ -62,10 +66,6 @@ from trinity.extensibility import (
 )
 from trinity.plugins.eth2.beacon.testing_blocks_generators import (
     get_ten_blocks_context,
-)
-from trinity.plugins.eth2.beacon.testing_config import (
-    index_to_pubkey,
-    keymap,
 )
 from trinity.protocol.bcc.peer import (
     BCCPeerPool,
@@ -154,17 +154,25 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
             server.cancel_token,
         )
 
-        validator_privkey = keymap[index_to_pubkey[self.context.args.validator_index]]
+        state_machine = chain.get_state_machine()
+        state = state_machine.state
+        registry_pubkeys = [v_record.pubkey for v_record in state.validator_registry]
+
+        validator_indices = []
+        validator_privkeys = {}
+        for pubkey in trinity_config.validator_pubkeys:
+            validator_index = registry_pubkeys.index(pubkey)
+            validator_indices.append(validator_index)
+            validator_privkeys[validator_index] = trinity_config.genesis_data.keymap[pubkey]
+
         validator = Validator(
-            validator_index=ValidatorIndex(self.context.args.validator_index),
+            validator_indices=validator_indices,
             chain=chain,
             peer_pool=server.peer_pool,
-            privkey=validator_privkey,
+            validator_privkeys=validator_privkeys,
             event_bus=self.context.event_bus,
             token=server.cancel_token,
         )
-
-        state_machine = chain.get_state_machine()
 
         slot_ticker = SlotTicker(
             genesis_slot=chain_config.genesis_slot,
@@ -197,25 +205,25 @@ class Validator(BaseService):
     Reference: https://github.com/ethereum/trinity/blob/master/eth2/beacon/tools/builder/proposer.py#L175  # noqa: E501
     """
 
-    validator_index: ValidatorIndex
+    validator_indices: Sequence[ValidatorIndex]
     chain: BeaconChain
     peer_pool: BCCPeerPool
-    privkey: PrivateKey
+    validator_privkeys: Dict[ValidatorIndex, PrivateKey]
     event_bus: TrinityEventBusEndpoint
 
     def __init__(
             self,
-            validator_index: ValidatorIndex,
+            validator_indices: Sequence[ValidatorIndex],
             chain: BeaconChain,
             peer_pool: BCCPeerPool,
-            privkey: PrivateKey,
+            validator_privkeys: Dict[ValidatorIndex, PrivateKey],
             event_bus: TrinityEventBusEndpoint,
             token: CancelToken = None) -> None:
         super().__init__(token)
-        self.validator_index = validator_index
+        self.validator_indices = validator_indices
         self.chain = chain
         self.peer_pool = peer_pool
-        self.privkey = privkey
+        self.validator_privkeys = validator_privkeys
         self.event_bus = event_bus
 
     async def _run(self) -> None:
@@ -243,9 +251,14 @@ class Validator(BaseService):
             slot,
             state_machine.config,
         )
-        if self.validator_index == proposer_index:
-            self.propose_block(slot=slot, state=state,
-                               state_machine=state_machine, head_block=head)
+        if proposer_index in self.validator_indices:
+            self.propose_block(
+                proposer_index=proposer_index,
+                slot=slot,
+                state=state,
+                state_machine=state_machine,
+                head_block=head
+            )
         else:
             self.skip_block(
                 slot=slot,
@@ -255,11 +268,12 @@ class Validator(BaseService):
             )
 
     def propose_block(self,
+                      proposer_index: ValidatorIndex,
                       slot: Slot,
                       state: BeaconState,
                       state_machine: BaseBeaconStateMachine,
                       head_block: BaseBeaconBlock) -> None:
-        block = self._make_proposing_block(slot, state, state_machine, head_block)
+        block = self._make_proposing_block(proposer_index, slot, state, state_machine, head_block)
         self.logger.debug(
             bold_green(f"Propose block={block}")
         )
@@ -271,6 +285,7 @@ class Validator(BaseService):
         self.chain.import_block(block)
 
     def _make_proposing_block(self,
+                              proposer_index: ValidatorIndex,
                               slot: Slot,
                               state: BeaconState,
                               state_machine: BaseBeaconStateMachine,
@@ -282,8 +297,8 @@ class Validator(BaseService):
             block_class=SerenityBeaconBlock,
             parent_block=parent_block,
             slot=slot,
-            validator_index=self.validator_index,
-            privkey=self.privkey,
+            validator_index=proposer_index,
+            privkey=self.validator_privkeys[proposer_index],
             attestations=(),
             check_proposer_index=False,
         )
