@@ -17,11 +17,14 @@ from typing import (
 from trinity.plugins.eth2.beacon.gen_genesis_json import (
     generate_genesis_json,
 )
+from trinity.plugins.eth2.beacon.gen_pubkeys_json import (
+    generate_pubkeys_json,
+)
 
 from pathlib import Path
 
 
-dir_root = Path("/tmp/ttt")
+dir_root = Path("/tmp/testnet")
 dir_alice = dir_root / "alice"
 dir_bob = dir_root / "bob"
 port_alice = 30304
@@ -31,6 +34,7 @@ index_bob = 1
 cmd_alice = f"trinity-beacon --validator_index={index_alice} --port={port_alice} --trinity-root-dir={dir_alice} --beacon-nodekey=6b94ffa2d9b8ee85afb9d7153c463ea22789d3bbc5d961cc4f63a41676883c19 -l debug"  # noqa: E501
 cmd_bob = f"trinity-beacon --validator_index={index_bob} --port={port_bob} --trinity-root-dir={dir_bob} --beacon-nodekey=f5ad1c57b5a489fc8f21ad0e5a19c1f1a60b8ab357a2100ff7e75f3fa8a4fd2e --bootstrap_nodes=enode://c289557985d885a3f13830a475d649df434099066fbdc840aafac23144f6ecb70d7cc16c186467f273ad7b29707aa15e6a50ec3fde35ae2e69b07b3ddc7a36c7@127.0.0.1:{port_alice} -l debug"  # noqa: E501
 file_genesis_json = "genesis.json"
+file_validators_json = "validators.json"
 
 time_bob_wait_for_alice = 15
 
@@ -163,6 +167,18 @@ async def main():
 
     with open(dir_bob / file_genesis_json, "w") as f:
         f.write(genesis_json)
+
+    # pubkeys = list(genesis_json["keymap"])
+    # alice_pubkeys_json, bob_pubkeys_json = generate_pubkeys_json(pubkeys)
+    import json
+    privkeys = json.loads(genesis_json)["privkeys"]
+    alice_pubkeys_json, bob_pubkeys_json = generate_pubkeys_json(privkeys)
+
+    with open(dir_alice / file_validators_json, "w") as f:
+        f.write(alice_pubkeys_json)
+
+    with open(dir_bob / file_validators_json, "w") as f:
+        f.write(bob_pubkeys_json)
 
     def sigint_handler(sig, frame):
         stop_all_nodes()
