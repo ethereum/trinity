@@ -94,10 +94,6 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
 
     def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
         arg_parser.add_argument(
-            "--validator_index",
-            type=int, required=True,
-        )
-        arg_parser.add_argument(
             "--bootstrap_nodes",
             help="enode://node1@0.0.0.0:1234,enode://node2@0.0.0.0:5678",
         )
