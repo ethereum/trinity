@@ -10,7 +10,6 @@ from ssz.sedes import (
     uint64
 )
 
-from eth2.beacon._utils.hash import hash_eth2
 from eth2.beacon.constants import EMPTY_SIGNATURE
 
 from eth2.beacon.typing import (
@@ -60,6 +59,4 @@ class Transfer(ssz.Serializable):
 
     @property
     def root(self) -> Hash32:
-        if self._root is None:
-            self._root = hash_eth2(ssz.encode(self))
-        return self._root
+        return super().root

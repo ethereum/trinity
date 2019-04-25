@@ -58,7 +58,7 @@ def get_temporary_block_header(block: BeaconBlock) -> BeaconBlockHeader:
         slot=block.slot,
         previous_block_root=block.previous_block_root,
         state_root=ZERO_HASH32,
-        block_body_root=block.body.tree_root,
+        block_body_root=block.body.root,
         signature=EMPTY_SIGNATURE,
     )
 

@@ -24,8 +24,8 @@ from eth_utils import (
 from eth.constants import (
     ZERO_HASH32,
 )
-
 from py_ecc import bls
+import ssz
 
 from eth2._utils.bitfield import (
     get_empty_bitfield,
@@ -34,6 +34,9 @@ from eth2._utils.bitfield import (
 from eth2.configs import (
     CommitteeConfig,
     Eth2Config,
+)
+from eth2.beacon._utils.hash import (
+    hash_eth2,
 )
 from eth2.beacon.constants import (
     ZERO_TIMESTAMP,
@@ -157,7 +160,7 @@ def sign_proof_of_possession(deposit_input: DepositInput,
         SignatureDomain.DOMAIN_DEPOSIT,
     )
     return bls.sign(
-        message_hash=deposit_input.root,
+        message_hash=hash_eth2(ssz.encode(deposit_input)),
         privkey=privkey,
         domain=domain,
     )

@@ -21,9 +21,6 @@ from eth.constants import (
     ZERO_HASH32,
 )
 
-from eth2.beacon._utils.hash import (
-    hash_eth2,
-)
 from eth2.beacon.helpers import (
     slot_to_epoch,
     get_temporary_block_header,
@@ -188,19 +185,11 @@ class BeaconState(ssz.Serializable):
             encode_hex(self.root)[2:10],
         )
 
-    _hash = None
-
-    @property
-    def hash(self) -> Hash32:
-        if self._hash is None:
-            self._hash = hash_eth2(ssz.encode(self))
-        return self._hash
+    _root = None
 
     @property
     def root(self) -> Hash32:
-        # Alias of `hash`.
-        # Using flat hash, might change to SSZ tree hash.
-        return self.hash
+        return super().root
 
     @property
     def num_validators(self) -> int:

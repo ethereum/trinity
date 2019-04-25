@@ -35,10 +35,8 @@ class HistoricalBatch(ssz.Serializable):
             state_roots=state_roots,
         )
 
-    _hash_tree_root = None
+    _root = None
 
     @property
-    def tree_root(self) -> Hash32:
-        if self._hash_tree_root is None:
-            self._hash_tree_root = ssz.hash_tree_root(self)
-        return self._hash_tree_root
+    def root(self) -> Hash32:
+        return super().root

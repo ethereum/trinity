@@ -36,13 +36,12 @@ class DepositInput(ssz.Serializable):
         )
 
     _root = None
-    _signed_root = None
 
     @property
     def root(self) -> Hash32:
-        if self._root is None:
-            self._root = hash_eth2(ssz.encode(self))
-        return self._root
+        return super().root
+
+    _signed_root = None
 
     @property
     def signed_root(self) -> Hash32:

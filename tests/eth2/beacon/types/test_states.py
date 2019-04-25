@@ -73,11 +73,6 @@ def test_num_crosslink_records(expected,
     assert state.num_crosslinks == expected
 
 
-def test_hash(sample_beacon_state_params):
-    state = BeaconState(**sample_beacon_state_params)
-    assert state.root == hash_eth2(ssz.encode(state))
-
-
 @pytest.mark.parametrize(
     'validator_index, new_pubkey, new_balance',
     [

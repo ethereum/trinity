@@ -18,7 +18,6 @@ from eth_typing import (
 from eth2._utils.bitfield import (
     has_voted,
 )
-from eth2.beacon._utils.hash import hash_eth2
 from eth2.beacon.typing import (
     ValidatorIndex,
 )
@@ -53,19 +52,11 @@ class SlashableAttestation(ssz.Serializable):
             aggregate_signature,
         )
 
-    _hash = None
-
-    @property
-    def hash(self) -> Hash32:
-        if self._hash is None:
-            self._hash = hash_eth2(ssz.encode(self.data))
-        return self._hash
+    _root = None
 
     @property
     def root(self) -> Hash32:
-        # Alias of `hash`.
-        # Using flat hash, will likely use SSZ tree hash.
-        return self.hash
+        return super().root
 
     @property
     def are_validator_indices_ascending(self) -> bool:
