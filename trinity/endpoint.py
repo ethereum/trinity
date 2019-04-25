@@ -26,7 +26,7 @@ class TrinityEventBusEndpoint(Endpoint):
         """
         Perfom a graceful shutdown of Trinity. Can be called from any process.
         """
-        self.broadcast(
+        self.broadcast_nowait(
             ShutdownRequest(reason),
             BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT)
         )
@@ -58,7 +58,7 @@ class TrinityEventBusEndpoint(Endpoint):
         Announce this endpoint to the :class:`~trinity.endpoint.TrinityMainEventBusEndpoint` so
         that it will be further propagated to all other endpoints, allowing them to connect to us.
         """
-        self.broadcast(
+        self.broadcast_nowait(
             EventBusConnected(ConnectionConfig(name=self.name, path=self.ipc_path)),
             BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT)
         )
@@ -94,7 +94,7 @@ class TrinityMainEventBusEndpoint(TrinityEventBusEndpoint):
             self.logger.debug("New EventBus Endpoint connected %s", ev.connection_config.name)
             # Broadcast available endpoints to all connected endpoints, giving them
             # a chance to cross connect
-            self.broadcast(AvailableEndpointsUpdated(self.available_endpoints))
+            self.broadcast_nowait(AvailableEndpointsUpdated(self.available_endpoints))
             self.logger.debug("Connected EventBus Endpoints %s", self.available_endpoints)
 
         self.subscribe(EventBusConnected, handle_new_endpoints)

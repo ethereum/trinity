@@ -215,7 +215,7 @@ class BasePlugin(ABC):
 
         self._status = PluginStatus.STARTED
         self.do_start()
-        self.event_bus.broadcast(
+        self.event_bus.broadcast_nowait(
             PluginStartedEvent(type(self))
         )
         self.logger.info("Plugin started: %s", self.name)
@@ -309,7 +309,7 @@ class BaseIsolatedPlugin(BasePlugin):
         # This makes the `main` process aware of this Endpoint which will then propagate the info
         # so that every other Endpoint can connect directly to the plugin Endpoint
         self.event_bus.announce_endpoint()
-        self.event_bus.broadcast(
+        self.event_bus.broadcast_nowait(
             PluginStartedEvent(type(self))
         )
 
