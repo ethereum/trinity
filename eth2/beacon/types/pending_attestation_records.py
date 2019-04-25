@@ -22,7 +22,7 @@ class PendingAttestationRecord(ssz.Serializable):
         # Attestation data
         ('data', AttestationData),
         # Custody bitfield
-        ('custody_bitfield', byte_listbyte_list),
+        ('custody_bitfield', byte_list),
         # Inclusion slot
         ('inclusion_slot', uint64),
     ]
