@@ -1,7 +1,7 @@
-from .highest_slot import (
-    HighestSlotForkChoice,
+from .higher_slot import (
+    higher_slot_scoring,
 )
 
 from .lmd_ghost import (
-    LMDGHOSTForkChoice,
+    lmd_ghost_scoring,
 )
