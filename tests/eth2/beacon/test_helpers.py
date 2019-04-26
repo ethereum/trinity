@@ -68,7 +68,7 @@ def generate_mock_latest_historical_roots(
     chain_length = (current_slot // slots_per_epoch + 1) * slots_per_epoch
     blocks = get_pseudo_chain(chain_length, genesis_block)
     latest_block_roots = [
-        block.signed_root
+        block.signing_root
         for block in blocks[:current_slot]
     ] + [
         ZERO_HASH32
@@ -125,7 +125,7 @@ def test_get_block_root(sample_beacon_state_params,
             target_slot,
             slots_per_historical_root,
         )
-        assert block_root == blocks[target_slot].signed_root
+        assert block_root == blocks[target_slot].signing_root
     else:
         with pytest.raises(ValidationError):
             get_block_root(
@@ -180,7 +180,7 @@ def test_get_state_root(sample_beacon_state_params,
             target_slot,
             slots_per_historical_root,
         )
-        assert state_root == blocks[target_slot].signed_root
+        assert state_root == blocks[target_slot].signing_root
     else:
         with pytest.raises(ValidationError):
             get_state_root(

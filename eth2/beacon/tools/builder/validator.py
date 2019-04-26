@@ -25,7 +25,6 @@ from eth.constants import (
     ZERO_HASH32,
 )
 from py_ecc import bls
-import ssz
 
 from eth2._utils.bitfield import (
     get_empty_bitfield,
@@ -34,9 +33,6 @@ from eth2._utils.bitfield import (
 from eth2.configs import (
     CommitteeConfig,
     Eth2Config,
-)
-from eth2.beacon._utils.hash import (
-    hash_eth2,
 )
 from eth2.beacon.constants import (
     ZERO_TIMESTAMP,
@@ -160,7 +156,7 @@ def sign_proof_of_possession(deposit_input: DepositInput,
         SignatureDomain.DOMAIN_DEPOSIT,
     )
     return bls.sign(
-        message_hash=hash_eth2(ssz.encode(deposit_input)),
+        message_hash=deposit_input.signing_root,
         privkey=privkey,
         domain=domain,
     )
@@ -199,7 +195,7 @@ def create_block_header_with_signature(
         block_body_root=block_body_root,
     )
     block_header_signature = sign_transaction(
-        message_hash=block_header.signed_root,
+        message_hash=block_header.signing_root,
         privkey=privkey,
         fork=state.fork,
         slot=block_header.slot,
@@ -548,7 +544,7 @@ def create_mock_voluntary_exit(state: BeaconState,
     )
     return voluntary_exit.copy(
         signature=sign_transaction(
-            message_hash=voluntary_exit.signed_root,
+            message_hash=voluntary_exit.signing_root,
             privkey=keymap[state.validator_registry[validator_index].pubkey],
             fork=state.fork,
             slot=get_epoch_start_slot(current_epoch, config.SLOTS_PER_EPOCH),
@@ -576,7 +572,7 @@ def create_deposit_data(*,
         deposit_input=DepositInput(
             pubkey=pubkey,
             withdrawal_credentials=withdrawal_credentials,
-            proof_of_possession=sign_proof_of_possession(
+            signature=sign_proof_of_possession(
                 deposit_input=DepositInput(
                     pubkey=pubkey,
                     withdrawal_credentials=withdrawal_credentials,

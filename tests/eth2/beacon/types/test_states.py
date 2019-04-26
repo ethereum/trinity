@@ -8,9 +8,6 @@ from eth2.beacon.types.states import (
 from eth2.beacon.types.crosslink_records import (
     CrosslinkRecord,
 )
-from eth2.beacon._utils.hash import (
-    hash_eth2,
-)
 
 from tests.eth2.beacon.helpers import (
     mock_validator_record,

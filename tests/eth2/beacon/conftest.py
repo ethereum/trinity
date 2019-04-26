@@ -240,7 +240,7 @@ def sample_deposit_input_params():
     return {
         'pubkey': 123,
         'withdrawal_credentials': b'\11' * 32,
-        'proof_of_possession': (0, 0),
+        'signature': (0, 0),
     }
 
 

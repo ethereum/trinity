@@ -111,7 +111,7 @@ def test_validate_proposer_signature(
 
     proposed_block = block.copy(
         signature=bls.sign(
-            message_hash=header.signed_root,
+            message_hash=header.signing_root,
             privkey=proposer_privkey,
             domain=get_domain(
                 Fork(
