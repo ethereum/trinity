@@ -14,6 +14,7 @@ from eth_utils.toolz import (
     assoc,
     curry,
 )
+import ssz
 
 from eth2._utils.tuple import (
     update_tuple_item,
@@ -1569,18 +1570,13 @@ def test_update_latest_active_index_roots(genesis_state,
 
     result_state = _update_latest_active_index_roots(state, committee_config)
 
-    # TODO: chanege to hash_tree_root
-    index_root = hash_eth2(
-        b''.join(
-            [
-                index.to_bytes(32, 'little')
-                for index in get_active_validator_indices(
-                    state.validator_registry,
-                    # TODO: change to `per-epoch` version
-                    slot_to_epoch(state.slot, slots_per_epoch),
-                )
-            ]
-        )
+    index_root = ssz.hash_tree_root(
+        get_active_validator_indices(
+            state.validator_registry,
+            # TODO: change to `per-epoch` version
+            slot_to_epoch(state.slot, slots_per_epoch),
+        ),
+        ssz.sedes.List(ssz.uint64),
     )
 
     target_epoch = state.next_epoch(slots_per_epoch) + activation_exit_delay

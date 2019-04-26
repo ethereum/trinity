@@ -83,7 +83,6 @@ class SlashableAttestation(ssz.Serializable):
         Build the message_hashes that validators are expected to sign for an
         ``AttesterSlashing`` operation.
         """
-        # TODO: change to hash_tree_root when we have SSZ tree hashing
         return (
             AttestationDataAndCustodyBit(data=self.data, custody_bit=False).root,
             AttestationDataAndCustodyBit(data=self.data, custody_bit=True).root,
