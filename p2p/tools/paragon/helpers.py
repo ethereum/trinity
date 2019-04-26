@@ -115,7 +115,7 @@ async def get_directly_linked_peers_without_handshake(
         alice_private_key.public_key, kademlia.Address('0.0.0.0', 0, 0))
 
     use_eip8 = False
-    initiator = auth.HandshakeInitiator(alice_remote, alice_private_key, use_eip8, cancel_token)
+    initiator = auth.HandshakeInitiator(alice_remote, alice_private_key, use_eip8)
 
     f_alice: 'asyncio.Future[BasePeer]' = asyncio.Future()
     handshake_finished = asyncio.Event()
@@ -127,7 +127,7 @@ async def get_directly_linked_peers_without_handshake(
 
     async def do_handshake() -> None:
         aes_secret, mac_secret, egress_mac, ingress_mac = await auth._handshake(
-            initiator, alice_reader, alice_writer, cancel_token)
+            initiator, alice_reader, alice_writer)
 
         connection = PeerConnection(
             reader=alice_reader,
@@ -148,7 +148,7 @@ async def get_directly_linked_peers_without_handshake(
     asyncio.ensure_future(do_handshake())
 
     use_eip8 = False
-    responder = auth.HandshakeResponder(bob_remote, bob_private_key, use_eip8, cancel_token)
+    responder = auth.HandshakeResponder(bob_remote, bob_private_key, use_eip8)
     auth_cipher = await bob_reader.read(constants.ENCRYPTED_AUTH_MSG_LEN)
 
     initiator_ephemeral_pubkey, initiator_nonce, _ = decode_authentication(

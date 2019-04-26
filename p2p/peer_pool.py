@@ -2,6 +2,7 @@ from abc import (
     abstractmethod,
 )
 import asyncio
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 import operator
 from typing import (
     AsyncIterator,
@@ -83,6 +84,7 @@ TO_DISCOVERY_BROADCAST_CONFIG = BroadcastConfig(filter_endpoint=DISCOVERY_EVENTB
 COMMON_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
     PeerConnectionLost,
     TimeoutError,
+    FuturesTimeoutError,
     UnreachablePeer,
 ))
 
@@ -303,8 +305,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         try:
             self.logger.debug2("Connecting to %s...", remote)
-            # We use self.wait() as well as passing our CancelToken to handshake() as a workaround
-            # for https://github.com/ethereum/py-evm/issues/670.
             peer = await self.wait(handshake(remote, self.get_peer_factory()))
 
             return peer

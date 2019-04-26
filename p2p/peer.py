@@ -105,7 +105,7 @@ async def handshake(remote: Node, factory: 'BasePeerFactory') -> 'BasePeer':
          ingress_mac,
          reader,
          writer
-         ) = await auth.handshake(remote, factory.privkey, factory.cancel_token)
+         ) = await auth.handshake(remote, factory.privkey)
     except (ConnectionRefusedError, OSError) as e:
         raise UnreachablePeer(f"Can't reach {remote!r}") from e
     connection = PeerConnection(
