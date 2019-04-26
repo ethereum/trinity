@@ -57,12 +57,16 @@ DEFAULT_NUM_VALIDATORS = 40
 # SSZ
 @pytest.fixture(scope="function", autouse=True)
 def override_length(config):
-    BeaconState._meta.container_sedes.field_name_to_sedes["latest_randao_mixes"].length = config.LATEST_RANDAO_MIXES_LENGTH  # noqa: E501
-    BeaconState._meta.container_sedes.field_name_to_sedes["latest_crosslinks"].length = config.SHARD_COUNT  # noqa: E501
-    BeaconState._meta.container_sedes.field_name_to_sedes["latest_block_roots"].length = config.SLOTS_PER_HISTORICAL_ROOT  # noqa: E501
-    BeaconState._meta.container_sedes.field_name_to_sedes["latest_state_roots"].length = config.SLOTS_PER_HISTORICAL_ROOT  # noqa: E501
-    BeaconState._meta.container_sedes.field_name_to_sedes["latest_active_index_roots"].length = config.LATEST_ACTIVE_INDEX_ROOTS_LENGTH  # noqa: E501
-    BeaconState._meta.container_sedes.field_name_to_sedes["latest_slashed_balances"].length = config.LATEST_SLASHED_EXIT_LENGTH  # noqa: E501
+    vector_dict = {
+        "latest_randao_mixes": config.LATEST_RANDAO_MIXES_LENGTH,
+        "latest_crosslinks": config.SHARD_COUNT,
+        "latest_block_roots": config.SLOTS_PER_HISTORICAL_ROOT,
+        "latest_state_roots": config.SLOTS_PER_HISTORICAL_ROOT,
+        "latest_active_index_roots": config.LATEST_ACTIVE_INDEX_ROOTS_LENGTH,
+        "latest_slashed_balances": config.LATEST_SLASHED_EXIT_LENGTH,
+    }
+    for key, value in vector_dict.items():
+        BeaconState._meta.container_sedes.field_name_to_sedes[key].length = value
 
 
 @pytest.fixture(scope="session")
