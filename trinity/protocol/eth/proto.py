@@ -64,7 +64,7 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
         }
         cmd = Status(self.cmd_id_offset, self.snappy_support)
         self.logger.debug2("Sending ETH/Status msg: %s", resp)
-        self.send(*cmd.encode(resp))
+        self.transport.send(*cmd.encode(resp))
 
     #
     # Node Data
@@ -72,12 +72,12 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
     def send_get_node_data(self, node_hashes: Tuple[Hash32, ...]) -> None:
         cmd = GetNodeData(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(node_hashes)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     def send_node_data(self, nodes: Tuple[bytes, ...]) -> None:
         cmd = NodeData(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(nodes)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     #
     # Block Headers
@@ -102,12 +102,12 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
             'reverse': reverse
         }
         header, body = cmd.encode(data)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     def send_block_headers(self, headers: Tuple[BlockHeader, ...]) -> None:
         cmd = BlockHeaders(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(headers)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     #
     # Block Bodies
@@ -115,12 +115,12 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
     def send_get_block_bodies(self, block_hashes: Tuple[Hash32, ...]) -> None:
         cmd = GetBlockBodies(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(block_hashes)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     def send_block_bodies(self, blocks: List[BlockBody]) -> None:
         cmd = BlockBodies(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(blocks)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     #
     # Receipts
@@ -128,12 +128,12 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
     def send_get_receipts(self, block_hashes: Tuple[Hash32, ...]) -> None:
         cmd = GetReceipts(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(block_hashes)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     def send_receipts(self, receipts: List[List[Receipt]]) -> None:
         cmd = Receipts(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(receipts)
-        self.send(header, body)
+        self.transport.send(header, body)
 
     #
     # Transactions
@@ -141,4 +141,4 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
     def send_transactions(self, transactions: List[BaseTransactionFields]) -> None:
         cmd = Transactions(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode(transactions)
-        self.send(header, body)
+        self.transport.send(header, body)

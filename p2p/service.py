@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import asyncio
 import concurrent
+import datetime
 import functools
 import logging
 from typing import (
@@ -15,6 +16,7 @@ from weakref import WeakSet
 
 from cancel_token import CancelToken, OperationCancelled
 from eth_utils import (
+    humanize_seconds,
     ValidationError,
 )
 
@@ -73,6 +75,10 @@ class BaseService(ABC, CancellableMixin):
             )
         return self._logger
 
+    @property
+    def uptime(self) -> str:
+        return humanize_seconds((datetime.datetime.utcnow() - self.start_time).total_seconds())
+
     def get_event_loop(self) -> asyncio.AbstractEventLoop:
         if self._loop is None:
             return asyncio.get_event_loop()
@@ -98,6 +104,7 @@ class BaseService(ABC, CancellableMixin):
         try:
             async with self._run_lock:
                 self.events.started.set()
+                self.start_time = datetime.datetime.utcnow()
                 await self._run()
         except OperationCancelled as e:
             self.logger.debug("%s finished: %s", self, e)

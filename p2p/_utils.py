@@ -1,13 +1,11 @@
 import asyncio
 from concurrent.futures import Executor, ProcessPoolExecutor
-import datetime
 import logging
 import os
 import signal
 import time
 from typing import (
     AsyncGenerator,
-    Tuple,
     Union,
 )
 
@@ -44,13 +42,6 @@ def get_devp2p_cmd_id(msg: bytes) -> int:
     as an integer.
     """
     return rlp.decode(msg[:1], sedes=rlp.sedes.big_endian_int)
-
-
-def time_since(start_time: datetime.datetime) -> Tuple[int, int, int, int]:
-    delta = datetime.datetime.now() - start_time
-    hours, remainder = divmod(delta.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return delta.days, hours, minutes, seconds
 
 
 CPU_EMPTY_VALUES = {None, 0}

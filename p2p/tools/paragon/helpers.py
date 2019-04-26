@@ -26,12 +26,12 @@ from p2p.exceptions import (
 from p2p.peer import (
     BasePeer,
     BasePeerFactory,
-    PeerConnection,
 )
 from p2p.p2p_proto import (
     DisconnectReason,
     Hello,
 )
+from p2p.transport import Transport
 
 
 from .peer import (
@@ -129,7 +129,9 @@ async def get_directly_linked_peers_without_handshake(
         aes_secret, mac_secret, egress_mac, ingress_mac = await auth._handshake(
             initiator, alice_reader, alice_writer)
 
-        connection = PeerConnection(
+        transport = Transport(
+            remote=alice_remote,
+            private_key=alice_factory.privkey,
             reader=alice_reader,
             writer=alice_writer,
             aes_secret=aes_secret,
@@ -137,10 +139,7 @@ async def get_directly_linked_peers_without_handshake(
             egress_mac=egress_mac,
             ingress_mac=ingress_mac,
         )
-        alice = alice_factory.create_peer(
-            alice_remote,
-            connection,
-        )
+        alice = alice_factory.create_peer(transport)
 
         f_alice.set_result(alice)
         handshake_finished.set()
@@ -164,9 +163,11 @@ async def get_directly_linked_peers_without_handshake(
     aes_secret, mac_secret, egress_mac, ingress_mac = responder.derive_secrets(
         initiator_nonce, responder_nonce, initiator_ephemeral_pubkey,
         auth_cipher, auth_ack_ciphertext)
-    assert egress_mac.digest() == alice.ingress_mac.digest()
-    assert ingress_mac.digest() == alice.egress_mac.digest()
-    connection = PeerConnection(
+    assert egress_mac.digest() == alice.transport._ingress_mac.digest()
+    assert ingress_mac.digest() == alice.transport._egress_mac.digest()
+    transport = Transport(
+        remote=bob_remote,
+        private_key=bob_factory.privkey,
         reader=bob_reader,
         writer=bob_writer,
         aes_secret=aes_secret,
@@ -174,10 +175,7 @@ async def get_directly_linked_peers_without_handshake(
         egress_mac=egress_mac,
         ingress_mac=ingress_mac,
     )
-    bob = bob_factory.create_peer(
-        bob_remote,
-        connection,
-    )
+    bob = bob_factory.create_peer(transport)
 
     return alice, bob
 
@@ -276,9 +274,8 @@ async def get_directly_linked_v4_and_v5_peers(
     )
 
     # Tweaking the P2P Protocol Versions for Alice
-    alice.base_protocol.version = 4
-    # The below type ignore is because mypy still doesn't support method overwrites
-    alice.process_p2p_handshake = MethodType(process_v4_p2p_handshake, alice)  # type: ignore
+    alice.base_protocol.version = 4  # type: ignore  # mypy doesn't like us overwriting class variables  # noqa: E501
+    alice.process_p2p_handshake = MethodType(process_v4_p2p_handshake, alice)  # type: ignore  # mypy still support method overwrites  # noqa: E501
 
     # Perform the base protocol (P2P) handshake.
     await asyncio.gather(alice.do_p2p_handshake(), bob.do_p2p_handshake())
