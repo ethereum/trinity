@@ -181,13 +181,17 @@ def sign_transaction(*,
     )
 
 
+SAMPLE_HASH_1 = Hash32(b'\x11' * 32)
+SAMPLE_HASH_2 = Hash32(b'\x22' * 32)
+
+
 def create_block_header_with_signature(
         state: BeaconState,
         block_body_root: Hash32,
         privkey: int,
         slots_per_epoch: int,
-        previous_block_root: bytes=b'\x11' * 32,
-        state_root: bytes=b'\x22' * 32)-> BeaconBlockHeader:
+        previous_block_root: Hash32=SAMPLE_HASH_1,
+        state_root: Hash32=SAMPLE_HASH_2)-> BeaconBlockHeader:
     block_header = BeaconBlockHeader(
         slot=state.slot,
         previous_block_root=previous_block_root,

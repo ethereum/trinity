@@ -16,9 +16,6 @@ from eth_typing import (
     BLSSignature,
     Hash32,
 )
-from eth_utils import (
-    encode_hex,
-)
 
 import ssz
 from ssz.sedes import (
@@ -42,60 +39,15 @@ from eth2.beacon.typing import (
 
 from .attestations import Attestation
 from .attester_slashings import AttesterSlashing
+from .block_headers import BeaconBlockHeader
 from .deposits import Deposit
 from .eth1_data import Eth1Data
+from .proposer_slashings import ProposerSlashing
 from .transfers import Transfer
 from .voluntary_exits import VoluntaryExit
 
 if TYPE_CHECKING:
-    from .proposer_slashings import ProposerSlashing  # noqa: F401
     from eth2.beacon.db.chain import BaseBeaconChainDB  # noqa: F401
-
-
-class BeaconBlockHeader(ssz.SignedSerializable):
-
-    fields = [
-        ('slot', uint64),
-        ('previous_block_root', bytes32),
-        ('state_root', bytes32),
-        ('block_body_root', bytes32),
-        ('signature', bytes96),
-    ]
-
-    def __init__(self,
-                 *,
-                 slot: uint64,
-                 previous_block_root: bytes32,
-                 state_root: bytes32,
-                 block_body_root: bytes32,
-                 signature: BLSSignature=EMPTY_SIGNATURE):
-        super().__init__(
-            slot=slot,
-            previous_block_root=previous_block_root,
-            state_root=state_root,
-            block_body_root=block_body_root,
-            signature=signature,
-        )
-
-    def __repr__(self) -> str:
-        return '<BlockHeader #{0} {1}>'.format(
-            self.slot,
-            encode_hex(self.signing_root)[2:10],
-        )
-
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root
-
-    _signing_root = None
-
-    @property
-    def signing_root(self) -> Hash32:
-        if self._signing_root is None:
-            self._signing_root = super().signing_root
-        return Hash32(self._signing_root)
 
 
 class BeaconBlockBody(ssz.Serializable):
@@ -103,7 +55,7 @@ class BeaconBlockBody(ssz.Serializable):
     fields = [
         ('randao_reveal', bytes96),
         ('eth1_data', Eth1Data),
-        ('proposer_slashings', List('ProposerSlashing')),
+        ('proposer_slashings', List(ProposerSlashing)),
         ('attester_slashings', List(AttesterSlashing)),
         ('attestations', List(Attestation)),
         ('deposits', List(Deposit)),
@@ -115,7 +67,7 @@ class BeaconBlockBody(ssz.Serializable):
                  *,
                  randao_reveal: bytes96,
                  eth1_data: Eth1Data,
-                 proposer_slashings: Sequence['ProposerSlashing'],
+                 proposer_slashings: Sequence[ProposerSlashing],
                  attester_slashings: Sequence[AttesterSlashing],
                  attestations: Sequence[Attestation],
                  deposits: Sequence[Deposit],
@@ -322,4 +274,14 @@ class BeaconBlock(BaseBeaconBlock):
             state_root=block.state_root,
             body=block.body,
             signature=block.signature,
+        )
+
+    @classmethod
+    def from_header(cls, header: BeaconBlockHeader) -> 'BeaconBlock':
+        return cls(
+            slot=header.slot,
+            previous_block_root=header.previous_block_root,
+            state_root=header.state_root,
+            signature=header.signature,
+            body=BeaconBlockBody.create_empty_body(),
         )
