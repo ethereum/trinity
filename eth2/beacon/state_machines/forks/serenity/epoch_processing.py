@@ -1184,7 +1184,6 @@ def _update_historical_roots(state: BeaconState,
         historical_batch = HistoricalBatch(
             block_roots=state.latest_block_roots,
             state_roots=state.latest_state_roots,
-            slots_per_historical_root=config.SLOTS_PER_HISTORICAL_ROOT,
         )
         updated_historical_roots += (historical_batch.root,)
 
