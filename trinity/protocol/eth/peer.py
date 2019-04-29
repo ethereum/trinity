@@ -28,13 +28,12 @@ from .commands import (
     NewBlock,
     Status,
 )
-from .constants import MAX_HEADERS_FETCH
+from . import constants
 from .proto import ETHProtocol
 from .handlers import ETHExchangeHandler
 
 
 class ETHPeer(BaseChainPeer):
-    max_headers_fetch = MAX_HEADERS_FETCH
 
     supported_sub_protocols = [ETHProtocol]
     sub_proto: ETHProtocol = None
@@ -44,6 +43,10 @@ class ETHPeer(BaseChainPeer):
     def get_extra_stats(self) -> List[str]:
         stats_pairs = self.requests.get_stats().items()
         return ['%s: %s' % (cmd_name, stats) for cmd_name, stats in stats_pairs]
+
+    @property
+    def max_headers_fetch(self) -> int:
+        return constants.MAX_HEADERS_FETCH
 
     @property
     def requests(self) -> ETHExchangeHandler:

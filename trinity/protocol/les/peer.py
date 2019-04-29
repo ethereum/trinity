@@ -30,13 +30,13 @@ from trinity.protocol.common.peer import (
     BaseChainPeerPool,
 )
 
+from . import (
+    constants,
+)
 from .commands import (
     Announce,
     Status,
     StatusV2,
-)
-from .constants import (
-    MAX_HEADERS_FETCH,
 )
 from .proto import (
     LESProtocol,
@@ -46,7 +46,6 @@ from .handlers import LESExchangeHandler
 
 
 class LESPeer(BaseChainPeer):
-    max_headers_fetch = MAX_HEADERS_FETCH
 
     supported_sub_protocols = [LESProtocol, LESProtocolV2]
     sub_proto: LESProtocol = None
@@ -56,6 +55,10 @@ class LESPeer(BaseChainPeer):
     def get_extra_stats(self) -> List[str]:
         stats_pairs = self.requests.get_stats().items()
         return ['%s: %s' % (cmd_name, stats) for cmd_name, stats in stats_pairs]
+
+    @property
+    def max_headers_fetch(self) -> int:
+        return constants.MAX_HEADERS_FETCH
 
     @property
     def requests(self) -> LESExchangeHandler:
