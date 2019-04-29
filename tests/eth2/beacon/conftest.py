@@ -21,6 +21,7 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
+from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.eth1_data import Eth1Data
@@ -75,6 +76,10 @@ def override_length(config):
     }
     for key, value in historical_batch_vector_dict.items():
         HistoricalBatch._meta.container_sedes.field_name_to_sedes[key].length = value
+
+    Deposit._meta.container_sedes.field_name_to_sedes['proof'].length = (
+        config.DEPOSIT_CONTRACT_TREE_DEPTH
+    )
 
 
 @pytest.fixture(scope="session")
