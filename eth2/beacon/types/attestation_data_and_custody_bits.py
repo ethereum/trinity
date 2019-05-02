@@ -2,9 +2,6 @@ import ssz
 from ssz.sedes import (
     boolean,
 )
-from eth_typing import (
-    Hash32,
-)
 
 from .attestation_data import (
     AttestationData,
@@ -28,9 +25,3 @@ class AttestationDataAndCustodyBit(ssz.Serializable):
             data=data,
             custody_bit=custody_bit,
         )
-
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root

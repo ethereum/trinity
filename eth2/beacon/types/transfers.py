@@ -1,7 +1,6 @@
 from eth_typing import (
     BLSPubkey,
     BLSSignature,
-    Hash32,
 )
 import ssz
 from ssz.sedes import (
@@ -54,9 +53,3 @@ class Transfer(ssz.Serializable):
             pubkey=pubkey,
             signature=signature,
         )
-
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root

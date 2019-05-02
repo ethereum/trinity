@@ -39,7 +39,7 @@ from eth2.beacon.tools.builder.initializer import (
     create_mock_genesis,
 )
 from eth2.beacon.tools.misc.ssz_vector import (
-    override_vector_length,
+    override_vector_lengths,
 )
 from eth2.beacon.tools.builder.proposer import (
     _get_proposer_index,
@@ -83,7 +83,7 @@ genesis_data = BeaconGenesisData(
 beacon_chain_config = BeaconChainConfig(chain_name='TestTestTest', genesis_data=genesis_data)
 chain_class = beacon_chain_config.beacon_chain_class
 
-override_vector_length(XIAO_LONG_BAO_CONFIG)
+override_vector_lengths(XIAO_LONG_BAO_CONFIG)
 
 
 class FakeProtocol:

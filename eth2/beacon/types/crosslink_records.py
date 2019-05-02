@@ -28,9 +28,3 @@ class CrosslinkRecord(ssz.Serializable):
             epoch=epoch,
             crosslink_data_root=crosslink_data_root,
         )
-
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root

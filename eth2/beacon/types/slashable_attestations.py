@@ -52,12 +52,6 @@ class SlashableAttestation(ssz.Serializable):
             aggregate_signature,
         )
 
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root
-
     @property
     def are_validator_indices_ascending(self) -> bool:
         for i in range(len(self.validator_indices) - 1):

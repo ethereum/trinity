@@ -185,12 +185,6 @@ class BeaconState(ssz.Serializable):
             encode_hex(self.root)[2:10],
         )
 
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root
-
     @property
     def num_validators(self) -> int:
         return len(self.validator_registry)

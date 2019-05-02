@@ -30,7 +30,7 @@ from eth2.beacon.on_genesis import (
     get_genesis_block,
 )
 from eth2.beacon.tools.misc.ssz_vector import (
-    override_vector_length,
+    override_vector_lengths,
 )
 from eth2.beacon.types.blocks import (
     BeaconBlockBody,
@@ -60,8 +60,8 @@ SAMPLE_SIGNATURE = b'\56' * 96
 
 # SSZ
 @pytest.fixture(scope="function", autouse=True)
-def override_length(config):
-    override_vector_length(config)
+def override_lengths(config):
+    override_vector_lengths(config)
 
 
 @pytest.fixture(scope="session")

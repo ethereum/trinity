@@ -33,18 +33,3 @@ class DepositInput(ssz.SignedSerializable):
             withdrawal_credentials=withdrawal_credentials,
             signature=signature,
         )
-
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root
-
-    _signing_root = None
-
-    @property
-    def signing_root(self) -> Hash32:
-        # Use SSZ built-in function
-        if self._signing_root is None:
-            self._signing_root = super().signing_root
-        return self._signing_root

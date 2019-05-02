@@ -126,12 +126,6 @@ class BeaconBlockBody(ssz.Serializable):
             transfers=body.transfers,
         )
 
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root
-
 
 class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
     fields = [
@@ -170,20 +164,6 @@ class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
             self.slot,
             encode_hex(self.signing_root)[2:10],
         )
-
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root
-
-    _signing_root = None
-
-    @property
-    def signing_root(self) -> Hash32:
-        if self._signing_root is None:
-            self._signing_root = super().signing_root
-        return Hash32(self._signing_root)
 
     @property
     def num_attestations(self) -> int:

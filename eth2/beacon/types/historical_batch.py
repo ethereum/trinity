@@ -30,9 +30,3 @@ class HistoricalBatch(ssz.Serializable):
             block_roots=block_roots,
             state_roots=state_roots,
         )
-
-    _root = None
-
-    @property
-    def root(self) -> Hash32:
-        return super().root
