@@ -160,9 +160,10 @@ class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
         )
 
     def __repr__(self) -> str:
-        return '<Block #{0} {1}>'.format(
-            self.slot,
-            encode_hex(self.signing_root)[2:10],
+        return (
+            f'<Block #{self.slot} '
+            f'signing_root={encode_hex(self.signing_root)[2:10]} '
+            f'root={encode_hex(self.root)[2:10]}>'
         )
 
     @property
