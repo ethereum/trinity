@@ -14,6 +14,7 @@ from eth2.beacon._utils.hash import (
     hash_eth2,
 )
 from eth2.beacon.constants import (
+    EMPTY_SIGNATURE,
     GWEI_PER_ETH,
     FAR_FUTURE_EPOCH,
 )
@@ -55,7 +56,7 @@ def test_get_temporary_block_header(sample_block):
     assert header.previous_block_root == sample_block.previous_block_root
     assert header.state_root == ZERO_HASH32
     assert header.block_body_root == sample_block.body.root
-    assert header.signature == sample_block.signature
+    assert header.signature == EMPTY_SIGNATURE
 
 
 def generate_mock_latest_historical_roots(
