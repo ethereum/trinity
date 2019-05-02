@@ -5,6 +5,7 @@ from typing import (
     Iterator,
 )
 
+import cachetools.func
 from eth_utils import ValidationError
 import rocksdb
 
@@ -65,6 +66,14 @@ class RocksDB(BaseAtomicDB):
         self.db.write(batch)
 
 
+# A readonly database does only see the data as it was at the point of its creation.
+# We assign a TTL to readonly database instances to guarantee that we initiate a
+# fresh instance after the TTL has passed.
+# A TTL of 100 ms should achieve that the data is reasonable fresh, yet multiple reads
+# that are made in one tick do not cause re-initialzing a fresh readonly db over and over.
+READ_ONLY_DB_TTL = 0.1
+
+
 class ReadonlyRocksDB(BaseAtomicDB):
     logger = logging.getLogger("trinity.db.rocksdb.ReadonlyRocksDB")
 
@@ -75,6 +84,7 @@ class ReadonlyRocksDB(BaseAtomicDB):
 
         self._db_path = db_path
 
+    @cachetools.func.ttl_cache(ttl=READ_ONLY_DB_TTL)
     def _initialize_db(self) -> rocksdb.DB:
         return rocksdb.DB(str(self._db_path), rocksdb.Options(), read_only=True)
 
@@ -94,6 +104,9 @@ class ReadonlyRocksDB(BaseAtomicDB):
 
     def __delitem__(self, key: bytes) -> None:
         raise NotImplementedError("Readonly connection")
+
+    def __hash__(self) -> int:
+        return hash(self._db_path)
 
     @contextmanager
     def atomic_batch(self) -> Iterator['RocksDBWriteBatch']:
