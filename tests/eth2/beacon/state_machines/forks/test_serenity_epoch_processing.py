@@ -1573,7 +1573,6 @@ def test_update_latest_active_index_roots(genesis_state,
     index_root = ssz.hash_tree_root(
         get_active_validator_indices(
             state.validator_registry,
-            # TODO: change to `per-epoch` version
             slot_to_epoch(state.slot, slots_per_epoch),
         ),
         ssz.sedes.List(ssz.uint64),

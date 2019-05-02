@@ -628,5 +628,4 @@ def _decode_block(block_ssz: bytes, sedes: Type[BaseBeaconBlock]) -> BaseBeaconB
 
 @functools.lru_cache(128)
 def _decode_state(state_ssz: bytes, state_class: Type[BeaconState]) -> BeaconState:
-    # TODO: forkable BeaconState fields?
     return ssz.decode(state_ssz, sedes=state_class)

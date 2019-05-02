@@ -362,9 +362,7 @@ def _corrupt_signature(slots_per_epoch, params, fork):
 
 
 def _create_slashable_attestation_messages(params):
-    # TODO update when we move to `ssz` tree hash
-    votes = SlashableAttestation(**params)
-    return votes.message_hashes
+    return SlashableAttestation(**params).message_hashes
 
 
 @pytest.mark.parametrize(

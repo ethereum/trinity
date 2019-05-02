@@ -96,7 +96,6 @@ def test_add_pending_validator(sample_beacon_state_params,
         validator,
         amount,
     )
-    print(f'state.validator_registry[-1].root={state.validator_registry[-1].root}')
 
     assert state.validator_registry[-1] == validator
 
