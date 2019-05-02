@@ -461,7 +461,7 @@ def test_process_crosslinks(
         success_crosslink_in_previous_epoch,
         success_crosslink_in_current_epoch,
         sample_attestation_data_params,
-        sample_attestation_params):
+        sample_pending_attestation_record_params):
     shard = 1
     previous_epoch_crosslink_data_root = hash_eth2(b'previous_epoch_crosslink_data_root')
     current_epoch_crosslink_data_root = hash_eth2(b'current_epoch_crosslink_data_root')
@@ -504,7 +504,7 @@ def test_process_crosslinks(
                         aggregation_bitfield, committee.index(v_index))
                 # Generate the attestation
                 previous_epoch_attestations.append(
-                    Attestation(**sample_attestation_params).copy(
+                    PendingAttestationRecord(**sample_pending_attestation_record_params).copy(
                         aggregation_bitfield=aggregation_bitfield,
                         data=AttestationData(**sample_attestation_data_params).copy(
                             slot=slot_in_previous_epoch,
@@ -543,7 +543,7 @@ def test_process_crosslinks(
                         aggregation_bitfield, committee.index(v_index))
                 # Generate the attestation
                 current_epoch_attestations.append(
-                    Attestation(**sample_attestation_params).copy(
+                    PendingAttestationRecord(**sample_pending_attestation_record_params).copy(
                         aggregation_bitfield=aggregation_bitfield,
                         data=AttestationData(**sample_attestation_data_params).copy(
                             slot=slot_in_current_epoch,

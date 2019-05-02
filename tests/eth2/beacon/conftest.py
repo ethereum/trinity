@@ -13,7 +13,6 @@ from eth2.configs import (
     CommitteeConfig,
 )
 from eth2.beacon.constants import (
-    EMPTY_SIGNATURE,
     FAR_FUTURE_EPOCH,
 )
 from eth2.beacon.helpers import (
@@ -54,6 +53,8 @@ from tests.eth2.beacon.helpers import (
 DEFAULT_SHUFFLING_SEED = b'\00' * 32
 DEFAULT_RANDAO = b'\45' * 32
 DEFAULT_NUM_VALIDATORS = 40
+
+SAMPLE_SIGNATURE = b'\56' * 96
 
 
 # SSZ
@@ -124,7 +125,7 @@ def sample_attestation_params(sample_attestation_data_params):
         'aggregation_bitfield': b'\12' * 16,
         'data': AttestationData(**sample_attestation_data_params),
         'custody_bitfield': b'\34' * 16,
-        'aggregate_signature': [0, 0],
+        'aggregate_signature': SAMPLE_SIGNATURE,
     }
 
 
@@ -153,7 +154,7 @@ def sample_attestation_data_and_custody_bit_params(sample_attestation_data_param
 @pytest.fixture
 def sample_beacon_block_body_params(sample_eth1_data_params):
     return {
-        'randao_reveal': EMPTY_SIGNATURE,
+        'randao_reveal': SAMPLE_SIGNATURE,
         'eth1_data': Eth1Data(**sample_eth1_data_params),
         'proposer_slashings': (),
         'attester_slashings': (),
@@ -171,7 +172,7 @@ def sample_beacon_block_params(sample_beacon_block_body_params,
         'slot': genesis_slot + 10,
         'previous_block_root': ZERO_HASH32,
         'state_root': b'\x55' * 32,
-        'signature': EMPTY_SIGNATURE,
+        'signature': SAMPLE_SIGNATURE,
         'body': BeaconBlockBody(**sample_beacon_block_body_params)
     }
 
@@ -255,9 +256,9 @@ def sample_crosslink_record_params():
 @pytest.fixture
 def sample_deposit_input_params():
     return {
-        'pubkey': 123,
+        'pubkey': b'\x67' * 48,
         'withdrawal_credentials': b'\11' * 32,
-        'signature': (0, 0),
+        'signature': SAMPLE_SIGNATURE,
     }
 
 
@@ -284,7 +285,7 @@ def sample_voluntary_exit_params():
     return {
         'epoch': 123,
         'validator_index': 15,
-        'signature': EMPTY_SIGNATURE,
+        'signature': SAMPLE_SIGNATURE,
     }
 
 
@@ -333,7 +334,7 @@ def sample_slashable_attestation_params(sample_attestation_data_params):
         'validator_indices': (10, 11, 12, 15, 28),
         'data': AttestationData(**sample_attestation_data_params),
         'custody_bitfield': b'\00' * 4,
-        'aggregate_signature': EMPTY_SIGNATURE,
+        'aggregate_signature': SAMPLE_SIGNATURE,
     }
 
 
@@ -362,7 +363,7 @@ def sample_attester_slashing_params(sample_slashable_attestation_params):
 @pytest.fixture
 def sample_validator_record_params():
     return {
-        'pubkey': 123,
+        'pubkey': b'\x67' * 48,
         'withdrawal_credentials': b'\x01' * 32,
         'activation_epoch': FAR_FUTURE_EPOCH,
         'exit_epoch': FAR_FUTURE_EPOCH,
