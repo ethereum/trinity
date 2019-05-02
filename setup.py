@@ -53,6 +53,7 @@ deps = {
         "flake8-bugbear==18.8.0",
         "mypy==0.701",
         "sqlalchemy-stubs==0.1",
+        "black",
     ],
     "doc": [
         "pytest~=3.2",
