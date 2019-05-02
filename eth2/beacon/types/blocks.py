@@ -16,7 +16,9 @@ from eth_typing import (
     BLSSignature,
     Hash32,
 )
-
+from eth_utils import (
+    encode_hex,
+)
 import ssz
 from ssz.sedes import (
     List,
@@ -163,11 +165,11 @@ class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
             signature=signature,
         )
 
-    # def __repr__(self) -> str:
-    #     return '<Block #{0} {1}>'.format(
-    #         self.slot,
-    #         encode_hex(self.signing_root)[2:10],
-    #     )
+    def __repr__(self) -> str:
+        return '<Block #{0} {1}>'.format(
+            self.slot,
+            encode_hex(self.signing_root)[2:10],
+        )
 
     _root = None
 
