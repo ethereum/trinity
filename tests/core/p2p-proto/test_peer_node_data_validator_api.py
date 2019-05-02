@@ -4,21 +4,14 @@ import random
 
 import pytest
 
-from eth_utils import (
-    keccak,
-)
+from eth_utils import keccak
 
-from tests.core.peer_helpers import (
-    get_directly_linked_peers,
-)
+from tests.core.peer_helpers import get_directly_linked_peers
 
 
 @pytest.fixture
 async def eth_peer_and_remote(request, event_loop):
-    peer, remote = await get_directly_linked_peers(
-        request,
-        event_loop,
-    )
+    peer, remote = await get_directly_linked_peers(request, event_loop)
     return peer, remote
 
 
@@ -37,18 +30,15 @@ def mk_node_data(n):
 
 
 @pytest.mark.parametrize(
-    'node_keys,nodes',
+    "node_keys,nodes",
     (
-        (
-            (keccak(b''),),
-            (b'',),
-        ),
+        ((keccak(b""),), (b"",)),
         mk_node_data(1),
         mk_node_data(4),
         mk_node_data(20),
         mk_node_data(128),
         mk_node_data(384),
-    )
+    ),
 )
 @pytest.mark.asyncio
 async def test_eth_peer_get_node_data_round_trip(eth_peer_and_remote, node_keys, nodes):
@@ -107,7 +97,9 @@ async def test_eth_peer_get_headers_round_trip_with_noise(eth_peer_and_remote):
 
 
 @pytest.mark.asyncio
-async def test_eth_peer_get_headers_round_trip_does_not_match_invalid_response(eth_peer_and_remote):
+async def test_eth_peer_get_headers_round_trip_does_not_match_invalid_response(
+    eth_peer_and_remote
+):
     peer, remote = eth_peer_and_remote
 
     node_keys, nodes = mk_node_data(32)

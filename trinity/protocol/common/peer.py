@@ -1,18 +1,9 @@
 from abc import abstractmethod
 import operator
 import random
-from typing import (
-    Dict,
-    List,
-    NamedTuple,
-    Tuple,
-    Type,
-)
+from typing import Dict, List, NamedTuple, Tuple, Type
 
-from eth_typing import (
-    BlockNumber,
-    Hash32,
-)
+from eth_typing import BlockNumber, Hash32
 
 from eth_utils.toolz import groupby
 
@@ -21,22 +12,16 @@ from eth.vm.base import BaseVM
 
 from p2p.exceptions import NoConnectedPeers
 from p2p.kademlia import Node
-from p2p.peer import (
-    BasePeer,
-    BasePeerFactory,
-)
-from p2p.peer_pool import (
-    BasePeerPool,
-)
-from p2p.tracking.connection import (
-    BaseConnectionTracker,
-    NoopConnectionTracker,
-)
+from p2p.peer import BasePeer, BasePeerFactory
+from p2p.peer_pool import BasePeerPool
+from p2p.tracking.connection import BaseConnectionTracker, NoopConnectionTracker
 
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.common.handlers import BaseChainExchangeHandler
 
-from trinity.plugins.builtin.network_db.connection.tracker import ConnectionTrackerClient
+from trinity.plugins.builtin.network_db.connection.tracker import (
+    ConnectionTrackerClient,
+)
 
 from .boot import DAOCheckBootManager
 from .context import ChainContext
@@ -86,7 +71,9 @@ class BaseChainPeer(BasePeer):
     async def _get_local_genesis_hash(self) -> Hash32:
         if self._local_genesis_hash is None:
             self._local_genesis_hash = await self.wait(
-                self.headerdb.coro_get_canonical_block_hash(BlockNumber(GENESIS_BLOCK_NUMBER))
+                self.headerdb.coro_get_canonical_block_hash(
+                    BlockNumber(GENESIS_BLOCK_NUMBER)
+                )
             )
         return self._local_genesis_hash
 
@@ -127,7 +114,7 @@ class BaseChainPeerPool(BasePeerPool):
         peers = tuple(self.connected_nodes.values())
         if not peers:
             raise NoConnectedPeers()
-        peers_by_td = groupby(operator.attrgetter('head_td'), peers)
+        peers_by_td = groupby(operator.attrgetter("head_td"), peers)
         max_td = max(peers_by_td.keys())
         return random.choice(peers_by_td[max_td])
 

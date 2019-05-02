@@ -1,32 +1,18 @@
-from typing import (
-    Iterable,
-)
-from eth_utils import (
-    to_tuple,
-    ValidationError,
-)
+from typing import Iterable
+from eth_utils import to_tuple, ValidationError
 
-from eth2.configs import (
-    Eth2Config,
-    CommitteeConfig,
-)
+from eth2.configs import Eth2Config, CommitteeConfig
 from eth2.beacon.validator_status_helpers import (
     initiate_validator_exit,
     slash_validator,
 )
-from eth2.beacon.typing import (
-    ValidatorIndex,
-)
-from eth2.beacon.committee_helpers import (
-    slot_to_epoch,
-)
+from eth2.beacon.typing import ValidatorIndex
+from eth2.beacon.committee_helpers import slot_to_epoch
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.deposit_helpers import (
-    process_deposit,
-)
+from eth2.beacon.deposit_helpers import process_deposit
 
 from .block_validation import (
     validate_attestation,
@@ -37,9 +23,9 @@ from .block_validation import (
 )
 
 
-def process_proposer_slashings(state: BeaconState,
-                               block: BaseBeaconBlock,
-                               config: Eth2Config) -> BeaconState:
+def process_proposer_slashings(
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
+) -> BeaconState:
     if len(block.body.proposer_slashings) > config.MAX_PROPOSER_SLASHINGS:
         raise ValidationError(
             f"The block ({block}) has too many proposer slashings:\n"
@@ -63,21 +49,21 @@ def process_proposer_slashings(state: BeaconState,
 
 
 @to_tuple
-def _get_slashable_indices(state: BeaconState,
-                           config: Eth2Config,
-                           attester_slashing: AttesterSlashing) -> Iterable[ValidatorIndex]:
+def _get_slashable_indices(
+    state: BeaconState, config: Eth2Config, attester_slashing: AttesterSlashing
+) -> Iterable[ValidatorIndex]:
     for index in attester_slashing.slashable_attestation_1.validator_indices:
         should_be_slashed = (
-            index in attester_slashing.slashable_attestation_2.validator_indices and
-            not state.validator_registry[index].slashed
+            index in attester_slashing.slashable_attestation_2.validator_indices
+            and not state.validator_registry[index].slashed
         )
         if should_be_slashed:
             yield index
 
 
-def process_attester_slashings(state: BeaconState,
-                               block: BaseBeaconBlock,
-                               config: Eth2Config) -> BeaconState:
+def process_attester_slashings(
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
+) -> BeaconState:
     if len(block.body.attester_slashings) > config.MAX_ATTESTER_SLASHINGS:
         raise ValidationError(
             f"The block ({block}) has too many attester slashings:\n"
@@ -109,9 +95,9 @@ def process_attester_slashings(state: BeaconState,
     return state
 
 
-def process_attestations(state: BeaconState,
-                         block: BaseBeaconBlock,
-                         config: Eth2Config) -> BeaconState:
+def process_attestations(
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
+) -> BeaconState:
     """
     Implements 'per-block-processing.operations.attestations' portion of Phase 0 spec:
     https://github.com/ethereum/eth2.0-specs/blob/master/specs/core/0_beacon-chain.md#attestations-1
@@ -144,7 +130,10 @@ def process_attestations(state: BeaconState,
     new_previous_epoch_pending_attestations = []
     new_current_epoch_pending_attestations = []
     for attestation in block.body.attestations:
-        if slot_to_epoch(attestation.data.slot, config.SLOTS_PER_EPOCH) == current_epoch:
+        if (
+            slot_to_epoch(attestation.data.slot, config.SLOTS_PER_EPOCH)
+            == current_epoch
+        ):
             new_current_epoch_pending_attestations.append(
                 PendingAttestation(
                     aggregation_bitfield=attestation.aggregation_bitfield,
@@ -153,7 +142,10 @@ def process_attestations(state: BeaconState,
                     inclusion_slot=state.slot,
                 )
             )
-        elif slot_to_epoch(attestation.data.slot, config.SLOTS_PER_EPOCH) == previous_epoch:
+        elif (
+            slot_to_epoch(attestation.data.slot, config.SLOTS_PER_EPOCH)
+            == previous_epoch
+        ):
             new_previous_epoch_pending_attestations.append(
                 PendingAttestation(
                     aggregation_bitfield=attestation.aggregation_bitfield,
@@ -165,18 +157,20 @@ def process_attestations(state: BeaconState,
 
     state = state.copy(
         previous_epoch_attestations=(
-            state.previous_epoch_attestations + tuple(new_previous_epoch_pending_attestations)
+            state.previous_epoch_attestations
+            + tuple(new_previous_epoch_pending_attestations)
         ),
         current_epoch_attestations=(
-            state.current_epoch_attestations + tuple(new_current_epoch_pending_attestations)
+            state.current_epoch_attestations
+            + tuple(new_current_epoch_pending_attestations)
         ),
     )
     return state
 
 
-def process_voluntary_exits(state: BeaconState,
-                            block: BaseBeaconBlock,
-                            config: Eth2Config) -> BeaconState:
+def process_voluntary_exits(
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
+) -> BeaconState:
     if len(block.body.voluntary_exits) > config.MAX_VOLUNTARY_EXITS:
         raise ValidationError(
             f"The block ({block}) has too many voluntary exits:\n"
@@ -197,9 +191,9 @@ def process_voluntary_exits(state: BeaconState,
     return state
 
 
-def process_deposits(state: BeaconState,
-                     block: BaseBeaconBlock,
-                     config: Eth2Config) -> BeaconState:
+def process_deposits(
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
+) -> BeaconState:
     if len(block.body.deposits) > config.MAX_DEPOSITS:
         raise ValidationError(
             f"The block ({block}) has too many deposits:\n"

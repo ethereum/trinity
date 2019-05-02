@@ -1,18 +1,14 @@
-from typing import (
-    Tuple,
-)
+from typing import Tuple
 
 from eth2.beacon.types.blocks import BaseBeaconBlock
 
 from trinity.protocol.common.trackers import BasePerformanceTracker
-from trinity.protocol.bcc.requests import (
-    GetBeaconBlocksRequest,
-)
+from trinity.protocol.bcc.requests import GetBeaconBlocksRequest
 
 
-class GetBeaconBlocksTracker(BasePerformanceTracker[GetBeaconBlocksRequest,
-                                                    Tuple[BaseBeaconBlock, ...]]):
-
+class GetBeaconBlocksTracker(
+    BasePerformanceTracker[GetBeaconBlocksRequest, Tuple[BaseBeaconBlock, ...]]
+):
     def _get_request_size(self, request: GetBeaconBlocksRequest) -> int:
         return request.command_payload["max_blocks"]
 

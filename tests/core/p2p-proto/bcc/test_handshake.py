@@ -4,14 +4,10 @@ import asyncio
 
 from p2p.exceptions import HandshakeFailure
 
-from eth2.beacon.types.blocks import (
-    BeaconBlock,
-)
+from eth2.beacon.types.blocks import BeaconBlock
 
 from trinity.protocol.bcc.proto import BCCProtocol
-from trinity.protocol.bcc.commands import (
-    Status,
-)
+from trinity.protocol.bcc.commands import Status
 
 from .helpers import (
     get_directly_linked_peers,
@@ -56,8 +52,7 @@ async def test_unidirectional_handshake():
     )
     alice_chain_db = alice.context.chain_db
     alice_genesis = await alice_chain_db.coro_get_canonical_block_by_slot(
-        SERENITY_CONFIG.GENESIS_SLOT,
-        BeaconBlock,
+        SERENITY_CONFIG.GENESIS_SLOT, BeaconBlock
     )
     alice_genesis_root = alice_genesis.signing_root
     alice_head = await alice_chain_db.coro_get_canonical_head(BeaconBlock)
@@ -83,10 +78,7 @@ async def test_unidirectional_handshake():
     # stop cleanly
     asyncio.ensure_future(alice.run())
     asyncio.ensure_future(bob.run())
-    await asyncio.gather(
-        alice.cancel(),
-        bob.cancel(),
-    )
+    await asyncio.gather(alice.cancel(), bob.cancel())
 
 
 @pytest.mark.asyncio
@@ -107,7 +99,4 @@ async def test_handshake_wrong_network_id():
     # stop cleanly
     asyncio.ensure_future(alice.run())
     asyncio.ensure_future(bob.run())
-    await asyncio.gather(
-        alice.cancel(),
-        bob.cancel(),
-    )
+    await asyncio.gather(alice.cancel(), bob.cancel())

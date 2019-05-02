@@ -1,10 +1,6 @@
 import asyncio
 from contextlib import contextmanager
-from typing import (
-    AsyncIterator,
-    Iterator,
-    Set,
-)
+from typing import AsyncIterator, Iterator, Set
 
 from cancel_token import CancelToken
 from eth_utils import ValidationError
@@ -22,15 +18,13 @@ class BaseChainTipMonitor(BaseService, PeerSubscriber):
 
     Subclass must specify :attr:`subscription_msg_types`
     """
+
     # This is a rather arbitrary value, but when the sync is operating normally we never see
     # the msg queue grow past a few hundred items, so this should be a reasonable limit for
     # now.
     msg_queue_maxsize = 2000
 
-    def __init__(
-            self,
-            peer_pool: BaseChainPeerPool,
-            token: CancelToken = None) -> None:
+    def __init__(self, peer_pool: BaseChainPeerPool, token: CancelToken = None) -> None:
         super().__init__(token)
         self._peer_pool = peer_pool
         # There is one event for each subscriber, each one gets set any time new tip info arrives

@@ -21,6 +21,7 @@ class EMA:
 
     The initial value is the starting value for the EMA
     """
+
     def __init__(self, initial_value: float, smoothing_factor: float) -> None:
         self._value = initial_value
         if 0 < smoothing_factor < 1:

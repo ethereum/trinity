@@ -1,44 +1,22 @@
 import functools
-from typing import (  # noqa: F401
-    Iterable,
-    Sequence,
-    Tuple,
-    TYPE_CHECKING,
-)
+from typing import Iterable, Sequence, Tuple, TYPE_CHECKING  # noqa: F401
 
-from eth_typing import (
-    BLSPubkey,
-    BLSSignature,
-)
-from eth_utils import (
-    encode_hex,
-    to_tuple,
-    ValidationError,
-)
+from eth_typing import BLSPubkey, BLSSignature
+from eth_utils import encode_hex, to_tuple, ValidationError
 import ssz
 
-from eth.constants import (
-    ZERO_HASH32,
-)
+from eth.constants import ZERO_HASH32
 
 from py_ecc import bls
-from eth2._utils import (
-    bitfield,
-)
-from eth2.configs import (
-    CommitteeConfig,
-)
+from eth2._utils import bitfield
+from eth2.configs import CommitteeConfig
 from eth2.beacon.committee_helpers import (
     get_beacon_proposer_index,
     get_crosslink_committee_for_attestation,
     get_members_from_bitfield,
 )
-from eth2.beacon.constants import (
-    FAR_FUTURE_EPOCH,
-)
-from eth2.beacon.enums import (
-    SignatureDomain,
-)
+from eth2.beacon.constants import FAR_FUTURE_EPOCH
+from eth2.beacon.enums import SignatureDomain
 from eth2.beacon.helpers import (
     get_domain,
     is_double_vote,
@@ -47,7 +25,9 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.attestation_data import AttestationData
-from eth2.beacon.types.attestation_data_and_custody_bits import AttestationDataAndCustodyBit
+from eth2.beacon.types.attestation_data_and_custody_bits import (
+    AttestationDataAndCustodyBit,
+)
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockHeader
 from eth2.beacon.types.crosslinks import Crosslink
@@ -57,36 +37,24 @@ from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.beacon.types.validators import Validator
-from eth2.beacon.typing import (
-    Bitfield,
-    Epoch,
-    Shard,
-    Slot,
-    ValidatorIndex,
-)
-from eth2.beacon.validation import (
-    validate_bitfield,
-)
+from eth2.beacon.typing import Bitfield, Epoch, Shard, Slot, ValidatorIndex
+from eth2.beacon.validation import validate_bitfield
 
 if TYPE_CHECKING:
-    from eth_typing import (
-        Hash32,
-    )
+    from eth_typing import Hash32
 
 
 #
 # Slot validatation
 #
-def validate_block_slot(state: BeaconState,
-                        block: BaseBeaconBlock) -> None:
+def validate_block_slot(state: BeaconState, block: BaseBeaconBlock) -> None:
     if block.slot != state.slot:
         raise ValidationError(
             f"block.slot ({block.slot}) is not equal to state.slot ({state.slot})"
         )
 
 
-def validate_block_previous_root(state: BeaconState,
-                                 block: BaseBeaconBlock) -> None:
+def validate_block_previous_root(state: BeaconState, block: BaseBeaconBlock) -> None:
     expected_root = state.latest_block_header.signing_root
     previous_root = block.previous_block_root
     if previous_root != expected_root:
@@ -99,23 +67,23 @@ def validate_block_previous_root(state: BeaconState,
 #
 # Proposer signature validation
 #
-def validate_proposer_signature(state: BeaconState,
-                                block: BaseBeaconBlock,
-                                beacon_chain_shard_number: Shard,
-                                committee_config: CommitteeConfig) -> None:
+def validate_proposer_signature(
+    state: BeaconState,
+    block: BaseBeaconBlock,
+    beacon_chain_shard_number: Shard,
+    committee_config: CommitteeConfig,
+) -> None:
     message_hash = block.signing_root
 
     # Get the public key of proposer
     beacon_proposer_index = get_beacon_proposer_index(
-        state,
-        state.slot,
-        committee_config,
+        state, state.slot, committee_config
     )
     proposer_pubkey = state.validator_registry[beacon_proposer_index].pubkey
     domain = get_domain(
         state.fork,
         state.current_epoch(committee_config.SLOTS_PER_EPOCH),
-        SignatureDomain.DOMAIN_BEACON_BLOCK
+        SignatureDomain.DOMAIN_BEACON_BLOCK,
     )
 
     is_valid_signature = bls.verify(
@@ -136,9 +104,9 @@ def validate_proposer_signature(state: BeaconState,
 #
 # Proposer slashing validation
 #
-def validate_proposer_slashing(state: BeaconState,
-                               proposer_slashing: ProposerSlashing,
-                               slots_per_epoch: int) -> None:
+def validate_proposer_slashing(
+    state: BeaconState, proposer_slashing: ProposerSlashing, slots_per_epoch: int
+) -> None:
     """
     Validate the given ``proposer_slashing``.
     Raise ``ValidationError`` if it's invalid.
@@ -166,8 +134,9 @@ def validate_proposer_slashing(state: BeaconState,
     )
 
 
-def validate_proposer_slashing_epoch(proposer_slashing: ProposerSlashing,
-                                     slots_per_epoch: int) -> None:
+def validate_proposer_slashing_epoch(
+    proposer_slashing: ProposerSlashing, slots_per_epoch: int
+) -> None:
     epoch_1 = slot_to_epoch(proposer_slashing.header_1.slot, slots_per_epoch)
     epoch_2 = slot_to_epoch(proposer_slashing.header_2.slot, slots_per_epoch)
 
@@ -192,10 +161,9 @@ def validate_proposer_slashing_is_slashed(slashed: bool) -> None:
         raise ValidationError(f"proposer.slashed is True")
 
 
-def validate_block_header_signature(header: BeaconBlockHeader,
-                                    pubkey: BLSPubkey,
-                                    fork: Fork,
-                                    slots_per_epoch: int) -> None:
+def validate_block_header_signature(
+    header: BeaconBlockHeader, pubkey: BLSPubkey, fork: Fork, slots_per_epoch: int
+) -> None:
     header_signature_is_valid = bls.verify(
         pubkey=pubkey,
         message_hash=header.signing_root,
@@ -204,7 +172,7 @@ def validate_block_header_signature(header: BeaconBlockHeader,
             fork,
             slot_to_epoch(header.slot, slots_per_epoch),
             SignatureDomain.DOMAIN_BEACON_BLOCK,
-        )
+        ),
     )
     if not header_signature_is_valid:
         raise ValidationError(
@@ -217,39 +185,36 @@ def validate_block_header_signature(header: BeaconBlockHeader,
 #
 # Attester slashing validation
 #
-def validate_attester_slashing(state: BeaconState,
-                               attester_slashing: AttesterSlashing,
-                               max_indices_per_slashable_vote: int,
-                               slots_per_epoch: int) -> None:
+def validate_attester_slashing(
+    state: BeaconState,
+    attester_slashing: AttesterSlashing,
+    max_indices_per_slashable_vote: int,
+    slots_per_epoch: int,
+) -> None:
     slashable_attestation_1 = attester_slashing.slashable_attestation_1
     slashable_attestation_2 = attester_slashing.slashable_attestation_2
 
-    validate_attester_slashing_different_data(slashable_attestation_1, slashable_attestation_2)
+    validate_attester_slashing_different_data(
+        slashable_attestation_1, slashable_attestation_2
+    )
 
     validate_attester_slashing_slashing_conditions(
-        slashable_attestation_1,
-        slashable_attestation_2,
-        slots_per_epoch,
+        slashable_attestation_1, slashable_attestation_2, slots_per_epoch
     )
 
     validate_slashable_attestation(
-        state,
-        slashable_attestation_1,
-        max_indices_per_slashable_vote,
-        slots_per_epoch,
+        state, slashable_attestation_1, max_indices_per_slashable_vote, slots_per_epoch
     )
 
     validate_slashable_attestation(
-        state,
-        slashable_attestation_2,
-        max_indices_per_slashable_vote,
-        slots_per_epoch,
+        state, slashable_attestation_2, max_indices_per_slashable_vote, slots_per_epoch
     )
 
 
 def validate_attester_slashing_different_data(
-        slashable_attestation_1: SlashableAttestation,
-        slashable_attestation_2: SlashableAttestation) -> None:
+    slashable_attestation_1: SlashableAttestation,
+    slashable_attestation_2: SlashableAttestation,
+) -> None:
     if slashable_attestation_1.data == slashable_attestation_2.data:
         raise ValidationError(
             "slashable_attestation_1.data "
@@ -260,18 +225,15 @@ def validate_attester_slashing_different_data(
 
 
 def validate_attester_slashing_slashing_conditions(
-        slashable_attestation_1: SlashableAttestation,
-        slashable_attestation_2: SlashableAttestation,
-        slots_per_epoch: int) -> None:
+    slashable_attestation_1: SlashableAttestation,
+    slashable_attestation_2: SlashableAttestation,
+    slots_per_epoch: int,
+) -> None:
     is_double_vote_slashing = is_double_vote(
-        slashable_attestation_1.data,
-        slashable_attestation_2.data,
-        slots_per_epoch,
+        slashable_attestation_1.data, slashable_attestation_2.data, slots_per_epoch
     )
     is_surround_vote_slashing = is_surround_vote(
-        slashable_attestation_1.data,
-        slashable_attestation_2.data,
-        slots_per_epoch,
+        slashable_attestation_1.data, slashable_attestation_2.data, slots_per_epoch
     )
     if not (is_double_vote_slashing or is_surround_vote_slashing):
         raise ValidationError(
@@ -281,19 +243,19 @@ def validate_attester_slashing_slashing_conditions(
 
 def validate_slashable_indices(slashable_indices: Sequence[ValidatorIndex]) -> None:
     if len(slashable_indices) < 1:
-        raise ValidationError(
-            "len(slashable_indices) should be greater or equal to 1"
-        )
+        raise ValidationError("len(slashable_indices) should be greater or equal to 1")
 
 
 #
 # Attestation validation
 #
-def validate_attestation(state: BeaconState,
-                         attestation: Attestation,
-                         min_attestation_inclusion_delay: int,
-                         slots_per_historical_root: int,
-                         committee_config: CommitteeConfig) -> None:
+def validate_attestation(
+    state: BeaconState,
+    attestation: Attestation,
+    min_attestation_inclusion_delay: int,
+    slots_per_historical_root: int,
+    committee_config: CommitteeConfig,
+) -> None:
     """
     Validate the given ``attestation``.
     Raise ``ValidationError`` if it's invalid.
@@ -309,10 +271,7 @@ def validate_attestation(state: BeaconState,
     )
 
     validate_attestation_source_epoch_and_root(
-        state,
-        attestation.data,
-        state.current_epoch(slots_per_epoch),
-        slots_per_epoch,
+        state, attestation.data, state.current_epoch(slots_per_epoch), slots_per_epoch
     )
 
     validate_attestation_previous_crosslink_or_root(
@@ -323,18 +282,16 @@ def validate_attestation(state: BeaconState,
 
     validate_attestation_crosslink_data_root(attestation.data)
 
-    validate_attestation_aggregate_signature(
-        state,
-        attestation,
-        committee_config,
-    )
+    validate_attestation_aggregate_signature(state, attestation, committee_config)
 
 
-def validate_attestation_slot(attestation_data: AttestationData,
-                              state_slot: Slot,
-                              slots_per_epoch: int,
-                              min_attestation_inclusion_delay: int,
-                              genesis_slot: Slot) -> None:
+def validate_attestation_slot(
+    attestation_data: AttestationData,
+    state_slot: Slot,
+    slots_per_epoch: int,
+    min_attestation_inclusion_delay: int,
+    genesis_slot: Slot,
+) -> None:
     """
     Validate ``slot`` field of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
@@ -364,10 +321,12 @@ def validate_attestation_slot(attestation_data: AttestationData,
         )
 
 
-def validate_attestation_source_epoch_and_root(state: BeaconState,
-                                               attestation_data: AttestationData,
-                                               current_epoch: Epoch,
-                                               slots_per_epoch: int) -> None:
+def validate_attestation_source_epoch_and_root(
+    state: BeaconState,
+    attestation_data: AttestationData,
+    current_epoch: Epoch,
+    slots_per_epoch: int,
+) -> None:
     """
     Validate ``source_epoch`` and ``source_root`` fields of ``attestation_data``.
     Raise ``ValidationError`` if it's invalid.
@@ -378,16 +337,16 @@ def validate_attestation_source_epoch_and_root(state: BeaconState,
             raise ValidationError(
                 "Current epoch attestation that "
                 "`source_epoch` is not targeting the `state.current_justified_epoch`:\n"
-                "\tFound: %s, Expected %s" %
-                (attestation_data.source_epoch, state.current_justified_epoch)
+                "\tFound: %s, Expected %s"
+                % (attestation_data.source_epoch, state.current_justified_epoch)
             )
 
         if attestation_data.source_root != state.current_justified_root:
             raise ValidationError(
                 "Current epoch attestation that "
                 "`source_root` is not equal to `state.current_justified_root`:\n"
-                "\tFound: %s, Expected %s" %
-                (attestation_data.source_root, state.current_justified_root)
+                "\tFound: %s, Expected %s"
+                % (attestation_data.source_root, state.current_justified_root)
             )
     else:
         # Case 2: previous epoch attestations
@@ -395,22 +354,24 @@ def validate_attestation_source_epoch_and_root(state: BeaconState,
             raise ValidationError(
                 "Previous epoch attestation that "
                 "`source_epoch`` is not targeting the `state.previous_justified_epoch`:\n"
-                "\tFound: %s, Expected %s" %
-                (attestation_data.source_epoch, state.previous_justified_epoch)
+                "\tFound: %s, Expected %s"
+                % (attestation_data.source_epoch, state.previous_justified_epoch)
             )
 
         if attestation_data.source_root != state.previous_justified_root:
             raise ValidationError(
                 "Previous epoch attestation that "
                 "`source_root` is not equal to `state.previous_justified_root`:\n"
-                "\tFound: %s, Expected %s" %
-                (attestation_data.source_root, state.previous_justified_root)
+                "\tFound: %s, Expected %s"
+                % (attestation_data.source_root, state.previous_justified_root)
             )
 
 
-def validate_attestation_previous_crosslink_or_root(attestation_data: AttestationData,
-                                                    state_latest_crosslink: Crosslink,
-                                                    slots_per_epoch: int) -> None:
+def validate_attestation_previous_crosslink_or_root(
+    attestation_data: AttestationData,
+    state_latest_crosslink: Crosslink,
+    slots_per_epoch: int,
+) -> None:
     """
     Validate that either the attestation ``previous_crosslink`` or ``crosslink_data_root``
     field of ``attestation_data`` is the provided ``latest_crosslink``.
@@ -448,35 +409,30 @@ def validate_attestation_crosslink_data_root(attestation_data: AttestationData) 
     if attestation_data.crosslink_data_root != ZERO_HASH32:
         raise ValidationError(
             "Attestation ``crosslink_data_root`` is not ZERO_HASH32.\n"
-            "\tFound: %s, Expected %s" %
-            (
-                attestation_data.crosslink_data_root,
-                ZERO_HASH32,
-            )
+            "\tFound: %s, Expected %s"
+            % (attestation_data.crosslink_data_root, ZERO_HASH32)
         )
 
 
 @to_tuple
-def get_pubkey_for_indices(validators: Sequence[Validator],
-                           indices: Sequence[ValidatorIndex]) -> Iterable[BLSPubkey]:
+def get_pubkey_for_indices(
+    validators: Sequence[Validator], indices: Sequence[ValidatorIndex]
+) -> Iterable[BLSPubkey]:
     for index in indices:
         yield validators[index].pubkey
 
 
 @to_tuple
 def generate_aggregate_pubkeys_from_indices(
-        validators: Sequence[Validator],
-        *indices: Sequence[Sequence['ValidatorIndex']]) -> Iterable[BLSPubkey]:
+    validators: Sequence[Validator], *indices: Sequence[Sequence["ValidatorIndex"]]
+) -> Iterable[BLSPubkey]:
     get_pubkeys = functools.partial(get_pubkey_for_indices, validators)
-    return map(
-        bls.aggregate_pubkeys,
-        map(get_pubkeys, indices),
-    )
+    return map(bls.aggregate_pubkeys, map(get_pubkeys, indices))
 
 
 def _validate_custody_bitfield(custody_bitfield: Bitfield) -> None:
     # TODO: to be removed in phase 1.
-    empty_custody_bitfield = b'\x00' * len(custody_bitfield)
+    empty_custody_bitfield = b"\x00" * len(custody_bitfield)
     if custody_bitfield != empty_custody_bitfield:
         raise ValidationError(
             "Attestation custody bitfield is not empty.\n"
@@ -485,7 +441,7 @@ def _validate_custody_bitfield(custody_bitfield: Bitfield) -> None:
 
 
 def _validate_aggregation_bitfield(aggregation_bitfield: Bitfield) -> None:
-    empty_aggregation_bitfield = b'\x00' * len(aggregation_bitfield)
+    empty_aggregation_bitfield = b"\x00" * len(aggregation_bitfield)
     if aggregation_bitfield == empty_aggregation_bitfield:
         raise ValidationError(
             "Attestation aggregation bitfield is empty.\n"
@@ -493,9 +449,9 @@ def _validate_aggregation_bitfield(aggregation_bitfield: Bitfield) -> None:
         )
 
 
-def _validate_custody_bitfield_from_aggregation_bitfield(committee_size: int,
-                                                         aggregation_bitfield: Bitfield,
-                                                         custody_bitfield: Bitfield) -> None:
+def _validate_custody_bitfield_from_aggregation_bitfield(
+    committee_size: int, aggregation_bitfield: Bitfield, custody_bitfield: Bitfield
+) -> None:
     """
     Ensure that every unset bit in the ``aggregation_bitfield`` is also unset
     in the ``custody_bitfield`` to ensure a canonical representation of information
@@ -513,9 +469,9 @@ def _validate_custody_bitfield_from_aggregation_bitfield(committee_size: int,
                 )
 
 
-def validate_attestation_aggregate_signature(state: BeaconState,
-                                             attestation: Attestation,
-                                             committee_config: CommitteeConfig) -> None:
+def validate_attestation_aggregate_signature(
+    state: BeaconState, attestation: Attestation, committee_config: CommitteeConfig
+) -> None:
     """
     Validate ``aggregate_signature`` field of ``attestation``.
     Raise ``ValidationError`` if it's invalid.
@@ -535,19 +491,21 @@ def validate_attestation_aggregate_signature(state: BeaconState,
     )
 
     _validate_custody_bitfield_from_aggregation_bitfield(
-        len(committee),
-        attestation.aggregation_bitfield,
-        attestation.custody_bitfield,
+        len(committee), attestation.aggregation_bitfield, attestation.custody_bitfield
     )
 
-    participants = get_members_from_bitfield(committee, attestation.aggregation_bitfield)
-    custody_bit_1_participants = get_members_from_bitfield(committee, attestation.custody_bitfield)
-    custody_bit_0_participants = (i for i in participants if i not in custody_bit_1_participants)
+    participants = get_members_from_bitfield(
+        committee, attestation.aggregation_bitfield
+    )
+    custody_bit_1_participants = get_members_from_bitfield(
+        committee, attestation.custody_bitfield
+    )
+    custody_bit_0_participants = (
+        i for i in participants if i not in custody_bit_1_participants
+    )
 
     pubkeys = generate_aggregate_pubkeys_from_indices(
-        state.validator_registry,
-        custody_bit_0_participants,
-        custody_bit_1_participants,
+        state.validator_registry, custody_bit_0_participants, custody_bit_1_participants
     )
 
     # TODO: change to tree hashing (hash_tree_root) when we have SSZ
@@ -582,11 +540,13 @@ def validate_attestation_aggregate_signature(state: BeaconState,
         )
 
 
-def validate_randao_reveal(randao_reveal: BLSSignature,
-                           proposer_index: ValidatorIndex,
-                           proposer_pubkey: BLSPubkey,
-                           epoch: Epoch,
-                           fork: Fork) -> None:
+def validate_randao_reveal(
+    randao_reveal: BLSSignature,
+    proposer_index: ValidatorIndex,
+    proposer_pubkey: BLSPubkey,
+    epoch: Epoch,
+    fork: Fork,
+) -> None:
     message_hash = ssz.hash_tree_root(epoch, sedes=ssz.sedes.uint64)
     domain = get_domain(fork, epoch, SignatureDomain.DOMAIN_RANDAO)
 
@@ -609,16 +569,17 @@ def validate_randao_reveal(randao_reveal: BLSSignature,
 #
 # Slashable attestation validation
 #
-def verify_slashable_attestation_signature(state: BeaconState,
-                                           slashable_attestation: SlashableAttestation,
-                                           slots_per_epoch: int) -> bool:
+def verify_slashable_attestation_signature(
+    state: BeaconState,
+    slashable_attestation: SlashableAttestation,
+    slots_per_epoch: int,
+) -> bool:
     """
     Ensure we have a valid aggregate signature for the ``slashable_attestation``.
     """
     all_indices = slashable_attestation.custody_bit_indices
     pubkeys: Tuple[BLSPubkey, ...] = generate_aggregate_pubkeys_from_indices(
-        state.validator_registry,
-        *all_indices,
+        state.validator_registry, *all_indices
     )
     message_hashes: Tuple[Hash32, ...] = slashable_attestation.message_hashes
 
@@ -645,10 +606,12 @@ def verify_slashable_attestation_signature(state: BeaconState,
     )
 
 
-def validate_slashable_attestation(state: BeaconState,
-                                   slashable_attestation: SlashableAttestation,
-                                   max_indices_per_slashable_vote: int,
-                                   slots_per_epoch: int) -> None:
+def validate_slashable_attestation(
+    state: BeaconState,
+    slashable_attestation: SlashableAttestation,
+    max_indices_per_slashable_vote: int,
+    slots_per_epoch: int,
+) -> None:
     """
     Verify validity of ``slashable_attestation`` fields.
     Ensure that the ``slashable_attestation`` is properly assembled and contains the signature
@@ -658,9 +621,7 @@ def validate_slashable_attestation(state: BeaconState,
     _validate_custody_bitfield(slashable_attestation.custody_bitfield)
 
     if len(slashable_attestation.validator_indices) == 0:
-        raise ValidationError(
-            "`slashable_attestation.validator_indices` is empty."
-        )
+        raise ValidationError("`slashable_attestation.validator_indices` is empty.")
 
     if not slashable_attestation.are_validator_indices_ascending:
         raise ValidationError(
@@ -681,19 +642,21 @@ def validate_slashable_attestation(state: BeaconState,
             f"MAX_INDICES_PER_SLASHABLE_VOTE ({max_indices_per_slashable_vote})"
         )
 
-    if not verify_slashable_attestation_signature(state, slashable_attestation, slots_per_epoch):
-        raise ValidationError(
-            f"slashable_attestation.signature error"
-        )
+    if not verify_slashable_attestation_signature(
+        state, slashable_attestation, slots_per_epoch
+    ):
+        raise ValidationError(f"slashable_attestation.signature error")
 
 
 #
 # Voluntary Exit
 #
-def validate_voluntary_exit(state: BeaconState,
-                            voluntary_exit: VoluntaryExit,
-                            slots_per_epoch: int,
-                            persistent_committee_period: int) -> None:
+def validate_voluntary_exit(
+    state: BeaconState,
+    voluntary_exit: VoluntaryExit,
+    slots_per_epoch: int,
+    persistent_committee_period: int,
+) -> None:
     validator = state.validator_registry[voluntary_exit.validator_index]
     current_epoch = state.current_epoch(slots_per_epoch)
 
@@ -703,7 +666,9 @@ def validate_voluntary_exit(state: BeaconState,
 
     validate_voluntary_exit_epoch(voluntary_exit, current_epoch)
 
-    validate_voluntary_exit_persistent(validator, current_epoch, persistent_committee_period)
+    validate_voluntary_exit_persistent(
+        validator, current_epoch, persistent_committee_period
+    )
 
     validate_voluntary_exit_signature(state, voluntary_exit, validator)
 
@@ -729,8 +694,9 @@ def validate_voluntary_exit_initiated_exit(validator: Validator) -> None:
         )
 
 
-def validate_voluntary_exit_epoch(voluntary_exit: VoluntaryExit,
-                                  current_epoch: Epoch) -> None:
+def validate_voluntary_exit_epoch(
+    voluntary_exit: VoluntaryExit, current_epoch: Epoch
+) -> None:
     """
     Exits must specify an epoch when they become valid; they are not valid before then.
     """
@@ -741,9 +707,9 @@ def validate_voluntary_exit_epoch(voluntary_exit: VoluntaryExit,
         )
 
 
-def validate_voluntary_exit_persistent(validator: Validator,
-                                       current_epoch: Epoch,
-                                       persistent_committee_period: int) -> None:
+def validate_voluntary_exit_persistent(
+    validator: Validator, current_epoch: Epoch, persistent_committee_period: int
+) -> None:
     """
     # Must have been in the validator set long enough
     """
@@ -755,13 +721,15 @@ def validate_voluntary_exit_persistent(validator: Validator,
         )
 
 
-def validate_voluntary_exit_signature(state: BeaconState,
-                                      voluntary_exit: VoluntaryExit,
-                                      validator: Validator) -> None:
+def validate_voluntary_exit_signature(
+    state: BeaconState, voluntary_exit: VoluntaryExit, validator: Validator
+) -> None:
     """
     Verify signature.
     """
-    domain = get_domain(state.fork, voluntary_exit.epoch, SignatureDomain.DOMAIN_VOLUNTARY_EXIT)
+    domain = get_domain(
+        state.fork, voluntary_exit.epoch, SignatureDomain.DOMAIN_VOLUNTARY_EXIT
+    )
     is_valid_signature = bls.verify(
         pubkey=validator.pubkey,
         message_hash=voluntary_exit.signing_root,

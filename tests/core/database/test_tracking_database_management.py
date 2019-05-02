@@ -19,13 +19,13 @@ from trinity.exceptions import BadDatabaseError
 
 @pytest.fixture
 def session():
-    path = Path(':memory:')
+    path = Path(":memory:")
     return _get_session(path)
 
 
 @pytest.fixture
 def db_path(tmpdir):
-    path = Path(tmpdir.join('nodedb.sqlite'))
+    path = Path(tmpdir.join("nodedb.sqlite"))
     return path
 
 
@@ -62,7 +62,7 @@ def test_check_schema_version_false_when_wrong_version(session):
 
     # change version to unknown value
     schema_version = session.query(SchemaVersion).one()
-    schema_version.version = 'unknown'
+    schema_version.version = "unknown"
 
     session.add(schema_version)
     session.commit()
@@ -81,10 +81,10 @@ def test_check_tables_exist_missing_table(session):
     _setup_schema(session)
     assert _check_tables_exist(session) is True
     engine = session.get_bind()
-    assert engine.has_table('schema_version') is True
-    table = Base.metadata.tables['schema_version']
+    assert engine.has_table("schema_version") is True
+    table = Base.metadata.tables["schema_version"]
     table.drop(engine)
-    assert engine.has_table('schema_version') is False
+    assert engine.has_table("schema_version") is False
     assert _check_tables_exist(session) is False
 
 
@@ -93,14 +93,14 @@ def test_check_schema_version_false_when_multiple_entries(session):
 
     assert _check_schema_version(session) is True
 
-    session.add(SchemaVersion(version='unknown'))
+    session.add(SchemaVersion(version="unknown"))
     session.commit()
 
     assert _check_schema_version(session) is False
 
 
 def test_get_tracking_db_from_empty():
-    session = get_tracking_database(Path(':memory:'))
+    session = get_tracking_database(Path(":memory:"))
     assert _check_schema_version(session) is True
 
 
@@ -124,7 +124,7 @@ def test_get_tracking_db_errors_bad_schema_version(db_path):
 
     # change version to unknown value
     schema_version = session_a.query(SchemaVersion).one()
-    schema_version.version = 'unknown'
+    schema_version.version = "unknown"
 
     session_a.add(schema_version)
     session_a.commit()
@@ -155,10 +155,7 @@ async def test_db_can_have_different_concurrent_sessions(db_path):
             await asyncio.sleep(0.01)
 
     await asyncio.gather(
-        read_and_write(),
-        read_and_write(),
-        read_and_write(),
-        read_and_write(),
+        read_and_write(), read_and_write(), read_and_write(), read_and_write()
     )
     schema_version = _get_session(db_path).query(SchemaVersion).one()
     print(schema_version.version)

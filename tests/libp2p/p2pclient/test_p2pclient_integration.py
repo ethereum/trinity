@@ -3,25 +3,16 @@ import functools
 import os
 import subprocess
 import time
-from typing import (
-    NamedTuple,
-)
+from typing import NamedTuple
 
 import pytest
 
-from multiaddr import (
-    Multiaddr,
-    protocols,
-)
+from multiaddr import Multiaddr, protocols
 
 import multihash
 
-from libp2p.p2pclient.datastructures import (
-    PeerID,
-)
-from libp2p.p2pclient.exceptions import (
-    ControlFailure,
-)
+from libp2p.p2pclient.datastructures import PeerID
+from libp2p.p2pclient.exceptions import ControlFailure
 from libp2p.p2pclient.p2pclient import (
     Client,
     ConnectionManagerClient,
@@ -86,7 +77,9 @@ class Daemon:
     f_log = None
     closed = None
 
-    def __init__(self, control_maddr, enable_control, enable_connmgr, enable_dht, enable_pubsub):
+    def __init__(
+        self, control_maddr, enable_control, enable_connmgr, enable_dht, enable_pubsub
+    ):
         self.control_maddr = control_maddr
         self.enable_control = enable_control
         self.enable_connmgr = enable_connmgr
@@ -97,50 +90,28 @@ class Daemon:
         self._run()
 
     def _start_logging(self):
-        name_control_maddr = str(self.control_maddr).replace('/', '_').replace('.', '_')
-        self.log_filename = f'/tmp/log_p2pd{name_control_maddr}.txt'
-        self.f_log = open(self.log_filename, 'wb')
+        name_control_maddr = str(self.control_maddr).replace("/", "_").replace(".", "_")
+        self.log_filename = f"/tmp/log_p2pd{name_control_maddr}.txt"
+        self.f_log = open(self.log_filename, "wb")
 
     def _run(self):
-        cmd_list = [
-            "p2pd",
-            f"-listen={str(self.control_maddr)}",
-        ]
+        cmd_list = ["p2pd", f"-listen={str(self.control_maddr)}"]
         if self.enable_connmgr:
-            cmd_list += [
-                "-connManager=true",
-                "-connLo=1",
-                "-connHi=2",
-                "-connGrace=0",
-            ]
+            cmd_list += ["-connManager=true", "-connLo=1", "-connHi=2", "-connGrace=0"]
         if self.enable_dht:
-            cmd_list += [
-                "-dht=true",
-            ]
+            cmd_list += ["-dht=true"]
         if self.enable_pubsub:
-            cmd_list += [
-                "-pubsub=true",
-                "-pubsubRouter=gossipsub",
-            ]
+            cmd_list += ["-pubsub=true", "-pubsubRouter=gossipsub"]
         self.proc_daemon = subprocess.Popen(
-            cmd_list,
-            stdout=self.f_log,
-            stderr=self.f_log,
-            bufsize=0,
+            cmd_list, stdout=self.f_log, stderr=self.f_log, bufsize=0
         )
 
     async def wait_until_ready(self):
-        lines_head_pattern = (
-            b'Control socket:',
-            b'Peer ID:',
-            b'Peer Addrs:',
-        )
-        lines_head_occurred = {
-            line: False
-            for line in lines_head_pattern
-        }
+        lines_head_pattern = (b"Control socket:", b"Peer ID:", b"Peer Addrs:")
+        lines_head_occurred = {line: False for line in lines_head_pattern}
 
-        with open(self.log_filename, 'rb') as f_log_read:
+        with open(self.log_filename, "rb") as f_log_read:
+
             async def read_from_daemon_and_check():
                 line = f_log_read.readline()
                 for head_pattern in lines_head_occurred:
@@ -176,7 +147,8 @@ class ConnectionFailure(Exception):
 
 
 async def make_p2pd_pair_unix(
-        id_generator, enable_control, enable_connmgr, enable_dht, enable_pubsub):
+    id_generator, enable_control, enable_connmgr, enable_dht, enable_pubsub
+):
     socket_id = id_generator()
     control_maddr = Multiaddr(f"/unix/tmp/test_p2pd_control_{socket_id}.sock")
     listen_maddr = Multiaddr(f"/unix/tmp/test_p2pd_listen_{socket_id}.sock")
@@ -200,7 +172,8 @@ async def make_p2pd_pair_unix(
 
 
 async def make_p2pd_pair_ip4(
-        id_generator, enable_control, enable_connmgr, enable_dht, enable_pubsub):
+    id_generator, enable_control, enable_connmgr, enable_dht, enable_pubsub
+):
     control_maddr = Multiaddr(f"/ip4/127.0.0.1/tcp/{id_generator()}")
     listen_maddr = Multiaddr(f"/ip4/127.0.0.1/tcp/{id_generator()}")
     return await _make_p2pd_pair(
@@ -214,12 +187,13 @@ async def make_p2pd_pair_ip4(
 
 
 async def _make_p2pd_pair(
-        control_maddr,
-        listen_maddr,
-        enable_control,
-        enable_connmgr,
-        enable_dht,
-        enable_pubsub):
+    control_maddr,
+    listen_maddr,
+    enable_control,
+    enable_connmgr,
+    enable_dht,
+    enable_pubsub,
+):
     p2pd = Daemon(
         control_maddr=control_maddr,
         enable_control=enable_control,
@@ -255,12 +229,13 @@ async def _make_p2pd_pair(
 
 @pytest.fixture(params=[make_p2pd_pair_ip4, make_p2pd_pair_unix])
 async def p2pds(
-        request,
-        enable_control,
-        enable_connmgr,
-        enable_dht,
-        enable_pubsub,
-        unused_tcp_port_factory):
+    request,
+    enable_control,
+    enable_connmgr,
+    enable_dht,
+    enable_pubsub,
+    unused_tcp_port_factory,
+):
     make_p2pd_pair = request.param
     pairs = tuple(
         asyncio.ensure_future(
@@ -285,10 +260,7 @@ async def p2pds(
             await p2pd_tuple.control.close()
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_listen(p2pds):
     c0 = p2pds[0].control
@@ -301,10 +273,7 @@ async def test_control_client_listen(p2pds):
         await c0.listen()
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_close(p2pds):
     c0 = p2pds[0].control
@@ -320,19 +289,13 @@ async def test_control_client_close(p2pds):
     await c0.listen()
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_identify(p2pds):
     await p2pds[0].control.identify()
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_connect_success(p2pds):
     c0, c1 = p2pds[0].control, p2pds[1].control
@@ -343,10 +306,7 @@ async def test_control_client_connect_success(p2pds):
     await c1.connect(peer_id_0, maddrs_0)
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_connect_failure(peer_id_random, p2pds):
     c0, c1 = p2pds[0].control, p2pds[1].control
@@ -376,26 +336,18 @@ async def connect_safe(p2pd_tuple_0, p2pd_tuple_1):
     await p2pd_tuple_0.control.connect(peer_id_1, maddrs_1)
     await try_until_success(
         functools.partial(
-            _check_connection,
-            p2pd_tuple_0=p2pd_tuple_0,
-            p2pd_tuple_1=p2pd_tuple_1,
-        ),
+            _check_connection, p2pd_tuple_0=p2pd_tuple_0, p2pd_tuple_1=p2pd_tuple_1
+        )
     )
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_connect_safe(p2pds):
     await connect_safe(p2pds[0], p2pds[1])
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_list_peers(p2pds):
     c0, c1, c2 = p2pds[0].control, p2pds[1].control, p2pds[2].control
@@ -412,10 +364,7 @@ async def test_control_client_list_peers(p2pds):
     assert len(await c2.list_peers()) == 1
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_controle_client_disconnect(peer_id_random, p2pds):
     c0, c1 = p2pds[0].control, p2pds[1].control
@@ -435,10 +384,7 @@ async def test_controle_client_disconnect(peer_id_random, p2pds):
     assert len(await c1.list_peers()) == 0
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_stream_open_success(p2pds):
     c0, c1 = p2pds[0].control, p2pds[1].control
@@ -454,10 +400,7 @@ async def test_control_client_stream_open_success(p2pds):
     await c1.stream_handler(proto, handle_proto)
 
     # test case: normal
-    stream_info, _, writer = await c0.stream_open(
-        peer_id_1,
-        (proto,),
-    )
+    stream_info, _, writer = await c0.stream_open(peer_id_1, (proto,))
     assert stream_info.peer_id == peer_id_1
     assert stream_info.addr in maddrs_1
     assert stream_info.proto == "123"
@@ -466,8 +409,7 @@ async def test_control_client_stream_open_success(p2pds):
 
     # test case: open with multiple protocols
     stream_info, _, writer = await c0.stream_open(
-        peer_id_1,
-        (proto, "another_protocol"),
+        peer_id_1, (proto, "another_protocol")
     )
     assert stream_info.peer_id == peer_id_1
     assert stream_info.addr in maddrs_1
@@ -476,10 +418,7 @@ async def test_control_client_stream_open_success(p2pds):
     await asyncio.sleep(0.1)  # yield
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_stream_open_failure(p2pds):
     c0, c1 = p2pds[0].control, p2pds[1].control
@@ -491,10 +430,7 @@ async def test_control_client_stream_open_failure(p2pds):
 
     # test case: `stream_open` to a peer who didn't register the protocol
     with pytest.raises(ControlFailure):
-        await c0.stream_open(
-            peer_id_1,
-            (proto,),
-        )
+        await c0.stream_open(peer_id_1, (proto,))
 
     # test case: `stream_open` to a peer for a non-registered protocol
     async def handle_proto(stream_info, reader, writer):
@@ -502,10 +438,7 @@ async def test_control_client_stream_open_failure(p2pds):
 
     await c1.stream_handler(proto, handle_proto)
     with pytest.raises(ControlFailure):
-        await c0.stream_open(
-            peer_id_1,
-            ("another_protocol",),
-        )
+        await c0.stream_open(peer_id_1, ("another_protocol",))
 
 
 def _get_current_running_dispatched_handler():
@@ -519,10 +452,7 @@ def _get_current_running_dispatched_handler():
     return running_handlers[0]
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_stream_handler_success(p2pds):
     c0, c1 = p2pds[0].control, p2pds[1].control
@@ -545,10 +475,7 @@ async def test_control_client_stream_handler_success(p2pds):
     assert handle_proto == c1.handlers[proto]
 
     # test case: test the stream handler `handle_proto`
-    _, _, writer = await c0.stream_open(
-        peer_id_1,
-        (proto,),
-    )
+    _, _, writer = await c0.stream_open(peer_id_1, (proto,))
     # wait until the handler function starts blocking waiting for the data
     await event_proto.wait()
     # because we haven't sent the data, we know the handler function must still blocking waiting.
@@ -579,10 +506,7 @@ async def test_control_client_stream_handler_success(p2pds):
     assert another_proto in c1.handlers
     assert handle_another_proto == c1.handlers[another_proto]
 
-    _, _, another_writer = await c0.stream_open(
-        peer_id_1,
-        (another_proto,),
-    )
+    _, _, another_writer = await c0.stream_open(peer_id_1, (another_proto,))
     await event_another_proto.wait()
 
     # we know at this moment the handler must still blocking wait
@@ -608,18 +532,12 @@ async def test_control_client_stream_handler_success(p2pds):
     # ensure the handler is override
     assert handler_third == c1.handlers[another_proto]
 
-    await c0.stream_open(
-        peer_id_1,
-        (another_proto,),
-    )
+    await c0.stream_open(peer_id_1, (another_proto,))
     # ensure the overriding handler is called when the protocol is opened a stream
     await event_third.wait()
 
 
-@pytest.mark.parametrize(
-    'enable_control',
-    (True,),
-)
+@pytest.mark.parametrize("enable_control", (True,))
 @pytest.mark.asyncio
 async def test_control_client_stream_handler_failure(p2pds):
     c0, c1 = p2pds[0].control, p2pds[1].control
@@ -638,12 +556,7 @@ async def test_control_client_stream_handler_failure(p2pds):
         await c0.stream_open(peer_id_1, (proto,))
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_find_peer_success(p2pds):
     peer_id_2, _ = await p2pds[2].control.identify()
@@ -654,12 +567,7 @@ async def test_dht_client_find_peer_success(p2pds):
     assert len(pinfo.addrs) != 0
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_find_peer_failure(peer_id_random, p2pds):
     peer_id_2, _ = await p2pds[2].control.identify()
@@ -672,12 +580,7 @@ async def test_dht_client_find_peer_failure(peer_id_random, p2pds):
         await p2pds[0].dht.find_peer(peer_id_2)
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_find_peers_connected_to_peer_success(p2pds):
     peer_id_2, _ = await p2pds[2].control.identify()
@@ -689,12 +592,7 @@ async def test_dht_client_find_peers_connected_to_peer_success(p2pds):
     assert len(pinfos_connecting_to_2) == 1
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_find_peers_connected_to_peer_failure(peer_id_random, p2pds):
     peer_id_2, _ = await p2pds[2].control.identify()
@@ -707,27 +605,17 @@ async def test_dht_client_find_peers_connected_to_peer_failure(peer_id_random, p
     assert not pinfos
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_find_providers(p2pds):
     await connect_safe(p2pds[0], p2pds[1])
     # borrowed from https://github.com/ipfs/go-cid#parsing-string-input-from-users
-    content_id_bytes = b'\x01r\x12 \xc0F\xc8\xechB\x17\xf0\x1b$\xb9\xecw\x11\xde\x11Cl\x8eF\xd8\x9a\xf1\xaeLa?\xb0\xaf\xe6K\x8b'  # noqa: E501
+    content_id_bytes = b"\x01r\x12 \xc0F\xc8\xechB\x17\xf0\x1b$\xb9\xecw\x11\xde\x11Cl\x8eF\xd8\x9a\xf1\xaeLa?\xb0\xaf\xe6K\x8b"  # noqa: E501
     pinfos = await p2pds[1].dht.find_providers(content_id_bytes, 100)
     assert not pinfos
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_get_closest_peers(p2pds):
     await connect_safe(p2pds[0], p2pds[1])
@@ -736,12 +624,7 @@ async def test_dht_client_get_closest_peers(p2pds):
     assert len(peer_ids_1) == 2
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_get_public_key_success(peer_id_random, p2pds):
     peer_id_0, _ = await p2pds[0].control.identify()
@@ -754,12 +637,7 @@ async def test_dht_client_get_public_key_success(peer_id_random, p2pds):
     assert pk0 != pk1
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_get_public_key_failure(peer_id_random, p2pds):
     peer_id_2, _ = await p2pds[2].control.identify()
@@ -773,12 +651,7 @@ async def test_dht_client_get_public_key_failure(peer_id_random, p2pds):
     await p2pds[0].dht.get_public_key(peer_id_2)
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_get_value(p2pds):
     key_not_existing = b"/123/456"
@@ -791,12 +664,7 @@ async def test_dht_client_get_value(p2pds):
         await p2pds[0].dht.get_value(key_not_existing)
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_search_value(p2pds):
     key_not_existing = b"/123/456"
@@ -809,12 +677,7 @@ async def test_dht_client_search_value(p2pds):
     assert len(pinfos) == 0
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_put_value(p2pds):
     peer_id_0, _ = await p2pds[0].control.identify()
@@ -838,18 +701,13 @@ async def test_dht_client_put_value(p2pds):
         await p2pds[0].dht.put_value(key_invalid, key_invalid)
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_dht',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_dht", ((True, True),))
 @pytest.mark.asyncio
 async def test_dht_client_provide(p2pds):
     peer_id_0, _ = await p2pds[0].control.identify()
     await connect_safe(p2pds[0], p2pds[1])
     # test case: no providers
-    content_id_bytes = b'\x01r\x12 \xc0F\xc8\xechB\x17\xf0\x1b$\xb9\xecw\x11\xde\x11Cl\x8eF\xd8\x9a\xf1\xaeLa?\xb0\xaf\xe6K\x8b'  # noqa: E501
+    content_id_bytes = b"\x01r\x12 \xc0F\xc8\xechB\x17\xf0\x1b$\xb9\xecw\x11\xde\x11Cl\x8eF\xd8\x9a\xf1\xaeLa?\xb0\xaf\xe6K\x8b"  # noqa: E501
     pinfos_empty = await p2pds[1].dht.find_providers(content_id_bytes, 100)
     assert not pinfos_empty
     # test case: c0 provides
@@ -859,12 +717,7 @@ async def test_dht_client_provide(p2pds):
     assert pinfos[0].peer_id == peer_id_0
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_connmgr',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_connmgr", ((True, True),))
 @pytest.mark.asyncio
 async def test_connmgr_client_tag_peer(peer_id_random, p2pds):
     peer_id_0, _ = await p2pds[0].control.identify()
@@ -880,12 +733,7 @@ async def test_connmgr_client_tag_peer(peer_id_random, p2pds):
     await p2pds[1].connmgr.tag_peer(peer_id_random, "123", 123)
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_connmgr',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_connmgr", ((True, True),))
 @pytest.mark.asyncio
 async def test_connmgr_client_untag_peer(peer_id_random, p2pds):
     # test case: untag an inexisting tag
@@ -897,12 +745,7 @@ async def test_connmgr_client_untag_peer(peer_id_random, p2pds):
     await p2pds[0].connmgr.untag_peer(peer_id_random, "123")
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_connmgr',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_connmgr", ((True, True),))
 @pytest.mark.asyncio
 async def test_connmgr_client_trim_automatically_by_connmgr(p2pds):
     # test case: due to `connHi=2` and `connLo=1`, when `p2pds[1]` connecting to the third peer,
@@ -919,12 +762,7 @@ async def test_connmgr_client_trim_automatically_by_connmgr(p2pds):
     assert len(await p2pds[1].control.list_peers()) == 1
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_connmgr',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_connmgr", ((True, True),))
 @pytest.mark.asyncio
 async def test_connmgr_client_trim(p2pds):
     peer_id_0, _ = await p2pds[0].control.identify()
@@ -941,47 +779,27 @@ async def test_connmgr_client_trim(p2pds):
     assert peers_1[0].peer_id == peer_id_2
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_pubsub',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_pubsub", ((True, True),))
 @pytest.mark.asyncio
 async def test_pubsub_client_get_topics(p2pds):
     topics = await p2pds[0].pubsub.get_topics()
     assert len(topics) == 0
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_pubsub',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_pubsub", ((True, True),))
 @pytest.mark.asyncio
 async def test_pubsub_client_list_topic_peers(p2pds):
     peers = await p2pds[0].pubsub.list_peers("123")
     assert len(peers) == 0
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_pubsub',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_pubsub", ((True, True),))
 @pytest.mark.asyncio
 async def test_pubsub_client_publish(p2pds):
     await p2pds[0].pubsub.publish("123", b"data")
 
 
-@pytest.mark.parametrize(
-    'enable_control, enable_pubsub',
-    (
-        (True, True),
-    ),
-)
+@pytest.mark.parametrize("enable_control, enable_pubsub", ((True, True),))
 @pytest.mark.asyncio
 async def test_pubsub_client_subscribe(p2pds):
     peer_id_0, _ = await p2pds[0].control.identify()
@@ -1017,7 +835,9 @@ async def test_pubsub_client_subscribe(p2pds):
     await read_pbmsg_safe(reader_1, pubsub_msg_1_0)
     pubsub_msg_1_1 = p2pd_pb.PSMessage()
     await read_pbmsg_safe(reader_1, pubsub_msg_1_1)
-    assert set([pubsub_msg_1_0.data, pubsub_msg_1_1.data]) == set([another_data_0, another_data_1])
+    assert set([pubsub_msg_1_0.data, pubsub_msg_1_1.data]) == set(
+        [another_data_0, another_data_1]
+    )
     # test case: subscribe to multiple topics
     another_topic = "topic456"
     reader_0_another, writer_0_another = await p2pds[0].pubsub.subscribe(another_topic)
@@ -1041,6 +861,6 @@ async def test_pubsub_client_subscribe(p2pds):
     assert topic not in await p2pds[0].pubsub.get_topics()
 
     async def is_peer_removed_from_topic():
-        return (peer_id_0 not in await p2pds[1].pubsub.list_peers(topic))
+        return peer_id_0 not in await p2pds[1].pubsub.list_peers(topic)
 
     await try_until_success(is_peer_removed_from_topic)

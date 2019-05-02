@@ -1,15 +1,7 @@
-from trinity.db.base import (
-    AsyncDBPreProxy,
-)
-from trinity.db.eth1.chain import (
-    AsyncChainDBPreProxy,
-)
-from trinity.db.eth1.header import (
-    AsyncHeaderDBPreProxy,
-)
-from trinity.db.beacon.chain import (
-    AsyncBeaconChainDBPreProxy,
-)
+from trinity.db.base import AsyncDBPreProxy
+from trinity.db.eth1.chain import AsyncChainDBPreProxy
+from trinity.db.eth1.header import AsyncHeaderDBPreProxy
+from trinity.db.beacon.chain import AsyncBeaconChainDBPreProxy
 
 
 def test_can_instantiate_proxy():

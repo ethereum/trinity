@@ -28,17 +28,17 @@ from p2p.tools.factories import (
 # Force our tests to fail quickly if they accidentally make network requests.
 @pytest.fixture(autouse=True)
 def short_timeout(monkeypatch):
-    monkeypatch.setattr(kademlia, 'k_request_timeout', 0.05)
+    monkeypatch.setattr(kademlia, "k_request_timeout", 0.05)
 
 
 @pytest.fixture
 def alice():
-    return DiscoveryProtocolFactory.from_seed(b'alice')
+    return DiscoveryProtocolFactory.from_seed(b"alice")
 
 
 @pytest.fixture
 def bob():
-    return DiscoveryProtocolFactory.from_seed(b'bob')
+    return DiscoveryProtocolFactory.from_seed(b"bob")
 
 
 def test_ping_pong(alice, bob):
@@ -47,7 +47,9 @@ def test_ping_pong(alice, bob):
     link_transports(alice, bob)
     # Collect all pongs received by alice in a list for later inspection.
     received_pongs = []
-    alice.recv_pong_v4 = lambda node, payload, hash_: received_pongs.append((node, payload))
+    alice.recv_pong_v4 = lambda node, payload, hash_: received_pongs.append(
+        (node, payload)
+    )
 
     token = alice.send_ping_v4(bob.this_node)
 
@@ -68,7 +70,9 @@ def _test_find_node_neighbours(use_v5, alice, bob):
     link_transports(alice, bob)
     # Collect all neighbours packets received by alice in a list for later inspection.
     received_neighbours = []
-    alice.recv_neighbours_v4 = lambda node, payload, hash_: received_neighbours.append((node, payload))  # noqa: E501
+    alice.recv_neighbours_v4 = lambda node, payload, hash_: received_neighbours.append(
+        (node, payload)
+    )  # noqa: E501
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
     bob.update_routing_table(alice.this_node)
 
@@ -85,8 +89,9 @@ def _test_find_node_neighbours(use_v5, alice, bob):
     for packet in [packet1, packet2]:
         node, payload = packet
         assert node == bob.this_node
-        neighbours.extend(discovery._extract_nodes_from_payload(
-            node.address, payload[0], bob.logger))
+        neighbours.extend(
+            discovery._extract_nodes_from_payload(node.address, payload[0], bob.logger)
+        )
     assert len(neighbours) == kademlia.k_bucket_size
 
 
@@ -111,19 +116,19 @@ async def test_protocol_bootstrap():
     assert len(proto.messages) == 2
     # We don't care in which order the bootstrap nodes are contacted, nor which node_id was used
     # in the find_node request, so we just assert that we sent find_node msgs to both nodes.
-    assert sorted([(node, cmd) for (node, cmd, _) in proto.messages]) == sorted([
-        (node1, 'find_node'),
-        (node2, 'find_node')])
+    assert sorted([(node, cmd) for (node, cmd, _) in proto.messages]) == sorted(
+        [(node1, "find_node"), (node2, "find_node")]
+    )
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('echo', ['echo', b'echo'])
+@pytest.mark.parametrize("echo", ["echo", b"echo"])
 async def test_wait_ping(echo):
     proto = MockDiscoveryProtocol([])
     node = NodeFactory()
 
     # Schedule a call to proto.recv_ping() simulating a ping from the node we expect.
-    recv_ping_coroutine = asyncio.coroutine(lambda: proto.recv_ping_v4(node, echo, b''))
+    recv_ping_coroutine = asyncio.coroutine(lambda: proto.recv_ping_v4(node, echo, b""))
     asyncio.ensure_future(recv_ping_coroutine())
 
     got_ping = await proto.wait_ping(node)
@@ -134,7 +139,7 @@ async def test_wait_ping(echo):
 
     # If we waited for a ping from a different node, wait_ping() would timeout and thus return
     # false.
-    recv_ping_coroutine = asyncio.coroutine(lambda: proto.recv_ping_v4(node, echo, b''))
+    recv_ping_coroutine = asyncio.coroutine(lambda: proto.recv_ping_v4(node, echo, b""))
     asyncio.ensure_future(recv_ping_coroutine())
 
     node2 = NodeFactory()
@@ -150,10 +155,16 @@ async def test_wait_pong():
     us = proto.this_node
     node = NodeFactory()
 
-    token = b'token'
+    token = b"token"
     # Schedule a call to proto.recv_pong() simulating a pong from the node we expect.
-    pong_msg_payload = [us.address.to_endpoint(), token, discovery._get_msg_expiration()]
-    recv_pong_coroutine = asyncio.coroutine(lambda: proto.recv_pong_v4(node, pong_msg_payload, b''))
+    pong_msg_payload = [
+        us.address.to_endpoint(),
+        token,
+        discovery._get_msg_expiration(),
+    ]
+    recv_pong_coroutine = asyncio.coroutine(
+        lambda: proto.recv_pong_v4(node, pong_msg_payload, b"")
+    )
     asyncio.ensure_future(recv_pong_coroutine())
 
     got_pong = await proto.wait_pong_v4(node, token)
@@ -166,8 +177,14 @@ async def test_wait_pong():
     # If the remote node echoed something different than what we expected, wait_pong() would
     # timeout.
     wrong_token = b"foo"
-    pong_msg_payload = [us.address.to_endpoint(), wrong_token, discovery._get_msg_expiration()]
-    recv_pong_coroutine = asyncio.coroutine(lambda: proto.recv_pong_v4(node, pong_msg_payload, b''))
+    pong_msg_payload = [
+        us.address.to_endpoint(),
+        wrong_token,
+        discovery._get_msg_expiration(),
+    ]
+    recv_pong_coroutine = asyncio.coroutine(
+        lambda: proto.recv_pong_v4(node, pong_msg_payload, b"")
+    )
     asyncio.ensure_future(recv_pong_coroutine())
 
     got_pong = await proto.wait_pong_v4(node, token)
@@ -186,9 +203,11 @@ async def test_wait_neighbours():
     neighbours = tuple(NodeFactory.create_batch(3))
     neighbours_msg_payload = [
         [n.address.to_endpoint() + [n.pubkey.to_bytes()] for n in neighbours],
-        discovery._get_msg_expiration()]
+        discovery._get_msg_expiration(),
+    ]
     recv_neighbours_coroutine = asyncio.coroutine(
-        lambda: proto.recv_neighbours_v4(node, neighbours_msg_payload, b''))
+        lambda: proto.recv_neighbours_v4(node, neighbours_msg_payload, b"")
+    )
     asyncio.ensure_future(recv_neighbours_coroutine())
 
     received_neighbours = await proto.wait_neighbours(node)
@@ -209,7 +228,7 @@ async def test_bond():
     proto = MockDiscoveryProtocol([])
     node = NodeFactory()
 
-    token = b'token'
+    token = b"token"
     # Do not send pings, instead simply return the pingid we'd expect back together with the pong.
     proto.send_ping_v4 = lambda remote: token
 
@@ -289,7 +308,10 @@ def test_unpack_eip8_packets():
     for cmd, packets in eip8_packets.items():
         for _, packet in packets.items():
             pubkey, cmd_id, payload, _ = discovery._unpack_v4(packet)
-            assert pubkey.to_hex() == '0xca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31387574077f301b421bc84df7266c44e9e6d569fc56be00812904767bf5ccd1fc7f'  # noqa: E501
+            assert (
+                pubkey.to_hex()
+                == "0xca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31387574077f301b421bc84df7266c44e9e6d569fc56be00812904767bf5ccd1fc7f"
+            )  # noqa: E501
             assert cmd.id == cmd_id
             assert cmd.elem_count == len(payload)
 
@@ -299,13 +321,13 @@ def test_v5_handlers(monkeypatch):
     # These are hex-encoded messages sent by geth over the wire, obtained via wireshark using the
     # ethereum dissectors (https://github.com/ConsenSys/ethereum-dissectors).
     v5_handlers = dict(
-        recv_topic_register='74656d706f7261727920646973636f766572792076354b1f9f999e3cf283e42270742eb3b52b1c0b63ede116ea58632517ffccc7516c794f6fc20f199b3a3a887f3e961b453bb9213eebad4581aaf9b2a60da7e5ba7b0106e2da954c455332406434653536373430663837366165663883666f6f8204d283666f6f',  # noqa: E501
-        recv_pong_v5='74656d706f7261727920646973636f766572792076356cb538da9382c022cc6d9b860b7cc7660718c731e1e6331de86a7cabfba8f01c061b5d6c09dd84de1d6c653536bb8ad31fb140d55d317dfaea5225a6907f49450102f855cb84a5a587f2827660827660a0b484b40a3712766dbbe8498f110bab968a543f9d0d57ec4cfa3b38b32ef2f237831f5ca3a0bd1ea218eaf7cddc6b068a414ae08876315f92bd134e214d5f3961d1a3e8e35b4ec13c',  # noqa: E501
-        recv_ping_v5='74656d706f7261727920646973636f76657279207635c26911f1d2a320f17fa683397028e6cc7ebe114623e28e933d870634aa6050f45960679170192ec0f133dbc3f4e627eef468dbdb48bf4a7848412938da21be8a0001f84104d79000000000000000000000000000000000827660827660cb84b0201d9282848b82848b845b7e5593d6954c4553324064346535363734306638373661656638',  # noqa: E501
-        recv_find_nodehash='74656d706f7261727920646973636f7665727920763558dc895847c5d2cc9ab6f722f25b9ff1b9c188af6ff7ed7c716a3cde2e93f3ec1e2b897acb1a33aa1d345c72ea34912287b21480c80ef99241d4bd9fd53711ee0105e6a038f7bb96e94bcd39866baa56038367ad6145de1ee8f4a8b0993ebdf8883a0ad8845b7e5593',  # noqa: E501
-        recv_topic_query='74656d706f7261727920646973636f76657279207635308621f1ed59a67613da52da3f84bac3d927d0dc1650b27552b10a0a823fb2133cebf3680f68bf88457bb0c07787031357430985d03afa1af0574e8ef0eab7fc0007d7954c455332406434653536373430663837366165663880',  # noqa: E501
-        recv_topic_nodes='74656d706f7261727920646973636f76657279207635e33166b59d20f206f0df2502be59186cb971c76ee91dba94ea9b1bbeb1308a5f4efbdf945ead9ba89d7c2c55d5d841dacdef69a455c98e1a5415e489508afa450008f87ea0cff0456ecbf2e6b0a40bc6541bd209c60ced192509470b405c256a17443674b3f85bf8599000000000000000000000ffff904c1f9c82765f82765fb840e7d624c642b86d3d48cea3e395305345c3a0226fc4c2dfdfbeb94cb6891e5e72b4467c69684ac14b072d2e4fa9c7a731cc1fdf0283abe41186d00b4c879f80ed',  # noqa: E501
-        recv_neighbours_v5='74656d706f7261727920646973636f766572792076358f6671ae9611c82c9cb04538aeed13a8b4e8eb8ad0d0dbba4b161ded52b195846c6086a0d42eef44cfcc0b793a0b9420613727958a8956139c127810b94d4e830004f90174f9016cf8599000000000000000000000ffff59401a22826597826597b840d723e264da67820fb0cedb0d03d5d975cc82bffdadd2879f3e5fa58b5525de5fdd0b90002bba44ac9232247dfbccb2a730e5ea98201bab1f1fe72422aa58143ff8599000000000000000000000ffffae6c601a82765f82765fb840779f19056e0a0486c3f6838896a931bf920cd8f551f664022a50690d4cca4730b50a97058aac11a5aa0cc55db6f9207e12a9cd389269f414a98e5b6a2f6c9f89f8599000000000000000000000ffff287603df827663827663b84085c85d7143ae8bb96924f2b54f1b3e70d8c4d367af305325d30a61385a432f247d2c75c45c6b4a60335060d072d7f5b35dd1d4c45f76941f62a4f83b6e75daaff8599000000000000000000000ffff0d4231b0820419820419b8407b46cc366b6cbaec088a7d15688a2c12bb8ba4cf7ee8e01b22ab534829f9ff13f7cc4130f10a4021f7d77e9b9c80a9777f5ddc035efb130fe3b6786434367973845b7e5569',  # noqa: E501
+        recv_topic_register="74656d706f7261727920646973636f766572792076354b1f9f999e3cf283e42270742eb3b52b1c0b63ede116ea58632517ffccc7516c794f6fc20f199b3a3a887f3e961b453bb9213eebad4581aaf9b2a60da7e5ba7b0106e2da954c455332406434653536373430663837366165663883666f6f8204d283666f6f",  # noqa: E501
+        recv_pong_v5="74656d706f7261727920646973636f766572792076356cb538da9382c022cc6d9b860b7cc7660718c731e1e6331de86a7cabfba8f01c061b5d6c09dd84de1d6c653536bb8ad31fb140d55d317dfaea5225a6907f49450102f855cb84a5a587f2827660827660a0b484b40a3712766dbbe8498f110bab968a543f9d0d57ec4cfa3b38b32ef2f237831f5ca3a0bd1ea218eaf7cddc6b068a414ae08876315f92bd134e214d5f3961d1a3e8e35b4ec13c",  # noqa: E501
+        recv_ping_v5="74656d706f7261727920646973636f76657279207635c26911f1d2a320f17fa683397028e6cc7ebe114623e28e933d870634aa6050f45960679170192ec0f133dbc3f4e627eef468dbdb48bf4a7848412938da21be8a0001f84104d79000000000000000000000000000000000827660827660cb84b0201d9282848b82848b845b7e5593d6954c4553324064346535363734306638373661656638",  # noqa: E501
+        recv_find_nodehash="74656d706f7261727920646973636f7665727920763558dc895847c5d2cc9ab6f722f25b9ff1b9c188af6ff7ed7c716a3cde2e93f3ec1e2b897acb1a33aa1d345c72ea34912287b21480c80ef99241d4bd9fd53711ee0105e6a038f7bb96e94bcd39866baa56038367ad6145de1ee8f4a8b0993ebdf8883a0ad8845b7e5593",  # noqa: E501
+        recv_topic_query="74656d706f7261727920646973636f76657279207635308621f1ed59a67613da52da3f84bac3d927d0dc1650b27552b10a0a823fb2133cebf3680f68bf88457bb0c07787031357430985d03afa1af0574e8ef0eab7fc0007d7954c455332406434653536373430663837366165663880",  # noqa: E501
+        recv_topic_nodes="74656d706f7261727920646973636f76657279207635e33166b59d20f206f0df2502be59186cb971c76ee91dba94ea9b1bbeb1308a5f4efbdf945ead9ba89d7c2c55d5d841dacdef69a455c98e1a5415e489508afa450008f87ea0cff0456ecbf2e6b0a40bc6541bd209c60ced192509470b405c256a17443674b3f85bf8599000000000000000000000ffff904c1f9c82765f82765fb840e7d624c642b86d3d48cea3e395305345c3a0226fc4c2dfdfbeb94cb6891e5e72b4467c69684ac14b072d2e4fa9c7a731cc1fdf0283abe41186d00b4c879f80ed",  # noqa: E501
+        recv_neighbours_v5="74656d706f7261727920646973636f766572792076358f6671ae9611c82c9cb04538aeed13a8b4e8eb8ad0d0dbba4b161ded52b195846c6086a0d42eef44cfcc0b793a0b9420613727958a8956139c127810b94d4e830004f90174f9016cf8599000000000000000000000ffff59401a22826597826597b840d723e264da67820fb0cedb0d03d5d975cc82bffdadd2879f3e5fa58b5525de5fdd0b90002bba44ac9232247dfbccb2a730e5ea98201bab1f1fe72422aa58143ff8599000000000000000000000ffffae6c601a82765f82765fb840779f19056e0a0486c3f6838896a931bf920cd8f551f664022a50690d4cca4730b50a97058aac11a5aa0cc55db6f9207e12a9cd389269f414a98e5b6a2f6c9f89f8599000000000000000000000ffff287603df827663827663b84085c85d7143ae8bb96924f2b54f1b3e70d8c4d367af305325d30a61385a432f247d2c75c45c6b4a60335060d072d7f5b35dd1d4c45f76941f62a4f83b6e75daaff8599000000000000000000000ffff0d4231b0820419820419b8407b46cc366b6cbaec088a7d15688a2c12bb8ba4cf7ee8e01b22ab534829f9ff13f7cc4130f10a4021f7d77e9b9c80a9777f5ddc035efb130fe3b6786434367973845b7e5569",  # noqa: E501
     )
 
     proto = DiscoveryProtocolFactory()
@@ -325,9 +347,11 @@ def test_ping_pong_v5(alice, bob):
 
     # Collect all pongs received by alice in a list for later inspection.
     received_pongs = []
-    alice.recv_pong_v5 = lambda node, payload, hash_, _: received_pongs.append((node, payload))
+    alice.recv_pong_v5 = lambda node, payload, hash_, _: received_pongs.append(
+        (node, payload)
+    )
 
-    topics = [b'foo', b'bar']
+    topics = [b"foo", b"bar"]
     token = alice.send_ping_v5(bob.this_node, topics)
 
     assert len(received_pongs) == 1
@@ -344,7 +368,7 @@ def test_find_node_neighbours_v5(alice, bob):
 
 def test_topic_table():
     table = discovery.TopicTable(logging.getLogger("test"))
-    topic = b'topic'
+    topic = b"topic"
     node = NodeFactory()
 
     table.add_node(node, topic)
@@ -376,14 +400,19 @@ def remove_whitespace(s):
 eip8_packets = {
     discovery.CMD_PING: dict(
         # ping packet with version 4, additional list elements
-        ping1=decode_hex(remove_whitespace("""
+        ping1=decode_hex(
+            remove_whitespace(
+                """
         e9614ccfd9fc3e74360018522d30e1419a143407ffcce748de3e22116b7e8dc92ff74788c0b6663a
         aa3d67d641936511c8f8d6ad8698b820a7cf9e1be7155e9a241f556658c55428ec0563514365799a
         4be2be5a685a80971ddcfa80cb422cdd0101ec04cb847f000001820cfa8215a8d790000000000000
-        000000000000000000018208ae820d058443b9a3550102""")),
-
+        000000000000000000018208ae820d058443b9a3550102"""
+            )
+        ),
         # ping packet with version 555, additional list elements and additional random data
-        ping2=decode_hex(remove_whitespace("""
+        ping2=decode_hex(
+            remove_whitespace(
+                """
         577be4349c4dd26768081f58de4c6f375a7a22f3f7adda654d1428637412c3d7fe917cadc56d4e5e
         7ffae1dbe3efffb9849feb71b262de37977e7c7a44e677295680e9e38ab26bee2fcbae207fba3ff3
         d74069a50b902a82c9903ed37cc993c50001f83e82022bd79020010db83c4d001500000000abcdef
@@ -391,34 +420,43 @@ eip8_packets = {
         040531b9019afde696e582a78fa8d95ea13ce3297d4afb8ba6433e4154caa5ac6431af1b80ba7602
         3fa4090c408f6b4bc3701562c031041d4702971d102c9ab7fa5eed4cd6bab8f7af956f7d565ee191
         7084a95398b6a21eac920fe3dd1345ec0a7ef39367ee69ddf092cbfe5b93e5e568ebc491983c09c7
-        6d922dc3""")),
+        6d922dc3"""
+            )
+        ),
     ),
-
     discovery.CMD_PONG: dict(
         # pong packet with additional list elements and additional random data
-        pong=decode_hex(remove_whitespace("""
+        pong=decode_hex(
+            remove_whitespace(
+                """
         09b2428d83348d27cdf7064ad9024f526cebc19e4958f0fdad87c15eb598dd61d08423e0bf66b206
         9869e1724125f820d851c136684082774f870e614d95a2855d000f05d1648b2d5945470bc187c2d2
         216fbe870f43ed0909009882e176a46b0102f846d79020010db885a308d313198a2e037073488208
         ae82823aa0fbc914b16819237dcd8801d7e53f69e9719adecb3cc0e790c57e91ca4461c9548443b9
         a355c6010203c2040506a0c969a58f6f9095004c0177a6b47f451530cab38966a25cca5cb58f0555
-        42124e""")),
+        42124e"""
+            )
+        )
     ),
-
     discovery.CMD_FIND_NODE: dict(
         # findnode packet with additional list elements and additional random data
-        findnode=decode_hex(remove_whitespace("""
+        findnode=decode_hex(
+            remove_whitespace(
+                """
         c7c44041b9f7c7e41934417ebac9a8e1a4c6298f74553f2fcfdcae6ed6fe53163eb3d2b52e39fe91
         831b8a927bf4fc222c3902202027e5e9eb812195f95d20061ef5cd31d502e47ecb61183f74a504fe
         04c51e73df81f25c4d506b26db4517490103f84eb840ca634cae0d49acb401d8a4c6b6fe8c55b70d
         115bf400769cc1400f3258cd31387574077f301b421bc84df7266c44e9e6d569fc56be0081290476
         7bf5ccd1fc7f8443b9a35582999983999999280dc62cc8255c73471e0a61da0c89acdc0e035e260a
-        dd7fc0c04ad9ebf3919644c91cb247affc82b69bd2ca235c71eab8e49737c937a2c396""")),
+        dd7fc0c04ad9ebf3919644c91cb247affc82b69bd2ca235c71eab8e49737c937a2c396"""
+            )
+        )
     ),
-
     discovery.CMD_NEIGHBOURS: dict(
         # neighbours packet with additional list elements and additional random data
-        neighbours=decode_hex(remove_whitespace("""
+        neighbours=decode_hex(
+            remove_whitespace(
+                """
         c679fc8fe0b8b12f06577f2e802d34f6fa257e6137a995f6f4cbfc9ee50ed3710faf6e66f932c4c8
         d81d64343f429651328758b47d3dbc02c4042f0fff6946a50f4a49037a72bb550f3a7872363a83e1
         b9ee6469856c24eb4ef80b7535bcf99c0004f9015bf90150f84d846321163782115c82115db84031
@@ -430,7 +468,9 @@ eip8_packets = {
         d96126051913f44582e8c199ad7c6d6819e9a56483f637feaac9448aacf8599020010db885a308d3
         13198a2e037073488203e78203e8b8408dcab8618c3253b558d459da53bd8fa68935a719aff8b811
         197101a4b2b47dd2d47295286fc00cc081bb542d760717d1bdd6bec2c37cd72eca367d6dd3b9df73
-        8443b9a355010203b525a138aa34383fec3d2719a0""")),
+        8443b9a355010203b525a138aa34383fec3d2719a0"""
+            )
+        )
     ),
 }
 
@@ -463,18 +503,20 @@ class MockDiscoveryProtocol(discovery.DiscoveryProtocol):
 
     def __init__(self, bootnodes):
         privkey = keys.PrivateKey(keccak(b"seed"))
-        super().__init__(privkey, AddressFactory(), bootnodes, CancelToken("discovery-test"))
+        super().__init__(
+            privkey, AddressFactory(), bootnodes, CancelToken("discovery-test")
+        )
 
     def send_ping_v4(self, node):
-        echo = hex(random.randint(0, 2**256))[-32:]
-        self.messages.append((node, 'ping', echo))
+        echo = hex(random.randint(0, 2 ** 256))[-32:]
+        self.messages.append((node, "ping", echo))
         return echo
 
     def send_pong_v4(self, node, echo):
-        self.messages.append((node, 'pong', echo))
+        self.messages.append((node, "pong", echo))
 
     def send_find_node_v4(self, node, nodeid):
-        self.messages.append((node, 'find_node', nodeid))
+        self.messages.append((node, "find_node", nodeid))
 
     def send_neighbours_v4(self, node, neighbours):
-        self.messages.append((node, 'neighbours', neighbours))
+        self.messages.append((node, "neighbours", neighbours))

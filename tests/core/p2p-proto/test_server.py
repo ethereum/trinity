@@ -10,10 +10,7 @@ from eth.db.atomic import AtomicDB
 from eth.db.chain import ChainDB
 
 from p2p.auth import HandshakeInitiator, _handshake
-from p2p.kademlia import (
-    Node,
-    Address,
-)
+from p2p.kademlia import Node, Address
 from p2p.peer import PeerConnection
 from p2p.tools.factories import get_open_port
 from p2p.tools.paragon import (
@@ -36,14 +33,14 @@ from tests.core.integration_test_helpers import (
 
 port = get_open_port()
 NETWORK_ID = 99
-SERVER_ADDRESS = Address('127.0.0.1', udp_port=port, tcp_port=port)
-RECEIVER_PRIVKEY = keys.PrivateKey(eip8_values['receiver_private_key'])
+SERVER_ADDRESS = Address("127.0.0.1", udp_port=port, tcp_port=port)
+RECEIVER_PRIVKEY = keys.PrivateKey(eip8_values["receiver_private_key"])
 RECEIVER_PUBKEY = RECEIVER_PRIVKEY.public_key
 RECEIVER_REMOTE = Node(RECEIVER_PUBKEY, SERVER_ADDRESS)
 
-INITIATOR_PRIVKEY = keys.PrivateKey(eip8_values['initiator_private_key'])
+INITIATOR_PRIVKEY = keys.PrivateKey(eip8_values["initiator_private_key"])
 INITIATOR_PUBKEY = INITIATOR_PRIVKEY.public_key
-INITIATOR_ADDRESS = Address('127.0.0.1', get_open_port() + 1)
+INITIATOR_ADDRESS = Address("127.0.0.1", get_open_port() + 1)
 INITIATOR_REMOTE = Node(INITIATOR_PUBKEY, INITIATOR_ADDRESS)
 
 
@@ -98,7 +95,8 @@ async def test_server_incoming_connection(monkeypatch, server, event_loop):
     reader, writer = await initiator.connect()
     # Send auth init message to the server, then read and decode auth ack
     aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
-        initiator, reader, writer, token)
+        initiator, reader, writer, token
+    )
 
     connection = PeerConnection(
         reader=reader,
@@ -141,11 +139,10 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server):
         nonlocal started_peers
         started_peers.append(peer)
 
-    monkeypatch.setattr(server.peer_pool, 'start_peer', mock_start_peer)
+    monkeypatch.setattr(server.peer_pool, "start_peer", mock_start_peer)
 
     initiator_peer_pool = ParagonPeerPool(
-        privkey=INITIATOR_PRIVKEY,
-        context=ParagonContext(),
+        privkey=INITIATOR_PRIVKEY, context=ParagonContext()
     )
     nodes = [RECEIVER_REMOTE]
     asyncio.ensure_future(initiator_peer_pool.run(), loop=event_loop)
@@ -166,23 +163,18 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server):
 async def test_peer_pool_answers_connect_commands(event_loop, event_bus, server):
     # This is the PeerPool which will accept our message and try to connect to {server}
     initiator_peer_pool = ParagonPeerPool(
-        privkey=INITIATOR_PRIVKEY,
-        context=ParagonContext(),
-        event_bus=event_bus,
+        privkey=INITIATOR_PRIVKEY, context=ParagonContext(), event_bus=event_bus
     )
     asyncio.ensure_future(initiator_peer_pool.run(), loop=event_loop)
     await initiator_peer_pool.events.started.wait()
     await make_peer_pool_answer_event_bus_requests(
-        event_bus,
-        initiator_peer_pool,
-        handler_type=ParagonPeerPoolEventServer
+        event_bus, initiator_peer_pool, handler_type=ParagonPeerPoolEventServer
     )
 
     assert len(server.peer_pool.connected_nodes) == 0
 
     event_bus.broadcast(
-        ConnectToNodeCommand(RECEIVER_REMOTE),
-        TO_NETWORKING_BROADCAST_CONFIG
+        ConnectToNodeCommand(RECEIVER_REMOTE), TO_NETWORKING_BROADCAST_CONFIG
     )
 
     await asyncio.sleep(0.5)

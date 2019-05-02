@@ -1,4 +1,3 @@
-
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.endpoint import TrinityEventBusEndpoint
 from trinity.nodes.events import NetworkIdRequest
@@ -7,7 +6,6 @@ from trinity.rpc.modules import BaseRPCModule
 
 
 class Net(BaseRPCModule):
-
     def __init__(self, event_bus: TrinityEventBusEndpoint):
         self.event_bus = event_bus
 
@@ -16,8 +14,7 @@ class Net(BaseRPCModule):
         Returns the current network ID.
         """
         response = await self.event_bus.request(
-            NetworkIdRequest(),
-            TO_NETWORKING_BROADCAST_CONFIG
+            NetworkIdRequest(), TO_NETWORKING_BROADCAST_CONFIG
         )
         return str(response.network_id)
 
@@ -26,8 +23,7 @@ class Net(BaseRPCModule):
         Return the number of peers that are currently connected to the node
         """
         response = await self.event_bus.request(
-            PeerCountRequest(),
-            TO_NETWORKING_BROADCAST_CONFIG
+            PeerCountRequest(), TO_NETWORKING_BROADCAST_CONFIG
         )
         return hex(response.peer_count)
 

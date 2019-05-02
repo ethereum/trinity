@@ -1,26 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import (
-    Any,
-    Generic,
-    Tuple,
-    TypeVar,
-    cast,
-)
+from typing import Any, Generic, Tuple, TypeVar, cast
 
 from eth.rlp.headers import BlockHeader
-from eth_typing import (
-    Hash32,
-    BlockIdentifier,
-    BlockNumber,
-)
-from eth_utils import (
-    ValidationError,
-    encode_hex,
-)
+from eth_typing import Hash32, BlockIdentifier, BlockNumber
+from eth_utils import ValidationError, encode_hex
 
 from trinity._utils.headers import sequence_builder
 
-TResponse = TypeVar('TResponse')
+TResponse = TypeVar("TResponse")
 
 
 def noop_payload_validator(request: Any, response: Any) -> None:
@@ -31,6 +18,7 @@ class BaseValidator(ABC, Generic[TResponse]):
     """
     A validator which compares the initial request to its normalized result.
     """
+
     @abstractmethod
     def validate_result(self, result: TResponse) -> None:
         pass
@@ -42,11 +30,13 @@ class BaseBlockHeadersValidator(BaseValidator[Tuple[BlockHeader, ...]]):
     skip: int
     reverse: bool
 
-    def __init__(self,
-                 block_number_or_hash: BlockIdentifier,
-                 max_headers: int,
-                 skip: int,
-                 reverse: bool) -> None:
+    def __init__(
+        self,
+        block_number_or_hash: BlockIdentifier,
+        max_headers: int,
+        skip: int,
+        reverse: bool,
+    ) -> None:
         self.block_number_or_hash = block_number_or_hash
         self.max_headers = max_headers
         self.skip = skip
@@ -77,7 +67,9 @@ class BaseBlockHeadersValidator(BaseValidator[Tuple[BlockHeader, ...]]):
         )
         return self._validate_sequence(block_numbers)
 
-    def _generate_block_numbers(self, block_number: BlockNumber=None) -> Tuple[BlockNumber, ...]:
+    def _generate_block_numbers(
+        self, block_number: BlockNumber = None
+    ) -> Tuple[BlockNumber, ...]:
         if block_number is None and not self._is_numbered:
             raise TypeError(
                 "A `block_number` must be supplied to generate block numbers "
@@ -93,12 +85,7 @@ class BaseBlockHeadersValidator(BaseValidator[Tuple[BlockHeader, ...]]):
 
         max_headers = min(self.protocol_max_request_size, self.max_headers)
 
-        return sequence_builder(
-            block_number,
-            max_headers,
-            self.skip,
-            self.reverse,
-        )
+        return sequence_builder(block_number, max_headers, self.skip, self.reverse)
 
     @property
     def _is_numbered(self) -> bool:
@@ -115,18 +102,15 @@ class BaseBlockHeadersValidator(BaseValidator[Tuple[BlockHeader, ...]]):
         # check for numbers that should not be present.
         unexpected_numbers = set(block_numbers).difference(expected_numbers)
         if unexpected_numbers:
-            raise ValidationError(f'Unexpected numbers: {unexpected_numbers}')
+            raise ValidationError(f"Unexpected numbers: {unexpected_numbers}")
 
         # check that the numbers are correctly ordered.
-        expected_order = tuple(sorted(
-            block_numbers,
-            reverse=self.reverse,
-        ))
+        expected_order = tuple(sorted(block_numbers, reverse=self.reverse))
         if block_numbers != expected_order:
             raise ValidationError(
-                'Returned headers are not correctly ordered.\n'
-                f'Expected: {expected_order}\n'
-                f'Got     : {block_numbers}\n'
+                "Returned headers are not correctly ordered.\n"
+                f"Expected: {expected_order}\n"
+                f"Got     : {block_numbers}\n"
             )
 
         # check that all provided numbers are an ordered subset of the master
@@ -138,7 +122,7 @@ class BaseBlockHeadersValidator(BaseValidator[Tuple[BlockHeader, ...]]):
                     break
             else:
                 raise ValidationError(
-                    'Returned headers contain an unexpected block number.\n'
-                    f'Unexpected Number: {number}\n'
-                    f'Expected Numbers : {expected_numbers}'
+                    "Returned headers contain an unexpected block number.\n"
+                    f"Unexpected Number: {number}\n"
+                    f"Expected Numbers : {expected_numbers}"
                 )

@@ -1,41 +1,20 @@
 import asyncio
 import itertools
 import operator
-from typing import (
-    cast,
-    Tuple,
-    Iterable,
-    AsyncGenerator,
-)
+from typing import cast, Tuple, Iterable, AsyncGenerator
 
-from eth_utils import (
-    ValidationError,
-)
-from eth_utils.toolz import (
-    first,
-)
+from eth_utils import ValidationError
+from eth_utils.toolz import first
 
-from cancel_token import (
-    CancelToken,
-)
+from cancel_token import CancelToken
 
-from p2p.service import (
-    BaseService,
-)
+from p2p.service import BaseService
 
-from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
-    BeaconBlock,
-)
+from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
-from eth2.beacon.typing import (
-    Slot,
-)
+from eth2.beacon.typing import Slot
 
-from trinity.protocol.bcc.peer import (
-    BCCPeer,
-    BCCPeerPool,
-)
+from trinity.protocol.bcc.peer import BCCPeer, BCCPeerPool
 from trinity.sync.beacon.constants import (
     MAX_BLOCKS_PER_REQUEST,
     PEER_SELECTION_RETRY_INTERVAL,
@@ -46,10 +25,12 @@ from trinity.sync.beacon.constants import (
 class BeaconChainSyncer(BaseService):
     """Sync from our finalized head until their preliminary head."""
 
-    def __init__(self,
-                 chain_db: BaseAsyncBeaconChainDB,
-                 peer_pool: BCCPeerPool,
-                 token: CancelToken = None) -> None:
+    def __init__(
+        self,
+        chain_db: BaseAsyncBeaconChainDB,
+        peer_pool: BCCPeerPool,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
 
         self.chain_db = chain_db
@@ -136,23 +117,22 @@ class BeaconChainSyncer(BaseService):
             try:
                 await self.chain_db.coro_persist_block_chain(batch, BeaconBlock)
             except ValidationError as exception:
-                self.logger.info(f"Received invalid batch from {self.sync_peer}: {exception}")
+                self.logger.info(
+                    f"Received invalid batch from {self.sync_peer}: {exception}"
+                )
                 break
 
-    async def request_batches(self,
-                              start_slot: Slot,
-                              ) -> AsyncGenerator[Tuple[BaseBeaconBlock, ...], None]:
+    async def request_batches(
+        self, start_slot: Slot
+    ) -> AsyncGenerator[Tuple[BaseBeaconBlock, ...], None]:
         slot = start_slot
         while True:
             self.logger.debug(
-                "Requesting blocks from %s starting at #%d",
-                self.sync_peer,
-                slot,
+                "Requesting blocks from %s starting at #%d", self.sync_peer, slot
             )
 
             batch = await self.sync_peer.requests.get_beacon_blocks(
-                slot,
-                MAX_BLOCKS_PER_REQUEST,
+                slot, MAX_BLOCKS_PER_REQUEST
             )
 
             if len(batch) == 0:
@@ -173,8 +153,7 @@ class BeaconChainSyncer(BaseService):
             )
 
         canonical_parent = await self.chain_db.coro_get_canonical_block_by_slot(
-            parent_slot,
-            BeaconBlock,
+            parent_slot, BeaconBlock
         )
         if canonical_parent.signing_root != previous_block_root:
             message = f"Peer has different block finalized at slot #{parent_slot}"

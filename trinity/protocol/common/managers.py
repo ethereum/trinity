@@ -1,29 +1,14 @@
 import asyncio
 import time
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    Generic,
-    FrozenSet,
-    Tuple,
-    Type,
-    cast,
-)
+from typing import Any, AsyncGenerator, Callable, Generic, FrozenSet, Tuple, Type, cast
 
 from cancel_token import CancelToken
 
-from eth_utils import (
-    ValidationError,
-)
+from eth_utils import ValidationError
 
 from p2p.exceptions import PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.protocol import (
-    BaseRequest,
-    Command,
-    TRequestPayload,
-)
+from p2p.protocol import BaseRequest, Command, TRequestPayload
 from p2p.service import BaseService
 from p2p._utils import ensure_global_asyncio_executor
 
@@ -32,16 +17,12 @@ from trinity.exceptions import AlreadyWaiting
 from .constants import ROUND_TRIP_TIMEOUT, NUM_QUEUED_REQUESTS
 from .normalizers import BaseNormalizer
 from .trackers import BasePerformanceTracker
-from .types import (
-    TResponsePayload,
-    TResult,
-)
+from .types import TResponsePayload, TResult
 
 
 class ResponseCandidateStream(
-        PeerSubscriber,
-        BaseService,
-        Generic[TRequestPayload, TResponsePayload]):
+    PeerSubscriber, BaseService, Generic[TRequestPayload, TResponsePayload]
+):
 
     #
     # PeerSubscriber
@@ -54,26 +35,25 @@ class ResponseCandidateStream(
 
     response_timeout: float = ROUND_TRIP_TIMEOUT
 
-    pending_request: Tuple[float, 'asyncio.Future[TResponsePayload]'] = None
+    pending_request: Tuple[float, "asyncio.Future[TResponsePayload]"] = None
 
     _peer: BasePeer
 
     def __init__(
-            self,
-            peer: BasePeer,
-            response_msg_type: Type[Command],
-            token: CancelToken) -> None:
+        self, peer: BasePeer, response_msg_type: Type[Command], token: CancelToken
+    ) -> None:
         super().__init__(token)
         self._peer = peer
         self.response_msg_type = response_msg_type
         self._lock = asyncio.Lock()
 
     async def payload_candidates(
-            self,
-            request: BaseRequest[TRequestPayload],
-            tracker: BasePerformanceTracker[BaseRequest[TRequestPayload], Any],
-            *,
-            timeout: float = None) -> AsyncGenerator[TResponsePayload, None]:
+        self,
+        request: BaseRequest[TRequestPayload],
+        tracker: BasePerformanceTracker[BaseRequest[TRequestPayload], Any],
+        *,
+        timeout: float = None,
+    ) -> AsyncGenerator[TResponsePayload, None]:
         """
         Make a request and iterate through candidates for a valid response.
 
@@ -85,7 +65,9 @@ class ResponseCandidateStream(
         # The _lock ensures that we never have two concurrent requests to a
         # single peer for a single command pair in flight.
         try:
-            await self.wait(self._lock.acquire(), timeout=total_timeout * NUM_QUEUED_REQUESTS)
+            await self.wait(
+                self._lock.acquire(), timeout=total_timeout * NUM_QUEUED_REQUESTS
+            )
         except TimeoutError:
             raise AlreadyWaiting(
                 f"Timed out waiting for {self.response_msg_name} request lock "
@@ -97,7 +79,9 @@ class ResponseCandidateStream(
         try:
             self._request(request)
             while self._is_pending():
-                timeout_remaining = max(0, total_timeout - (time.perf_counter() - start_at))
+                timeout_remaining = max(
+                    0, total_timeout - (time.perf_counter() - start_at)
+                )
 
                 try:
                     yield await self._get_payload(timeout_remaining)
@@ -113,7 +97,9 @@ class ResponseCandidateStream(
 
     def complete_request(self) -> None:
         if self.pending_request is None:
-            self.logger.warning("`complete_request` was called when there was no pending request")
+            self.logger.warning(
+                "`complete_request` was called when there was no pending request"
+            )
         self.pending_request = None
 
     #
@@ -126,12 +112,16 @@ class ResponseCandidateStream(
             while self.is_operational:
                 peer, cmd, msg = await self.wait(self.msg_queue.get())
                 if peer != self._peer:
-                    self.logger.error("Unexpected peer: %s  expected: %s", peer, self._peer)
+                    self.logger.error(
+                        "Unexpected peer: %s  expected: %s", peer, self._peer
+                    )
                     continue
                 elif isinstance(cmd, self.response_msg_type):
                     await self._handle_msg(cast(TResponsePayload, msg))
                 else:
-                    self.logger.warning("Unexpected payload type: %s", cmd.__class__.__name__)
+                    self.logger.warning(
+                        "Unexpected payload type: %s", cmd.__class__.__name__
+                    )
 
     async def _handle_msg(self, msg: TResponsePayload) -> None:
         if self.pending_request is None:
@@ -146,8 +136,7 @@ class ResponseCandidateStream(
             future.set_result(msg)
         except asyncio.InvalidStateError:
             self.logger.debug(
-                "%s received a message response, but future was already done",
-                self,
+                "%s received a message response, but future was already done", self
             )
 
     async def _get_payload(self, timeout: float) -> TResponsePayload:
@@ -167,11 +156,13 @@ class ResponseCandidateStream(
             # This is somewhat of an invariant check but since there the
             # linkage between the lock and this method are loose this sanity
             # check seems appropriate.
-            raise Exception("Invariant: cannot issue a request without an acquired lock")
+            raise Exception(
+                "Invariant: cannot issue a request without an acquired lock"
+            )
 
         self._peer.sub_proto.send_request(request)
 
-        future: 'asyncio.Future[TResponsePayload]' = asyncio.Future()
+        future: "asyncio.Future[TResponsePayload]" = asyncio.Future()
         self.pending_request = (time.perf_counter(), future)
 
     def _is_pending(self) -> bool:
@@ -179,12 +170,16 @@ class ResponseCandidateStream(
 
     async def _cleanup(self) -> None:
         if self.pending_request is not None:
-            self.logger.debug("Stream %r shutting down, cancelling the pending request", self)
+            self.logger.debug(
+                "Stream %r shutting down, cancelling the pending request", self
+            )
             _, future = self.pending_request
             try:
-                future.set_exception(PeerConnectionLost(
-                    f"Pending request can't complete: {self} is shutting down"
-                ))
+                future.set_exception(
+                    PeerConnectionLost(
+                        f"Pending request can't complete: {self} is shutting down"
+                    )
+                )
             except asyncio.InvalidStateError:
                 self.logger.debug(
                     "%s cancelled pending future in cleanup, but it was already done",
@@ -199,12 +194,16 @@ class ResponseCandidateStream(
 
     def deregister_peer(self, peer: BasePeer) -> None:
         if self.pending_request is not None:
-            self.logger.debug("Peer stream %r shutting down, cancelling the pending request", self)
+            self.logger.debug(
+                "Peer stream %r shutting down, cancelling the pending request", self
+            )
             _, future = self.pending_request
             try:
-                future.set_exception(PeerConnectionLost(
-                    f"Pending request can't complete: {self} peer went offline"
-                ))
+                future.set_exception(
+                    PeerConnectionLost(
+                        f"Pending request can't complete: {self} peer went offline"
+                    )
+                )
             except asyncio.InvalidStateError:
                 self.logger.debug(
                     "%s cancelled pending future in deregister, but it was already done",
@@ -212,29 +211,27 @@ class ResponseCandidateStream(
                 )
 
     def __repr__(self) -> str:
-        return f'<ResponseCandidateStream({self._peer!s}, {self.response_msg_type!r})>'
+        return f"<ResponseCandidateStream({self._peer!s}, {self.response_msg_type!r})>"
 
 
 class ExchangeManager(Generic[TRequestPayload, TResponsePayload, TResult]):
     _response_stream: ResponseCandidateStream[TRequestPayload, TResponsePayload] = None
 
     def __init__(
-            self,
-            peer: BasePeer,
-            listening_for: Type[Command],
-            cancel_token: CancelToken) -> None:
+        self, peer: BasePeer, listening_for: Type[Command], cancel_token: CancelToken
+    ) -> None:
         self._peer = peer
         self._cancel_token = cancel_token
         self._response_command_type = listening_for
 
     async def launch_service(self) -> None:
         if self._cancel_token.triggered:
-            raise PeerConnectionLost("Peer %s is gone. Ignoring new requests to it" % self._peer)
+            raise PeerConnectionLost(
+                "Peer %s is gone. Ignoring new requests to it" % self._peer
+            )
 
         self._response_stream = ResponseCandidateStream(
-            self._peer,
-            self._response_command_type,
-            self._cancel_token,
+            self._peer, self._response_command_type, self._cancel_token
         )
         self._peer.run_daemon(self._response_stream)
         await self._response_stream.events.started.wait()
@@ -244,13 +241,14 @@ class ExchangeManager(Generic[TRequestPayload, TResponsePayload, TResult]):
         return self.service is not None and self.service.is_operational
 
     async def get_result(
-            self,
-            request: BaseRequest[TRequestPayload],
-            normalizer: BaseNormalizer[TResponsePayload, TResult],
-            validate_result: Callable[[TResult], None],
-            payload_validator: Callable[[TResponsePayload], None],
-            tracker: BasePerformanceTracker[BaseRequest[TRequestPayload], TResult],
-            timeout: float = None) -> TResult:
+        self,
+        request: BaseRequest[TRequestPayload],
+        normalizer: BaseNormalizer[TResponsePayload, TResult],
+        validate_result: Callable[[TResult], None],
+        payload_validator: Callable[[TResponsePayload], None],
+        tracker: BasePerformanceTracker[BaseRequest[TRequestPayload], TResult],
+        timeout: float = None,
+    ) -> TResult:
 
         if not self.is_operational:
             if self.service is None or not self.service.is_cancelled:
@@ -264,7 +262,9 @@ class ExchangeManager(Generic[TRequestPayload, TResponsePayload, TResult]):
 
         stream = self._response_stream
 
-        async for payload in stream.payload_candidates(request, tracker, timeout=timeout):
+        async for payload in stream.payload_candidates(
+            request, tracker, timeout=timeout
+        ):
             try:
                 payload_validator(payload)
 
@@ -274,7 +274,7 @@ class ExchangeManager(Generic[TRequestPayload, TResponsePayload, TResult]):
                         # Node launches. The node manages the lifecycle of the executor.
                         ensure_global_asyncio_executor(),
                         normalizer.normalize_result,
-                        payload
+                        payload,
                     )
                 else:
                     result = normalizer.normalize_result(payload)
@@ -289,15 +289,13 @@ class ExchangeManager(Generic[TRequestPayload, TResponsePayload, TResult]):
                 )
                 continue
             else:
-                tracker.record_response(
-                    stream.last_response_time,
-                    request,
-                    result,
-                )
+                tracker.record_response(stream.last_response_time, request, result)
                 stream.complete_request()
                 return result
 
-        raise ValidationError("Manager is not pending a response, but no valid response received")
+        raise ValidationError(
+            "Manager is not pending a response, but no valid response received"
+        )
 
     @property
     def service(self) -> BaseService:

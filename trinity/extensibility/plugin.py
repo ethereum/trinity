@@ -1,58 +1,21 @@
-from abc import (
-    ABC,
-    abstractmethod
-)
-from argparse import (
-    ArgumentParser,
-    Namespace,
-    _SubParsersAction,
-)
+from abc import ABC, abstractmethod
+from argparse import ArgumentParser, Namespace, _SubParsersAction
 import asyncio
-from enum import (
-    auto,
-    Enum,
-)
+from enum import auto, Enum
 import logging
-from multiprocessing import (
-    Process
-)
-from typing import (
-    Any,
-    Dict,
-    NamedTuple
-)
+from multiprocessing import Process
+from typing import Any, Dict, NamedTuple
 
-from lahja import (
-    ConnectionConfig,
-)
+from lahja import ConnectionConfig
 
-from trinity.config import (
-    TrinityConfig
-)
-from trinity.constants import (
-    MAIN_EVENTBUS_ENDPOINT,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity.extensibility.events import (
-    BaseEvent,
-    PluginStartedEvent,
-)
-from trinity.extensibility.exceptions import (
-    EventBusNotReady,
-    InvalidPluginStatus,
-)
-from trinity._utils.mp import (
-    ctx,
-)
-from trinity._utils.logging import (
-    setup_log_levels,
-    setup_queue_logging,
-)
-from trinity._utils.os import (
-    friendly_filename_or_url,
-)
+from trinity.config import TrinityConfig
+from trinity.constants import MAIN_EVENTBUS_ENDPOINT
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.extensibility.events import BaseEvent, PluginStartedEvent
+from trinity.extensibility.exceptions import EventBusNotReady, InvalidPluginStatus
+from trinity._utils.mp import ctx
+from trinity._utils.logging import setup_log_levels, setup_queue_logging
+from trinity._utils.os import friendly_filename_or_url
 
 
 class PluginStatus(Enum):
@@ -62,7 +25,7 @@ class PluginStatus(Enum):
     STOPPED = auto()
 
 
-INVALID_START_STATUS = (PluginStatus.NOT_READY, PluginStatus.STARTED,)
+INVALID_START_STATUS = (PluginStatus.NOT_READY, PluginStatus.STARTED)
 
 
 class TrinityBootInfo(NamedTuple):
@@ -83,7 +46,9 @@ class PluginContext:
     :meth:`~trinity.extensibility.plugin.BasePlugin.on_ready` call.
     """
 
-    def __init__(self, endpoint: TrinityEventBusEndpoint, boot_info: TrinityBootInfo) -> None:
+    def __init__(
+        self, endpoint: TrinityEventBusEndpoint, boot_info: TrinityBootInfo
+    ) -> None:
         self._event_bus = endpoint
         self._args: Namespace = boot_info.args
         self._trinity_config: TrinityConfig = boot_info.trinity_config
@@ -139,7 +104,7 @@ class BasePlugin(ABC):
         """
         Get the :class:`~logging.Logger` for this plugin.
         """
-        return logging.getLogger(f'trinity.extensibility.plugin.BasePlugin#{self.name}')
+        return logging.getLogger(f"trinity.extensibility.plugin.BasePlugin#{self.name}")
 
     @property
     def event_bus(self) -> TrinityEventBusEndpoint:
@@ -148,7 +113,9 @@ class BasePlugin(ABC):
         event bus
         """
         if self.context is None:
-            raise EventBusNotReady("Tried accessing ``event_bus`` before ``ready`` was called")
+            raise EventBusNotReady(
+                "Tried accessing ``event_bus`` before ``ready`` was called"
+            )
 
         return self.context.event_bus
 
@@ -194,7 +161,9 @@ class BasePlugin(ABC):
         """
         pass
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         """
         Give the plugin a chance to amend the Trinity CLI argument parser. This hook is called
         before :meth:`~trinity.extensibility.plugin.BasePlugin.on_ready`
@@ -215,9 +184,7 @@ class BasePlugin(ABC):
 
         self._status = PluginStatus.STARTED
         self.do_start()
-        self.event_bus.broadcast(
-            PluginStartedEvent(type(self))
-        )
+        self.event_bus.broadcast(PluginStartedEvent(type(self)))
         self.logger.info("Plugin started: %s", self.name)
 
     def do_start(self) -> None:
@@ -258,6 +225,7 @@ class BaseMainProcessPlugin(BasePlugin):
     early before any of the subsystems started. In that sense it redefines the whole meaning of the
     ``trinity`` command.
     """
+
     pass
 
 
@@ -286,16 +254,14 @@ class BaseIsolatedPlugin(BasePlugin):
         Prepare the plugin to get started and eventually call ``do_start`` in a separate process.
         """
         self._status = PluginStatus.STARTED
-        self._process = ctx.Process(
-            target=self._prepare_start,
-        )
+        self._process = ctx.Process(target=self._prepare_start)
 
         self._process.start()
         self.logger.info("Plugin started: %s (pid=%d)", self.name, self._process.pid)
 
     def _prepare_start(self) -> None:
-        log_queue = self.context.boot_kwargs['log_queue']
-        level = self.context.boot_kwargs.get('log_level', logging.INFO)
+        log_queue = self.context.boot_kwargs["log_queue"]
+        level = self.context.boot_kwargs.get("log_level", logging.INFO)
         setup_queue_logging(log_queue, level)
         if self.context.args.log_levels:
             setup_log_levels(self.context.args.log_levels)
@@ -304,14 +270,14 @@ class BaseIsolatedPlugin(BasePlugin):
         )
         self.event_bus.start_serving_nowait(connection_config)
         self.event_bus.connect_to_endpoints_blocking(
-            ConnectionConfig.from_name(MAIN_EVENTBUS_ENDPOINT, self.context.trinity_config.ipc_dir)
+            ConnectionConfig.from_name(
+                MAIN_EVENTBUS_ENDPOINT, self.context.trinity_config.ipc_dir
+            )
         )
         # This makes the `main` process aware of this Endpoint which will then propagate the info
         # so that every other Endpoint can connect directly to the plugin Endpoint
         self.event_bus.announce_endpoint()
-        self.event_bus.broadcast(
-            PluginStartedEvent(type(self))
-        )
+        self.event_bus.broadcast(PluginStartedEvent(type(self)))
 
         # Whenever new EventBus Endpoints come up the `main` process broadcasts this event
         # and we connect to every Endpoint directly
@@ -339,7 +305,9 @@ class DebugPlugin(BaseAsyncStopPlugin):
     def name(self) -> str:
         return "Debug Plugin"
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         arg_parser.add_argument("--debug-plugin", type=bool, required=False)
 
     def handle_event(self, activation_event: BaseEvent) -> None:

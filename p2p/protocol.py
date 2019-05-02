@@ -1,21 +1,9 @@
 from abc import ABC
 import logging
 import struct
-from typing import (
-    Any,
-    Dict,
-    Generic,
-    List,
-    Tuple,
-    Type,
-    TypeVar,
-    TYPE_CHECKING,
-    Union,
-)
+from typing import Any, Dict, Generic, List, Tuple, Type, TypeVar, TYPE_CHECKING, Union
 
-from mypy_extensions import (
-    TypedDict,
-)
+from mypy_extensions import TypedDict
 
 import snappy
 
@@ -24,9 +12,7 @@ from rlp import sedes
 
 from eth.constants import NULL_BYTE
 
-from p2p.exceptions import (
-    MalformedMessage,
-)
+from p2p.exceptions import MalformedMessage
 from p2p._utils import get_devp2p_cmd_id
 
 # Workaround for import cycles caused by type annotations:
@@ -47,15 +33,13 @@ PayloadType = Union[
 ]
 
 # A payload to be delivered with a request
-TRequestPayload = TypeVar('TRequestPayload', bound=PayloadType, covariant=True)
+TRequestPayload = TypeVar("TRequestPayload", bound=PayloadType, covariant=True)
 
 # for backwards compatibility for internal references in p2p:
 _DecodedMsgType = PayloadType
 
 
-StructureType = Union[
-    Tuple[Tuple[str, Any], ...],
-]
+StructureType = Union[Tuple[Tuple[str, Any], ...],]
 
 
 class Command:
@@ -109,24 +93,27 @@ class Command:
             decoder = self.structure
         else:
             decoder = sedes.List(
-                [type_ for _, type_ in self.structure], strict=self.decode_strict)
+                [type_ for _, type_ in self.structure], strict=self.decode_strict
+            )
         try:
             data = rlp.decode(rlp_data, sedes=decoder, recursive_cache=True)
         except rlp.DecodingError as err:
-            raise MalformedMessage(f"Malformed {type(self).__name__} message: {err!r}") from err
+            raise MalformedMessage(
+                f"Malformed {type(self).__name__} message: {err!r}"
+            ) from err
 
         if isinstance(self.structure, sedes.CountableList):
             return data
         return {
-            field_name: value
-            for ((field_name, _), value)
-            in zip(self.structure, data)
+            field_name: value for ((field_name, _), value) in zip(self.structure, data)
         }
 
     def decode(self, data: bytes) -> PayloadType:
         packet_type = get_devp2p_cmd_id(data)
         if packet_type != self.cmd_id:
-            raise MalformedMessage(f"Wrong packet type: {packet_type}, expected {self.cmd_id}")
+            raise MalformedMessage(
+                f"Wrong packet type: {packet_type}, expected {self.cmd_id}"
+            )
 
         compressed_payload = data[1:]
         encoded_payload = self.decompress_payload(compressed_payload)
@@ -157,11 +144,11 @@ class Command:
             raise ValueError("Frame size has to fit in a 3-byte integer")
 
         # Drop the first byte as, per the spec, frame_size must be a 3-byte int.
-        header = struct.pack('>I', frame_size)[1:]
+        header = struct.pack(">I", frame_size)[1:]
         # All clients seem to ignore frame header data, so we do the same, although I'm not sure
         # why geth uses the following value:
         # https://github.com/ethereum/go-ethereum/blob/master/p2p/rlpx.go#L556
-        zero_header = b'\xc2\x80\x80'
+        zero_header = b"\xc2\x80\x80"
         header += zero_header
         header = _pad_to_16_byte_boundary(header)
 
@@ -174,6 +161,7 @@ class BaseRequest(ABC, Generic[TRequestPayload]):
     Must define command_payload during init. This is the data that will
     be sent to the peer with the request command.
     """
+
     # Defined at init time, with specific parameters:
     command_payload: TRequestPayload
 
@@ -185,7 +173,7 @@ class BaseRequest(ABC, Generic[TRequestPayload]):
 
 
 class Protocol:
-    peer: 'BasePeer'
+    peer: "BasePeer"
     name: str = None
     version: int = None
     cmd_length: int = None
@@ -194,11 +182,15 @@ class Protocol:
 
     _logger: logging.Logger = None
 
-    def __init__(self, peer: 'BasePeer', cmd_id_offset: int, snappy_support: bool) -> None:
+    def __init__(
+        self, peer: "BasePeer", cmd_id_offset: int, snappy_support: bool
+    ) -> None:
         self.peer = peer
         self.cmd_id_offset = cmd_id_offset
         self.snappy_support = snappy_support
-        self.commands = [cmd_class(cmd_id_offset, snappy_support) for cmd_class in self._commands]
+        self.commands = [
+            cmd_class(cmd_id_offset, snappy_support) for cmd_class in self._commands
+        ]
         self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
         self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
 

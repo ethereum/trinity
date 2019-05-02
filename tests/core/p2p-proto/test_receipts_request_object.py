@@ -3,10 +3,7 @@ import time
 
 import pytest
 
-from eth_utils import (
-    to_tuple,
-    ValidationError,
-)
+from eth_utils import to_tuple, ValidationError
 
 from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
@@ -18,12 +15,7 @@ from trinity.protocol.eth.validators import ReceiptsValidator
 @to_tuple
 def mk_receipts(num_receipts):
     for _ in range(num_receipts):
-        yield Receipt(
-            state_root=os.urandom(32),
-            gas_used=21000,
-            bloom=0,
-            logs=[],
-        )
+        yield Receipt(state_root=os.urandom(32), gas_used=21000, bloom=0, logs=[])
 
 
 def mk_header_and_receipts(block_number, num_receipts):
@@ -70,7 +62,9 @@ def test_receipts_request_valid_with_partial_response():
 
     validator.validate_result(receipts_bundle[2:])
 
-    validator.validate_result((receipts_bundle[1], receipts_bundle[3], receipts_bundle[4]))
+    validator.validate_result(
+        (receipts_bundle[1], receipts_bundle[3], receipts_bundle[4])
+    )
 
 
 def test_receipts_request_with_fully_invalid_response():

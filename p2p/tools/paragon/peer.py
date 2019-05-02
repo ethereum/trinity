@@ -1,25 +1,10 @@
-from typing import (
-    Iterable,
-)
-from p2p.exceptions import (
-    PeerConnectionLost,
-)
-from p2p.peer import (
-    BasePeer,
-    BasePeerContext,
-    BasePeerFactory,
-)
-from p2p.peer_pool import (
-    BasePeerPool,
-)
-from p2p.protocol import (
-    Command,
-    _DecodedMsgType,
-)
+from typing import Iterable
+from p2p.exceptions import PeerConnectionLost
+from p2p.peer import BasePeer, BasePeerContext, BasePeerFactory
+from p2p.peer_pool import BasePeerPool
+from p2p.protocol import Command, _DecodedMsgType
 
-from trinity.protocol.common.peer_pool_event_bus import (
-    PeerPoolEventServer,
-)
+from trinity.protocol.common.peer_pool_event_bus import PeerPoolEventServer
 
 from .events import GetSumRequest
 from .proto import ParagonProtocol
@@ -33,7 +18,8 @@ class ParagonPeer(BasePeer):
         pass
 
     async def process_sub_proto_handshake(
-            self, cmd: Command, msg: _DecodedMsgType) -> None:
+        self, cmd: Command, msg: _DecodedMsgType
+    ) -> None:
         pass
 
     async def do_sub_proto_handshake(self) -> None:
@@ -83,4 +69,6 @@ class ParagonMockPeerPoolWithConnectedPeers(ParagonPeerPool):
             self.connected_nodes[peer.remote] = peer
 
     async def _run(self) -> None:
-        raise NotImplementedError("This is a mock PeerPool implementation, you must not _run() it")
+        raise NotImplementedError(
+            "This is a mock PeerPool implementation, you must not _run() it"
+        )

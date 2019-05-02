@@ -1,28 +1,28 @@
-from typing import (
-    AsyncIterator,
-    Awaitable,
-    TypeVar,
-)
+from typing import AsyncIterator, Awaitable, TypeVar
 
 from cancel_token import CancelToken
 
-TReturn = TypeVar('TReturn')
+TReturn = TypeVar("TReturn")
 
 
 class CancellableMixin:
     cancel_token: CancelToken = None
 
-    async def wait(self,
-                   awaitable: Awaitable[TReturn],
-                   token: CancelToken = None,
-                   timeout: float = None) -> TReturn:
+    async def wait(
+        self,
+        awaitable: Awaitable[TReturn],
+        token: CancelToken = None,
+        timeout: float = None,
+    ) -> TReturn:
         """See wait_first()"""
         return await self.wait_first(awaitable, token=token, timeout=timeout)
 
-    async def wait_first(self,
-                         *awaitables: Awaitable[TReturn],
-                         token: CancelToken = None,
-                         timeout: float = None) -> TReturn:
+    async def wait_first(
+        self,
+        *awaitables: Awaitable[TReturn],
+        token: CancelToken = None,
+        timeout: float = None
+    ) -> TReturn:
         """
         Wait for the first awaitable to complete, unless we timeout or the token chain is triggered.
 
@@ -42,10 +42,11 @@ class CancellableMixin:
         return await token_chain.cancellable_wait(*awaitables, timeout=timeout)
 
     async def wait_iter(
-            self,
-            aiterable: AsyncIterator[TReturn],
-            token: CancelToken = None,
-            timeout: float = None) -> AsyncIterator[TReturn]:
+        self,
+        aiterable: AsyncIterator[TReturn],
+        token: CancelToken = None,
+        timeout: float = None,
+    ) -> AsyncIterator[TReturn]:
         """
         Iterate through an async iterator, raising the OperationCancelled exception if the token is
         triggered. For example:
@@ -60,10 +61,6 @@ class CancellableMixin:
         aiter = aiterable.__aiter__()
         while True:
             try:
-                yield await self.wait(
-                    aiter.__anext__(),
-                    token=token,
-                    timeout=timeout,
-                )
+                yield await self.wait(aiter.__anext__(), token=token, timeout=timeout)
             except StopAsyncIteration:
                 break

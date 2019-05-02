@@ -1,51 +1,28 @@
 import asyncio
-from argparse import (
-    Namespace,
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import Namespace, ArgumentParser, _SubParsersAction
 import logging
 
 from sqlalchemy.orm import Session
 
-from p2p.tracking.connection import (
-    BaseConnectionTracker,
-    NoopConnectionTracker,
-)
+from p2p.tracking.connection import BaseConnectionTracker, NoopConnectionTracker
 
-from trinity._utils.shutdown import (
-    exit_with_endpoint_and_services,
-)
-from trinity.config import (
-    TrinityConfig,
-)
+from trinity._utils.shutdown import exit_with_endpoint_and_services
+from trinity.config import TrinityConfig
 from trinity.db.orm import get_tracking_database
-from trinity.extensibility.plugin import (
-    BaseIsolatedPlugin,
-)
-from trinity.db.network import (
-    get_networkdb_path,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
+from trinity.extensibility.plugin import BaseIsolatedPlugin
+from trinity.db.network import get_networkdb_path
+from trinity.endpoint import TrinityEventBusEndpoint
 
 from .connection.server import ConnectionTrackerServer
-from .connection.tracker import (
-    SQLiteConnectionTracker,
-    MemoryConnectionTracker,
-)
-from .cli import (
-    TrackingBackend,
-    NormalizeTrackingBackend,
-)
+from .connection.tracker import SQLiteConnectionTracker, MemoryConnectionTracker
+from .cli import TrackingBackend, NormalizeTrackingBackend
 
 
 class NetworkDBPlugin(BaseIsolatedPlugin):
     # we access this logger from a classmethod so it needs to be available on
     # the class (instead of as a computed property like the base class
     # provided.
-    logger = logging.getLogger(f'trinity.extensibility.plugin.NetworkDBPlugin')
+    logger = logging.getLogger(f"trinity.extensibility.plugin.NetworkDBPlugin")
 
     @property
     def name(self) -> str:
@@ -55,43 +32,45 @@ class NetworkDBPlugin(BaseIsolatedPlugin):
     def normalized_name(self) -> str:
         return "network-db"
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
-        tracking_parser = arg_parser.add_argument_group('network db')
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
+        tracking_parser = arg_parser.add_argument_group("network db")
         tracking_parser.add_argument(
-            '--network-tracking-backend',
+            "--network-tracking-backend",
             help=(
                 "Configure whether nodes are tracked and how. (sqlite3: persistent "
                 "tracking across runs from an on-disk sqlite3 database, memory: tracking "
                 "only in memory, do-not-track: no tracking)"
             ),
             action=NormalizeTrackingBackend,
-            choices=('sqlite3', 'memory', 'do-not-track'),
+            choices=("sqlite3", "memory", "do-not-track"),
             default=TrackingBackend.sqlite3,
             type=str,
         )
         tracking_parser.add_argument(
-            '--disable-networkdb-plugin',
+            "--disable-networkdb-plugin",
             help=(
                 "Disables the builtin 'Networkt Database' plugin. "
                 "**WARNING**: disabling this API without a proper replacement "
                 "will cause your trinity node to crash."
             ),
-            action='store_true',
+            action="store_true",
         )
         tracking_parser.add_argument(
-            '--disable-blacklistdb',
+            "--disable-blacklistdb",
             help=(
                 "Disables the blacklist database server component of the Network Database plugin."
                 "**WARNING**: disabling this API without a proper replacement "
                 "will cause your trinity node to crash."
             ),
-            action='store_true',
+            action="store_true",
         )
 
         # Command to wipe the on-disk database
         remove_db_parser = subparser.add_parser(
-            'remove-network-db',
-            help='Remove the on-disk sqlite database that tracks data about the p2p network',
+            "remove-network-db",
+            help="Remove the on-disk sqlite database that tracks data about the p2p network",
         )
         remove_db_parser.set_defaults(func=self.clear_node_db)
 
@@ -118,7 +97,9 @@ class NetworkDBPlugin(BaseIsolatedPlugin):
 
     def _get_database_session(self) -> Session:
         if self._session is None:
-            self._session = get_tracking_database(get_networkdb_path(self.context.trinity_config))
+            self._session = get_tracking_database(
+                get_networkdb_path(self.context.trinity_config)
+            )
         return self._session
 
     def _get_blacklist_tracker(self) -> BaseConnectionTracker:
@@ -137,8 +118,7 @@ class NetworkDBPlugin(BaseIsolatedPlugin):
     def _get_blacklist_service(self) -> ConnectionTrackerServer:
         tracker = self._get_blacklist_tracker()
         blacklist_service = ConnectionTrackerServer(
-            event_bus=self.event_bus,
-            tracker=tracker,
+            event_bus=self.event_bus, tracker=tracker
         )
         return blacklist_service
 
@@ -154,7 +134,9 @@ class NetworkDBPlugin(BaseIsolatedPlugin):
 
             service = self._get_blacklist_service()
 
-            asyncio.ensure_future(exit_with_endpoint_and_services(self.event_bus, service))
+            asyncio.ensure_future(
+                exit_with_endpoint_and_services(self.event_bus, service)
+            )
             asyncio.ensure_future(service.run())
 
             loop.run_forever()

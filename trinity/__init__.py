@@ -13,7 +13,7 @@ import eth as _eth_module  # noqa: F401
 
 
 def is_uvloop_supported() -> bool:
-    return sys.platform in {'darwin', 'linux'} or sys.platform.startswith('freebsd')
+    return sys.platform in {"darwin", "linux"} or sys.platform.startswith("freebsd")
 
 
 if is_uvloop_supported():
@@ -21,15 +21,12 @@ if is_uvloop_supported():
     import asyncio  # noqa: E402
 
     from eth._warnings import catch_and_ignore_import_warning
+
     with catch_and_ignore_import_warning():
         import uvloop  # noqa: E402
 
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-from .main import (  # noqa: F401
-    main,
-)
+from .main import main  # noqa: F401
 
-from .main_beacon import (  # noqa: F401
-    main_beacon,
-)
+from .main_beacon import main_beacon  # noqa: F401

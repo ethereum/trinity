@@ -1,65 +1,25 @@
-from abc import (
-    ABC,
-    abstractmethod,
-)
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from abc import ABC, abstractmethod
+from argparse import ArgumentParser, _SubParsersAction
 import asyncio
-from logging import (
-    Logger,
-)
-from multiprocessing.managers import (
-    BaseManager,
-)
-from typing import (
-    cast,
-    Iterable,
-    Type,
-)
+from logging import Logger
+from multiprocessing.managers import BaseManager
+from typing import cast, Iterable, Type
 
 from cancel_token import CancelToken
-from eth.chains.base import (
-    BaseChain
-)
-from eth_utils import (
-    to_tuple,
-    ValidationError,
-)
+from eth.chains.base import BaseChain
+from eth_utils import to_tuple, ValidationError
 
-from trinity.constants import (
-    SYNC_FAST,
-    SYNC_FULL,
-    SYNC_LIGHT,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity.extensibility.events import (
-    ResourceAvailableEvent,
-)
-from trinity.extensibility.plugin import (
-    BaseAsyncStopPlugin,
-)
-from trinity.protocol.eth.peer import (
-    BaseChainPeerPool,
-    ETHPeerPool,
-)
-from trinity.protocol.les.peer import (
-    LESPeerPool,
-)
-from trinity.sync.full.service import (
-    FastThenFullChainSyncer,
-    FullChainSyncer,
-)
-from trinity.sync.light.chain import (
-    LightChainSyncer,
-)
+from trinity.constants import SYNC_FAST, SYNC_FULL, SYNC_LIGHT
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.extensibility.events import ResourceAvailableEvent
+from trinity.extensibility.plugin import BaseAsyncStopPlugin
+from trinity.protocol.eth.peer import BaseChainPeerPool, ETHPeerPool
+from trinity.protocol.les.peer import LESPeerPool
+from trinity.sync.full.service import FastThenFullChainSyncer, FullChainSyncer
+from trinity.sync.light.chain import LightChainSyncer
 
 
 class BaseSyncStrategy(ABC):
-
     @property
     def shutdown_node_on_halt(self) -> bool:
         """
@@ -74,47 +34,51 @@ class BaseSyncStrategy(ABC):
         pass
 
     @abstractmethod
-    async def sync(self,
-                   logger: Logger,
-                   chain: BaseChain,
-                   db_manager: BaseManager,
-                   peer_pool: BaseChainPeerPool,
-                   cancel_token: CancelToken) -> None:
+    async def sync(
+        self,
+        logger: Logger,
+        chain: BaseChain,
+        db_manager: BaseManager,
+        peer_pool: BaseChainPeerPool,
+        cancel_token: CancelToken,
+    ) -> None:
         pass
 
 
 class NoopSyncStrategy(BaseSyncStrategy):
-
     @property
     def shutdown_node_on_halt(self) -> bool:
         return False
 
     @classmethod
     def get_sync_mode(cls) -> str:
-        return 'none'
+        return "none"
 
-    async def sync(self,
-                   logger: Logger,
-                   chain: BaseChain,
-                   db_manager: BaseManager,
-                   peer_pool: BaseChainPeerPool,
-                   cancel_token: CancelToken) -> None:
+    async def sync(
+        self,
+        logger: Logger,
+        chain: BaseChain,
+        db_manager: BaseManager,
+        peer_pool: BaseChainPeerPool,
+        cancel_token: CancelToken,
+    ) -> None:
 
         logger.info("Node running without sync (--sync-mode=%s)", self.get_sync_mode())
 
 
 class FullSyncStrategy(BaseSyncStrategy):
-
     @classmethod
     def get_sync_mode(cls) -> str:
         return SYNC_FULL
 
-    async def sync(self,
-                   logger: Logger,
-                   chain: BaseChain,
-                   db_manager: BaseManager,
-                   peer_pool: BaseChainPeerPool,
-                   cancel_token: CancelToken) -> None:
+    async def sync(
+        self,
+        logger: Logger,
+        chain: BaseChain,
+        db_manager: BaseManager,
+        peer_pool: BaseChainPeerPool,
+        cancel_token: CancelToken,
+    ) -> None:
 
         syncer = FullChainSyncer(
             chain,
@@ -128,17 +92,18 @@ class FullSyncStrategy(BaseSyncStrategy):
 
 
 class FastThenFullSyncStrategy(BaseSyncStrategy):
-
     @classmethod
     def get_sync_mode(cls) -> str:
         return SYNC_FAST
 
-    async def sync(self,
-                   logger: Logger,
-                   chain: BaseChain,
-                   db_manager: BaseManager,
-                   peer_pool: BaseChainPeerPool,
-                   cancel_token: CancelToken) -> None:
+    async def sync(
+        self,
+        logger: Logger,
+        chain: BaseChain,
+        db_manager: BaseManager,
+        peer_pool: BaseChainPeerPool,
+        cancel_token: CancelToken,
+    ) -> None:
 
         syncer = FastThenFullChainSyncer(
             chain,
@@ -152,17 +117,18 @@ class FastThenFullSyncStrategy(BaseSyncStrategy):
 
 
 class LightSyncStrategy(BaseSyncStrategy):
-
     @classmethod
     def get_sync_mode(cls) -> str:
         return SYNC_LIGHT
 
-    async def sync(self,
-                   logger: Logger,
-                   chain: BaseChain,
-                   db_manager: BaseManager,
-                   peer_pool: BaseChainPeerPool,
-                   cancel_token: CancelToken) -> None:
+    async def sync(
+        self,
+        logger: Logger,
+        chain: BaseChain,
+        db_manager: BaseManager,
+        peer_pool: BaseChainPeerPool,
+        cancel_token: CancelToken,
+    ) -> None:
 
         syncer = LightChainSyncer(
             chain,
@@ -183,9 +149,11 @@ class SyncerPlugin(BaseAsyncStopPlugin):
     active_strategy: BaseSyncStrategy = None
     strategies: Iterable[BaseSyncStrategy]
 
-    def __init__(self,
-                 strategies: Iterable[BaseSyncStrategy],
-                 default_strategy: Type[BaseSyncStrategy]):
+    def __init__(
+        self,
+        strategies: Iterable[BaseSyncStrategy],
+        default_strategy: Type[BaseSyncStrategy],
+    ):
         # Other plugins can get a reference to this plugin instance and
         # add another sync strategy which will then be available under --sync-strategy=<other>
         self.strategies = strategies
@@ -195,15 +163,19 @@ class SyncerPlugin(BaseAsyncStopPlugin):
     def name(self) -> str:
         return "Syncer Plugin"
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
 
         if self.default_strategy not in self.extract_strategy_types():
-            raise ValidationError(f"Default strategy {self.default_strategy} not in strategies")
+            raise ValidationError(
+                f"Default strategy {self.default_strategy} not in strategies"
+            )
 
-        syncing_parser = arg_parser.add_argument_group('sync mode')
+        syncing_parser = arg_parser.add_argument_group("sync mode")
         mode_parser = syncing_parser.add_mutually_exclusive_group()
         mode_parser.add_argument(
-            '--sync-mode',
+            "--sync-mode",
             choices=self.extract_modes(),
             default=self.default_strategy.get_sync_mode(),
         )
@@ -228,7 +200,9 @@ class SyncerPlugin(BaseAsyncStopPlugin):
                 self.active_strategy = strategy
 
         if not self.active_strategy:
-            self.logger.warn("No sync strategy matches --sync-mode=%s", self.context.args.sync_mode)
+            self.logger.warn(
+                "No sync strategy matches --sync-mode=%s", self.context.args.sync_mode
+            )
             return
 
         self.event_bus.subscribe(ResourceAvailableEvent, self.handle_event)
@@ -253,11 +227,7 @@ class SyncerPlugin(BaseAsyncStopPlugin):
 
     async def handle_sync(self) -> None:
         await self.active_strategy.sync(
-            self.logger,
-            self.chain,
-            self.db_manager,
-            self.peer_pool,
-            self.cancel_token
+            self.logger, self.chain, self.db_manager, self.peer_pool, self.cancel_token
         )
 
         if self.active_strategy.shutdown_node_on_halt:

@@ -1,37 +1,31 @@
 import ssz
-from ssz.sedes import (
-    byte_list,
-    uint64,
-)
+from ssz.sedes import byte_list, uint64
 
-from eth2.beacon.typing import (
-    Slot,
-    Bitfield,
-)
+from eth2.beacon.typing import Slot, Bitfield
 
-from .attestation_data import (
-    AttestationData,
-)
+from .attestation_data import AttestationData
 
 
 class PendingAttestation(ssz.Serializable):
 
     fields = [
         # Attester aggregation bitfield
-        ('aggregation_bitfield', byte_list),
+        ("aggregation_bitfield", byte_list),
         # Attestation data
-        ('data', AttestationData),
+        ("data", AttestationData),
         # Custody bitfield
-        ('custody_bitfield', byte_list),
+        ("custody_bitfield", byte_list),
         # Inclusion slot
-        ('inclusion_slot', uint64),
+        ("inclusion_slot", uint64),
     ]
 
-    def __init__(self,
-                 aggregation_bitfield: Bitfield,
-                 data: AttestationData,
-                 custody_bitfield: Bitfield,
-                 inclusion_slot: Slot) -> None:
+    def __init__(
+        self,
+        aggregation_bitfield: Bitfield,
+        data: AttestationData,
+        custody_bitfield: Bitfield,
+        inclusion_slot: Slot,
+    ) -> None:
         super().__init__(
             aggregation_bitfield=aggregation_bitfield,
             data=data,

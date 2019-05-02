@@ -1,16 +1,11 @@
 import pytest
 
-from eth2.beacon.chains.base import (
-    BeaconChain,
-)
+from eth2.beacon.chains.base import BeaconChain
 
 
 def _beacon_chain_with_block_validation(
-        base_db,
-        genesis_block,
-        genesis_state,
-        fixture_sm_class,
-        chain_cls=BeaconChain):
+    base_db, genesis_block, genesis_state, fixture_sm_class, chain_cls=BeaconChain
+):
     """
     Return a Chain object containing just the genesis block.
 
@@ -24,31 +19,21 @@ def _beacon_chain_with_block_validation(
     """
 
     klass = chain_cls.configure(
-        __name__='TestChain',
-        sm_configuration=(
-            (genesis_state.slot, fixture_sm_class),
-        ),
+        __name__="TestChain",
+        sm_configuration=((genesis_state.slot, fixture_sm_class),),
         chain_id=5566,
     )
 
-    chain = klass.from_genesis(
-        base_db,
-        genesis_state,
-        genesis_block,
-    )
+    chain = klass.from_genesis(base_db, genesis_state, genesis_block)
     return chain
 
 
 @pytest.fixture
-def beacon_chain_with_block_validation(base_db,
-                                       genesis_block,
-                                       genesis_state,
-                                       fixture_sm_class):
+def beacon_chain_with_block_validation(
+    base_db, genesis_block, genesis_state, fixture_sm_class
+):
     return _beacon_chain_with_block_validation(
-        base_db,
-        genesis_block,
-        genesis_state,
-        fixture_sm_class,
+        base_db, genesis_block, genesis_state, fixture_sm_class
     )
 
 
@@ -58,11 +43,8 @@ def import_block_without_validation(chain, block):
 
 @pytest.fixture(params=[BeaconChain])
 def beacon_chain_without_block_validation(
-        request,
-        base_db,
-        genesis_state,
-        genesis_block,
-        fixture_sm_class):
+    request, base_db, genesis_state, genesis_block, fixture_sm_class
+):
     """
     Return a Chain object containing just the genesis block.
 
@@ -73,22 +55,14 @@ def beacon_chain_without_block_validation(
     chain itself.
     """
     # Disable block validation so that we don't need to construct finalized blocks.
-    overrides = {
-        'import_block': import_block_without_validation,
-    }
+    overrides = {"import_block": import_block_without_validation}
     chain_class = request.param
     klass = chain_class.configure(
-        __name__='TestChainWithoutBlockValidation',
-        sm_configuration=(
-            (0, fixture_sm_class),
-        ),
+        __name__="TestChainWithoutBlockValidation",
+        sm_configuration=((0, fixture_sm_class),),
         chain_id=5566,
         **overrides,
     )
 
-    chain = klass.from_genesis(
-        base_db,
-        genesis_state,
-        genesis_block,
-    )
+    chain = klass.from_genesis(base_db, genesis_state, genesis_block)
     return chain

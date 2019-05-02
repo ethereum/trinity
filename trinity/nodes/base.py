@@ -1,42 +1,22 @@
 from abc import abstractmethod
 from pathlib import Path
-from multiprocessing.managers import (
-    BaseManager,
-)
+from multiprocessing.managers import BaseManager
 
-from lahja import (
-    BroadcastConfig,
-)
+from lahja import BroadcastConfig
 
 from eth.chains.base import BaseChain
 
 from p2p.peer_pool import BasePeerPool
-from p2p.service import (
-    BaseService,
-)
+from p2p.service import BaseService
 
 from trinity.chains.full import FullChain
-from trinity.db.eth1.header import (
-    BaseAsyncHeaderDB,
-)
-from trinity.db.eth1.manager import (
-    create_db_consumer_manager,
-)
-from trinity.config import (
-    ChainConfig,
-    TrinityConfig,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity.extensibility.events import (
-    ResourceAvailableEvent
-)
+from trinity.db.eth1.header import BaseAsyncHeaderDB
+from trinity.db.eth1.manager import create_db_consumer_manager
+from trinity.config import ChainConfig, TrinityConfig
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.extensibility.events import ResourceAvailableEvent
 
-from .events import (
-    NetworkIdRequest,
-    NetworkIdResponse,
-)
+from .events import NetworkIdRequest, NetworkIdResponse
 
 
 class Node(BaseService):
@@ -44,9 +24,12 @@ class Node(BaseService):
     Create usable nodes by adding subclasses that define the following
     unset attributes.
     """
+
     _full_chain: FullChain = None
 
-    def __init__(self, event_bus: TrinityEventBusEndpoint, trinity_config: TrinityConfig) -> None:
+    def __init__(
+        self, event_bus: TrinityEventBusEndpoint, trinity_config: TrinityConfig
+    ) -> None:
         super().__init__()
         self.trinity_config = trinity_config
         self._db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
@@ -64,8 +47,7 @@ class Node(BaseService):
             # retrieving a `BroadcastConfig` from the request via the
             # `event.broadcast_config()` API.
             self.event_bus.broadcast(
-                NetworkIdResponse(self._network_id),
-                req.broadcast_config()
+                NetworkIdResponse(self._network_id), req.broadcast_config()
             )
 
     _chain_config: ChainConfig = None
@@ -122,8 +104,7 @@ class Node(BaseService):
 
         self.event_bus.broadcast(
             ResourceAvailableEvent(
-                resource=(peer_pool, self.cancel_token),
-                resource_type=type(peer_pool)
+                resource=(peer_pool, self.cancel_token), resource_type=type(peer_pool)
             ),
             BroadcastConfig(internal=True),
         )
@@ -131,20 +112,14 @@ class Node(BaseService):
         # This broadcasts the *local* chain, which is suited for tasks that aren't blocking
         # for too long. There may be value in also broadcasting the proxied chain.
         self.event_bus.broadcast(
-            ResourceAvailableEvent(
-                resource=self.get_chain(),
-                resource_type=BaseChain
-            ),
+            ResourceAvailableEvent(resource=self.get_chain(), resource_type=BaseChain),
             BroadcastConfig(internal=True),
         )
 
         # Broadcasting the DbManager internally, ensures plugins that run in the networking process
         # can reuse the existing connection instead of creating additional new connections
         self.event_bus.broadcast(
-            ResourceAvailableEvent(
-                resource=self.db_manager,
-                resource_type=BaseManager
-            ),
+            ResourceAvailableEvent(resource=self.db_manager, resource_type=BaseManager),
             BroadcastConfig(internal=True),
         )
 

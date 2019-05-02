@@ -8,11 +8,7 @@ import rlp
 
 from eth_hash.auto import keccak
 
-from eth_utils import (
-    to_tuple,
-    big_endian_to_int,
-    ValidationError,
-)
+from eth_utils import to_tuple, big_endian_to_int, ValidationError
 
 from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
@@ -39,7 +35,7 @@ def mk_transaction():
         gas_price=1,
         to=os.urandom(20),
         value=random.randint(0, 100),
-        data=b'',
+        data=b"",
         v=27,
         r=big_endian_to_int(os.urandom(32)),
         s=big_endian_to_int(os.urandom(32)),
@@ -82,7 +78,9 @@ def test_block_bodies_request_empty_response_is_valid():
 
 def test_block_bodies_request_valid_with_full_response():
     headers_bundle = mk_headers((2, 3), (8, 4), (0, 1), (0, 0))
-    headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(*headers_bundle)
+    headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(
+        *headers_bundle
+    )
     transactions_bundles = tuple(zip(transactions_roots, trie_data_dicts))
     bodies_bundle = tuple(zip(bodies, transactions_bundles, uncles_hashes))
     validator = GetBlockBodiesValidator(headers)
@@ -91,7 +89,9 @@ def test_block_bodies_request_valid_with_full_response():
 
 def test_block_bodies_request_valid_with_partial_response():
     headers_bundle = mk_headers((2, 3), (8, 4), (0, 1), (0, 0))
-    headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(*headers_bundle)
+    headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(
+        *headers_bundle
+    )
     transactions_bundles = tuple(zip(transactions_roots, trie_data_dicts))
     bodies_bundle = tuple(zip(bodies, transactions_bundles, uncles_hashes))
     validator = GetBlockBodiesValidator(headers)
@@ -119,7 +119,9 @@ def test_block_bodies_request_with_fully_invalid_response():
 
 def test_block_bodies_request_with_extra_unrequested_bodies():
     headers_bundle = mk_headers((2, 3), (8, 4), (0, 1), (0, 0))
-    headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(*headers_bundle)
+    headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(
+        *headers_bundle
+    )
     transactions_bundles = tuple(zip(transactions_roots, trie_data_dicts))
     bodies_bundle = tuple(zip(bodies, transactions_bundles, uncles_hashes))
     validator = GetBlockBodiesValidator(headers)

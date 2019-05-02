@@ -1,24 +1,14 @@
-from asyncio import (
-    PriorityQueue,
-)
-from typing import (
-    Generic,
-    Type,
-    TypeVar,
-)
+from asyncio import PriorityQueue
+from typing import Generic, Type, TypeVar
 
-from eth_utils import (
-    ValidationError,
-)
+from eth_utils import ValidationError
 
 from p2p.protocol import Command
 
 from trinity.protocol.common.peer import BaseChainPeer
-from trinity._utils.datastructures import (
-    SortableTask,
-)
+from trinity._utils.datastructures import SortableTask
 
-TChainPeer = TypeVar('TChainPeer', bound=BaseChainPeer)
+TChainPeer = TypeVar("TChainPeer", bound=BaseChainPeer)
 
 
 class WaitingPeers(Generic[TChainPeer]):
@@ -26,7 +16,8 @@ class WaitingPeers(Generic[TChainPeer]):
     Peers waiting to perform some action. When getting a peer from this queue,
     prefer the peer with the best throughput for the given command.
     """
-    _waiting_peers: 'PriorityQueue[SortableTask[TChainPeer]]'
+
+    _waiting_peers: "PriorityQueue[SortableTask[TChainPeer]]"
 
     def __init__(self, response_command_type: Type[Command]) -> None:
         self._waiting_peers = PriorityQueue()

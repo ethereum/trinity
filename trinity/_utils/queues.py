@@ -1,27 +1,22 @@
-from asyncio import (  # noqa: F401
-    Queue,
-)
-from typing import (
-    Tuple,
-    TypeVar,
-)
+from asyncio import Queue  # noqa: F401
+from typing import Tuple, TypeVar
 
-from eth_utils import (
-    ValidationError,
-)
+from eth_utils import ValidationError
 
-TQueueItem = TypeVar('TQueueItem')
+TQueueItem = TypeVar("TQueueItem")
 
 
 async def queue_get_batch(
-        queue: 'Queue[TQueueItem]',
-        max_results: int = None) -> Tuple[TQueueItem, ...]:
+    queue: "Queue[TQueueItem]", max_results: int = None
+) -> Tuple[TQueueItem, ...]:
     """
     Wait until at least one result is available, and return it and any
     other results that are immediately available, up to max_results.
     """
     if max_results is not None and max_results < 1:
-        raise ValidationError("Must request at least one item from a queue, not {max_results!r}")
+        raise ValidationError(
+            "Must request at least one item from a queue, not {max_results!r}"
+        )
 
     # if the queue is empty, wait until at least one item is available
     if queue.empty():
@@ -38,10 +33,12 @@ async def queue_get_batch(
     remaining_items = queue_get_nowait(queue, remaining_count)
 
     # Combine the first and remaining items
-    return (first_item, ) + remaining_items
+    return (first_item,) + remaining_items
 
 
-def queue_get_nowait(queue: 'Queue[TQueueItem]', max_results: int = None) -> Tuple[TQueueItem, ...]:
+def queue_get_nowait(
+    queue: "Queue[TQueueItem]", max_results: int = None
+) -> Tuple[TQueueItem, ...]:
     # How many results do we want?
     available = queue.qsize()
     if max_results is None:

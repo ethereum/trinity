@@ -1,34 +1,18 @@
+from typing import Iterable, Sequence, Tuple, TypeVar
 
-from typing import (
-    Iterable,
-    Sequence,
-    Tuple,
-    TypeVar,
-)
+from eth_typing import Hash32
+from eth_utils import ValidationError
 
-from eth_typing import (
-    Hash32,
-)
-from eth_utils import (
-    ValidationError,
-)
-
-from eth2.beacon._utils.hash import (
-    hash_eth2,
-)
-from eth2.beacon.constants import (
-    POWER_OF_TWO_NUMBERS,
-    MAX_LIST_SIZE,
-)
+from eth2.beacon._utils.hash import hash_eth2
+from eth2.beacon.constants import POWER_OF_TWO_NUMBERS, MAX_LIST_SIZE
 
 
-TItem = TypeVar('TItem')
+TItem = TypeVar("TItem")
 
 
-def get_permuted_index(index: int,
-                       list_size: int,
-                       seed: Hash32,
-                       shuffle_round_count: int) -> int:
+def get_permuted_index(
+    index: int, list_size: int, seed: Hash32, shuffle_round_count: int
+) -> int:
     """
     Return `p(index)` in a pseudorandom permutation `p` of `0...list_size-1`
     with ``seed`` as entropy.
@@ -50,14 +34,16 @@ def get_permuted_index(index: int,
 
     new_index = index
     for round in range(shuffle_round_count):
-        pivot = int.from_bytes(
-            hash_eth2(seed + round.to_bytes(1, 'little'))[0:8],
-            'little',
-        ) % list_size
+        pivot = (
+            int.from_bytes(hash_eth2(seed + round.to_bytes(1, "little"))[0:8], "little")
+            % list_size
+        )
 
         flip = (pivot - new_index) % list_size
         hash_pos = max(new_index, flip)
-        h = hash_eth2(seed + round.to_bytes(1, 'little') + (hash_pos // 256).to_bytes(4, 'little'))
+        h = hash_eth2(
+            seed + round.to_bytes(1, "little") + (hash_pos // 256).to_bytes(4, "little")
+        )
         byte = h[(hash_pos % 256) // 8]
         bit = (byte >> (hash_pos % 8)) % 2
         new_index = flip if bit else new_index
@@ -65,17 +51,17 @@ def get_permuted_index(index: int,
     return new_index
 
 
-def shuffle(values: Sequence[TItem],
-            seed: Hash32,
-            shuffle_round_count: int) -> Tuple[TItem, ...]:
+def shuffle(
+    values: Sequence[TItem], seed: Hash32, shuffle_round_count: int
+) -> Tuple[TItem, ...]:
     # This uses this *sub-function* to get around this `eth-utils` bug
     # https://github.com/ethereum/eth-utils/issues/152
     return tuple(_shuffle(values, seed, shuffle_round_count))
 
 
-def _shuffle(values: Sequence[TItem],
-             seed: Hash32,
-             shuffle_round_count: int) -> Iterable[TItem]:
+def _shuffle(
+    values: Sequence[TItem], seed: Hash32, shuffle_round_count: int
+) -> Iterable[TItem]:
     """
     Return shuffled indices in a pseudorandom permutation `0...list_size-1` with
     ``seed`` as entropy.
@@ -94,17 +80,17 @@ def _shuffle(values: Sequence[TItem],
 
     indices = list(range(list_size))
     for round in range(shuffle_round_count):
-        hash_bytes = b''.join(
+        hash_bytes = b"".join(
             [
-                hash_eth2(seed + round.to_bytes(1, 'little') + i.to_bytes(4, 'little'))
+                hash_eth2(seed + round.to_bytes(1, "little") + i.to_bytes(4, "little"))
                 for i in range((list_size + 255) // 256)
             ]
         )
 
-        pivot = int.from_bytes(
-            hash_eth2(seed + round.to_bytes(1, 'little'))[:8],
-            'little',
-        ) % list_size
+        pivot = (
+            int.from_bytes(hash_eth2(seed + round.to_bytes(1, "little"))[:8], "little")
+            % list_size
+        )
         for i in range(list_size):
             flip = (pivot - indices[i]) % list_size
             hash_position = indices[i] if indices[i] > flip else flip
@@ -127,6 +113,8 @@ def split(values: Sequence[TItem], split_count: int) -> Tuple[Sequence[TItem], .
     """
     list_length = len(values)
     return tuple(
-        values[(list_length * i // split_count): (list_length * (i + 1) // split_count)]
+        values[
+            (list_length * i // split_count) : (list_length * (i + 1) // split_count)
+        ]
         for i in range(split_count)
     )

@@ -3,20 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from p2p.exceptions import (
-    HandshakeFailure,
-)
-from p2p.tools.factories import (
-    NodeFactory,
-)
+from p2p.exceptions import HandshakeFailure
+from p2p.tools.factories import NodeFactory
 
 from trinity.plugins.builtin.network_db.connection.tracker import (
     SQLiteConnectionTracker,
     MemoryConnectionTracker,
 )
-from trinity.db.orm import (
-    get_tracking_database,
-)
+from trinity.db.orm import get_tracking_database
 
 
 @pytest.mark.asyncio

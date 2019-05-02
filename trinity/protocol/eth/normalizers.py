@@ -1,18 +1,11 @@
-from typing import (
-    Iterable,
-    Tuple,
-)
+from typing import Iterable, Tuple
 
-from eth_utils import (
-    to_tuple,
-)
+from eth_utils import to_tuple
 from eth.db.trie import make_trie_root_and_nodes
 from eth_hash.auto import keccak
 import rlp
 
-from trinity.protocol.common.normalizers import (
-    BaseNormalizer,
-)
+from trinity.protocol.common.normalizers import BaseNormalizer
 from trinity.protocol.common.types import (
     BlockBodyBundle,
     BlockBodyBundles,

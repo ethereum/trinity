@@ -1,15 +1,9 @@
 from abc import abstractmethod, ABC
-from typing import (
-    Generic,
-    TypeVar,
-)
+from typing import Generic, TypeVar
 
 from p2p.protocol import PayloadType
 
-from .types import (
-    TResponsePayload,
-    TResult,
-)
+from .types import TResponsePayload, TResult
 
 
 class BaseNormalizer(ABC, Generic[TResponsePayload, TResult]):
@@ -29,7 +23,7 @@ class BaseNormalizer(ABC, Generic[TResponsePayload, TResult]):
         raise NotImplementedError()
 
 
-TPassthrough = TypeVar('TPassthrough', bound=PayloadType)
+TPassthrough = TypeVar("TPassthrough", bound=PayloadType)
 
 
 class NoopNormalizer(BaseNormalizer[TPassthrough, TPassthrough]):

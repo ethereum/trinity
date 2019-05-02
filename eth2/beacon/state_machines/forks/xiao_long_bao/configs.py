@@ -1,9 +1,5 @@
-from eth2.beacon.helpers import (
-    slot_to_epoch,
-)
-from eth2.beacon.state_machines.forks.serenity.configs import (
-    SERENITY_CONFIG,
-)
+from eth2.beacon.helpers import slot_to_epoch
+from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 
 
 SLOTS_PER_EPOCH = 4

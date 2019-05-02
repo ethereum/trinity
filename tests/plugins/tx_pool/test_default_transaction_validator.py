@@ -1,50 +1,47 @@
 import pytest
 
-from eth.chains.base import (
-    MiningChain,
-)
+from eth.chains.base import MiningChain
 from eth.tools.builder.chain import api
-from eth.vm.forks.frontier.transactions import (
-    FrontierTransaction,
-)
-from eth.vm.forks.homestead.transactions import (
-    HomesteadTransaction,
-)
-from eth.vm.forks.spurious_dragon.transactions import (
-    SpuriousDragonTransaction,
-)
+from eth.vm.forks.frontier.transactions import FrontierTransaction
+from eth.vm.forks.homestead.transactions import HomesteadTransaction
+from eth.vm.forks.spurious_dragon.transactions import SpuriousDragonTransaction
 
-from trinity.plugins.builtin.tx_pool.validators import (
-    DefaultTransactionValidator,
-)
+from trinity.plugins.builtin.tx_pool.validators import DefaultTransactionValidator
 
 
 @pytest.mark.parametrize(
     (
-        'initial_block_number',
-        'expected_initial_tx_class',
-        'expected_outdated_tx_class',
-        'expected_future_tx_class',
+        "initial_block_number",
+        "expected_initial_tx_class",
+        "expected_outdated_tx_class",
+        "expected_future_tx_class",
     ),
     [
-        (1, FrontierTransaction, None, SpuriousDragonTransaction,),
-        (5, HomesteadTransaction, FrontierTransaction, SpuriousDragonTransaction,),
-        (6, HomesteadTransaction, FrontierTransaction, SpuriousDragonTransaction,),
+        (1, FrontierTransaction, None, SpuriousDragonTransaction),
+        (5, HomesteadTransaction, FrontierTransaction, SpuriousDragonTransaction),
+        (6, HomesteadTransaction, FrontierTransaction, SpuriousDragonTransaction),
         # If no initial block number is specified, the latest VM is assumed to be active
-        (None, SpuriousDragonTransaction, HomesteadTransaction, SpuriousDragonTransaction,),
+        (
+            None,
+            SpuriousDragonTransaction,
+            HomesteadTransaction,
+            SpuriousDragonTransaction,
+        ),
     ],
 )
-def test_tx_class_resolution(initial_block_number,
-                             expected_initial_tx_class,
-                             expected_outdated_tx_class,
-                             expected_future_tx_class):
+def test_tx_class_resolution(
+    initial_block_number,
+    expected_initial_tx_class,
+    expected_outdated_tx_class,
+    expected_future_tx_class,
+):
     chain = api.build(
         MiningChain,
         api.frontier_at(0),
         api.homestead_at(5),
         api.spurious_dragon_at(10),
         api.disable_pow_check,
-        api.genesis
+        api.genesis,
     )
     validator = DefaultTransactionValidator(chain, initial_block_number)
     assert validator.get_appropriate_tx_class() == expected_initial_tx_class

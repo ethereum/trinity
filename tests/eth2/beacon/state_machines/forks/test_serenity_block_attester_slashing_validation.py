@@ -1,13 +1,8 @@
 import pytest
 
-from eth_utils import (
-    ValidationError,
-)
+from eth_utils import ValidationError
 
-from eth2.beacon.helpers import (
-    is_double_vote,
-    is_surround_vote,
-)
+from eth2.beacon.helpers import is_double_vote, is_surround_vote
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_attester_slashing,
     validate_attester_slashing_different_data,
@@ -22,30 +17,15 @@ from eth2.beacon.tools.builder.validator import (
 
 
 @pytest.mark.parametrize(
-    (
-        'num_validators',
-        'slots_per_epoch',
-        'target_committee_size',
-        'shard_count',
-    ),
-    [
-        (40, 2, 2, 2),
-    ]
+    ("num_validators", "slots_per_epoch", "target_committee_size", "shard_count"),
+    [(40, 2, 2, 2)],
 )
 def test_validate_proposer_slashing_valid_double_vote(
-        genesis_state,
-        keymap,
-        slots_per_epoch,
-        max_indices_per_slashable_vote,
-        config):
-    attesting_state = genesis_state.copy(
-        slot=genesis_state.slot + slots_per_epoch,
-    )
+    genesis_state, keymap, slots_per_epoch, max_indices_per_slashable_vote, config
+):
+    attesting_state = genesis_state.copy(slot=genesis_state.slot + slots_per_epoch)
     valid_attester_slashing = create_mock_attester_slashing_is_double_vote(
-        attesting_state,
-        config,
-        keymap,
-        attestation_epoch=0,
+        attesting_state, config, keymap, attestation_epoch=0
     )
 
     assert is_double_vote(
@@ -59,37 +39,20 @@ def test_validate_proposer_slashing_valid_double_vote(
         slots_per_epoch,
     )
 
-    state = attesting_state.copy(
-        slot=attesting_state.slot + 1,
-    )
+    state = attesting_state.copy(slot=attesting_state.slot + 1)
     validate_attester_slashing(
-        state,
-        valid_attester_slashing,
-        max_indices_per_slashable_vote,
-        slots_per_epoch,
+        state, valid_attester_slashing, max_indices_per_slashable_vote, slots_per_epoch
     )
 
 
 @pytest.mark.parametrize(
-    (
-        'num_validators',
-        'slots_per_epoch',
-        'target_committee_size',
-        'shard_count',
-    ),
-    [
-        (40, 2, 2, 2),
-    ]
+    ("num_validators", "slots_per_epoch", "target_committee_size", "shard_count"),
+    [(40, 2, 2, 2)],
 )
 def test_validate_proposer_slashing_valid_is_surround_vote(
-        genesis_state,
-        keymap,
-        slots_per_epoch,
-        max_indices_per_slashable_vote,
-        config):
-    attesting_state = genesis_state.copy(
-        slot=genesis_state.slot + slots_per_epoch,
-    )
+    genesis_state, keymap, slots_per_epoch, max_indices_per_slashable_vote, config
+):
+    attesting_state = genesis_state.copy(slot=genesis_state.slot + slots_per_epoch)
     valid_attester_slashing = create_mock_attester_slashing_is_surround_vote(
         attesting_state,
         config,
@@ -108,41 +71,22 @@ def test_validate_proposer_slashing_valid_is_surround_vote(
         slots_per_epoch,
     )
 
-    state = attesting_state.copy(
-        slot=attesting_state.slot + config.SLOTS_PER_EPOCH,
-    )
+    state = attesting_state.copy(slot=attesting_state.slot + config.SLOTS_PER_EPOCH)
     validate_attester_slashing(
-        state,
-        valid_attester_slashing,
-        max_indices_per_slashable_vote,
-        slots_per_epoch,
+        state, valid_attester_slashing, max_indices_per_slashable_vote, slots_per_epoch
     )
 
 
 @pytest.mark.parametrize(
-    (
-        'num_validators',
-        'slots_per_epoch',
-        'target_committee_size',
-        'shard_count',
-    ),
-    [
-        (40, 2, 2, 2),
-    ]
+    ("num_validators", "slots_per_epoch", "target_committee_size", "shard_count"),
+    [(40, 2, 2, 2)],
 )
 def test_validate_attester_slashing_different_data(
-        genesis_state,
-        keymap,
-        slots_per_epoch,
-        config):
-    attesting_state = genesis_state.copy(
-        slot=genesis_state.slot + slots_per_epoch,
-    )
+    genesis_state, keymap, slots_per_epoch, config
+):
+    attesting_state = genesis_state.copy(slot=genesis_state.slot + slots_per_epoch)
     valid_attester_slashing = create_mock_attester_slashing_is_double_vote(
-        attesting_state,
-        config,
-        keymap,
-        attestation_epoch=0,
+        attesting_state, config, keymap, attestation_epoch=0
     )
 
     with pytest.raises(ValidationError):
@@ -153,26 +97,15 @@ def test_validate_attester_slashing_different_data(
 
 
 @pytest.mark.parametrize(
-    (
-        'num_validators',
-        'slots_per_epoch',
-        'target_committee_size',
-        'shard_count',
-    ),
-    [
-        (40, 2, 2, 2),
-    ]
+    ("num_validators", "slots_per_epoch", "target_committee_size", "shard_count"),
+    [(40, 2, 2, 2)],
 )
 def test_validate_attester_slashing_slashing_conditions(
-        genesis_state,
-        keymap,
-        slots_per_epoch,
-        config):
-    attesting_state_1 = genesis_state.copy(
-        slot=genesis_state.slot + slots_per_epoch,
-    )
+    genesis_state, keymap, slots_per_epoch, config
+):
+    attesting_state_1 = genesis_state.copy(slot=genesis_state.slot + slots_per_epoch)
     attesting_state_2 = attesting_state_1.copy(
-        slot=attesting_state_1.slot + slots_per_epoch,
+        slot=attesting_state_1.slot + slots_per_epoch
     )
 
     slashable_attestation_1 = create_mock_slashable_attestation(
@@ -190,22 +123,12 @@ def test_validate_attester_slashing_slashing_conditions(
 
     with pytest.raises(ValidationError):
         validate_attester_slashing_slashing_conditions(
-            slashable_attestation_1,
-            slashable_attestation_2,
-            slots_per_epoch,
+            slashable_attestation_1, slashable_attestation_2, slots_per_epoch
         )
 
 
 @pytest.mark.parametrize(
-    (
-        'slashable_indices',
-        'success',
-    ),
-    [
-        ((), False),
-        ((1,), True),
-        ((1, 2), True),
-    ]
+    ("slashable_indices", "success"), [((), False), ((1,), True), ((1, 2), True)]
 )
 def test_validate_slashable_indices(slashable_indices, success):
     if success:

@@ -1,32 +1,15 @@
-from typing import (
-    Any,
-    Dict,
-    FrozenSet,
-    Sequence,
-    Type,
-    Union,
-    cast,
-)
+from typing import Any, Dict, FrozenSet, Sequence, Type, Union, cast
 
 from cancel_token import CancelToken
 
-from eth.exceptions import (
-    HeaderNotFound,
-)
-from eth_typing import (
-    BlockIdentifier,
-    Hash32,
-)
+from eth.exceptions import HeaderNotFound
+from eth_typing import BlockIdentifier, Hash32
 
-from eth_utils import (
-    to_hex,
-)
+from eth_utils import to_hex
 
 from p2p import protocol
 from p2p.peer import BasePeer
-from p2p.protocol import (
-    Command,
-)
+from p2p.protocol import Command
 
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.protocol.common.servers import BaseRequestServer, BasePeerRequestHandler
@@ -51,25 +34,26 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         self.db: BaseAsyncChainDB = db
 
     async def handle_get_block_headers(
-            self,
-            peer: ETHPeer,
-            msg: Dict[str, Any]) -> None:
+        self, peer: ETHPeer, msg: Dict[str, Any]
+    ) -> None:
         if not peer.is_operational:
             return
         query = cast(Dict[Any, Union[bool, int]], msg)
         self.logger.debug("%s requested headers: %s", peer, query)
         request = ETHHeaderRequest(
-            cast(BlockIdentifier, query['block_number_or_hash']),
-            query['max_headers'],
-            query['skip'],
-            cast(bool, query['reverse']),
+            cast(BlockIdentifier, query["block_number_or_hash"]),
+            query["max_headers"],
+            query["skip"],
+            cast(bool, query["reverse"]),
         )
 
         headers = await self.lookup_headers(request)
         self.logger.debug2("Replying to %s with %d headers", peer, len(headers))
         peer.sub_proto.send_block_headers(headers)
 
-    async def handle_get_block_bodies(self, peer: ETHPeer, block_hashes: Sequence[Hash32]) -> None:
+    async def handle_get_block_bodies(
+        self, peer: ETHPeer, block_hashes: Sequence[Hash32]
+    ) -> None:
         if not peer.is_operational:
             return
         self.logger.debug2("%s requested bodies for %d blocks", peer, len(block_hashes))
@@ -77,39 +61,54 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         # Only serve up to MAX_BODIES_FETCH items in every request.
         for block_hash in block_hashes[:MAX_BODIES_FETCH]:
             try:
-                header = await self.wait(self.db.coro_get_block_header_by_hash(block_hash))
+                header = await self.wait(
+                    self.db.coro_get_block_header_by_hash(block_hash)
+                )
             except HeaderNotFound:
                 self.logger.debug(
                     "%s asked for a block we don't have: %s", peer, to_hex(block_hash)
                 )
                 continue
             transactions = await self.wait(
-                self.db.coro_get_block_transactions(header, BaseTransactionFields))
+                self.db.coro_get_block_transactions(header, BaseTransactionFields)
+            )
             uncles = await self.wait(self.db.coro_get_block_uncles(header.uncles_hash))
             bodies.append(BlockBody(transactions, uncles))
         self.logger.debug2("Replying to %s with %d block bodies", peer, len(bodies))
         peer.sub_proto.send_block_bodies(bodies)
 
-    async def handle_get_receipts(self, peer: ETHPeer, block_hashes: Sequence[Hash32]) -> None:
+    async def handle_get_receipts(
+        self, peer: ETHPeer, block_hashes: Sequence[Hash32]
+    ) -> None:
         if not peer.is_operational:
             return
-        self.logger.debug2("%s requested receipts for %d blocks", peer, len(block_hashes))
+        self.logger.debug2(
+            "%s requested receipts for %d blocks", peer, len(block_hashes)
+        )
         receipts = []
         # Only serve up to MAX_RECEIPTS_FETCH items in every request.
         for block_hash in block_hashes[:MAX_RECEIPTS_FETCH]:
             try:
-                header = await self.wait(self.db.coro_get_block_header_by_hash(block_hash))
+                header = await self.wait(
+                    self.db.coro_get_block_header_by_hash(block_hash)
+                )
             except HeaderNotFound:
                 self.logger.debug(
-                    "%s asked receipts for a block we don't have: %s", peer, to_hex(block_hash)
+                    "%s asked receipts for a block we don't have: %s",
+                    peer,
+                    to_hex(block_hash),
                 )
                 continue
             block_receipts = await self.wait(self.db.coro_get_receipts(header, Receipt))
             receipts.append(block_receipts)
-        self.logger.debug2("Replying to %s with receipts for %d blocks", peer, len(receipts))
+        self.logger.debug2(
+            "Replying to %s with receipts for %d blocks", peer, len(receipts)
+        )
         peer.sub_proto.send_receipts(receipts)
 
-    async def handle_get_node_data(self, peer: ETHPeer, node_hashes: Sequence[Hash32]) -> None:
+    async def handle_get_node_data(
+        self, peer: ETHPeer, node_hashes: Sequence[Hash32]
+    ) -> None:
         if not peer.is_operational:
             return
         self.logger.debug2("%s requested %d trie nodes", peer, len(node_hashes))
@@ -120,7 +119,9 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
                 node = await self.wait(self.db.coro_get(node_hash))
             except KeyError:
                 self.logger.debug(
-                    "%s asked for a trie node we don't have: %s", peer, to_hex(node_hash)
+                    "%s asked for a trie node we don't have: %s",
+                    peer,
+                    to_hex(node_hash),
                 )
                 continue
             nodes.append(node)
@@ -133,38 +134,39 @@ class ETHRequestServer(BaseRequestServer):
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
     """
-    subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
-        commands.GetBlockHeaders,
-        commands.GetBlockBodies,
-        commands.GetReceipts,
-        commands.GetNodeData,
-        # TODO: all of the following are here to quiet warning logging output
-        # until the messages are properly handled.
-        commands.Transactions,
-        commands.NewBlockHashes,
-    })
+
+    subscription_msg_types: FrozenSet[Type[Command]] = frozenset(
+        {
+            commands.GetBlockHeaders,
+            commands.GetBlockBodies,
+            commands.GetReceipts,
+            commands.GetNodeData,
+            # TODO: all of the following are here to quiet warning logging output
+            # until the messages are properly handled.
+            commands.Transactions,
+            commands.NewBlockHashes,
+        }
+    )
 
     def __init__(
-            self,
-            db: BaseAsyncChainDB,
-            peer_pool: ETHPeerPool,
-            token: CancelToken = None) -> None:
+        self, db: BaseAsyncChainDB, peer_pool: ETHPeerPool, token: CancelToken = None
+    ) -> None:
         super().__init__(peer_pool, token)
         self._handler = ETHPeerRequestHandler(db, self.cancel_token)
 
-    async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
-                          msg: protocol._DecodedMsgType) -> None:
+    async def _handle_msg(
+        self, base_peer: BasePeer, cmd: Command, msg: protocol._DecodedMsgType
+    ) -> None:
         peer = cast(ETHPeer, base_peer)
 
-        ignored_commands = (
-            commands.Transactions,
-            commands.NewBlockHashes,
-        )
+        ignored_commands = (commands.Transactions, commands.NewBlockHashes)
 
         if isinstance(cmd, ignored_commands):
             pass
         elif isinstance(cmd, commands.GetBlockHeaders):
-            await self._handler.handle_get_block_headers(peer, cast(Dict[str, Any], msg))
+            await self._handler.handle_get_block_headers(
+                peer, cast(Dict[str, Any], msg)
+            )
         elif isinstance(cmd, commands.GetBlockBodies):
             block_hashes = cast(Sequence[Hash32], msg)
             await self._handler.handle_get_block_bodies(peer, block_hashes)

@@ -1,16 +1,12 @@
-from typing import (
-    Awaitable,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing import Awaitable, Optional, Tuple, TypeVar
 
 
 TReturn = TypeVar("TReturn")
 
 
 async def await_and_wrap_errors(
-        awaitable: Awaitable[TReturn]) -> Tuple[Optional[TReturn], Optional[Exception]]:
+    awaitable: Awaitable[TReturn]
+) -> Tuple[Optional[TReturn], Optional[Exception]]:
     try:
         val = await awaitable
     except Exception as e:

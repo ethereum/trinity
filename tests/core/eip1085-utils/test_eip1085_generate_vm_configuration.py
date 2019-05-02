@@ -13,114 +13,79 @@ from trinity._utils.eip1085 import extract_vm_configuration
 
 
 def wrap_config(v):
-    return {'params': v}
+    return {"params": v}
 
 
-CONSTANTINOPLE_AT_0 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x00",
-    "EIP158ForkBlock": "0x00",
-    "byzantiumForkBlock": "0x00",
-    "constantinopleForkBlock": "0x00",
-})
-CONSTANTINOPLE_AT_0_CONFIG = (
-    (0, ConstantinopleVM),
+CONSTANTINOPLE_AT_0 = wrap_config(
+    {
+        "homesteadForkBlock": "0x00",
+        "EIP150ForkBlock": "0x00",
+        "EIP158ForkBlock": "0x00",
+        "byzantiumForkBlock": "0x00",
+        "constantinopleForkBlock": "0x00",
+    }
 )
+CONSTANTINOPLE_AT_0_CONFIG = ((0, ConstantinopleVM),)
 
-CONSTANTINOPLE_AT_5 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x00",
-    "EIP158ForkBlock": "0x00",
-    "byzantiumForkBlock": "0x00",
-    "constantinopleForkBlock": "0x05",
-})
-CONSTANTINOPLE_AT_5_CONFIG = (
-    (0, ByzantiumVM),
-    (5, ConstantinopleVM),
+CONSTANTINOPLE_AT_5 = wrap_config(
+    {
+        "homesteadForkBlock": "0x00",
+        "EIP150ForkBlock": "0x00",
+        "EIP158ForkBlock": "0x00",
+        "byzantiumForkBlock": "0x00",
+        "constantinopleForkBlock": "0x05",
+    }
 )
+CONSTANTINOPLE_AT_5_CONFIG = ((0, ByzantiumVM), (5, ConstantinopleVM))
 
-BYZANTIUM_AT_0 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x00",
-    "EIP158ForkBlock": "0x00",
-    "byzantiumForkBlock": "0x00",
-})
-BYZANTIUM_AT_0_CONFIG = (
-    (0, ByzantiumVM),
+BYZANTIUM_AT_0 = wrap_config(
+    {
+        "homesteadForkBlock": "0x00",
+        "EIP150ForkBlock": "0x00",
+        "EIP158ForkBlock": "0x00",
+        "byzantiumForkBlock": "0x00",
+    }
 )
+BYZANTIUM_AT_0_CONFIG = ((0, ByzantiumVM),)
 
-BYZANTIUM_AT_5 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x00",
-    "EIP158ForkBlock": "0x00",
-    "byzantiumForkBlock": "0x05",
-})
-BYZANTIUM_AT_5_CONFIG = (
-    (0, SpuriousDragonVM),
-    (5, ByzantiumVM),
+BYZANTIUM_AT_5 = wrap_config(
+    {
+        "homesteadForkBlock": "0x00",
+        "EIP150ForkBlock": "0x00",
+        "EIP158ForkBlock": "0x00",
+        "byzantiumForkBlock": "0x05",
+    }
 )
+BYZANTIUM_AT_5_CONFIG = ((0, SpuriousDragonVM), (5, ByzantiumVM))
 
-SPURIOUS_AT_0 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x00",
-    "EIP158ForkBlock": "0x00",
-})
-SPURIOUS_AT_0_CONFIG = (
-    (0, SpuriousDragonVM),
+SPURIOUS_AT_0 = wrap_config(
+    {"homesteadForkBlock": "0x00", "EIP150ForkBlock": "0x00", "EIP158ForkBlock": "0x00"}
 )
+SPURIOUS_AT_0_CONFIG = ((0, SpuriousDragonVM),)
 
-SPURIOUS_AT_5 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x00",
-    "EIP158ForkBlock": "0x05",
-})
-SPURIOUS_AT_5_CONFIG = (
-    (0, TangerineWhistleVM),
-    (5, SpuriousDragonVM),
+SPURIOUS_AT_5 = wrap_config(
+    {"homesteadForkBlock": "0x00", "EIP150ForkBlock": "0x00", "EIP158ForkBlock": "0x05"}
 )
+SPURIOUS_AT_5_CONFIG = ((0, TangerineWhistleVM), (5, SpuriousDragonVM))
 
-TANGERINE_AT_0 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x00",
-})
-TANGERINE_AT_0_CONFIG = (
-    (0, TangerineWhistleVM),
-)
+TANGERINE_AT_0 = wrap_config({"homesteadForkBlock": "0x00", "EIP150ForkBlock": "0x00"})
+TANGERINE_AT_0_CONFIG = ((0, TangerineWhistleVM),)
 
-TANGERINE_AT_5 = wrap_config({
-    "homesteadForkBlock": "0x00",
-    "EIP150ForkBlock": "0x05",
-})
-TANGERINE_AT_5_CONFIG = (
-    (0, HomesteadVM),
-    (5, TangerineWhistleVM),
-)
+TANGERINE_AT_5 = wrap_config({"homesteadForkBlock": "0x00", "EIP150ForkBlock": "0x05"})
+TANGERINE_AT_5_CONFIG = ((0, HomesteadVM), (5, TangerineWhistleVM))
 
-HOMESTEAD_AT_0 = wrap_config({
-    "homesteadForkBlock": "0x00",
-})
-HOMESTEAD_AT_0_CONFIG = (
-    (0, HomesteadVM),
-)
+HOMESTEAD_AT_0 = wrap_config({"homesteadForkBlock": "0x00"})
+HOMESTEAD_AT_0_CONFIG = ((0, HomesteadVM),)
 
-HOMESTEAD_AT_5 = wrap_config({
-    "homesteadForkBlock": "0x05",
-})
-HOMESTEAD_AT_5_CONFIG = (
-    (0, FrontierVM),
-    (5, HomesteadVM),
-)
+HOMESTEAD_AT_5 = wrap_config({"homesteadForkBlock": "0x05"})
+HOMESTEAD_AT_5_CONFIG = ((0, FrontierVM), (5, HomesteadVM))
 
-FRONTIER_AT_0 = wrap_config({
-    "frontierForkBlock": "0x00",
-})
-FRONTIER_AT_0_CONFIG = (
-    (0, FrontierVM),
-)
+FRONTIER_AT_0 = wrap_config({"frontierForkBlock": "0x00"})
+FRONTIER_AT_0_CONFIG = ((0, FrontierVM),)
 
 
 @pytest.mark.parametrize(
-    'genesis_config,expected',
+    "genesis_config,expected",
     (
         (CONSTANTINOPLE_AT_0, CONSTANTINOPLE_AT_0_CONFIG),
         (CONSTANTINOPLE_AT_5, CONSTANTINOPLE_AT_5_CONFIG),

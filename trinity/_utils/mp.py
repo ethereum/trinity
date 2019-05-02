@@ -4,18 +4,13 @@ import inspect
 import multiprocessing
 import os
 import traceback
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    List,
-)
+from typing import Any, Awaitable, Callable, List
 from types import TracebackType
 
 
 # WARNING: Think twice before experimenting with `fork`. The `fork` method does not work well with
 # asyncio yet. This might change with Python 3.8 (See https://bugs.python.org/issue22087#msg318140)
-MP_CONTEXT = os.environ.get('TRINITY_MP_CONTEXT', 'spawn')
+MP_CONTEXT = os.environ.get("TRINITY_MP_CONTEXT", "spawn")
 
 
 # sets the type of process that multiprocessing will create.
@@ -27,17 +22,16 @@ def async_method(method_name: str) -> Callable[..., Any]:
         loop = asyncio.get_event_loop()
 
         return await loop.run_in_executor(
-            None,
-            functools.partial(self._callmethod, kwds=kwargs),
-            method_name,
-            args,
+            None, functools.partial(self._callmethod, kwds=kwargs), method_name, args
         )
+
     return method
 
 
 def sync_method(method_name: str) -> Callable[..., Any]:
     def method(self: Any, *args: Any, **kwargs: Any) -> Any:
         return self._callmethod(method_name, args, kwargs)
+
     return method
 
 
@@ -76,7 +70,6 @@ def record_traceback_on_error(attr: Callable[..., Any]) -> Callable[..., Any]:
 
 
 class RemoteTraceback(Exception):
-
     def __init__(self, tb: str) -> None:
         self.tb = tb
 
@@ -85,9 +78,10 @@ class RemoteTraceback(Exception):
 
 
 class ChainedExceptionWithTraceback(Exception):
-
     def __init__(self, exc: Exception, tb: TracebackType) -> None:
-        self.tb = '\n"""\n%s"""' % ''.join(traceback.format_exception(type(exc), exc, tb))
+        self.tb = '\n"""\n%s"""' % "".join(
+            traceback.format_exception(type(exc), exc, tb)
+        )
         self.exc = exc
 
     def __reduce__(self) -> Any:

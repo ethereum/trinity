@@ -1,6 +1,4 @@
-from multiprocessing.managers import (
-    BaseManager,
-)
+from multiprocessing.managers import BaseManager
 import pathlib
 
 from eth.db.chain import ChainDB
@@ -10,18 +8,14 @@ from eth.db.header import HeaderDB
 from trinity.config import TrinityConfig
 from trinity.db.base import AsyncDBProxy
 from trinity.db.eth1.chain import AsyncChainDBProxy
-from trinity.db.eth1.header import (
-    AsyncHeaderDBProxy
-)
-from trinity.initialization import (
-    is_database_initialized,
-    initialize_database,
-)
+from trinity.db.eth1.header import AsyncHeaderDBProxy
+from trinity.initialization import is_database_initialized, initialize_database
 from trinity._utils.mp import TracebackRecorder
 
 
-def create_db_server_manager(trinity_config: TrinityConfig,
-                             base_db: BaseAtomicDB) -> BaseManager:
+def create_db_server_manager(
+    trinity_config: TrinityConfig, base_db: BaseAtomicDB
+) -> BaseManager:
 
     chain_config = trinity_config.get_chain_config()
     chaindb = ChainDB(base_db)
@@ -35,16 +29,17 @@ def create_db_server_manager(trinity_config: TrinityConfig,
         pass
 
     DBManager.register(
-        'get_db', callable=lambda: TracebackRecorder(base_db), proxytype=AsyncDBProxy)
+        "get_db", callable=lambda: TracebackRecorder(base_db), proxytype=AsyncDBProxy
+    )
 
     DBManager.register(
-        'get_chaindb',
+        "get_chaindb",
         callable=lambda: TracebackRecorder(chaindb),
         proxytype=AsyncChainDBProxy,
     )
 
     DBManager.register(
-        'get_headerdb',
+        "get_headerdb",
         callable=lambda: TracebackRecorder(headerdb),
         proxytype=AsyncHeaderDBProxy,
     )
@@ -53,17 +48,20 @@ def create_db_server_manager(trinity_config: TrinityConfig,
     return manager
 
 
-def create_db_consumer_manager(ipc_path: pathlib.Path, connect: bool=True) -> BaseManager:
+def create_db_consumer_manager(
+    ipc_path: pathlib.Path, connect: bool = True
+) -> BaseManager:
     """
     We're still using 'str' here on param ipc_path because an issue with
     multi-processing not being able to interpret 'Path' objects correctly
     """
+
     class DBManager(BaseManager):
         pass
 
-    DBManager.register('get_db', proxytype=AsyncDBProxy)
-    DBManager.register('get_chaindb', proxytype=AsyncChainDBProxy)
-    DBManager.register('get_headerdb', proxytype=AsyncHeaderDBProxy)
+    DBManager.register("get_db", proxytype=AsyncDBProxy)
+    DBManager.register("get_chaindb", proxytype=AsyncChainDBProxy)
+    DBManager.register("get_headerdb", proxytype=AsyncHeaderDBProxy)
 
     manager = DBManager(address=str(ipc_path))  # type: ignore
     if connect:

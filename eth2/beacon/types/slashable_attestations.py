@@ -1,26 +1,11 @@
-from typing import (
-    Sequence,
-    Tuple,
-)
+from typing import Sequence, Tuple
 
 import ssz
-from ssz.sedes import (
-    List,
-    byte_list,
-    bytes96,
-    uint64,
-)
+from ssz.sedes import List, byte_list, bytes96, uint64
 
-from eth_typing import (
-    BLSSignature,
-    Hash32,
-)
-from eth2._utils.bitfield import (
-    has_voted,
-)
-from eth2.beacon.typing import (
-    ValidatorIndex,
-)
+from eth_typing import BLSSignature, Hash32
+from eth2._utils.bitfield import has_voted
+from eth2.beacon.typing import ValidatorIndex
 from eth2.beacon.constants import EMPTY_SIGNATURE
 
 from .attestation_data import AttestationData
@@ -31,26 +16,23 @@ class SlashableAttestation(ssz.Serializable):
 
     fields = [
         # Validator indices
-        ('validator_indices', List(uint64)),
+        ("validator_indices", List(uint64)),
         # Attestation data
-        ('data', AttestationData),
+        ("data", AttestationData),
         # Custody bitfield
-        ('custody_bitfield', byte_list),
+        ("custody_bitfield", byte_list),
         # Aggregate signature
-        ('aggregate_signature', bytes96),
+        ("aggregate_signature", bytes96),
     ]
 
-    def __init__(self,
-                 validator_indices: Sequence[ValidatorIndex],
-                 data: AttestationData,
-                 custody_bitfield: bytes,
-                 aggregate_signature: BLSSignature = EMPTY_SIGNATURE) -> None:
-        super().__init__(
-            validator_indices,
-            data,
-            custody_bitfield,
-            aggregate_signature,
-        )
+    def __init__(
+        self,
+        validator_indices: Sequence[ValidatorIndex],
+        data: AttestationData,
+        custody_bitfield: bytes,
+        aggregate_signature: BLSSignature = EMPTY_SIGNATURE,
+    ) -> None:
+        super().__init__(validator_indices, data, custody_bitfield, aggregate_signature)
 
     @property
     def are_validator_indices_ascending(self) -> bool:
@@ -60,7 +42,9 @@ class SlashableAttestation(ssz.Serializable):
         return True
 
     @property
-    def custody_bit_indices(self) -> Tuple[Tuple[ValidatorIndex, ...], Tuple[ValidatorIndex, ...]]:
+    def custody_bit_indices(
+        self
+    ) -> Tuple[Tuple[ValidatorIndex, ...], Tuple[ValidatorIndex, ...]]:
         custody_bit_0_indices = ()  # type: Tuple[ValidatorIndex, ...]
         custody_bit_1_indices = ()  # type: Tuple[ValidatorIndex, ...]
         for i, validator_index in enumerate(self.validator_indices):

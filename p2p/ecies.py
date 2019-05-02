@@ -9,22 +9,18 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.constant_time import bytes_eq
 
-from eth_utils import (
-    int_to_big_endian,
-)
+from eth_utils import int_to_big_endian
 
 from eth_keys import keys
 from eth_keys import datatypes
 
 from p2p.exceptions import DecryptionError
 
-from .constants import (
-    PUBKEY_LEN,
-)
+from .constants import PUBKEY_LEN
 
 
 def pad32(value: bytes) -> bytes:
-    return value.rjust(32, b'\x00')
+    return value.rjust(32, b"\x00")
 
 
 CIPHER = algorithms.AES
@@ -39,20 +35,23 @@ class _InvalidPublicKey(Exception):
     A custom exception raised when trying to convert bytes
     into an elliptic curve public key.
     """
+
     pass
 
 
 def generate_privkey() -> datatypes.PrivateKey:
     """Generate a new SECP256K1 private key and return it"""
     privkey = ec.generate_private_key(CURVE, default_backend())
-    return keys.PrivateKey(pad32(int_to_big_endian(privkey.private_numbers().private_value)))
+    return keys.PrivateKey(
+        pad32(int_to_big_endian(privkey.private_numbers().private_value))
+    )
 
 
 def ecdh_agree(privkey: datatypes.PrivateKey, pubkey: datatypes.PublicKey) -> bytes:
     """Performs a key exchange operation using the ECDH algorithm."""
     privkey_as_int = int(cast(int, privkey))
     ec_privkey = ec.derive_private_key(privkey_as_int, CURVE, default_backend())
-    pubkey_bytes = b'\x04' + pubkey.to_bytes()
+    pubkey_bytes = b"\x04" + pubkey.to_bytes()
     try:
         # either of these can raise a ValueError:
         pubkey_nums = ec.EllipticCurvePublicKey.from_encoded_point(CURVE, pubkey_bytes)
@@ -65,7 +64,9 @@ def ecdh_agree(privkey: datatypes.PrivateKey, pubkey: datatypes.PublicKey) -> by
     return ec_privkey.exchange(ec.ECDH(), ec_pubkey)
 
 
-def encrypt(data: bytes, pubkey: datatypes.PublicKey, shared_mac_data: bytes = b'') -> bytes:
+def encrypt(
+    data: bytes, pubkey: datatypes.PublicKey, shared_mac_data: bytes = b""
+) -> bytes:
     """Encrypt data with ECIES method to the given public key
 
     1) generate r = random value
@@ -79,7 +80,7 @@ def encrypt(data: bytes, pubkey: datatypes.PublicKey, shared_mac_data: bytes = b
     # 2) generate shared-secret = kdf( ecdhAgree(r, P) )
     key_material = ecdh_agree(ephemeral, pubkey)
     key = kdf(key_material)
-    key_enc, key_mac = key[:KEY_LEN // 2], key[KEY_LEN // 2:]
+    key_enc, key_mac = key[: KEY_LEN // 2], key[KEY_LEN // 2 :]
 
     key_mac = sha256(key_mac).digest()
     # 3) generate R = rG [same op as generating a public key]
@@ -92,14 +93,16 @@ def encrypt(data: bytes, pubkey: datatypes.PublicKey, shared_mac_data: bytes = b
     ciphertext = ctx.update(data) + ctx.finalize()
 
     # 4) 0x04 || R || AsymmetricEncrypt(shared-secret, plaintext) || tag
-    msg = b'\x04' + ephem_pubkey.to_bytes() + iv + ciphertext
+    msg = b"\x04" + ephem_pubkey.to_bytes() + iv + ciphertext
 
     # the MAC of a message (called the tag) as per SEC 1, 3.5.
-    tag = hmac_sha256(key_mac, msg[1 + PUBKEY_LEN:] + shared_mac_data)
+    tag = hmac_sha256(key_mac, msg[1 + PUBKEY_LEN :] + shared_mac_data)
     return msg + tag
 
 
-def decrypt(data: bytes, privkey: datatypes.PrivateKey, shared_mac_data: bytes = b'') -> bytes:
+def decrypt(
+    data: bytes, privkey: datatypes.PrivateKey, shared_mac_data: bytes = b""
+) -> bytes:
     """Decrypt data with ECIES method using the given private key
 
     1) generate shared-secret = kdf( ecdhAgree(myPrivKey, msg[1:65]) )
@@ -110,11 +113,11 @@ def decrypt(data: bytes, privkey: datatypes.PrivateKey, shared_mac_data: bytes =
     [where R = r*G, and recipientPublic = recipientPrivate*G]
 
     """
-    if data[:1] != b'\x04':
+    if data[:1] != b"\x04":
         raise DecryptionError("wrong ecies header")
 
     #  1) generate shared-secret = kdf( ecdhAgree(myPrivKey, msg[1:65]) )
-    shared = data[1:1 + PUBKEY_LEN]
+    shared = data[1 : 1 + PUBKEY_LEN]
     try:
         key_material = ecdh_agree(privkey, keys.PublicKey(shared))
     except _InvalidPublicKey as exc:
@@ -122,20 +125,22 @@ def decrypt(data: bytes, privkey: datatypes.PrivateKey, shared_mac_data: bytes =
             f"Failed to generate shared secret with pubkey {shared}: {exc}"
         ) from exc
     key = kdf(key_material)
-    key_enc, key_mac = key[:KEY_LEN // 2], key[KEY_LEN // 2:]
+    key_enc, key_mac = key[: KEY_LEN // 2], key[KEY_LEN // 2 :]
     key_mac = sha256(key_mac).digest()
     tag = data[-KEY_LEN:]
 
     # 2) Verify tag
-    expected_tag = hmac_sha256(key_mac, data[1 + PUBKEY_LEN:- KEY_LEN] + shared_mac_data)
+    expected_tag = hmac_sha256(
+        key_mac, data[1 + PUBKEY_LEN : -KEY_LEN] + shared_mac_data
+    )
     if not bytes_eq(expected_tag, tag):
         raise DecryptionError("Failed to verify tag")
 
     # 3) Decrypt
     algo = CIPHER(key_enc)
     blocksize = algo.block_size // 8
-    iv = data[1 + PUBKEY_LEN:1 + PUBKEY_LEN + blocksize]
-    ciphertext = data[1 + PUBKEY_LEN + blocksize:- KEY_LEN]
+    iv = data[1 + PUBKEY_LEN : 1 + PUBKEY_LEN + blocksize]
+    ciphertext = data[1 + PUBKEY_LEN + blocksize : -KEY_LEN]
     ctx = Cipher(algo, MODE(iv), default_backend()).decryptor()
     return ctx.update(ciphertext) + ctx.finalize()
 
@@ -153,7 +158,7 @@ def kdf(key_material: bytes) -> bytes:
     while counter <= reps:
         counter += 1
         ctx = sha256()
-        ctx.update(struct.pack('>I', counter))
+        ctx.update(struct.pack(">I", counter))
         ctx.update(key_material)
         key += ctx.digest()
     return key[:KEY_LEN]

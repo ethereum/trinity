@@ -4,22 +4,12 @@ import sys
 import pexpect
 import pytest
 
-from eth_utils import (
-    encode_hex,
-)
-from eth.constants import (
-    GENESIS_BLOCK_NUMBER,
-    GENESIS_PARENT_HASH,
-)
+from eth_utils import encode_hex
+from eth.constants import GENESIS_BLOCK_NUMBER, GENESIS_PARENT_HASH
 
-from tests.integration.helpers import (
-    run_command_and_detect_errors,
-    scan_for_errors,
-)
+from tests.integration.helpers import run_command_and_detect_errors, scan_for_errors
 
-from trinity._utils.async_iter import (
-    contains_all
-)
+from trinity._utils.async_iter import contains_all
 
 
 # IMPORTANT: Test names are intentionally short here because they end up
@@ -38,96 +28,91 @@ from trinity._utils.async_iter import (
 #     assert await contains_all(async_process_runner.stdout, {'bytes from'})
 
 
-@pytest.mark.parametrize(
-    'command',
-    (
-        ('trinity',),
-        ('trinity', '--ropsten',),
-    )
-)
+@pytest.mark.parametrize("command", (("trinity",), ("trinity", "--ropsten")))
 @pytest.mark.asyncio
 async def test_full_boot(async_process_runner, command):
     await async_process_runner.run(command, timeout_sec=30)
-    assert await contains_all(async_process_runner.stderr, {
-        "Started DB server process",
-        "Started networking process",
-        "Running server",
-        "IPC started at",
-    })
+    assert await contains_all(
+        async_process_runner.stderr,
+        {
+            "Started DB server process",
+            "Started networking process",
+            "Running server",
+            "IPC started at",
+        },
+    )
 
 
 @pytest.mark.parametrize(
-    'command',
-    (
-        ('trinity', '--tx-pool',),
-        ('trinity', '--tx-pool', '--ropsten',),
-    )
+    "command", (("trinity", "--tx-pool"), ("trinity", "--tx-pool", "--ropsten"))
 )
 @pytest.mark.asyncio
 async def test_txpool_full_boot(async_process_runner, command):
     await async_process_runner.run(command, timeout_sec=30)
-    assert await contains_all(async_process_runner.stderr, {
-        "Started DB server process",
-        "Started networking process",
-        "Running Tx Pool",
-        "Running server",
-        "IPC started at",
-    })
+    assert await contains_all(
+        async_process_runner.stderr,
+        {
+            "Started DB server process",
+            "Started networking process",
+            "Running Tx Pool",
+            "Running server",
+            "IPC started at",
+        },
+    )
 
 
 @pytest.mark.parametrize(
-    'command',
+    "command",
     (
-        ('trinity', '--sync-mode=light', '--tx-pool',),
-        ('trinity', '--sync-mode=light', '--ropsten', '--tx-pool',),
-    )
+        ("trinity", "--sync-mode=light", "--tx-pool"),
+        ("trinity", "--sync-mode=light", "--ropsten", "--tx-pool"),
+    ),
 )
 @pytest.mark.asyncio
 async def test_txpool_deactivated(async_process_runner, command):
     await async_process_runner.run(command, timeout_sec=30)
-    assert await contains_all(async_process_runner.stderr, {
-        "Started DB server process",
-        "Started networking process",
-        "Transaction pool not available in light mode",
-    })
+    assert await contains_all(
+        async_process_runner.stderr,
+        {
+            "Started DB server process",
+            "Started networking process",
+            "Transaction pool not available in light mode",
+        },
+    )
 
 
 @pytest.mark.parametrize(
-    'command',
-    (
-        ('trinity', '--sync-mode=light',),
-        ('trinity', '--sync-mode=light', '--ropsten',),
-    )
+    "command",
+    (("trinity", "--sync-mode=light"), ("trinity", "--sync-mode=light", "--ropsten")),
 )
 @pytest.mark.asyncio
 async def test_light_boot(async_process_runner, command):
     await async_process_runner.run(command, timeout_sec=30)
-    assert await contains_all(async_process_runner.stderr, {
-        "Started DB server process",
-        "Started networking process",
-        "IPC started at",
-    })
-
-
-@pytest.mark.parametrize(
-    'command',
-    (
-        ('trinity', ),
+    assert await contains_all(
+        async_process_runner.stderr,
+        {"Started DB server process", "Started networking process", "IPC started at"},
     )
-)
+
+
+@pytest.mark.parametrize("command", (("trinity",),))
 @pytest.mark.asyncio
 async def test_web3(command, async_process_runner):
     await async_process_runner.run(command, timeout_sec=30)
-    assert await contains_all(async_process_runner.stderr, {
-        "Started DB server process",
-        "Started networking process",
-        "IPC started at",
-        # Ensure we do not start making requests that depend on the networking
-        # process, before it is connected to the JSON-RPC-API
-        "EventBus Endpoint networking connecting to other Endpoint bjson-rpc-api",
-    })
+    assert await contains_all(
+        async_process_runner.stderr,
+        {
+            "Started DB server process",
+            "Started networking process",
+            "IPC started at",
+            # Ensure we do not start making requests that depend on the networking
+            # process, before it is connected to the JSON-RPC-API
+            "EventBus Endpoint networking connecting to other Endpoint bjson-rpc-api",
+        },
+    )
 
-    attached_trinity = pexpect.spawn('trinity', ['attach'], logfile=sys.stdout, encoding="utf-8")
+    attached_trinity = pexpect.spawn(
+        "trinity", ["attach"], logfile=sys.stdout, encoding="utf-8"
+    )
     try:
         attached_trinity.expect("An instance of Web3 connected to the running chain")
         attached_trinity.sendline("w3.net.version")
@@ -145,17 +130,17 @@ async def test_web3(command, async_process_runner):
 
 
 @pytest.mark.parametrize(
-    'command',
+    "command",
     (
         # mainnet
-        ('trinity',),
-        ('trinity', '--tx-pool',),
-        ('trinity', '--sync-mode=light',),
+        ("trinity",),
+        ("trinity", "--tx-pool"),
+        ("trinity", "--sync-mode=light"),
         # ropsten
-        ('trinity', '--ropsten',),
-        ('trinity', '--ropsten', '--tx-pool',),
-        ('trinity', '--sync-mode=light', '--ropsten',),
-    )
+        ("trinity", "--ropsten"),
+        ("trinity", "--ropsten", "--tx-pool"),
+        ("trinity", "--sync-mode=light", "--ropsten"),
+    ),
 )
 @pytest.mark.asyncio
 async def test_does_not_throw(async_process_runner, command):
@@ -165,34 +150,28 @@ async def test_does_not_throw(async_process_runner, command):
 
 
 @pytest.mark.parametrize(
-    'command, expected_to_contain_log',
+    "command, expected_to_contain_log",
     (
-        (('trinity', '-l=DEBUG2'), True),
+        (("trinity", "-l=DEBUG2"), True),
         # We expect not to contain it because we set the p2p.discovery logger to only log errors
-        (('trinity', '-l=DEBUG2', '-l', 'p2p.discovery=ERROR'), False,)
-    )
+        (("trinity", "-l=DEBUG2", "-l", "p2p.discovery=ERROR"), False),
+    ),
 )
 @pytest.mark.asyncio
 async def test_logger(async_process_runner, command, expected_to_contain_log):
     await async_process_runner.run(command, timeout_sec=30)
-    actually_contains_log = await contains_all(async_process_runner.stderr, {
-        "DiscoveryProtocol  >>> ping",
-    })
+    actually_contains_log = await contains_all(
+        async_process_runner.stderr, {"DiscoveryProtocol  >>> ping"}
+    )
     assert actually_contains_log == expected_to_contain_log
 
 
-@pytest.mark.parametrize(
-    'command',
-    (
-        ('trinity', ),
-    )
-)
+@pytest.mark.parametrize("command", (("trinity",),))
 @pytest.mark.asyncio
 # Once we get Trinity to shutdown cleanly, we should remove the xfail so that the test ensures
 # ongoing clean exits.
 @pytest.mark.xfail
 async def test_shutdown(command, async_process_runner):
-
     async def run_then_shutdown_and_yield_output():
         await async_process_runner.run(command, timeout_sec=30)
 

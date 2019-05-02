@@ -2,17 +2,13 @@ import asyncio
 
 from eth_utils import to_tuple
 from eth.rlp.headers import BlockHeader
-from p2p.peer import (
-    PeerSubscriber,
-)
+from p2p.peer import PeerSubscriber
 import pytest
 
 from trinity.protocol.les.commands import GetBlockHeaders
 from trinity.protocol.les.peer import LESPeer
 
-from tests.core.peer_helpers import (
-    get_directly_linked_peers,
-)
+from tests.core.peer_helpers import get_directly_linked_peers
 
 
 class RequestIDMonitor(PeerSubscriber):
@@ -21,7 +17,7 @@ class RequestIDMonitor(PeerSubscriber):
 
     async def next_request_id(self):
         msg = await self.msg_queue.get()
-        return msg.payload['request_id']
+        return msg.payload["request_id"]
 
 
 @to_tuple
@@ -46,35 +42,28 @@ def mk_header_chain(length):
 
 @pytest.fixture
 async def eth_peer_and_remote(request, event_loop):
-    peer, remote = await get_directly_linked_peers(
-        request,
-        event_loop,
-    )
+    peer, remote = await get_directly_linked_peers(request, event_loop)
     return peer, remote
 
 
 @pytest.fixture
 async def les_peer_and_remote(request, event_loop):
     peer, remote = await get_directly_linked_peers(
-        request,
-        event_loop,
-        alice_peer_class=LESPeer,
+        request, event_loop, alice_peer_class=LESPeer
     )
     return peer, remote
 
 
 @pytest.mark.parametrize(
-    'params,headers',
+    "params,headers",
     (
         ((0, 1, 0, False), mk_header_chain(1)),
         ((0, 10, 0, False), mk_header_chain(10)),
         ((3, 5, 0, False), mk_header_chain(10)[3:8]),
-    )
+    ),
 )
 @pytest.mark.asyncio
-async def test_eth_peer_get_headers_round_trip(eth_peer_and_remote,
-                                               params,
-                                               headers):
+async def test_eth_peer_get_headers_round_trip(eth_peer_and_remote, params, headers):
     peer, remote = eth_peer_and_remote
 
     async def send_headers():
@@ -119,23 +108,24 @@ async def test_eth_peer_get_headers_round_trip_concurrent_requests(eth_peer_and_
 
 
 @pytest.mark.parametrize(
-    'params,headers',
+    "params,headers",
     (
         ((0, 1, 0, False), mk_header_chain(1)),
         ((0, 10, 0, False), mk_header_chain(10)),
         ((3, 5, 0, False), mk_header_chain(10)[3:8]),
-    )
+    ),
 )
 @pytest.mark.asyncio
-async def test_les_peer_get_headers_round_trip(les_peer_and_remote,
-                                               params,
-                                               monkeypatch,
-                                               headers):
+async def test_les_peer_get_headers_round_trip(
+    les_peer_and_remote, params, monkeypatch, headers
+):
     peer, remote = les_peer_and_remote
 
     request_id_monitor = RequestIDMonitor()
     with request_id_monitor.subscribe_peer(remote):
-        get_headers_task = asyncio.ensure_future(peer.requests.get_block_headers(*params))
+        get_headers_task = asyncio.ensure_future(
+            peer.requests.get_block_headers(*params)
+        )
         request_id = await request_id_monitor.next_request_id()
 
     remote.sub_proto.send_block_headers(headers, 0, request_id)
@@ -154,12 +144,14 @@ async def test_eth_peer_get_headers_round_trip_with_noise(eth_peer_and_remote):
     headers = mk_header_chain(10)
 
     async def send_responses():
-        remote.sub_proto.send_node_data([b'arst', b'tsra'])
+        remote.sub_proto.send_node_data([b"arst", b"tsra"])
         await asyncio.sleep(0)
         remote.sub_proto.send_block_headers(headers)
         await asyncio.sleep(0)
 
-    get_headers_task = asyncio.ensure_future(peer.requests.get_block_headers(0, 10, 0, False))
+    get_headers_task = asyncio.ensure_future(
+        peer.requests.get_block_headers(0, 10, 0, False)
+    )
     asyncio.ensure_future(send_responses())
 
     response = await get_headers_task
@@ -170,7 +162,9 @@ async def test_eth_peer_get_headers_round_trip_with_noise(eth_peer_and_remote):
 
 
 @pytest.mark.asyncio
-async def test_eth_peer_get_headers_round_trip_does_not_match_invalid_response(eth_peer_and_remote):
+async def test_eth_peer_get_headers_round_trip_does_not_match_invalid_response(
+    eth_peer_and_remote
+):
     peer, remote = eth_peer_and_remote
 
     headers = mk_header_chain(5)
@@ -178,14 +172,16 @@ async def test_eth_peer_get_headers_round_trip_does_not_match_invalid_response(e
     wrong_headers = mk_header_chain(10)[3:8]
 
     async def send_responses():
-        remote.sub_proto.send_node_data([b'arst', b'tsra'])
+        remote.sub_proto.send_node_data([b"arst", b"tsra"])
         await asyncio.sleep(0)
         remote.sub_proto.send_block_headers(wrong_headers)
         await asyncio.sleep(0)
         remote.sub_proto.send_block_headers(headers)
         await asyncio.sleep(0)
 
-    get_headers_task = asyncio.ensure_future(peer.requests.get_block_headers(0, 5, 0, False))
+    get_headers_task = asyncio.ensure_future(
+        peer.requests.get_block_headers(0, 5, 0, False)
+    )
     asyncio.ensure_future(send_responses())
 
     response = await get_headers_task

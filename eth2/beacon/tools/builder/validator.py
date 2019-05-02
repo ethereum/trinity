@@ -1,52 +1,25 @@
 import random
 import time
 
-from typing import (
-    Dict,
-    Iterable,
-    Sequence,
-    Tuple,
-)
+from typing import Dict, Iterable, Sequence, Tuple
 
-from cytoolz import (
-    pipe,
-)
+from cytoolz import pipe
 
-from eth_typing import (
-    BLSPubkey,
-    BLSSignature,
-    Hash32,
-)
-from eth_utils import (
-    to_tuple,
-)
+from eth_typing import BLSPubkey, BLSSignature, Hash32
+from eth_utils import to_tuple
 
-from eth.constants import (
-    ZERO_HASH32,
-)
+from eth.constants import ZERO_HASH32
 from py_ecc import bls
 
-from eth2._utils.bitfield import (
-    get_empty_bitfield,
-    set_voted,
-)
-from eth2.configs import (
-    CommitteeConfig,
-    Eth2Config,
-)
-from eth2.beacon.constants import (
-    ZERO_TIMESTAMP,
-)
-from eth2.beacon.enums import (
-    SignatureDomain,
-)
+from eth2._utils.bitfield import get_empty_bitfield, set_voted
+from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.beacon.constants import ZERO_TIMESTAMP
+from eth2.beacon.enums import SignatureDomain
 from eth2.beacon.committee_helpers import (
     get_beacon_proposer_index,
     get_crosslink_committees_at_slot,
 )
-from eth2.beacon.exceptions import (
-    NoCommitteeAssignment,
-)
+from eth2.beacon.exceptions import NoCommitteeAssignment
 from eth2.beacon.helpers import (
     get_block_root,
     get_domain,
@@ -77,38 +50,28 @@ from eth2.beacon.typing import (
     Timestamp,
     ValidatorIndex,
 )
-from eth2.beacon.state_machines.base import (
-    BaseBeaconStateMachine,
-)
-from eth2.beacon.validation import (
-    validate_epoch_within_previous_and_next,
-)
+from eth2.beacon.state_machines.base import BaseBeaconStateMachine
+from eth2.beacon.validation import validate_epoch_within_previous_and_next
 
-from .committee_assignment import (
-    CommitteeAssignment,
-)
+from .committee_assignment import CommitteeAssignment
 
 
 #
 # Aggregation
 #
 def verify_votes(
-        message_hash: Hash32,
-        votes: Iterable[Tuple[CommitteeIndex, BLSSignature, BLSPubkey]],
-        domain: SignatureDomain
+    message_hash: Hash32,
+    votes: Iterable[Tuple[CommitteeIndex, BLSSignature, BLSPubkey]],
+    domain: SignatureDomain,
 ) -> Tuple[Tuple[BLSSignature, ...], Tuple[CommitteeIndex, ...]]:
     """
     Verify the given votes.
     """
     sigs_with_committee_info = tuple(
         (sig, committee_index)
-        for (committee_index, sig, pubkey)
-        in votes
+        for (committee_index, sig, pubkey) in votes
         if bls.verify(
-            message_hash=message_hash,
-            pubkey=pubkey,
-            signature=sig,
-            domain=domain,
+            message_hash=message_hash, pubkey=pubkey, signature=sig, domain=domain
         )
     )
     try:
@@ -121,10 +84,10 @@ def verify_votes(
 
 
 def aggregate_votes(
-        bitfield: Bitfield,
-        sigs: Sequence[BLSSignature],
-        voting_sigs: Sequence[BLSSignature],
-        voting_committee_indices: Sequence[CommitteeIndex]
+    bitfield: Bitfield,
+    sigs: Sequence[BLSSignature],
+    voting_sigs: Sequence[BLSSignature],
+    voting_committee_indices: Sequence[CommitteeIndex],
 ) -> Tuple[Bitfield, BLSSignature]:
     """
     Aggregate the votes.
@@ -145,53 +108,46 @@ def aggregate_votes(
 #
 # Signer
 #
-def sign_proof_of_possession(deposit_input: DepositInput,
-                             privkey: int,
-                             fork: Fork,
-                             slot: Slot,
-                             slots_per_epoch: int) -> BLSSignature:
+def sign_proof_of_possession(
+    deposit_input: DepositInput,
+    privkey: int,
+    fork: Fork,
+    slot: Slot,
+    slots_per_epoch: int,
+) -> BLSSignature:
     domain = get_domain(
-        fork,
-        slot_to_epoch(slot, slots_per_epoch),
-        SignatureDomain.DOMAIN_DEPOSIT,
+        fork, slot_to_epoch(slot, slots_per_epoch), SignatureDomain.DOMAIN_DEPOSIT
     )
     return bls.sign(
-        message_hash=deposit_input.signing_root,
-        privkey=privkey,
-        domain=domain,
+        message_hash=deposit_input.signing_root, privkey=privkey, domain=domain
     )
 
 
-def sign_transaction(*,
-                     message_hash: Hash32,
-                     privkey: int,
-                     fork: Fork,
-                     slot: Slot,
-                     signature_domain: SignatureDomain,
-                     slots_per_epoch: int) -> BLSSignature:
-    domain = get_domain(
-        fork,
-        slot_to_epoch(slot, slots_per_epoch),
-        signature_domain,
-    )
-    return bls.sign(
-        message_hash=message_hash,
-        privkey=privkey,
-        domain=domain,
-    )
+def sign_transaction(
+    *,
+    message_hash: Hash32,
+    privkey: int,
+    fork: Fork,
+    slot: Slot,
+    signature_domain: SignatureDomain,
+    slots_per_epoch: int
+) -> BLSSignature:
+    domain = get_domain(fork, slot_to_epoch(slot, slots_per_epoch), signature_domain)
+    return bls.sign(message_hash=message_hash, privkey=privkey, domain=domain)
 
 
-SAMPLE_HASH_1 = Hash32(b'\x11' * 32)
-SAMPLE_HASH_2 = Hash32(b'\x22' * 32)
+SAMPLE_HASH_1 = Hash32(b"\x11" * 32)
+SAMPLE_HASH_2 = Hash32(b"\x22" * 32)
 
 
 def create_block_header_with_signature(
-        state: BeaconState,
-        block_body_root: Hash32,
-        privkey: int,
-        slots_per_epoch: int,
-        previous_block_root: Hash32=SAMPLE_HASH_1,
-        state_root: Hash32=SAMPLE_HASH_2)-> BeaconBlockHeader:
+    state: BeaconState,
+    block_body_root: Hash32,
+    privkey: int,
+    slots_per_epoch: int,
+    previous_block_root: Hash32 = SAMPLE_HASH_1,
+    state_root: Hash32 = SAMPLE_HASH_2,
+) -> BeaconBlockHeader:
     block_header = BeaconBlockHeader(
         slot=state.slot,
         previous_block_root=previous_block_root,
@@ -220,12 +176,13 @@ def create_block_header_with_signature(
 # ProposerSlashing
 #
 def create_mock_proposer_slashing_at_block(
-        state: BeaconState,
-        config: Eth2Config,
-        keymap: Dict[BLSPubkey, int],
-        block_root_1: Hash32,
-        block_root_2: Hash32,
-        proposer_index: ValidatorIndex) -> ProposerSlashing:
+    state: BeaconState,
+    config: Eth2Config,
+    keymap: Dict[BLSPubkey, int],
+    block_root_1: Hash32,
+    block_root_2: Hash32,
+    proposer_index: ValidatorIndex,
+) -> ProposerSlashing:
     """
     Return a `ProposerSlashing` derived from the given block roots.
 
@@ -249,19 +206,19 @@ def create_mock_proposer_slashing_at_block(
     )
 
     return ProposerSlashing(
-        proposer_index=proposer_index,
-        header_1=block_header_1,
-        header_2=block_header_2,
+        proposer_index=proposer_index, header_1=block_header_1, header_2=block_header_2
     )
 
 
 #
 # AttesterSlashing
 #
-def create_mock_slashable_attestation(state: BeaconState,
-                                      config: Eth2Config,
-                                      keymap: Dict[BLSPubkey, int],
-                                      attestation_slot: Slot) -> SlashableAttestation:
+def create_mock_slashable_attestation(
+    state: BeaconState,
+    config: Eth2Config,
+    keymap: Dict[BLSPubkey, int],
+    attestation_slot: Slot,
+) -> SlashableAttestation:
     """
     Create `SlashableAttestation` that is signed by one attester.
     """
@@ -271,9 +228,7 @@ def create_mock_slashable_attestation(state: BeaconState,
 
     # Use genesis block root as `beacon_block_root`, only for tests.
     beacon_block_root = get_block_root(
-        state,
-        config.GENESIS_SLOT,
-        config.SLOTS_PER_HISTORICAL_ROOT,
+        state, config.GENESIS_SLOT, config.SLOTS_PER_HISTORICAL_ROOT
     )
 
     # Get `target_root`
@@ -298,18 +253,12 @@ def create_mock_slashable_attestation(state: BeaconState,
     )
 
     message_hash, voting_committee_indices = _get_mock_message_and_voting_committee_indices(
-        attestation_data,
-        committee,
-        num_voted_attesters=1,
+        attestation_data, committee, num_voted_attesters=1
     )
 
     signature = sign_transaction(
         message_hash=message_hash,
-        privkey=keymap[
-            state.validator_registry[
-                voting_committee_indices[0]
-            ].pubkey
-        ],
+        privkey=keymap[state.validator_registry[voting_committee_indices[0]].pubkey],
         fork=state.fork,
         slot=attestation_slot,
         signature_domain=SignatureDomain.DOMAIN_ATTESTATION,
@@ -326,24 +275,19 @@ def create_mock_slashable_attestation(state: BeaconState,
 
 
 def create_mock_attester_slashing_is_double_vote(
-        state: BeaconState,
-        config: Eth2Config,
-        keymap: Dict[BLSPubkey, int],
-        attestation_epoch: Epoch) -> AttesterSlashing:
+    state: BeaconState,
+    config: Eth2Config,
+    keymap: Dict[BLSPubkey, int],
+    attestation_epoch: Epoch,
+) -> AttesterSlashing:
     attestation_slot_1 = get_epoch_start_slot(attestation_epoch, config.SLOTS_PER_EPOCH)
     attestation_slot_2 = Slot(attestation_slot_1 + 1)
 
     slashable_attestation_1 = create_mock_slashable_attestation(
-        state,
-        config,
-        keymap,
-        attestation_slot_1,
+        state, config, keymap, attestation_slot_1
     )
     slashable_attestation_2 = create_mock_slashable_attestation(
-        state,
-        config,
-        keymap,
-        attestation_slot_2,
+        state, config, keymap, attestation_slot_2
     )
 
     return AttesterSlashing(
@@ -353,18 +297,18 @@ def create_mock_attester_slashing_is_double_vote(
 
 
 def create_mock_attester_slashing_is_surround_vote(
-        state: BeaconState,
-        config: Eth2Config,
-        keymap: Dict[BLSPubkey, int],
-        attestation_epoch: Epoch) -> AttesterSlashing:
+    state: BeaconState,
+    config: Eth2Config,
+    keymap: Dict[BLSPubkey, int],
+    attestation_epoch: Epoch,
+) -> AttesterSlashing:
     # target_epoch_2 < target_epoch_1
     attestation_slot_2 = get_epoch_start_slot(attestation_epoch, config.SLOTS_PER_EPOCH)
     attestation_slot_1 = Slot(attestation_slot_2 + config.SLOTS_PER_EPOCH)
 
     slashable_attestation_1 = create_mock_slashable_attestation(
         state.copy(
-            slot=attestation_slot_1,
-            current_justified_epoch=config.GENESIS_EPOCH,
+            slot=attestation_slot_1, current_justified_epoch=config.GENESIS_EPOCH
         ),
         config,
         keymap,
@@ -373,7 +317,8 @@ def create_mock_attester_slashing_is_surround_vote(
     slashable_attestation_2 = create_mock_slashable_attestation(
         state.copy(
             slot=attestation_slot_1,
-            current_justified_epoch=config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
+            current_justified_epoch=config.GENESIS_EPOCH
+            + 1,  # source_epoch_1 < source_epoch_2
         ),
         config,
         keymap,
@@ -389,33 +334,28 @@ def create_mock_attester_slashing_is_surround_vote(
 #
 # Attestation
 #
-def _get_target_root(state: BeaconState,
-                     config: Eth2Config,
-                     beacon_block_root: Hash32) -> Hash32:
+def _get_target_root(
+    state: BeaconState, config: Eth2Config, beacon_block_root: Hash32
+) -> Hash32:
     epoch_start_slot = get_epoch_start_slot(
-        slot_to_epoch(state.slot, config.SLOTS_PER_EPOCH),
-        config.SLOTS_PER_EPOCH,
+        slot_to_epoch(state.slot, config.SLOTS_PER_EPOCH), config.SLOTS_PER_EPOCH
     )
     if epoch_start_slot == state.slot:
         return beacon_block_root
     else:
-        return get_block_root(
-            state,
-            epoch_start_slot,
-            config.SLOTS_PER_HISTORICAL_ROOT,
-        )
+        return get_block_root(state, epoch_start_slot, config.SLOTS_PER_HISTORICAL_ROOT)
 
 
 def _get_mock_message_and_voting_committee_indices(
-        attestation_data: AttestationData,
-        committee: Sequence[ValidatorIndex],
-        num_voted_attesters: int) -> Tuple[Hash32, Tuple[CommitteeIndex, ...]]:
+    attestation_data: AttestationData,
+    committee: Sequence[ValidatorIndex],
+    num_voted_attesters: int,
+) -> Tuple[Hash32, Tuple[CommitteeIndex, ...]]:
     """
     Get ``message_hash`` and voting indices of the given ``committee``.
     """
     message_hash = AttestationDataAndCustodyBit(
-        data=attestation_data,
-        custody_bit=False
+        data=attestation_data, custody_bit=False
     ).root
 
     committee_size = len(committee)
@@ -423,36 +363,33 @@ def _get_mock_message_and_voting_committee_indices(
 
     # Index in committee
     voting_committee_indices = tuple(
-        CommitteeIndex(i) for i in random.sample(range(committee_size), num_voted_attesters)
+        CommitteeIndex(i)
+        for i in random.sample(range(committee_size), num_voted_attesters)
     )
 
     return message_hash, voting_committee_indices
 
 
-def create_mock_signed_attestation(state: BeaconState,
-                                   attestation_data: AttestationData,
-                                   committee: Sequence[ValidatorIndex],
-                                   num_voted_attesters: int,
-                                   keymap: Dict[BLSPubkey, int],
-                                   slots_per_epoch: int) -> Attestation:
+def create_mock_signed_attestation(
+    state: BeaconState,
+    attestation_data: AttestationData,
+    committee: Sequence[ValidatorIndex],
+    num_voted_attesters: int,
+    keymap: Dict[BLSPubkey, int],
+    slots_per_epoch: int,
+) -> Attestation:
     """
     Create a mocking attestation of the given ``attestation_data`` slot with ``keymap``.
     """
     message_hash, voting_committee_indices = _get_mock_message_and_voting_committee_indices(
-        attestation_data,
-        committee,
-        num_voted_attesters,
+        attestation_data, committee, num_voted_attesters
     )
 
     # Use privkeys to sign the attestation
     signatures = [
         sign_transaction(
             message_hash=message_hash,
-            privkey=keymap[
-                state.validator_registry[
-                    committee[committee_index]
-                ].pubkey
-            ],
+            privkey=keymap[state.validator_registry[committee[committee_index]].pubkey],
             fork=state.fork,
             slot=attestation_data.slot,
             signature_domain=SignatureDomain.DOMAIN_ATTESTATION,
@@ -473,32 +410,30 @@ def create_mock_signed_attestation(state: BeaconState,
     return Attestation(
         aggregation_bitfield=aggregation_bitfield,
         data=attestation_data,
-        custody_bitfield=Bitfield(b'\x00' * len(aggregation_bitfield)),
+        custody_bitfield=Bitfield(b"\x00" * len(aggregation_bitfield)),
         aggregate_signature=aggregate_signature,
     )
 
 
 @to_tuple
 def create_mock_signed_attestations_at_slot(
-        state: BeaconState,
-        config: Eth2Config,
-        state_machine: BaseBeaconStateMachine,
-        attestation_slot: Slot,
-        beacon_block_root: Hash32,
-        keymap: Dict[BLSPubkey, int],
-        voted_attesters_ratio: float=1.0) -> Iterable[Attestation]:
+    state: BeaconState,
+    config: Eth2Config,
+    state_machine: BaseBeaconStateMachine,
+    attestation_slot: Slot,
+    beacon_block_root: Hash32,
+    keymap: Dict[BLSPubkey, int],
+    voted_attesters_ratio: float = 1.0,
+) -> Iterable[Attestation]:
     """
     Create the mocking attestations of the given ``attestation_slot`` slot with ``keymap``.
     """
     state_transition = state_machine.state_transition
     state = state_transition.apply_state_transition_without_block(
-        state,
-        attestation_slot,
+        state, attestation_slot
     )
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
-        state,
-        attestation_slot,
-        CommitteeConfig(config),
+        state, attestation_slot, CommitteeConfig(config)
     )
 
     # Get `target_root`
@@ -536,14 +471,18 @@ def create_mock_signed_attestations_at_slot(
 #
 # VoluntaryExit
 #
-def create_mock_voluntary_exit(state: BeaconState,
-                               config: Eth2Config,
-                               keymap: Dict[BLSPubkey, int],
-                               validator_index: ValidatorIndex,
-                               exit_epoch: Epoch=None) -> VoluntaryExit:
+def create_mock_voluntary_exit(
+    state: BeaconState,
+    config: Eth2Config,
+    keymap: Dict[BLSPubkey, int],
+    validator_index: ValidatorIndex,
+    exit_epoch: Epoch = None,
+) -> VoluntaryExit:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     voluntary_exit = VoluntaryExit(
-        epoch=state.current_epoch(config.SLOTS_PER_EPOCH) if exit_epoch is None else exit_epoch,
+        epoch=state.current_epoch(config.SLOTS_PER_EPOCH)
+        if exit_epoch is None
+        else exit_epoch,
         validator_index=validator_index,
     )
     return voluntary_exit.copy(
@@ -561,14 +500,16 @@ def create_mock_voluntary_exit(state: BeaconState,
 #
 # Deposit
 #
-def create_deposit_data(*,
-                        config: Eth2Config,
-                        pubkey: BLSPubkey,
-                        privkey: int,
-                        withdrawal_credentials: Hash32,
-                        fork: Fork,
-                        deposit_timestamp: Timestamp,
-                        amount: Gwei=None) -> DepositData:
+def create_deposit_data(
+    *,
+    config: Eth2Config,
+    pubkey: BLSPubkey,
+    privkey: int,
+    withdrawal_credentials: Hash32,
+    fork: Fork,
+    deposit_timestamp: Timestamp,
+    amount: Gwei = None
+) -> DepositData:
     if amount is None:
         amount = config.MAX_DEPOSIT_AMOUNT
 
@@ -578,8 +519,7 @@ def create_deposit_data(*,
             withdrawal_credentials=withdrawal_credentials,
             signature=sign_proof_of_possession(
                 deposit_input=DepositInput(
-                    pubkey=pubkey,
-                    withdrawal_credentials=withdrawal_credentials,
+                    pubkey=pubkey, withdrawal_credentials=withdrawal_credentials
                 ),
                 privkey=privkey,
                 fork=fork,
@@ -592,14 +532,16 @@ def create_deposit_data(*,
     )
 
 
-def create_mock_deposit_data(*,
-                             config: Eth2Config,
-                             pubkeys: Sequence[BLSPubkey],
-                             keymap: Dict[BLSPubkey, int],
-                             validator_index: ValidatorIndex,
-                             withdrawal_credentials: Hash32,
-                             fork: Fork,
-                             deposit_timestamp: Timestamp=ZERO_TIMESTAMP) -> DepositData:
+def create_mock_deposit_data(
+    *,
+    config: Eth2Config,
+    pubkeys: Sequence[BLSPubkey],
+    keymap: Dict[BLSPubkey, int],
+    validator_index: ValidatorIndex,
+    withdrawal_credentials: Hash32,
+    fork: Fork,
+    deposit_timestamp: Timestamp = ZERO_TIMESTAMP
+) -> DepositData:
     if deposit_timestamp is None:
         deposit_timestamp = Timestamp(int(time.time()))
 
@@ -624,11 +566,11 @@ def create_mock_deposit_data(*,
 # Lookahead
 #
 def get_committee_assignment(
-        state: BeaconState,
-        config: Eth2Config,
-        epoch: Epoch,
-        validator_index: ValidatorIndex,
-        registry_change: bool=False
+    state: BeaconState,
+    config: Eth2Config,
+    epoch: Epoch,
+    validator_index: ValidatorIndex,
+    registry_change: bool = False,
 ) -> CommitteeAssignment:
     """
     Return the ``CommitteeAssignment`` in the ``epoch`` for ``validator_index``
@@ -651,10 +593,7 @@ def get_committee_assignment(
 
     for slot in range(epoch_start_slot, epoch_start_slot + config.SLOTS_PER_EPOCH):
         crosslink_committees = get_crosslink_committees_at_slot(
-            state,
-            slot,
-            committee_config,
-            registry_change=registry_change,
+            state, slot, committee_config, registry_change=registry_change
         )
         selected_committees = [
             committee
@@ -665,12 +604,11 @@ def get_committee_assignment(
             validators = selected_committees[0][0]
             shard = selected_committees[0][1]
             is_proposer = validator_index == get_beacon_proposer_index(
-                state,
-                Slot(slot),
-                committee_config,
-                registry_change=registry_change,
+                state, Slot(slot), committee_config, registry_change=registry_change
             )
 
-            return CommitteeAssignment(tuple(validators), shard, Slot(slot), is_proposer)
+            return CommitteeAssignment(
+                tuple(validators), shard, Slot(slot), is_proposer
+            )
 
     raise NoCommitteeAssignment

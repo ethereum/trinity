@@ -8,6 +8,6 @@ from eth.rlp.transactions import BaseTransactionFields
 
 class BlockBody(rlp.Serializable):
     fields = [
-        ('transactions', sedes.CountableList(BaseTransactionFields)),
-        ('uncles', sedes.CountableList(BlockHeader))
+        ("transactions", sedes.CountableList(BaseTransactionFields)),
+        ("uncles", sedes.CountableList(BlockHeader)),
     ]

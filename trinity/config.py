@@ -1,13 +1,7 @@
-from abc import (
-    ABC,
-    abstractmethod,
-)
+from abc import ABC, abstractmethod
 import argparse
 from contextlib import contextmanager
-from enum import (
-    auto,
-    Enum,
-)
+from enum import auto, Enum
 import json
 from pathlib import Path
 from typing import (
@@ -23,10 +17,7 @@ from typing import (
     Union,
 )
 
-from eth_typing import (
-    Address,
-    BLSPubkey,
-)
+from eth_typing import Address, BLSPubkey
 
 from eth_keys import keys
 from eth_keys.datatypes import PrivateKey
@@ -35,10 +26,7 @@ from eth.db.backends.base import BaseAtomicDB
 from eth.typing import VMConfiguration
 
 from p2p.kademlia import Node as KademliaNode
-from p2p.constants import (
-    MAINNET_BOOTNODES,
-    ROPSTEN_BOOTNODES,
-)
+from p2p.constants import MAINNET_BOOTNODES, ROPSTEN_BOOTNODES
 
 from trinity.constants import (
     ASSETS_DIR,
@@ -65,21 +53,12 @@ from trinity._utils.eip1085 import (
     GenesisParams,
     extract_genesis_data,
 )
-from trinity._utils.filesystem import (
-    PidFile,
-)
-from trinity._utils.xdg import (
-    get_xdg_trinity_root,
-)
+from trinity._utils.filesystem import PidFile
+from trinity._utils.xdg import get_xdg_trinity_root
 
 from eth2.beacon.chains.testnet import TestnetChain
-from eth2.beacon.typing import (
-    Slot,
-    Timestamp,
-)
-from eth2.beacon.tools.builder.initializer import (
-    create_mock_genesis,
-)
+from eth2.beacon.typing import Slot, Timestamp
+from eth2.beacon.tools.builder.initializer import create_mock_genesis
 
 
 if TYPE_CHECKING:
@@ -89,10 +68,10 @@ if TYPE_CHECKING:
     from trinity.chains.light import LightDispatchChain  # noqa: F401
     from eth2.beacon.chains.base import BeaconChain  # noqa: F401
 
-DATABASE_DIR_NAME = 'chain'
+DATABASE_DIR_NAME = "chain"
 
-MAINNET_EIP1085_PATH = ASSETS_DIR / 'eip1085' / 'mainnet.json'
-ROPSTEN_EIP1085_PATH = ASSETS_DIR / 'eip1085' / 'ropsten.json'
+MAINNET_EIP1085_PATH = ASSETS_DIR / "eip1085" / "mainnet.json"
+ROPSTEN_EIP1085_PATH = ASSETS_DIR / "eip1085" / "ropsten.json"
 
 
 PRECONFIGURED_NETWORKS = {MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID}
@@ -100,10 +79,10 @@ PRECONFIGURED_NETWORKS = {MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID}
 
 def _load_preconfigured_genesis_config(network_id: int) -> Dict[str, Any]:
     if network_id == MAINNET_NETWORK_ID:
-        with MAINNET_EIP1085_PATH.open('r') as mainnet_genesis_file:
+        with MAINNET_EIP1085_PATH.open("r") as mainnet_genesis_file:
             return json.load(mainnet_genesis_file)
     elif network_id == ROPSTEN_NETWORK_ID:
-        with ROPSTEN_EIP1085_PATH.open('r') as ropsten_genesis_file:
+        with ROPSTEN_EIP1085_PATH.open("r") as ropsten_genesis_file:
             return json.load(ropsten_genesis_file)
     else:
         raise TypeError(f"Unknown or unsupported `network_id`: {network_id}")
@@ -111,17 +90,15 @@ def _load_preconfigured_genesis_config(network_id: int) -> Dict[str, Any]:
 
 def _get_preconfigured_chain_name(network_id: int) -> str:
     if network_id == MAINNET_NETWORK_ID:
-        return 'MainnetChain'
+        return "MainnetChain"
     elif network_id == ROPSTEN_NETWORK_ID:
-        return 'RopstenChain'
+        return "RopstenChain"
     else:
         raise TypeError(f"Unknown or unsupported `network_id`: {network_id}")
 
 
 class ChainConfig:
-    def __init__(self,
-                 genesis_data: GenesisData,
-                 chain_name: str=None) -> None:
+    def __init__(self, genesis_data: GenesisData, chain_name: str = None) -> None:
 
         self.genesis_data = genesis_data
         self._chain_name = chain_name
@@ -134,7 +111,7 @@ class ChainConfig:
             return self._chain_name
 
     @property
-    def full_chain_class(self) -> Type['FullChain']:
+    def full_chain_class(self) -> Type["FullChain"]:
         from trinity.chains.full import FullChain  # noqa: F811
 
         return FullChain.configure(
@@ -144,7 +121,7 @@ class ChainConfig:
         )
 
     @property
-    def light_chain_class(self) -> Type['LightDispatchChain']:
+    def light_chain_class(self) -> Type["LightDispatchChain"]:
         from trinity.chains.light import LightDispatchChain  # noqa: F811
 
         return LightDispatchChain.configure(
@@ -154,19 +131,14 @@ class ChainConfig:
         )
 
     @classmethod
-    def from_eip1085_genesis_config(cls,
-                                    genesis_config: Dict[str, Any],
-                                    chain_name: str=None,
-                                    ) -> 'ChainConfig':
+    def from_eip1085_genesis_config(
+        cls, genesis_config: Dict[str, Any], chain_name: str = None
+    ) -> "ChainConfig":
         genesis_data = extract_genesis_data(genesis_config)
-        return cls(
-            genesis_data=genesis_data,
-            chain_name=chain_name,
-        )
+        return cls(genesis_data=genesis_data, chain_name=chain_name)
 
     @classmethod
-    def from_preconfigured_network(cls,
-                                   network_id: int) -> 'ChainConfig':
+    def from_preconfigured_network(cls, network_id: int) -> "ChainConfig":
         genesis_config = _load_preconfigured_genesis_config(network_id)
         chain_name = _get_preconfigured_chain_name(network_id)
         return cls.from_eip1085_genesis_config(genesis_config, chain_name)
@@ -186,19 +158,20 @@ class ChainConfig:
     def genesis_state(self) -> Dict[Address, Account]:
         return self.genesis_data.state
 
-    def initialize_chain(self,
-                         base_db: BaseAtomicDB) -> 'FullChain':
+    def initialize_chain(self, base_db: BaseAtomicDB) -> "FullChain":
         genesis_params = self.genesis_params.to_dict()
         genesis_state = {
             address: account.to_dict()
-            for address, account
-            in self.genesis_state.items()
+            for address, account in self.genesis_state.items()
         }
-        return cast('FullChain', self.full_chain_class.from_genesis(
-            base_db=base_db,
-            genesis_params=genesis_params,
-            genesis_state=genesis_state,
-        ))
+        return cast(
+            "FullChain",
+            self.full_chain_class.from_genesis(
+                base_db=base_db,
+                genesis_params=genesis_params,
+                genesis_state=genesis_state,
+            ),
+        )
 
     @property
     def vm_configuration(self) -> VMConfiguration:
@@ -208,7 +181,7 @@ class ChainConfig:
         return self.genesis_data.vm_configuration
 
 
-TAppConfig = TypeVar('TAppConfig', bound='BaseAppConfig')
+TAppConfig = TypeVar("TAppConfig", bound="BaseAppConfig")
 
 
 class TrinityConfig:
@@ -229,21 +202,23 @@ class TrinityConfig:
 
     _genesis_config: Dict[str, Any] = None
 
-    _app_configs: Dict[Type['BaseAppConfig'], 'BaseAppConfig'] = None
+    _app_configs: Dict[Type["BaseAppConfig"], "BaseAppConfig"] = None
 
-    def __init__(self,
-                 network_id: int,
-                 app_identifier: str="",
-                 genesis_config: Dict[str, Any]=None,
-                 max_peers: int=25,
-                 trinity_root_dir: str=None,
-                 data_dir: str=None,
-                 nodekey_path: str=None,
-                 nodekey: PrivateKey=None,
-                 port: int=30303,
-                 use_discv5: bool = False,
-                 preferred_nodes: Tuple[KademliaNode, ...]=None,
-                 bootstrap_nodes: Tuple[KademliaNode, ...]=None) -> None:
+    def __init__(
+        self,
+        network_id: int,
+        app_identifier: str = "",
+        genesis_config: Dict[str, Any] = None,
+        max_peers: int = 25,
+        trinity_root_dir: str = None,
+        data_dir: str = None,
+        nodekey_path: str = None,
+        nodekey: PrivateKey = None,
+        port: int = 30303,
+        use_discv5: bool = False,
+        preferred_nodes: Tuple[KademliaNode, ...] = None,
+        bootstrap_nodes: Tuple[KademliaNode, ...] = None,
+    ) -> None:
         self.app_identifier = app_identifier
         self.network_id = network_id
         self.max_peers = max_peers
@@ -288,7 +263,9 @@ class TrinityConfig:
             self.data_dir = data_dir
 
         if nodekey is not None and nodekey_path is not None:
-            raise ValueError("It is invalid to provide both a `nodekey` and a `nodekey_path`")
+            raise ValueError(
+                "It is invalid to provide both a `nodekey` and a `nodekey_path`"
+            )
         elif nodekey_path is not None:
             self.nodekey_path = nodekey_path
         elif nodekey is not None:
@@ -452,10 +429,12 @@ class TrinityConfig:
             yield
 
     @classmethod
-    def from_parser_args(cls,
-                         parser_args: argparse.Namespace,
-                         app_identifier: str,
-                         app_config_types: Iterable[Type['BaseAppConfig']]) -> 'TrinityConfig':
+    def from_parser_args(
+        cls,
+        parser_args: argparse.Namespace,
+        app_identifier: str,
+        app_config_types: Iterable[Type["BaseAppConfig"]],
+    ) -> "TrinityConfig":
         """
         Helper function for initializing from the namespace object produced by
         an ``argparse.ArgumentParser``
@@ -467,9 +446,11 @@ class TrinityConfig:
 
         return trinity_config
 
-    def initialize_app_configs(self,
-                               parser_args: argparse.Namespace,
-                               app_config_types: Iterable[Type['BaseAppConfig']]) -> None:
+    def initialize_app_configs(
+        self,
+        parser_args: argparse.Namespace,
+        app_config_types: Iterable[Type["BaseAppConfig"]],
+    ) -> None:
         """
         Initialize all available ``BaseAppConfig`` based on their concrete types,
         the ``parser_args`` and the existing ``TrinityConfig`` instance.
@@ -477,13 +458,13 @@ class TrinityConfig:
         for app_config_type in app_config_types:
             self.add_app_config(app_config_type.from_parser_args(parser_args, self))
 
-    def add_app_config(self, app_config: 'BaseAppConfig') -> None:
+    def add_app_config(self, app_config: "BaseAppConfig") -> None:
         """
         Register the given ``app_config``.
         """
         self._app_configs[type(app_config)] = app_config
 
-    def has_app_config(self, app_config_type: Type['BaseAppConfig']) -> bool:
+    def has_app_config(self, app_config_type: Type["BaseAppConfig"]) -> bool:
         """
         Check if a ``BaseAppConfig`` exists based on the given ``app_config_type``.
         """
@@ -502,15 +483,14 @@ class TrinityConfig:
 
 
 class BaseAppConfig(ABC):
-
     def __init__(self, trinity_config: TrinityConfig):
         self.trinity_config = trinity_config
 
     @classmethod
     @abstractmethod
-    def from_parser_args(cls,
-                         args: argparse.Namespace,
-                         trinity_config: TrinityConfig) -> 'BaseAppConfig':
+    def from_parser_args(
+        cls, args: argparse.Namespace, trinity_config: TrinityConfig
+    ) -> "BaseAppConfig":
         """
         Initialize from the namespace object produced by
         an ``argparse.ArgumentParser`` and the ``TrinityConfig``
@@ -525,16 +505,15 @@ class Eth1DbMode(Enum):
 
 
 class Eth1AppConfig(BaseAppConfig):
-
     def __init__(self, trinity_config: TrinityConfig, sync_mode: str):
         super().__init__(trinity_config)
         self.trinity_config = trinity_config
         self._sync_mode = sync_mode
 
     @classmethod
-    def from_parser_args(cls,
-                         args: argparse.Namespace,
-                         trinity_config: TrinityConfig) -> 'BaseAppConfig':
+    def from_parser_args(
+        cls, args: argparse.Namespace, trinity_config: TrinityConfig
+    ) -> "BaseAppConfig":
         return cls(trinity_config, args.sync_mode)
 
     @property
@@ -560,7 +539,7 @@ class Eth1AppConfig(BaseAppConfig):
             return Eth1DbMode.FULL
 
     @property
-    def node_class(self) -> Type['Node']:
+    def node_class(self) -> Type["Node"]:
         """
         The ``Node`` class that trinity will use.
         """
@@ -572,7 +551,9 @@ class Eth1AppConfig(BaseAppConfig):
         elif self.database_mode is Eth1DbMode.LIGHT:
             return LightNode
         else:
-            raise NotImplementedError(f"Database mode {self.database_mode} not supported")
+            raise NotImplementedError(
+                f"Database mode {self.database_mode} not supported"
+            )
 
     @property
     def sync_mode(self) -> str:
@@ -588,9 +569,9 @@ class BeaconGenesisData(NamedTuple):
 
 
 class BeaconChainConfig:
-    def __init__(self,
-                 chain_name: str=None,
-                 genesis_data: BeaconGenesisData=None) -> None:
+    def __init__(
+        self, chain_name: str = None, genesis_data: BeaconGenesisData = None
+    ) -> None:
         self._chain_name = chain_name
         self.network_id = 5567
         self.genesis_data = genesis_data
@@ -612,17 +593,14 @@ class BeaconChainConfig:
             return self._chain_name
 
     @property
-    def beacon_chain_class(self) -> Type['BeaconChain']:
+    def beacon_chain_class(self) -> Type["BeaconChain"]:
         if self._beacon_chain_class is None:
             # TODO: we should be able to customize configs for tests/ instead of using the configs
             #   from `TestnetChain`
-            self._beacon_chain_class = TestnetChain.configure(
-                __name__=self.chain_name,
-            )
+            self._beacon_chain_class = TestnetChain.configure(__name__=self.chain_name)
         return self._beacon_chain_class
 
-    def initialize_chain(self,
-                         base_db: BaseAtomicDB) -> 'BeaconChain':
+    def initialize_chain(self, base_db: BaseAtomicDB) -> "BeaconChain":
         # Only used for testing
         chain_class = self.beacon_chain_class
         _, state_machine = chain_class.sm_configuration[0]
@@ -633,27 +611,37 @@ class BeaconChainConfig:
             genesis_block_class=state_machine.block_class,
             genesis_time=self.genesis_time,
         )
-        return cast('BeaconChain', chain_class.from_genesis(
-            base_db=base_db,
-            genesis_state=state,
-            genesis_block=block,
-        ))
+        return cast(
+            "BeaconChain",
+            chain_class.from_genesis(
+                base_db=base_db, genesis_state=state, genesis_block=block
+            ),
+        )
 
 
 class BeaconAppConfig(BaseAppConfig):
-
     @classmethod
-    def from_parser_args(cls,
-                         args: argparse.Namespace,
-                         trinity_config: TrinityConfig) -> 'BaseAppConfig':
+    def from_parser_args(
+        cls, args: argparse.Namespace, trinity_config: TrinityConfig
+    ) -> "BaseAppConfig":
         if args is not None:
             # This is quick and dirty way to get bootstrap_nodes
-            trinity_config.bootstrap_nodes = tuple(
-                KademliaNode.from_uri(enode) for enode in args.bootstrap_nodes.split(',')
-            ) if args.bootstrap_nodes is not None else tuple()
-            trinity_config.preferred_nodes = tuple(
-                KademliaNode.from_uri(enode) for enode in args.preferred_nodes.split(',')
-            ) if args.preferred_nodes is not None else tuple()
+            trinity_config.bootstrap_nodes = (
+                tuple(
+                    KademliaNode.from_uri(enode)
+                    for enode in args.bootstrap_nodes.split(",")
+                )
+                if args.bootstrap_nodes is not None
+                else tuple()
+            )
+            trinity_config.preferred_nodes = (
+                tuple(
+                    KademliaNode.from_uri(enode)
+                    for enode in args.preferred_nodes.split(",")
+                )
+                if args.preferred_nodes is not None
+                else tuple()
+            )
         return cls(trinity_config)
 
     @property

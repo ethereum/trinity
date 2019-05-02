@@ -8,7 +8,6 @@ from trinity.rpc.modules import BaseRPCModule
 
 
 class Admin(BaseRPCModule):
-
     def __init__(self, event_bus: TrinityEventBusEndpoint) -> None:
         self.event_bus = event_bus
 
@@ -16,6 +15,5 @@ class Admin(BaseRPCModule):
         validate_enode_uri(uri, require_ip=True)
 
         self.event_bus.broadcast(
-            ConnectToNodeCommand(Node.from_uri(uri)),
-            TO_NETWORKING_BROADCAST_CONFIG
+            ConnectToNodeCommand(Node.from_uri(uri)), TO_NETWORKING_BROADCAST_CONFIG
         )

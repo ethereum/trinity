@@ -1,9 +1,6 @@
 from typing import Type
 
-from lahja import (
-    BaseEvent,
-    BaseRequestResponseEvent,
-)
+from lahja import BaseEvent, BaseRequestResponseEvent
 
 from p2p.kademlia import Node
 

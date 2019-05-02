@@ -1,35 +1,14 @@
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    Sequence,
-    Tuple,
-)
+from typing import Any, Callable, Dict, Iterable, Sequence, Tuple
 
-from eth_utils import (
-    to_dict,
-)
-from eth_utils.toolz import (
-    curry,
-    first,
-)
+from eth_utils import to_dict
+from eth_utils.toolz import curry, first
 import ssz
 
 from eth2.beacon import helpers
-from eth2._utils.numeric import (
-    is_power_of_two,
-)
-from eth2._utils.tuple import (
-    update_tuple_item,
-)
-from eth2.configs import (
-    Eth2Config,
-    CommitteeConfig,
-)
-from eth2.beacon.constants import (
-    FAR_FUTURE_EPOCH,
-)
+from eth2._utils.numeric import is_power_of_two
+from eth2._utils.tuple import update_tuple_item
+from eth2.configs import Eth2Config, CommitteeConfig
+from eth2.beacon.constants import FAR_FUTURE_EPOCH
 from eth2.beacon.committee_helpers import (
     get_attester_indices_from_attestations,
     get_beacon_proposer_index,
@@ -67,12 +46,7 @@ from eth2.beacon.types.crosslinks import Crosslink
 from eth2.beacon.types.eth1_data_vote import Eth1DataVote
 from eth2.beacon.types.historical_batch import HistoricalBatch
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import (
-    Epoch,
-    Gwei,
-    Slot,
-    ValidatorIndex,
-)
+from eth2.beacon.typing import Epoch, Gwei, Slot, ValidatorIndex
 
 
 #
@@ -102,17 +76,12 @@ def _update_eth1_vote_if_exists(state: BeaconState, config: Eth2Config) -> Beaco
     latest_eth1_data = state.latest_eth1_data
 
     try:
-        majority_vote = first(
-            filter(_is_majority_vote(config), state.eth1_data_votes)
-        )
+        majority_vote = first(filter(_is_majority_vote(config), state.eth1_data_votes))
         latest_eth1_data = majority_vote.eth1_data
     except StopIteration:
         pass
 
-    return state.copy(
-        latest_eth1_data=latest_eth1_data,
-        eth1_data_votes=(),
-    )
+    return state.copy(latest_eth1_data=latest_eth1_data, eth1_data_votes=())
 
 
 def process_eth1_data_votes(state: BeaconState, config: Eth2Config) -> BeaconState:
@@ -127,55 +96,55 @@ def process_eth1_data_votes(state: BeaconState, config: Eth2Config) -> BeaconSta
 # Justification
 #
 
-def _is_epoch_justifiable(state: BeaconState,
-                          attestations: Sequence[PendingAttestation],
-                          epoch: Epoch,
-                          config: Eth2Config) -> bool:
+
+def _is_epoch_justifiable(
+    state: BeaconState,
+    attestations: Sequence[PendingAttestation],
+    epoch: Epoch,
+    config: Eth2Config,
+) -> bool:
     """
     Determine if epoch boundary attesting balance is greater than 2/3 of total_balance
     for the given ``epoch``.
     """
     active_validator_indices = get_active_validator_indices(
-        state.validator_registry,
-        epoch,
+        state.validator_registry, epoch
     )
 
     if not active_validator_indices:
         return False
 
     total_balance = get_total_balance(
-        state.validator_balances,
-        active_validator_indices,
-        config.MAX_DEPOSIT_AMOUNT,
+        state.validator_balances, active_validator_indices, config.MAX_DEPOSIT_AMOUNT
     )
 
-    attesting_balance = get_epoch_boundary_attesting_balance(state, attestations, epoch, config)
+    attesting_balance = get_epoch_boundary_attesting_balance(
+        state, attestations, epoch, config
+    )
 
     return 3 * attesting_balance >= 2 * total_balance
 
 
 def _get_finalized_epoch(
-        justification_bitfield: int,
-        previous_justified_epoch: Epoch,
-        current_justified_epoch: Epoch,
-        finalized_epoch: Epoch,
-        previous_epoch: Epoch) -> Tuple[Epoch, int]:
+    justification_bitfield: int,
+    previous_justified_epoch: Epoch,
+    current_justified_epoch: Epoch,
+    finalized_epoch: Epoch,
+    previous_epoch: Epoch,
+) -> Tuple[Epoch, int]:
 
     rule_1 = (
-        (justification_bitfield >> 1) % 8 == 0b111 and
-        previous_justified_epoch == previous_epoch - 2
-    )
+        justification_bitfield >> 1
+    ) % 8 == 0b111 and previous_justified_epoch == previous_epoch - 2
     rule_2 = (
-        (justification_bitfield >> 1) % 4 == 0b11 and
-        previous_justified_epoch == previous_epoch - 1
-    )
+        justification_bitfield >> 1
+    ) % 4 == 0b11 and previous_justified_epoch == previous_epoch - 1
     rule_3 = (
-        justification_bitfield % 8 == 0b111 and
-        current_justified_epoch == previous_epoch - 1
+        justification_bitfield % 8 == 0b111
+        and current_justified_epoch == previous_epoch - 1
     )
     rule_4 = (
-        justification_bitfield % 4 == 0b11 and
-        current_justified_epoch == previous_epoch
+        justification_bitfield % 4 == 0b11 and current_justified_epoch == previous_epoch
     )
     # Check the rule in the order that can finalize higher epoch possible
     # The second output indicating what rule triggered is for testing purpose
@@ -196,16 +165,10 @@ def process_justification(state: BeaconState, config: Eth2Config) -> BeaconState
     previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
 
     current_epoch_justifiable = _is_epoch_justifiable(
-        state,
-        state.current_epoch_attestations,
-        current_epoch,
-        config,
+        state, state.current_epoch_attestations, current_epoch, config
     )
     previous_epoch_justifiable = _is_epoch_justifiable(
-        state,
-        state.previous_epoch_attestations,
-        previous_epoch,
-        config,
+        state, state.previous_epoch_attestations, previous_epoch, config
     )
 
     _justification_bitfield = state.justification_bitfield << 1
@@ -257,7 +220,7 @@ def process_justification(state: BeaconState, config: Eth2Config) -> BeaconState
                 state,
                 get_epoch_start_slot(new_finalized_epoch, config.SLOTS_PER_EPOCH),
                 config.SLOTS_PER_HISTORICAL_ROOT,
-            )
+            ),
         )
 
     return state
@@ -279,25 +242,19 @@ def process_crosslinks(state: BeaconState, config: Eth2Config) -> BeaconState:
     latest_crosslinks = state.latest_crosslinks
     effective_balances = {
         ValidatorIndex(index): get_effective_balance(
-            state.validator_balances,
-            ValidatorIndex(index),
-            config.MAX_DEPOSIT_AMOUNT,
+            state.validator_balances, ValidatorIndex(index), config.MAX_DEPOSIT_AMOUNT
         )
         for index in range(len(state.validator_registry))
     }
     previous_epoch_start_slot = get_epoch_start_slot(
-        state.previous_epoch(config.SLOTS_PER_EPOCH),
-        config.SLOTS_PER_EPOCH,
+        state.previous_epoch(config.SLOTS_PER_EPOCH), config.SLOTS_PER_EPOCH
     )
     next_epoch_start_slot = get_epoch_start_slot(
-        state.next_epoch(config.SLOTS_PER_EPOCH),
-        config.SLOTS_PER_EPOCH,
+        state.next_epoch(config.SLOTS_PER_EPOCH), config.SLOTS_PER_EPOCH
     )
     for slot in range(previous_epoch_start_slot, next_epoch_start_slot):
         crosslink_committees_at_slot = get_crosslink_committees_at_slot(
-            state,
-            slot,
-            CommitteeConfig(config),
+            state, slot, CommitteeConfig(config)
         )
         for crosslink_committee, shard in crosslink_committees_at_slot:
             winning_root, attesting_validator_indices = get_winning_root_and_participants(
@@ -326,17 +283,16 @@ def process_crosslinks(state: BeaconState, config: Eth2Config) -> BeaconState:
                             crosslink_data_root=winning_root,
                         ),
                     )
-    state = state.copy(
-        latest_crosslinks=latest_crosslinks,
-    )
+    state = state.copy(latest_crosslinks=latest_crosslinks)
     return state
 
 
 @to_dict
 def _update_rewards_or_penalies(
-        index: ValidatorIndex,
-        amount: Gwei,
-        rewards_or_penalties: Dict[ValidatorIndex, Gwei]) -> Iterable[Tuple[ValidatorIndex, Gwei]]:
+    index: ValidatorIndex,
+    amount: Gwei,
+    rewards_or_penalties: Dict[ValidatorIndex, Gwei],
+) -> Iterable[Tuple[ValidatorIndex, Gwei]]:
     for i in rewards_or_penalties:
         if i == index:
             yield i, Gwei(rewards_or_penalties[i] + amount)
@@ -345,94 +301,88 @@ def _update_rewards_or_penalies(
 
 
 def _compute_normal_justification_and_finalization_deltas(
-        state: BeaconState,
-        config: Eth2Config,
-        previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
-        previous_total_balance: Gwei,
-        previous_epoch_attester_indices: Sequence[ValidatorIndex],
-        previous_epoch_boundary_attester_indices: Sequence[ValidatorIndex],
-        previous_epoch_head_attester_indices: Sequence[ValidatorIndex],
-        inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
-        effective_balances: Dict[ValidatorIndex, Gwei],
-        base_rewards: Dict[ValidatorIndex, Gwei]) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
+    state: BeaconState,
+    config: Eth2Config,
+    previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
+    previous_total_balance: Gwei,
+    previous_epoch_attester_indices: Sequence[ValidatorIndex],
+    previous_epoch_boundary_attester_indices: Sequence[ValidatorIndex],
+    previous_epoch_head_attester_indices: Sequence[ValidatorIndex],
+    inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
+    effective_balances: Dict[ValidatorIndex, Gwei],
+    base_rewards: Dict[ValidatorIndex, Gwei],
+) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
     rewards_received = {
-        ValidatorIndex(index): Gwei(0)
-        for index in range(len(state.validator_registry))
+        ValidatorIndex(index): Gwei(0) for index in range(len(state.validator_registry))
     }
     penalties_received = rewards_received.copy()
     previous_epoch_attesting_balance = get_total_balance_from_effective_balances(
-        effective_balances,
-        previous_epoch_attester_indices,
+        effective_balances, previous_epoch_attester_indices
     )
     previous_epoch_boundary_attesting_balance = get_total_balance_from_effective_balances(
-        effective_balances,
-        previous_epoch_boundary_attester_indices,
+        effective_balances, previous_epoch_boundary_attester_indices
     )
     previous_epoch_head_attesting_balance = get_total_balance_from_effective_balances(
-        effective_balances,
-        previous_epoch_head_attester_indices,
+        effective_balances, previous_epoch_head_attester_indices
     )
     for index in previous_epoch_active_validator_indices:
         # Expected FFG source
         if index in previous_epoch_attester_indices:
             rewards_received = _update_rewards_or_penalies(
                 index,
-                base_rewards[index] * previous_epoch_attesting_balance // previous_total_balance,
+                base_rewards[index]
+                * previous_epoch_attesting_balance
+                // previous_total_balance,
                 rewards_received,
             )
             # Inclusion speed bonus
             rewards_received = _update_rewards_or_penalies(
                 index,
                 (
-                    base_rewards[index] * config.MIN_ATTESTATION_INCLUSION_DELAY //
-                    inclusion_infos[index].inclusion_distance
+                    base_rewards[index]
+                    * config.MIN_ATTESTATION_INCLUSION_DELAY
+                    // inclusion_infos[index].inclusion_distance
                 ),
                 rewards_received,
             )
         else:
             penalties_received = _update_rewards_or_penalies(
-                index,
-                base_rewards[index],
-                penalties_received,
+                index, base_rewards[index], penalties_received
             )
         # Expected FFG target
         if index in previous_epoch_boundary_attester_indices:
             rewards_received = _update_rewards_or_penalies(
                 index,
                 (
-                    base_rewards[index] * previous_epoch_boundary_attesting_balance //
-                    previous_total_balance
+                    base_rewards[index]
+                    * previous_epoch_boundary_attesting_balance
+                    // previous_total_balance
                 ),
                 rewards_received,
             )
         else:
             penalties_received = _update_rewards_or_penalies(
-                index,
-                base_rewards[index],
-                penalties_received,
+                index, base_rewards[index], penalties_received
             )
         # Expected head
         if index in previous_epoch_head_attester_indices:
             rewards_received = _update_rewards_or_penalies(
                 index,
                 (
-                    base_rewards[index] * previous_epoch_head_attesting_balance //
-                    previous_total_balance
+                    base_rewards[index]
+                    * previous_epoch_head_attesting_balance
+                    // previous_total_balance
                 ),
                 rewards_received,
             )
         else:
             penalties_received = _update_rewards_or_penalies(
-                index,
-                base_rewards[index],
-                penalties_received,
+                index, base_rewards[index], penalties_received
             )
         # Proposer bonus
         if index in previous_epoch_attester_indices:
             proposer_index = get_beacon_proposer_index(
-                state,
-                inclusion_infos[index].inclusion_slot,
-                CommitteeConfig(config),
+                state, inclusion_infos[index].inclusion_slot, CommitteeConfig(config)
             )
             rewards_received = _update_rewards_or_penalies(
                 proposer_index,
@@ -443,16 +393,17 @@ def _compute_normal_justification_and_finalization_deltas(
 
 
 def _compute_inactivity_leak_deltas(
-        state: BeaconState,
-        config: Eth2Config,
-        previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
-        previous_epoch_attester_indices: Sequence[ValidatorIndex],
-        previous_epoch_boundary_attester_indices: Sequence[ValidatorIndex],
-        previous_epoch_head_attester_indices: Sequence[ValidatorIndex],
-        inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
-        effective_balances: Dict[ValidatorIndex, Gwei],
-        base_rewards: Dict[ValidatorIndex, Gwei],
-        epochs_since_finality: int) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
+    state: BeaconState,
+    config: Eth2Config,
+    previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
+    previous_epoch_attester_indices: Sequence[ValidatorIndex],
+    previous_epoch_boundary_attester_indices: Sequence[ValidatorIndex],
+    previous_epoch_head_attester_indices: Sequence[ValidatorIndex],
+    inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
+    effective_balances: Dict[ValidatorIndex, Gwei],
+    base_rewards: Dict[ValidatorIndex, Gwei],
+    epochs_since_finality: int,
+) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
     inactivity_penalties = {
         ValidatorIndex(index): get_inactivity_penalty(
             base_reward=base_rewards[ValidatorIndex(index)],
@@ -463,16 +414,13 @@ def _compute_inactivity_leak_deltas(
         for index in range(len(state.validator_registry))
     }
     rewards_received = {
-        ValidatorIndex(index): Gwei(0)
-        for index in range(len(state.validator_registry))
+        ValidatorIndex(index): Gwei(0) for index in range(len(state.validator_registry))
     }
     penalties_received = rewards_received.copy()
     for index in previous_epoch_active_validator_indices:
         if index not in previous_epoch_attester_indices:
             penalties_received = _update_rewards_or_penalies(
-                index,
-                inactivity_penalties[index],
-                penalties_received,
+                index, inactivity_penalties[index], penalties_received
             )
         else:
             # If a validator did attest, apply a small penalty
@@ -480,41 +428,37 @@ def _compute_inactivity_leak_deltas(
             rewards_received = _update_rewards_or_penalies(
                 index,
                 (
-                    base_rewards[index] * config.MIN_ATTESTATION_INCLUSION_DELAY //
-                    inclusion_infos[index].inclusion_distance
+                    base_rewards[index]
+                    * config.MIN_ATTESTATION_INCLUSION_DELAY
+                    // inclusion_infos[index].inclusion_distance
                 ),
                 rewards_received,
             )
             penalties_received = _update_rewards_or_penalies(
-                index,
-                base_rewards[index],
-                penalties_received,
+                index, base_rewards[index], penalties_received
             )
         if index not in previous_epoch_boundary_attester_indices:
             penalties_received = _update_rewards_or_penalies(
-                index,
-                inactivity_penalties[index],
-                penalties_received,
+                index, inactivity_penalties[index], penalties_received
             )
         if index not in previous_epoch_head_attester_indices:
             penalties_received = _update_rewards_or_penalies(
-                index,
-                base_rewards[index],
-                penalties_received,
+                index, base_rewards[index], penalties_received
             )
 
     # Penalize slashed-but-inactive validators as though they were active but offline
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     for i in range(len(state.validator_registry)):
         eligible = (
-            i not in previous_epoch_active_validator_indices and
-            state.validator_registry[ValidatorIndex(i)].slashed and
-            current_epoch < state.validator_registry[i].withdrawable_epoch
+            i not in previous_epoch_active_validator_indices
+            and state.validator_registry[ValidatorIndex(i)].slashed
+            and current_epoch < state.validator_registry[i].withdrawable_epoch
         )
         if eligible:
             penalties_received = _update_rewards_or_penalies(
                 ValidatorIndex(i),
-                2 * inactivity_penalties[ValidatorIndex(i)] + base_rewards[ValidatorIndex(i)],
+                2 * inactivity_penalties[ValidatorIndex(i)]
+                + base_rewards[ValidatorIndex(i)],
                 penalties_received,
             )
     return (rewards_received, penalties_received)
@@ -522,19 +466,18 @@ def _compute_inactivity_leak_deltas(
 
 @curry
 def _process_rewards_and_penalties_for_finality(
-        state: BeaconState,
-        config: Eth2Config,
-        previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
-        previous_total_balance: Gwei,
-        previous_epoch_attestations: Sequence[Attestation],
-        previous_epoch_attester_indices: Sequence[ValidatorIndex],
-        inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
-        effective_balances: Dict[ValidatorIndex, Gwei],
-        base_rewards: Dict[ValidatorIndex, Gwei]) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
+    state: BeaconState,
+    config: Eth2Config,
+    previous_epoch_active_validator_indices: Sequence[ValidatorIndex],
+    previous_total_balance: Gwei,
+    previous_epoch_attestations: Sequence[Attestation],
+    previous_epoch_attester_indices: Sequence[ValidatorIndex],
+    inclusion_infos: Dict[ValidatorIndex, InclusionInfo],
+    effective_balances: Dict[ValidatorIndex, Gwei],
+    base_rewards: Dict[ValidatorIndex, Gwei],
+) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
     previous_epoch_boundary_attestations = get_previous_epoch_boundary_attestations(
-        state,
-        config.SLOTS_PER_EPOCH,
-        config.SLOTS_PER_HISTORICAL_ROOT,
+        state, config.SLOTS_PER_EPOCH, config.SLOTS_PER_HISTORICAL_ROOT
     )
     previous_epoch_boundary_attester_indices = get_attester_indices_from_attestations(
         state=state,
@@ -543,9 +486,7 @@ def _process_rewards_and_penalties_for_finality(
     )
 
     previous_epoch_head_attestations = get_previous_epoch_matching_head_attestations(
-        state,
-        config.SLOTS_PER_EPOCH,
-        config.SLOTS_PER_HISTORICAL_ROOT,
+        state, config.SLOTS_PER_EPOCH, config.SLOTS_PER_HISTORICAL_ROOT
     )
     previous_epoch_head_attester_indices = get_attester_indices_from_attestations(
         state=state,
@@ -553,7 +494,9 @@ def _process_rewards_and_penalties_for_finality(
         committee_config=CommitteeConfig(config),
     )
 
-    epochs_since_finality = state.next_epoch(config.SLOTS_PER_EPOCH) - state.finalized_epoch
+    epochs_since_finality = (
+        state.next_epoch(config.SLOTS_PER_EPOCH) - state.finalized_epoch
+    )
     if epochs_since_finality <= 4:
         return _compute_normal_justification_and_finalization_deltas(
             state,
@@ -586,28 +529,24 @@ def _process_rewards_and_penalties_for_finality(
 
 @curry
 def _process_rewards_and_penalties_for_crosslinks(
-        state: BeaconState,
-        config: Eth2Config,
-        effective_balances: Dict[ValidatorIndex, Gwei],
-        base_rewards: Dict[ValidatorIndex, Gwei]) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
+    state: BeaconState,
+    config: Eth2Config,
+    effective_balances: Dict[ValidatorIndex, Gwei],
+    base_rewards: Dict[ValidatorIndex, Gwei],
+) -> Tuple[Dict[ValidatorIndex, Gwei], Dict[ValidatorIndex, Gwei]]:  # noqa: E501
     previous_epoch_start_slot = get_epoch_start_slot(
-        state.previous_epoch(config.SLOTS_PER_EPOCH),
-        config.SLOTS_PER_EPOCH,
+        state.previous_epoch(config.SLOTS_PER_EPOCH), config.SLOTS_PER_EPOCH
     )
     current_epoch_start_slot = get_epoch_start_slot(
-        state.current_epoch(config.SLOTS_PER_EPOCH),
-        config.SLOTS_PER_EPOCH,
+        state.current_epoch(config.SLOTS_PER_EPOCH), config.SLOTS_PER_EPOCH
     )
     rewards_received = {
-        ValidatorIndex(index): Gwei(0)
-        for index in range(len(state.validator_registry))
+        ValidatorIndex(index): Gwei(0) for index in range(len(state.validator_registry))
     }
     penalties_received = rewards_received.copy()
     for slot in range(previous_epoch_start_slot, current_epoch_start_slot):
         crosslink_committees_at_slot = get_crosslink_committees_at_slot(
-            state,
-            slot,
-            CommitteeConfig(config),
+            state, slot, CommitteeConfig(config)
         )
         for crosslink_committee, shard in crosslink_committees_at_slot:
             winning_root, attesting_validator_indices = get_winning_root_and_participants(
@@ -622,8 +561,7 @@ def _process_rewards_and_penalties_for_crosslinks(
                 config.MAX_DEPOSIT_AMOUNT,
             )
             total_balance = get_total_balance_from_effective_balances(
-                effective_balances,
-                crosslink_committee,
+                effective_balances, crosslink_committee
             )
             for index in attesting_validator_indices:
                 rewards_received = _update_rewards_or_penalies(
@@ -631,22 +569,23 @@ def _process_rewards_and_penalties_for_crosslinks(
                     base_rewards[index] * total_attesting_balance // total_balance,
                     rewards_received,
                 )
-            for index in set(crosslink_committee).difference(attesting_validator_indices):
+            for index in set(crosslink_committee).difference(
+                attesting_validator_indices
+            ):
                 penalties_received = _update_rewards_or_penalies(
-                    index,
-                    base_rewards[index],
-                    penalties_received,
+                    index, base_rewards[index], penalties_received
                 )
     return (rewards_received, penalties_received)
 
 
-def process_rewards_and_penalties(state: BeaconState, config: Eth2Config) -> BeaconState:
+def process_rewards_and_penalties(
+    state: BeaconState, config: Eth2Config
+) -> BeaconState:
     # Compute previous epoch active validator indices and the total balance they account for
     # for later use.
     previous_epoch_active_validator_indices = set(
         get_active_validator_indices(
-            state.validator_registry,
-            state.previous_epoch(config.SLOTS_PER_EPOCH)
+            state.validator_registry, state.previous_epoch(config.SLOTS_PER_EPOCH)
         )
     )
     previous_total_balance: Gwei = get_total_balance(
@@ -674,9 +613,7 @@ def process_rewards_and_penalties(state: BeaconState, config: Eth2Config) -> Bea
     # Compute effective balance of each previous epoch active validator for later use
     effective_balances = {
         ValidatorIndex(index): get_effective_balance(
-            state.validator_balances,
-            ValidatorIndex(index),
-            config.MAX_DEPOSIT_AMOUNT,
+            state.validator_balances, ValidatorIndex(index), config.MAX_DEPOSIT_AMOUNT
         )
         for index in range(len(state.validator_registry))
     }
@@ -706,10 +643,7 @@ def process_rewards_and_penalties(state: BeaconState, config: Eth2Config) -> Bea
     )
     # 2. Process rewards and penalties for crosslinks
     crosslinks_rewards, crosslinks_penalties = _process_rewards_and_penalties_for_crosslinks(
-        state,
-        config,
-        effective_balances,
-        base_rewards,
+        state, config, effective_balances, base_rewards
     )
 
     # Apply the overall rewards/penalties
@@ -719,11 +653,11 @@ def process_rewards_and_penalties(state: BeaconState, config: Eth2Config) -> Bea
             # Prevent validator balance under flow
             max(
                 (
-                    state.validator_balances[index] +
-                    finality_rewards[index] +
-                    crosslinks_rewards[index] -
-                    finality_penalties[index] -
-                    crosslinks_penalties[index]
+                    state.validator_balances[index]
+                    + finality_rewards[index]
+                    + crosslinks_rewards[index]
+                    - finality_penalties[index]
+                    - crosslinks_penalties[index]
                 ),
                 0,
             ),
@@ -735,15 +669,13 @@ def process_rewards_and_penalties(state: BeaconState, config: Eth2Config) -> Bea
 #
 # Ejections
 #
-def process_ejections(state: BeaconState,
-                      config: Eth2Config) -> BeaconState:
+def process_ejections(state: BeaconState, config: Eth2Config) -> BeaconState:
     """
     Iterate through the validator registry and eject active validators
     with balance below ``EJECTION_BALANCE``.
     """
     active_validator_indices = get_active_validator_indices(
-        state.validator_registry,
-        state.current_epoch(config.SLOTS_PER_EPOCH),
+        state.validator_registry, state.current_epoch(config.SLOTS_PER_EPOCH)
     )
     for index in set(active_validator_indices):
         if state.validator_balances[index] < config.EJECTION_BALANCE:
@@ -767,8 +699,9 @@ def _update_previous_shuffling_data(state: BeaconState) -> BeaconState:
     )
 
 
-def _check_if_update_validator_registry(state: BeaconState,
-                                        config: Eth2Config) -> Tuple[bool, int]:
+def _check_if_update_validator_registry(
+    state: BeaconState, config: Eth2Config
+) -> Tuple[bool, int]:
     if state.finalized_epoch <= state.validator_registry_update_epoch:
         return False, 0
 
@@ -785,7 +718,10 @@ def _check_if_update_validator_registry(state: BeaconState,
         for i in range(current_epoch_committee_count)
     )
     for shard in shards:
-        if state.latest_crosslinks[shard].epoch <= state.validator_registry_update_epoch:
+        if (
+            state.latest_crosslinks[shard].epoch
+            <= state.validator_registry_update_epoch
+        ):
             return False, 0
 
     return True, current_epoch_committee_count
@@ -795,14 +731,12 @@ def _update_shuffling_epoch(state: BeaconState, slots_per_epoch: int) -> BeaconS
     """
     Updates the ``current_shuffling_epoch`` to the ``state``'s next epoch.
     """
-    return state.copy(
-        current_shuffling_epoch=state.next_epoch(slots_per_epoch),
-    )
+    return state.copy(current_shuffling_epoch=state.next_epoch(slots_per_epoch))
 
 
-def _update_shuffling_start_shard(state: BeaconState,
-                                  current_epoch_committee_count: int,
-                                  shard_count: int) -> BeaconState:
+def _update_shuffling_start_shard(
+    state: BeaconState, current_epoch_committee_count: int, shard_count: int
+) -> BeaconState:
     """
     Updates the ``current_shuffling_start_shard`` to the current value in
     the ``state`` incremented by the number of shards we touched in the current epoch.
@@ -810,12 +744,14 @@ def _update_shuffling_start_shard(state: BeaconState,
     return state.copy(
         current_shuffling_start_shard=(
             state.current_shuffling_start_shard + current_epoch_committee_count
-        ) % shard_count,
+        )
+        % shard_count
     )
 
 
-def _update_shuffling_seed(state: BeaconState,
-                           committee_config: CommitteeConfig) -> BeaconState:
+def _update_shuffling_seed(
+    state: BeaconState, committee_config: CommitteeConfig
+) -> BeaconState:
     """
     Updates the ``current_shuffling_seed`` in the ``state`` given the current state data.
     """
@@ -826,17 +762,17 @@ def _update_shuffling_seed(state: BeaconState,
         epoch=state.current_shuffling_epoch,
         committee_config=committee_config,
     )
-    return state.copy(
-        current_shuffling_seed=current_shuffling_seed,
-    )
+    return state.copy(current_shuffling_seed=current_shuffling_seed)
 
 
-def _is_ready_to_activate(state: BeaconState,
-                          index: ValidatorIndex,
-                          max_deposit_amount: Gwei) -> bool:
+def _is_ready_to_activate(
+    state: BeaconState, index: ValidatorIndex, max_deposit_amount: Gwei
+) -> bool:
     validator = state.validator_registry[index]
     balance = state.validator_balances[index]
-    return validator.activation_epoch == FAR_FUTURE_EPOCH and balance >= max_deposit_amount
+    return (
+        validator.activation_epoch == FAR_FUTURE_EPOCH and balance >= max_deposit_amount
+    )
 
 
 def _is_ready_to_exit(state: BeaconState, index: ValidatorIndex) -> bool:
@@ -844,11 +780,13 @@ def _is_ready_to_exit(state: BeaconState, index: ValidatorIndex) -> bool:
     return validator.exit_epoch == FAR_FUTURE_EPOCH and validator.initiated_exit
 
 
-def _churn_validators(state: BeaconState,
-                      config: Eth2Config,
-                      check_should_churn_fn: Callable[..., Any],
-                      churn_fn: Callable[..., Any],
-                      max_balance_churn: int) -> BeaconState:
+def _churn_validators(
+    state: BeaconState,
+    config: Eth2Config,
+    check_should_churn_fn: Callable[..., Any],
+    churn_fn: Callable[..., Any],
+    max_balance_churn: int,
+) -> BeaconState:
     """
     Churn the validators. The number of the churning validators is based on
     the given ``max_balance_churn``.
@@ -860,16 +798,11 @@ def _churn_validators(state: BeaconState,
     balance_churn = 0
     for index in range(len(state.validator_registry)):
         index = ValidatorIndex(index)
-        should_churn = check_should_churn_fn(
-            state,
-            index,
-        )
+        should_churn = check_should_churn_fn(state, index)
         if should_churn:
             # Check the balance churn would be within the allowance
             balance_churn += get_effective_balance(
-                state.validator_balances,
-                index,
-                config.MAX_DEPOSIT_AMOUNT,
+                state.validator_balances, index, config.MAX_DEPOSIT_AMOUNT
             )
             if balance_churn > max_balance_churn:
                 break
@@ -884,18 +817,18 @@ def update_validator_registry(state: BeaconState, config: Eth2Config) -> BeaconS
     """
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     # The active validators
-    active_validator_indices = get_active_validator_indices(state.validator_registry, current_epoch)
+    active_validator_indices = get_active_validator_indices(
+        state.validator_registry, current_epoch
+    )
     # The total effective balance of active validators
     total_balance = get_total_balance(
-        state.validator_balances,
-        active_validator_indices,
-        config.MAX_DEPOSIT_AMOUNT,
+        state.validator_balances, active_validator_indices, config.MAX_DEPOSIT_AMOUNT
     )
 
     # The maximum balance churn in Gwei (for deposits and exits separately)
     max_balance_churn = max(
         config.MAX_DEPOSIT_AMOUNT,
-        total_balance // (2 * config.MAX_BALANCE_CHURN_QUOTIENT)
+        total_balance // (2 * config.MAX_BALANCE_CHURN_QUOTIENT),
     )
 
     # Activate validators within the allowable balance churn
@@ -904,9 +837,7 @@ def update_validator_registry(state: BeaconState, config: Eth2Config) -> BeaconS
         state=state,
         config=config,
         check_should_churn_fn=lambda state, index: _is_ready_to_activate(
-            state,
-            index,
-            max_deposit_amount=config.MAX_DEPOSIT_AMOUNT,
+            state, index, max_deposit_amount=config.MAX_DEPOSIT_AMOUNT
         ),
         churn_fn=lambda state, index: activate_validator(
             state,
@@ -934,9 +865,7 @@ def update_validator_registry(state: BeaconState, config: Eth2Config) -> BeaconS
         max_balance_churn=max_balance_churn,
     )
 
-    state = state.copy(
-        validator_registry_update_epoch=current_epoch,
-    )
+    state = state.copy(validator_registry_update_epoch=current_epoch)
 
     return state
 
@@ -945,14 +874,16 @@ StateUpdaterForConfig = Callable[[BeaconState, Eth2Config], BeaconState]
 
 
 @curry
-def _process_validator_registry_with_update(current_epoch_committee_count: int,
-                                            state: BeaconState,
-                                            config: Eth2Config) -> StateUpdaterForConfig:
+def _process_validator_registry_with_update(
+    current_epoch_committee_count: int, state: BeaconState, config: Eth2Config
+) -> StateUpdaterForConfig:
     state = update_validator_registry(state, config)
 
     # Update step-by-step since updated `state.current_shuffling_epoch`
     # is used to calculate other value). Follow the spec tightly now.
-    state = _update_shuffling_start_shard(state, current_epoch_committee_count, config.SHARD_COUNT)
+    state = _update_shuffling_start_shard(
+        state, current_epoch_committee_count, config.SHARD_COUNT
+    )
 
     state = _update_shuffling_epoch(state, config.SLOTS_PER_EPOCH)
 
@@ -961,10 +892,12 @@ def _process_validator_registry_with_update(current_epoch_committee_count: int,
     return state
 
 
-def _process_validator_registry_without_update(state: BeaconState,
-                                               config: Eth2Config) -> BeaconState:
+def _process_validator_registry_without_update(
+    state: BeaconState, config: Eth2Config
+) -> BeaconState:
     epochs_since_last_registry_update = (
-        state.current_epoch(config.SLOTS_PER_EPOCH) - state.validator_registry_update_epoch
+        state.current_epoch(config.SLOTS_PER_EPOCH)
+        - state.validator_registry_update_epoch
     )
 
     if epochs_since_last_registry_update <= 1:
@@ -984,19 +917,17 @@ def _process_validator_registry_without_update(state: BeaconState,
     return state
 
 
-def process_validator_registry(state: BeaconState,
-                               config: Eth2Config) -> BeaconState:
+def process_validator_registry(state: BeaconState, config: Eth2Config) -> BeaconState:
     state = _update_previous_shuffling_data(state)
 
     need_to_update, current_epoch_committee_count = _check_if_update_validator_registry(
-        state,
-        config
+        state, config
     )
 
     if need_to_update:
         # this next function call returns a closure, linter didn't like a bare lambda
         validator_registry_transition = _process_validator_registry_with_update(
-            current_epoch_committee_count,
+            current_epoch_committee_count
         )
     else:
         validator_registry_transition = _process_validator_registry_without_update
@@ -1010,8 +941,9 @@ def process_validator_registry(state: BeaconState,
     return state
 
 
-def _update_latest_active_index_roots(state: BeaconState,
-                                      committee_config: CommitteeConfig) -> BeaconState:
+def _update_latest_active_index_roots(
+    state: BeaconState, committee_config: CommitteeConfig
+) -> BeaconState:
     """
     Return the BeaconState with updated `latest_active_index_roots`.
     """
@@ -1022,56 +954,56 @@ def _update_latest_active_index_roots(state: BeaconState,
         Epoch(next_epoch + committee_config.ACTIVATION_EXIT_DELAY),
     )
     index_root = ssz.hash_tree_root(
-        active_validator_indices,
-        ssz.sedes.List(ssz.uint64),
+        active_validator_indices, ssz.sedes.List(ssz.uint64)
     )
 
     latest_active_index_roots = update_tuple_item(
         state.latest_active_index_roots,
         (
-            (next_epoch + committee_config.ACTIVATION_EXIT_DELAY) %
-            committee_config.LATEST_ACTIVE_INDEX_ROOTS_LENGTH
+            (next_epoch + committee_config.ACTIVATION_EXIT_DELAY)
+            % committee_config.LATEST_ACTIVE_INDEX_ROOTS_LENGTH
         ),
         index_root,
     )
 
-    return state.copy(
-        latest_active_index_roots=latest_active_index_roots,
-    )
+    return state.copy(latest_active_index_roots=latest_active_index_roots)
 
 
-def _compute_total_penalties(state: BeaconState,
-                             config: Eth2Config,
-                             current_epoch: Epoch) -> Gwei:
+def _compute_total_penalties(
+    state: BeaconState, config: Eth2Config, current_epoch: Epoch
+) -> Gwei:
     epoch_index = current_epoch % config.LATEST_SLASHED_EXIT_LENGTH
     start_index_in_latest_slashed_balances = (
-        (epoch_index + 1) % config.LATEST_SLASHED_EXIT_LENGTH
-    )
-    total_at_start = state.latest_slashed_balances[start_index_in_latest_slashed_balances]
+        epoch_index + 1
+    ) % config.LATEST_SLASHED_EXIT_LENGTH
+    total_at_start = state.latest_slashed_balances[
+        start_index_in_latest_slashed_balances
+    ]
     total_at_end = state.latest_slashed_balances[epoch_index]
     return Gwei(total_at_end - total_at_start)
 
 
-def _compute_individual_penalty(state: BeaconState,
-                                config: Eth2Config,
-                                validator_index: ValidatorIndex,
-                                total_penalties: Gwei,
-                                total_balance: Gwei) -> Gwei:
+def _compute_individual_penalty(
+    state: BeaconState,
+    config: Eth2Config,
+    validator_index: ValidatorIndex,
+    total_penalties: Gwei,
+    total_balance: Gwei,
+) -> Gwei:
     effective_balance = get_effective_balance(
-        state.validator_balances,
-        validator_index,
-        config.MAX_DEPOSIT_AMOUNT,
+        state.validator_balances, validator_index, config.MAX_DEPOSIT_AMOUNT
     )
     return Gwei(
         max(
-            effective_balance * min(total_penalties * 3, total_balance) // total_balance,
+            effective_balance
+            * min(total_penalties * 3, total_balance)
+            // total_balance,
             effective_balance // config.MIN_PENALTY_QUOTIENT,
         )
     )
 
 
-def process_slashings(state: BeaconState,
-                      config: Eth2Config) -> BeaconState:
+def process_slashings(state: BeaconState, config: Eth2Config) -> BeaconState:
     """
     Process the slashings.
     """
@@ -1079,23 +1011,22 @@ def process_slashings(state: BeaconState,
     max_deposit_amount = config.MAX_DEPOSIT_AMOUNT
 
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    active_validator_indices = get_active_validator_indices(state.validator_registry, current_epoch)
+    active_validator_indices = get_active_validator_indices(
+        state.validator_registry, current_epoch
+    )
     total_balance = Gwei(
         sum(
             get_effective_balance(state.validator_balances, i, max_deposit_amount)
             for i in active_validator_indices
         )
     )
-    total_penalties = _compute_total_penalties(
-        state,
-        config,
-        current_epoch,
-    )
+    total_penalties = _compute_total_penalties(state, config, current_epoch)
 
     for validator_index, validator in enumerate(state.validator_registry):
         validator_index = ValidatorIndex(validator_index)
         is_halfway_to_withdrawable_epoch = (
-            current_epoch == validator.withdrawable_epoch - latest_slashed_exit_length // 2
+            current_epoch
+            == validator.withdrawable_epoch - latest_slashed_exit_length // 2
         )
         if validator.slashed and is_halfway_to_withdrawable_epoch:
             penalty = _compute_individual_penalty(
@@ -1112,11 +1043,11 @@ def process_slashings(state: BeaconState,
     return state
 
 
-def process_exit_queue(state: BeaconState,
-                       config: Eth2Config) -> BeaconState:
+def process_exit_queue(state: BeaconState, config: Eth2Config) -> BeaconState:
     """
     Process the exit queue.
     """
+
     def eligible(index: ValidatorIndex) -> bool:
         validator = state.validator_registry[index]
         # Filter out dequeued validators
@@ -1125,19 +1056,18 @@ def process_exit_queue(state: BeaconState,
         # Dequeue if the minimum amount of time has passed
         else:
             return (
-                state.current_epoch(config.SLOTS_PER_EPOCH) >=
-                validator.exit_epoch + config.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+                state.current_epoch(config.SLOTS_PER_EPOCH)
+                >= validator.exit_epoch + config.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
             )
 
     eligible_indices = filter(
         eligible,
-        tuple([ValidatorIndex(i) for i in range(len(state.validator_registry))])
+        tuple([ValidatorIndex(i) for i in range(len(state.validator_registry))]),
     )
     # Sort in order of exit epoch, and validators that exit within the same epoch exit
     # in order of validator index
     sorted_indices = sorted(
-        eligible_indices,
-        key=lambda index: state.validator_registry[index].exit_epoch,
+        eligible_indices, key=lambda index: state.validator_registry[index].exit_epoch
     )
     for dequeues, index in enumerate(sorted_indices):
         if dequeues >= config.MAX_EXIT_DEQUEUES_PER_EPOCH:
@@ -1152,29 +1082,27 @@ def process_exit_queue(state: BeaconState,
     return state
 
 
-def _update_historical_roots(state: BeaconState,
-                             next_epoch: Epoch,
-                             config: Eth2Config) -> BeaconState:
+def _update_historical_roots(
+    state: BeaconState, next_epoch: Epoch, config: Eth2Config
+) -> BeaconState:
     updated_historical_roots = state.historical_roots
-    epochs_per_historical_root = config.SLOTS_PER_HISTORICAL_ROOT // config.SLOTS_PER_EPOCH
+    epochs_per_historical_root = (
+        config.SLOTS_PER_HISTORICAL_ROOT // config.SLOTS_PER_EPOCH
+    )
     should_update_historical_roots = next_epoch % epochs_per_historical_root == 0
     if should_update_historical_roots:
         historical_batch = HistoricalBatch(
-            block_roots=state.latest_block_roots,
-            state_roots=state.latest_state_roots,
+            block_roots=state.latest_block_roots, state_roots=state.latest_state_roots
         )
         updated_historical_roots += (historical_batch.root,)
 
-    return state.copy(
-        historical_roots=updated_historical_roots
-    )
+    return state.copy(historical_roots=updated_historical_roots)
 
 
 #
 # Final updates
 #
-def process_final_updates(state: BeaconState,
-                          config: Eth2Config) -> BeaconState:
+def process_final_updates(state: BeaconState, config: Eth2Config) -> BeaconState:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     next_epoch = state.next_epoch(config.SLOTS_PER_EPOCH)
 
@@ -1184,7 +1112,9 @@ def process_final_updates(state: BeaconState,
         latest_slashed_balances=update_tuple_item(
             state.latest_slashed_balances,
             next_epoch % config.LATEST_SLASHED_EXIT_LENGTH,
-            state.latest_slashed_balances[current_epoch % config.LATEST_SLASHED_EXIT_LENGTH],
+            state.latest_slashed_balances[
+                current_epoch % config.LATEST_SLASHED_EXIT_LENGTH
+            ],
         ),
         latest_randao_mixes=update_tuple_item(
             state.latest_randao_mixes,

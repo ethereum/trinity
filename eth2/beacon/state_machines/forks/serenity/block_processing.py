@@ -1,17 +1,10 @@
-from eth_utils.toolz import (
-    first,
-)
+from eth_utils.toolz import first
 
 from eth2._utils.tuple import update_tuple_item
-from eth2._utils.numeric import (
-    bitwise_xor,
-)
+from eth2._utils.numeric import bitwise_xor
 from eth2.beacon._utils.hash import hash_eth2
 
-from eth2.configs import (
-    Eth2Config,
-    CommitteeConfig,
-)
+from eth2.configs import Eth2Config, CommitteeConfig
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.eth1_data_vote import Eth1DataVote
@@ -20,13 +13,8 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_randao_reveal,
 )
 
-from eth2.beacon.helpers import (
-    get_randao_mix,
-    get_temporary_block_header,
-)
-from eth2.beacon.committee_helpers import (
-    get_beacon_proposer_index,
-)
+from eth2.beacon.helpers import get_randao_mix, get_temporary_block_header
+from eth2.beacon.committee_helpers import get_beacon_proposer_index
 
 from .block_validation import (
     validate_block_slot,
@@ -35,16 +23,16 @@ from .block_validation import (
 )
 
 
-def process_block_header(state: BeaconState,
-                         block: BaseBeaconBlock,
-                         config: Eth2Config,
-                         check_proposer_signature: bool) -> BeaconState:
+def process_block_header(
+    state: BeaconState,
+    block: BaseBeaconBlock,
+    config: Eth2Config,
+    check_proposer_signature: bool,
+) -> BeaconState:
     validate_block_slot(state, block)
     validate_block_previous_root(state, block)
 
-    state = state.copy(
-        latest_block_header=get_temporary_block_header(block),
-    )
+    state = state.copy(latest_block_header=get_temporary_block_header(block))
 
     if check_proposer_signature:
         validate_proposer_signature(
@@ -57,8 +45,7 @@ def process_block_header(state: BeaconState,
     return state
 
 
-def process_eth1_data(state: BeaconState,
-                      block: BaseBeaconBlock) -> BeaconState:
+def process_eth1_data(state: BeaconState, block: BaseBeaconBlock) -> BeaconState:
     try:
         vote_index, original_vote = first(
             (index, eth1_data_vote)
@@ -66,31 +53,24 @@ def process_eth1_data(state: BeaconState,
             if block.body.eth1_data == eth1_data_vote.eth1_data
         )
     except StopIteration:
-        new_vote = Eth1DataVote(
-            eth1_data=block.body.eth1_data,
-            vote_count=1,
-        )
-        state = state.copy(
-            eth1_data_votes=state.eth1_data_votes + (new_vote,)
-        )
+        new_vote = Eth1DataVote(eth1_data=block.body.eth1_data, vote_count=1)
+        state = state.copy(eth1_data_votes=state.eth1_data_votes + (new_vote,))
     else:
-        updated_vote = original_vote.copy(
-            vote_count=original_vote.vote_count + 1
-        )
+        updated_vote = original_vote.copy(vote_count=original_vote.vote_count + 1)
         state = state.copy(
-            eth1_data_votes=update_tuple_item(state.eth1_data_votes, vote_index, updated_vote)
+            eth1_data_votes=update_tuple_item(
+                state.eth1_data_votes, vote_index, updated_vote
+            )
         )
 
     return state
 
 
-def process_randao(state: BeaconState,
-                   block: BaseBeaconBlock,
-                   config: Eth2Config) -> BeaconState:
+def process_randao(
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
+) -> BeaconState:
     proposer_index = get_beacon_proposer_index(
-        state=state,
-        slot=state.slot,
-        committee_config=CommitteeConfig(config),
+        state=state, slot=state.slot, committee_config=CommitteeConfig(config)
     )
     proposer = state.validator_registry[proposer_index]
 
@@ -117,8 +97,6 @@ def process_randao(state: BeaconState,
 
     return state.copy(
         latest_randao_mixes=update_tuple_item(
-            state.latest_randao_mixes,
-            randao_mix_index,
-            new_randao_mix,
-        ),
+            state.latest_randao_mixes, randao_mix_index, new_randao_mix
+        )
     )

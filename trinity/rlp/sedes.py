@@ -2,7 +2,6 @@ from rlp import sedes
 
 
 class HashOrNumber:
-
     def serialize(self, obj: int) -> bytes:
         if isinstance(obj, int):
             return sedes.big_endian_int.serialize(obj)

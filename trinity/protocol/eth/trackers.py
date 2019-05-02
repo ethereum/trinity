@@ -1,7 +1,4 @@
-from typing import (
-    Optional,
-    Tuple,
-)
+from typing import Optional, Tuple
 
 from eth.rlp.headers import BlockHeader
 
@@ -22,21 +19,22 @@ from .requests import (
 
 
 BaseGetBlockHeadersTracker = BasePerformanceTracker[
-    GetBlockHeadersRequest,
-    Tuple[BlockHeader, ...],
+    GetBlockHeadersRequest, Tuple[BlockHeader, ...]
 ]
 
 
 class GetBlockHeadersTracker(BaseGetBlockHeadersTracker):
     def _get_request_size(self, request: GetBlockHeadersRequest) -> int:
         payload = request.command_payload
-        if isinstance(payload['block_number_or_hash'], int):
-            return len(sequence_builder(
-                start_number=payload['block_number_or_hash'],
-                max_length=payload['max_headers'],
-                skip=payload['skip'],
-                reverse=payload['reverse'],
-            ))
+        if isinstance(payload["block_number_or_hash"], int):
+            return len(
+                sequence_builder(
+                    start_number=payload["block_number_or_hash"],
+                    max_length=payload["max_headers"],
+                    skip=payload["skip"],
+                    reverse=payload["reverse"],
+                )
+            )
         else:
             return None
 
@@ -47,7 +45,9 @@ class GetBlockHeadersTracker(BaseGetBlockHeadersTracker):
         return len(result)
 
 
-class GetBlockBodiesTracker(BasePerformanceTracker[GetBlockBodiesRequest, BlockBodyBundles]):
+class GetBlockBodiesTracker(
+    BasePerformanceTracker[GetBlockBodiesRequest, BlockBodyBundles]
+):
     def _get_request_size(self, request: GetBlockBodiesRequest) -> Optional[int]:
         return len(request.command_payload)
 
@@ -57,8 +57,7 @@ class GetBlockBodiesTracker(BasePerformanceTracker[GetBlockBodiesRequest, BlockB
     def _get_result_item_count(self, result: BlockBodyBundles) -> int:
         return sum(
             len(body.uncles) + len(body.transactions)
-            for body, trie_data, uncles_hash
-            in result
+            for body, trie_data, uncles_hash in result
         )
 
 
@@ -70,11 +69,7 @@ class GetReceiptsTracker(BasePerformanceTracker[GetReceiptsRequest, ReceiptsBund
         return len(result)
 
     def _get_result_item_count(self, result: ReceiptsBundles) -> int:
-        return sum(
-            len(receipts)
-            for receipts, trie_data
-            in result
-        )
+        return sum(len(receipts) for receipts, trie_data in result)
 
 
 class GetNodeDataTracker(BasePerformanceTracker[GetNodeDataRequest, NodeDataBundles]):

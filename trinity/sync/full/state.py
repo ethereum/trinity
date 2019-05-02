@@ -5,64 +5,35 @@ import logging
 from pathlib import Path
 import tempfile
 import time
-from typing import (
-    cast,
-    Dict,
-    Iterable,
-    List,
-    Set,
-    FrozenSet,
-    Tuple,
-    Type,
-)
+from typing import cast, Dict, Iterable, List, Set, FrozenSet, Tuple, Type
 
 import eth_utils.toolz
 
 import rlp
 
-from eth_utils import (
-    encode_hex,
-)
+from eth_utils import encode_hex
 
-from eth_typing import (
-    Hash32
-)
+from eth_typing import Hash32
 
 from cancel_token import CancelToken
 
-from eth.constants import (
-    BLANK_ROOT_HASH,
-    EMPTY_SHA3,
-)
+from eth.constants import BLANK_ROOT_HASH, EMPTY_SHA3
 from eth.db.backends.level import LevelDB
 from eth.rlp.accounts import Account
 from eth.tools.logging import ExtendedDebugLogger
 
 from p2p.service import BaseService
-from p2p.protocol import (
-    Command,
-)
+from p2p.protocol import Command
 
-from p2p.exceptions import (
-    NoEligiblePeers,
-    NoIdlePeers,
-)
+from p2p.exceptions import NoEligiblePeers, NoIdlePeers
 from p2p.peer import BasePeer, PeerSubscriber
 
 from trinity.db.base import BaseAsyncDB
 from trinity.db.eth1.chain import BaseAsyncChainDB
-from trinity.exceptions import (
-    AlreadyWaiting,
-    SyncRequestAlreadyProcessed,
-)
+from trinity.exceptions import AlreadyWaiting, SyncRequestAlreadyProcessed
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
-from trinity.protocol.eth import (
-    constants as eth_constants,
-)
-from trinity.sync.full.hexary_trie import (
-    HexaryTrieSync,
-    SyncRequest,
-)
+from trinity.protocol.eth import constants as eth_constants
+from trinity.sync.full.hexary_trie import HexaryTrieSync, SyncRequest
 from trinity._utils.os import get_open_fd_limit
 from trinity._utils.timer import Timer
 
@@ -74,19 +45,23 @@ class StateDownloader(BaseService, PeerSubscriber):
     _timer = Timer(auto_start=False)
     _total_timeouts = 0
 
-    def __init__(self,
-                 chaindb: BaseAsyncChainDB,
-                 account_db: BaseAsyncDB,
-                 root_hash: Hash32,
-                 peer_pool: ETHPeerPool,
-                 token: CancelToken = None) -> None:
+    def __init__(
+        self,
+        chaindb: BaseAsyncChainDB,
+        account_db: BaseAsyncDB,
+        root_hash: Hash32,
+        peer_pool: ETHPeerPool,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         self.chaindb = chaindb
         self.peer_pool = peer_pool
         self.root_hash = root_hash
         # We use a LevelDB instance for the nodes cache because a full state download, if run
         # uninterrupted will visit more than 180M nodes, making an in-memory cache unfeasible.
-        self._nodes_cache_dir = tempfile.TemporaryDirectory(prefix="pyevm-state-sync-cache")
+        self._nodes_cache_dir = tempfile.TemporaryDirectory(
+            prefix="pyevm-state-sync-cache"
+        )
 
         # Allow the LevelDB instance to consume half of the entire file descriptor limit that
         # the OS permits. Let the other half be reserved for other db access, networking etc.
@@ -96,10 +71,12 @@ class StateDownloader(BaseService, PeerSubscriber):
             root_hash,
             account_db,
             LevelDB(Path(self._nodes_cache_dir.name), max_open_files),
-            self.logger
+            self.logger,
         )
         self.request_tracker = TrieNodeRequestTracker(self._reply_timeout, self.logger)
-        self._peer_missing_nodes: Dict[ETHPeer, Set[Hash32]] = collections.defaultdict(set)
+        self._peer_missing_nodes: Dict[ETHPeer, Set[Hash32]] = collections.defaultdict(
+            set
+        )
 
     # We are only interested in peers entering or leaving the pool
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset()
@@ -125,7 +102,9 @@ class StateDownloader(BaseService, PeerSubscriber):
         async for peer in self.peer_pool:
             peer = cast(ETHPeer, peer)
             if self._peer_missing_nodes[peer].issuperset(node_keys):
-                self.logger.debug2("%s doesn't have any of the nodes we want, skipping it", peer)
+                self.logger.debug2(
+                    "%s doesn't have any of the nodes we want, skipping it", peer
+                )
                 continue
             has_eligible_peers = True
             if peer in self.request_tracker.active_requests:
@@ -172,34 +151,35 @@ class StateDownloader(BaseService, PeerSubscriber):
                 # TODO: disconnect a peer if the pool is full
                 return
 
-            candidates = list(not_yet_requested.difference(self._peer_missing_nodes[peer]))
-            batch = tuple(candidates[:eth_constants.MAX_STATE_FETCH])
+            candidates = list(
+                not_yet_requested.difference(self._peer_missing_nodes[peer])
+            )
+            batch = tuple(candidates[: eth_constants.MAX_STATE_FETCH])
             not_yet_requested = not_yet_requested.difference(batch)
             self.request_tracker.active_requests[peer] = (time.time(), batch)
             self.run_task(self._request_and_process_nodes(peer, batch))
 
-    async def _request_and_process_nodes(self, peer: ETHPeer, batch: Tuple[Hash32, ...]) -> None:
+    async def _request_and_process_nodes(
+        self, peer: ETHPeer, batch: Tuple[Hash32, ...]
+    ) -> None:
         self.logger.debug("Requesting %d trie nodes from %s", len(batch), peer)
         try:
             node_data = await peer.requests.get_node_data(batch)
         except TimeoutError as err:
             self.logger.debug(
-                "Timed out waiting for %s trie nodes from %s: %s",
-                len(batch),
-                peer,
-                err,
+                "Timed out waiting for %s trie nodes from %s: %s", len(batch), peer, err
             )
             node_data = tuple()
         except AlreadyWaiting as err:
-            self.logger.warning(
-                "Already waiting for a NodeData response from %s", peer,
-            )
+            self.logger.warning("Already waiting for a NodeData response from %s", peer)
             return
 
         try:
             self.request_tracker.active_requests.pop(peer)
         except KeyError:
-            self.logger.warning("Unexpected error removing peer from active requests: %s", peer)
+            self.logger.warning(
+                "Unexpected error removing peer from active requests: %s", peer
+            )
 
         self.logger.debug("Got %d NodeData entries from %s", len(node_data), peer)
 
@@ -232,13 +212,17 @@ class StateDownloader(BaseService, PeerSubscriber):
         while self.is_operational:
             timed_out = self.request_tracker.get_timed_out()
             if timed_out:
-                self.logger.debug("Re-requesting %d timed out trie nodes", len(timed_out))
+                self.logger.debug(
+                    "Re-requesting %d timed out trie nodes", len(timed_out)
+                )
                 self._total_timeouts += len(timed_out)
                 await self.request_nodes(timed_out)
 
             retriable_missing = self.request_tracker.get_retriable_missing()
             if retriable_missing:
-                self.logger.debug("Re-requesting %d missing trie nodes", len(retriable_missing))
+                self.logger.debug(
+                    "Re-requesting %d missing trie nodes", len(retriable_missing)
+                )
                 await self.request_nodes(retriable_missing)
 
             # Finally, sleep until the time either our oldest request is scheduled to timeout or
@@ -252,7 +236,9 @@ class StateDownloader(BaseService, PeerSubscriber):
         Raises OperationCancelled if we're interrupted before that is completed.
         """
         self._timer.start()
-        self.logger.info("Starting state sync for root hash %s", encode_hex(self.root_hash))
+        self.logger.info(
+            "Starting state sync for root hash %s", encode_hex(self.root_hash)
+        )
         self.run_task(self._periodically_report_progress())
         self.run_task(self._periodically_retry_timedout_and_missing())
         with self.subscribe(self.peer_pool):
@@ -274,12 +260,16 @@ class StateDownloader(BaseService, PeerSubscriber):
 
                 await self.request_nodes([request.node_key for request in requests])
 
-        self.logger.info("Finished state sync with root hash %s", encode_hex(self.root_hash))
+        self.logger.info(
+            "Finished state sync with root hash %s", encode_hex(self.root_hash)
+        )
 
     async def _periodically_report_progress(self) -> None:
         while self.is_operational:
             requested_nodes = sum(
-                len(node_keys) for _, node_keys in self.request_tracker.active_requests.values())
+                len(node_keys)
+                for _, node_keys in self.request_tracker.active_requests.values()
+            )
             msg = "processed=%d  " % self._total_processed_nodes
             msg += "tnps=%d  " % (self._total_processed_nodes / self._timer.elapsed)
             msg += "committed=%d  " % self.scheduler.committed_nodes
@@ -293,7 +283,6 @@ class StateDownloader(BaseService, PeerSubscriber):
 
 
 class TrieNodeRequestTracker:
-
     def __init__(self, reply_timeout: int, logger: ExtendedDebugLogger) -> None:
         self.reply_timeout = reply_timeout
         self.logger = logger
@@ -302,27 +291,35 @@ class TrieNodeRequestTracker:
 
     def get_timed_out(self) -> List[Hash32]:
         timed_out = eth_utils.toolz.valfilter(
-            lambda v: time.time() - v[0] > self.reply_timeout, self.active_requests)
+            lambda v: time.time() - v[0] > self.reply_timeout, self.active_requests
+        )
         for peer, (_, node_keys) in timed_out.items():
             self.logger.debug(
-                "Timed out waiting for %d nodes from %s", len(node_keys), peer)
-        self.active_requests = eth_utils.toolz.dissoc(self.active_requests, *timed_out.keys())
-        return list(eth_utils.toolz.concat(node_keys for _, node_keys in timed_out.values()))
+                "Timed out waiting for %d nodes from %s", len(node_keys), peer
+            )
+        self.active_requests = eth_utils.toolz.dissoc(
+            self.active_requests, *timed_out.keys()
+        )
+        return list(
+            eth_utils.toolz.concat(node_keys for _, node_keys in timed_out.values())
+        )
 
     def get_retriable_missing(self) -> List[Hash32]:
         retriable = eth_utils.toolz.keyfilter(
-            lambda k: time.time() - k > self.reply_timeout, self.missing)
+            lambda k: time.time() - k > self.reply_timeout, self.missing
+        )
         self.missing = eth_utils.toolz.dissoc(self.missing, *retriable.keys())
         return list(eth_utils.toolz.concat(retriable.values()))
 
     def get_next_timeout(self) -> float:
         active_req_times = [req_time for (req_time, _) in self.active_requests.values()]
-        oldest = min(itertools.chain([time.time()], self.missing.keys(), active_req_times))
+        oldest = min(
+            itertools.chain([time.time()], self.missing.keys(), active_req_times)
+        )
         return oldest + self.reply_timeout
 
 
 class StateSync(HexaryTrieSync):
-
     async def leaf_callback(self, data: bytes, parent: SyncRequest) -> None:
         # TODO: Need to figure out why geth uses 64 as the depth here, and then document it.
         depth = 64
@@ -330,7 +327,9 @@ class StateSync(HexaryTrieSync):
         if account.storage_root != BLANK_ROOT_HASH:
             await self.schedule(account.storage_root, parent, depth, leaf_callback=None)
         if account.code_hash != EMPTY_SHA3:
-            await self.schedule(account.code_hash, parent, depth, leaf_callback=None, is_raw=True)
+            await self.schedule(
+                account.code_hash, parent, depth, leaf_callback=None, is_raw=True
+            )
 
 
 def _test() -> None:
@@ -342,13 +341,21 @@ def _test() -> None:
     from trinity.constants import DEFAULT_PREFERRED_NODES, ROPSTEN_NETWORK_ID
     from trinity.protocol.common.context import ChainContext
     from tests.core.integration_test_helpers import (
-        FakeAsyncChainDB, FakeAsyncLevelDB, connect_to_peers_loop)
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+        FakeAsyncChainDB,
+        FakeAsyncLevelDB,
+        connect_to_peers_loop,
+    )
+
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
+    )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-db', type=str, required=True)
-    parser.add_argument('-debug', action="store_true")
-    parser.add_argument('-enode', type=str, required=False, help="The enode we should connect to")
+    parser.add_argument("-db", type=str, required=True)
+    parser.add_argument("-debug", action="store_true")
+    parser.add_argument(
+        "-enode", type=str, required=False, help="The enode we should connect to"
+    )
     args = parser.parse_args()
 
     log_level = logging.INFO
@@ -368,10 +375,7 @@ def _test() -> None:
         network_id=network_id,
         vm_configuration=ROPSTEN_VM_CONFIGURATION,
     )
-    peer_pool = ETHPeerPool(
-        privkey=ecies.generate_privkey(),
-        context=context,
-    )
+    peer_pool = ETHPeerPool(privkey=ecies.generate_privkey(), context=context)
     asyncio.ensure_future(peer_pool.run())
     peer_pool.run_task(connect_to_peers_loop(peer_pool, nodes))
 

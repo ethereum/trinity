@@ -1,34 +1,30 @@
-from typing import (
-    Optional,
-    Tuple,
-)
+from typing import Optional, Tuple
 
 from eth.rlp.headers import BlockHeader
 
 from trinity.protocol.common.trackers import BasePerformanceTracker
 from trinity._utils.headers import sequence_builder
 
-from .requests import (
-    GetBlockHeadersRequest,
-)
+from .requests import GetBlockHeadersRequest
 
 
 BaseGetBlockHeadersTracker = BasePerformanceTracker[
-    GetBlockHeadersRequest,
-    Tuple[BlockHeader, ...],
+    GetBlockHeadersRequest, Tuple[BlockHeader, ...]
 ]
 
 
 class GetBlockHeadersTracker(BaseGetBlockHeadersTracker):
     def _get_request_size(self, request: GetBlockHeadersRequest) -> Optional[int]:
-        payload = request.command_payload['query']
-        if isinstance(payload['block_number_or_hash'], int):
-            return len(sequence_builder(
-                start_number=payload['block_number_or_hash'],
-                max_length=payload['max_headers'],
-                skip=payload['skip'],
-                reverse=payload['reverse'],
-            ))
+        payload = request.command_payload["query"]
+        if isinstance(payload["block_number_or_hash"], int):
+            return len(
+                sequence_builder(
+                    start_number=payload["block_number_or_hash"],
+                    max_length=payload["max_headers"],
+                    skip=payload["skip"],
+                    reverse=payload["reverse"],
+                )
+            )
         else:
             return None
 

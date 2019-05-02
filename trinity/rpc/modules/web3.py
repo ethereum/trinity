@@ -3,13 +3,10 @@ from eth_utils import decode_hex, encode_hex
 
 from trinity._utils.version import construct_trinity_client_identifier
 
-from trinity.rpc.modules import (
-    BaseRPCModule
-)
+from trinity.rpc.modules import BaseRPCModule
 
 
 class Web3(BaseRPCModule):
-
     async def clientVersion(self) -> str:
         """
         Returns the current client version.

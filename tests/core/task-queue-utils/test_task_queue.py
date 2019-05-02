@@ -1,7 +1,5 @@
 import asyncio
-from asyncio import (
-    Event,
-)
+from asyncio import Event
 from contextlib import contextmanager
 import functools
 import pytest
@@ -9,15 +7,8 @@ import random
 
 from cancel_token import CancelToken, OperationCancelled
 from eth_utils import ValidationError
-from eth_utils.toolz import (
-    complement,
-    curry,
-)
-from hypothesis import (
-    example,
-    given,
-    strategies as st,
-)
+from eth_utils.toolz import complement, curry
+from hypothesis import example, given, strategies as st
 
 from trinity._utils.datastructures import TaskQueue
 
@@ -39,10 +30,13 @@ def trap_operation_cancelled():
 def run_in_event_loop(async_func):
     @functools.wraps(async_func)
     def wrapped(operations, queue_size, add_size, get_size, event_loop):
-        event_loop.run_until_complete(asyncio.ensure_future(
-            async_func(operations, queue_size, add_size, get_size, event_loop),
-            loop=event_loop,
-        ))
+        event_loop.run_until_complete(
+            asyncio.ensure_future(
+                async_func(operations, queue_size, add_size, get_size, event_loop),
+                loop=event_loop,
+            )
+        )
+
     return wrapped
 
 
@@ -58,13 +52,23 @@ def run_in_event_loop(async_func):
 )
 @example(
     # try having two adders alternate a couple times quickly
-    operations=[(0, False), (1, False), (0, False), (1, True), (2, False), (2, False), (2, False)],
+    operations=[
+        (0, False),
+        (1, False),
+        (0, False),
+        (1, True),
+        (2, False),
+        (2, False),
+        (2, False),
+    ],
     queue_size=5,
     add_size=2,
     get_size=5,
 )
 @run_in_event_loop
-async def test_no_asyncio_exception_leaks(operations, queue_size, add_size, get_size, event_loop):
+async def test_no_asyncio_exception_leaks(
+    operations, queue_size, add_size, get_size, event_loop
+):
     """
     This could be made much more general, at the cost of simplicity.
     For now, this mimics real usage enough to hopefully catch the big issues.
@@ -80,9 +84,7 @@ async def test_no_asyncio_exception_leaks(operations, queue_size, add_size, get_
             # wait to run the get
             await cancel_token.cancellable_wait(get_event.wait())
 
-            batch, tasks = await cancel_token.cancellable_wait(
-                queue.get(num_tasks)
-            )
+            batch, tasks = await cancel_token.cancellable_wait(queue.get(num_tasks))
             get_event.clear()
 
             # wait to run the completion
@@ -112,16 +114,21 @@ async def test_no_asyncio_exception_leaks(operations, queue_size, add_size, get_
 
     q = TaskQueue(queue_size)
     events = tuple(Event() for _ in range(6))
-    add_event, add2_event, get_event, get2_event, complete_event, complete2_event = events
-    cancel_token = CancelToken('end test')
+    add_event, add2_event, get_event, get2_event, complete_event, complete2_event = (
+        events
+    )
+    cancel_token = CancelToken("end test")
 
-    done, pending = await asyncio.wait([
-        getter(q, get_size, get_event, complete_event, cancel_token),
-        getter(q, get_size, get2_event, complete2_event, cancel_token),
-        adder(q, add_size, add_event, cancel_token),
-        adder(q, add_size, add2_event, cancel_token),
-        operation_order(operations, events, cancel_token),
-    ], return_when=asyncio.FIRST_EXCEPTION)
+    done, pending = await asyncio.wait(
+        [
+            getter(q, get_size, get_event, complete_event, cancel_token),
+            getter(q, get_size, get2_event, complete2_event, cancel_token),
+            adder(q, add_size, add_event, cancel_token),
+            adder(q, add_size, add2_event, cancel_token),
+            operation_order(operations, events, cancel_token),
+        ],
+        return_when=asyncio.FIRST_EXCEPTION,
+    )
 
     for task in done:
         exc = task.exception()
@@ -141,7 +148,7 @@ async def test_queue_size_reset_after_complete():
 
     # there should not be room to add another task
     try:
-        await wait(q.add((3, )))
+        await wait(q.add((3,)))
     except asyncio.TimeoutError:
         pass
     else:
@@ -152,11 +159,11 @@ async def test_queue_size_reset_after_complete():
     q.complete(batch, tasks)
 
     # there should be room to add more now
-    await wait(q.add((3, )))
+    await wait(q.add((3,)))
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('tasks', ((2, 3), (object(), object())))
+@pytest.mark.parametrize("tasks", ((2, 3), (object(), object())))
 async def test_queue_contains_task_until_complete(tasks):
     q = TaskQueue(order_fn=id)
 
@@ -208,37 +215,45 @@ class SortableInt:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'order_fn',
-    (
-        SortableInt,
-        type('still_valid', (SortableInt, ), {}),
-    ),
+    "order_fn", (SortableInt, type("still_valid", (SortableInt,), {}))
 )
 async def test_valid_priority_order(order_fn):
     q = TaskQueue(order_fn=order_fn)
 
     # this just needs to not crash, when testing sortability
-    await wait(q.add((1, )))
+    await wait(q.add((1,)))
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'order_fn',
+    "order_fn",
     (
         # a basic object is not sortable
         lambda x: object(),
         # If comparison rules create an invalid result (like an element not equal to itself), crash.
         # The following are subclasses of SortableInt that have an intentionally broken comparitor:
-        type('invalid_eq', (SortableInt, ), dict(__eq__=curry(complement(SortableInt.__eq__)))),
-        type('invalid_lt', (SortableInt, ), dict(__lt__=curry(complement(SortableInt.__lt__)))),
-        type('invalid_gt', (SortableInt, ), dict(__gt__=curry(complement(SortableInt.__gt__)))),
+        type(
+            "invalid_eq",
+            (SortableInt,),
+            dict(__eq__=curry(complement(SortableInt.__eq__))),
+        ),
+        type(
+            "invalid_lt",
+            (SortableInt,),
+            dict(__lt__=curry(complement(SortableInt.__lt__))),
+        ),
+        type(
+            "invalid_gt",
+            (SortableInt,),
+            dict(__gt__=curry(complement(SortableInt.__gt__))),
+        ),
     ),
 )
 async def test_invalid_priority_order(order_fn):
     q = TaskQueue(order_fn=order_fn)
 
     with pytest.raises(ValidationError):
-        await wait(q.add((1, )))
+        await wait(q.add((1,)))
 
 
 @pytest.mark.asyncio
@@ -261,7 +276,7 @@ async def test_unfinished_tasks_readded():
 
     batch, tasks = await wait(q.get())
 
-    q.complete(batch, (2, ))
+    q.complete(batch, (2,))
 
     batch, tasks = await wait(q.get())
 
@@ -385,11 +400,11 @@ async def test_two_pending_adds_one_release():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'start_tasks, get_max, expected, remainder',
+    "start_tasks, get_max, expected, remainder",
     (
         ((4, 3, 2, 1), 5, (1, 2, 3, 4), None),
         ((4, 3, 2, 1), 4, (1, 2, 3, 4), None),
-        ((4, 3, 2, 1), 3, (1, 2, 3), (4, )),
+        ((4, 3, 2, 1), 3, (1, 2, 3), (4,)),
     ),
 )
 async def test_queue_get_cap(start_tasks, get_max, expected, remainder):
@@ -420,7 +435,7 @@ async def test_cannot_readd_same_task():
         await q.add((2,))
 
 
-@pytest.mark.parametrize('get_size', (1, None))
+@pytest.mark.parametrize("get_size", (1, None))
 def test_get_nowait_queuefull(get_size):
     q = TaskQueue()
     with pytest.raises(asyncio.QueueFull):
@@ -428,12 +443,7 @@ def test_get_nowait_queuefull(get_size):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    'tasks, get_size, expected_tasks',
-    (
-        ((3, 2), 1, (2, )),
-    ),
-)
+@pytest.mark.parametrize("tasks, get_size, expected_tasks", (((3, 2), 1, (2,)),))
 async def test_get_nowait(tasks, get_size, expected_tasks):
     q = TaskQueue()
     await q.add(tasks)

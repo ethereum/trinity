@@ -1,10 +1,6 @@
 import asyncio
 import functools
-from typing import (
-    Any,
-    Awaitable,
-    Callable
-)
+from typing import Any, Awaitable, Callable
 
 
 def async_method(method_name: str) -> Callable[..., Any]:
@@ -15,4 +11,5 @@ def async_method(method_name: str) -> Callable[..., Any]:
         pfunc = functools.partial(func, *args, **kwargs)
 
         return await loop.run_in_executor(None, pfunc)
+
     return method

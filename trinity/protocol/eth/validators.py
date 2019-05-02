@@ -1,19 +1,10 @@
-from typing import (
-    Tuple,
-)
+from typing import Tuple
 
 from eth.rlp.headers import BlockHeader
-from eth_typing import (
-    Hash32,
-)
-from eth_utils import (
-    ValidationError,
-)
+from eth_typing import Hash32
+from eth_utils import ValidationError
 
-from trinity.protocol.common.validators import (
-    BaseValidator,
-    BaseBlockHeadersValidator,
-)
+from trinity.protocol.common.validators import BaseValidator, BaseBlockHeadersValidator
 from trinity.protocol.common.types import (
     BlockBodyBundles,
     NodeDataBundles,
@@ -45,7 +36,9 @@ class GetNodeDataValidator(BaseValidator[NodeDataBundles]):
         unexpected_keys = node_key_set.difference(self.node_hashes)
 
         if unexpected_keys:
-            raise ValidationError(f"Response contains {len(unexpected_keys)} unexpected nodes")
+            raise ValidationError(
+                f"Response contains {len(unexpected_keys)} unexpected nodes"
+            )
 
 
 class ReceiptsValidator(BaseValidator[ReceiptsBundles]):
@@ -59,15 +52,15 @@ class ReceiptsValidator(BaseValidator[ReceiptsBundles]):
 
         expected_receipt_roots = set(header.receipt_root for header in self.headers)
         actual_receipt_roots = set(
-            root_hash
-            for receipt, (root_hash, trie_data)
-            in result
+            root_hash for receipt, (root_hash, trie_data) in result
         )
 
         unexpected_roots = actual_receipt_roots.difference(expected_receipt_roots)
 
         if unexpected_roots:
-            raise ValidationError(f"Got {len(unexpected_roots)} unexpected receipt roots")
+            raise ValidationError(
+                f"Got {len(unexpected_roots)} unexpected receipt roots"
+            )
 
 
 class GetBlockBodiesValidator(BaseValidator[BlockBodyBundles]):
@@ -76,13 +69,11 @@ class GetBlockBodiesValidator(BaseValidator[BlockBodyBundles]):
 
     def validate_result(self, response: BlockBodyBundles) -> None:
         expected_keys = {
-            (header.transaction_root, header.uncles_hash)
-            for header in self.headers
+            (header.transaction_root, header.uncles_hash) for header in self.headers
         }
         actual_keys = {
             (txn_root, uncles_hash)
-            for body, (txn_root, trie_data), uncles_hash
-            in response
+            for body, (txn_root, trie_data), uncles_hash in response
         }
         unexpected_keys = actual_keys.difference(expected_keys)
         if unexpected_keys:

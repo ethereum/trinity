@@ -1,36 +1,21 @@
 import logging
 import multiprocessing
-from multiprocessing.managers import (
-    BaseManager,
-)
+from multiprocessing.managers import BaseManager
 import tempfile
 
 import pytest
 
 from eth.chains.ropsten import ROPSTEN_GENESIS_HEADER
-from eth.db.atomic import (
-    AtomicDB,
-)
-from eth.db.chain import (
-    ChainDB,
-)
+from eth.db.atomic import AtomicDB
+from eth.db.chain import ChainDB
 
-from trinity.db.eth1.manager import (
-    create_db_server_manager,
-)
-from trinity.config import (
-    TrinityConfig,
-)
-from trinity.initialization import (
-    initialize_data_dir,
-)
+from trinity.db.eth1.manager import create_db_server_manager
+from trinity.config import TrinityConfig
+from trinity.initialization import initialize_data_dir
 from trinity.constants import ROPSTEN_NETWORK_ID
 from trinity.db.eth1.chain import AsyncChainDBProxy
 from trinity.db.base import AsyncDBProxy
-from trinity._utils.ipc import (
-    wait_for_ipc,
-    kill_process_gracefully,
-)
+from trinity._utils.ipc import wait_for_ipc, kill_process_gracefully
 
 
 def serve_chaindb(manager):
@@ -41,7 +26,7 @@ def serve_chaindb(manager):
 @pytest.fixture
 def database_server_ipc_path():
     core_db = AtomicDB()
-    core_db[b'key-a'] = b'value-a'
+    core_db[b"key-a"] = b"value-a"
 
     chaindb = ChainDB(core_db)
     # TODO: use a custom chain class only for testing.
@@ -49,15 +34,13 @@ def database_server_ipc_path():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         trinity_config = TrinityConfig(
-            network_id=ROPSTEN_NETWORK_ID,
-            trinity_root_dir=temp_dir,
+            network_id=ROPSTEN_NETWORK_ID, trinity_root_dir=temp_dir
         )
         initialize_data_dir(trinity_config)
 
         manager = create_db_server_manager(trinity_config, core_db)
         chaindb_server_process = multiprocessing.Process(
-            target=serve_chaindb,
-            args=(manager,),
+            target=serve_chaindb, args=(manager,)
         )
         chaindb_server_process.start()
 
@@ -74,8 +57,8 @@ def manager(database_server_ipc_path):
     class DBManager(BaseManager):
         pass
 
-    DBManager.register('get_db', proxytype=AsyncDBProxy)
-    DBManager.register('get_chaindb', proxytype=AsyncChainDBProxy)
+    DBManager.register("get_db", proxytype=AsyncDBProxy)
+    DBManager.register("get_chaindb", proxytype=AsyncChainDBProxy)
 
     _manager = DBManager(address=str(database_server_ipc_path))
     _manager.connect()
@@ -94,24 +77,24 @@ async def test_chaindb_over_ipc_manager(manager):
 def test_db_over_ipc_manager(manager):
     db = manager.get_db()
 
-    assert b'key-a' in db
-    assert db[b'key-a'] == b'value-a'
+    assert b"key-a" in db
+    assert db[b"key-a"] == b"value-a"
 
     with pytest.raises(KeyError):
-        db[b'not-present']
+        db[b"not-present"]
 
 
 def test_atomic_batch_over_ipc_manager(manager):
     db = manager.get_db()
 
-    assert b'key-b' not in db
-    assert b'key-c' not in db
+    assert b"key-b" not in db
+    assert b"key-c" not in db
 
     with db.atomic_batch() as batch:
-        batch.set(b'key-b', b'value-b')
-        batch.set(b'key-c', b'value-c')
+        batch.set(b"key-b", b"value-b")
+        batch.set(b"key-c", b"value-c")
 
-    assert b'key-b' in db
-    assert db[b'key-b'] == b'value-b'
-    assert b'key-c' in db
-    assert db[b'key-c'] == b'value-c'
+    assert b"key-b" in db
+    assert db[b"key-b"] == b"value-b"
+    assert b"key-c" in db
+    assert db[b"key-c"] == b"value-c"

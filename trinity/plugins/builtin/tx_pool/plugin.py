@@ -1,41 +1,18 @@
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, _SubParsersAction
 import asyncio
 
 from cancel_token import CancelToken
 
-from eth.chains.base import (
-    BaseChain
-)
-from eth.chains.mainnet import (
-    BYZANTIUM_MAINNET_BLOCK,
-)
-from eth.chains.ropsten import (
-    BYZANTIUM_ROPSTEN_BLOCK,
-)
+from eth.chains.base import BaseChain
+from eth.chains.mainnet import BYZANTIUM_MAINNET_BLOCK
+from eth.chains.ropsten import BYZANTIUM_ROPSTEN_BLOCK
 
-from trinity.constants import (
-    SYNC_LIGHT,
-    MAINNET_NETWORK_ID,
-    ROPSTEN_NETWORK_ID,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity.extensibility import (
-    BaseAsyncStopPlugin,
-)
-from trinity.extensibility.events import (
-    ResourceAvailableEvent,
-)
-from trinity.plugins.builtin.tx_pool.pool import (
-    TxPool,
-)
-from trinity.plugins.builtin.tx_pool.validators import (
-    DefaultTransactionValidator
-)
+from trinity.constants import SYNC_LIGHT, MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.extensibility import BaseAsyncStopPlugin
+from trinity.extensibility.events import ResourceAvailableEvent
+from trinity.plugins.builtin.tx_pool.pool import TxPool
+from trinity.plugins.builtin.tx_pool.validators import DefaultTransactionValidator
 from trinity.protocol.eth.peer import ETHPeerPool
 
 
@@ -50,7 +27,9 @@ class TxPlugin(BaseAsyncStopPlugin):
     def name(self) -> str:
         return "TxPlugin"
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         arg_parser.add_argument(
             "--tx-pool",
             action="store_true",
@@ -92,7 +71,9 @@ class TxPlugin(BaseAsyncStopPlugin):
         else:
             # TODO: We could hint the user about e.g. a --tx-pool-no-validation flag to run the
             # tx pool without tx validation in this case
-            raise ValueError("The TxPool plugin only supports MainnetChain or RopstenChain")
+            raise ValueError(
+                "The TxPool plugin only supports MainnetChain or RopstenChain"
+            )
 
         self.tx_pool = TxPool(self.peer_pool, validator, self.cancel_token)
         asyncio.ensure_future(self.tx_pool.run())

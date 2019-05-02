@@ -5,9 +5,7 @@ from eth.chains.ropsten import ROPSTEN_GENESIS_HEADER
 from eth.db.backends.level import LevelDB
 from eth.db.chain import ChainDB
 
-from trinity.initialization import (
-    is_database_initialized,
-)
+from trinity.initialization import is_database_initialized
 
 
 @pytest.fixture

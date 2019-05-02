@@ -12,7 +12,6 @@ from trinity._utils.shutdown import exit_with_endpoint_and_services
 
 
 class PeerCountReporter(BaseService):
-
     def __init__(self, event_bus: TrinityEventBusEndpoint) -> None:
         super().__init__()
         self.event_bus = event_bus
@@ -25,8 +24,7 @@ class PeerCountReporter(BaseService):
         while self.is_operational:
             try:
                 response = await asyncio.wait_for(
-                    self.event_bus.request(PeerCountRequest()),
-                    timeout=1.0
+                    self.event_bus.request(PeerCountRequest()), timeout=1.0
                 )
                 self.logger.info("CONNECTED PEERS: %s", response.peer_count)
             except asyncio.TimeoutError:
@@ -35,14 +33,13 @@ class PeerCountReporter(BaseService):
 
 
 class PeerCountReporterPlugin(BaseIsolatedPlugin):
-
     @property
     def name(self) -> str:
         return "Peer Count Reporter"
 
-    def configure_parser(self,
-                         arg_parser: ArgumentParser,
-                         subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         arg_parser.add_argument(
             "--report-peer-count",
             action="store_true",

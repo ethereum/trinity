@@ -1,15 +1,9 @@
 import operator
 
-from typing import (
-    List,
-)
-from cytoolz import (
-    curry,
-)
+from typing import List
+from cytoolz import curry
 from cytoolz.curried import reduce
-from itertools import (
-    zip_longest,
-)
+from itertools import zip_longest
 from eth2.beacon.typing import Bitfield
 
 
@@ -25,7 +19,9 @@ def set_voted(bitfield: Bitfield, index: int) -> Bitfield:
     byte_index = index // 8
     bit_index = index % 8
     new_byte_value = bitfield[byte_index] | (1 << bit_index)
-    new_bitfield = bitfield[:byte_index] + bytes([new_byte_value]) + bitfield[byte_index + 1:]
+    new_bitfield = (
+        bitfield[:byte_index] + bytes([new_byte_value]) + bitfield[byte_index + 1 :]
+    )
     return Bitfield(new_bitfield)
 
 
@@ -40,11 +36,7 @@ def get_empty_bitfield(bit_count: int) -> Bitfield:
 
 def get_vote_count(bitfield: Bitfield) -> int:
     return len(
-        tuple(
-            index
-            for index in range(len(bitfield) * 8)
-            if has_voted(bitfield, index)
-        )
+        tuple(index for index in range(len(bitfield) * 8) if has_voted(bitfield, index))
     )
 
 

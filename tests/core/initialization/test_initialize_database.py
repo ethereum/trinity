@@ -3,10 +3,7 @@ import pytest
 from eth.db.backends.level import LevelDB
 from eth.db.chain import ChainDB
 
-from trinity.initialization import (
-    initialize_database,
-    is_database_initialized,
-)
+from trinity.initialization import initialize_database, is_database_initialized
 
 
 @pytest.fixture

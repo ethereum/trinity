@@ -1,33 +1,21 @@
-from eth_utils import (
-    ValidationError,
-)
+from eth_utils import ValidationError
 
-from eth.validation import (
-    validate_gte,
-    validate_lte,
-    validate_is_integer,
-)
+from eth.validation import validate_gte, validate_lte, validate_is_integer
 
-from eth2._utils.bitfield import (
-    get_bitfield_length,
-    has_voted,
-)
+from eth2._utils.bitfield import get_bitfield_length, has_voted
 
-from eth2.beacon.typing import (
-    Epoch,
-)
+from eth2.beacon.typing import Epoch
 
 
-def validate_slot(slot: int, title: str="Slot") -> None:
+def validate_slot(slot: int, title: str = "Slot") -> None:
     validate_is_integer(slot, title)
     validate_gte(slot, 0, title)
-    validate_lte(slot, 2**64 - 1, title)
+    validate_lte(slot, 2 ** 64 - 1, title)
 
 
 def validate_epoch_within_previous_and_next(
-        epoch: Epoch,
-        previous_epoch: Epoch,
-        next_epoch: Epoch) -> None:
+    epoch: Epoch, previous_epoch: Epoch, next_epoch: Epoch
+) -> None:
     """
     Validate that ``previous_epoch <= epoch <= next_epoch``.
     """
@@ -43,9 +31,9 @@ def validate_epoch_within_previous_and_next(
         )
 
 
-def validate_epoch_for_active_randao_mix(state_epoch: Epoch,
-                                         given_epoch: Epoch,
-                                         latest_randao_mixes_length: int) -> None:
+def validate_epoch_for_active_randao_mix(
+    state_epoch: Epoch, given_epoch: Epoch, latest_randao_mixes_length: int
+) -> None:
     if state_epoch >= given_epoch + latest_randao_mixes_length:
         raise ValidationError(
             f"state_epoch ({state_epoch}) should be less than (given_epoch {given_epoch} + "
@@ -58,11 +46,16 @@ def validate_epoch_for_active_randao_mix(state_epoch: Epoch,
         )
 
 
-def validate_epoch_for_active_index_root(state_epoch: Epoch,
-                                         given_epoch: Epoch,
-                                         activation_exit_delay: int,
-                                         latest_active_index_roots_length: int) -> None:
-    if state_epoch >= given_epoch + latest_active_index_roots_length - activation_exit_delay:
+def validate_epoch_for_active_index_root(
+    state_epoch: Epoch,
+    given_epoch: Epoch,
+    activation_exit_delay: int,
+    latest_active_index_roots_length: int,
+) -> None:
+    if (
+        state_epoch
+        >= given_epoch + latest_active_index_roots_length - activation_exit_delay
+    ):
         raise ValidationError(
             f"state_epoch ({state_epoch}) should be less than (given_epoch {given_epoch} + "
             f"LATEST_ACTIVE_INDEX_ROOTS_LENGTH ({latest_active_index_roots_length}))"

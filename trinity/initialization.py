@@ -15,16 +15,10 @@ from trinity.config import (
     TrinityConfig,
 )
 
-from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
-)
+from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.db.chain import BaseBeaconChainDB
-from trinity.exceptions import (
-    MissingPath,
-)
-from trinity._utils.filesystem import (
-    is_under_path,
-)
+from trinity.exceptions import MissingPath
+from trinity._utils.filesystem import is_under_path
 
 
 def is_data_dir_initialized(trinity_config: TrinityConfig) -> bool:
@@ -69,8 +63,9 @@ def is_database_initialized(chaindb: BaseChainDB) -> bool:
         return True
 
 
-def is_beacon_database_initialized(chaindb: BaseBeaconChainDB,
-                                   block_class: Type[BaseBeaconBlock]) -> bool:
+def is_beacon_database_initialized(
+    chaindb: BaseBeaconChainDB, block_class: Type[BaseBeaconBlock]
+) -> bool:
     try:
         chaindb.get_canonical_head(block_class)
     except CanonicalHeadNotFound:
@@ -81,9 +76,8 @@ def is_beacon_database_initialized(chaindb: BaseBeaconChainDB,
 
 
 def initialize_data_dir(trinity_config: TrinityConfig) -> None:
-    should_create_data_dir = (
-        not trinity_config.data_dir.exists() and
-        is_under_path(trinity_config.trinity_root_dir, trinity_config.data_dir)
+    should_create_data_dir = not trinity_config.data_dir.exists() and is_under_path(
+        trinity_config.trinity_root_dir, trinity_config.data_dir
     )
     if should_create_data_dir:
         trinity_config.data_dir.mkdir(parents=True, exist_ok=True)
@@ -95,16 +89,13 @@ def initialize_data_dir(trinity_config: TrinityConfig) -> None:
         )
 
     # Logfile
-    should_create_logdir = (
-        not trinity_config.log_dir.exists() and
-        (
-            # If we're in the default path, always create the log directory
-            is_under_path(trinity_config.trinity_root_dir, trinity_config.log_dir) or
-            (
-                # If we're in a custom path, create the log directory if the data dir is empty
-                is_under_path(trinity_config.data_dir, trinity_config.log_dir) and
-                not any(trinity_config.data_dir.iterdir())
-            )
+    should_create_logdir = not trinity_config.log_dir.exists() and (
+        # If we're in the default path, always create the log directory
+        is_under_path(trinity_config.trinity_root_dir, trinity_config.log_dir)
+        or (
+            # If we're in a custom path, create the log directory if the data dir is empty
+            is_under_path(trinity_config.data_dir, trinity_config.log_dir)
+            and not any(trinity_config.data_dir.iterdir())
         )
     )
     if should_create_logdir:
@@ -114,7 +105,7 @@ def initialize_data_dir(trinity_config: TrinityConfig) -> None:
         # we don't lazily create the base dir for non-default base directories.
         raise MissingPath(
             "The base logging directory provided does not exist: `{0}`".format(
-                trinity_config.log_dir,
+                trinity_config.log_dir
             ),
             trinity_config.log_dir,
         )
@@ -126,23 +117,25 @@ def initialize_data_dir(trinity_config: TrinityConfig) -> None:
     # Nodekey
     if trinity_config.nodekey is None:
         nodekey = ecies.generate_privkey()
-        with open(trinity_config.nodekey_path, 'wb') as nodekey_file:
+        with open(trinity_config.nodekey_path, "wb") as nodekey_file:
             nodekey_file.write(nodekey.to_bytes())
 
 
-def initialize_database(chain_config: ChainConfig,
-                        chaindb: BaseChainDB,
-                        base_db: BaseAtomicDB) -> None:
+def initialize_database(
+    chain_config: ChainConfig, chaindb: BaseChainDB, base_db: BaseAtomicDB
+) -> None:
     try:
         chaindb.get_canonical_head()
     except CanonicalHeadNotFound:
         chain_config.initialize_chain(base_db)
 
 
-def initialize_beacon_database(chain_config: BeaconChainConfig,
-                               chaindb: BaseBeaconChainDB,
-                               base_db: BaseAtomicDB,
-                               block_class: Type[BaseBeaconBlock]) -> None:
+def initialize_beacon_database(
+    chain_config: BeaconChainConfig,
+    chaindb: BaseBeaconChainDB,
+    base_db: BaseAtomicDB,
+    block_class: Type[BaseBeaconBlock],
+) -> None:
     try:
         chaindb.get_canonical_head(block_class)
     except CanonicalHeadNotFound:

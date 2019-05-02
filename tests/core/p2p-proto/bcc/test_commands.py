@@ -2,32 +2,18 @@ import pytest
 
 import ssz
 
-from eth.constants import (
-    ZERO_HASH32,
-)
+from eth.constants import ZERO_HASH32
 
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.attestation_data import AttestationData
-from eth2.beacon.types.blocks import (
-    BeaconBlock,
-    BeaconBlockBody,
-)
+from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.crosslinks import Crosslink
 
-from p2p.peer import (
-    MsgBuffer,
-)
+from p2p.peer import MsgBuffer
 
-from trinity.protocol.bcc.commands import (
-    BeaconBlocks,
-    GetBeaconBlocks,
-    Attestations,
-)
+from trinity.protocol.bcc.commands import BeaconBlocks, GetBeaconBlocks, Attestations
 
-from .helpers import (
-    get_directly_linked_peers,
-    get_genesis_chain_db,
-)
+from .helpers import get_directly_linked_peers, get_genesis_chain_db
 
 from eth2.beacon.constants import EMPTY_SIGNATURE
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
@@ -55,10 +41,7 @@ async def test_send_no_blocks(request, event_loop):
 
     message = await msg_buffer.msg_queue.get()
     assert isinstance(message.command, BeaconBlocks)
-    assert message.payload == {
-        "request_id": request_id,
-        "encoded_blocks": (),
-    }
+    assert message.payload == {"request_id": request_id, "encoded_blocks": ()}
 
 
 @pytest.mark.asyncio
@@ -191,15 +174,20 @@ async def test_send_multiple_attestations(request, event_loop):
                 target_root=ZERO_HASH32,
                 source_root=ZERO_HASH32,
                 shard=shard,
-                previous_crosslink=Crosslink(SERENITY_CONFIG.GENESIS_EPOCH, ZERO_HASH32),
+                previous_crosslink=Crosslink(
+                    SERENITY_CONFIG.GENESIS_EPOCH, ZERO_HASH32
+                ),
                 crosslink_data_root=ZERO_HASH32,
             ),
             custody_bitfield=b"\x00\x00\x00",
-        ) for shard in range(10)
+        )
+        for shard in range(10)
     )
 
     alice.sub_proto.send_attestation_records(attestations)
 
     message = await msg_buffer.msg_queue.get()
     assert isinstance(message.command, Attestations)
-    assert message.payload == tuple(ssz.encode(attestation) for attestation in attestations)
+    assert message.payload == tuple(
+        ssz.encode(attestation) for attestation in attestations
+    )

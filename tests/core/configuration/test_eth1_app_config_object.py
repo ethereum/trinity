@@ -1,16 +1,8 @@
 import pytest
 
-from trinity.config import (
-    Eth1AppConfig,
-    Eth1DbMode,
-    TrinityConfig,
-)
-from trinity.nodes.full import (
-    FullNode,
-)
-from trinity.nodes.light import (
-    LightNode,
-)
+from trinity.config import Eth1AppConfig, Eth1DbMode, TrinityConfig
+from trinity.nodes.full import FullNode
+from trinity.nodes.light import LightNode
 
 
 @pytest.mark.parametrize(
@@ -24,11 +16,16 @@ from trinity.nodes.light import (
         ("", "fast", "chain", "full"),
     ),
 )
-def test_computed_database_dir(app_identifier, sync_mode, expected_db_path, expected_db_name):
+def test_computed_database_dir(
+    app_identifier, sync_mode, expected_db_path, expected_db_name
+):
     trinity_config = TrinityConfig(network_id=1, app_identifier=app_identifier)
     eth1_app_config = Eth1AppConfig(trinity_config, sync_mode)
 
-    assert eth1_app_config.database_dir == trinity_config.data_dir / expected_db_path / expected_db_name  # noqa: E501
+    assert (
+        eth1_app_config.database_dir
+        == trinity_config.data_dir / expected_db_path / expected_db_name
+    )  # noqa: E501
 
 
 @pytest.mark.parametrize(
@@ -40,9 +37,9 @@ def test_computed_database_dir(app_identifier, sync_mode, expected_db_path, expe
         ("warp", True, FullNode),
     ),
 )
-def test_sync_mode_effect_on_db_and_node_type(sync_mode,
-                                              expected_full_db,
-                                              expected_node_class):
+def test_sync_mode_effect_on_db_and_node_type(
+    sync_mode, expected_full_db, expected_node_class
+):
 
     trinity_config = TrinityConfig(network_id=1)
     eth1_app_config = Eth1AppConfig(trinity_config, sync_mode)

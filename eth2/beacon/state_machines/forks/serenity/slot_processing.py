@@ -1,28 +1,20 @@
-from typing import (
-    Sequence,
-)
+from typing import Sequence
 
-from eth.constants import (
-    ZERO_HASH32,
-)
+from eth.constants import ZERO_HASH32
 
-from eth_typing import (
-    Hash32,
-)
+from eth_typing import Hash32
 
-from eth2.configs import (
-    Eth2Config,
-)
-from eth2.beacon.typing import (
-    Slot,
-)
+from eth2.configs import Eth2Config
+from eth2.beacon.typing import Slot
 from eth2.beacon.types.states import BeaconState
 
 
-def _update_historical_root(roots: Sequence[Hash32],
-                            index: Slot,
-                            slots_per_historical_root: int,
-                            new_root: Hash32) -> Sequence[Hash32]:
+def _update_historical_root(
+    roots: Sequence[Hash32],
+    index: Slot,
+    slots_per_historical_root: int,
+    new_root: Hash32,
+) -> Sequence[Hash32]:
     mutable_roots = list(roots)
     mutable_roots[index % slots_per_historical_root] = new_root
     return tuple(mutable_roots)
@@ -43,9 +35,7 @@ def process_cache_state(state: BeaconState, config: Eth2Config) -> BeaconState:
     if state.latest_block_header.state_root == ZERO_HASH32:
         latest_block_header = state.latest_block_header
         state = state.copy(
-            latest_block_header=latest_block_header.copy(
-                state_root=latest_state_root,
-            ),
+            latest_block_header=latest_block_header.copy(state_root=latest_state_root)
         )
 
     # Update state.latest_block_roots
@@ -66,6 +56,4 @@ def process_cache_state(state: BeaconState, config: Eth2Config) -> BeaconState:
 
 def process_slot_transition(state: BeaconState) -> BeaconState:
     # Update state.slot
-    return state.copy(
-        slot=state.slot + 1
-    )
+    return state.copy(slot=state.slot + 1)

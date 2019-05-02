@@ -1,20 +1,8 @@
-from typing import (
-    Tuple,
-)
-from lahja import (
-    BroadcastConfig,
-    ConnectionConfig,
-    Endpoint,
-)
+from typing import Tuple
+from lahja import BroadcastConfig, ConnectionConfig, Endpoint
 
-from trinity.constants import (
-    MAIN_EVENTBUS_ENDPOINT,
-)
-from trinity.events import (
-    AvailableEndpointsUpdated,
-    EventBusConnected,
-    ShutdownRequest,
-)
+from trinity.constants import MAIN_EVENTBUS_ENDPOINT
+from trinity.events import AvailableEndpointsUpdated, EventBusConnected, ShutdownRequest
 
 
 class TrinityEventBusEndpoint(Endpoint):
@@ -28,11 +16,10 @@ class TrinityEventBusEndpoint(Endpoint):
         """
         self.broadcast(
             ShutdownRequest(reason),
-            BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT)
+            BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT),
         )
 
-    def connect_to_other_endpoints(self,
-                                   ev: AvailableEndpointsUpdated) -> None:
+    def connect_to_other_endpoints(self, ev: AvailableEndpointsUpdated) -> None:
 
         for connection_config in ev.available_endpoints:
             if connection_config.name == self.name:
@@ -43,7 +30,7 @@ class TrinityEventBusEndpoint(Endpoint):
                 self.logger.info(
                     "EventBus Endpoint %s connecting to other Endpoint %s",
                     self.name,
-                    connection_config.name
+                    connection_config.name,
                 )
                 self.connect_to_endpoints_nowait(connection_config)
 
@@ -60,7 +47,7 @@ class TrinityEventBusEndpoint(Endpoint):
         """
         self.broadcast(
             EventBusConnected(ConnectionConfig(name=self.name, path=self.ipc_path)),
-            BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT)
+            BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT),
         )
 
 
@@ -86,15 +73,22 @@ class TrinityMainEventBusEndpoint(TrinityEventBusEndpoint):
             # to that endpoint.
             if not self.is_connected_to(ev.connection_config.name):
                 self.logger.info(
-                    "EventBus of main process connecting to EventBus %s", ev.connection_config.name
+                    "EventBus of main process connecting to EventBus %s",
+                    ev.connection_config.name,
                 )
                 self.connect_to_endpoints_blocking(ev.connection_config)
 
-            self.available_endpoints = self.available_endpoints + (ev.connection_config,)
-            self.logger.debug("New EventBus Endpoint connected %s", ev.connection_config.name)
+            self.available_endpoints = self.available_endpoints + (
+                ev.connection_config,
+            )
+            self.logger.debug(
+                "New EventBus Endpoint connected %s", ev.connection_config.name
+            )
             # Broadcast available endpoints to all connected endpoints, giving them
             # a chance to cross connect
             self.broadcast(AvailableEndpointsUpdated(self.available_endpoints))
-            self.logger.debug("Connected EventBus Endpoints %s", self.available_endpoints)
+            self.logger.debug(
+                "Connected EventBus Endpoints %s", self.available_endpoints
+            )
 
         self.subscribe(EventBusConnected, handle_new_endpoints)

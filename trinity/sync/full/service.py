@@ -18,18 +18,21 @@ from .constants import FAST_SYNC_CUTOFF
 from .state import StateDownloader
 
 
-async def ensure_state_then_sync_full(logger: logging.Logger,
-                                      head: BlockHeader,
-                                      base_db: BaseAsyncDB,
-                                      chaindb: BaseAsyncChainDB,
-                                      chain: BaseAsyncChain,
-                                      peer_pool: ETHPeerPool,
-                                      cancel_token: CancelToken) -> None:
+async def ensure_state_then_sync_full(
+    logger: logging.Logger,
+    head: BlockHeader,
+    base_db: BaseAsyncDB,
+    chaindb: BaseAsyncChainDB,
+    chain: BaseAsyncChain,
+    peer_pool: ETHPeerPool,
+    cancel_token: CancelToken,
+) -> None:
     # Ensure we have the state for our current head.
     if head.state_root != BLANK_ROOT_HASH and head.state_root not in base_db:
-        logger.info(
-            "Missing state for current head %s, downloading it", head)
-        downloader = StateDownloader(chaindb, base_db, head.state_root, peer_pool, cancel_token)
+        logger.info("Missing state for current head %s, downloading it", head)
+        downloader = StateDownloader(
+            chaindb, base_db, head.state_root, peer_pool, cancel_token
+        )
         await downloader.run()
         # remove the reference so the memory can be reclaimed
         del downloader
@@ -39,19 +42,19 @@ async def ensure_state_then_sync_full(logger: logging.Logger,
 
     # Now, loop forever, fetching missing blocks and applying them.
     logger.info("Starting regular sync; current head: %s", head)
-    regular_syncer = RegularChainSyncer(
-        chain, chaindb, peer_pool, cancel_token)
+    regular_syncer = RegularChainSyncer(chain, chaindb, peer_pool, cancel_token)
     await regular_syncer.run()
 
 
 class FullChainSyncer(BaseService):
-
-    def __init__(self,
-                 chain: BaseAsyncChain,
-                 chaindb: BaseAsyncChainDB,
-                 base_db: BaseAsyncDB,
-                 peer_pool: ETHPeerPool,
-                 token: CancelToken = None) -> None:
+    def __init__(
+        self,
+        chain: BaseAsyncChain,
+        chaindb: BaseAsyncChainDB,
+        base_db: BaseAsyncDB,
+        peer_pool: ETHPeerPool,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         self.chain = chain
         self.chaindb = chaindb
@@ -71,18 +74,19 @@ class FullChainSyncer(BaseService):
             self.chaindb,
             self.chain,
             self.peer_pool,
-            self.cancel_token
+            self.cancel_token,
         )
 
 
 class FastThenFullChainSyncer(BaseService):
-
-    def __init__(self,
-                 chain: BaseAsyncChain,
-                 chaindb: BaseAsyncChainDB,
-                 base_db: BaseAsyncDB,
-                 peer_pool: ETHPeerPool,
-                 token: CancelToken = None) -> None:
+    def __init__(
+        self,
+        chain: BaseAsyncChain,
+        chaindb: BaseAsyncChainDB,
+        base_db: BaseAsyncDB,
+        peer_pool: ETHPeerPool,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         self.chain = chain
         self.chaindb = chaindb
@@ -98,17 +102,16 @@ class FastThenFullChainSyncer(BaseService):
             # Fast-sync chain data.
             self.logger.info("Starting fast-sync; current head: %s", head)
             fast_syncer = FastChainSyncer(
-                self.chain,
-                self.chaindb,
-                self.peer_pool,
-                self.cancel_token,
+                self.chain, self.chaindb, self.peer_pool, self.cancel_token
             )
             await fast_syncer.run()
 
             previous_head = head
             head = await self.wait(self.chaindb.coro_get_canonical_head())
             self.logger.info(
-                "Finished fast fast-sync; previous head: %s, current head: %s", previous_head, head
+                "Finished fast fast-sync; previous head: %s, current head: %s",
+                previous_head,
+                head,
             )
 
             if not fast_syncer.is_complete:
@@ -129,7 +132,7 @@ class FastThenFullChainSyncer(BaseService):
             self.chaindb,
             self.chain,
             self.peer_pool,
-            self.cancel_token
+            self.cancel_token,
         )
 
 
@@ -144,12 +147,20 @@ def _test() -> None:
     from trinity.constants import DEFAULT_PREFERRED_NODES, ROPSTEN_NETWORK_ID
     from trinity.protocol.common.context import ChainContext
     from tests.core.integration_test_helpers import (
-        FakeAsyncChainDB, FakeAsyncRopstenChain, connect_to_peers_loop)
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+        FakeAsyncChainDB,
+        FakeAsyncRopstenChain,
+        connect_to_peers_loop,
+    )
+
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s"
+    )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-db', type=str, required=True)
-    parser.add_argument('-enode', type=str, required=False, help="The enode we should connect to")
+    parser.add_argument("-db", type=str, required=True)
+    parser.add_argument(
+        "-enode", type=str, required=False, help="The enode we should connect to"
+    )
     args = parser.parse_args()
 
     chaindb = FakeAsyncChainDB(LevelDB(args.db))
@@ -160,7 +171,7 @@ def _test() -> None:
     context = ChainContext(
         headerdb=chaindb,
         network_id=network_id,
-        vm_configuration=ROPSTEN_VM_CONFIGURATION
+        vm_configuration=ROPSTEN_VM_CONFIGURATION,
     )
     peer_pool = ETHPeerPool(privkey=privkey, context=context)
     if args.enode:

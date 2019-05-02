@@ -10,29 +10,19 @@ from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 
-from tests.core.peer_helpers import (
-    get_directly_linked_peers,
-)
+from tests.core.peer_helpers import get_directly_linked_peers
 
 
 @pytest.fixture
 async def eth_peer_and_remote(request, event_loop):
-    peer, remote = await get_directly_linked_peers(
-        request,
-        event_loop,
-    )
+    peer, remote = await get_directly_linked_peers(request, event_loop)
     return peer, remote
 
 
 @to_tuple
 def mk_receipts(num_receipts):
     for _ in range(num_receipts):
-        yield Receipt(
-            state_root=os.urandom(32),
-            gas_used=21000,
-            bloom=0,
-            logs=[],
-        )
+        yield Receipt(state_root=os.urandom(32), gas_used=21000, bloom=0, logs=[])
 
 
 def mk_header_and_receipts(block_number, num_receipts):
@@ -76,7 +66,9 @@ async def test_eth_peer_get_receipts_round_trip_with_full_response(eth_peer_and_
 
 
 @pytest.mark.asyncio
-async def test_eth_peer_get_receipts_round_trip_with_partial_response(eth_peer_and_remote):
+async def test_eth_peer_get_receipts_round_trip_with_partial_response(
+    eth_peer_and_remote
+):
     peer, remote = eth_peer_and_remote
 
     headers_bundle = mk_headers(1, 3, 2, 5, 4)
@@ -122,7 +114,9 @@ async def test_eth_peer_get_receipts_round_trip_with_noise(eth_peer_and_remote):
 
 
 @pytest.mark.asyncio
-async def test_eth_peer_get_receipts_round_trip_no_match_invalid_response(eth_peer_and_remote):
+async def test_eth_peer_get_receipts_round_trip_no_match_invalid_response(
+    eth_peer_and_remote
+):
     peer, remote = eth_peer_and_remote
 
     headers_bundle = mk_headers(1, 3, 2, 5, 4)

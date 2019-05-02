@@ -1,20 +1,18 @@
 import pytest
 
 from p2p import kademlia
-from p2p.tools.factories import (
-    NodeFactory,
-)
+from p2p.tools.factories import NodeFactory
 
 
 def test_node_from_uri():
-    pubkey = 'a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c'  # noqa: E501
-    ip = '52.16.188.185'
+    pubkey = "a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c"  # noqa: E501
+    ip = "52.16.188.185"
     port = 30303
-    uri = 'enode://%s@%s:%d' % (pubkey, ip, port)
+    uri = "enode://%s@%s:%d" % (pubkey, ip, port)
     node = kademlia.Node.from_uri(uri)
     assert node.address.ip == ip
     assert node.address.udp_port == node.address.tcp_port == port
-    assert node.pubkey.to_hex() == '0x' + pubkey
+    assert node.pubkey.to_hex() == "0x" + pubkey
 
 
 def test_routingtable_split_bucket():
@@ -178,14 +176,17 @@ def test_bucket_ordering():
         # test for node.id > bucket.start
         (list([kademlia.KBucket(6, 10)]), 5),
         # test multiple buckets that don't contain node.id
-        (list(
-            [
-                kademlia.KBucket(1, 5),
-                kademlia.KBucket(6, 49),
-                kademlia.KBucket(50, 100),
-            ]
-        ), 0),
-    )
+        (
+            list(
+                [
+                    kademlia.KBucket(1, 5),
+                    kademlia.KBucket(6, 49),
+                    kademlia.KBucket(50, 100),
+                ]
+            ),
+            0,
+        ),
+    ),
 )
 def test_binary_get_bucket_for_node_error(bucket_list, node_id):
     node = NodeFactory.with_nodeid(nodeid=node_id)
@@ -198,19 +199,26 @@ def test_binary_get_bucket_for_node_error(bucket_list, node_id):
     (
         (list([kademlia.KBucket(0, 100)]), 5, 0),
         (list([kademlia.KBucket(0, 49), kademlia.KBucket(50, 100)]), 5, 0),
-        (list(
-            [
-                kademlia.KBucket(0, 1),
-                kademlia.KBucket(2, 5),
-                kademlia.KBucket(6, 49),
-                kademlia.KBucket(50, 100)
-            ]
-        ), 5, 1),
-    )
+        (
+            list(
+                [
+                    kademlia.KBucket(0, 1),
+                    kademlia.KBucket(2, 5),
+                    kademlia.KBucket(6, 49),
+                    kademlia.KBucket(50, 100),
+                ]
+            ),
+            5,
+            1,
+        ),
+    ),
 )
 def test_binary_get_bucket_for_node(bucket_list, node_id, correct_position):
     node = NodeFactory.with_nodeid(nodeid=node_id)
-    assert kademlia.binary_get_bucket_for_node(bucket_list, node) == bucket_list[correct_position]
+    assert (
+        kademlia.binary_get_bucket_for_node(bucket_list, node)
+        == bucket_list[correct_position]
+    )
 
 
 def test_compute_shared_prefix_bits():
@@ -221,29 +229,29 @@ def test_compute_shared_prefix_bits():
     # Otherwise the depth is the number of leading bits (in the left-padded binary representation)
     # shared by all node IDs.
     nodes.append(NodeFactory())
-    nodes[0].id = int('0b1', 2)
-    nodes[1].id = int('0b0', 2)
+    nodes[0].id = int("0b1", 2)
+    nodes[1].id = int("0b0", 2)
     assert kademlia._compute_shared_prefix_bits(nodes) == kademlia.k_id_size - 1
 
-    nodes[0].id = int('0b010', 2)
-    nodes[1].id = int('0b110', 2)
+    nodes[0].id = int("0b010", 2)
+    nodes[1].id = int("0b110", 2)
     assert kademlia._compute_shared_prefix_bits(nodes) == kademlia.k_id_size - 3
 
 
 def test_check_relayed_addr():
-    public_host = kademlia.Address('8.8.8.8', 80)
-    local_host = kademlia.Address('127.0.0.1', 80)
+    public_host = kademlia.Address("8.8.8.8", 80)
+    local_host = kademlia.Address("127.0.0.1", 80)
     assert kademlia.check_relayed_addr(local_host, local_host)
     assert not kademlia.check_relayed_addr(public_host, local_host)
 
-    private = kademlia.Address('192.168.1.1', 80)
+    private = kademlia.Address("192.168.1.1", 80)
     assert kademlia.check_relayed_addr(private, private)
     assert not kademlia.check_relayed_addr(public_host, private)
 
-    reserved = kademlia.Address('240.0.0.1', 80)
+    reserved = kademlia.Address("240.0.0.1", 80)
     assert not kademlia.check_relayed_addr(local_host, reserved)
     assert not kademlia.check_relayed_addr(public_host, reserved)
 
-    unspecified = kademlia.Address('0.0.0.0', 80)
+    unspecified = kademlia.Address("0.0.0.0", 80)
     assert not kademlia.check_relayed_addr(local_host, unspecified)
     assert not kademlia.check_relayed_addr(public_host, unspecified)

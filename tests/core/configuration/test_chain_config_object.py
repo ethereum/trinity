@@ -1,29 +1,15 @@
 import pytest
 
-from eth_utils import (
-    decode_hex,
-    to_int,
-)
+from eth_utils import decode_hex, to_int
 
 from eth.db.atomic import AtomicDB
 from eth.vm.forks.constantinople import ConstantinopleVM
 from eth.vm.forks.homestead import HomesteadVM
-from eth.chains.mainnet import (
-    MainnetChain,
-    MAINNET_GENESIS_HEADER,
-)
-from eth.chains.ropsten import (
-    RopstenChain,
-    ROPSTEN_GENESIS_HEADER,
-)
+from eth.chains.mainnet import MainnetChain, MAINNET_GENESIS_HEADER
+from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER
 
-from trinity.config import (
-    ChainConfig,
-)
-from trinity.constants import (
-    MAINNET_NETWORK_ID,
-    ROPSTEN_NETWORK_ID,
-)
+from trinity.config import ChainConfig
+from trinity.constants import MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID
 from trinity._utils.db import MemoryDB
 from trinity._utils.eip1085 import validate_raw_eip1085_genesis_config
 
@@ -41,21 +27,22 @@ def assert_vm_configuration_equal(left, right):
             assert left_vm.dao_fork_block_number == right_vm.dao_fork_block_number
 
 
-@pytest.mark.parametrize(
-    'network_id',
-    (MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID),
-)
+@pytest.mark.parametrize("network_id", (MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID))
 def test_chain_config_from_preconfigured_network(network_id):
     chain_config = ChainConfig.from_preconfigured_network(network_id)
     chain = chain_config.initialize_chain(AtomicDB(MemoryDB()))
 
     if network_id == MAINNET_NETWORK_ID:
         assert chain_config.chain_id == MainnetChain.chain_id
-        assert_vm_configuration_equal(chain_config.vm_configuration, MainnetChain.vm_configuration)
+        assert_vm_configuration_equal(
+            chain_config.vm_configuration, MainnetChain.vm_configuration
+        )
         assert chain.get_canonical_head() == MAINNET_GENESIS_HEADER
     elif network_id == ROPSTEN_NETWORK_ID:
         assert chain_config.chain_id == RopstenChain.chain_id
-        assert_vm_configuration_equal(chain_config.vm_configuration, RopstenChain.vm_configuration)
+        assert_vm_configuration_equal(
+            chain_config.vm_configuration, RopstenChain.vm_configuration
+        )
         assert chain.get_canonical_head() == ROPSTEN_GENESIS_HEADER
     else:
         assert False, "Invariant: unreachable code path"
@@ -78,8 +65,8 @@ EIP1085_GENESIS_CONFIG = {
         "author": "0x0000000000000000000000000000000000000000",
         "timestamp": "0x00",
         "extraData": "0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa",
-        "gasLimit": "0x1388"
-    }
+        "gasLimit": "0x1388",
+    },
 }
 
 
@@ -97,9 +84,17 @@ def test_chain_config_from_eip1085_genesis_config():
 
     params = chain_config.genesis_params
 
-    assert params.nonce == decode_hex(EIP1085_GENESIS_CONFIG['genesis']['nonce'])
-    assert params.difficulty == to_int(hexstr=EIP1085_GENESIS_CONFIG['genesis']['difficulty'])
-    assert params.coinbase == decode_hex(EIP1085_GENESIS_CONFIG['genesis']['author'])
-    assert params.timestamp == to_int(hexstr=EIP1085_GENESIS_CONFIG['genesis']['timestamp'])
-    assert params.extra_data == decode_hex(EIP1085_GENESIS_CONFIG['genesis']['extraData'])
-    assert params.gas_limit == to_int(hexstr=EIP1085_GENESIS_CONFIG['genesis']['gasLimit'])
+    assert params.nonce == decode_hex(EIP1085_GENESIS_CONFIG["genesis"]["nonce"])
+    assert params.difficulty == to_int(
+        hexstr=EIP1085_GENESIS_CONFIG["genesis"]["difficulty"]
+    )
+    assert params.coinbase == decode_hex(EIP1085_GENESIS_CONFIG["genesis"]["author"])
+    assert params.timestamp == to_int(
+        hexstr=EIP1085_GENESIS_CONFIG["genesis"]["timestamp"]
+    )
+    assert params.extra_data == decode_hex(
+        EIP1085_GENESIS_CONFIG["genesis"]["extraData"]
+    )
+    assert params.gas_limit == to_int(
+        hexstr=EIP1085_GENESIS_CONFIG["genesis"]["gasLimit"]
+    )

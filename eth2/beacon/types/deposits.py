@@ -1,16 +1,8 @@
-from typing import (
-    Sequence,
-)
+from typing import Sequence
 
-from eth_typing import (
-    Hash32,
-)
+from eth_typing import Hash32
 import ssz
-from ssz.sedes import (
-    Vector,
-    bytes32,
-    uint64,
-)
+from ssz.sedes import Vector, bytes32, uint64
 
 from .deposit_data import DepositData
 
@@ -24,19 +16,14 @@ class Deposit(ssz.Serializable):
 
     fields = [
         # Merkle branch in the deposit tree
-        ('proof', Vector(bytes32, 1)),
+        ("proof", Vector(bytes32, 1)),
         # Index in the deposit tree
-        ('index', uint64),
+        ("index", uint64),
         # Deposit data
-        ('deposit_data', DepositData),
+        ("deposit_data", DepositData),
     ]
 
-    def __init__(self,
-                 proof: Sequence[Hash32],
-                 index: int,
-                 deposit_data: DepositData)-> None:
-        super().__init__(
-            proof,
-            index,
-            deposit_data,
-        )
+    def __init__(
+        self, proof: Sequence[Hash32], index: int, deposit_data: DepositData
+    ) -> None:
+        super().__init__(proof, index, deposit_data)

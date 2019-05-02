@@ -1,30 +1,14 @@
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Type,
-)
+from typing import Any, Callable, Generic, Type
 
-from p2p.protocol import (
-    BaseRequest,
-    Command,
-    TRequestPayload,
-)
+from p2p.protocol import BaseRequest, Command, TRequestPayload
 
 from trinity._utils.decorators import classproperty
-from .trackers import (
-    BasePerformanceTracker,
-)
-from .managers import (
-    ExchangeManager,
-)
+from .trackers import BasePerformanceTracker
+from .managers import ExchangeManager
 from .normalizers import BaseNormalizer
-from .types import (
-    TResponsePayload,
-    TResult,
-)
+from .types import TResponsePayload, TResult
 from .validators import BaseValidator
 
 
@@ -50,17 +34,20 @@ class BaseExchange(ABC, Generic[TRequestPayload, TResponsePayload, TResult]):
     tracker_class: Type[BasePerformanceTracker[Any, TResult]]
     tracker: BasePerformanceTracker[BaseRequest[TRequestPayload], TResult]
 
-    def __init__(self, mgr: ExchangeManager[TRequestPayload, TResponsePayload, TResult]) -> None:
+    def __init__(
+        self, mgr: ExchangeManager[TRequestPayload, TResponsePayload, TResult]
+    ) -> None:
         self._manager = mgr
         self.tracker = self.tracker_class()
 
     async def get_result(
-            self,
-            request: BaseRequest[TRequestPayload],
-            normalizer: BaseNormalizer[TResponsePayload, TResult],
-            result_validator: BaseValidator[TResult],
-            payload_validator: Callable[[TRequestPayload, TResponsePayload], None],
-            timeout: float = None) -> TResult:
+        self,
+        request: BaseRequest[TRequestPayload],
+        normalizer: BaseNormalizer[TResponsePayload, TResult],
+        result_validator: BaseValidator[TResult],
+        payload_validator: Callable[[TRequestPayload, TResponsePayload], None],
+        timeout: float = None,
+    ) -> TResult:
         """
         This is a light convenience wrapper around the ExchangeManager's get_result() method.
 
@@ -92,4 +79,4 @@ class BaseExchange(ABC, Generic[TRequestPayload, TResponsePayload, TResult]):
         """
         Issue the request to the peer for the desired data
         """
-        raise NotImplementedError('__call__ must be defined on every Exchange')
+        raise NotImplementedError("__call__ must be defined on every Exchange")

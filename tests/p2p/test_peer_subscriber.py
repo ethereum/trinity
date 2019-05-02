@@ -10,7 +10,7 @@ from p2p.tools.paragon import GetSum
 from p2p.tools.paragon.helpers import get_directly_linked_peers
 
 
-logger = logging.getLogger('testing.p2p.PeerSubscriber')
+logger = logging.getLogger("testing.p2p.PeerSubscriber")
 
 
 class GetSumSubscriber(PeerSubscriber):
@@ -35,11 +35,11 @@ async def test_peer_subscriber_filters_messages(request, event_loop):
     peer.add_subscriber(get_sum_subscriber)
     peer.add_subscriber(all_subscriber)
 
-    remote.sub_proto.send_broadcast_data(b'value-a')
-    remote.sub_proto.send_broadcast_data(b'value-b')
+    remote.sub_proto.send_broadcast_data(b"value-a")
+    remote.sub_proto.send_broadcast_data(b"value-b")
     remote.sub_proto.send_get_sum(7, 8)
     remote.sub_proto.send_get_sum(1234, 4321)
-    remote.sub_proto.send_broadcast_data(b'value-b')
+    remote.sub_proto.send_broadcast_data(b"value-b")
 
     # yeild to let remote and peer transmit.
     await asyncio.sleep(0.02)

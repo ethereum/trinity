@@ -2,13 +2,8 @@ import copy
 
 import pytest
 
-from p2p.exceptions import (
-    HandshakeFailure,
-)
-from p2p.tracking.connection import (
-    get_timeout_for_failure,
-    register_error,
-)
+from p2p.exceptions import HandshakeFailure
+from p2p.tracking.connection import get_timeout_for_failure, register_error
 
 
 @pytest.fixture(autouse=True)
@@ -16,6 +11,7 @@ def _prevent_global_mutation_of_registry():
     # Ensure that the tests don't result in mutation of the configuration of
     # timeout failures.
     from p2p.tracking import connection
+
     original = copy.copy(connection.FAILURE_TIMEOUTS)
     yield
     # We cannot simply replace the original object onto the module because

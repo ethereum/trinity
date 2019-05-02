@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class DAOCheckBootManager(BasePeerBootManager):
-    peer: 'BaseChainPeer'
+    peer: "BaseChainPeer"
 
     async def _run(self) -> None:
         try:
@@ -71,4 +71,6 @@ class DAOCheckBootManager(BasePeerBootManager):
             try:
                 vm_class.validate_header(header, parent, check_seal=True)
             except ValidationError as err:
-                raise DAOForkCheckFailure(f"{self.peer} failed DAO fork check validation: {err}")
+                raise DAOForkCheckFailure(
+                    f"{self.peer} failed DAO fork check validation: {err}"
+                )

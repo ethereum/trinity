@@ -1,16 +1,9 @@
-from typing import (
-    Type,
-)
+from typing import Type
 
-from lahja import (
-    BaseEvent,
-    BaseRequestResponseEvent,
-)
+from lahja import BaseEvent, BaseRequestResponseEvent
 
 from p2p.kademlia import Node
-from p2p.p2p_proto import (
-    DisconnectReason,
-)
+from p2p.p2p_proto import DisconnectReason
 
 
 class ConnectToNodeCommand(BaseEvent):

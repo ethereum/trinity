@@ -1,49 +1,22 @@
 from abc import ABC, abstractmethod
-from typing import (
-    AsyncIterator,
-    Tuple,
-)
+from typing import AsyncIterator, Tuple
 
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
+from cancel_token import CancelToken, OperationCancelled
 
 from eth.constants import GENESIS_BLOCK_NUMBER
-from eth.exceptions import (
-    HeaderNotFound,
-)
-from eth_typing import (
-    BlockNumber,
-    Hash32,
-)
-from eth_utils import (
-    encode_hex,
-    ValidationError,
-)
-from eth.rlp.blocks import (
-    BaseBlock,
-)
-from eth.rlp.headers import (
-    BlockHeader,
-)
+from eth.exceptions import HeaderNotFound
+from eth_typing import BlockNumber, Hash32
+from eth_utils import encode_hex, ValidationError
+from eth.rlp.blocks import BaseBlock
+from eth.rlp.headers import BlockHeader
 
-from p2p.constants import (
-    MAX_REORG_DEPTH,
-    SEAL_CHECK_RANDOM_SAMPLE_RATE,
-)
-from p2p.p2p_proto import (
-    DisconnectReason,
-)
-from p2p.service import (
-    BaseService,
-)
+from p2p.constants import MAX_REORG_DEPTH, SEAL_CHECK_RANDOM_SAMPLE_RATE
+from p2p.p2p_proto import DisconnectReason
+from p2p.service import BaseService
 
 from trinity.chains.base import BaseAsyncChain
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.protocol.common.peer import (
-    BaseChainPeer,
-)
+from trinity.protocol.common.peer import BaseChainPeer
 
 from .types import SyncProgress
 
@@ -55,13 +28,16 @@ class PeerHeaderSyncer(BaseService):
     Here, the run() method will execute the sync loop until our local head is the same as the one
     with the highest TD announced by any of our peers.
     """
+
     _seal_check_random_sample_rate = SEAL_CHECK_RANDOM_SAMPLE_RATE
 
-    def __init__(self,
-                 chain: BaseAsyncChain,
-                 db: BaseAsyncHeaderDB,
-                 peer: BaseChainPeer,
-                 token: CancelToken = None) -> None:
+    def __init__(
+        self,
+        chain: BaseAsyncChain,
+        db: BaseAsyncHeaderDB,
+        peer: BaseChainPeer,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         self.chain = chain
         self.db = db
@@ -71,7 +47,9 @@ class PeerHeaderSyncer(BaseService):
 
     def get_target_header_hash(self) -> Hash32:
         if self._target_header_hash is None:
-            raise ValidationError("Cannot check the target hash when there is no active sync")
+            raise ValidationError(
+                "Cannot check the target hash when there is no active sync"
+            )
         else:
             return self._target_header_hash
 
@@ -91,13 +69,21 @@ class PeerHeaderSyncer(BaseService):
         if peer.head_td <= head_td:
             self.logger.info(
                 "Head TD (%d) announced by %s not higher than ours (%d), not syncing",
-                peer.head_td, peer, head_td)
+                peer.head_td,
+                peer,
+                head_td,
+            )
             return
         else:
             self.logger.debug(
                 "%s announced Head TD %d, which is higher than ours (%d), starting sync",
-                peer, peer.head_td, head_td)
-        self.sync_progress = SyncProgress(head.block_number, head.block_number, peer.head_number)
+                peer,
+                peer.head_td,
+                head_td,
+            )
+        self.sync_progress = SyncProgress(
+            head.block_number, head.block_number, peer.head_number
+        )
         self.logger.info("Starting sync with %s", peer)
         last_received_header: BlockHeader = None
         # When we start the sync with a peer, we always request up to MAX_REORG_DEPTH extra
@@ -124,7 +110,7 @@ class PeerHeaderSyncer(BaseService):
                         head = await self.wait(self.db.coro_get_canonical_head())
                         start_at = max(
                             all_headers[-1].block_number + 1,
-                            head.block_number - MAX_REORG_DEPTH
+                            head.block_number - MAX_REORG_DEPTH,
                         )
                         self.logger.debug(
                             "All %d headers redundant, head at %s, fetching from #%d",
@@ -135,18 +121,21 @@ class PeerHeaderSyncer(BaseService):
                         continue
                 else:
                     headers = all_headers
-                self.logger.debug2('sync received new headers: %s', headers)
+                self.logger.debug2("sync received new headers: %s", headers)
             except OperationCancelled:
                 self.logger.info("Sync with %s completed", peer)
                 break
             except TimeoutError:
-                self.logger.warning("Timeout waiting for header batch from %s, aborting sync", peer)
+                self.logger.warning(
+                    "Timeout waiting for header batch from %s, aborting sync", peer
+                )
                 await peer.disconnect(DisconnectReason.timeout)
                 break
             except ValidationError as err:
                 self.logger.warning(
                     "Invalid header response sent by peer %s disconnecting: %s",
-                    peer, err,
+                    peer,
+                    err,
                 )
                 await peer.disconnect(DisconnectReason.useless_peer)
                 break
@@ -181,8 +170,7 @@ class PeerHeaderSyncer(BaseService):
                     )
                 except HeaderNotFound:
                     self.logger.warning(
-                        "Unable to find common ancestor betwen our chain and %s",
-                        peer,
+                        "Unable to find common ancestor betwen our chain and %s", peer
                     )
                     break
             elif last_received_header.hash != first.parent_hash:
@@ -196,10 +184,7 @@ class PeerHeaderSyncer(BaseService):
                 break
 
             self.logger.debug(
-                "Got new header chain from %s: %s..%s",
-                peer,
-                first,
-                headers[-1],
+                "Got new header chain from %s: %s..%s", peer, first, headers[-1]
             )
             try:
                 await self.chain.coro_validate_chain(
@@ -208,7 +193,9 @@ class PeerHeaderSyncer(BaseService):
                     self._seal_check_random_sample_rate,
                 )
             except ValidationError as e:
-                self.logger.warning("Received invalid headers from %s, disconnecting: %s", peer, e)
+                self.logger.warning(
+                    "Received invalid headers from %s, disconnecting: %s", peer, e
+                )
                 await peer.disconnect(DisconnectReason.subprotocol_error)
                 break
 
@@ -221,25 +208,25 @@ class PeerHeaderSyncer(BaseService):
             yield headers
             last_received_header = headers[-1]
             self.sync_progress = self.sync_progress.update_current_block(
-                last_received_header.block_number,
+                last_received_header.block_number
             )
             start_at = last_received_header.block_number + 1
 
     async def _request_headers(
-            self, peer: BaseChainPeer, start_at: BlockNumber) -> Tuple[BlockHeader, ...]:
+        self, peer: BaseChainPeer, start_at: BlockNumber
+    ) -> Tuple[BlockHeader, ...]:
         """Fetch a batch of headers starting at start_at and return the ones we're missing."""
-        self.logger.debug("Requsting chain of headers from %s starting at #%d", peer, start_at)
+        self.logger.debug(
+            "Requsting chain of headers from %s starting at #%d", peer, start_at
+        )
 
         return await peer.requests.get_block_headers(
-            start_at,
-            peer.max_headers_fetch,
-            skip=0,
-            reverse=False,
+            start_at, peer.max_headers_fetch, skip=0, reverse=False
         )
 
     async def _get_missing_tail(
-            self,
-            headers: Tuple[BlockHeader, ...]) -> AsyncIterator[BlockHeader]:
+        self, headers: Tuple[BlockHeader, ...]
+    ) -> AsyncIterator[BlockHeader]:
         """
         We only want headers that are missing, so we iterate over the list
         until we find the first missing header, after which we return all of
@@ -261,8 +248,8 @@ class PeerHeaderSyncer(BaseService):
 class BaseBlockImporter(ABC):
     @abstractmethod
     async def import_block(
-            self,
-            block: BaseBlock) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
+        self, block: BaseBlock
+    ) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
         pass
 
 
@@ -271,6 +258,6 @@ class SimpleBlockImporter(BaseBlockImporter):
         self._chain = chain
 
     async def import_block(
-            self,
-            block: BaseBlock) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
+        self, block: BaseBlock
+    ) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
         return await self._chain.coro_import_block(block, perform_validation=True)

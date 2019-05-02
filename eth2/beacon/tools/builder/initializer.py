@@ -1,66 +1,38 @@
-from typing import (
-    Dict,
-    Sequence,
-    Tuple,
-    Type,
-)
+from typing import Dict, Sequence, Tuple, Type
 
-from eth_typing import (
-    BLSPubkey,
-    Hash32,
-)
+from eth_typing import BLSPubkey, Hash32
 import ssz
 
-from eth.constants import (
-    ZERO_HASH32,
-)
+from eth.constants import ZERO_HASH32
 
-from eth2._utils.merkle.common import (
-    get_merkle_proof,
-)
-from eth2._utils.merkle.sparse import (
-    calc_merkle_tree_from_leaves,
-    get_merkle_root,
-)
+from eth2._utils.merkle.common import get_merkle_proof
+from eth2._utils.merkle.sparse import calc_merkle_tree_from_leaves, get_merkle_root
 from eth2.configs import Eth2Config
-from eth2.beacon._utils.hash import (
-    hash_eth2,
-)
-from eth2.beacon.constants import (
-    ZERO_TIMESTAMP,
-)
-from eth2.beacon.on_genesis import (
-    get_genesis_block,
-    get_genesis_beacon_state,
-)
-from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
-)
+from eth2.beacon._utils.hash import hash_eth2
+from eth2.beacon.constants import ZERO_TIMESTAMP
+from eth2.beacon.on_genesis import get_genesis_block, get_genesis_beacon_state
+from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositData  # noqa: F401
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import (
-    Timestamp,
-    ValidatorIndex,
-)
+from eth2.beacon.typing import Timestamp, ValidatorIndex
 
-from eth2.beacon.tools.builder.validator import (
-    create_mock_deposit_data,
-)
+from eth2.beacon.tools.builder.validator import create_mock_deposit_data
 
 
 def create_mock_genesis_validator_deposits_and_root(
-        num_validators: int,
-        config: Eth2Config,
-        pubkeys: Sequence[BLSPubkey],
-        keymap: Dict[BLSPubkey, int]) -> Tuple[Tuple[Deposit, ...], Hash32]:
+    num_validators: int,
+    config: Eth2Config,
+    pubkeys: Sequence[BLSPubkey],
+    keymap: Dict[BLSPubkey, int],
+) -> Tuple[Tuple[Deposit, ...], Hash32]:
     # Mock data
-    withdrawal_credentials = Hash32(b'\x22' * 32)
+    withdrawal_credentials = Hash32(b"\x22" * 32)
     fork = Fork(
-        previous_version=config.GENESIS_FORK_VERSION.to_bytes(4, 'little'),
-        current_version=config.GENESIS_FORK_VERSION.to_bytes(4, 'little'),
+        previous_version=config.GENESIS_FORK_VERSION.to_bytes(4, "little"),
+        current_version=config.GENESIS_FORK_VERSION.to_bytes(4, "little"),
         epoch=config.GENESIS_EPOCH,
     )
 
@@ -96,26 +68,21 @@ def create_mock_genesis_validator_deposits_and_root(
 
 
 def create_mock_genesis(
-        num_validators: int,
-        config: Eth2Config,
-        keymap: Dict[BLSPubkey, int],
-        genesis_block_class: Type[BaseBeaconBlock],
-        genesis_time: Timestamp=ZERO_TIMESTAMP) -> Tuple[BeaconState, BaseBeaconBlock]:
+    num_validators: int,
+    config: Eth2Config,
+    keymap: Dict[BLSPubkey, int],
+    genesis_block_class: Type[BaseBeaconBlock],
+    genesis_time: Timestamp = ZERO_TIMESTAMP,
+) -> Tuple[BeaconState, BaseBeaconBlock]:
     assert num_validators <= len(keymap)
 
     pubkeys = list(keymap)[:num_validators]
 
     genesis_validator_deposits, deposit_root = create_mock_genesis_validator_deposits_and_root(
-        num_validators=num_validators,
-        config=config,
-        pubkeys=pubkeys,
-        keymap=keymap,
+        num_validators=num_validators, config=config, pubkeys=pubkeys, keymap=keymap
     )
 
-    genesis_eth1_data = Eth1Data(
-        deposit_root=deposit_root,
-        block_hash=ZERO_HASH32,
-    )
+    genesis_eth1_data = Eth1Data(deposit_root=deposit_root, block_hash=ZERO_HASH32)
 
     state = get_genesis_beacon_state(
         genesis_validator_deposits=genesis_validator_deposits,

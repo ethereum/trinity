@@ -1,19 +1,9 @@
 import bisect
-from typing import (
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Tuple,
-)
+from typing import Awaitable, Callable, Dict, List, Tuple
 
-from eth_utils import (
-    encode_hex,
-)
+from eth_utils import encode_hex
 
-from eth_typing import (
-    Hash32
-)
+from eth_typing import Hash32
 
 from eth.db.backends.base import BaseDB
 from eth.tools.logging import ExtendedDebugLogger
@@ -24,22 +14,21 @@ from trie.constants import (
     NODE_TYPE_EXTENSION,
     NODE_TYPE_LEAF,
 )
-from trie.utils.nodes import (
-    decode_node,
-    get_node_type,
-    is_blank_node,
-)
+from trie.utils.nodes import decode_node, get_node_type, is_blank_node
 
 from trinity.db.base import BaseAsyncDB
 from trinity.exceptions import SyncRequestAlreadyProcessed
 
 
 class SyncRequest:
-
     def __init__(
-            self, node_key: Hash32, parent: 'SyncRequest', depth: int,
-            leaf_callback: Callable[[bytes, 'SyncRequest'], Awaitable[None]],
-            is_raw: bool = False) -> None:
+        self,
+        node_key: Hash32,
+        parent: "SyncRequest",
+        depth: int,
+        leaf_callback: Callable[[bytes, "SyncRequest"], Awaitable[None]],
+        is_raw: bool = False,
+    ) -> None:
         """Create a new SyncRequest for a given HexaryTrie node.
 
         :param node_key: The node's key.
@@ -60,15 +49,16 @@ class SyncRequest:
         self.dependencies = 0
         self.data: bytes = None
 
-    def __lt__(self, other: 'SyncRequest') -> bool:
+    def __lt__(self, other: "SyncRequest") -> bool:
         return self.depth < other.depth
 
     def __repr__(self) -> str:
         return "SyncRequest(%s, depth=%d)" % (encode_hex(self.node_key), self.depth)
 
 
-def _get_children(node: Hash32, depth: int
-                  ) -> Tuple[List[Tuple[int, Hash32]], List[bytes]]:
+def _get_children(
+    node: Hash32, depth: int
+) -> Tuple[List[Tuple[int, Hash32]], List[bytes]]:
     """Return all children of the node with the given hash.
 
     :rtype: A two-tuple with one list containing the children that reference other nodes and
@@ -100,7 +90,9 @@ def _get_children(node: Hash32, depth: int
                 references.append((depth + 1, sub_node))
             else:
                 # TODO: Follow up on mypy confusion around `int`, `bytes` and `Hash32` here
-                sub_references, sub_leaves = _get_children(sub_node, depth)  # type: ignore
+                sub_references, sub_leaves = _get_children(
+                    sub_node, depth
+                )  # type: ignore
                 references.extend(sub_references)
                 leaves.extend(sub_leaves)  # type: ignore
 
@@ -112,12 +104,13 @@ def _get_children(node: Hash32, depth: int
 
 
 class HexaryTrieSync:
-
-    def __init__(self,
-                 root_hash: Hash32,
-                 db: BaseAsyncDB,
-                 nodes_cache: BaseDB,
-                 logger: ExtendedDebugLogger) -> None:
+    def __init__(
+        self,
+        root_hash: Hash32,
+        db: BaseAsyncDB,
+        nodes_cache: BaseDB,
+        logger: ExtendedDebugLogger,
+    ) -> None:
         # Nodes that haven't been requested yet.
         self.queue: List[SyncRequest] = []
         # Nodes that have been requested to a peer, but not yet committed to the DB, either
@@ -133,9 +126,13 @@ class HexaryTrieSync:
         self.nodes_cache = nodes_cache
         self.committed_nodes = 0
         if root_hash in self.db:
-            self.logger.info("Root node (%s) already exists in DB, nothing to do", root_hash)
+            self.logger.info(
+                "Root node (%s) already exists in DB, nothing to do", root_hash
+            )
         else:
-            self._schedule(root_hash, parent=None, depth=0, leaf_callback=self.leaf_callback)
+            self._schedule(
+                root_hash, parent=None, depth=0, leaf_callback=self.leaf_callback
+            )
 
     async def leaf_callback(self, data: bytes, parent: SyncRequest) -> None:
         """Called when we reach a leaf node.
@@ -156,29 +153,40 @@ class HexaryTrieSync:
         self.queue = self.queue[:-n]
         return batch
 
-    async def schedule(self, node_key: Hash32, parent: SyncRequest, depth: int,
-                       leaf_callback: Callable[[bytes, 'SyncRequest'], Awaitable[None]],
-                       is_raw: bool = False) -> None:
+    async def schedule(
+        self,
+        node_key: Hash32,
+        parent: SyncRequest,
+        depth: int,
+        leaf_callback: Callable[[bytes, "SyncRequest"], Awaitable[None]],
+        is_raw: bool = False,
+    ) -> None:
         """Schedule a request for the node with the given key."""
         if node_key in self.nodes_cache:
             self.logger.debug2("Node %s already exists in db", encode_hex(node_key))
             return
         if await self.db.coro_exists(node_key):
-            self.nodes_cache[node_key] = b''
+            self.nodes_cache[node_key] = b""
             self.logger.debug2("Node %s already exists in db", encode_hex(node_key))
             return
         self._schedule(node_key, parent, depth, leaf_callback, is_raw)
 
-    def _schedule(self, node_key: Hash32, parent: SyncRequest, depth: int,
-                  leaf_callback: Callable[[bytes, 'SyncRequest'], Awaitable[None]],
-                  is_raw: bool = False) -> None:
+    def _schedule(
+        self,
+        node_key: Hash32,
+        parent: SyncRequest,
+        depth: int,
+        leaf_callback: Callable[[bytes, "SyncRequest"], Awaitable[None]],
+        is_raw: bool = False,
+    ) -> None:
         if parent is not None:
             parent.dependencies += 1
 
         existing = self.requests.get(node_key)
         if existing is not None:
             self.logger.debug2(
-                "Already requesting %s, will just update parents list", node_key)
+                "Already requesting %s, will just update parents list", node_key
+            )
             existing.parents.append(parent)
             return
 
@@ -202,11 +210,14 @@ class HexaryTrieSync:
                 # and then eventually get two responses with it.
                 self.logger.debug2(
                     "No SyncRequest found for %s, maybe we got more than one response for it",
-                    encode_hex(node_key))
+                    encode_hex(node_key),
+                )
                 return
 
             if request.data is not None:
-                raise SyncRequestAlreadyProcessed("%s has been processed already" % request)
+                raise SyncRequestAlreadyProcessed(
+                    "%s has been processed already" % request
+                )
 
             request.data = data
             if request.is_raw:
@@ -234,7 +245,7 @@ class HexaryTrieSync:
         """
         self.committed_nodes += 1
         await self.db.coro_set(request.node_key, request.data)
-        self.nodes_cache[request.node_key] = b''
+        self.nodes_cache[request.node_key] = b""
         self.requests.pop(request.node_key)
         for ancestor in request.parents:
             ancestor.dependencies -= 1

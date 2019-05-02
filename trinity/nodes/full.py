@@ -14,7 +14,9 @@ class FullNode(Node):
     _chain: FullChain = None
     _p2p_server: FullServer = None
 
-    def __init__(self, event_bus: TrinityEventBusEndpoint, trinity_config: TrinityConfig) -> None:
+    def __init__(
+        self, event_bus: TrinityEventBusEndpoint, trinity_config: TrinityConfig
+    ) -> None:
         super().__init__(event_bus, trinity_config)
         self._bootstrap_nodes = trinity_config.bootstrap_nodes
         self._preferred_nodes = trinity_config.preferred_nodes

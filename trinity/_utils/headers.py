@@ -1,12 +1,4 @@
-from typing import (
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    cast,
-    Iterable,
-    Tuple,
-    TypeVar,
-)
+from typing import AsyncIterator, Awaitable, Callable, cast, Iterable, Tuple, TypeVar
 
 from eth.constants import UINT_256_MAX
 from eth.rlp.headers import BlockHeader
@@ -17,13 +9,12 @@ from trinity.exceptions import OversizeObject
 
 MAXIMUM_OBJECT_MEMORY_BYTES = 10000000
 
-T = TypeVar('T', bound=int)
+T = TypeVar("T", bound=int)
 
 
-def sequence_builder(start_number: T,
-                     max_length: int,
-                     skip: int,
-                     reverse: bool) -> Tuple[T, ...]:
+def sequence_builder(
+    start_number: T, max_length: int, skip: int, reverse: bool
+) -> Tuple[T, ...]:
     # Limit the in-memory size of this sequence.
     # A tuple of 64-bit ints is about 8 bytes per value
     # Ignore the cutoffs at 0 and UINT_256_MAX, because this is just a gut check anyway,
@@ -42,14 +33,15 @@ def sequence_builder(start_number: T,
 
     return cast(
         Tuple[T, ...],
-        tuple(number for number in whole_range if 0 <= number <= UINT_256_MAX)
+        tuple(number for number in whole_range if 0 <= number <= UINT_256_MAX),
     )
 
 
 async def skip_complete_headers(
-        headers: Iterable[BlockHeader],
-        logger: ExtendedDebugLogger,
-        completion_check: Callable[[BlockHeader], Awaitable[bool]]) -> Tuple[BlockHeader, ...]:
+    headers: Iterable[BlockHeader],
+    logger: ExtendedDebugLogger,
+    completion_check: Callable[[BlockHeader], Awaitable[bool]],
+) -> Tuple[BlockHeader, ...]:
     """
     Skip any headers where `completion_check(header)` returns False
     After finding the first header that returns True, return all remaining headers.
@@ -57,7 +49,9 @@ async def skip_complete_headers(
 
     Services should call self.wait() when using this method
     """
-    skip_headers_coro = _skip_complete_headers_iterator(headers, logger, completion_check)
+    skip_headers_coro = _skip_complete_headers_iterator(
+        headers, logger, completion_check
+    )
     return tuple(
         # The inner list comprehension is needed because async_generators
         # cannot be cast to a tuple.
@@ -66,9 +60,10 @@ async def skip_complete_headers(
 
 
 async def _skip_complete_headers_iterator(
-        headers: Iterable[BlockHeader],
-        logger: ExtendedDebugLogger,
-        completion_check: Callable[[BlockHeader], Awaitable[bool]]) -> AsyncIterator[BlockHeader]:
+    headers: Iterable[BlockHeader],
+    logger: ExtendedDebugLogger,
+    completion_check: Callable[[BlockHeader], Awaitable[bool]],
+) -> AsyncIterator[BlockHeader]:
     """
     We only want headers that are missing, so we iterate over the list
     until we find the first missing header, after which we return all of

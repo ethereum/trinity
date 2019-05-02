@@ -1,7 +1,5 @@
 import pytest
-from trinity.plugins.registry import (
-    discover_plugins
-)
+from trinity.plugins.registry import discover_plugins
 
 
 def test_plugin_discovery():

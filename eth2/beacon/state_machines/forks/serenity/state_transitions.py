@@ -1,16 +1,10 @@
-from eth2.configs import (
-    Eth2Config,
-)
+from eth2.configs import Eth2Config
 from eth2.beacon.state_machines.state_transitions import BaseStateTransition
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 
-from .block_processing import (
-    process_block_header,
-    process_eth1_data,
-    process_randao,
-)
+from .block_processing import process_block_header, process_eth1_data, process_randao
 from .epoch_processing import (
     process_eth1_data_votes,
     process_justification,
@@ -27,10 +21,7 @@ from .operation_processing import (
     process_proposer_slashings,
     process_voluntary_exits,
 )
-from .slot_processing import (
-    process_slot_transition,
-    process_cache_state,
-)
+from .slot_processing import process_slot_transition, process_cache_state
 
 
 class SerenityStateTransition(BaseStateTransition):
@@ -39,10 +30,12 @@ class SerenityStateTransition(BaseStateTransition):
     def __init__(self, config: Eth2Config):
         self.config = config
 
-    def apply_state_transition(self,
-                               state: BeaconState,
-                               block: BaseBeaconBlock,
-                               check_proposer_signature: bool=True) -> BeaconState:
+    def apply_state_transition(
+        self,
+        state: BeaconState,
+        block: BaseBeaconBlock,
+        check_proposer_signature: bool = True,
+    ) -> BeaconState:
         if state.slot >= block.slot:
             return state
 
@@ -52,7 +45,9 @@ class SerenityStateTransition(BaseStateTransition):
                 state = self.per_epoch_transition(state)
             state = self.per_slot_transition(state)
             if state.slot == block.slot:
-                state = self.per_block_transition(state, block, check_proposer_signature)
+                state = self.per_block_transition(
+                    state, block, check_proposer_signature
+                )
                 break
         else:
             raise Exception(
@@ -61,9 +56,9 @@ class SerenityStateTransition(BaseStateTransition):
             )
         return state
 
-    def apply_state_transition_without_block(self,
-                                             state: BeaconState,
-                                             slot: Slot) -> BeaconState:
+    def apply_state_transition_without_block(
+        self, state: BeaconState, slot: Slot
+    ) -> BeaconState:
         """
         Advance the ``state`` to the beginning of the requested ``slot``.
         Return the resulting state at that slot assuming there are no intervening blocks.
@@ -93,11 +88,15 @@ class SerenityStateTransition(BaseStateTransition):
     def per_slot_transition(self, state: BeaconState) -> BeaconState:
         return process_slot_transition(state)
 
-    def per_block_transition(self,
-                             state: BeaconState,
-                             block: BaseBeaconBlock,
-                             check_proposer_signature: bool=True) -> BeaconState:
-        state = process_block_header(state, block, self.config, check_proposer_signature)
+    def per_block_transition(
+        self,
+        state: BeaconState,
+        block: BaseBeaconBlock,
+        check_proposer_signature: bool = True,
+    ) -> BeaconState:
+        state = process_block_header(
+            state, block, self.config, check_proposer_signature
+        )
         state = process_randao(state, block, self.config)
         state = process_eth1_data(state, block)
 

@@ -1,7 +1,3 @@
-from .p2pclient import (  # noqa: F401
-    Client,
-    ControlFailure,
-    DispatchFailure,
-)
+from .p2pclient import Client, ControlFailure, DispatchFailure  # noqa: F401
 
 name = "p2pclient"

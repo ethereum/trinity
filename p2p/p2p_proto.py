@@ -1,10 +1,5 @@
 import enum
-from typing import (
-    cast,
-    Any,
-    Dict,
-    TYPE_CHECKING
-)
+from typing import cast, Any, Dict, TYPE_CHECKING
 
 from eth_utils.toolz import assoc
 
@@ -13,27 +8,24 @@ from rlp import sedes
 
 from p2p.exceptions import MalformedMessage
 
-from p2p.protocol import (
-    Command,
-    Protocol,
-    _DecodedMsgType,
-)
+from p2p.protocol import Command, Protocol, _DecodedMsgType
 
 if TYPE_CHECKING:
-    from p2p.peer import (  # noqa: F401
-        BasePeer
-    )
+    from p2p.peer import BasePeer  # noqa: F401
 
 
 class Hello(Command):
     _cmd_id = 0
     decode_strict = False
     structure = (
-        ('version', sedes.big_endian_int),
-        ('client_version_string', sedes.text),
-        ('capabilities', sedes.CountableList(sedes.List([sedes.text, sedes.big_endian_int]))),
-        ('listen_port', sedes.big_endian_int),
-        ('remote_pubkey', sedes.binary)
+        ("version", sedes.big_endian_int),
+        ("client_version_string", sedes.text),
+        (
+            "capabilities",
+            sedes.CountableList(sedes.List([sedes.text, sedes.big_endian_int])),
+        ),
+        ("listen_port", sedes.big_endian_int),
+        ("remote_pubkey", sedes.binary),
     )
 
     def decompress_payload(self, raw_payload: bytes) -> bytes:
@@ -48,6 +40,7 @@ class Hello(Command):
 @enum.unique
 class DisconnectReason(enum.Enum):
     """More details at https://github.com/ethereum/wiki/wiki/%C3%90%CE%9EVp2p-Wire-Protocol#p2p"""
+
     disconnect_requested = 0
     tcp_sub_system_error = 1
     bad_protocol = 2
@@ -65,7 +58,7 @@ class DisconnectReason(enum.Enum):
 
 class Disconnect(Command):
     _cmd_id = 1
-    structure = (('reason', sedes.big_endian_int),)
+    structure = (("reason", sedes.big_endian_int),)
 
     def get_reason_name(self, reason_id: int) -> str:
         try:
@@ -79,7 +72,9 @@ class Disconnect(Command):
         except rlp.exceptions.ListDeserializationError:
             self.logger.warning("Malformed Disconnect message: %s", data)
             raise MalformedMessage(f"Malformed Disconnect message: {data}")
-        return assoc(raw_decoded, 'reason_name', self.get_reason_name(raw_decoded['reason']))
+        return assoc(
+            raw_decoded, "reason_name", self.get_reason_name(raw_decoded["reason"])
+        )
 
 
 class Ping(Command):
@@ -93,12 +88,12 @@ class Pong(Command):
 
 
 class P2PProtocol(Protocol):
-    name = 'p2p'
+    name = "p2p"
     version = 5
     _commands = (Hello, Ping, Pong, Disconnect)
     cmd_length = 16
 
-    def __init__(self, peer: 'BasePeer', snappy_support: bool) -> None:
+    def __init__(self, peer: "BasePeer", snappy_support: bool) -> None:
         # For the base protocol the cmd_id_offset is always 0.
         # For the base protocol snappy compression should be disabled
         super().__init__(peer, cmd_id_offset=0, snappy_support=snappy_support)
@@ -106,20 +101,20 @@ class P2PProtocol(Protocol):
     def send_handshake(self) -> None:
         # TODO: move import out once this is in the trinity codebase
         from trinity._utils.version import construct_trinity_client_identifier
-        data = dict(version=self.version,
-                    client_version_string=construct_trinity_client_identifier(),
-                    capabilities=self.peer.capabilities,
-                    listen_port=self.peer.listen_port,
-                    remote_pubkey=self.peer.privkey.public_key.to_bytes())
+
+        data = dict(
+            version=self.version,
+            client_version_string=construct_trinity_client_identifier(),
+            capabilities=self.peer.capabilities,
+            listen_port=self.peer.listen_port,
+            remote_pubkey=self.peer.privkey.public_key.to_bytes(),
+        )
         header, body = Hello(self.cmd_id_offset, self.snappy_support).encode(data)
         self.send(header, body)
 
     def send_disconnect(self, reason: DisconnectReason) -> None:
         msg: Dict[str, Any] = {"reason": reason}
-        header, body = Disconnect(
-            self.cmd_id_offset,
-            self.snappy_support
-        ).encode(msg)
+        header, body = Disconnect(self.cmd_id_offset, self.snappy_support).encode(msg)
         self.send(header, body)
 
     def send_pong(self) -> None:

@@ -1,19 +1,10 @@
-from typing import (
-    Any,
-    Dict,
-    Tuple,
-)
+from typing import Any, Dict, Tuple
 
-from eth_typing import (
-    BlockIdentifier,
-    Hash32,
-)
+from eth_typing import BlockIdentifier, Hash32
 from p2p.protocol import BaseRequest
 
 from trinity.protocol.eth.constants import MAX_HEADERS_FETCH
-from trinity.protocol.common.requests import (
-    BaseHeaderRequest,
-)
+from trinity.protocol.common.requests import BaseHeaderRequest
 
 from .commands import (
     BlockBodies,
@@ -33,13 +24,16 @@ class HeaderRequest(BaseHeaderRequest):
     `trinity.protocol.eth.servers.PeerRequestHandler` to have a common API between light and
     full chains so maybe it should go there
     """
+
     max_size = MAX_HEADERS_FETCH
 
-    def __init__(self,
-                 block_number_or_hash: BlockIdentifier,
-                 max_headers: int,
-                 skip: int,
-                 reverse: bool) -> None:
+    def __init__(
+        self,
+        block_number_or_hash: BlockIdentifier,
+        max_headers: int,
+        skip: int,
+        reverse: bool,
+    ) -> None:
         self.block_number_or_hash = block_number_or_hash
         self.max_headers = max_headers
         self.skip = skip
@@ -50,16 +44,18 @@ class GetBlockHeadersRequest(BaseRequest[Dict[str, Any]]):
     cmd_type = GetBlockHeaders
     response_type = BlockHeaders
 
-    def __init__(self,
-                 block_number_or_hash: BlockIdentifier,
-                 max_headers: int,
-                 skip: int,
-                 reverse: bool) -> None:
+    def __init__(
+        self,
+        block_number_or_hash: BlockIdentifier,
+        max_headers: int,
+        skip: int,
+        reverse: bool,
+    ) -> None:
         self.command_payload = {
-            'block_number_or_hash': block_number_or_hash,
-            'max_headers': max_headers,
-            'skip': skip,
-            'reverse': reverse
+            "block_number_or_hash": block_number_or_hash,
+            "max_headers": max_headers,
+            "skip": skip,
+            "reverse": reverse,
         }
 
 

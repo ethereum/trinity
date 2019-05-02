@@ -4,12 +4,7 @@ import time
 
 import pytest
 
-from hypothesis import (
-    given,
-    settings,
-    strategies,
-    example,
-)
+from hypothesis import given, settings, strategies, example
 from hypothesis.types import RandomWithSeed
 
 from trie import HexaryTrie
@@ -47,10 +42,7 @@ def make_random_trie(random):
 
 
 @given(random=strategies.randoms())
-@settings(
-    max_examples=10,
-    deadline=4000,
-)
+@settings(max_examples=10, deadline=4000)
 @example(random=RandomWithSeed(EXAMPLE_37968))
 @example(random=RandomWithSeed(EXAMPLE_809368))
 def test_trie_sync(random, event_loop):
@@ -61,8 +53,9 @@ def test_trie_sync(random, event_loop):
         src_trie, contents = make_random_trie(random)
         dest_db = FakeAsyncMemoryDB()
         nodes_cache = MemoryDB()
-        scheduler = HexaryTrieSync(src_trie.root_hash, dest_db, nodes_cache,
-                                   ExtendedDebugLogger("test"))
+        scheduler = HexaryTrieSync(
+            src_trie.root_hash, dest_db, nodes_cache, ExtendedDebugLogger("test")
+        )
         requests = scheduler.next_batch()
         while len(requests) > 0:
             results = []
@@ -90,7 +83,7 @@ def make_random_state(n):
         account_db.set_nonce(addr, nonce)
         storage = random.randint(0, 10000)
         account_db.set_storage(addr, 0, storage)
-        code = b'not-real-code'
+        code = b"not-real-code"
         account_db.set_code(addr, code)
         contents[addr] = (balance, nonce, storage, code)
     account_db.persist()
@@ -102,7 +95,7 @@ async def test_state_sync():
     raw_db, state_root, contents = make_random_state(1000)
     dest_db = FakeAsyncMemoryDB()
     nodes_cache = MemoryDB()
-    scheduler = StateSync(state_root, dest_db, nodes_cache, ExtendedDebugLogger('test'))
+    scheduler = StateSync(state_root, dest_db, nodes_cache, ExtendedDebugLogger("test"))
     requests = scheduler.next_batch(10)
     while requests:
         results = []
@@ -124,11 +117,12 @@ REPLY_TIMEOUT = 5
 
 
 def test_node_request_tracker_get_timed_out():
-    tracker = TrieNodeRequestTracker(REPLY_TIMEOUT, ExtendedDebugLogger('name'))
+    tracker = TrieNodeRequestTracker(REPLY_TIMEOUT, ExtendedDebugLogger("name"))
     peer1, peer2, peer3, peer4 = object(), object(), object(), object()
     peer_nodes = dict(
         (peer, [os.urandom(32) for _ in range(3)])
-        for peer in [peer1, peer2, peer3, peer4])
+        for peer in [peer1, peer2, peer3, peer4]
+    )
     now = time.time()
     # Populate the tracker's active_requests with 4 requests, 2 of them made more than
     # REPLY_TIMEOUT seconds in the past and 2 made less than REPLY_TIMEOUT seconds ago.
@@ -152,14 +146,23 @@ def test_node_request_tracker_get_timed_out():
 
 
 def test_node_request_tracker_get_retriable_missing():
-    tracker = TrieNodeRequestTracker(REPLY_TIMEOUT, ExtendedDebugLogger('name'))
+    tracker = TrieNodeRequestTracker(REPLY_TIMEOUT, ExtendedDebugLogger("name"))
     now = time.time()
     # Populate the tracker's missing dict with 4 requests, 2 of them made more than
     # REPLY_TIMEOUT seconds in the past and 2 made less than REPLY_TIMEOUT seconds ago.
     req1_time, req1_nodes = now, [os.urandom(32) for _ in range(3)]
-    req2_time, req2_nodes = (now - REPLY_TIMEOUT - 1), [os.urandom(32) for _ in range(3)]
-    req3_time, req3_nodes = (now - REPLY_TIMEOUT - 2), [os.urandom(32) for _ in range(3)]
-    req4_time, req4_nodes = (now - REPLY_TIMEOUT + 1), [os.urandom(32) for _ in range(3)]
+    req2_time, req2_nodes = (
+        (now - REPLY_TIMEOUT - 1),
+        [os.urandom(32) for _ in range(3)],
+    )
+    req3_time, req3_nodes = (
+        (now - REPLY_TIMEOUT - 2),
+        [os.urandom(32) for _ in range(3)],
+    )
+    req4_time, req4_nodes = (
+        (now - REPLY_TIMEOUT + 1),
+        [os.urandom(32) for _ in range(3)],
+    )
     tracker.missing[req1_time] = req1_nodes
     tracker.missing[req2_time] = req2_nodes
     tracker.missing[req3_time] = req3_nodes
@@ -177,7 +180,7 @@ def test_node_request_tracker_get_retriable_missing():
 
 
 def test_node_request_tracker_get_next_timeout():
-    tracker = TrieNodeRequestTracker(REPLY_TIMEOUT, ExtendedDebugLogger('name'))
+    tracker = TrieNodeRequestTracker(REPLY_TIMEOUT, ExtendedDebugLogger("name"))
     oldest_req_time = 1234
 
     # Populate the tracker with missing and active requests, one of each made at oldest_req_time

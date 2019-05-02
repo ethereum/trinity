@@ -1,38 +1,24 @@
 import pytest
 
 from eth2.beacon.db.chain import BeaconChainDB
-from eth2.beacon.state_machines.forks.serenity.blocks import (
-    SerenityBeaconBlock,
-)
-from eth2.beacon.tools.builder.initializer import (
-    create_mock_genesis,
-)
-from eth2.beacon.tools.builder.proposer import (
-    create_mock_block,
-)
-from eth2.beacon.tools.builder.validator import (
-    create_mock_signed_attestations_at_slot,
-)
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.tools.builder.initializer import create_mock_genesis
+from eth2.beacon.tools.builder.proposer import create_mock_block
+from eth2.beacon.tools.builder.validator import create_mock_signed_attestations_at_slot
 
 
 @pytest.mark.long
 @pytest.mark.parametrize(
     (
-        'num_validators,'
-        'slots_per_epoch,'
-        'min_attestation_inclusion_delay,'
-        'target_committee_size,'
-        'shard_count'
+        "num_validators,"
+        "slots_per_epoch,"
+        "min_attestation_inclusion_delay,"
+        "target_committee_size,"
+        "shard_count"
     ),
-    [
-        (40, 8, 2, 3, 2)
-    ]
+    [(40, 8, 2, 3, 2)],
 )
-def test_demo(base_db,
-              num_validators,
-              config,
-              keymap,
-              fixture_sm_class):
+def test_demo(base_db, num_validators, config, keymap, fixture_sm_class):
     genesis_slot = config.GENESIS_SLOT
     genesis_epoch = config.GENESIS_EPOCH
     chaindb = BeaconChainDB(base_db)
@@ -59,17 +45,16 @@ def test_demo(base_db,
 
     for current_slot in range(genesis_slot + 1, genesis_slot + chain_length + 1):
         if current_slot > genesis_slot + config.MIN_ATTESTATION_INCLUSION_DELAY:
-            attestations = attestations_map[current_slot - config.MIN_ATTESTATION_INCLUSION_DELAY]
+            attestations = attestations_map[
+                current_slot - config.MIN_ATTESTATION_INCLUSION_DELAY
+            ]
         else:
             attestations = ()
 
         block = create_mock_block(
             state=state,
             config=config,
-            state_machine=fixture_sm_class(
-                chaindb,
-                blocks[-1],
-            ),
+            state_machine=fixture_sm_class(chaindb, blocks[-1]),
             block_class=SerenityBeaconBlock,
             parent_block=block,
             keymap=keymap,
@@ -78,10 +63,7 @@ def test_demo(base_db,
         )
 
         # Get state machine instance
-        sm = fixture_sm_class(
-            chaindb,
-            blocks[-1],
-        )
+        sm = fixture_sm_class(chaindb, blocks[-1])
         state, _ = sm.import_block(block)
 
         chaindb.persist_state(state)
@@ -94,10 +76,7 @@ def test_demo(base_db,
         attestations = create_mock_signed_attestations_at_slot(
             state=state,
             config=config,
-            state_machine=fixture_sm_class(
-                chaindb,
-                block,
-            ),
+            state_machine=fixture_sm_class(chaindb, block),
             attestation_slot=attestation_slot,
             beacon_block_root=block.signing_root,
             keymap=keymap,

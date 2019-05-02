@@ -1,91 +1,56 @@
-from typing import (
-    List,
-    Type,
-    TypeVar,
-)
+from typing import List, Type, TypeVar
 
-from cancel_token import (
-    CancelToken,
-)
-from eth_typing import (
-    Address,
-    Hash32,
-)
-from eth.rlp.accounts import (
-    Account,
-)
-from eth.rlp.headers import (
-    BlockHeader,
-)
-from eth.rlp.receipts import (
-    Receipt,
-)
-from lahja import (
-    BaseEvent,
-    BaseRequestResponseEvent,
-)
-from p2p.service import (
-    BaseService,
-)
+from cancel_token import CancelToken
+from eth_typing import Address, Hash32
+from eth.rlp.accounts import Account
+from eth.rlp.headers import BlockHeader
+from eth.rlp.receipts import Receipt
+from lahja import BaseEvent, BaseRequestResponseEvent
+from p2p.service import BaseService
 
-from trinity.constants import (
-    TO_NETWORKING_BROADCAST_CONFIG,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity._utils.async_errors import (
-    await_and_wrap_errors,
-)
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity._utils.async_errors import await_and_wrap_errors
 from trinity.rlp.block_body import BlockBody
-from trinity.sync.light.service import (
-    BaseLightPeerChain,
-)
+from trinity.sync.light.service import BaseLightPeerChain
 
 
 class BaseLightPeerChainResponse(BaseEvent):
-
     def __init__(self, error: Exception) -> None:
         self.error = error
 
 
 class BlockHeaderResponse(BaseLightPeerChainResponse):
-
-    def __init__(self, block_header: BlockHeader, error: Exception=None) -> None:
+    def __init__(self, block_header: BlockHeader, error: Exception = None) -> None:
         super().__init__(error)
         self.block_header = block_header
 
 
 class BlockBodyResponse(BaseLightPeerChainResponse):
-
-    def __init__(self, block_body: BlockBody, error: Exception=None) -> None:
+    def __init__(self, block_body: BlockBody, error: Exception = None) -> None:
         super().__init__(error)
         self.block_body = block_body
 
 
 class ReceiptsResponse(BaseLightPeerChainResponse):
-
-    def __init__(self, receipts: List[Receipt], error: Exception=None) -> None:
+    def __init__(self, receipts: List[Receipt], error: Exception = None) -> None:
         super().__init__(error)
         self.receipts = receipts
 
 
 class AccountResponse(BaseLightPeerChainResponse):
-
-    def __init__(self, account: Account, error: Exception=None) -> None:
+    def __init__(self, account: Account, error: Exception = None) -> None:
         super().__init__(error)
         self.account = account
 
 
 class BytesResponse(BaseLightPeerChainResponse):
-
-    def __init__(self, bytez: bytes, error: Exception=None) -> None:
+    def __init__(self, bytez: bytes, error: Exception = None) -> None:
         super().__init__(error)
         self.bytez = bytez
 
 
 class GetBlockHeaderByHashRequest(BaseRequestResponseEvent[BlockHeaderResponse]):
-
     def __init__(self, block_hash: Hash32) -> None:
         self.block_hash = block_hash
 
@@ -95,7 +60,6 @@ class GetBlockHeaderByHashRequest(BaseRequestResponseEvent[BlockHeaderResponse])
 
 
 class GetBlockBodyByHashRequest(BaseRequestResponseEvent[BlockBodyResponse]):
-
     def __init__(self, block_hash: Hash32) -> None:
         self.block_hash = block_hash
 
@@ -105,7 +69,6 @@ class GetBlockBodyByHashRequest(BaseRequestResponseEvent[BlockBodyResponse]):
 
 
 class GetReceiptsRequest(BaseRequestResponseEvent[ReceiptsResponse]):
-
     def __init__(self, block_hash: Hash32) -> None:
         self.block_hash = block_hash
 
@@ -115,7 +78,6 @@ class GetReceiptsRequest(BaseRequestResponseEvent[ReceiptsResponse]):
 
 
 class GetAccountRequest(BaseRequestResponseEvent[AccountResponse]):
-
     def __init__(self, block_hash: Hash32, address: Address) -> None:
         self.block_hash = block_hash
         self.address = address
@@ -126,7 +88,6 @@ class GetAccountRequest(BaseRequestResponseEvent[AccountResponse]):
 
 
 class GetContractCodeRequest(BaseRequestResponseEvent[BytesResponse]):
-
     def __init__(self, block_hash: Hash32, address: Address) -> None:
         self.block_hash = block_hash
         self.address = address
@@ -143,10 +104,12 @@ class LightPeerChainEventBusHandler(BaseService):
     back to the caller.
     """
 
-    def __init__(self,
-                 chain: BaseLightPeerChain,
-                 event_bus: TrinityEventBusEndpoint,
-                 token: CancelToken = None) -> None:
+    def __init__(
+        self,
+        chain: BaseLightPeerChain,
+        event_bus: TrinityEventBusEndpoint,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         self.chain = chain
         self.event_bus = event_bus
@@ -168,8 +131,7 @@ class LightPeerChainEventBusHandler(BaseService):
             )
 
             self.event_bus.broadcast(
-                event.expected_response_type()(val, error),
-                event.broadcast_config()
+                event.expected_response_type()(val, error), event.broadcast_config()
             )
 
     async def handle_get_blockbody_by_hash_requests(self) -> None:
@@ -180,18 +142,18 @@ class LightPeerChainEventBusHandler(BaseService):
             )
 
             self.event_bus.broadcast(
-                event.expected_response_type()(val, error),
-                event.broadcast_config()
+                event.expected_response_type()(val, error), event.broadcast_config()
             )
 
     async def handle_get_receipts_by_hash_requests(self) -> None:
         async for event in self.event_bus.stream(GetReceiptsRequest):
 
-            val, error = await await_and_wrap_errors(self.chain.coro_get_receipts(event.block_hash))
+            val, error = await await_and_wrap_errors(
+                self.chain.coro_get_receipts(event.block_hash)
+            )
 
             self.event_bus.broadcast(
-                event.expected_response_type()(val, error),
-                event.broadcast_config()
+                event.expected_response_type()(val, error), event.broadcast_config()
             )
 
     async def handle_get_account_requests(self) -> None:
@@ -202,8 +164,7 @@ class LightPeerChainEventBusHandler(BaseService):
             )
 
             self.event_bus.broadcast(
-                event.expected_response_type()(val, error),
-                event.broadcast_config()
+                event.expected_response_type()(val, error), event.broadcast_config()
             )
 
     async def handle_get_contract_code_requests(self) -> None:
@@ -215,8 +176,7 @@ class LightPeerChainEventBusHandler(BaseService):
             )
 
             self.event_bus.broadcast(
-                event.expected_response_type()(val, error),
-                event.broadcast_config()
+                event.expected_response_type()(val, error), event.broadcast_config()
             )
 
 
@@ -253,7 +213,9 @@ class EventBusLightPeerChain(BaseLightPeerChain):
             await self.event_bus.request(event, TO_NETWORKING_BROADCAST_CONFIG)
         ).account
 
-    async def coro_get_contract_code(self, block_hash: Hash32, address: Address) -> bytes:
+    async def coro_get_contract_code(
+        self, block_hash: Hash32, address: Address
+    ) -> bytes:
         event = GetContractCodeRequest(block_hash, address)
         return self._pass_or_raise(
             await self.event_bus.request(event, TO_NETWORKING_BROADCAST_CONFIG)

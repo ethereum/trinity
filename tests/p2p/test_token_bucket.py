@@ -2,10 +2,7 @@ import asyncio
 import pytest
 import time
 
-from p2p.token_bucket import (
-    TokenBucket,
-    NotEnoughTokens,
-)
+from p2p.token_bucket import TokenBucket, NotEnoughTokens
 
 
 async def measure_zero(iterations):

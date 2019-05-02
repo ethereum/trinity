@@ -4,7 +4,7 @@ from p2p._utils import clamp
 
 
 @pytest.mark.parametrize(
-    'lower_bound,upper_bound,value,expected',
+    "lower_bound,upper_bound,value,expected",
     (
         (5, 8, 4, 5),
         (5, 8, 5, 5),

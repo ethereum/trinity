@@ -1,8 +1,6 @@
 import pytest
 
-from eth_utils import (
-    ValidationError,
-)
+from eth_utils import ValidationError
 
 from trinity.protocol.common.requests import BaseHeaderRequest
 from trinity.protocol.common.validators import BaseBlockHeadersValidator
@@ -15,17 +13,13 @@ REVERSE_5_to_0 = (5, 6, 0, True)
 REVERSE_5_to_0_SKIP_1 = (5, 3, 1, True)
 
 
-BLOCK_HASH = b'\x01' * 32
+BLOCK_HASH = b"\x01" * 32
 
 
 class HeaderRequest(BaseHeaderRequest):
     max_size = 192
 
-    def __init__(self,
-                 block_number_or_hash,
-                 max_headers,
-                 skip,
-                 reverse):
+    def __init__(self, block_number_or_hash, max_headers, skip, reverse):
         self.block_number_or_hash = block_number_or_hash
         self.max_headers = max_headers
         self.skip = skip
@@ -37,17 +31,10 @@ class BlockHeadersValidator(BaseBlockHeadersValidator):
 
 
 @pytest.mark.parametrize(
-    'block_number_or_hash,expected',
-    (
-        (0, True),
-        (1, True),
-        (10000000, True),
-        (BLOCK_HASH, False),
-    ),
+    "block_number_or_hash,expected",
+    ((0, True), (1, True), (10000000, True), (BLOCK_HASH, False)),
 )
-def test_header_request_is_numbered_property(
-        block_number_or_hash,
-        expected):
+def test_header_request_is_numbered_property(block_number_or_hash, expected):
     request = HeaderRequest(block_number_or_hash, 5, 0, False)
     assert request.is_numbered is expected
 
@@ -125,10 +112,7 @@ def test_block_number_generation_limited_to_MAX_HEADERS_FETCH():
         (FORWARD_0_to_5_SKIP_1, (0, 2, 3), False),
     ),
 )
-def test_header_request_sequence_matching(
-        params,
-        sequence,
-        is_match):
+def test_header_request_sequence_matching(params, sequence, is_match):
     validator = BlockHeadersValidator(*params)
 
     if is_match:

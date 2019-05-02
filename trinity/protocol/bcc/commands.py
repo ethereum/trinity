@@ -1,29 +1,16 @@
-from typing import (
-    Tuple,
-    Union,
-)
+from typing import Tuple, Union
 
 from rlp import sedes
 
-from mypy_extensions import (
-    TypedDict,
-)
+from mypy_extensions import TypedDict
 
-from eth_typing import (
-    Hash32,
-)
+from eth_typing import Hash32
 
-from eth2.beacon.typing import (
-    Slot,
-)
+from eth2.beacon.typing import Slot
 
-from p2p.protocol import (
-    Command,
-)
+from p2p.protocol import Command
 
-from trinity.rlp.sedes import (
-    HashOrNumber,
-)
+from trinity.rlp.sedes import HashOrNumber
 
 from eth2.beacon.types.blocks import BeaconBlock
 
@@ -46,10 +33,10 @@ class StatusMessage(TypedDict):
 class Status(Command):
     _cmd_id = 0
     structure = (
-        ('protocol_version', sedes.big_endian_int),
-        ('network_id', sedes.big_endian_int),
-        ('genesis_hash', sedes.binary),
-        ('head_slot', sedes.big_endian_int),
+        ("protocol_version", sedes.big_endian_int),
+        ("network_id", sedes.big_endian_int),
+        ("genesis_hash", sedes.binary),
+        ("head_slot", sedes.big_endian_int),
     )
 
 
@@ -62,9 +49,9 @@ class GetBeaconBlocksMessage(TypedDict):
 class GetBeaconBlocks(Command):
     _cmd_id = 1
     structure = (
-        ('request_id', sedes.big_endian_int),
-        ('block_slot_or_root', HashOrNumber()),
-        ('max_blocks', sedes.big_endian_int),
+        ("request_id", sedes.big_endian_int),
+        ("block_slot_or_root", HashOrNumber()),
+        ("max_blocks", sedes.big_endian_int),
     )
 
 
@@ -76,8 +63,8 @@ class BeaconBlocksMessage(TypedDict):
 class BeaconBlocks(Command):
     _cmd_id = 2
     structure = (
-        ('request_id', sedes.big_endian_int),
-        ('encoded_blocks', sedes.CountableList(sedes.binary)),
+        ("request_id", sedes.big_endian_int),
+        ("encoded_blocks", sedes.CountableList(sedes.binary)),
     )
 
 
@@ -92,6 +79,4 @@ class NewBeaconBlockMessage(TypedDict):
 
 class NewBeaconBlock(Command):
     _cmd_id = 4
-    structure = (
-        ('encoded_block', sedes.binary),
-    )
+    structure = (("encoded_block", sedes.binary),)

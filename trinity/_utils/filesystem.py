@@ -22,26 +22,29 @@ class PidFile:
     It happens to usually prevent running two processes with the same process_name
     at the same time, but does not guarantee this behavior.
     """
+
     def __init__(self, process_name: str, path: Path) -> None:
-        self.filepath = path / (process_name + '.pid')
+        self.filepath = path / (process_name + ".pid")
         self._running = False
 
     def __enter__(self) -> None:
         if self.filepath.exists():
             raise FileExistsError(
-                "File %s already exists -- cannot run the same process twice" % self.filepath
+                "File %s already exists -- cannot run the same process twice"
+                % self.filepath
             )
         elif self._running:
             raise RuntimeError("Cannot enter the same PidFile context twice")
         if not self.filepath.parent.is_dir():
             raise IOError(
-                "Cannot create pidfile in base directory that doesn't exist: %s" % self.filepath
+                "Cannot create pidfile in base directory that doesn't exist: %s"
+                % self.filepath
             )
         else:
             self._running = True
 
             # try to create the pidfile, failing if it already exists
-            with self.filepath.open('x') as pidfile:
+            with self.filepath.open("x") as pidfile:
                 pidfile.write(str(os.getpid()) + "\n")
 
     def __exit__(self, exc_type=None, exc_value=None, exc_tb=None):  # type: ignore

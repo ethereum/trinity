@@ -1,7 +1,4 @@
-from typing import (
-    AsyncIterable,
-    Set,
-)
+from typing import AsyncIterable, Set
 
 
 async def contains_all(async_gen: AsyncIterable[str], keywords: Set[str]) -> bool:

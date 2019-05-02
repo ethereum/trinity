@@ -1,21 +1,10 @@
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, _SubParsersAction
 import asyncio
-from typing import (
-    Type,
-)
+from typing import Type
 
-from eth_typing import (
-    BlockNumber,
-)
-from eth.constants import (
-    GENESIS_BLOCK_NUMBER
-)
-from p2p.constants import (
-    DISCOVERY_EVENTBUS_ENDPOINT,
-)
+from eth_typing import BlockNumber
+from eth.constants import GENESIS_BLOCK_NUMBER
+from p2p.constants import DISCOVERY_EVENTBUS_ENDPOINT
 from p2p.discovery import (
     get_v5_topic,
     DiscoveryByTopicProtocol,
@@ -24,43 +13,18 @@ from p2p.discovery import (
     PreferredNodeDiscoveryProtocol,
     StaticDiscoveryService,
 )
-from p2p.kademlia import (
-    Address,
-)
-from p2p.protocol import (
-    Protocol,
-)
-from p2p.service import (
-    BaseService,
-)
+from p2p.kademlia import Address
+from p2p.protocol import Protocol
+from p2p.service import BaseService
 
-from trinity.config import (
-    BeaconAppConfig,
-    Eth1AppConfig,
-    Eth1DbMode,
-    TrinityConfig,
-)
-from trinity.db.eth1.manager import (
-    create_db_consumer_manager
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity.extensibility import (
-    BaseIsolatedPlugin,
-)
-from trinity.protocol.bcc.proto import (
-    BCCProtocol,
-)
-from trinity.protocol.eth.proto import (
-    ETHProtocol,
-)
-from trinity.protocol.les.proto import (
-    LESProtocolV2,
-)
-from trinity._utils.shutdown import (
-    exit_with_endpoint_and_services,
-)
+from trinity.config import BeaconAppConfig, Eth1AppConfig, Eth1DbMode, TrinityConfig
+from trinity.db.eth1.manager import create_db_consumer_manager
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.extensibility import BaseIsolatedPlugin
+from trinity.protocol.bcc.proto import BCCProtocol
+from trinity.protocol.eth.proto import ETHProtocol
+from trinity.protocol.les.proto import LESProtocolV2
+from trinity._utils.shutdown import exit_with_endpoint_and_services
 
 
 def get_protocol(trinity_config: TrinityConfig) -> Type[Protocol]:
@@ -93,10 +57,12 @@ class DiscoveryBootstrapService(BaseService):
     Bootstrap discovery to provide a parent ``CancellationToken``
     """
 
-    def __init__(self,
-                 disable_discovery: bool,
-                 event_bus: TrinityEventBusEndpoint,
-                 trinity_config: TrinityConfig) -> None:
+    def __init__(
+        self,
+        disable_discovery: bool,
+        event_bus: TrinityEventBusEndpoint,
+        trinity_config: TrinityConfig,
+    ) -> None:
         super().__init__()
         self.is_discovery_disabled = disable_discovery
         self.event_bus = event_bus
@@ -104,7 +70,9 @@ class DiscoveryBootstrapService(BaseService):
 
     async def _run(self) -> None:
         external_ip = "0.0.0.0"
-        address = Address(external_ip, self.trinity_config.port, self.trinity_config.port)
+        address = Address(
+            external_ip, self.trinity_config.port, self.trinity_config.port
+        )
 
         if self.trinity_config.use_discv5:
             protocol = get_protocol(self.trinity_config)
@@ -128,9 +96,7 @@ class DiscoveryBootstrapService(BaseService):
 
         if self.is_discovery_disabled:
             discovery_service: BaseService = StaticDiscoveryService(
-                self.event_bus,
-                self.trinity_config.preferred_nodes,
-                self.cancel_token,
+                self.event_bus, self.trinity_config.preferred_nodes, self.cancel_token
             )
         else:
             discovery_service = DiscoveryService(
@@ -162,11 +128,11 @@ class PeerDiscoveryPlugin(BaseIsolatedPlugin):
     def on_ready(self, manager_eventbus: TrinityEventBusEndpoint) -> None:
         self.start()
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         arg_parser.add_argument(
-            "--disable-discovery",
-            action="store_true",
-            help="Disable peer discovery",
+            "--disable-discovery", action="store_true", help="Disable peer discovery"
         )
 
     def do_start(self) -> None:
@@ -174,9 +140,11 @@ class PeerDiscoveryPlugin(BaseIsolatedPlugin):
         discovery_bootstrap = DiscoveryBootstrapService(
             self.context.args.disable_discovery,
             self.event_bus,
-            self.context.trinity_config
+            self.context.trinity_config,
         )
-        asyncio.ensure_future(exit_with_endpoint_and_services(self.event_bus, discovery_bootstrap))
+        asyncio.ensure_future(
+            exit_with_endpoint_and_services(self.event_bus, discovery_bootstrap)
+        )
         asyncio.ensure_future(discovery_bootstrap.run())
         loop.run_forever()
         loop.close()

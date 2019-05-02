@@ -8,10 +8,7 @@ from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER
 from eth.db.atomic import AtomicDB
 from eth.vm.forks.homestead import HomesteadVM
 
-from trinity.config import (
-    MAINNET_EIP1085_PATH,
-    ROPSTEN_EIP1085_PATH,
-)
+from trinity.config import MAINNET_EIP1085_PATH, ROPSTEN_EIP1085_PATH
 from trinity._utils.eip1085 import (
     validate_raw_eip1085_genesis_config,
     extract_genesis_data,
@@ -32,13 +29,11 @@ def test_mainnet_eip1085_validity(mainnet_genesis_config):
 def test_mainnet_eip1085_matches_mainnet_genesis_header(mainnet_genesis_config):
     genesis_data = extract_genesis_data(mainnet_genesis_config)
     genesis_state = {
-        address: account.to_dict()
-        for address, account in genesis_data.state.items()
+        address: account.to_dict() for address, account in genesis_data.state.items()
     }
     genesis_params = genesis_data.params.to_dict()
     chain = Chain.configure(
-        vm_configuration=genesis_data.vm_configuration,
-        chain_id=genesis_data.chain_id,
+        vm_configuration=genesis_data.vm_configuration, chain_id=genesis_data.chain_id
     ).from_genesis(AtomicDB(), genesis_params, genesis_state)
     genesis_header = chain.get_canonical_head()
 
@@ -55,7 +50,10 @@ def test_mainnet_eip1085_matches_mainnet_genesis_header(mainnet_genesis_config):
 
     assert issubclass(actual_homestead_vm, HomesteadVM)
     assert actual_homestead_vm.support_dao_fork is True
-    assert actual_homestead_vm.get_dao_fork_block_number() == expected_homestead_vm.get_dao_fork_block_number()  # noqa: E501
+    assert (
+        actual_homestead_vm.get_dao_fork_block_number()
+        == expected_homestead_vm.get_dao_fork_block_number()
+    )  # noqa: E501
 
 
 @pytest.fixture
@@ -72,13 +70,11 @@ def test_ropsten_eip1085_validity(ropsten_genesis_config):
 def test_ropsten_eip1085_matches_ropsten_chain(ropsten_genesis_config):
     genesis_data = extract_genesis_data(ropsten_genesis_config)
     genesis_state = {
-        address: account.to_dict()
-        for address, account in genesis_data.state.items()
+        address: account.to_dict() for address, account in genesis_data.state.items()
     }
     genesis_params = genesis_data.params.to_dict()
     chain = Chain.configure(
-        vm_configuration=genesis_data.vm_configuration,
-        chain_id=genesis_data.chain_id,
+        vm_configuration=genesis_data.vm_configuration, chain_id=genesis_data.chain_id
     ).from_genesis(AtomicDB(), genesis_params, genesis_state)
     genesis_header = chain.get_canonical_head()
 

@@ -4,11 +4,7 @@ Run with `python -m scripts.chainsync -db <path>`.
 """
 import asyncio
 import logging
-from typing import (
-    cast,
-    Type,
-    Union,
-)
+from typing import cast, Type, Union
 
 from eth.exceptions import HeaderNotFound
 
@@ -26,27 +22,44 @@ def _test() -> None:
     import signal
     from p2p import ecies
     from p2p.kademlia import Node
-    from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
-    from eth.chains.mainnet import MainnetChain, MAINNET_GENESIS_HEADER, MAINNET_VM_CONFIGURATION
+    from eth.chains.ropsten import (
+        RopstenChain,
+        ROPSTEN_GENESIS_HEADER,
+        ROPSTEN_VM_CONFIGURATION,
+    )
+    from eth.chains.mainnet import (
+        MainnetChain,
+        MAINNET_GENESIS_HEADER,
+        MAINNET_VM_CONFIGURATION,
+    )
     from eth.db.backends.level import LevelDB
     from tests.core.integration_test_helpers import (
-        FakeAsyncChainDB, FakeAsyncMainnetChain, FakeAsyncRopstenChain, FakeAsyncHeaderDB,
-        connect_to_peers_loop)
+        FakeAsyncChainDB,
+        FakeAsyncMainnetChain,
+        FakeAsyncRopstenChain,
+        FakeAsyncHeaderDB,
+        connect_to_peers_loop,
+    )
     from trinity.constants import DEFAULT_PREFERRED_NODES
     from trinity.protocol.common.context import ChainContext
     from trinity._utils.chains import load_nodekey
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-db', type=str, required=True)
-    parser.add_argument('-fast', action="store_true")
-    parser.add_argument('-light', action="store_true")
-    parser.add_argument('-nodekey', type=str)
-    parser.add_argument('-enode', type=str, required=False, help="The enode we should connect to")
-    parser.add_argument('-debug', action="store_true")
+    parser.add_argument("-db", type=str, required=True)
+    parser.add_argument("-fast", action="store_true")
+    parser.add_argument("-light", action="store_true")
+    parser.add_argument("-nodekey", type=str)
+    parser.add_argument(
+        "-enode", type=str, required=False, help="The enode we should connect to"
+    )
+    parser.add_argument("-debug", action="store_true")
     args = parser.parse_args()
 
     logging.basicConfig(
-        level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     log_level = logging.INFO
     if args.debug:
         log_level = logging.DEBUG
@@ -83,9 +96,7 @@ def _test() -> None:
         privkey = ecies.generate_privkey()
 
     context = ChainContext(
-        headerdb=headerdb,
-        network_id=network_id,
-        vm_configuration=vm_config,
+        headerdb=headerdb, network_id=network_id, vm_configuration=vm_config
     )
 
     peer_pool = peer_pool_class(privkey=privkey, context=context)
@@ -134,8 +145,8 @@ def _run_test(profile: bool) -> None:
     import cProfile, pstats  # noqa
 
     if profile:
-        cProfile.run('_test()', 'stats')
-        pstats.Stats('stats').strip_dirs().sort_stats('cumulative').print_stats(50)
+        cProfile.run("_test()", "stats")
+        pstats.Stats("stats").strip_dirs().sort_stats("cumulative").print_stats(50)
     else:
         _test()
 

@@ -2,19 +2,10 @@ import pytest
 
 import os
 
-from trinity._utils.filesystem import (
-    is_under_path,
-)
-from trinity.initialization import (
-    is_data_dir_initialized,
-    initialize_data_dir,
-)
-from trinity.config import (
-    TrinityConfig,
-)
-from trinity.exceptions import (
-    MissingPath,
-)
+from trinity._utils.filesystem import is_under_path
+from trinity.initialization import is_data_dir_initialized, initialize_data_dir
+from trinity.config import TrinityConfig
+from trinity.exceptions import MissingPath
 
 
 @pytest.fixture

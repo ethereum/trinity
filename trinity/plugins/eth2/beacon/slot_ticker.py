@@ -1,27 +1,13 @@
 import asyncio
 import time
 
-from cancel_token import (
-    CancelToken,
-)
-from lahja import (
-    BaseEvent,
-    BroadcastConfig,
-)
+from cancel_token import CancelToken
+from lahja import BaseEvent, BroadcastConfig
 
-from eth2.beacon.typing import (
-    Second,
-    Slot,
-)
-from p2p.service import (
-    BaseService,
-)
-from trinity._utils.shellart import (
-    bold_green,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
+from eth2.beacon.typing import Second, Slot
+from p2p.service import BaseService
+from trinity._utils.shellart import bold_green
+from trinity.endpoint import TrinityEventBusEndpoint
 
 DEFAULT_CHECK_FREQUENCY = 5
 
@@ -40,12 +26,13 @@ class SlotTicker(BaseService):
     event_bus: TrinityEventBusEndpoint
 
     def __init__(
-            self,
-            genesis_slot: Slot,
-            genesis_time: int,
-            seconds_per_slot: Second,
-            event_bus: TrinityEventBusEndpoint,
-            token: CancelToken = None) -> None:
+        self,
+        genesis_slot: Slot,
+        genesis_time: int,
+        seconds_per_slot: Second,
+        event_bus: TrinityEventBusEndpoint,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         self.genesis_slot = genesis_slot
         self.genesis_time = genesis_time
@@ -70,10 +57,7 @@ class SlotTicker(BaseService):
                     )
                     self.latest_slot = slot
                     self.event_bus.broadcast(
-                        NewSlotEvent(
-                            slot=slot,
-                            elapsed_time=elapsed_time,
-                        ),
+                        NewSlotEvent(slot=slot, elapsed_time=elapsed_time),
                         BroadcastConfig(internal=True),
                     )
             await asyncio.sleep(self.seconds_per_slot // DEFAULT_CHECK_FREQUENCY)

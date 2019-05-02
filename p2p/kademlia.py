@@ -6,27 +6,12 @@ import operator
 import random
 import struct
 import time
-from typing import (
-    Any,
-    Dict,
-    Iterable,
-    Iterator,
-    List,
-    Sized,
-    Tuple,
-)
+from typing import Any, Dict, Iterable, Iterator, List, Sized, Tuple
 from urllib import parse as urlparse
 
-from eth_utils import (
-    big_endian_to_int,
-    decode_hex,
-    remove_0x_prefix,
-)
+from eth_utils import big_endian_to_int, decode_hex, remove_0x_prefix
 
-from eth_keys import (
-    datatypes,
-    keys,
-)
+from eth_keys import datatypes, keys
 
 from eth_hash.auto import keccak
 
@@ -35,9 +20,9 @@ from p2p.validation import validate_enode_uri
 k_b = 8  # 8 bits per hop
 
 k_bucket_size = 16
-k_request_timeout = 7.2                  # timeout of message round trips
-k_idle_bucket_refresh_interval = 3600    # ping all nodes in bucket if bucket was idle
-k_find_concurrency = 3                   # parallel find node lookups
+k_request_timeout = 7.2  # timeout of message round trips
+k_idle_bucket_refresh_interval = 3600  # ping all nodes in bucket if bucket was idle
+k_find_concurrency = 3  # parallel find node lookups
 k_pubkey_size = 512
 k_id_size = 256
 k_max_node_id = 2 ** k_id_size - 1
@@ -45,7 +30,7 @@ k_max_node_id = 2 ** k_id_size - 1
 
 def int_to_big_endian4(integer: int) -> bytes:
     """ 4 bytes big endian integer"""
-    return struct.pack('>I', integer)
+    return struct.pack(">I", integer)
 
 
 def enc_port(p: int) -> bytes:
@@ -53,7 +38,6 @@ def enc_port(p: int) -> bytes:
 
 
 class Address:
-
     def __init__(self, ip: str, udp_port: int, tcp_port: int = 0) -> None:
         tcp_port = tcp_port or udp_port
         self.udp_port = udp_port
@@ -84,26 +68,27 @@ class Address:
         return (self.ip, self.udp_port) == (other.ip, other.udp_port)
 
     def __repr__(self) -> str:
-        return 'Address(%s:udp:%s|tcp:%s)' % (self.ip, self.udp_port, self.tcp_port)
+        return "Address(%s:udp:%s|tcp:%s)" % (self.ip, self.udp_port, self.tcp_port)
 
     def to_endpoint(self) -> List[bytes]:
         return [self._ip.packed, enc_port(self.udp_port), enc_port(self.tcp_port)]
 
     @classmethod
-    def from_endpoint(cls, ip: str, udp_port: bytes, tcp_port: bytes = b'\x00\x00') -> 'Address':
+    def from_endpoint(
+        cls, ip: str, udp_port: bytes, tcp_port: bytes = b"\x00\x00"
+    ) -> "Address":
         return cls(ip, big_endian_to_int(udp_port), big_endian_to_int(tcp_port))
 
 
 @total_ordering
 class Node:
-
     def __init__(self, pubkey: datatypes.PublicKey, address: Address) -> None:
         self.pubkey = pubkey
         self.address = address
         self.id = big_endian_to_int(keccak(pubkey.to_bytes()))
 
     @classmethod
-    def from_uri(cls, uri: str) -> 'Node':
+    def from_uri(cls, uri: str) -> "Node":
         validate_enode_uri(uri)  # Be no more permissive than the validation
         parsed = urlparse.urlparse(uri)
         pubkey = keys.PublicKey(decode_hex(parsed.username))
@@ -112,20 +97,24 @@ class Node:
     def uri(self) -> str:
         hexstring = self.pubkey.to_hex()
         hexstring = remove_0x_prefix(hexstring)
-        return f'enode://{hexstring}@{self.address.ip}:{self.address.tcp_port}'
+        return f"enode://{hexstring}@{self.address.ip}:{self.address.tcp_port}"
 
     def __str__(self) -> str:
-        return '<Node(%s@%s)>' % (self.pubkey.to_hex()[:6], self.address.ip)
+        return "<Node(%s@%s)>" % (self.pubkey.to_hex()[:6], self.address.ip)
 
     def __repr__(self) -> str:
-        return '<Node(%s@%s:%d)>' % (self.pubkey.to_hex(), self.address.ip, self.address.tcp_port)
+        return "<Node(%s@%s:%d)>" % (
+            self.pubkey.to_hex(),
+            self.address.ip,
+            self.address.tcp_port,
+        )
 
     def distance_to(self, id: int) -> int:
         return self.id ^ id
 
     # mypy doesn't have support for @total_ordering
     # https://github.com/python/mypy/issues/4610
-    def __lt__(self, other: 'Node') -> bool:
+    def __lt__(self, other: "Node") -> bool:
         if not isinstance(other, self.__class__):
             return super().__lt__(other)  # type: ignore
         return self.id < other.id
@@ -142,10 +131,10 @@ class Node:
         return hash(self.pubkey)
 
     def __getstate__(self) -> Dict[Any, Any]:
-        return {'enode': self.uri()}
+        return {"enode": self.uri()}
 
     def __setstate__(self, state: Dict[Any, Any]) -> None:
-        enode = state.pop('enode')
+        enode = state.pop("enode")
         node = self.from_uri(enode)
         self.__dict__.update(node.__dict__)
 
@@ -157,6 +146,7 @@ class KBucket(Sized):
     The bucket is kept sorted by time last seen—least-recently seen node at the head,
     most-recently seen at the tail.
     """
+
     k = k_bucket_size
 
     def __init__(self, start: int, end: int) -> None:
@@ -174,9 +164,9 @@ class KBucket(Sized):
         return self.midpoint ^ id
 
     def nodes_by_distance_to(self, id: int) -> List[Node]:
-        return sorted(self.nodes, key=operator.methodcaller('distance_to', id))
+        return sorted(self.nodes, key=operator.methodcaller("distance_to", id))
 
-    def split(self) -> Tuple['KBucket', 'KBucket']:
+    def split(self) -> Tuple["KBucket", "KBucket"]:
         """Split at the median id"""
         splitid = self.midpoint
         lower = KBucket(self.start, splitid)
@@ -238,7 +228,7 @@ class KBucket(Sized):
     def __len__(self) -> int:
         return len(self.nodes)
 
-    def __lt__(self, other: 'KBucket') -> bool:
+    def __lt__(self, other: "KBucket") -> bool:
         if not isinstance(other, self.__class__):
             raise TypeError(f"Cannot compare KBucket with type {other.__class__}")
         return self.end < other.start
@@ -302,7 +292,9 @@ class RoutingTable:
             # Split if the bucket has the local node in its range or if the depth is not congruent
             # to 0 mod k_b
             depth = _compute_shared_prefix_bits(bucket.nodes)
-            if bucket.in_range(self.this_node) or (depth % k_b != 0 and depth != k_id_size):
+            if bucket.in_range(self.this_node) or (
+                depth % k_b != 0 and depth != k_id_size
+            ):
                 self.split_bucket(self.buckets.index(bucket))
                 return self.add_node(node)  # retry
             # Nothing added, ping eviction_candidate
@@ -313,7 +305,7 @@ class RoutingTable:
         return binary_get_bucket_for_node(self.buckets, node)
 
     def buckets_by_distance_to(self, id: int) -> List[KBucket]:
-        return sorted(self.buckets, key=operator.methodcaller('distance_to', id))
+        return sorted(self.buckets, key=operator.methodcaller("distance_to", id))
 
     def __contains__(self, node: Node) -> bool:
         return node in self.get_bucket_for_node(node)
@@ -372,9 +364,10 @@ def binary_get_bucket_for_node(buckets: List[KBucket], node: Node) -> KBucket:
 
 def _compute_shared_prefix_bits(nodes: List[Node]) -> int:
     """Count the number of prefix bits shared by all nodes."""
+
     def to_binary(x: int) -> str:  # left padded bit representation
         b = bin(x)[2:]
-        return '0' * (k_id_size - len(b)) + b
+        return "0" * (k_id_size - len(b)) + b
 
     if len(nodes) < 2:
         return k_id_size
@@ -389,4 +382,4 @@ def _compute_shared_prefix_bits(nodes: List[Node]) -> int:
 
 
 def sort_by_distance(nodes: List[Node], target_id: int) -> List[Node]:
-    return sorted(nodes, key=operator.methodcaller('distance_to', target_id))
+    return sorted(nodes, key=operator.methodcaller("distance_to", target_id))

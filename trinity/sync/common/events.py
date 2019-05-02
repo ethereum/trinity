@@ -1,16 +1,8 @@
-from typing import (
-    Optional,
-    Type,
-)
+from typing import Optional, Type
 
-from lahja import (
-    BaseEvent,
-    BaseRequestResponseEvent,
-)
+from lahja import BaseEvent, BaseRequestResponseEvent
 
-from trinity.sync.common.types import (
-    SyncProgress
-)
+from trinity.sync.common.types import SyncProgress
 
 
 class SyncingResponse(BaseEvent):

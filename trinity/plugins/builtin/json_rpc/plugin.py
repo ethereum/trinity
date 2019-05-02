@@ -1,49 +1,26 @@
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, _SubParsersAction
 import asyncio
-from typing import (
-    Tuple
-)
+from typing import Tuple
 
-from trinity.config import (
-    Eth1AppConfig,
-    Eth1DbMode,
-    BeaconAppConfig,
-    TrinityConfig
-)
+from trinity.config import Eth1AppConfig, Eth1DbMode, BeaconAppConfig, TrinityConfig
 from trinity.chains.base import BaseAsyncChain
-from trinity.db.eth1.manager import (
-    create_db_consumer_manager
-)
-from trinity.extensibility import (
-    BaseIsolatedPlugin,
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
+from trinity.db.eth1.manager import create_db_consumer_manager
+from trinity.extensibility import BaseIsolatedPlugin
+from trinity.endpoint import TrinityEventBusEndpoint
 from trinity.plugins.builtin.light_peer_chain_bridge.light_peer_chain_bridge import (
     EventBusLightPeerChain,
 )
-from trinity.rpc.main import (
-    RPCServer,
-)
+from trinity.rpc.main import RPCServer
 from trinity.rpc.modules import (
     BaseRPCModule,
     initialize_beacon_modules,
     initialize_eth1_modules,
 )
-from trinity.rpc.ipc import (
-    IPCServer,
-)
-from trinity._utils.shutdown import (
-    exit_with_endpoint_and_services,
-)
+from trinity.rpc.ipc import IPCServer
+from trinity._utils.shutdown import exit_with_endpoint_and_services
 
 
 class JsonRpcServerPlugin(BaseIsolatedPlugin):
-
     @property
     def name(self) -> str:
         return "JSON-RPC API"
@@ -52,14 +29,16 @@ class JsonRpcServerPlugin(BaseIsolatedPlugin):
         if not self.context.args.disable_rpc:
             self.start()
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         arg_parser.add_argument(
-            "--disable-rpc",
-            action="store_true",
-            help="Disables the JSON-RPC Server",
+            "--disable-rpc", action="store_true", help="Disables the JSON-RPC Server"
         )
 
-    def setup_eth1_modules(self, trinity_config: TrinityConfig) -> Tuple[BaseRPCModule, ...]:
+    def setup_eth1_modules(
+        self, trinity_config: TrinityConfig
+    ) -> Tuple[BaseRPCModule, ...]:
         db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
 
         eth1_app_config = trinity_config.get_app_config(Eth1AppConfig)
@@ -70,12 +49,16 @@ class JsonRpcServerPlugin(BaseIsolatedPlugin):
         if eth1_app_config.database_mode is Eth1DbMode.LIGHT:
             header_db = db_manager.get_headerdb()  # type: ignore
             event_bus_light_peer_chain = EventBusLightPeerChain(self.context.event_bus)
-            chain = chain_config.light_chain_class(header_db, peer_chain=event_bus_light_peer_chain)
+            chain = chain_config.light_chain_class(
+                header_db, peer_chain=event_bus_light_peer_chain
+            )
         elif eth1_app_config.database_mode is Eth1DbMode.FULL:
             db = db_manager.get_db()  # type: ignore
             chain = chain_config.full_chain_class(db)
         else:
-            raise Exception(f"Unsupported Database Mode: {eth1_app_config.database_mode}")
+            raise Exception(
+                f"Unsupported Database Mode: {eth1_app_config.database_mode}"
+            )
 
         return initialize_eth1_modules(chain, self.event_bus)
 
@@ -98,7 +81,9 @@ class JsonRpcServerPlugin(BaseIsolatedPlugin):
         ipc_server = IPCServer(rpc, self.context.trinity_config.jsonrpc_ipc_path)
 
         loop = asyncio.get_event_loop()
-        asyncio.ensure_future(exit_with_endpoint_and_services(self.context.event_bus, ipc_server))
+        asyncio.ensure_future(
+            exit_with_endpoint_and_services(self.context.event_bus, ipc_server)
+        )
         asyncio.ensure_future(ipc_server.run())
         loop.run_forever()
         loop.close()

@@ -2,15 +2,11 @@ import asyncio
 import importlib
 import logging
 import time
-from typing import (
-    Tuple,
-)
+from typing import Tuple
 
 from eth_utils.exceptions import ValidationError
 
-from lahja import (
-    BroadcastConfig,
-)
+from lahja import BroadcastConfig
 
 import pytest
 
@@ -18,44 +14,25 @@ from py_ecc import bls
 
 from eth.exceptions import BlockNotFound
 
-from trinity.config import (
-    BeaconChainConfig,
-    BeaconGenesisData,
-)
-from trinity.plugins.eth2.beacon.validator import (
-    Validator,
-)
+from trinity.config import BeaconChainConfig, BeaconGenesisData
+from trinity.plugins.eth2.beacon.validator import Validator
 
-from eth2.beacon._utils.hash import (
-    hash_eth2,
-)
-from eth2.beacon.state_machines.forks.serenity.blocks import (
-    SerenityBeaconBlock,
-)
-from eth2.beacon.state_machines.forks.xiao_long_bao.configs import (
-    XIAO_LONG_BAO_CONFIG,
-)
-from eth2.beacon.tools.builder.initializer import (
-    create_mock_genesis,
-)
-from eth2.beacon.tools.misc.ssz_vector import (
-    override_vector_lengths,
-)
-from eth2.beacon.tools.builder.proposer import (
-    _get_proposer_index,
-)
-from trinity.plugins.eth2.beacon.slot_ticker import (
-    NewSlotEvent,
-)
+from eth2.beacon._utils.hash import hash_eth2
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.xiao_long_bao.configs import XIAO_LONG_BAO_CONFIG
+from eth2.beacon.tools.builder.initializer import create_mock_genesis
+from eth2.beacon.tools.misc.ssz_vector import override_vector_lengths
+from eth2.beacon.tools.builder.proposer import _get_proposer_index
+from trinity.plugins.eth2.beacon.slot_ticker import NewSlotEvent
 
 
-helpers = importlib.import_module('tests.core.p2p-proto.bcc.helpers')
+helpers = importlib.import_module("tests.core.p2p-proto.bcc.helpers")
 
 
 NUM_VALIDATORS = 8
 
-privkeys = tuple(int.from_bytes(
-    hash_eth2(str(i).encode('utf-8'))[:4], 'big')
+privkeys = tuple(
+    int.from_bytes(hash_eth2(str(i).encode("utf-8"))[:4], "big")
     for i in range(NUM_VALIDATORS)
 )
 index_to_pubkey = {}
@@ -80,7 +57,9 @@ genesis_data = BeaconGenesisData(
     keymap=keymap,
     num_validators=NUM_VALIDATORS,
 )
-beacon_chain_config = BeaconChainConfig(chain_name='TestTestTest', genesis_data=genesis_data)
+beacon_chain_config = BeaconChainConfig(
+    chain_name="TestTestTest", genesis_data=genesis_data
+)
 chain_class = beacon_chain_config.beacon_chain_class
 
 override_vector_lengths(XIAO_LONG_BAO_CONFIG)
@@ -109,9 +88,7 @@ class FakePeerPool:
 
 def get_chain_from_genesis(db):
     return chain_class.from_genesis(
-        base_db=db,
-        genesis_state=genesis_state,
-        genesis_block=genesis_block,
+        base_db=db, genesis_state=genesis_state, genesis_block=genesis_block
     )
 
 
@@ -148,12 +125,10 @@ def _get_slot_with_validator_selected(largest_index, start_slot, state, state_ma
     num_trials = 1000
     while True:
         if (slot - start_slot) > num_trials:
-            raise Exception("Failed to find a slot where we have validators selected as a proposer")
-        proposer_index = _get_proposer_index(
-            state,
-            slot,
-            state_machine.config,
-        )
+            raise Exception(
+                "Failed to find a slot where we have validators selected as a proposer"
+            )
+        proposer_index = _get_proposer_index(state, slot, state_machine.config)
         if proposer_index <= largest_index:
             return slot, proposer_index
         slot += 1
@@ -186,10 +161,7 @@ async def test_validator_propose_block_succeeds(caplog, event_loop, event_bus):
         assert False
     head = v.chain.get_canonical_head()
     block = v.propose_block(
-        slot=slot,
-        state=state,
-        state_machine=state_machine,
-        head_block=head,
+        slot=slot, state=state, state_machine=state_machine, head_block=head
     )
     # test: ensure the proposed block is saved to the chaindb
     assert v.chain.get_block_by_root(block.signing_root) == block
@@ -210,9 +182,7 @@ async def test_validator_propose_block_fails(caplog, event_loop, event_bus):
     slot = state.slot + 1
 
     proposer_index = _get_proposer_index(
-        state=state,
-        slot=slot,
-        config=state_machine.config,
+        state=state, slot=slot, config=state_machine.config
     )
     # select the wrong validator as proposer
     v: Validator = None
@@ -224,10 +194,7 @@ async def test_validator_propose_block_fails(caplog, event_loop, event_bus):
     # test: if a non-proposer validator proposes a block, the block validation should fail.
     with pytest.raises(ValidationError):
         v.propose_block(
-            slot=slot,
-            state=state,
-            state_machine=state_machine,
-            head_block=head,
+            slot=slot, state=state, state_machine=state_machine, head_block=head
         )
 
 
@@ -239,9 +206,7 @@ async def test_validator_skip_block(caplog, event_loop, event_bus):
     state = state_machine.state
     slot = state.slot + 1
     root_post_state = alice.skip_block(
-        slot=slot,
-        state=state,
-        state_machine=state_machine,
+        slot=slot, state=state, state_machine=state_machine
     )
     # test: confirm that no block is imported at the slot
     with pytest.raises(BlockNotFound):
@@ -260,23 +225,15 @@ async def test_validator_handle_new_slot(caplog, event_loop, event_bus, monkeypa
     async def new_slot(slot):
         event_new_slot_called.set()
 
-    monkeypatch.setattr(alice, 'new_slot', new_slot)
+    monkeypatch.setattr(alice, "new_slot", new_slot)
 
     # sleep for `event_bus` ready
     await asyncio.sleep(0.01)
 
     event_bus.broadcast(
-        NewSlotEvent(
-            slot=1,
-            elapsed_time=2,
-        ),
-        BroadcastConfig(internal=True),
+        NewSlotEvent(slot=1, elapsed_time=2), BroadcastConfig(internal=True)
     )
-    await asyncio.wait_for(
-        event_new_slot_called.wait(),
-        timeout=2,
-        loop=event_loop,
-    )
+    await asyncio.wait_for(event_new_slot_called.wait(), timeout=2, loop=event_loop)
 
 
 @pytest.mark.asyncio
@@ -288,11 +245,7 @@ async def test_validator_new_slot(caplog, event_loop, event_bus, monkeypatch):
     new_slot = state.slot + 1
     # test: `new_slot` should call `propose_block` if the validator get selected,
     #   else calls `skip_block`.
-    index = _get_proposer_index(
-        state,
-        new_slot,
-        state_machine.config,
-    )
+    index = _get_proposer_index(state, new_slot, state_machine.config)
 
     is_proposing = None
 
@@ -304,8 +257,8 @@ async def test_validator_new_slot(caplog, event_loop, event_bus, monkeypatch):
         nonlocal is_proposing
         is_proposing = False
 
-    monkeypatch.setattr(alice, 'propose_block', propose_block)
-    monkeypatch.setattr(alice, 'skip_block', skip_block)
+    monkeypatch.setattr(alice, "propose_block", propose_block)
+    monkeypatch.setattr(alice, "skip_block", skip_block)
 
     await alice.new_slot(new_slot)
 

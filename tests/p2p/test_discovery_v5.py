@@ -3,11 +3,7 @@ import socket
 
 import pytest
 
-from p2p.tools.factories import (
-    AddressFactory,
-    DiscoveryProtocolFactory,
-    NodeFactory,
-)
+from p2p.tools.factories import AddressFactory, DiscoveryProtocolFactory, NodeFactory
 
 
 """
@@ -19,7 +15,8 @@ async def get_listening_discovery_protocol(event_loop):
     addr = AddressFactory.localhost()
     proto = DiscoveryProtocolFactory(address=addr)
     await event_loop.create_datagram_endpoint(
-        lambda: proto, local_addr=(addr.ip, addr.udp_port), family=socket.AF_INET)
+        lambda: proto, local_addr=(addr.ip, addr.udp_port), family=socket.AF_INET
+    )
     return proto
 
 
@@ -27,7 +24,7 @@ async def get_listening_discovery_protocol(event_loop):
 async def test_topic_query(event_loop):
     bob = await get_listening_discovery_protocol(event_loop)
     les_nodes = NodeFactory.create_batch(10)
-    topic = b'les'
+    topic = b"les"
     for n in les_nodes:
         bob.topic_table.add_node(n, topic)
     alice = await get_listening_discovery_protocol(event_loop)
@@ -43,7 +40,7 @@ async def test_topic_query(event_loop):
 async def test_topic_register(event_loop):
     bob = await get_listening_discovery_protocol(event_loop)
     alice = await get_listening_discovery_protocol(event_loop)
-    topics = [b'les', b'les2']
+    topics = [b"les", b"les2"]
 
     # In order to register ourselves under a given topic we need to first get a ticket.
     ticket = await bob.get_ticket(alice.this_node, topics)

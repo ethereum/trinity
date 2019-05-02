@@ -1,26 +1,13 @@
-from argparse import (
-    ArgumentParser,
-    Namespace,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, Namespace, _SubParsersAction
 import sys
 
-from trinity.config import (
-    Eth1AppConfig,
-    TrinityConfig,
-)
-from trinity.extensibility import (
-    BaseMainProcessPlugin,
-)
+from trinity.config import Eth1AppConfig, TrinityConfig
+from trinity.extensibility import BaseMainProcessPlugin
 
-from trinity.plugins.builtin.attach.console import (
-    console,
-    db_shell,
-)
+from trinity.plugins.builtin.attach.console import console, db_shell
 
 
 class AttachPlugin(BaseMainProcessPlugin):
-
     def __init__(self, use_ipython: bool = True) -> None:
         super().__init__()
         self.use_ipython = use_ipython
@@ -29,11 +16,12 @@ class AttachPlugin(BaseMainProcessPlugin):
     def name(self) -> str:
         return "Attach"
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
 
         attach_parser = subparser.add_parser(
-            'attach',
-            help='open an REPL attached to a currently running chain',
+            "attach", help="open an REPL attached to a currently running chain"
         )
 
         attach_parser.set_defaults(func=self.run_console)
@@ -47,7 +35,6 @@ class AttachPlugin(BaseMainProcessPlugin):
 
 
 class DbShellPlugin(BaseMainProcessPlugin):
-
     def __init__(self, use_ipython: bool = True) -> None:
         super().__init__()
         self.use_ipython = use_ipython
@@ -56,11 +43,12 @@ class DbShellPlugin(BaseMainProcessPlugin):
     def name(self) -> str:
         return "DB Shell"
 
-    def configure_parser(self, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        self, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
 
         attach_parser = subparser.add_parser(
-            'db-shell',
-            help='open a REPL to inspect the db',
+            "db-shell", help="open a REPL to inspect the db"
         )
 
         attach_parser.set_defaults(func=self.run_shell)
@@ -71,4 +59,6 @@ class DbShellPlugin(BaseMainProcessPlugin):
             config = trinity_config.get_app_config(Eth1AppConfig)
             db_shell(self.use_ipython, config.database_dir, trinity_config)
         else:
-            self.logger.error("DB Shell does only support the Ethereum 1 node at this time")
+            self.logger.error(
+                "DB Shell does only support the Ethereum 1 node at this time"
+            )

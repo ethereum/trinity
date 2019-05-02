@@ -9,6 +9,7 @@ class StandardDeviation:
 
     Tracks standard deviation on a stream of data.
     """
+
     def __init__(self, window_size: int) -> None:
         self.window: Deque[Union[int, float]] = collections.deque()
         self.window_size = window_size
@@ -30,6 +31,6 @@ class StandardDeviation:
         sum_of_squared_values = sum(item * item for item in self.window)
 
         return math.sqrt(
-            (num_values * sum_of_squared_values - sum_of_values ** 2) /
-            (num_values * (num_values - 1))
+            (num_values * sum_of_squared_values - sum_of_values ** 2)
+            / (num_values * (num_values - 1))
         )

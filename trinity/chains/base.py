@@ -13,39 +13,38 @@ from eth.rlp.receipts import Receipt
 # Chain implementation.
 class BaseAsyncChainAPI(ABC):
     @abstractmethod
-    async def coro_import_block(self,
-                                block: BlockHeader,
-                                perform_validation: bool=True,
-                                ) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
+    async def coro_import_block(
+        self, block: BlockHeader, perform_validation: bool = True
+    ) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
         pass
 
     @abstractmethod
     async def coro_validate_chain(
-            self,
-            parent: BlockHeader,
-            chain: Tuple[BlockHeader, ...],
-            seal_check_random_sample_rate: int = 1) -> None:
+        self,
+        parent: BlockHeader,
+        chain: Tuple[BlockHeader, ...],
+        seal_check_random_sample_rate: int = 1,
+    ) -> None:
         pass
 
     @abstractmethod
-    async def coro_validate_receipt(self,
-                                    receipt: Receipt,
-                                    at_header: BlockHeader) -> None:
+    async def coro_validate_receipt(
+        self, receipt: Receipt, at_header: BlockHeader
+    ) -> None:
         pass
 
     @abstractmethod
-    async def coro_get_block_by_hash(self,
-                                     block_hash: Hash32) -> BaseBlock:
+    async def coro_get_block_by_hash(self, block_hash: Hash32) -> BaseBlock:
         pass
 
     @abstractmethod
-    async def coro_get_block_by_header(self,
-                                       header: BlockHeader) -> BaseBlock:
+    async def coro_get_block_by_header(self, header: BlockHeader) -> BaseBlock:
         pass
 
     @abstractmethod
-    async def coro_get_canonical_block_by_number(self,
-                                                 block_number: BlockNumber) -> BaseBlock:
+    async def coro_get_canonical_block_by_number(
+        self, block_number: BlockNumber
+    ) -> BaseBlock:
         pass
 
 

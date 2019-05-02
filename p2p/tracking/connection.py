@@ -1,16 +1,9 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import (
-    Dict,
-    Type,
-)
+from typing import Dict, Type
 
 from p2p.kademlia import Node
-from p2p.exceptions import (
-    BaseP2PError,
-    HandshakeFailure,
-    TooManyPeersFailure,
-)
+from p2p.exceptions import BaseP2PError, HandshakeFailure, TooManyPeersFailure
 
 
 FAILURE_TIMEOUTS: Dict[Type[Exception], int] = {}
@@ -31,7 +24,7 @@ def get_timeout_for_failure(failure: BaseP2PError) -> int:
         if cls in FAILURE_TIMEOUTS:
             return FAILURE_TIMEOUTS[cls]
     failure_name = type(failure).__name__
-    raise Exception(f'Unknown failure type: {failure_name}')
+    raise Exception(f"Unknown failure type: {failure_name}")
 
 
 class BaseConnectionTracker(ABC):
@@ -39,7 +32,8 @@ class BaseConnectionTracker(ABC):
     Base API which defines the interface that the peer pool uses to record
     information about connection failures when attempting to connect to peers
     """
-    logger = logging.getLogger('p2p.tracking.connection.ConnectionTracker')
+
+    logger = logging.getLogger("p2p.tracking.connection.ConnectionTracker")
 
     def record_failure(self, remote: Node, failure: BaseP2PError) -> None:
         timeout_seconds = get_timeout_for_failure(failure)

@@ -1,55 +1,22 @@
 from abc import ABC, abstractmethod
-from asyncio import (
-    AbstractEventLoop,
-    Lock,
-    PriorityQueue,
-    Queue,
-    QueueFull,
-)
+from asyncio import AbstractEventLoop, Lock, PriorityQueue, Queue, QueueFull
 from collections import defaultdict
 from enum import Enum
-from functools import (
-    total_ordering,
-)
-from itertools import (
-    count,
-)
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generic,
-    Iterable,
-    Set,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from functools import total_ordering
+from itertools import count
+from typing import Any, Callable, Dict, Generic, Iterable, Set, Tuple, Type, TypeVar
 
-from eth_utils import (
-    ValidationError,
-    to_tuple,
-)
-from eth_utils.toolz import (
-    identity,
-    mapcat,
-)
+from eth_utils import ValidationError, to_tuple
+from eth_utils.toolz import identity, mapcat
 
-from eth.typing import (
-    StaticMethod,
-)
+from eth.typing import StaticMethod
 
-from trinity._utils.queues import (
-    queue_get_batch,
-    queue_get_nowait,
-)
-from trinity._utils.tree_root import (
-    RootTracker,
-)
+from trinity._utils.queues import queue_get_batch, queue_get_nowait
+from trinity._utils.tree_root import RootTracker
 
-TPrerequisite = TypeVar('TPrerequisite', bound=Enum)
-TTask = TypeVar('TTask')
-TTaskID = TypeVar('TTaskID')
+TPrerequisite = TypeVar("TPrerequisite", bound=Enum)
+TTask = TypeVar("TTask")
+TTaskID = TypeVar("TTaskID")
 
 
 @total_ordering
@@ -57,12 +24,18 @@ class SortableTask(Generic[TTask]):
     _order_fn: StaticMethod[Callable[[TTask], Any]] = None
 
     @classmethod
-    def orderable_by_func(cls, order_fn: Callable[[TTask], Any]) -> 'Type[SortableTask[TTask]]':
-        return type('PredefinedSortableTask', (cls, ), dict(_order_fn=staticmethod(order_fn)))
+    def orderable_by_func(
+        cls, order_fn: Callable[[TTask], Any]
+    ) -> "Type[SortableTask[TTask]]":
+        return type(
+            "PredefinedSortableTask", (cls,), dict(_order_fn=staticmethod(order_fn))
+        )
 
     def __init__(self, task: TTask) -> None:
         if self._order_fn is None:
-            raise ValidationError("Must create this class with orderable_by_func before init")
+            raise ValidationError(
+                "Must create this class with orderable_by_func before init"
+            )
         self._task = task
         _comparable_val = self._order_fn(task)
 
@@ -126,17 +99,18 @@ class TaskQueue(Generic[TTask]):
     _in_progress: Dict[int, Tuple[TTask, ...]]
 
     # all tasks that have been placed in the queue and have not been started
-    _open_queue: 'PriorityQueue[SortableTask[TTask]]'
+    _open_queue: "PriorityQueue[SortableTask[TTask]]"
 
     # all tasks that have been placed in the queue and have not been completed
     _tasks: Set[TTask]
 
     def __init__(
-            self,
-            maxsize: int = 0,
-            order_fn: Callable[[TTask], Any] = identity,
-            *,
-            loop: AbstractEventLoop = None) -> None:
+        self,
+        maxsize: int = 0,
+        order_fn: Callable[[TTask], Any] = identity,
+        *,
+        loop: AbstractEventLoop = None,
+    ) -> None:
         self._maxsize = maxsize
         self._full_lock = Lock(loop=loop)
         self._open_queue = PriorityQueue(maxsize, loop=loop)
@@ -152,7 +126,9 @@ class TaskQueue(Generic[TTask]):
         It will finally return when all tasks have been inserted.
         """
         if not isinstance(tasks, tuple):
-            raise ValidationError(f"must pass a tuple of tasks to add(), but got {tasks!r}")
+            raise ValidationError(
+                f"must pass a tuple of tasks to add(), but got {tasks!r}"
+            )
 
         already_pending = self._tasks.intersection(tasks)
         if already_pending:
@@ -190,11 +166,11 @@ class TaskQueue(Generic[TTask]):
                     task_idx = queueing.index(task)
                     qsize = self._open_queue.qsize()
                     raise QueueFull(
-                        f'TaskQueue unsuccessful in adding task {task.original!r} ',
-                        f'because qsize={qsize}, '
-                        f'num_tasks={num_tasks}, maxsize={self._maxsize}, open_slots={open_slots}, '
-                        f'num queueing={len(queueing)}, len(_tasks)={len(self._tasks)}, task_idx='
-                        f'{task_idx}, queuing={queueing}, original msg: {exc}',
+                        f"TaskQueue unsuccessful in adding task {task.original!r} ",
+                        f"because qsize={qsize}, "
+                        f"num_tasks={num_tasks}, maxsize={self._maxsize}, open_slots={open_slots}, "
+                        f"num queueing={len(queueing)}, len(_tasks)={len(self._tasks)}, task_idx="
+                        f"{task_idx}, queuing={queueing}, original msg: {exc}",
                     )
 
             original_queued = tuple(task.original for task in queueing)
@@ -243,7 +219,9 @@ class TaskQueue(Generic[TTask]):
 
     def complete(self, batch_id: int, completed: Tuple[TTask, ...]) -> None:
         if batch_id not in self._in_progress:
-            raise ValidationError(f"batch id {batch_id} not recognized, with tasks {completed!r}")
+            raise ValidationError(
+                f"batch id {batch_id} not recognized, with tasks {completed!r}"
+            )
 
         attempted = self._in_progress.pop(batch_id)
 
@@ -283,13 +261,16 @@ class BaseTaskPrerequisites(Generic[TTask, TPrerequisite]):
     Keep track of which prerequisites on a task are complete. It is used internally by
     :class:`OrderedTaskPreparation`
     """
+
     _prereqs: Iterable[TPrerequisite]
     _completed_prereqs: Set[TPrerequisite]
     _task: TTask
 
     @classmethod
-    def from_enum(cls, prereqs: Type[TPrerequisite]) -> 'Type[BaseTaskPrerequisites[Any, Any]]':
-        return type('CompletionFor' + prereqs.__name__, (cls, ), dict(_prereqs=prereqs))
+    def from_enum(
+        cls, prereqs: Type[TPrerequisite]
+    ) -> "Type[BaseTaskPrerequisites[Any, Any]]":
+        return type("CompletionFor" + prereqs.__name__, (cls,), dict(_prereqs=prereqs))
 
     def __init__(self, task: TTask) -> None:
         self._task = task
@@ -325,8 +306,8 @@ class BaseTaskPrerequisites(Generic[TTask, TPrerequisite]):
 
     def __repr__(self) -> str:
         return (
-            f'<{type(self).__name__}({self._task!r}, done={self._completed_prereqs!r}, '
-            f'remaining={self.remaining_prereqs!r})>'
+            f"<{type(self).__name__}({self._task!r}, done={self._completed_prereqs!r}, "
+            f"remaining={self.remaining_prereqs!r})>"
         )
 
 
@@ -334,6 +315,7 @@ class DuplicateTasks(Exception, Generic[TTask]):
     """
     Tried to register a task that was already registered
     """
+
     def __init__(self, msg: str, duplicates: Tuple[TTask, ...]) -> None:
         super().__init__(msg)
         self.duplicates = duplicates
@@ -343,6 +325,7 @@ class MissingDependency(Exception):
     """
     Tried to register a task that is missing a dependency
     """
+
     pass
 
 
@@ -356,7 +339,9 @@ class BaseOrderedTaskPreparation(ABC, Generic[TTask, TTaskID]):
         pass
 
     @abstractmethod
-    def register_tasks(self, tasks: Tuple[TTask, ...], ignore_duplicates: bool = False) -> None:
+    def register_tasks(
+        self, tasks: Tuple[TTask, ...], ignore_duplicates: bool = False
+    ) -> None:
         pass
 
     @abstractmethod
@@ -369,8 +354,8 @@ class BaseOrderedTaskPreparation(ABC, Generic[TTask, TTaskID]):
 
 
 class OrderedTaskPreparation(
-        BaseOrderedTaskPreparation[TTask, TTaskID],
-        Generic[TTask, TTaskID, TPrerequisite]):
+    BaseOrderedTaskPreparation[TTask, TTaskID], Generic[TTask, TTaskID, TPrerequisite]
+):
     """
     This class is useful when a series of tasks with prerequisites must be run
     sequentially. The prerequisites may be finished in any order, but the
@@ -447,6 +432,7 @@ class OrderedTaskPreparation(
     - ready: a task is ready after all its prereqs are completed, and the task it depends on is
         also ready. The initial ready task is set with :meth:`set_finished_dependency`
     """
+
     # methods to extract the id and dependency IDs out of a task
     _id_of: StaticMethod[Callable[[TTask], TTaskID]]
     _dependency_of: StaticMethod[Callable[[TTask], TTaskID]]
@@ -466,12 +452,13 @@ class OrderedTaskPreparation(
     """
 
     def __init__(
-            self,
-            prerequisites: Type[TPrerequisite],
-            id_extractor: Callable[[TTask], TTaskID],
-            dependency_extractor: Callable[[TTask], TTaskID],
-            accept_dangling_tasks: bool = False,
-            max_depth: int = None) -> None:
+        self,
+        prerequisites: Type[TPrerequisite],
+        id_extractor: Callable[[TTask], TTaskID],
+        dependency_extractor: Callable[[TTask], TTaskID],
+        accept_dangling_tasks: bool = False,
+        max_depth: int = None,
+    ) -> None:
 
         self._prereq_tracker = BaseTaskPrerequisites.from_enum(prerequisites)
         self._id_of = id_extractor
@@ -482,7 +469,9 @@ class OrderedTaskPreparation(
         if max_depth is None:
             self._max_depth = self._default_max_depth
         elif max_depth < 0:
-            raise ValidationError(f"The maximum depth must be at least 0, not {max_depth}")
+            raise ValidationError(
+                f"The maximum depth must be at least 0, not {max_depth}"
+            )
         else:
             self._max_depth = max_depth
 
@@ -501,7 +490,7 @@ class OrderedTaskPreparation(
 
         # This is a queue of tasks that have become ready, in order.
         # They wait in this Queue until being returned by ready_tasks().
-        self._ready_tasks: 'Queue[TTask]' = Queue()
+        self._ready_tasks: "Queue[TTask]" = Queue()
 
         # Declared finished with set_finished_dependency()
         self._declared_finished: Set[TTaskID] = set()
@@ -528,7 +517,7 @@ class OrderedTaskPreparation(
             raise DuplicateTasks(
                 f"Can't set a new finished dependency {finished_task} id:{task_id}, "
                 "it's already registered",
-                (finished_task, ),
+                (finished_task,),
             )
         self._tasks[task_id] = completed
         self._declared_finished.add(task_id)
@@ -541,7 +530,9 @@ class OrderedTaskPreparation(
 
         # note that this task is intentionally *not* added to self._unready
 
-    def register_tasks(self, tasks: Tuple[TTask, ...], ignore_duplicates: bool = False) -> None:
+    def register_tasks(
+        self, tasks: Tuple[TTask, ...], ignore_duplicates: bool = False
+    ) -> None:
         """
         Initiate a task into tracking. By default, each task must be registered
         *after* its dependency has been registered.
@@ -554,12 +545,13 @@ class OrderedTaskPreparation(
             whether ready or not
         """
         identified_tasks = tuple((self._id_of(task), task) for task in tasks)
-        duplicates = tuple(task for task_id, task in identified_tasks if task_id in self._tasks)
+        duplicates = tuple(
+            task for task_id, task in identified_tasks if task_id in self._tasks
+        )
 
         if duplicates and not ignore_duplicates:
             raise DuplicateTasks(
-                f"Cannot re-register tasks: {duplicates!r} for completion",
-                duplicates,
+                f"Cannot re-register tasks: {duplicates!r} for completion", duplicates
             )
 
         task_meta_info = tuple(
@@ -590,12 +582,16 @@ class OrderedTaskPreparation(
     def finish_prereq(self, prereq: TPrerequisite, tasks: Tuple[TTask, ...]) -> None:
         """For every task in tasks, mark the given prerequisite as completed"""
         if len(self._tasks) == 0:
-            raise ValidationError("Cannot finish a task until set_last_completion() is called")
+            raise ValidationError(
+                "Cannot finish a task until set_last_completion() is called"
+            )
 
         for task in tasks:
             task_id = self._id_of(task)
             if task_id not in self._tasks:
-                raise ValidationError(f"Cannot finish task {task_id!r} before preparing it")
+                raise ValidationError(
+                    f"Cannot finish task {task_id!r} before preparing it"
+                )
             elif task_id not in self._unready:
                 raise ValidationError(
                     f"Cannot finish prereq {prereq} of task {task} id:{task_id!r} that is complete"
@@ -638,10 +634,9 @@ class OrderedTaskPreparation(
     def _mark_complete(self, task_id: TTaskID) -> None:
         qualified_tasks = tuple([task_id])
         while qualified_tasks:
-            qualified_tasks = tuple(mapcat(
-                self._mark_one_task_complete,
-                qualified_tasks,
-            ))
+            qualified_tasks = tuple(
+                mapcat(self._mark_one_task_complete, qualified_tasks)
+            )
 
     @to_tuple
     def _mark_one_task_complete(self, task_id: TTaskID) -> Iterable[TTaskID]:

@@ -1,25 +1,16 @@
 import asyncio
-from concurrent.futures import (
-    ThreadPoolExecutor,
-)
+from concurrent.futures import ThreadPoolExecutor
 import ipaddress
-from typing import (
-    AsyncGenerator,
-    NamedTuple,
-)
+from typing import AsyncGenerator, NamedTuple
 from urllib.parse import urlparse
 
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
-from p2p.exceptions import (
-    NoInternalAddressMatchesDevice,
-)
+from cancel_token import CancelToken, OperationCancelled
+from p2p.exceptions import NoInternalAddressMatchesDevice
 import netifaces
 from p2p.service import BaseService
 
 from eth._warnings import catch_and_ignore_import_warning
+
 with catch_and_ignore_import_warning():
     import upnpclient
 
@@ -40,15 +31,15 @@ def find_internal_ip_on_device_network(upnp_dev: upnpclient.upnp.Device) -> str:
     """
     parsed_url = urlparse(upnp_dev.location)
     # Get an ipaddress.IPv4Network instance for the upnp device's network.
-    upnp_dev_net = ipaddress.ip_network(parsed_url.hostname + '/24', strict=False)
+    upnp_dev_net = ipaddress.ip_network(parsed_url.hostname + "/24", strict=False)
     for iface in netifaces.interfaces():
         for family, addresses in netifaces.ifaddresses(iface).items():
             # TODO: Support IPv6 addresses as well.
             if family != netifaces.AF_INET:
                 continue
             for item in addresses:
-                if ipaddress.ip_address(item['addr']) in upnp_dev_net:
-                    return item['addr']
+                if ipaddress.ip_address(item["addr"]) in upnp_dev_net:
+                    return item["addr"]
     raise NoInternalAddressMatchesDevice(device_hostname=parsed_url.hostname)
 
 
@@ -108,12 +99,14 @@ class UPnPService(BaseService):
                 else:
                     return external_ip
         except upnpclient.soap.SOAPError as e:
-            if e.args == (718, 'ConflictInMappingEntry'):
+            if e.args == (718, "ConflictInMappingEntry"):
                 # An entry already exists with the parameters we specified. Maybe the router
                 # didn't clean it up after it expired or it has been configured by other piece
                 # of software, either way we should not override it.
                 # https://tools.ietf.org/id/draft-ietf-pcp-upnp-igd-interworking-07.html#errors
-                self.logger.info("NAT port mapping already configured, not overriding it")
+                self.logger.info(
+                    "NAT port mapping already configured, not overriding it"
+                )
             else:
                 self.logger.exception("Failed to setup NAT portmap")
 
@@ -122,7 +115,7 @@ class UPnPService(BaseService):
 
     def current_mapping(self) -> PortMapping:
         if self._mapping is None:
-            unbound = ':%d' % self.port
+            unbound = ":%d" % self.port
             return PortMapping(unbound, unbound)
         else:
             return self._mapping
@@ -131,33 +124,39 @@ class UPnPService(BaseService):
         # Detect our internal IP address (which raises if there are no matches)
         internal_ip = find_internal_ip_on_device_network(upnp_dev)
 
-        external_ip = upnp_dev.WANIPConn1.GetExternalIPAddress()['NewExternalIPAddress']
-        for protocol, description in [('TCP', 'ethereum p2p'), ('UDP', 'ethereum discovery')]:
+        external_ip = upnp_dev.WANIPConn1.GetExternalIPAddress()["NewExternalIPAddress"]
+        for protocol, description in [
+            ("TCP", "ethereum p2p"),
+            ("UDP", "ethereum discovery"),
+        ]:
             upnp_dev.WANIPConn1.AddPortMapping(
                 NewRemoteHost=external_ip,
                 NewExternalPort=self.port,
                 NewProtocol=protocol,
                 NewInternalPort=self.port,
                 NewInternalClient=internal_ip,
-                NewEnabled='1',
+                NewEnabled="1",
                 NewPortMappingDescription=description,
                 NewLeaseDuration=self._nat_portmap_lifetime,
             )
         self._mapping = PortMapping(
-            '%s:%d' % (internal_ip, self.port),
-            '%s:%d' % (external_ip, self.port),
+            "%s:%d" % (internal_ip, self.port), "%s:%d" % (external_ip, self.port)
         )
         self.logger.info("NAT port forwarding successfully set up: %r", self._mapping)
         return external_ip
 
-    async def _discover_upnp_devices(self) -> AsyncGenerator[upnpclient.upnp.Device, None]:
+    async def _discover_upnp_devices(
+        self
+    ) -> AsyncGenerator[upnpclient.upnp.Device, None]:
         loop = asyncio.get_event_loop()
         # Use loop.run_in_executor() because upnpclient.discover() is blocking and may take a
         # while to complete. We must use a ThreadPoolExecutor() because the
         # response from upnpclient.discover() can't be pickled.
         try:
             devices = await self.wait(
-                loop.run_in_executor(ThreadPoolExecutor(max_workers=1), upnpclient.discover),
+                loop.run_in_executor(
+                    ThreadPoolExecutor(max_workers=1), upnpclient.discover
+                ),
                 timeout=UPNP_DISCOVER_TIMEOUT_SECONDS,
             )
         except TimeoutError:

@@ -1,37 +1,22 @@
-from typing import (
-    cast,
-    Tuple,
-    Union,
-)
+from typing import cast, Tuple, Union
 
-from eth_typing import (
-    Hash32,
-)
+from eth_typing import Hash32
 
-from eth_utils import (
-    ValidationError,
-    encode_hex,
-)
-from eth_utils.toolz import (
-    sliding_window,
-)
+from eth_utils import ValidationError, encode_hex
+from eth_utils.toolz import sliding_window
 
 from eth2.beacon.types.blocks import BaseBeaconBlock
-from eth2.beacon.typing import (
-    Slot,
-)
+from eth2.beacon.typing import Slot
 
 from trinity.protocol.common.validators import BaseValidator
 
-from trinity.protocol.bcc.commands import (
-    RequestMessage,
-    ResponseMessage,
-)
+from trinity.protocol.bcc.commands import RequestMessage, ResponseMessage
 
 
 class BeaconBlocksValidator(BaseValidator[Tuple[BaseBeaconBlock, ...]]):
-
-    def __init__(self, block_slot_or_hash: Union[Slot, Hash32], max_blocks: int) -> None:
+    def __init__(
+        self, block_slot_or_hash: Union[Slot, Hash32], max_blocks: int
+    ) -> None:
         self.block_slot_or_hash = block_slot_or_hash
         self.max_blocks = max_blocks
 
@@ -81,11 +66,11 @@ class BeaconBlocksValidator(BaseValidator[Tuple[BaseBeaconBlock, ...]]):
             # check that the received blocks form a sequence of descendents connected by parent
             # hashes, starting with the oldest ancestor
             if child.previous_block_root != parent.signing_root:
-                raise ValidationError(
-                    "Returned blocks are not a connected branch"
-                )
+                raise ValidationError("Returned blocks are not a connected branch")
 
 
-def match_payload_request_id(request: RequestMessage, response: ResponseMessage) -> None:
-    if request['request_id'] != response['request_id']:
+def match_payload_request_id(
+    request: RequestMessage, response: ResponseMessage
+) -> None:
+    if request["request_id"] != response["request_id"]:
         raise ValidationError("Request `id` does not match")

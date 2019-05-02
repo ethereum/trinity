@@ -3,44 +3,24 @@ from abc import abstractmethod
 import asyncio
 import logging
 import secrets
-from typing import (
-    Any,
-    cast,
-    Generic,
-    Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-)
+from typing import Any, cast, Generic, Sequence, Tuple, Type, TypeVar
 
 from eth_keys import datatypes
 from eth_utils import big_endian_to_int
 from cancel_token import CancelToken, OperationCancelled
 from eth_typing import BlockNumber
 from eth.vm.base import BaseVM
-from p2p.auth import (
-    decode_authentication,
-    HandshakeResponder,
-)
+from p2p.auth import decode_authentication, HandshakeResponder
 from p2p.constants import (
     ENCRYPTED_AUTH_MSG_LEN,
     DEFAULT_MAX_PEERS,
     HASH_LEN,
     REPLY_TIMEOUT,
 )
-from p2p.exceptions import (
-    DecryptionError,
-    HandshakeFailure,
-    PeerConnectionLost,
-)
-from p2p.kademlia import (
-    Address,
-    Node,
-)
+from p2p.exceptions import DecryptionError, HandshakeFailure, PeerConnectionLost
+from p2p.kademlia import Address, Node
 from p2p.nat import UPnPService
-from p2p.p2p_proto import (
-    DisconnectReason,
-)
+from p2p.p2p_proto import DisconnectReason
 from p2p.peer import BasePeer, PeerConnection
 from p2p.service import BaseService
 
@@ -68,29 +48,31 @@ from trinity.protocol.bcc.servers import BCCRequestServer
 
 DIAL_IN_OUT_RATIO = 0.75
 
-TPeerPool = TypeVar('TPeerPool', bound=BasePeerPool)
+TPeerPool = TypeVar("TPeerPool", bound=BasePeerPool)
 T_VM_CONFIGURATION = Tuple[Tuple[BlockNumber, Type[BaseVM]], ...]
 
 
 class BaseServer(BaseService, Generic[TPeerPool]):
     """Server listening for incoming connections"""
+
     _tcp_listener = None
     peer_pool: TPeerPool
 
-    def __init__(self,
-                 privkey: datatypes.PrivateKey,
-                 port: int,
-                 chain: BaseAsyncChain,
-                 chaindb: BaseAsyncChainDB,
-                 headerdb: BaseAsyncHeaderDB,
-                 base_db: BaseAsyncDB,
-                 network_id: int,
-                 max_peers: int = DEFAULT_MAX_PEERS,
-                 bootstrap_nodes: Tuple[Node, ...] = None,
-                 preferred_nodes: Sequence[Node] = None,
-                 event_bus: TrinityEventBusEndpoint = None,
-                 token: CancelToken = None,
-                 ) -> None:
+    def __init__(
+        self,
+        privkey: datatypes.PrivateKey,
+        port: int,
+        chain: BaseAsyncChain,
+        chaindb: BaseAsyncChainDB,
+        headerdb: BaseAsyncHeaderDB,
+        base_db: BaseAsyncDB,
+        network_id: int,
+        max_peers: int = DEFAULT_MAX_PEERS,
+        bootstrap_nodes: Tuple[Node, ...] = None,
+        preferred_nodes: Sequence[Node] = None,
+        event_bus: TrinityEventBusEndpoint = None,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         # cross process event bus
         self.event_bus = event_bus
@@ -114,7 +96,9 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         # child services
         self.upnp_service = UPnPService(port, token=self.cancel_token)
         self.peer_pool = self._make_peer_pool()
-        self._peer_pool_request_handler = self._make_peer_pool_request_handler(self.peer_pool)
+        self._peer_pool_request_handler = self._make_peer_pool_request_handler(
+            self.peer_pool
+        )
         self.request_server = self._make_request_server()
 
         if not bootstrap_nodes:
@@ -125,12 +109,10 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         pass
 
     def _make_peer_pool_request_handler(
-            self,
-            peer_pool: TPeerPool) -> PeerPoolEventServer[Any]:
+        self, peer_pool: TPeerPool
+    ) -> PeerPoolEventServer[Any]:
         return DefaultPeerPoolEventBusRequestHandler(
-            self.event_bus,
-            peer_pool,
-            self.cancel_token
+            self.event_bus, peer_pool, self.cancel_token
         )
 
     @abstractmethod
@@ -140,9 +122,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
     async def _start_tcp_listener(self) -> None:
         # TODO: Support IPv6 addresses as well.
         self._tcp_listener = await asyncio.start_server(
-            self.receive_handshake,
-            host='0.0.0.0',
-            port=self.port,
+            self.receive_handshake, host="0.0.0.0", port=self.port
         )
 
     async def _close_tcp_listener(self) -> None:
@@ -154,7 +134,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         self.logger.info("Running server...")
         mapped_external_ip = await self.upnp_service.add_nat_portmap()
         if mapped_external_ip is None:
-            external_ip = '0.0.0.0'
+            external_ip = "0.0.0.0"
         else:
             external_ip = mapped_external_ip
         await self._start_tcp_listener()
@@ -164,8 +144,8 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             external_ip,
             self.port,
         )
-        self.logger.info('network: %s', self.network_id)
-        self.logger.info('peers: max_peers=%s', self.max_peers)
+        self.logger.info("network: %s", self.network_id)
+        self.logger.info("peers: max_peers=%s", self.max_peers)
 
         self.run_daemon(self.peer_pool)
         self.run_daemon(self._peer_pool_request_handler)
@@ -181,7 +161,8 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         await self._close_tcp_listener()
 
     async def receive_handshake(
-            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         expected_exceptions = (
             TimeoutError,
             PeerConnectionLost,
@@ -198,10 +179,11 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             self.logger.exception("Unexpected error handling handshake")
 
     async def _receive_handshake(
-            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+    ) -> None:
         msg = await self.wait(
-            reader.read(ENCRYPTED_AUTH_MSG_LEN),
-            timeout=REPLY_TIMEOUT)
+            reader.read(ENCRYPTED_AUTH_MSG_LEN), timeout=REPLY_TIMEOUT
+        )
 
         ip, socket, *_ = writer.get_extra_info("peername")
         remote_address = Address(ip, socket)
@@ -209,24 +191,26 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         got_eip8 = False
         try:
             ephem_pubkey, initiator_nonce, initiator_pubkey = decode_authentication(
-                msg, self.privkey)
+                msg, self.privkey
+            )
         except DecryptionError:
             # Try to decode as EIP8
             got_eip8 = True
             msg_size = big_endian_to_int(msg[:2])
             remaining_bytes = msg_size - ENCRYPTED_AUTH_MSG_LEN + 2
-            msg += await self.wait(
-                reader.read(remaining_bytes),
-                timeout=REPLY_TIMEOUT)
+            msg += await self.wait(reader.read(remaining_bytes), timeout=REPLY_TIMEOUT)
             try:
                 ephem_pubkey, initiator_nonce, initiator_pubkey = decode_authentication(
-                    msg, self.privkey)
+                    msg, self.privkey
+                )
             except DecryptionError as e:
                 self.logger.debug("Failed to decrypt handshake: %s", e)
                 return
 
         initiator_remote = Node(initiator_pubkey, remote_address)
-        responder = HandshakeResponder(initiator_remote, self.privkey, got_eip8, self.cancel_token)
+        responder = HandshakeResponder(
+            initiator_remote, self.privkey, got_eip8, self.cancel_token
+        )
 
         responder_nonce = secrets.token_bytes(HASH_LEN)
         auth_ack_msg = responder.create_auth_ack_message(responder_nonce)
@@ -242,7 +226,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             responder_nonce=responder_nonce,
             remote_ephemeral_pubkey=ephem_pubkey,
             auth_init_ciphertext=msg,
-            auth_ack_ciphertext=auth_ack_ciphertext
+            auth_ack_ciphertext=auth_ack_ciphertext,
         )
         connection = PeerConnection(
             reader=reader,
@@ -255,9 +239,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
 
         # Create and register peer in peer_pool
         peer = self.peer_pool.get_peer_factory().create_peer(
-            remote=initiator_remote,
-            connection=connection,
-            inbound=True,
+            remote=initiator_remote, connection=connection, inbound=True
         )
 
         if self.peer_pool.is_full:
@@ -268,12 +250,9 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             return
 
         total_peers = len(self.peer_pool)
-        inbound_peer_count = len([
-            peer
-            for peer
-            in self.peer_pool.connected_nodes.values()
-            if peer.inbound
-        ])
+        inbound_peer_count = len(
+            [peer for peer in self.peer_pool.connected_nodes.values() if peer.inbound]
+        )
         if total_peers > 1 and inbound_peer_count / total_peers > DIAL_IN_OUT_RATIO:
             # make sure to have at least 1/4 outbound connections
             await peer.disconnect(DisconnectReason.too_many_peers)
@@ -300,15 +279,11 @@ class FullServer(BaseServer[ETHPeerPool]):
             max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
         )
 
     def _make_request_server(self) -> ETHRequestServer:
-        return ETHRequestServer(
-            self.chaindb,
-            self.peer_pool,
-            token=self.cancel_token,
-        )
+        return ETHRequestServer(self.chaindb, self.peer_pool, token=self.cancel_token)
 
 
 class LightServer(BaseServer[LESPeerPool]):
@@ -323,14 +298,12 @@ class LightServer(BaseServer[LESPeerPool]):
             max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
         )
 
     def _make_request_server(self) -> LightRequestServer:
         return LightRequestServer(
-            self.headerdb,
-            self.peer_pool,
-            token=self.cancel_token,
+            self.headerdb, self.peer_pool, token=self.cancel_token
         )
 
 
@@ -346,7 +319,7 @@ class BCCServer(BaseServer[BCCPeerPool]):
             max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
         )
 
     def _make_request_server(self) -> BCCRequestServer:
@@ -371,18 +344,25 @@ def _test() -> None:
     from trinity._utils.chains import load_nodekey
 
     from tests.core.integration_test_helpers import (
-        FakeAsyncLevelDB, FakeAsyncHeaderDB, FakeAsyncChainDB, FakeAsyncRopstenChain)
+        FakeAsyncLevelDB,
+        FakeAsyncHeaderDB,
+        FakeAsyncChainDB,
+        FakeAsyncRopstenChain,
+    )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-db', type=str, required=True)
-    parser.add_argument('-debug', action="store_true")
-    parser.add_argument('-bootnodes', type=str, default=[])
-    parser.add_argument('-nodekey', type=str)
+    parser.add_argument("-db", type=str, required=True)
+    parser.add_argument("-debug", action="store_true")
+    parser.add_argument("-bootnodes", type=str, default=[])
+    parser.add_argument("-nodekey", type=str)
 
     args = parser.parse_args()
 
     logging.basicConfig(
-        level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     log_level = logging.INFO
     if args.debug:
         log_level = logging.DEBUG
@@ -404,7 +384,7 @@ def _test() -> None:
 
     port = 30303
     if args.bootnodes:
-        bootstrap_nodes = args.bootnodes.split(',')
+        bootstrap_nodes = args.bootnodes.split(",")
     else:
         bootstrap_nodes = ROPSTEN_BOOTNODES
     bootstrap_nodes = [Node.from_uri(enode) for enode in bootstrap_nodes]

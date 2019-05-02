@@ -1,22 +1,12 @@
-from typing import (
-    List,
-    Tuple,
-    TYPE_CHECKING,
-    Union,
-)
+from typing import List, Tuple, TYPE_CHECKING, Union
 
-from eth_typing import (
-    Hash32,
-    BlockNumber,
-)
+from eth_typing import Hash32, BlockNumber
 
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransactionFields
 
-from p2p.protocol import (
-    Protocol,
-)
+from p2p.protocol import Protocol
 
 from trinity.protocol.common.peer import ChainInfo
 from trinity.rlp.block_body import BlockBody
@@ -44,29 +34,33 @@ if TYPE_CHECKING:
 
 # HasExtendedDebugLogger must come before Protocol so there's self.logger.debug2()
 class ETHProtocol(HasExtendedDebugLogger, Protocol):
-    name = 'eth'
+    name = "eth"
     version = 63
     _commands = (
         Status,
         NewBlockHashes,
         Transactions,
-        GetBlockHeaders, BlockHeaders,
-        GetBlockBodies, BlockBodies,
+        GetBlockHeaders,
+        BlockHeaders,
+        GetBlockBodies,
+        BlockBodies,
         NewBlock,
-        GetNodeData, NodeData,
-        GetReceipts, Receipts,
+        GetNodeData,
+        NodeData,
+        GetReceipts,
+        Receipts,
     )
     cmd_length = 17
 
-    peer: 'ETHPeer'
+    peer: "ETHPeer"
 
     def send_handshake(self, chain_info: ChainInfo) -> None:
         resp = {
-            'protocol_version': self.version,
-            'network_id': self.peer.local_network_id,
-            'td': chain_info.total_difficulty,
-            'best_hash': chain_info.block_hash,
-            'genesis_hash': chain_info.genesis_hash,
+            "protocol_version": self.version,
+            "network_id": self.peer.local_network_id,
+            "td": chain_info.total_difficulty,
+            "best_hash": chain_info.block_hash,
+            "genesis_hash": chain_info.genesis_hash,
         }
         cmd = Status(self.cmd_id_offset, self.snappy_support)
         self.logger.debug2("Sending ETH/Status msg: %s", resp)
@@ -89,11 +83,12 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
     # Block Headers
     #
     def send_get_block_headers(
-            self,
-            block_number_or_hash: Union[BlockNumber, Hash32],
-            max_headers: int,
-            skip: int,
-            reverse: bool) -> None:
+        self,
+        block_number_or_hash: Union[BlockNumber, Hash32],
+        max_headers: int,
+        skip: int,
+        reverse: bool,
+    ) -> None:
         """Send a GetBlockHeaders msg to the remote.
 
         This requests that the remote send us up to max_headers, starting from
@@ -102,10 +97,10 @@ class ETHProtocol(HasExtendedDebugLogger, Protocol):
         """
         cmd = GetBlockHeaders(self.cmd_id_offset, self.snappy_support)
         data = {
-            'block_number_or_hash': block_number_or_hash,
-            'max_headers': max_headers,
-            'skip': skip,
-            'reverse': reverse
+            "block_number_or_hash": block_number_or_hash,
+            "max_headers": max_headers,
+            "skip": skip,
+            "reverse": reverse,
         }
         header, body = cmd.encode(data)
         self.send(header, body)

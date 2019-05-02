@@ -1,16 +1,14 @@
 import pytest
 
-from tests.integration.helpers import (
-    run_command_and_detect_errors,
-)
+from tests.integration.helpers import run_command_and_detect_errors
 
 
 @pytest.mark.parametrize(
-    'command',
+    "command",
     (
         # ropsten
-        ('trinity', '--ropsten',),
-    )
+        ("trinity", "--ropsten"),
+    ),
 )
 @pytest.mark.asyncio
 async def test_does_not_throw_long_run(async_process_runner, command):

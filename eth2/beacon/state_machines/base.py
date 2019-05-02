@@ -1,33 +1,17 @@
-from abc import (
-    ABC,
-    abstractmethod,
-)
-from typing import (
-    Tuple,
-    Type,
-)
+from abc import ABC, abstractmethod
+from typing import Tuple, Type
 
-from eth_typing import (
-    Hash32,
-)
+from eth_typing import Hash32
 
-from eth._utils.datatypes import (
-    Configurable,
-)
+from eth._utils.datatypes import Configurable
 
-from eth2.configs import (  # noqa: F401
-    Eth2Config,
-)
+from eth2.configs import Eth2Config  # noqa: F401
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import (
-    FromBlockParams,
-)
+from eth2.beacon.typing import FromBlockParams
 
-from .state_transitions import (
-    BaseStateTransition,
-)
+from .state_transitions import BaseStateTransition
 
 
 class BaseBeaconStateMachine(Configurable, ABC):
@@ -43,9 +27,7 @@ class BaseBeaconStateMachine(Configurable, ABC):
     state_transition_class = None  # type: Type[BaseStateTransition]
 
     @abstractmethod
-    def __init__(self,
-                 chaindb: BaseBeaconChainDB,
-                 block_root: Hash32) -> None:
+    def __init__(self, chaindb: BaseBeaconChainDB, block_root: Hash32) -> None:
         pass
 
     @classmethod
@@ -72,22 +54,21 @@ class BaseBeaconStateMachine(Configurable, ABC):
     # Import block API
     #
     @abstractmethod
-    def import_block(self,
-                     block: BaseBeaconBlock,
-                     check_proposer_signature: bool=True) -> Tuple[BeaconState, BaseBeaconBlock]:
+    def import_block(
+        self, block: BaseBeaconBlock, check_proposer_signature: bool = True
+    ) -> Tuple[BeaconState, BaseBeaconBlock]:
         pass
 
     @staticmethod
     @abstractmethod
-    def create_block_from_parent(parent_block: BaseBeaconBlock,
-                                 block_params: FromBlockParams) -> BaseBeaconBlock:
+    def create_block_from_parent(
+        parent_block: BaseBeaconBlock, block_params: FromBlockParams
+    ) -> BaseBeaconBlock:
         pass
 
 
 class BeaconStateMachine(BaseBeaconStateMachine):
-    def __init__(self,
-                 chaindb: BaseBeaconChainDB,
-                 block: BaseBeaconBlock) -> None:
+    def __init__(self, chaindb: BaseBeaconChainDB, block: BaseBeaconBlock) -> None:
         self.chaindb = chaindb
         self.block = block
 
@@ -95,8 +76,7 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     def state(self) -> BeaconState:
         if self._state is None:
             self._state = self.chaindb.get_state_by_root(
-                self.block.state_root,
-                self.get_state_class()
+                self.block.state_root, self.get_state_class()
             )
         return self._state
 
@@ -129,7 +109,9 @@ class BeaconStateMachine(BaseBeaconStateMachine):
         class that this StateTransition uses for StateTransition.
         """
         if cls.state_transition_class is None:
-            raise AttributeError("No `state_transition_class` has been set for this StateMachine")
+            raise AttributeError(
+                "No `state_transition_class` has been set for this StateMachine"
+            )
         else:
             return cls.state_transition_class
 
@@ -140,17 +122,13 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     #
     # Import block API
     #
-    def import_block(self,
-                     block: BaseBeaconBlock,
-                     check_proposer_signature: bool=True) -> Tuple[BeaconState, BaseBeaconBlock]:
+    def import_block(
+        self, block: BaseBeaconBlock, check_proposer_signature: bool = True
+    ) -> Tuple[BeaconState, BaseBeaconBlock]:
         state = self.state_transition.apply_state_transition(
-            self.state,
-            block,
-            check_proposer_signature,
+            self.state, block, check_proposer_signature
         )
 
-        block = block.copy(
-            state_root=state.root,
-        )
+        block = block.copy(state_root=state.root)
 
         return state, block

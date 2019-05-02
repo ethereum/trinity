@@ -1,10 +1,7 @@
 import code
 from functools import partial
 from pathlib import Path
-from typing import (
-    Any,
-    Dict,
-)
+from typing import Any, Dict
 
 from eth_utils import encode_hex
 from eth_utils.toolz import merge
@@ -12,12 +9,8 @@ from eth_utils.toolz import merge
 from eth.db.chain import ChainDB
 from eth.db.backends.level import LevelDB
 
-from trinity._utils.log_messages import (
-    create_missing_ipc_error_message,
-)
-from trinity.config import (
-    TrinityConfig,
-)
+from trinity._utils.log_messages import create_missing_ipc_error_message
+from trinity.config import TrinityConfig
 
 
 DEFAULT_BANNER: str = (
@@ -47,8 +40,7 @@ def ipython_shell(namespace: Dict[str, Any], banner: str) -> Any:
         )
 
     return IPython.terminal.embed.InteractiveShellEmbed(
-        user_ns=namespace,
-        banner1=banner,
+        user_ns=namespace, banner1=banner
     )
 
 
@@ -59,16 +51,18 @@ def python_shell(namespace: Dict[str, Any], banner: str) -> Any:
     except ImportError:
         pass
     else:
-        readline.parse_and_bind('tab: complete')
+        readline.parse_and_bind("tab: complete")
 
     shell = code.InteractiveConsole(namespace)
     return partial(shell.interact, banner=banner)
 
 
-def console(ipc_path: Path,
-            use_ipython: bool=True,
-            env: Dict[str, Any]=None,
-            banner: str=DEFAULT_BANNER) -> None:
+def console(
+    ipc_path: Path,
+    use_ipython: bool = True,
+    env: Dict[str, Any] = None,
+    banner: str = DEFAULT_BANNER,
+) -> None:
     """
     Method that starts the chain, setups the trinity CLI and register the
     cleanup function.
@@ -82,6 +76,7 @@ def console(ipc_path: Path,
 
     # wait to import web3, because it's somewhat large, and not usually used
     import web3
+
     ipc_provider = web3.IPCProvider(ipc_path)
     w3 = web3.Web3(ipc_provider)
 
@@ -89,12 +84,14 @@ def console(ipc_path: Path,
     def rpc(method: str, params: Dict[str, Any] = None) -> str:
         return ipc_provider.make_request(method, params)
 
-    namespace = merge({'w3': w3, 'rpc': rpc}, env)
+    namespace = merge({"w3": w3, "rpc": rpc}, env)
 
     shell(use_ipython, namespace, banner)
 
 
-def db_shell(use_ipython: bool, database_dir: Path, trinity_config: TrinityConfig) -> None:
+def db_shell(
+    use_ipython: bool, database_dir: Path, trinity_config: TrinityConfig
+) -> None:
 
     db = LevelDB(database_dir)
     chaindb = ChainDB(db)
@@ -116,11 +113,11 @@ def db_shell(use_ipython: bool, database_dir: Path, trinity_config: TrinityConfi
     """
 
     namespace = {
-        'db': db,
-        'chaindb': chaindb,
-        'trinity_config': trinity_config,
-        'chain_config': chain_config,
-        'chain': chain,
+        "db": db,
+        "chaindb": chaindb,
+        "trinity_config": trinity_config,
+        "chain_config": chain_config,
+        "chain": chain,
     }
     shell(use_ipython, namespace, DB_SHELL_BANNER + greeter)
 

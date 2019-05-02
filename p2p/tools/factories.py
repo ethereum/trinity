@@ -4,10 +4,7 @@ from typing import Any
 
 from cancel_token import CancelToken
 
-from eth_utils import (
-    keccak,
-    int_to_big_endian,
-)
+from eth_utils import keccak, int_to_big_endian
 
 from eth_keys import keys
 
@@ -19,7 +16,9 @@ from p2p.ecies import generate_privkey
 try:
     import factory
 except ImportError:
-    raise ImportError("The p2p.tools.factories module requires the `factory_boy` library.")
+    raise ImportError(
+        "The p2p.tools.factories module requires the `factory_boy` library."
+    )
 
 
 def get_open_port() -> int:
@@ -31,9 +30,9 @@ def get_open_port() -> int:
     return port
 
 
-def PrivateKeyFactory(seed: bytes=None) -> keys.PrivateKey:
+def PrivateKeyFactory(seed: bytes = None) -> keys.PrivateKey:
     if seed is None:
-        key_bytes = int_to_big_endian(random.getrandbits(256)).rjust(32, b'\x00')
+        key_bytes = int_to_big_endian(random.getrandbits(256)).rjust(32, b"\x00")
     else:
         key_bytes = keccak(seed)
     return keys.PrivateKey(key_bytes)
@@ -47,13 +46,15 @@ class AddressFactory(factory.Factory):
     class Meta:
         model = kademlia.Address
 
-    ip = factory.Sequence(lambda n: f'10.{(n // 65536) % 256}.{(n // 256) % 256}.{n % 256}')
+    ip = factory.Sequence(
+        lambda n: f"10.{(n // 65536) % 256}.{(n // 256) % 256}.{n % 256}"
+    )
     udp_port = factory.LazyFunction(get_open_port)
     tcp_port = 0
 
     @classmethod
     def localhost(cls, *args: Any, **kwargs: Any) -> kademlia.Address:
-        return cls(*args, ip='127.0.0.1', **kwargs)
+        return cls(*args, ip="127.0.0.1", **kwargs)
 
 
 class NodeFactory(factory.Factory):
@@ -77,9 +78,11 @@ class DiscoveryProtocolFactory(factory.Factory):
     privkey = factory.LazyFunction(generate_privkey)
     address = factory.SubFactory(AddressFactory)
     bootstrap_nodes = factory.LazyFunction(tuple)
-    cancel_token = factory.LazyFunction(lambda: CancelToken('discovery-test'))
+    cancel_token = factory.LazyFunction(lambda: CancelToken("discovery-test"))
 
     @classmethod
-    def from_seed(cls, seed: bytes, *args: Any, **kwargs: Any) -> discovery.DiscoveryProtocol:
+    def from_seed(
+        cls, seed: bytes, *args: Any, **kwargs: Any
+    ) -> discovery.DiscoveryProtocol:
         privkey = keys.PrivateKey(keccak(seed))
         return cls(*args, privkey=privkey, **kwargs)

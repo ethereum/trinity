@@ -1,9 +1,6 @@
 import asyncio
 import time
-from typing import (
-    Union,
-    AsyncGenerator,
-)
+from typing import Union, AsyncGenerator
 
 
 class NotEnoughTokens(Exception):
@@ -11,13 +8,12 @@ class NotEnoughTokens(Exception):
     Raised if the token bucket is empty when trying to take a token in blocking
     mode.
     """
+
     pass
 
 
 class TokenBucket:
-    def __init__(self,
-                 rate: Union[int, float],
-                 capacity: Union[int, float]) -> None:
+    def __init__(self, rate: Union[int, float], capacity: Union[int, float]) -> None:
         self._rate = rate
         self._capacity = capacity
         self._num_tokens = self._capacity
@@ -44,8 +40,7 @@ class TokenBucket:
         # Note that the implementation of the `take` method requires that this
         # function to allow negative results..
         return min(
-            self._capacity,
-            self._num_tokens + (self._rate * (when - self._last_refill)),
+            self._capacity, self._num_tokens + (self._rate * (when - self._last_refill))
         )
 
     def _take(self, num: Union[int, float] = 1) -> None:

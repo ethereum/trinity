@@ -1,13 +1,7 @@
-from typing import (
-    Dict,
-    Generic,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing import Dict, Generic, Optional, Tuple, TypeVar
 from eth_utils import ValidationError
 
-TNodeID = TypeVar('TNodeID')
+TNodeID = TypeVar("TNodeID")
 
 
 class Tree(Generic[TNodeID]):
@@ -20,6 +14,7 @@ class Tree(Generic[TNodeID]):
 
     Nodes can only be removed if their parent is not present
     """
+
     def __init__(self) -> None:
         self._parents: Dict[TNodeID, TNodeID] = {}
         self._children: Dict[TNodeID, Tuple[TNodeID, ...]] = {}
@@ -51,7 +46,7 @@ class Tree(Generic[TNodeID]):
         else:
             self._parents[node_id] = parent_id
             children = self._children.get(parent_id, tuple())
-            self._children[parent_id] = children + (node_id, )
+            self._children[parent_id] = children + (node_id,)
 
     def prune(self, node_id: TNodeID) -> None:
         if self.has_parent(node_id):
@@ -63,7 +58,9 @@ class Tree(Generic[TNodeID]):
 
             # remove node ID from parent's children
             parent_children = self.children_of(parent_id)
-            new_parent_children = tuple(child for child in parent_children if child != node_id)
+            new_parent_children = tuple(
+                child for child in parent_children if child != node_id
+            )
             if len(new_parent_children):
                 self._children[parent_id] = new_parent_children
             else:
@@ -92,6 +89,7 @@ class TreeRoot(Generic[TNodeID]):
         for one side of the fork, and then mutate the root for the other side of the fork,
         with distinct root objects.
     """
+
     def __init__(self, root_node_id: TNodeID) -> None:
         # _root_id is the best-known root node at the time of node insertion
         self._root_id = root_node_id
@@ -103,7 +101,7 @@ class TreeRoot(Generic[TNodeID]):
     def _is_extension(self) -> bool:
         return self._extends_root is not None
 
-    def extend(self, tree_root: 'TreeRoot[TNodeID]', more_depth: int) -> None:
+    def extend(self, tree_root: "TreeRoot[TNodeID]", more_depth: int) -> None:
         """
         Indicate that what was once the original root now has a new root, because
         a parent node was added. tree_root is the new root node, and more_depth
@@ -114,7 +112,9 @@ class TreeRoot(Generic[TNodeID]):
         self._depth_extension = more_depth
         self._extends_root = tree_root
 
-    def _prune(self, from_node: TNodeID, to_node: TNodeID, old_depth_offset: int) -> None:
+    def _prune(
+        self, from_node: TNodeID, to_node: TNodeID, old_depth_offset: int
+    ) -> None:
         """
         Meant for pruning one node at a time
         """
@@ -133,7 +133,9 @@ class TreeRoot(Generic[TNodeID]):
                 self._depth_offset = old_depth_offset - 1 + self._depth_extension
         else:
             if from_node != self._root_id:
-                raise ValidationError(f"Pruned node {from_node} must be root: {self._root_id}")
+                raise ValidationError(
+                    f"Pruned node {from_node} must be root: {self._root_id}"
+                )
             elif old_depth_offset != self._depth_offset:
                 raise ValidationError(
                     f"Trying to prune child node with unexpected offset: {old_depth_offset} "
@@ -143,7 +145,9 @@ class TreeRoot(Generic[TNodeID]):
                 self._depth_offset -= 1
                 self._root_id = to_node
 
-    def prune_to(self, child_pairs: Tuple[Tuple[TNodeID, 'TreeRoot[TNodeID]'], ...]) -> None:
+    def prune_to(
+        self, child_pairs: Tuple[Tuple[TNodeID, "TreeRoot[TNodeID]"], ...]
+    ) -> None:
         """
         Prune the root, to each of the children provided. Each child pair is the new
         node ID for the child and the TreeRoot object for the child.
@@ -188,7 +192,7 @@ class TreeRoot(Generic[TNodeID]):
         true_root, extension = self._get_true_root()
         return true_root._depth_offset + extension
 
-    def _get_true_root(self) -> Tuple['TreeRoot[TNodeID]', int]:
+    def _get_true_root(self) -> Tuple["TreeRoot[TNodeID]", int]:
         """
         Return the true root (through all extensions), and the extended depth to it
         """
@@ -224,6 +228,7 @@ class RootTracker(Generic[TNodeID]):
     parents before children will give the best performance. Every inverted addition of
     a node will add a step to the root lookup time.
     """
+
     _roots: Dict[TNodeID, TreeRoot[TNodeID]]
 
     # "original" because root may have an offset for the final depth after pruning or adding parents
@@ -264,13 +269,17 @@ class RootTracker(Generic[TNodeID]):
                 uncached_root = self.get_root(root_node_id)
                 raise ValidationError(
                     f"RootTracker had stale and invalid cache for {node_id} root, "
-                    f" correct: {root_node_id}, stale: {uncached_root}")
+                    f" correct: {root_node_id}, stale: {uncached_root}"
+                )
             else:
                 return (root_node_id, root_depth)
         else:
             root = self._roots[node_id]
             original_depth = self._original_depth_to_root[node_id]
-            (root_node_id, root_depth) = (root.node_id, original_depth + root.depth_offset)
+            (root_node_id, root_depth) = (
+                root.node_id,
+                original_depth + root.depth_offset,
+            )
             if self._tree.has_parent(root_node_id):
                 parent = self._tree.parent_of(root_node_id)
                 if parent in self._roots:
@@ -309,7 +318,9 @@ class RootTracker(Generic[TNodeID]):
             )
 
         child_nodes = self._tree.children_of(prune_off_id)
-        child_pairs = tuple((child_node, self._roots[child_node]) for child_node in child_nodes)
+        child_pairs = tuple(
+            (child_node, self._roots[child_node]) for child_node in child_nodes
+        )
         root_to_prune.prune_to(child_pairs)
         for child_node, child_root in child_pairs:
             if child_node != child_root.node_id:
@@ -321,7 +332,9 @@ class RootTracker(Generic[TNodeID]):
         self._original_depth_to_root.pop(prune_off_id)
         del self._roots[prune_off_id]
 
-    def _get_new_root(self, node_id: TNodeID, parent_id: TNodeID) -> Tuple[TreeRoot[TNodeID], int]:
+    def _get_new_root(
+        self, node_id: TNodeID, parent_id: TNodeID
+    ) -> Tuple[TreeRoot[TNodeID], int]:
         if self._tree.has_parent(node_id):
             try:
                 parent_root = self._roots[parent_id]
@@ -345,10 +358,11 @@ class RootTracker(Generic[TNodeID]):
         return node_root, original_depth
 
     def _link_children(
-            self,
-            parent_root: TreeRoot[TNodeID],
-            parent_original_depth: int,
-            children: Tuple[TNodeID, ...]) -> None:
+        self,
+        parent_root: TreeRoot[TNodeID],
+        parent_original_depth: int,
+        children: Tuple[TNodeID, ...],
+    ) -> None:
 
         for child in children:
             child_root = self._roots[child]
@@ -364,4 +378,6 @@ class RootTracker(Generic[TNodeID]):
                 ideal_original_depth = parent_original_depth + 1
                 actual_original_depth = self._original_depth_to_root[child]
                 # extension length = ideal - actual = ideal - 0
-                child_root.extend(parent_root, ideal_original_depth - actual_original_depth)
+                child_root.extend(
+                    parent_root, ideal_original_depth - actual_original_depth
+                )

@@ -1,6 +1,4 @@
-from trinity.extensibility.events import (  # noqa: F401
-    BaseEvent
-)
+from trinity.extensibility.events import BaseEvent  # noqa: F401
 from trinity.extensibility.exceptions import (  # noqa: F401
     EventBusNotReady,
     InvalidPluginStatus,

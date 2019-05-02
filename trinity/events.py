@@ -1,16 +1,10 @@
-from typing import (
-    Tuple,
-)
+from typing import Tuple
 
-from lahja import (
-    BaseEvent,
-    ConnectionConfig,
-)
+from lahja import BaseEvent, ConnectionConfig
 
 
 class ShutdownRequest(BaseEvent):
-
-    def __init__(self, reason: str="") -> None:
+    def __init__(self, reason: str = "") -> None:
         self.reason = reason
 
 

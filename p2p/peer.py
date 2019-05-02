@@ -29,9 +29,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.constant_time import bytes_eq
 
-from eth_utils import (
-    to_tuple,
-)
+from eth_utils import to_tuple
 
 
 from eth_keys import datatypes
@@ -39,19 +37,9 @@ from eth_keys import datatypes
 from cancel_token import CancelToken
 
 from p2p import auth
-from p2p._utils import (
-    get_devp2p_cmd_id,
-    roundup_16,
-    sxor,
-)
-from p2p.protocol import (
-    Command,
-    PayloadType,
-    Protocol,
-)
-from p2p.kademlia import (
-    Node,
-)
+from p2p._utils import get_devp2p_cmd_id, roundup_16, sxor
+from p2p.protocol import Command, PayloadType, Protocol
+from p2p.kademlia import Node
 from p2p.exceptions import (
     DecryptionError,
     HandshakeFailure,
@@ -64,19 +52,9 @@ from p2p.exceptions import (
     UnknownProtocolCommand,
     UnreachablePeer,
 )
-from p2p.p2p_proto import (
-    Disconnect,
-    DisconnectReason,
-    Hello,
-    P2PProtocol,
-    Ping,
-    Pong,
-)
+from p2p.p2p_proto import Disconnect, DisconnectReason, Hello, P2PProtocol, Ping, Pong
 from p2p.service import BaseService
-from p2p.tracking.connection import (
-    BaseConnectionTracker,
-    NoopConnectionTracker,
-)
+from p2p.tracking.connection import BaseConnectionTracker, NoopConnectionTracker
 
 from .constants import (
     CONN_IDLE_TIMEOUT,
@@ -90,7 +68,7 @@ if TYPE_CHECKING:
     from p2p.peer_pool import BasePeerPool  # noqa: F401
 
 
-async def handshake(remote: Node, factory: 'BasePeerFactory') -> 'BasePeer':
+async def handshake(remote: Node, factory: "BasePeerFactory") -> "BasePeer":
     """Perform the auth and P2P handshakes with the given remote.
 
     Return an instance of the given peer_class (must be a subclass of
@@ -104,13 +82,14 @@ async def handshake(remote: Node, factory: 'BasePeerFactory') -> 'BasePeer':
     supported by the remote.
     """
     try:
-        (aes_secret,
-         mac_secret,
-         egress_mac,
-         ingress_mac,
-         reader,
-         writer
-         ) = await auth.handshake(remote, factory.privkey, factory.cancel_token)
+        (
+            aes_secret,
+            mac_secret,
+            egress_mac,
+            ingress_mac,
+            reader,
+            writer,
+        ) = await auth.handshake(remote, factory.privkey, factory.cancel_token)
     except (ConnectionRefusedError, OSError) as e:
         raise UnreachablePeer(f"Can't reach {remote!r}") from e
     connection = PeerConnection(
@@ -121,11 +100,7 @@ async def handshake(remote: Node, factory: 'BasePeerFactory') -> 'BasePeer':
         egress_mac=egress_mac,
         ingress_mac=ingress_mac,
     )
-    peer = factory.create_peer(
-        remote=remote,
-        connection=connection,
-        inbound=False,
-    )
+    peer = factory.create_peer(remote=remote, connection=connection, inbound=False)
 
     try:
         await peer.do_p2p_handshake()
@@ -158,7 +133,8 @@ class BasePeerBootManager(BaseService):
     The default boot manager does nothing, simply serving as a hook for other
     protocols which need to perform more complex boot check.
     """
-    def __init__(self, peer: 'BasePeer') -> None:
+
+    def __init__(self, peer: "BasePeer") -> None:
         super().__init__(peer.cancel_token)
         self.peer = peer
 
@@ -194,15 +170,16 @@ class BasePeer(BaseService):
 
     _event_bus: Endpoint = None
 
-    def __init__(self,
-                 remote: Node,
-                 privkey: datatypes.PrivateKey,
-                 connection: PeerConnection,
-                 context: BasePeerContext,
-                 inbound: bool = False,
-                 event_bus: Endpoint = None,
-                 token: CancelToken = None,
-                 ) -> None:
+    def __init__(
+        self,
+        remote: Node,
+        privkey: datatypes.PrivateKey,
+        connection: PeerConnection,
+        context: BasePeerContext,
+        inbound: bool = False,
+        event_bus: Endpoint = None,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
 
         # Any contextual information the peer may need.
@@ -215,7 +192,7 @@ class BasePeer(BaseService):
         self.privkey = privkey
 
         # The self-identifying string that the remote names itself.
-        self.client_version_string = ''
+        self.client_version_string = ""
 
         # Networking reader and writer objects for communication
         self.reader = connection.reader
@@ -245,7 +222,9 @@ class BasePeer(BaseService):
         iv = b"\x00" * 16
         aes_secret = connection.aes_secret
         mac_secret = connection.mac_secret
-        aes_cipher = Cipher(algorithms.AES(aes_secret), modes.CTR(iv), default_backend())
+        aes_cipher = Cipher(
+            algorithms.AES(aes_secret), modes.CTR(iv), default_backend()
+        )
         self.aes_enc = aes_cipher.encryptor()
         self.aes_dec = aes_cipher.decryptor()
         mac_cipher = Cipher(algorithms.AES(mac_secret), modes.ECB(), default_backend())
@@ -286,12 +265,11 @@ class BasePeer(BaseService):
         pass
 
     @abstractmethod
-    async def process_sub_proto_handshake(
-            self, cmd: Command, msg: PayloadType) -> None:
+    async def process_sub_proto_handshake(self, cmd: Command, msg: PayloadType) -> None:
         pass
 
     @contextlib.contextmanager
-    def collect_sub_proto_messages(self) -> Iterator['MsgBuffer']:
+    def collect_sub_proto_messages(self) -> Iterator["MsgBuffer"]:
         """
         Can be used to gather up all messages that are sent to the peer.
         """
@@ -306,10 +284,10 @@ class BasePeer(BaseService):
     def received_msgs_count(self) -> int:
         return sum(self.received_msgs.values())
 
-    def add_subscriber(self, subscriber: 'PeerSubscriber') -> None:
+    def add_subscriber(self, subscriber: "PeerSubscriber") -> None:
         self._subscribers.append(subscriber)
 
-    def remove_subscriber(self, subscriber: 'PeerSubscriber') -> None:
+    def remove_subscriber(self, subscriber: "PeerSubscriber") -> None:
         if subscriber in self._subscribers:
             self._subscribers.remove(subscriber)
 
@@ -328,8 +306,10 @@ class BasePeer(BaseService):
         if isinstance(cmd, Disconnect):
             msg = cast(Dict[str, Any], msg)
             # Peers sometimes send a disconnect msg before they send the sub-proto handshake.
-            if msg['reason'] == DisconnectReason.too_many_peers.value:
-                raise TooManyPeersFailure(f'{self} disconnected from us before handshake')
+            if msg["reason"] == DisconnectReason.too_many_peers.value:
+                raise TooManyPeersFailure(
+                    f"{self} disconnected from us before handshake"
+                )
             raise HandshakeFailure(
                 f"{self} disconnected before completing sub-proto handshake: {msg['reason_name']}"
             )
@@ -353,8 +333,10 @@ class BasePeer(BaseService):
         if isinstance(cmd, Disconnect):
             msg = cast(Dict[str, Any], msg)
             # Peers sometimes send a disconnect msg before they send the initial P2P handshake.
-            if msg['reason'] == DisconnectReason.too_many_peers.value:
-                raise TooManyPeersFailure(f'{self} disconnected from us before handshake')
+            if msg["reason"] == DisconnectReason.too_many_peers.value:
+                raise TooManyPeersFailure(
+                    f"{self} disconnected from us before handshake"
+                )
             raise HandshakeFailure(
                 f"{self} disconnected before completing sub-proto handshake: {msg['reason_name']}"
             )
@@ -378,8 +360,14 @@ class BasePeer(BaseService):
     async def read(self, n: int) -> bytes:
         self.logger.debug2("Waiting for %s bytes from %s", n, self.remote)
         try:
-            return await self.wait(self.reader.readexactly(n), timeout=self.conn_idle_timeout)
-        except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError) as e:
+            return await self.wait(
+                self.reader.readexactly(n), timeout=self.conn_idle_timeout
+            )
+        except (
+            asyncio.IncompleteReadError,
+            ConnectionResetError,
+            BrokenPipeError,
+        ) as e:
             raise PeerConnectionLost(repr(e))
 
     def close(self) -> None:
@@ -410,12 +398,14 @@ class BasePeer(BaseService):
                 cmd, msg = await self.read_msg()
             except (PeerConnectionLost, TimeoutError) as err:
                 self.logger.debug(
-                    "%s stopped responding (%r), disconnecting", self.remote, err)
+                    "%s stopped responding (%r), disconnecting", self.remote, err
+                )
                 return
             except DecryptionError as err:
                 self.logger.warning(
                     "Unable to decrypt message from %s, disconnecting: %r",
-                    self, err,
+                    self,
+                    err,
                     exc_info=True,
                 )
                 return
@@ -434,10 +424,7 @@ class BasePeer(BaseService):
         try:
             header = self.decrypt_header(header_data)
         except DecryptionError as err:
-            self.logger.debug(
-                "Bad message header from peer %s: Error: %r",
-                self, err,
-            )
+            self.logger.debug("Bad message header from peer %s: Error: %r", self, err)
             raise MalformedMessage from err
         frame_size = self.get_frame_size(header)
         # The frame_size specified in the header does not include the padding to 16-byte boundary,
@@ -447,10 +434,7 @@ class BasePeer(BaseService):
         try:
             msg = self.decrypt_body(frame_data, frame_size)
         except DecryptionError as err:
-            self.logger.debug(
-                "Bad message body from peer %s: Error: %r",
-                self, err,
-            )
+            self.logger.debug("Bad message body from peer %s: Error: %r", self, err)
             raise MalformedMessage from err
         cmd = self.get_protocol_command_for(msg)
         # NOTE: This used to be a bottleneck but it doesn't seem to be so anymore. If we notice
@@ -462,7 +446,9 @@ class BasePeer(BaseService):
         except MalformedMessage as err:
             self.logger.debug(
                 "Malformed message from peer %s: CMD:%s Error: %r",
-                self, type(cmd).__name__, err,
+                self,
+                type(cmd).__name__,
+                err,
             )
             raise
         else:
@@ -474,7 +460,7 @@ class BasePeer(BaseService):
         """Handle the base protocol (P2P) messages."""
         if isinstance(cmd, Disconnect):
             msg = cast(Dict[str, Any], msg)
-            raise RemoteDisconnected(msg['reason_name'])
+            raise RemoteDisconnected(msg["reason_name"])
         elif isinstance(cmd, Ping):
             self.base_protocol.send_pong()
         elif isinstance(cmd, Pong):
@@ -490,8 +476,7 @@ class BasePeer(BaseService):
         if self._subscribers:
             was_added = tuple(
                 subscriber.add_msg(PeerMessage(self, cmd, msg))
-                for subscriber
-                in self._subscribers
+                for subscriber in self._subscribers
             )
             if not any(was_added):
                 self.logger.warning(
@@ -500,7 +485,9 @@ class BasePeer(BaseService):
                     cmd_type.__name__,
                 )
         else:
-            self.logger.warning("Peer %s has no subscribers, discarding %s msg", self, cmd)
+            self.logger.warning(
+                "Peer %s has no subscribers, discarding %s msg", self, cmd
+            )
 
     def process_msg(self, cmd: Command, msg: PayloadType) -> None:
         if cmd.is_base_protocol:
@@ -508,8 +495,7 @@ class BasePeer(BaseService):
         else:
             self.handle_sub_proto_msg(cmd, msg)
 
-    async def process_p2p_handshake(
-            self, cmd: Command, msg: PayloadType) -> None:
+    async def process_p2p_handshake(self, cmd: Command, msg: PayloadType) -> None:
         msg = cast(Dict[str, Any], msg)
         if not isinstance(cmd, Hello):
             await self.disconnect(DisconnectReason.bad_protocol)
@@ -517,8 +503,10 @@ class BasePeer(BaseService):
 
         # limit number of chars to be displayed, and try to keep printable ones only
         # MAGIC 256: arbitrary, "should be enough for everybody"
-        original_version = msg['client_version_string']
-        client_version_string = original_version[:256] + ('...' if original_version[256:] else '')
+        original_version = msg["client_version_string"]
+        client_version_string = original_version[:256] + (
+            "..." if original_version[256:] else ""
+        )
         if client_version_string.isprintable():
             self.client_version_string = client_version_string.strip()
         else:
@@ -526,7 +514,7 @@ class BasePeer(BaseService):
 
         # Check whether to support Snappy Compression or not
         # based on other peer's p2p protocol version
-        snappy_support = msg['version'] >= SNAPPY_PROTOCOL_VERSION
+        snappy_support = msg["version"] >= SNAPPY_PROTOCOL_VERSION
 
         if snappy_support:
             # Now update the base protocol to support snappy compression
@@ -534,9 +522,11 @@ class BasePeer(BaseService):
             # parity sends Ping immediately after Handshake
             self.base_protocol = P2PProtocol(self, snappy_support=snappy_support)
 
-        remote_capabilities = msg['capabilities']
+        remote_capabilities = msg["capabilities"]
         try:
-            self.sub_proto = self.select_sub_protocol(remote_capabilities, snappy_support)
+            self.sub_proto = self.select_sub_protocol(
+                remote_capabilities, snappy_support
+            )
         except NoMatchingPeerCapabilities:
             await self.disconnect(DisconnectReason.useless_peer)
             raise HandshakeFailure(
@@ -546,7 +536,9 @@ class BasePeer(BaseService):
 
         self.logger.debug(
             "Finished P2P handshake with %s, using sub-protocol %s",
-            self.remote, self.sub_proto)
+            self.remote,
+            self.sub_proto,
+        )
 
     def encrypt(self, header: bytes, frame: bytes) -> bytes:
         if len(header) != HEADER_LEN:
@@ -581,7 +573,7 @@ class BasePeer(BaseService):
         expected_header_mac = self.ingress_mac.digest()[:HEADER_LEN]
         if not bytes_eq(expected_header_mac, header_mac):
             raise DecryptionError(
-                f'Invalid header mac: expected {expected_header_mac}, got {header_mac}'
+                f"Invalid header mac: expected {expected_header_mac}, got {header_mac}"
             )
         return self.aes_dec.update(header_ciphertext)
 
@@ -589,11 +581,11 @@ class BasePeer(BaseService):
         read_size = roundup_16(body_size)
         if len(data) < read_size + MAC_LEN:
             raise ValueError(
-                f'Insufficient body length; Got {len(data)}, wanted {read_size} + {MAC_LEN}'
+                f"Insufficient body length; Got {len(data)}, wanted {read_size} + {MAC_LEN}"
             )
 
         frame_ciphertext = data[:read_size]
-        frame_mac = data[read_size:read_size + MAC_LEN]
+        frame_mac = data[read_size : read_size + MAC_LEN]
 
         self.ingress_mac.update(frame_ciphertext)
         fmac_seed = self.ingress_mac.digest()[:MAC_LEN]
@@ -601,15 +593,15 @@ class BasePeer(BaseService):
         expected_frame_mac = self.ingress_mac.digest()[:MAC_LEN]
         if not bytes_eq(expected_frame_mac, frame_mac):
             raise DecryptionError(
-                f'Invalid frame mac: expected {expected_frame_mac}, got {frame_mac}'
+                f"Invalid frame mac: expected {expected_frame_mac}, got {frame_mac}"
             )
         return self.aes_dec.update(frame_ciphertext)[:body_size]
 
     def get_frame_size(self, header: bytes) -> int:
         # The frame size is encoded in the header as a 3-byte int, so before we unpack we need
         # to prefix it with an extra byte.
-        encoded_size = b'\x00' + header[:3]
-        (size,) = struct.unpack(b'>I', encoded_size)
+        encoded_size = b"\x00" + header[:3]
+        (size,) = struct.unpack(b">I", encoded_size)
         return size
 
     def send(self, header: bytes, body: bytes) -> None:
@@ -617,7 +609,10 @@ class BasePeer(BaseService):
         self.logger.debug2("Sending msg with cmd id %d to %s", cmd_id, self)
         if self.is_closing:
             self.logger.error(
-                "Attempted to send msg with cmd id %d to disconnected peer %s", cmd_id, self)
+                "Attempted to send msg with cmd id %d to disconnected peer %s",
+                cmd_id,
+                self,
+            )
             return
         self.writer.write(self.encrypt(header, body))
 
@@ -629,12 +624,12 @@ class BasePeer(BaseService):
 
         if reason is DisconnectReason.bad_protocol:
             self.connection_tracker.record_blacklist(
-                self.remote,
-                timeout_seconds=MINUTES_10,
-                reason=f"Bad protocol",
+                self.remote, timeout_seconds=MINUTES_10, reason=f"Bad protocol"
             )
 
-        self.logger.debug("Disconnecting from remote peer %s; reason: %s", self.remote, reason.name)
+        self.logger.debug(
+            "Disconnecting from remote peer %s; reason: %s", self.remote, reason.name
+        )
         self.base_protocol.send_disconnect(reason.value)
         self.disconnect_reason = reason
         self.close()
@@ -658,9 +653,9 @@ class BasePeer(BaseService):
         if self.is_operational:
             self.cancel_nowait()
 
-    def select_sub_protocol(self,
-                            remote_capabilities: List[Tuple[bytes, int]],
-                            snappy_support: bool) -> Protocol:
+    def select_sub_protocol(
+        self, remote_capabilities: List[Tuple[bytes, int]], snappy_support: bool
+    ) -> Protocol:
         """Select the sub-protocol to use when talking to the remote.
 
         Find the highest version of our supported sub-protocols that is also supported by the
@@ -673,7 +668,9 @@ class BasePeer(BaseService):
         matching_capabilities = set(self.capabilities).intersection(remote_capabilities)
         if not matching_capabilities:
             raise NoMatchingPeerCapabilities()
-        _, highest_matching_version = max(matching_capabilities, key=operator.itemgetter(1))
+        _, highest_matching_version = max(
+            matching_capabilities, key=operator.itemgetter(1)
+        )
         offset = self.base_protocol.cmd_length
         for proto_class in self.supported_sub_protocols:
             if proto_class.version == highest_matching_version:
@@ -701,7 +698,8 @@ class PeerSubscriber(ABC):
     Use the :class:`~p2p.peer.PeerSubscriber` class to subscribe to messages from all or specific
     peers.
     """
-    _msg_queue: 'asyncio.Queue[PeerMessage]' = None
+
+    _msg_queue: "asyncio.Queue[PeerMessage]" = None
 
     @property
     @abstractmethod
@@ -721,9 +719,7 @@ class PeerSubscriber(ABC):
 
     @functools.lru_cache(maxsize=64)
     def is_subscription_command(self, cmd_type: Type[Command]) -> bool:
-        return bool(self.subscription_msg_types.intersection(
-            {cmd_type, Command}
-        ))
+        return bool(self.subscription_msg_types.intersection({cmd_type, Command}))
 
     @property
     @abstractmethod
@@ -756,7 +752,7 @@ class PeerSubscriber(ABC):
         pass
 
     @property
-    def msg_queue(self) -> 'asyncio.Queue[PeerMessage]':
+    def msg_queue(self) -> "asyncio.Queue[PeerMessage]":
         """
         Return the ``asyncio.Queue[PeerMessage]`` that this subscriber uses to receive messages.
         """
@@ -778,29 +774,38 @@ class PeerSubscriber(ABC):
         peer, cmd, _ = msg
 
         if not self.is_subscription_command(type(cmd)):
-            if hasattr(self, 'logger'):
+            if hasattr(self, "logger"):
                 self.logger.debug2(  # type: ignore
                     "Discarding %s msg from %s; not subscribed to msg type; "
                     "subscriptions: %s",
-                    cmd, peer, self.subscription_msg_types,
+                    cmd,
+                    peer,
+                    self.subscription_msg_types,
                 )
             return False
 
         try:
-            if hasattr(self, 'logger'):
+            if hasattr(self, "logger"):
                 self.logger.debug2(  # type: ignore
-                    "Adding %s msg from %s to queue; queue_size=%d", cmd, peer, self.queue_size)
+                    "Adding %s msg from %s to queue; queue_size=%d",
+                    cmd,
+                    peer,
+                    self.queue_size,
+                )
             self.msg_queue.put_nowait(msg)
             return True
         except asyncio.queues.QueueFull:
-            if hasattr(self, 'logger'):
+            if hasattr(self, "logger"):
                 self.logger.warning(  # type: ignore
                     "%s msg queue is full; discarding %s msg from %s",
-                    self.__class__.__name__, cmd, peer)
+                    self.__class__.__name__,
+                    cmd,
+                    peer,
+                )
             return False
 
     @contextlib.contextmanager
-    def subscribe(self, peer_pool: 'BasePeerPool') -> Iterator[None]:
+    def subscribe(self, peer_pool: "BasePeerPool") -> Iterator[None]:
         """
         Subscribe to all messages of the given :class:`~p2p.peer_pool.BasePeerPool`.
         Implementors need to call this API to start receiving messages from the pool.
@@ -838,7 +843,7 @@ class PeerSubscriber(ABC):
 
 
 class MsgBuffer(PeerSubscriber):
-    logger = logging.getLogger('p2p.peer.MsgBuffer')
+    logger = logging.getLogger("p2p.peer.MsgBuffer")
     msg_queue_maxsize = 500
     subscription_msg_types = frozenset({Command})
 
@@ -854,20 +859,21 @@ class BasePeerFactory(ABC):
     def peer_class(self) -> Type[BasePeer]:
         pass
 
-    def __init__(self,
-                 privkey: datatypes.PrivateKey,
-                 context: BasePeerContext,
-                 token: CancelToken,
-                 event_bus: Endpoint = None) -> None:
+    def __init__(
+        self,
+        privkey: datatypes.PrivateKey,
+        context: BasePeerContext,
+        token: CancelToken,
+        event_bus: Endpoint = None,
+    ) -> None:
         self.privkey = privkey
         self.context = context
         self.cancel_token = token
         self.event_bus = event_bus
 
-    def create_peer(self,
-                    remote: Node,
-                    connection: PeerConnection,
-                    inbound: bool = False) -> BasePeer:
+    def create_peer(
+        self, remote: Node, connection: PeerConnection, inbound: bool = False
+    ) -> BasePeer:
         return self.peer_class(
             remote=remote,
             privkey=self.privkey,

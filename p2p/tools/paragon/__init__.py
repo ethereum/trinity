@@ -1,11 +1,5 @@
-from .commands import (  # noqa: F401
-    BroadcastData,
-    GetSum,
-    Sum,
-)
-from .proto import (  # noqa: F401
-    ParagonProtocol,
-)
+from .commands import BroadcastData, GetSum, Sum  # noqa: F401
+from .proto import ParagonProtocol  # noqa: F401
 from .peer import (  # noqa: F401
     ParagonContext,
     ParagonMockPeerPoolWithConnectedPeers,

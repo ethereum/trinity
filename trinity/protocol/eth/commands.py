@@ -1,6 +1,4 @@
-from typing import (
-    Tuple,
-)
+from typing import Tuple
 
 from rlp import sedes
 
@@ -8,10 +6,7 @@ from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransactionFields
 
-from p2p.protocol import (
-    Command,
-    _DecodedMsgType,
-)
+from p2p.protocol import Command, _DecodedMsgType
 
 from trinity.protocol.common.commands import BaseBlockHeaders
 from trinity.rlp.block_body import BlockBody
@@ -21,11 +16,11 @@ from trinity.rlp.sedes import HashOrNumber
 class Status(Command):
     _cmd_id = 0
     structure = (
-        ('protocol_version', sedes.big_endian_int),
-        ('network_id', sedes.big_endian_int),
-        ('td', sedes.big_endian_int),
-        ('best_hash', sedes.binary),
-        ('genesis_hash', sedes.binary),
+        ("protocol_version", sedes.big_endian_int),
+        ("network_id", sedes.big_endian_int),
+        ("td", sedes.big_endian_int),
+        ("best_hash", sedes.binary),
+        ("genesis_hash", sedes.binary),
     )
 
 
@@ -42,10 +37,10 @@ class Transactions(Command):
 class GetBlockHeaders(Command):
     _cmd_id = 3
     structure = (
-        ('block_number_or_hash', HashOrNumber()),
-        ('max_headers', sedes.big_endian_int),
-        ('skip', sedes.big_endian_int),
-        ('reverse', sedes.boolean),
+        ("block_number_or_hash", HashOrNumber()),
+        ("max_headers", sedes.big_endian_int),
+        ("skip", sedes.big_endian_int),
+        ("reverse", sedes.boolean),
     )
 
 
@@ -70,10 +65,17 @@ class BlockBodies(Command):
 class NewBlock(Command):
     _cmd_id = 7
     structure = (
-        ('block', sedes.List([BlockHeader,
-                              sedes.CountableList(BaseTransactionFields),
-                              sedes.CountableList(BlockHeader)])),
-        ('total_difficulty', sedes.big_endian_int),
+        (
+            "block",
+            sedes.List(
+                [
+                    BlockHeader,
+                    sedes.CountableList(BaseTransactionFields),
+                    sedes.CountableList(BlockHeader),
+                ]
+            ),
+        ),
+        ("total_difficulty", sedes.big_endian_int),
     )
 
 

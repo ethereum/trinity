@@ -1,11 +1,7 @@
 import pytest
 
 from eth_utils import ValidationError
-from hypothesis import (
-    given,
-    settings,
-    strategies as st,
-)
+from hypothesis import given, settings, strategies as st
 
 from trinity._utils.tree_root import Tree, RootTracker
 
@@ -14,16 +10,16 @@ from trinity._utils.tree_root import Tree, RootTracker
 def test_tree_linking(add_order):
     # node and parent id
     nodes = (
-        ('A0', '_'),
-        ('A1', '_'),
-        ('B0', 'A0'),
-        ('C0', 'B0'),
-        ('C1', 'B0'),
-        ('C2', 'B0'),
-        ('D0', 'C0'),
-        ('D1', 'C0'),
-        ('D2', 'C0'),
-        ('E0', 'D0'),
+        ("A0", "_"),
+        ("A1", "_"),
+        ("B0", "A0"),
+        ("C0", "B0"),
+        ("C1", "B0"),
+        ("C2", "B0"),
+        ("D0", "C0"),
+        ("D1", "C0"),
+        ("D2", "C0"),
+        ("E0", "D0"),
     )
 
     tree = Tree()
@@ -31,13 +27,13 @@ def test_tree_linking(add_order):
         node, parent = nodes[node_idx]
         tree.add(node, parent)
 
-    assert not tree.has_parent('A0')
-    assert not tree.has_parent('A1')
-    assert not tree.has_node('_')
-    assert tree.has_node('A0')
-    assert tree.has_node('A1')
-    assert tree.children_of('A0') == ('B0',)
-    assert tree.children_of('A1') == tuple()
+    assert not tree.has_parent("A0")
+    assert not tree.has_parent("A1")
+    assert not tree.has_node("_")
+    assert tree.has_node("A0")
+    assert tree.has_node("A1")
+    assert tree.children_of("A0") == ("B0",)
+    assert tree.children_of("A1") == tuple()
 
     for node, parent in nodes[2:]:
         assert tree.has_node(node)
@@ -48,9 +44,9 @@ def test_tree_linking(add_order):
         children = tree.children_of(parent)
         assert node in children
 
-        if parent in ('B0', 'C0'):
+        if parent in ("B0", "C0"):
             assert len(children) == 3
-        elif parent in ('A0', 'D0'):
+        elif parent in ("A0", "D0"):
             assert len(children) == 1
         else:
             assert len(children) == 0
@@ -102,7 +98,9 @@ def test_prune_reinsert_root_tracking_linear(element_flipping):
             assert depth == test_node - root_id
 
 
-FULL_BINARY_TREE = [(layer, column) for layer in [0, 1, 2, 3] for column in range(2**layer)]
+FULL_BINARY_TREE = [
+    (layer, column) for layer in [0, 1, 2, 3] for column in range(2 ** layer)
+]
 
 
 def binary_parent(node):
@@ -110,10 +108,7 @@ def binary_parent(node):
 
 
 # only use the first 3 layers of the tree
-@given(st.lists(
-    st.integers(min_value=0, max_value=6),
-    min_size=3,
-))
+@given(st.lists(st.integers(min_value=0, max_value=6), min_size=3))
 def test_prune_reinsert_root_tracking_binary_tree(element_flipping):
     tracker = RootTracker()
 

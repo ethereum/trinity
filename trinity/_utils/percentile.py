@@ -10,6 +10,7 @@ class Percentile:
 
     https://en.wikipedia.org/wiki/Percentile
     """
+
     def __init__(self, percentile: float, window_size: int) -> None:
         if percentile < 0 or percentile > 1:
             raise ValueError("Invalid: percentile must be in the range [0, 1]")

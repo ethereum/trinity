@@ -18,7 +18,6 @@ class ParentService(BaseService):
 
 
 class WaitService(BaseService):
-
     async def _run(self):
         await self.cancel_token.wait()
 

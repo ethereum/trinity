@@ -1,11 +1,6 @@
-from abc import (
-    ABC,
-    abstractmethod,
-)
+from abc import ABC, abstractmethod
 
-from eth._utils.datatypes import (
-    Configurable,
-)
+from eth._utils.datatypes import Configurable
 
 from eth2.configs import Eth2Config
 from eth2.beacon.types.blocks import BaseBeaconBlock
@@ -20,16 +15,18 @@ class BaseStateTransition(Configurable, ABC):
         self.config = config
 
     @abstractmethod
-    def apply_state_transition(self,
-                               state: BeaconState,
-                               block: BaseBeaconBlock,
-                               check_proposer_signature: bool=True) -> BeaconState:
+    def apply_state_transition(
+        self,
+        state: BeaconState,
+        block: BaseBeaconBlock,
+        check_proposer_signature: bool = True,
+    ) -> BeaconState:
         pass
 
     @abstractmethod
-    def apply_state_transition_without_block(self,
-                                             state: BeaconState,
-                                             slot: Slot) -> BeaconState:
+    def apply_state_transition_without_block(
+        self, state: BeaconState, slot: Slot
+    ) -> BeaconState:
         """
         Advance the ``state`` to the beginning of the requested ``slot``.
         Return the resulting state at that slot assuming there are no
@@ -42,20 +39,20 @@ class BaseStateTransition(Configurable, ABC):
         pass
 
     @abstractmethod
-    def cache_state(self,
-                    state: BeaconState) -> BeaconState:
+    def cache_state(self, state: BeaconState) -> BeaconState:
         pass
 
     @abstractmethod
-    def per_slot_transition(self,
-                            state: BeaconState) -> BeaconState:
+    def per_slot_transition(self, state: BeaconState) -> BeaconState:
         pass
 
     @abstractmethod
-    def per_block_transition(self,
-                             state: BeaconState,
-                             block: BaseBeaconBlock,
-                             check_proposer_signature: bool=True) -> BeaconState:
+    def per_block_transition(
+        self,
+        state: BeaconState,
+        block: BaseBeaconBlock,
+        check_proposer_signature: bool = True,
+    ) -> BeaconState:
         pass
 
     @abstractmethod

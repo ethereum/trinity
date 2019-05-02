@@ -1,37 +1,22 @@
 from pathlib import Path
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.exc import (
-    OperationalError,
-)
-from sqlalchemy.orm.exc import (
-    NoResultFound,
-    MultipleResultsFound,
-)
-from sqlalchemy.orm import (
-    sessionmaker,
-    Session as BaseSession,
-)
-from sqlalchemy import (
-    create_engine,
-    Column,
-    Integer,
-    String,
-)
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm.exc import NoResultFound, MultipleResultsFound
+from sqlalchemy.orm import sessionmaker, Session as BaseSession
+from sqlalchemy import create_engine, Column, Integer, String
 
-from trinity.exceptions import (
-    BadDatabaseError,
-)
+from trinity.exceptions import BadDatabaseError
 
 
 Base = declarative_base()
 
 
-SCHEMA_VERSION = '2'
+SCHEMA_VERSION = "2"
 
 
 class SchemaVersion(Base):
-    __tablename__ = 'schema_version'
+    __tablename__ = "schema_version"
 
     id = Column(Integer, primary_key=True)
     version = Column(String, unique=True, nullable=False, index=True)
@@ -42,12 +27,12 @@ class SchemaVersion(Base):
 #
 def _get_session(path: Path) -> BaseSession:
     # python 3.6 does not support sqlite3.connect(Path)
-    is_memory = path.name == ':memory:'
+    is_memory = path.name == ":memory:"
 
     if is_memory:
-        database_uri = 'sqlite:///:memory:'
+        database_uri = "sqlite:///:memory:"
     else:
-        database_uri = f'sqlite:///{path.resolve()}'
+        database_uri = f"sqlite:///{path.resolve()}"
 
     engine = create_engine(database_uri)
     Session = sessionmaker(bind=engine)

@@ -1,6 +1,4 @@
-from typing import (
-    NamedTuple,
-)
+from typing import NamedTuple
 
 from eth2.beacon.typing import Slot
 

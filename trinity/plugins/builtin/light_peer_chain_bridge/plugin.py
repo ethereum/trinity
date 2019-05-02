@@ -1,29 +1,15 @@
 import asyncio
-from typing import (
-    cast
-)
+from typing import cast
 
-from eth.chains.base import (
-    BaseChain
-)
+from eth.chains.base import BaseChain
 
-from trinity.constants import (
-    SYNC_LIGHT
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity.extensibility import (
-    BaseAsyncStopPlugin,
-)
-from trinity.chains.light import (
-    LightDispatchChain,
-)
-from trinity.extensibility.events import (
-    ResourceAvailableEvent
-)
+from trinity.constants import SYNC_LIGHT
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.extensibility import BaseAsyncStopPlugin
+from trinity.chains.light import LightDispatchChain
+from trinity.extensibility.events import ResourceAvailableEvent
 from trinity.plugins.builtin.light_peer_chain_bridge import (
-    LightPeerChainEventBusHandler
+    LightPeerChainEventBusHandler,
 )
 
 
@@ -47,10 +33,7 @@ class LightPeerChainBridgePlugin(BaseAsyncStopPlugin):
         if self.context.args.sync_mode != SYNC_LIGHT:
             return
 
-        self.event_bus.subscribe(
-            ResourceAvailableEvent,
-            self.handle_event
-        )
+        self.event_bus.subscribe(ResourceAvailableEvent, self.handle_event)
 
     def handle_event(self, event: ResourceAvailableEvent) -> None:
         if event.resource_type is BaseChain:
@@ -59,7 +42,9 @@ class LightPeerChainBridgePlugin(BaseAsyncStopPlugin):
 
     def do_start(self) -> None:
         chain = cast(LightDispatchChain, self.chain)
-        self.handler = LightPeerChainEventBusHandler(chain._peer_chain, self.context.event_bus)
+        self.handler = LightPeerChainEventBusHandler(
+            chain._peer_chain, self.context.event_bus
+        )
         asyncio.ensure_future(self.handler.run())
 
     async def do_stop(self) -> None:

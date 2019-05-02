@@ -3,10 +3,7 @@ import random
 
 import pytest
 
-from eth_utils import (
-    keccak,
-    ValidationError,
-)
+from eth_utils import keccak, ValidationError
 
 from trinity.protocol.eth.validators import GetNodeDataValidator
 

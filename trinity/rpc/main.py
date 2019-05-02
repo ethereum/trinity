@@ -1,29 +1,13 @@
 import json
 import logging
-from typing import (
-    Any,
-    Dict,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, Dict, Sequence, Tuple, Union
 
-from eth_utils import (
-    ValidationError,
-)
+from eth_utils import ValidationError
 
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-)
-from trinity.rpc.modules import (
-    BaseRPCModule,
-)
+from trinity.endpoint import TrinityEventBusEndpoint
+from trinity.rpc.modules import BaseRPCModule
 
-REQUIRED_REQUEST_KEYS = {
-    'id',
-    'jsonrpc',
-    'method',
-}
+REQUIRED_REQUEST_KEYS = {"id", "jsonrpc", "method"}
 
 
 def validate_request(request: Dict[str, Any]) -> None:
@@ -32,19 +16,20 @@ def validate_request(request: Dict[str, Any]) -> None:
         raise ValueError("request must include the keys: %r" % missing_keys)
 
 
-def generate_response(request: Dict[str, Any], result: Any, error: Union[Exception, str]) -> str:
-    response = {
-        'id': request.get('id', -1),
-        'jsonrpc': request.get('jsonrpc', "2.0"),
-    }
+def generate_response(
+    request: Dict[str, Any], result: Any, error: Union[Exception, str]
+) -> str:
+    response = {"id": request.get("id", -1), "jsonrpc": request.get("jsonrpc", "2.0")}
 
     if error is None:
-        response['result'] = result
+        response["result"] = result
     elif result is not None:
-        raise ValueError("Must not supply both a result and an error for JSON-RPC response")
+        raise ValueError(
+            "Must not supply both a result and an error for JSON-RPC response"
+        )
     else:
         # only error is not None
-        response['error'] = str(error)
+        response["error"] = str(error)
 
     return json.dumps(response)
 
@@ -58,11 +43,14 @@ class RPCServer:
     then proxies to the appropriate method. For example, see
     :meth:`RPCServer.eth_getBlockByHash`.
     """
+
     chain = None
 
-    def __init__(self,
-                 modules: Sequence[BaseRPCModule],
-                 event_bus: TrinityEventBusEndpoint=None) -> None:
+    def __init__(
+        self,
+        modules: Sequence[BaseRPCModule],
+        event_bus: TrinityEventBusEndpoint = None,
+    ) -> None:
         self.modules: Dict[str, BaseRPCModule] = {}
 
         for module in modules:
@@ -76,7 +64,7 @@ class RPCServer:
             self.modules[name] = module
 
     def _lookup_method(self, rpc_method: str) -> Any:
-        method_pieces = rpc_method.split('_')
+        method_pieces = rpc_method.split("_")
 
         if len(method_pieces) != 2:
             # This check provides a security guarantee: that it's impossible to invoke
@@ -94,9 +82,9 @@ class RPCServer:
         except AttributeError:
             raise ValueError("Method not implemented: %r" % rpc_method)
 
-    async def _get_result(self,
-                          request: Dict[str, Any],
-                          debug: bool=False) -> Tuple[Any, Union[Exception, str]]:
+    async def _get_result(
+        self, request: Dict[str, Any], debug: bool = False
+    ) -> Tuple[Any, Union[Exception, str]]:
         """
         :returns: (result, error) - result is None if error is provided. Error must be
             convertable to string with ``str(error)``.
@@ -104,18 +92,18 @@ class RPCServer:
         try:
             validate_request(request)
 
-            if request.get('jsonrpc', None) != '2.0':
+            if request.get("jsonrpc", None) != "2.0":
                 raise NotImplementedError("Only the 2.0 jsonrpc protocol is supported")
 
-            method = self._lookup_method(request['method'])
-            params = request.get('params', [])
+            method = self._lookup_method(request["method"])
+            params = request.get("params", [])
             result = await method(*params)
 
-            if request['method'] == 'evm_resetToGenesisFixture':
+            if request["method"] == "evm_resetToGenesisFixture":
                 result = True
 
         except NotImplementedError as exc:
-            error = "Method not implemented: %r %s" % (request['method'], exc)
+            error = "Method not implemented: %r %s" % (request["method"], exc)
             return None, error
         except ValidationError as exc:
             logging.debug("Validation error while executing RPC method", exc_info=True)

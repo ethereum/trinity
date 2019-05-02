@@ -1,37 +1,13 @@
-from abc import (
-    abstractmethod,
-)
+from abc import abstractmethod
 import asyncio
 import operator
-from typing import (
-    AsyncIterator,
-    AsyncIterable,
-    cast,
-    Dict,
-    Iterator,
-    List,
-    Tuple,
-    Type,
-)
+from typing import AsyncIterator, AsyncIterable, cast, Dict, Iterator, List, Tuple, Type
 
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
-from eth_keys import (
-    datatypes,
-)
-from eth_utils import (
-    humanize_seconds,
-)
-from eth_utils.toolz import (
-    groupby,
-    take,
-)
-from lahja import (
-    Endpoint,
-    BroadcastConfig,
-)
+from cancel_token import CancelToken, OperationCancelled
+from eth_keys import datatypes
+from eth_utils import humanize_seconds
+from eth_utils.toolz import groupby, take
+from lahja import Endpoint, BroadcastConfig
 
 from p2p._utils import clamp
 from p2p.constants import (
@@ -52,9 +28,7 @@ from p2p.exceptions import (
     PeerConnectionLost,
     UnreachablePeer,
 )
-from p2p.kademlia import (
-    Node,
-)
+from p2p.kademlia import Node
 from p2p.peer import (
     BasePeer,
     BasePeerFactory,
@@ -63,58 +37,50 @@ from p2p.peer import (
     PeerMessage,
     PeerSubscriber,
 )
-from p2p.peer_backend import (
-    BasePeerBackend,
-    DiscoveryPeerBackend,
-    BootnodesPeerBackend,
-)
-from p2p.p2p_proto import (
-    DisconnectReason,
-)
-from p2p.service import (
-    BaseService,
-)
+from p2p.peer_backend import BasePeerBackend, DiscoveryPeerBackend, BootnodesPeerBackend
+from p2p.p2p_proto import DisconnectReason
+from p2p.service import BaseService
 from p2p.token_bucket import TokenBucket
-from p2p.tracking.connection import (
-    BaseConnectionTracker,
-    NoopConnectionTracker,
+from p2p.tracking.connection import BaseConnectionTracker, NoopConnectionTracker
+
+
+TO_DISCOVERY_BROADCAST_CONFIG = BroadcastConfig(
+    filter_endpoint=DISCOVERY_EVENTBUS_ENDPOINT
 )
 
 
-TO_DISCOVERY_BROADCAST_CONFIG = BroadcastConfig(filter_endpoint=DISCOVERY_EVENTBUS_ENDPOINT)
-
-
-COMMON_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
-    PeerConnectionLost,
-    TimeoutError,
-    UnreachablePeer,
-))
+COMMON_PEER_CONNECTION_EXCEPTIONS = cast(
+    Tuple[Type[BaseP2PError], ...], (PeerConnectionLost, TimeoutError, UnreachablePeer)
+)
 
 # This should contain all exceptions that should not propogate during a
 # standard attempt to connect to a peer.
-ALLOWED_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
-    IneligiblePeer,
-    BadAckMessage,
-    MalformedMessage,
-    HandshakeFailure,
-)) + COMMON_PEER_CONNECTION_EXCEPTIONS
+ALLOWED_PEER_CONNECTION_EXCEPTIONS = (
+    cast(
+        Tuple[Type[BaseP2PError], ...],
+        (IneligiblePeer, BadAckMessage, MalformedMessage, HandshakeFailure),
+    )
+    + COMMON_PEER_CONNECTION_EXCEPTIONS
+)
 
 
 class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     """
     PeerPool maintains connections to up-to max_peers on a given network.
     """
+
     _report_interval = 60
     _peer_boot_timeout = DEFAULT_PEER_BOOT_TIMEOUT
     _event_bus: Endpoint = None
 
-    def __init__(self,
-                 privkey: datatypes.PrivateKey,
-                 context: BasePeerContext,
-                 max_peers: int = DEFAULT_MAX_PEERS,
-                 token: CancelToken = None,
-                 event_bus: Endpoint = None,
-                 ) -> None:
+    def __init__(
+        self,
+        privkey: datatypes.PrivateKey,
+        context: BasePeerContext,
+        max_peers: int = DEFAULT_MAX_PEERS,
+        token: CancelToken = None,
+        event_bus: Endpoint = None,
+    ) -> None:
         super().__init__(token)
 
         self.privkey = privkey
@@ -126,7 +92,9 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         self._event_bus = event_bus
 
         # Restricts the number of concurrent connection attempts can be made
-        self._connection_attempt_lock = asyncio.BoundedSemaphore(MAX_CONCURRENT_CONNECTION_ATTEMPTS)
+        self._connection_attempt_lock = asyncio.BoundedSemaphore(
+            MAX_CONCURRENT_CONNECTION_ATTEMPTS
+        )
 
         self.peer_backends = self.setup_peer_backends()
         self.connection_tracker = self.setup_connection_tracker()
@@ -163,8 +131,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         try:
             candidates = await self.wait(
                 backend.get_peer_candidates(
-                    num_requested=available_slots,
-                    num_connected_peers=len(self),
+                    num_requested=available_slots, num_connected_peers=len(self)
                 ),
                 timeout=REQUEST_PEER_CANDIDATE_TIMEOUT,
             )
@@ -173,17 +140,14 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             return
         else:
             self.logger.debug2(
-                "Got candidates from backend %s (%s)",
-                backend,
-                candidates,
+                "Got candidates from backend %s (%s)", backend, candidates
             )
             if candidates:
                 await self.connect_to_nodes(iter(candidates))
 
     async def maybe_connect_more_peers(self) -> None:
         rate_limiter = TokenBucket(
-            rate=1 / PEER_CONNECT_INTERVAL,
-            capacity=MAX_SEQUENTIAL_PEER_CONNECT,
+            rate=1 / PEER_CONNECT_INTERVAL, capacity=MAX_SEQUENTIAL_PEER_CONNECT
         )
 
         while self.is_operational:
@@ -193,10 +157,14 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
             await self.wait(rate_limiter.take())
 
-            await self.wait(asyncio.gather(*(
-                self._add_peers_from_backend(backend)
-                for backend in self.peer_backends
-            )))
+            await self.wait(
+                asyncio.gather(
+                    *(
+                        self._add_peers_from_backend(backend)
+                        for backend in self.peer_backends
+                    )
+                )
+            )
 
     def __len__(self) -> int:
         return len(self.connected_nodes)
@@ -221,8 +189,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     def is_valid_connection_candidate(self, candidate: Node) -> bool:
         # connect to no more then 2 nodes with the same IP
         nodes_by_ip = groupby(
-            operator.attrgetter('address.ip'),
-            self.connected_nodes.keys(),
+            operator.attrgetter("address.ip"), self.connected_nodes.keys()
         )
         matching_ip_nodes = nodes_by_ip.get(candidate.address.ip, [])
         return len(matching_ip_nodes) <= 2
@@ -246,10 +213,10 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             with peer.collect_sub_proto_messages() as buffer:
                 await self.wait(
                     peer.boot_manager.events.finished.wait(),
-                    timeout=self._peer_boot_timeout
+                    timeout=self._peer_boot_timeout,
                 )
         except TimeoutError as err:
-            self.logger.debug('Timout waiting for peer to boot: %s', err)
+            self.logger.debug("Timout waiting for peer to boot: %s", err)
             await peer.disconnect(DisconnectReason.timeout)
             return
         except HandshakeFailure as err:
@@ -259,17 +226,17 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             if peer.is_operational:
                 self._add_peer(peer, buffer.get_messages())
             else:
-                self.logger.debug('%s disconnected during boot-up, not adding to pool', peer)
+                self.logger.debug(
+                    "%s disconnected during boot-up, not adding to pool", peer
+                )
 
-    def _add_peer(self,
-                  peer: BasePeer,
-                  msgs: Tuple[PeerMessage, ...]) -> None:
+    def _add_peer(self, peer: BasePeer, msgs: Tuple[PeerMessage, ...]) -> None:
         """Add the given peer to the pool.
 
         Appart from adding it to our list of connected nodes and adding each of our subscriber's
         to the peer, we also add the given messages to our subscriber's queues.
         """
-        self.logger.info('Adding %s to pool', peer)
+        self.logger.info("Adding %s to pool", peer)
         self.connected_nodes[peer.remote] = peer
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
@@ -290,11 +257,13 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     async def stop_all_peers(self) -> None:
         self.logger.info("Stopping all peers ...")
         peers = self.connected_nodes.values()
-        await asyncio.gather(*(
-            peer.disconnect(DisconnectReason.client_quitting)
-            for peer in peers
-            if peer.is_running
-        ))
+        await asyncio.gather(
+            *(
+                peer.disconnect(DisconnectReason.client_quitting)
+                for peer in peers
+                if peer.is_running
+            )
+        )
 
     async def _cleanup(self) -> None:
         await self.stop_all_peers()
@@ -310,11 +279,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         try:
             should_connect = await self.wait(
-                self.connection_tracker.should_connect_to(remote),
-                timeout=1,
+                self.connection_tracker.should_connect_to(remote), timeout=1
             )
         except TimeoutError:
-            self.logger.warning("ConnectionTracker.should_connect_to request timed out.")
+            self.logger.warning(
+                "ConnectionTracker.should_connect_to request timed out."
+            )
             raise
 
         if not should_connect:
@@ -334,27 +304,33 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             # This is kept separate from the
             # `COMMON_PEER_CONNECTION_EXCEPTIONS` to be sure that we aren't
             # silencing an error in our authentication code.
-            self.logger.error('Got bad auth ack from %r', remote)
+            self.logger.error("Got bad auth ack from %r", remote)
             # dump the full stacktrace in the debug logs
-            self.logger.debug('Got bad auth ack from %r', remote, exc_info=True)
+            self.logger.debug("Got bad auth ack from %r", remote, exc_info=True)
             raise
         except MalformedMessage:
             # This is kept separate from the
             # `COMMON_PEER_CONNECTION_EXCEPTIONS` to be sure that we aren't
             # silencing an error in how we decode messages during handshake.
-            self.logger.error('Got malformed response from %r during handshake', remote)
+            self.logger.error("Got malformed response from %r during handshake", remote)
             # dump the full stacktrace in the debug logs
-            self.logger.debug('Got malformed response from %r', remote, exc_info=True)
+            self.logger.debug("Got malformed response from %r", remote, exc_info=True)
             raise
         except HandshakeFailure as e:
-            self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
+            self.logger.debug(
+                "Could not complete handshake with %r: %s", remote, repr(e)
+            )
             self.connection_tracker.record_failure(remote, e)
             raise
         except COMMON_PEER_CONNECTION_EXCEPTIONS as e:
-            self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
+            self.logger.debug(
+                "Could not complete handshake with %r: %s", remote, repr(e)
+            )
             raise
         except Exception:
-            self.logger.exception("Unexpected error during auth/p2p handshake with %r", remote)
+            self.logger.exception(
+                "Unexpected error during auth/p2p handshake with %r", remote
+            )
             raise
 
     async def connect_to_nodes(self, nodes: Iterator[Node]) -> None:
@@ -376,15 +352,17 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                 return
 
             self.logger.debug(
-                'Initiating %d peer connection attempts with %d open peer slots',
+                "Initiating %d peer connection attempts with %d open peer slots",
                 len(batch),
                 available_peer_slots,
             )
             # Try to connect to the peers concurrently.
-            await self.wait(asyncio.gather(
-                *(self.connect_to_node(node) for node in batch),
-                loop=self.get_event_loop(),
-            ))
+            await self.wait(
+                asyncio.gather(
+                    *(self.connect_to_node(node) for node in batch),
+                    loop=self.get_event_loop(),
+                )
+            )
 
     async def connect_to_node(self, node: Node) -> None:
         """
@@ -450,30 +428,46 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     async def _periodically_report_stats(self) -> None:
         while self.is_operational:
             inbound_peers = len(
-                [peer for peer in self.connected_nodes.values() if peer.inbound])
-            self.logger.info("Connected peers: %d inbound, %d outbound",
-                             inbound_peers, (len(self.connected_nodes) - inbound_peers))
+                [peer for peer in self.connected_nodes.values() if peer.inbound]
+            )
+            self.logger.info(
+                "Connected peers: %d inbound, %d outbound",
+                inbound_peers,
+                (len(self.connected_nodes) - inbound_peers),
+            )
             subscribers = len(self._subscribers)
             if subscribers:
                 longest_queue = max(
-                    self._subscribers, key=operator.attrgetter('queue_size'))
+                    self._subscribers, key=operator.attrgetter("queue_size")
+                )
                 self.logger.info(
                     "Peer subscribers: %d, longest queue: %s(%d)",
-                    subscribers, longest_queue.__class__.__name__, longest_queue.queue_size)
+                    subscribers,
+                    longest_queue.__class__.__name__,
+                    longest_queue.queue_size,
+                )
 
             self.logger.debug("== Peer details == ")
             for peer in self.connected_nodes.values():
                 if not peer.is_running:
                     self.logger.warning(
-                        "%s is no longer alive but has not been removed from pool", peer)
+                        "%s is no longer alive but has not been removed from pool", peer
+                    )
                     continue
                 most_received_type, count = max(
-                    peer.received_msgs.items(), key=operator.itemgetter(1))
+                    peer.received_msgs.items(), key=operator.itemgetter(1)
+                )
                 self.logger.debug(
                     "%s: uptime=%s, received_msgs=%d, most_received=%s(%d)",
-                    peer, humanize_seconds(peer.uptime), peer.received_msgs_count,
-                    most_received_type, count)
-                self.logger.debug("client_version_string='%s'", peer.client_version_string)
+                    peer,
+                    humanize_seconds(peer.uptime),
+                    peer.received_msgs_count,
+                    most_received_type,
+                    count,
+                )
+                self.logger.debug(
+                    "client_version_string='%s'", peer.client_version_string
+                )
                 for line in peer.get_extra_stats():
                     self.logger.debug("    %s", line)
             self.logger.debug("== End peer details == ")

@@ -1,9 +1,5 @@
-from typing import (
-    Any,
-)
-from multiprocessing.managers import (
-    BaseManager,
-)
+from typing import Any
+from multiprocessing.managers import BaseManager
 import signal
 
 

@@ -8,15 +8,19 @@ import argparse
 import asyncio
 import logging
 import signal
-from typing import (
-    cast,
-    Type,
-    Union,
-)
+from typing import cast, Type, Union
 
 from eth_typing import BlockNumber
-from eth.chains.mainnet import MainnetChain, MAINNET_GENESIS_HEADER, MAINNET_VM_CONFIGURATION
-from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
+from eth.chains.mainnet import (
+    MainnetChain,
+    MAINNET_GENESIS_HEADER,
+    MAINNET_VM_CONFIGURATION,
+)
+from eth.chains.ropsten import (
+    RopstenChain,
+    ROPSTEN_GENESIS_HEADER,
+    ROPSTEN_VM_CONFIGURATION,
+)
 from eth.db.backends.memory import MemoryDB
 from eth.tools.logging import DEBUG2_LEVEL_NUM
 
@@ -31,12 +35,16 @@ from tests.core.integration_test_helpers import FakeAsyncHeaderDB, connect_to_pe
 
 
 def _main() -> None:
-    logging.basicConfig(level=DEBUG2_LEVEL_NUM, format='%(asctime)s %(levelname)s: %(message)s')
+    logging.basicConfig(
+        level=DEBUG2_LEVEL_NUM, format="%(asctime)s %(levelname)s: %(message)s"
+    )
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-enode', type=str, help="The enode we should connect to", required=True)
-    parser.add_argument('-mainnet', action='store_true')
-    parser.add_argument('-light', action='store_true', help="Connect as a light node")
+    parser.add_argument(
+        "-enode", type=str, help="The enode we should connect to", required=True
+    )
+    parser.add_argument("-mainnet", action="store_true")
+    parser.add_argument("-light", action="store_true", help="Connect as a light node")
     args = parser.parse_args()
 
     peer_class: Union[Type[ETHPeer], Type[LESPeer]]
@@ -64,14 +72,9 @@ def _main() -> None:
     nodes = [Node.from_uri(args.enode)]
 
     context = ChainContext(
-        headerdb=headerdb,
-        network_id=network_id,
-        vm_configuration=vm_config,
+        headerdb=headerdb, network_id=network_id, vm_configuration=vm_config
     )
-    peer_pool = pool_class(
-        privkey=ecies.generate_privkey(),
-        context=context,
-    )
+    peer_pool = pool_class(privkey=ecies.generate_privkey(), context=context)
 
     asyncio.ensure_future(peer_pool.run())
     peer_pool.run_task(connect_to_peers_loop(peer_pool, nodes))
@@ -85,8 +88,7 @@ def _main() -> None:
             await asyncio.sleep(0.2)
         peer = peer_pool.highest_td_peer
         headers = await cast(ETHPeer, peer).requests.get_block_headers(
-            BlockNumber(2440319),
-            max_headers=100
+            BlockNumber(2440319), max_headers=100
         )
         hashes = tuple(header.hash for header in headers)
         if peer_class == ETHPeer:

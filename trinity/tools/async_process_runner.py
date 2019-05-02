@@ -2,29 +2,24 @@ import asyncio
 import logging
 import os
 import signal
-from typing import (
-    AsyncIterable,
-    Awaitable,
-    Callable,
-    Tuple,
-)
+from typing import AsyncIterable, Awaitable, Callable, Tuple
 
 
-class AsyncProcessRunner():
+class AsyncProcessRunner:
     logger = logging.getLogger("trinity.tools.async_process_runner.AsyncProcessRunner")
 
     def __init__(self, debug_fn: Callable[[bytes], None] = None) -> None:
         self.debug_fn = debug_fn
 
     @classmethod
-    async def create_and_run(cls,
-                             cmds: Tuple[str, ...],
-                             timeout_sec: int=10) -> 'AsyncProcessRunner':
+    async def create_and_run(
+        cls, cmds: Tuple[str, ...], timeout_sec: int = 10
+    ) -> "AsyncProcessRunner":
         runner = cls()
         await runner.run(cmds, timeout_sec)
         return runner
 
-    async def run(self, cmds: Tuple[str, ...], timeout_sec: int=10) -> None:
+    async def run(self, cmds: Tuple[str, ...], timeout_sec: int = 10) -> None:
         proc = await asyncio.create_subprocess_exec(
             *cmds,
             stdout=asyncio.subprocess.PIPE,
@@ -48,22 +43,22 @@ class AsyncProcessRunner():
             yield line
 
     async def _iterate_until_empty(
-            self,
-            awaitable_bytes_fn: Callable[[], Awaitable[bytes]]) -> AsyncIterable[str]:
+        self, awaitable_bytes_fn: Callable[[], Awaitable[bytes]]
+    ) -> AsyncIterable[str]:
 
         while True:
             line = await awaitable_bytes_fn()
             if self.debug_fn:
                 self.debug_fn(line)
-            if line == b'':
+            if line == b"":
                 return
             else:
-                yield line.decode('utf-8')
+                yield line.decode("utf-8")
 
     async def kill_after_timeout(self, timeout_sec: int) -> None:
         await asyncio.sleep(timeout_sec)
         self.kill()
-        raise TimeoutError(f'Killed process after {timeout_sec} seconds')
+        raise TimeoutError(f"Killed process after {timeout_sec} seconds")
 
     def kill(self, sig: int = signal.SIGKILL) -> None:
         try:

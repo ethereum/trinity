@@ -1,8 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import (
-    Tuple,
-    cast,
-)
+from typing import Tuple, cast
 
 from eth_typing import BlockIdentifier, BlockNumber
 
@@ -20,7 +17,9 @@ class BaseHeaderRequest(ABC):
     def max_size(self) -> int:
         pass
 
-    def generate_block_numbers(self, block_number: BlockNumber=None) -> Tuple[BlockNumber, ...]:
+    def generate_block_numbers(
+        self, block_number: BlockNumber = None
+    ) -> Tuple[BlockNumber, ...]:
         if block_number is None and not self.is_numbered:
             raise TypeError(
                 "A `block_number` must be supplied to generate block numbers "
@@ -36,12 +35,7 @@ class BaseHeaderRequest(ABC):
 
         max_headers = min(self.max_size, self.max_headers)
 
-        return sequence_builder(
-            block_number,
-            max_headers,
-            self.skip,
-            self.reverse,
-        )
+        return sequence_builder(block_number, max_headers, self.skip, self.reverse)
 
     @property
     def is_numbered(self) -> bool:
