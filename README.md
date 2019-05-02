@@ -3,6 +3,7 @@
 [![Join the chat at https://gitter.im/ethereum/trinity](https://badges.gitter.im/ethereum/trinity.svg)](https://gitter.im/ethereum/trinity)
 [![CircleCI](https://circleci.com/gh/ethereum/trinity/tree/master.svg?style=shield)](https://circleci.com/gh/ethereum/trinity/tree/master)
 [![Documentation Status](https://readthedocs.org/projects/trinity-client/badge/?version=latest)](https://trinity-client.readthedocs.io/en/latest/?badge=latest)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
 Trinity is a client for the Ethereum protocol including the existing 1.0 chain as well as emerging support for the upcoming Ethereum 2.0 / Serenity spec. For the offical website, visit https://trinity.ethereum.org/
 
