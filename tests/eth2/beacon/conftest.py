@@ -20,16 +20,17 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.crosslink_records import CrosslinkRecord
-from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposit_input import DepositInput
 from eth2.beacon.types.eth1_data import Eth1Data
-from eth2.beacon.types.historical_batch import HistoricalBatch
 from eth2.beacon.types.slashable_attestations import SlashableAttestation
 from eth2.beacon.types.states import BeaconState
 
 from eth2.beacon.on_genesis import (
     get_genesis_block,
+)
+from eth2.beacon.tools.misc.ssz_vector import (
+    override_vector_length,
 )
 from eth2.beacon.types.blocks import (
     BeaconBlockBody,
@@ -60,27 +61,7 @@ SAMPLE_SIGNATURE = b'\56' * 96
 # SSZ
 @pytest.fixture(scope="function", autouse=True)
 def override_length(config):
-    state_vector_dict = {
-        "latest_randao_mixes": config.LATEST_RANDAO_MIXES_LENGTH,
-        "latest_crosslinks": config.SHARD_COUNT,
-        "latest_block_roots": config.SLOTS_PER_HISTORICAL_ROOT,
-        "latest_state_roots": config.SLOTS_PER_HISTORICAL_ROOT,
-        "latest_active_index_roots": config.LATEST_ACTIVE_INDEX_ROOTS_LENGTH,
-        "latest_slashed_balances": config.LATEST_SLASHED_EXIT_LENGTH,
-    }
-    for key, value in state_vector_dict.items():
-        BeaconState._meta.container_sedes.field_name_to_sedes[key].length = value
-
-    historical_batch_vector_dict = {
-        "block_roots": config.SLOTS_PER_HISTORICAL_ROOT,
-        "state_roots": config.SLOTS_PER_HISTORICAL_ROOT,
-    }
-    for key, value in historical_batch_vector_dict.items():
-        HistoricalBatch._meta.container_sedes.field_name_to_sedes[key].length = value
-
-    Deposit._meta.container_sedes.field_name_to_sedes['proof'].length = (
-        config.DEPOSIT_CONTRACT_TREE_DEPTH
-    )
+    override_vector_length(config)
 
 
 @pytest.fixture(scope="session")
