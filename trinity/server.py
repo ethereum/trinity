@@ -48,6 +48,7 @@ from p2p.transport import Transport
 from eth2.beacon.chains.base import BeaconChain
 
 from trinity.chains.base import BaseAsyncChain
+from trinity.config import TrinityConfig, Eth1AppConfig
 from trinity.constants import DEFAULT_PREFERRED_NODES
 from trinity.db.base import BaseAsyncDB
 from trinity.db.eth1.chain import BaseAsyncChainDB
@@ -91,6 +92,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
                  headerdb: BaseAsyncHeaderDB,
                  base_db: BaseAsyncDB,
                  network_id: int,
+                 trinity_config: TrinityConfig = None,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  bootstrap_nodes: Tuple[Node, ...] = None,
                  preferred_nodes: Sequence[Node] = None,
@@ -98,6 +100,9 @@ class BaseServer(BaseService, Generic[TPeerPool]):
                  token: CancelToken = None,
                  ) -> None:
         super().__init__(token)
+
+        self.trinity_config = trinity_config
+
         # cross process event bus
         self.event_bus = event_bus
 
@@ -334,7 +339,7 @@ class FullServer(BaseServer[ETHPeerPool]):
 
     def _make_request_server(self) -> ETHRequestServer:
         return ETHRequestServer(
-            self.chaindb,
+            self.trinity_config.get_app_config(Eth1AppConfig).readonly_chaindb,
             self.peer_pool,
             token=self.cancel_token,
         )

@@ -76,6 +76,7 @@ class LightNode(Node):
                 headerdb=self.headerdb,
                 base_db=manager.get_db(),  # type: ignore
                 network_id=self._network_id,
+                trinity_config=self.trinity_config,
                 max_peers=self._max_peers,
                 bootstrap_nodes=self._bootstrap_nodes,
                 preferred_nodes=self._preferred_nodes,

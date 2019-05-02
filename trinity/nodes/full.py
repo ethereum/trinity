@@ -39,6 +39,7 @@ class FullNode(Node):
                 chaindb=manager.get_chaindb(),  # type: ignore
                 headerdb=self.headerdb,
                 base_db=manager.get_db(),  # type: ignore
+                trinity_config=self.trinity_config,
                 network_id=self._network_id,
                 max_peers=self._max_peers,
                 bootstrap_nodes=self._bootstrap_nodes,

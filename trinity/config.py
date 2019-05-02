@@ -32,6 +32,7 @@ from eth_keys import keys
 from eth_keys.datatypes import PrivateKey
 
 from eth.db.backends.base import BaseAtomicDB
+from eth.db.chain import ChainDB
 from eth.typing import VMConfiguration
 
 from eth2.configs import Eth2Config
@@ -53,6 +54,9 @@ from trinity.constants import (
     PID_DIR,
     ROPSTEN_NETWORK_ID,
     SYNC_LIGHT,
+)
+from trinity.db.eth1.chain import (
+    AsyncChainDB,
 )
 from trinity.db.rocksdb import (
     ReadonlyRocksDB,
@@ -538,6 +542,7 @@ class Eth1DbMode(Enum):
 class Eth1AppConfig(BaseAppConfig):
 
     _readonly_database = None
+    _readonly_chaindb = None
 
     def __init__(self, trinity_config: TrinityConfig, sync_mode: str):
         super().__init__(trinity_config)
@@ -599,6 +604,13 @@ class Eth1AppConfig(BaseAppConfig):
             )
 
         return self._readonly_database
+
+    @property
+    def readonly_chaindb(self) -> AsyncChainDB:
+        if self._readonly_chaindb is None:
+            self._readonly_chaindb = AsyncChainDB(ChainDB(self.readonly_database))
+
+        return self._readonly_chaindb
 
 
 class BeaconGenesisData(NamedTuple):
