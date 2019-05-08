@@ -3,13 +3,17 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
-import asyncio
 import os
 from pathlib import (
     Path,
 )
 import sys
 import time
+from typing import (
+    Any,
+    Dict,
+    Tuple,
+)
 
 from ruamel.yaml import (
     YAML,
@@ -107,61 +111,64 @@ class NetworkGeneratorPlugin(BaseMainProcessPlugin):
 
     @classmethod
     def run_generate_testnet_dir(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(cls._run_generate_testnet_dir(args))
-        loop.close()
-
-    @classmethod
-    async def _run_generate_testnet_dir(cls, args: Namespace) -> None:
         logger = cls.get_logger()
         logger.info("Generating testnet")
-        cls.network_dir = args.network_dir
-        if len(os.listdir(cls.network_dir)) > 0:
+        network_dir = args.network_dir
+        if len(os.listdir(network_dir)) > 0:
             logger.error("This directory is not empty, won't create network files here.")
             sys.exit(1)
 
-        cls.generate_trinity_root_dirs()
-        cls.generate_keys(args.num)
-        cls.generate_genesis_state(args.genesis_delay)
+        clients = cls.generate_trinity_root_dirs(network_dir)
+        keymap = cls.generate_keys(args.num, network_dir, clients)
+        cls.generate_genesis_state(args.genesis_delay, network_dir, keymap, clients)
 
         logger.info(bold_green("Network generation completed"))
 
     @classmethod
-    def generate_keys(cls, num: int) -> None:
+    def generate_keys(cls,
+                      num: int,
+                      network_dir: Path,
+                      clients: Tuple[Client, ...]) -> Dict[Any, Any]:
         logger = cls.get_logger()
         logger.info(f"Creating {num} validators' keys")
-        cls.keys_dir = cls.network_dir / KEYS_DIR
-        cls.keys_dir.mkdir()
+        keys_dir = network_dir / KEYS_DIR
+        keys_dir.mkdir()
 
         privkeys = tuple(int.from_bytes(
             hash_eth2(str(i).encode('utf-8'))[:4], 'big')
             for i in range(num)
         )
-        cls.keymap = {bls.privtopub(key): key for key in privkeys}
+        keymap = {bls.privtopub(key): key for key in privkeys}
 
-        num_of_clients = len(cls.clients)
+        num_of_clients = len(clients)
         for validator_index, key in enumerate(privkeys):
             file_name = f"v{validator_index:07d}.privkey"
-            private_key_path = cls.keys_dir / file_name
+            private_key_path = keys_dir / file_name
             with open(private_key_path, "w") as f:
                 f.write(str(key))
 
             # Distribute keys to clients
-            client = cls.clients[validator_index % num_of_clients]
+            client = clients[validator_index % num_of_clients]
             with open(client.validator_keys_dir / file_name, "w") as f:
                 f.write(str(key))
 
+        return keymap
+
     @classmethod
-    def generate_genesis_state(cls, genesis_delay: Second) -> None:
+    def generate_genesis_state(cls,
+                               genesis_delay: Second,
+                               network_dir: Path,
+                               keymap: Dict[Any, Any],
+                               clients: Tuple[Client, ...]) -> None:
         logger = cls.get_logger()
         state_machine_class = XiaoLongBaoStateMachine
 
         # Since create_mock_genesis takes a long time, update the real genesis_time later
         dummy_time = Timestamp(int(time.time()))
         state, _ = create_mock_genesis(
-            num_validators=len(cls.keymap.keys()),
+            num_validators=len(keymap.keys()),
             config=state_machine_class.config,
-            keymap=cls.keymap,
+            keymap=keymap,
             genesis_block_class=state_machine_class.block_class,
             genesis_time=dummy_time,
         )
@@ -171,19 +178,20 @@ class NetworkGeneratorPlugin(BaseMainProcessPlugin):
             genesis_time=genesis_time,
         )
         yaml = YAML()
-        with open(cls.network_dir / GENESIS_FILE, "w") as f:
+        with open(network_dir / GENESIS_FILE, "w") as f:
             yaml.dump(to_formatted_dict(state), f)
 
         # Distribute genesis file to clients
-        for client in cls.clients:
+        for client in clients:
             with open(client.client_dir / GENESIS_FILE, "w") as f:
                 yaml.dump(to_formatted_dict(state), f)
 
     @classmethod
-    def generate_trinity_root_dirs(cls) -> None:
+    def generate_trinity_root_dirs(cls, network_dir: Path) -> Tuple[Client, ...]:
         logger = cls.get_logger()
         logger.info("Generating root directories for clients")
-        cls.clients = tuple(Client(name, cls.network_dir) for name in ("alice", "bob"))
-        for client in cls.clients:
+        clients = tuple(Client(name, network_dir) for name in ("alice", "bob"))
+        for client in clients:
             client.client_dir.mkdir()
             client.validator_keys_dir.mkdir()
+        return clients
