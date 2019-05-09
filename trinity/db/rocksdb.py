@@ -71,7 +71,7 @@ class RocksDB(BaseAtomicDB):
 # fresh instance after the TTL has passed.
 # A TTL of 100 ms should achieve that the data is reasonable fresh, yet multiple reads
 # that are made in one tick do not cause re-initialzing a fresh readonly db over and over.
-READ_ONLY_DB_TTL = 1
+READ_ONLY_DB_TTL = 0.25
 
 
 class ReadonlyRocksDB(BaseAtomicDB):
