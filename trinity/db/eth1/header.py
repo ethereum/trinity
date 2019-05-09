@@ -20,10 +20,12 @@ from eth_typing import (
 from eth.db.backends.base import (
     BaseAtomicDB,
 )
+from eth.db.header import HeaderDB
 from eth.rlp.headers import BlockHeader
 
+from trinity._utils.async_dispatch import async_method
 from trinity._utils.mp import (
-    async_method,
+    async_method as async_proxy_method
 )
 
 
@@ -68,6 +70,23 @@ class BaseAsyncHeaderDB(ABC):
         raise NotImplementedError("ChainDB classes must implement this method")
 
 
+class AsyncHeaderDB(BaseAsyncHeaderDB):
+
+    def __init__(self, header_db: HeaderDB):
+        self._header_db = header_db
+
+    coro_get_block_header_by_hash = async_method('_header_db.get_block_header_by_hash')
+    coro_get_canonical_block_hash = async_method('_header_db.get_canonical_block_hash')
+    coro_get_canonical_block_header_by_number = async_method(
+        '_header_db.get_canonical_block_header_by_number')
+    coro_get_canonical_head = async_method('_header_db.get_canonical_head')
+    coro_get_score = async_method('_header_db.get_score')
+    coro_header_exists = async_method('_header_db.header_exists')
+    coro_get_canonical_block_hash = async_method('_header_db.get_canonical_block_hash')
+    coro_persist_header = async_method('_header_db.persist_header')
+    coro_persist_header_chain = async_method('_header_db.persist_header_chain')
+
+
 class AsyncHeaderDBPreProxy(BaseAsyncHeaderDB):
     """
     Proxy implementation of ``BaseAsyncHeaderDB`` that does not derive from
@@ -77,15 +96,16 @@ class AsyncHeaderDBPreProxy(BaseAsyncHeaderDB):
     def __init__(self, db: BaseAtomicDB) -> None:
         pass
 
-    coro_get_block_header_by_hash = async_method('get_block_header_by_hash')
-    coro_get_canonical_block_hash = async_method('get_canonical_block_hash')
-    coro_get_canonical_block_header_by_number = async_method('get_canonical_block_header_by_number')
-    coro_get_canonical_head = async_method('get_canonical_head')
-    coro_get_score = async_method('get_score')
-    coro_header_exists = async_method('header_exists')
-    coro_get_canonical_block_hash = async_method('get_canonical_block_hash')
-    coro_persist_header = async_method('persist_header')
-    coro_persist_header_chain = async_method('persist_header_chain')
+    coro_get_block_header_by_hash = async_proxy_method('get_block_header_by_hash')
+    coro_get_canonical_block_hash = async_proxy_method('get_canonical_block_hash')
+    coro_get_canonical_block_header_by_number = async_proxy_method(
+        'get_canonical_block_header_by_number')
+    coro_get_canonical_head = async_proxy_method('get_canonical_head')
+    coro_get_score = async_proxy_method('get_score')
+    coro_header_exists = async_proxy_method('header_exists')
+    coro_get_canonical_block_hash = async_proxy_method('get_canonical_block_hash')
+    coro_persist_header = async_proxy_method('persist_header')
+    coro_persist_header_chain = async_proxy_method('persist_header_chain')
 
 
 class AsyncHeaderDBProxy(BaseProxy, AsyncHeaderDBPreProxy):
