@@ -325,7 +325,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
 class FullServer(BaseServer[ETHPeerPool]):
     def _make_peer_pool(self) -> ETHPeerPool:
         context = ChainContext(
-            headerdb=self.headerdb,
+            headerdb=self.trinity_config.get_app_config(Eth1AppConfig).readonly_headerdb,
             network_id=self.network_id,
             vm_configuration=self.chain.vm_configuration,
         )
