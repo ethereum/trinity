@@ -7,7 +7,6 @@ from eth_utils import (
 from eth2._utils.hash import (
     hash_eth2,
 )
-
 from eth2._utils.merkle.normal import (
     get_merkle_root_from_items,
     calc_merkle_tree,
