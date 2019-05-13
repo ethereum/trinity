@@ -6,7 +6,7 @@ from eth2._utils.merkle.sparse import (
     get_root,
     verify_merkle_proof,
 )
-from eth2.beacon._utils.hash import (
+from eth2._utils.hash import (
     hash_eth2,
 )
 

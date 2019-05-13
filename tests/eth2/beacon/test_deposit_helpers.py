@@ -13,7 +13,7 @@ from eth2._utils.merkle.sparse import (
     calc_merkle_tree_from_leaves,
     get_merkle_root,
 )
-from eth2.beacon._utils.hash import (
+from eth2._utils.hash import (
     hash_eth2,
 )
 

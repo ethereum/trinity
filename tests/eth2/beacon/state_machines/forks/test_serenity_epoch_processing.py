@@ -46,7 +46,7 @@ from eth2.beacon.epoch_processing_helpers import (
     get_base_reward,
     get_effective_balance,
 )
-from eth2.beacon._utils.hash import (
+from eth2._utils.hash import (
     hash_eth2,
 )
 from eth2.beacon.datastructures.inclusion_info import InclusionInfo
