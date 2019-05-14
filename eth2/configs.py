@@ -70,7 +70,7 @@ class Eth2Config(NamedTuple):
 class CommitteeConfig(NamedTuple):
     GENESIS_SLOT: Slot
     GENESIS_EPOCH: Epoch
-    SHARD_COUNT: Shard
+    SHARD_COUNT: int
     SLOTS_PER_EPOCH: int
     TARGET_COMMITTEE_SIZE: int
     SHUFFLE_ROUND_COUNT: int
