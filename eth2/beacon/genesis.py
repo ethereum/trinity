@@ -163,7 +163,7 @@ def get_genesis_beacon_state(*,
     current_shuffling_seed = generate_seed(
         state=state,
         epoch=config.GENESIS_EPOCH,
-        committee_config=CommitteeConfig(config),
+        committee_config=CommitteeConfig.from_eth2_config(config),
     )
     state = state.copy(
         current_shuffling_seed=current_shuffling_seed,

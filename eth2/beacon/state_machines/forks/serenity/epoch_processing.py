@@ -297,14 +297,14 @@ def process_crosslinks(state: BeaconState, config: Eth2Config) -> BeaconState:
         crosslink_committees_at_slot = get_crosslink_committees_at_slot(
             state,
             slot,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         )
         for crosslink_committee, shard in crosslink_committees_at_slot:
             winning_root, attesting_validator_indices = get_winning_root_and_participants(
                 state=state,
                 shard=shard,
                 effective_balances=effective_balances,
-                committee_config=CommitteeConfig(config),
+                committee_config=CommitteeConfig.from_eth2_config(config),
             )
             if len(attesting_validator_indices) > 0:
                 total_attesting_balance = get_total_balance(
@@ -432,7 +432,7 @@ def _compute_normal_justification_and_finalization_deltas(
             proposer_index = get_beacon_proposer_index(
                 state,
                 inclusion_infos[index].inclusion_slot,
-                CommitteeConfig(config),
+                CommitteeConfig.from_eth2_config(config),
             )
             rewards_received = _update_rewards_or_penalies(
                 proposer_index,
@@ -539,7 +539,7 @@ def _process_rewards_and_penalties_for_finality(
     previous_epoch_boundary_attester_indices = get_attester_indices_from_attestations(
         state=state,
         attestations=previous_epoch_boundary_attestations,
-        committee_config=CommitteeConfig(config),
+        committee_config=CommitteeConfig.from_eth2_config(config),
     )
 
     previous_epoch_head_attestations = get_previous_epoch_matching_head_attestations(
@@ -550,7 +550,7 @@ def _process_rewards_and_penalties_for_finality(
     previous_epoch_head_attester_indices = get_attester_indices_from_attestations(
         state=state,
         attestations=previous_epoch_head_attestations,
-        committee_config=CommitteeConfig(config),
+        committee_config=CommitteeConfig.from_eth2_config(config),
     )
 
     epochs_since_finality = state.next_epoch(config.SLOTS_PER_EPOCH) - state.finalized_epoch
@@ -607,14 +607,14 @@ def _process_rewards_and_penalties_for_crosslinks(
         crosslink_committees_at_slot = get_crosslink_committees_at_slot(
             state,
             slot,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         )
         for crosslink_committee, shard in crosslink_committees_at_slot:
             winning_root, attesting_validator_indices = get_winning_root_and_participants(
                 state=state,
                 shard=shard,
                 effective_balances=effective_balances,
-                committee_config=CommitteeConfig(config),
+                committee_config=CommitteeConfig.from_eth2_config(config),
             )
             total_attesting_balance = get_total_balance(
                 state.validator_balances,
@@ -661,14 +661,14 @@ def process_rewards_and_penalties(state: BeaconState, config: Eth2Config) -> Bea
     previous_epoch_attester_indices = get_attester_indices_from_attestations(
         state=state,
         attestations=previous_epoch_attestations,
-        committee_config=CommitteeConfig(config),
+        committee_config=CommitteeConfig.from_eth2_config(config),
     )
 
     # Compute inclusion slot/distance of previous attestations for later use.
     inclusion_infos = get_inclusion_infos(
         state=state,
         attestations=previous_epoch_attestations,
-        committee_config=CommitteeConfig(config),
+        committee_config=CommitteeConfig.from_eth2_config(config),
     )
 
     # Compute effective balance of each previous epoch active validator for later use
@@ -956,7 +956,7 @@ def _process_validator_registry_with_update(current_epoch_committee_count: int,
 
     state = _update_shuffling_epoch(state, config.SLOTS_PER_EPOCH)
 
-    state = _update_shuffling_seed(state, CommitteeConfig(config))
+    state = _update_shuffling_seed(state, CommitteeConfig.from_eth2_config(config))
 
     return state
 
@@ -979,7 +979,7 @@ def _process_validator_registry_without_update(state: BeaconState,
         # produced a full set of new crosslinks; validators should have a chance to
         # complete this goal in future epochs.
 
-        state = _update_shuffling_seed(state, CommitteeConfig(config))
+        state = _update_shuffling_seed(state, CommitteeConfig.from_eth2_config(config))
 
     return state
 
@@ -1178,7 +1178,7 @@ def process_final_updates(state: BeaconState,
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     next_epoch = state.next_epoch(config.SLOTS_PER_EPOCH)
 
-    state = _update_latest_active_index_roots(state, CommitteeConfig(config))
+    state = _update_latest_active_index_roots(state, CommitteeConfig.from_eth2_config(config))
 
     state = state.copy(
         latest_slashed_balances=update_tuple_item(

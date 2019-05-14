@@ -50,7 +50,7 @@ def process_block_header(state: BeaconState,
         validate_proposer_signature(
             state,
             block,
-            committee_config=CommitteeConfig(config),
+            committee_config=CommitteeConfig.from_eth2_config(config),
         )
 
     return state
@@ -89,7 +89,7 @@ def process_randao(state: BeaconState,
     proposer_index = get_beacon_proposer_index(
         state=state,
         slot=state.slot,
-        committee_config=CommitteeConfig(config),
+        committee_config=CommitteeConfig.from_eth2_config(config),
     )
     proposer = state.validator_registry[proposer_index]
 

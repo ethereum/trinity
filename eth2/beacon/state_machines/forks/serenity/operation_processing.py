@@ -56,7 +56,7 @@ def process_proposer_slashings(state: BeaconState,
             latest_slashed_exit_length=config.LATEST_SLASHED_EXIT_LENGTH,
             whistleblower_reward_quotient=config.WHISTLEBLOWER_REWARD_QUOTIENT,
             max_deposit_amount=config.MAX_DEPOSIT_AMOUNT,
-            committee_config=CommitteeConfig(config),
+            committee_config=CommitteeConfig.from_eth2_config(config),
         )
 
     return state
@@ -103,7 +103,7 @@ def process_attester_slashings(state: BeaconState,
                 latest_slashed_exit_length=config.LATEST_SLASHED_EXIT_LENGTH,
                 whistleblower_reward_quotient=config.WHISTLEBLOWER_REWARD_QUOTIENT,
                 max_deposit_amount=config.MAX_DEPOSIT_AMOUNT,
-                committee_config=CommitteeConfig(config),
+                committee_config=CommitteeConfig.from_eth2_config(config),
             )
 
     return state
@@ -135,7 +135,7 @@ def process_attestations(state: BeaconState,
             attestation,
             config.MIN_ATTESTATION_INCLUSION_DELAY,
             config.SLOTS_PER_HISTORICAL_ROOT,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         )
 
     # update attestations

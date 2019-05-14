@@ -156,7 +156,7 @@ def get_attesting_indices(state: 'BeaconState',
             state,
             a.data,
             a.aggregation_bitfield,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         )
         output = output.union(participants)
     for result in sorted(output):

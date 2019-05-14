@@ -126,14 +126,14 @@ def test_validate_proposer_signature(
         validate_proposer_signature(
             state,
             proposed_block,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         )
     else:
         with pytest.raises(ValidationError):
             validate_proposer_signature(
                 state,
                 proposed_block,
-                CommitteeConfig(config),
+                CommitteeConfig.from_eth2_config(config),
             )
 
 

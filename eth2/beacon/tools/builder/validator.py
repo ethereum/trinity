@@ -498,7 +498,7 @@ def create_mock_signed_attestations_at_slot(
     crosslink_committees_at_slot = get_crosslink_committees_at_slot(
         state,
         attestation_slot,
-        CommitteeConfig(config),
+        CommitteeConfig.from_eth2_config(config),
     )
 
     # Get `target_root`
@@ -647,7 +647,7 @@ def get_committee_assignment(
 
     epoch_start_slot = get_epoch_start_slot(epoch, config.SLOTS_PER_EPOCH)
 
-    committee_config = CommitteeConfig(config)
+    committee_config = CommitteeConfig.from_eth2_config(config)
 
     for slot in range(epoch_start_slot, epoch_start_slot + config.SLOTS_PER_EPOCH):
         crosslink_committees = get_crosslink_committees_at_slot(

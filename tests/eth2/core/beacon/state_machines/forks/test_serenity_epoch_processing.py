@@ -488,7 +488,7 @@ def test_process_crosslinks(
         for committee, _shard in get_crosslink_committees_at_slot(
             state,
             slot_in_previous_epoch,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         ):
             if _shard == shard:
                 # Sample validators attesting to this shard.
@@ -527,7 +527,7 @@ def test_process_crosslinks(
         for committee, _shard in get_crosslink_committees_at_slot(
             state,
             slot_in_current_epoch,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         ):
             if _shard == shard:
                 # Sample validators attesting to this shard.
@@ -766,7 +766,7 @@ def test_process_rewards_and_penalties_for_finality(
         get_crosslink_committees_at_slot(
             state,
             slot,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         )[0] for slot in range(prev_epoch_start_slot, prev_epoch_start_slot + slots_per_epoch)
     ]
 
@@ -874,7 +874,7 @@ def test_process_rewards_and_penalties_for_crosslinks(
         get_crosslink_committees_at_slot(
             state,
             slot,
-            CommitteeConfig(config),
+            CommitteeConfig.from_eth2_config(config),
         )[0] for slot in range(prev_epoch_start_slot, prev_epoch_start_slot + slots_per_epoch)
     ]
 

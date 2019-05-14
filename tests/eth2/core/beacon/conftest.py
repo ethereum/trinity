@@ -796,4 +796,4 @@ def fixture_sm_class(config):
 #
 @pytest.fixture
 def committee_config(config):
-    return CommitteeConfig(config)
+    return CommitteeConfig.from_eth2_config(config)

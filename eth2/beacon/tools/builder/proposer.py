@@ -82,7 +82,7 @@ def validate_proposer_index(state: BeaconState,
             slot=slot,
         ),
         slot,
-        CommitteeConfig(config),
+        CommitteeConfig.from_eth2_config(config),
     )
 
     if validator_index != beacon_proposer_index:
@@ -162,7 +162,7 @@ def _get_proposer_index(state: BeaconState,
     proposer_index = get_beacon_proposer_index(
         state,
         slot,
-        CommitteeConfig(config),
+        CommitteeConfig.from_eth2_config(config),
     )
     return proposer_index
 

@@ -110,7 +110,7 @@ def test_process_proposer_slashings(genesis_state,
     whistleblower_index = get_beacon_proposer_index(
         state,
         state.slot,
-        CommitteeConfig(config),
+        CommitteeConfig.from_eth2_config(config),
     )
     slashing_proposer_index = (whistleblower_index + 1) % len(state.validator_registry)
     proposer_slashing = create_mock_proposer_slashing_at_block(

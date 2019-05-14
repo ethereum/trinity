@@ -568,7 +568,7 @@ def test_get_inclusion_infos(
     result = get_inclusion_infos(
         state=n_validators_state,
         attestations=previous_epoch_attestations,
-        committee_config=CommitteeConfig(config),
+        committee_config=CommitteeConfig.from_eth2_config(config),
     )
     assert result[participating_validator_index].inclusion_slot == expected_inclusion_slot
     assert result[participating_validator_index].inclusion_distance == expected_inclusion_distance
