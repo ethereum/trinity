@@ -10,10 +10,6 @@ from typing import (
     Type,
 )
 
-from lahja import (
-    ConnectionConfig,
-)
-
 from eth.db.backends.base import BaseDB
 from eth.db.backends.level import LevelDB
 
@@ -29,16 +25,12 @@ from trinity.config import (
 )
 from trinity.constants import (
     APP_IDENTIFIER_ETH1,
-    MAIN_EVENTBUS_ENDPOINT,
     NETWORKING_EVENTBUS_ENDPOINT,
 )
 from trinity.db.eth1.manager import (
     create_db_server_manager,
 )
-from trinity.endpoint import (
-    TrinityMainEventBusEndpoint,
-    TrinityEventBusEndpoint,
-)
+from trinity.event_bus import AsyncioEventBusService
 from trinity.extensibility import (
     BasePlugin,
     PluginManager,
@@ -84,9 +76,7 @@ def main() -> None:
 def trinity_boot(args: Namespace,
                  trinity_config: TrinityConfig,
                  extra_kwargs: Dict[str, Any],
-                 plugin_manager: PluginManager,
                  listener: logging.handlers.QueueListener,
-                 main_endpoint: TrinityMainEventBusEndpoint,
                  logger: logging.Logger) -> Tuple[multiprocessing.Process, ...]:
     # start the listener thread to handle logs produced by other processes in
     # the local logger.
@@ -146,31 +136,23 @@ def launch_node(args: Namespace, trinity_config: TrinityConfig) -> None:
 
 
 async def launch_node_coro(args: Namespace, trinity_config: TrinityConfig) -> None:
-    endpoint = TrinityEventBusEndpoint()
+    event_bus_service = AsyncioEventBusService(trinity_config, NETWORKING_EVENTBUS_ENDPOINT)
+    asyncio.ensure_future(event_bus_service.run())
+
+    await event_bus_service.wait_event_bus_available()
+    endpoint = event_bus_service.get_event_bus()
+
+    # TODO: wait for service ready
     NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
     node = NodeClass(endpoint, trinity_config)
 
-    networking_connection_config = ConnectionConfig.from_name(
-        NETWORKING_EVENTBUS_ENDPOINT,
-        trinity_config.ipc_dir
-    )
-
-    await endpoint.start_serving(networking_connection_config)
-    asyncio.ensure_future(endpoint.auto_connect_new_announced_endpoints())
-    await endpoint.connect_to_endpoints(
-        ConnectionConfig.from_name(MAIN_EVENTBUS_ENDPOINT, trinity_config.ipc_dir),
-        # Plugins that run within the networking process broadcast and receive on the
-        # the same endpoint
-        networking_connection_config,
-    )
-    await endpoint.announce_endpoint()
-
     # This is a second PluginManager instance governing plugins in a shared process.
     plugin_manager = PluginManager(SharedProcessScope(endpoint), get_all_plugins())
+    # TODO: this actually starts the plugins.  This API name `prepare` doesn't convey this.
     plugin_manager.prepare(args, trinity_config)
 
-    asyncio.ensure_future(handle_networking_exit(node, plugin_manager, endpoint))
-    asyncio.ensure_future(node.run())
+    asyncio.ensure_future(handle_networking_exit(event_bus_service, plugin_manager))
+    event_bus_service.run_child_service(node)
 
 
 @setup_cprofiler('run_database_process')
@@ -186,11 +168,9 @@ def run_database_process(trinity_config: TrinityConfig, db_class: Type[BaseDB]) 
 
 
 async def handle_networking_exit(service: BaseService,
-                                 plugin_manager: PluginManager,
-                                 endpoint: TrinityEventBusEndpoint) -> None:
+                                 plugin_manager: PluginManager) -> None:
 
     async with exit_signal_with_services(service):
         await plugin_manager.shutdown()
-        endpoint.stop()
         # Retrieve and shutdown the global executor that was created at startup
         ensure_global_asyncio_executor().shutdown(wait=True)

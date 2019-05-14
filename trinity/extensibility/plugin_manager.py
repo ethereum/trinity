@@ -4,16 +4,13 @@ from abc import (
 )
 from argparse import (
     ArgumentParser,
-    Namespace,
     _SubParsersAction,
 )
 import asyncio
 import logging
 from typing import (
-    Any,
     Awaitable,
     cast,
-    Dict,
     Iterable,
     List,
     Optional,
@@ -21,13 +18,8 @@ from typing import (
     TypeVar,
 )
 
-from trinity.config import (
-    TrinityConfig
-)
-from trinity.endpoint import (
-    TrinityEventBusEndpoint,
-    TrinityMainEventBusEndpoint,
-)
+from lahja import EndpointAPI
+
 from trinity.extensibility.exceptions import (
     UnsuitableShutdownError,
 )
@@ -54,7 +46,7 @@ class BaseManagerProcessScope(ABC):
     responsible to manage a specific plugin and how it is created.
     """
 
-    endpoint: TrinityEventBusEndpoint
+    endpoint: EndpointAPI
 
     @abstractmethod
     def is_responsible_for_plugin(self, plugin: Type[BasePlugin]) -> bool:
@@ -76,7 +68,7 @@ class BaseManagerProcessScope(ABC):
 
 class MainAndIsolatedProcessScope(BaseManagerProcessScope):
 
-    def __init__(self, main_proc_endpoint: TrinityMainEventBusEndpoint) -> None:
+    def __init__(self, main_proc_endpoint: EndpointAPI) -> None:
         self.endpoint = main_proc_endpoint
 
     def is_responsible_for_plugin(self, plugin: Type[BasePlugin]) -> bool:
@@ -85,7 +77,7 @@ class MainAndIsolatedProcessScope(BaseManagerProcessScope):
         :class:`~trinity.extensibility.plugin.BaseIsolatedPlugin` or
         :class:`~trinity.extensibility.plugin.BaseMainProcessPlugin`
         """
-        return issubclass(plugin, BaseIsolatedPlugin) or issubclass(plugin, BaseMainProcessPlugin)
+        return issubclass(plugin, (BaseIsolatedPlugin, BaseMainProcessPlugin))
 
     def create_plugin(self,
                       plugin_type: Type[TPlugin],
@@ -95,7 +87,7 @@ class MainAndIsolatedProcessScope(BaseManagerProcessScope):
 
 class SharedProcessScope(BaseManagerProcessScope):
 
-    def __init__(self, shared_proc_endpoint: TrinityEventBusEndpoint) -> None:
+    def __init__(self, shared_proc_endpoint: EndpointAPI) -> None:
         self.endpoint = shared_proc_endpoint
 
     def is_responsible_for_plugin(self, plugin: Type[BasePlugin]) -> bool:
@@ -143,7 +135,7 @@ class PluginManager:
         self._logger = logging.getLogger("trinity.extensibility.plugin_manager.PluginManager")
 
     @property
-    def event_bus_endpoint(self) -> TrinityEventBusEndpoint:
+    def event_bus_endpoint(self) -> EndpointAPI:
         """
         Return the :class:`~lahja.endpoint.Endpoint` that the
         :class:`~trinity.extensibility.plugin_manager.PluginManager` instance uses to connect to
@@ -161,10 +153,7 @@ class PluginManager:
         for plugin_type in self._registered_plugins:
             plugin_type.configure_parser(arg_parser, subparser)
 
-    def prepare(self,
-                args: Namespace,
-                trinity_config: TrinityConfig,
-                boot_kwargs: Dict[str, Any] = None) -> None:
+    def prepare(self, boot_info: TrinityBootInfo) -> None:
         """
         Create all plugins which this manager is responsible for and call
         :meth:`~trinity.extensibility.plugin.BasePlugin.ready` on each of them.
@@ -173,10 +162,7 @@ class PluginManager:
             if not self._scope.is_responsible_for_plugin(plugin_type):
                 continue
 
-            plugin = self._scope.create_plugin(
-                plugin_type,
-                TrinityBootInfo(args, trinity_config, boot_kwargs)
-            )
+            plugin = self._scope.create_plugin(plugin_type, boot_info)
             plugin.ready(self.event_bus_endpoint)
 
             self._plugin_store.append(plugin)

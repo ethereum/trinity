@@ -20,7 +20,7 @@ from trinity.config import (
 )
 from trinity.db.orm import get_tracking_database
 from trinity.extensibility.plugin import (
-    BaseIsolatedPlugin,
+    AsyncioIsolatedPlugin,
 )
 from trinity.db.network import (
     get_networkdb_path,
@@ -43,7 +43,7 @@ from .cli import (
 )
 
 
-class NetworkDBPlugin(BaseIsolatedPlugin):
+class NetworkDBPlugin(AsyncioIsolatedPlugin):
     @property
     def name(self) -> str:
         return "Network Database"

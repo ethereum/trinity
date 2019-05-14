@@ -6,6 +6,7 @@ from trinity.extensibility.exceptions import (  # noqa: F401
     UnsuitableShutdownError,
 )
 from trinity.extensibility.plugin import (  # noqa: F401
+    AsyncioIsolatedPlugin,
     BaseAsyncStopPlugin,
     BaseMainProcessPlugin,
     BaseIsolatedPlugin,

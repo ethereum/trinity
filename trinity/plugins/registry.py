@@ -23,7 +23,7 @@ from trinity.plugins.builtin.json_rpc.plugin import (
 from trinity.plugins.builtin.network_db.plugin import (
     NetworkDBPlugin,
 )
-from trinity.plugins.builtin.peer_discovery.plugin import (
+from trinity.plugins.builtin.peer_discovery.trio_plugin import (
     PeerDiscoveryPlugin,
 )
 from trinity.plugins.builtin.request_server.plugin import (
