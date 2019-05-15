@@ -7,6 +7,8 @@ from typing import (
     Type,
 )
 
+from cancel_token import CancelToken
+
 from rlp import sedes
 from rlp.sedes import (
     BigEndianInt,
@@ -24,6 +26,7 @@ from p2p.protocol import (
     Protocol,
 )
 
+from trinity.db.eth1.chain import BaseAsyncChainDB
 
 from trinity.protocol.common.exchanges import BaseExchange
 from trinity.protocol.common.handlers import BaseExchangeHandler
@@ -114,7 +117,6 @@ class GetStateDataExchange(BaseExchange[BigEndianInt, BigEndianInt, BigEndianInt
 
 
 class FirehoseExchangeHandler(BaseExchangeHandler):
-    # TODO: you might not need to define this class
     _exchange_config = {
         'get_state_data': GetStateDataExchange,
     }
@@ -195,6 +197,11 @@ class FirehoseRequestServer(BaseRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
         GetStateData, StateData,
     })
+
+    def __init__(self, db: BaseAsyncChainDB,
+                 peer_pool: FirehosePeerPool, token: CancelToken = None) -> None:
+        super().__init__(peer_pool, token)
+        self.db = db
 
     async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
                           msg: _DecodedMsgType) -> None:

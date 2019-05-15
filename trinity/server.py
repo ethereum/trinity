@@ -384,6 +384,7 @@ class FirehoseServer(BaseServer[FirehosePeerPool]):
 
     def _make_request_server(self) -> FirehoseRequestServer:
         return FirehoseRequestServer(
+            db=self.chaindb,
             peer_pool=self.peer_pool,
             token=self.cancel_token,
         )

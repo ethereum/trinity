@@ -7,6 +7,10 @@ from p2p import ecies
 
 from trinity.protocol import firehose
 
+from tests.core.integration_test_helpers import (
+    FakeAsyncChainDB,
+)
+
 from p2p.tools.paragon.helpers import (
     get_directly_linked_peers,
 )
@@ -20,7 +24,7 @@ class MockPeerPool(firehose.FirehosePeerPool):
 
 
 @pytest.mark.asyncio
-async def test_firehose(request, event_loop):
+async def test_firehose(request, event_loop, chaindb_fresh):
     cancel_token = CancelToken('test_firehose')
 
     alice_factory = firehose.FirehosePeerFactory(
@@ -41,6 +45,7 @@ async def test_firehose(request, event_loop):
 
     alice_peer_pool = MockPeerPool([alice])
     request_server = firehose.FirehoseRequestServer(
+        db=FakeAsyncChainDB(chaindb_fresh.db),
         peer_pool=alice_peer_pool,
         token=cancel_token,
     )
