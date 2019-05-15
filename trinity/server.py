@@ -71,6 +71,10 @@ from trinity.protocol.bcc.servers import (
     BCCRequestServer,
     BCCReceiveServer,
 )
+from trinity.protocol.firehose import (
+    FirehosePeerPool,
+    FirehoseRequestServer,
+)
 
 DIAL_IN_OUT_RATIO = 0.75
 
@@ -359,6 +363,28 @@ class LightServer(BaseServer[LESPeerPool]):
         return LightRequestServer(
             self.headerdb,
             self.peer_pool,
+            token=self.cancel_token,
+        )
+
+
+class FirehoseServer(BaseServer[FirehosePeerPool]):
+    def _make_peer_pool(self) -> FirehosePeerPool:
+        context = ChainContext(
+            headerdb=self.headerdb,
+            network_id=self.network_id,
+            vm_configuration=self.chain.vm_configuration,
+        )
+        return FirehosePeerPool(
+            privkey=self.privkey,
+            context=context,
+            max_peers=self.max_peers,
+            token=self.cancel_token,
+            event_bus=self.event_bus,
+        )
+
+    def _make_request_server(self) -> FirehoseRequestServer:
+        return FirehoseRequestServer(
+            peer_pool=self.peer_pool,
             token=self.cancel_token,
         )
 

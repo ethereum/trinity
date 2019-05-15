@@ -42,7 +42,7 @@ from .trackers import (
     GetBlockHeadersTracker,
     GetBlockBodiesTracker,
     GetNodeDataTracker,
-    GetReceiptsTracker
+    GetReceiptsTracker,
 )
 from .validators import (
     GetBlockBodiesValidator,
