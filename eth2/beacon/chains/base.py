@@ -402,6 +402,11 @@ class BeaconChain(BaseBeaconChain):
         # TODO: Now it just persists all state. Should design how to clean up the old state.
         self.chaindb.persist_state(state)
 
+        # TODO write just the state and block here
+        # - can add logic to *not* write the state/block if we can detect they are bad
+        # TODO do the fork choice here, via the fork choice provided by the state machine
+        # TODO persist the result of the fork choice to the DB
+
         (
             new_canonical_blocks,
             old_canonical_blocks,
