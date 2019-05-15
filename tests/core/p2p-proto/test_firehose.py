@@ -15,6 +15,8 @@ from p2p.tools.paragon.helpers import (
     get_directly_linked_peers,
 )
 
+from trinity.sync.full.hexary_trie import trie_iterator
+
 
 class MockPeerPool(firehose.FirehosePeerPool):
     def __init__(self, peers) -> None:
@@ -43,7 +45,8 @@ async def test_firehose(request, event_loop, chaindb_fresh):
         request, event_loop, alice_factory, bob_factory
     )
 
-    chaindb = FakeAsyncChainDB(chaindb_fresh.db)
+    asyncchaindb = FakeAsyncChainDB(chaindb_fresh.db)
+    chaindb = asyncchaindb.db
 
     alice_peer_pool = MockPeerPool([alice])
     request_server = firehose.FirehoseRequestServer(
@@ -54,13 +57,19 @@ async def test_firehose(request, event_loop, chaindb_fresh):
 
     asyncio.ensure_future(request_server.run())
 
-    # 1. find the state root so we know what to ask for
-    head = await chaindb.coro_get_canonical_head()
+    head = asyncchaindb.get_canonical_head()
     state_root = head.state_root
 
-    await bob.requests.get_state_data(
+    result = await bob.requests.get_leaf_count(
         state_root,
         prefix=(0,),
         timeout=1,
     )
+
+    leaf_count = 0
+    for _ in trie_iterator(chaindb, state_root):
+        leaf_count += 1
+
+    assert result['leaf_count'] == leaf_count
+
     await request_server.cancel()
