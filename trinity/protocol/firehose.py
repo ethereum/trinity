@@ -4,15 +4,24 @@ from typing import (
     Dict,
     FrozenSet,
     Optional,
+    Tuple,
     Type,
 )
 
 from cancel_token import CancelToken
 
+from eth.rlp.sedes import trie_root
+
+from eth_typing import (
+    Hash32,
+)
+
 from rlp import sedes
 from rlp.sedes import (
     BigEndianInt,
 )
+
+from trie.utils.nibbles import encode_nibbles
 
 from p2p.exceptions import HandshakeFailure
 from p2p.p2p_proto import DisconnectReason
@@ -36,6 +45,9 @@ from trinity.protocol.common.trackers import BasePerformanceTracker
 from trinity.protocol.common.validators import BaseValidator, noop_payload_validator
 
 
+Nibbles = Tuple[int, ...]
+
+
 # Commands
 
 
@@ -50,6 +62,8 @@ class GetStateData(Command):
     _cmd_id = 1
     structure = (
         ('request_id', sedes.big_endian_int),
+        ('state_root', trie_root),
+        ('prefix', sedes.binary),  # encoded in the same way trie nibbles are
     )
 
 
@@ -57,6 +71,7 @@ class StateData(Command):
     _cmd_id = 2
     structure = (
         ('request_id', sedes.big_endian_int),
+        # ('node_count', sedes.big_endian_int),
     )
 
 
@@ -67,8 +82,13 @@ class GetStateDataRequest(BaseRequest[BigEndianInt]):
     cmd_type = GetStateData
     response_type = StateData
 
-    def __init__(self, request_id: int) -> None:
-        self.command_payload = (request_id,)
+    def __init__(self, request_id: int, state_root: Hash32, prefix: Nibbles) -> None:
+        nibbles = encode_nibbles(prefix)
+        self.command_payload = (
+            request_id,
+            state_root,
+            nibbles,
+        )
 
 
 # Trackers
@@ -101,9 +121,14 @@ class GetStateDataExchange(BaseExchange[BigEndianInt, BigEndianInt, BigEndianInt
     request_class = GetStateDataRequest
     tracker_class = GetStateDataTracker
 
-    async def __call__(self, timeout: float = None) -> BigEndianInt:  # type: ignore
+    async def __call__(self, state_root: Hash32, prefix: Nibbles,  # type: ignore
+                       timeout: float = None) -> None:
         validator = GetStateDataValidator()
-        request = self.request_class(request_id=1)
+        request = self.request_class(
+            request_id=1,
+            state_root=state_root,
+            prefix=prefix,
+        )
 
         return await self.get_result(
             request,
@@ -146,6 +171,7 @@ class FirehoseProtocol(Protocol):
         self.transport.send(*cmd.encode(resp))
 
     def send_get_state_data(self) -> None:
+        raise Exception('')
         cmd = GetStateData(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode((1,))
         self.transport.send(header, body)

@@ -43,14 +43,24 @@ async def test_firehose(request, event_loop, chaindb_fresh):
         request, event_loop, alice_factory, bob_factory
     )
 
+    chaindb = FakeAsyncChainDB(chaindb_fresh.db)
+
     alice_peer_pool = MockPeerPool([alice])
     request_server = firehose.FirehoseRequestServer(
-        db=FakeAsyncChainDB(chaindb_fresh.db),
+        db=chaindb,
         peer_pool=alice_peer_pool,
         token=cancel_token,
     )
 
     asyncio.ensure_future(request_server.run())
 
-    await bob.requests.get_state_data(timeout=1)
+    # 1. find the state root so we know what to ask for
+    head = await chaindb.coro_get_canonical_head()
+    state_root = head.state_root
+
+    await bob.requests.get_state_data(
+        state_root,
+        prefix=(0,),
+        timeout=1,
+    )
     await request_server.cancel()
