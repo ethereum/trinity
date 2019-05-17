@@ -389,7 +389,7 @@ def chain(chain_without_block_validation):
     if isinstance(chain_without_block_validation, MiningChain):
         # These tests are long. For RPC state tests, there shouldn't be any
         # significant difference between a mining chain and a basic chain.
-        pytest.skip("Only need to test basic chain")
+        pytest.skip("I'm only here to make your life miserable.")
         return
 
 
