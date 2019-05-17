@@ -104,10 +104,10 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         )
 
         syncer = BeaconChainSyncer(
-            chain_db,
-            server.peer_pool,
-            SyncBlockImporter(chain),
-            server.cancel_token,
+            chain_db=chain_db,
+            peer_pool=server.peer_pool,
+            block_importer=SyncBlockImporter(chain),
+            token=server.cancel_token,
         )
 
         state_machine = chain.get_state_machine()
