@@ -1,4 +1,3 @@
-from eth2.beacon.state_machines.forks.serenity import SERENITY_CONFIG
 from abc import abstractmethod
 import asyncio
 import logging

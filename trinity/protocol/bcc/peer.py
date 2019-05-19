@@ -76,11 +76,10 @@ class BCCPeer(BasePeer):
             )
         genesis_root = await self.get_genesis_root()
 
-        # TODO change message descriptor to 'genesis_root', accounting for the spec
-        if msg['genesis_hash'] != genesis_root:
+        if msg['genesis_root'] != genesis_root:
             await self.disconnect(DisconnectReason.useless_peer)
             raise HandshakeFailure(
-                f"{self} genesis ({encode_hex(msg['genesis_hash'])}) does not "
+                f"{self} genesis ({encode_hex(msg['genesis_root'])}) does not "
                 f"match ours ({encode_hex(genesis_root)}), disconnecting"
             )
 
