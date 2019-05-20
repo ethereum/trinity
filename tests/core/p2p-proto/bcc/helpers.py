@@ -64,9 +64,9 @@ class FakeAsyncBeaconChainDB(BaseAsyncBeaconChainDB, BeaconChainDB):
     coro_get = async_passthrough('get')
 
 
-def create_test_block(parent=None, **kwargs):
+def create_test_block(parent=None, genesis_config=SERENITY_GENESIS_CONFIG, **kwargs):
     defaults = {
-        "slot": SERENITY_CONFIG.GENESIS_SLOT,
+        "slot": genesis_config.GENESIS_SLOT,
         "previous_block_root": ZERO_HASH32,
         "state_root": ZERO_HASH32,  # note: not the actual genesis state root
         "signature": EMPTY_SIGNATURE,
@@ -105,7 +105,7 @@ async def get_chain_db(blocks=(), genesis_config=SERENITY_GENESIS_CONFIG):
 
 
 async def get_genesis_chain_db(genesis_config=SERENITY_GENESIS_CONFIG):
-    genesis = create_test_block()
+    genesis = create_test_block(genesis_config=genesis_config)
     return await get_chain_db((genesis,), genesis_config=genesis_config)
 
 
