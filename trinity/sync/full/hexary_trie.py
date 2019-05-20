@@ -3,7 +3,6 @@ from typing import (
     Awaitable,
     Callable,
     Dict,
-    Iterable,
     List,
     Tuple,
 )
@@ -17,7 +16,6 @@ from eth_typing import (
 )
 
 from eth.db.backends.base import BaseDB
-from eth.db.chain import ChainDB
 from eth.tools.logging import ExtendedDebugLogger
 
 from trie.constants import (
@@ -242,18 +240,3 @@ class HexaryTrieSync:
             ancestor.dependencies -= 1
             if ancestor.dependencies == 0:
                 await self.commit(ancestor)
-
-
-def trie_iterator(db: ChainDB, root_hash: Hash32) -> Iterable[bytes]:
-    # TODO: write tests that this works
-    if len(root_hash) < 32:
-        node_rlp = root_hash
-    else:
-        node_rlp = db.get(root_hash)
-    root_node = decode_node(node_rlp)
-
-    references, leaves = _get_children(root_node, depth=0)
-
-    yield from leaves
-    for _, child_hash in references:
-        yield from trie_iterator(db, child_hash)
