@@ -618,6 +618,12 @@ class BeaconGenesisData(NamedTuple):
 
 
 class BeaconChainConfig:
+    network_id: int
+    genesis_data: BeaconGenesisData
+    _chain_name: str
+    _beacon_chain_class: Type['BeaconChain'] = None
+    _genesis_config: Eth2GenesisConfig = None
+
     def __init__(self,
                  chain_name: str=None,
                  genesis_data: BeaconGenesisData=None) -> None:
@@ -626,8 +632,6 @@ class BeaconChainConfig:
         self.genesis_data = genesis_data
 
         self._chain_name = chain_name
-        self._beacon_chain_class = None
-        self._genesis_config = None
 
     @property
     def genesis_config(self) -> Eth2GenesisConfig:

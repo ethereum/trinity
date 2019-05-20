@@ -130,8 +130,9 @@ class BeaconNodePlugin(BaseIsolatedPlugin):
         )
 
         slot_ticker = SlotTicker(
-            genesis_config=chain_config.genesis_config,
+            genesis_slot=chain_config.genesis_config.GENESIS_SLOT,
             genesis_time=chain_config.genesis_data.genesis_time,
+            seconds_per_slot=chain_config.genesis_config.SECONDS_PER_SLOT,
             event_bus=self.event_bus,
             token=server.cancel_token,
         )
