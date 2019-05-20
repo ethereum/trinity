@@ -250,7 +250,6 @@ def genesis_state(base_genesis_state):
 
 @pytest.fixture
 def chain_without_block_validation(
-        request,
         base_db,
         genesis_state):
     """
