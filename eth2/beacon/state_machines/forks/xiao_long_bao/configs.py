@@ -4,9 +4,12 @@ from eth2.beacon.helpers import (
 from eth2.beacon.state_machines.forks.serenity.configs import (
     SERENITY_CONFIG,
 )
+from eth2.beacon.typing import (
+    Slot,
+)
 
 
-GENESIS_SLOT = 0
+GENESIS_SLOT = Slot(0)
 SLOTS_PER_EPOCH = 4
 
 XIAO_LONG_BAO_CONFIG = SERENITY_CONFIG._replace(
