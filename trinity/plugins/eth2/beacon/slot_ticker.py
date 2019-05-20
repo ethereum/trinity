@@ -22,9 +22,6 @@ from trinity._utils.shellart import (
 from trinity.endpoint import (
     TrinityEventBusEndpoint,
 )
-from eth2.configs import (
-    Eth2GenesisConfig,
-)
 
 DEFAULT_CHECK_FREQUENCY = 6
 
@@ -45,17 +42,18 @@ class SlotTicker(BaseService):
 
     def __init__(
             self,
-            genesis_config: Eth2GenesisConfig,
+            genesis_slot: Slot,
             genesis_time: int,
+            seconds_per_slot: Second,
             event_bus: TrinityEventBusEndpoint,
             token: CancelToken = None) -> None:
         super().__init__(token)
-        self.genesis_slot = genesis_config.GENESIS_SLOT
+        self.genesis_slot = genesis_slot
         self.genesis_time = genesis_time
         # FIXME: seconds_per_slot is assumed to be constant here.
         # Should it changed in the future fork, fix it as #491 described.
-        self.seconds_per_slot = genesis_config.SECONDS_PER_SLOT
-        self.latest_slot = self.genesis_slot
+        self.seconds_per_slot = seconds_per_slot
+        self.latest_slot = genesis_slot
         self.event_bus = event_bus
 
     async def _run(self) -> None:
