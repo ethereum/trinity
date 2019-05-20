@@ -393,7 +393,10 @@ class BeaconChain(BaseBeaconChain):
             parent_block,
             FromBlockParams(),
         )
-        state, imported_block = self.get_state_machine(base_block_for_import).import_block(block)
+
+        state_machine = self.get_state_machine(base_block_for_import)
+
+        state, imported_block = state_machine.import_block(block)
 
         # Validate the imported block.
         if perform_validation:
@@ -402,15 +405,17 @@ class BeaconChain(BaseBeaconChain):
         # TODO: Now it just persists all state. Should design how to clean up the old state.
         self.chaindb.persist_state(state)
 
-        # TODO write just the state and block here
-        # - can add logic to *not* write the state/block if we can detect they are bad
-        # TODO do the fork choice here, via the fork choice provided by the state machine
-        # TODO persist the result of the fork choice to the DB
+        self.chaindb.persist_block_without_scoring(imported_block, imported_block.__class__)
+
+        fork_choice_rule = state_machine.fork_choice_rule
+        score = fork_choice_rule.score_block(block, self.chaindb)
+
+        self.chaindb.set_score(block, score)
 
         (
             new_canonical_blocks,
             old_canonical_blocks,
-        ) = self.chaindb.persist_block(imported_block, imported_block.__class__)
+        ) = self.chaindb.update_canonical_head_if_needed(block)
 
         self.logger.debug(
             'IMPORTED_BLOCK: slot %s | signed root %s',
