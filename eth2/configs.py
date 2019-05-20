@@ -96,7 +96,7 @@ class Eth2GenesisConfig:
     Pass this to the chains, chain_db, or other objects that need them.
     """
 
-    def __init__(self, config: Eth2Config):
+    def __init__(self, config: Eth2Config) -> None:
         self.GENESIS_SLOT = config.GENESIS_SLOT
         self.GENESIS_EPOCH = config.GENESIS_EPOCH
         self.SECONDS_PER_SLOT = config.SECONDS_PER_SLOT
