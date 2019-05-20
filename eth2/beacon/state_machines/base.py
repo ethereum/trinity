@@ -15,6 +15,7 @@ from eth2.configs import (  # noqa: F401
     Eth2Config,
 )
 from eth2.beacon.db.chain import BaseBeaconChainDB
+from eth2.beacon.fork_choice import BaseForkChoiceRule
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
@@ -42,6 +43,7 @@ class BaseBeaconStateMachine(Configurable, ABC):
     def __init__(self,
                  chaindb: BaseBeaconChainDB,
                  block: BaseBeaconBlock,
+                 fork_choice_rule: BaseForkChoiceRule,
                  state: BeaconState=None) -> None:
         pass
 
@@ -65,6 +67,11 @@ class BaseBeaconStateMachine(Configurable, ABC):
     def state_transition(self) -> BaseStateTransition:
         pass
 
+    @property
+    @abstractmethod
+    def fork_choice_rule(self) -> BaseForkChoiceRule:
+        pass
+
     #
     # Import block API
     #
@@ -85,12 +92,14 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     def __init__(self,
                  chaindb: BaseBeaconChainDB,
                  block: BaseBeaconBlock,
+                 fork_choice_rule: BaseForkChoiceRule,
                  state: BeaconState=None) -> None:
         self.chaindb = chaindb
         if state is not None:
             self._state = state
         else:
             self.block = block
+        self._fork_choice_rule = fork_choice_rule
 
     @property
     def state(self) -> BeaconState:
@@ -137,6 +146,10 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     @property
     def state_transition(self) -> BaseStateTransition:
         return self.get_state_transiton_class()(self.config)
+
+    @property
+    def fork_choice_rule(self) -> BaseForkChoiceRule:
+        return self._fork_choice_rule
 
     #
     # Import block API
