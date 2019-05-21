@@ -42,5 +42,5 @@ class Attestation(ssz.Serializable):
             aggregate_signature,
         )
 
-    def __repr__(self):
-        return "<Attestation %s >".format(self.data)
+    def __repr__(self) -> str:
+        return f"<Attestation {self.data} >"

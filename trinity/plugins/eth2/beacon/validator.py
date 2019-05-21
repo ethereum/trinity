@@ -17,6 +17,7 @@ from eth_typing import (
 )
 from eth_utils import (
     to_tuple,
+    encode_hex,
 )
 
 from eth2.beacon.chains.base import BeaconChain
@@ -103,7 +104,11 @@ class Validator(BaseService):
 
     async def _run(self) -> None:
         await self.event_bus.wait_until_serving()
-        self.logger.debug(bold_green("validator running!!!"))
+        self.logger.info(
+            bold_green(
+                f"Validator service up. Handle indices={tuple(self.validator_privkeys.keys())}"
+            )
+        )
         self.run_daemon_task(self.handle_slot_tick())
         await self.cancellation()
 
@@ -143,7 +148,7 @@ class Validator(BaseService):
         state_machine = self.chain.get_state_machine()
         state = state_machine.state
         self.logger.debug(
-            bold_green(f"head: slot={head.slot}, state root={head.state_root.hex()}")
+            bold_green(f"Head: slot={head.slot}, state_root={encode_hex(head.state_root)}")
         )
         proposer_index = _get_proposer_index(
             state,
@@ -172,7 +177,7 @@ class Validator(BaseService):
         state_machine = self.chain.get_state_machine()
         state = state_machine.state
         self.logger.debug(
-            bold_green(f"head: slot={head.slot}, state root={head.state_root.hex()}")
+            bold_green(f"Head: slot={head.slot}, state_root={encode_hex(head.state_root)}")
         )
         if state.slot < slot:
             self.skip_block(
@@ -194,13 +199,13 @@ class Validator(BaseService):
             state_machine=state_machine,
             parent_block=head_block,
         )
-        self.logger.debug(
-            bold_green(f"validator index={proposer_index} proposing block, block={block}")
+        self.logger.info(
+            bold_green(f"Validator={proposer_index} proposing block={block}")
         )
         for peer in self.peer_pool.connected_nodes.values():
             peer = cast(BCCPeer, peer)
             self.logger.debug(
-                bold_red(f"sending block to peer={peer}")
+                bold_red(f"Sending block={block} to peer={peer}")
             )
             peer.sub_proto.send_new_block(block)
         self.chain.import_block(block)
@@ -237,7 +242,7 @@ class Validator(BaseService):
             cast(Slot, slot + 1),
         )
         self.logger.debug(
-            bold_green(f"skipping block, post state={post_state.root}")
+            bold_green(f"Skipping block, post state={encode_hex(post_state.root)}")
         )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
@@ -315,7 +320,7 @@ class Validator(BaseService):
             )
             self.logger.debug(
                 bold_green(
-                    f"validator index={attesting_validators_indices} attest to block, "
+                    f"Validators={attesting_validators_indices} attest to "
                     f"block={head}, attestation={attestation}"
                 )
             )
@@ -326,7 +331,7 @@ class Validator(BaseService):
         for peer in self.peer_pool.connected_nodes.values():
             peer = cast(BCCPeer, peer)
             self.logger.debug(
-                bold_red(f"sending attestations to peer={peer}")
+                bold_red(f"Sending attestations={attestations} to peer={peer}")
             )
             peer.sub_proto.send_attestation_records(attestations)
         return attestations

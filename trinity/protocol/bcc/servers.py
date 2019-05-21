@@ -306,7 +306,7 @@ class BCCReceiveServer(BaseReceiveServer):
         block = ssz.decode(encoded_block, BeaconBlock)
         if self._is_block_seen(block):
             raise Exception(f"block {block} is seen before")
-        self.logger.debug(f"received block={block}")
+        self.logger.debug(f"Received block={block}")
         # TODO: check the proposer signature before importing the block
         if self._process_received_block(block):
             self._broadcast_block(block, from_peer=peer)
