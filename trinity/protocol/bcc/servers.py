@@ -319,7 +319,7 @@ class BCCReceiveServer(BaseReceiveServer):
         block = ssz.decode(encoded_block, BeaconBlock)
         if self._is_block_seen(block):
             raise Exception(f"block {block} is seen before")
-        self.logger.debug("Received block=%s", block)
+        self.logger.debug("Received new block=%s", block)
         # TODO: check the proposer signature before importing the block
         if self._process_received_block(block):
             self._broadcast_block(block, from_peer=peer)
@@ -421,13 +421,13 @@ class BCCReceiveServer(BaseReceiveServer):
                     current_parent_root,
                 )
             for block in children:
-                self.logger.debug("Try to import block=%s", block)
                 try:
                     self.chain.import_block(block)
                     self.logger.debug("Successfully imported block=%s", block)
                     imported_roots.append(block.signing_root)
-                except ValidationError:
+                except ValidationError as e:
                     # TODO: Possibly drop all of its descendants in `self.orphan_block_pool`?
+                    self.logger.debug("Fail to import invalid block=%s  reason=%s", block, e)
                     pass
 
     def _request_block_from_peers(self, block_root: Hash32) -> None:
@@ -435,9 +435,9 @@ class BCCReceiveServer(BaseReceiveServer):
             peer = cast(BCCPeer, peer)
             request_id = gen_request_id()
             self.logger.debug(
-                bold_red("Send block=%s request to request_id=%s peer=%s"),
-                encode_hex(block_root),
+                bold_red("Send block request with request_id=%s root=%s to peer=%s"),
                 request_id,
+                encode_hex(block_root),
                 peer,
             )
 

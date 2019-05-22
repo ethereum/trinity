@@ -166,8 +166,8 @@ class Validator(BaseService):
         self.logger.debug(
             # Align with debug log below
             bold_green("Head       epoch=%s slot=%s state_root=%s"),
-            head.slot,
             state.current_epoch(self.slots_per_epoch),
+            head.slot,
             encode_hex(head.state_root),
         )
         self.logger.debug(
@@ -269,7 +269,7 @@ class Validator(BaseService):
             cast(Slot, slot + 1),
         )
         self.logger.debug(
-            bold_green("Skip block at slot=%s  post_state=%s"),
+            bold_green("Skip block at slot=%s  post_state_root=%s"),
             slot,
             encode_hex(post_state.root),
         )
