@@ -164,9 +164,26 @@ class Validator(BaseService):
         state_machine = self.chain.get_state_machine()
         state = state_machine.state
         self.logger.debug(
-            bold_green("Head  slot=%s state_root=%s"),
+            # Align with debug log below
+            bold_green("Head       epoch=%s slot=%s state_root=%s"),
             head.slot,
+            state.current_epoch(self.slots_per_epoch),
             encode_hex(head.state_root),
+        )
+        self.logger.debug(
+            bold_green("Justified  epoch=%s root=%s  (current)"),
+            state.current_justified_epoch,
+            encode_hex(state.current_justified_root),
+        )
+        self.logger.debug(
+            bold_green("Justified  epoch=%s root=%s  (previous)"),
+            state.previous_justified_epoch,
+            encode_hex(state.previous_justified_root),
+        )
+        self.logger.debug(
+            bold_green("Finalized  epoch=%s root=%s"),
+            state.finalized_epoch,
+            encode_hex(state.finalized_root),
         )
         proposer_index = _get_proposer_index(
             state,
@@ -191,14 +208,8 @@ class Validator(BaseService):
         await self.attest(slot)
 
     async def handle_second_tick(self, slot: Slot) -> None:
-        head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine()
         state = state_machine.state
-        self.logger.debug(
-            bold_green("Head  slot=%s state_root=%s"),
-            head.slot,
-            encode_hex(head.state_root),
-        )
         if state.slot < slot:
             self.skip_block(
                 slot=slot,
@@ -257,7 +268,11 @@ class Validator(BaseService):
             # of `slot - 1`, so we increment it by one to get the post state of `slot`.
             cast(Slot, slot + 1),
         )
-        self.logger.debug(bold_green("Skipping block  post_state=%s"), encode_hex(post_state.root))
+        self.logger.debug(
+            bold_green("Skip block at slot=%s  post_state=%s"),
+            slot,
+            encode_hex(post_state.root),
+        )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
         self.chain.chaindb.persist_state(post_state)
