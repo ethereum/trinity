@@ -162,6 +162,28 @@ class LeafCount(Command):
     )
 
 
+class GetNodeChunk(Command):
+    """
+    Returns a few layers of nodes starting at the given one. If prefix is None this
+    returns nodes from the first n levels in the same order that a breadth-first traversal
+    would traverse them.
+    """
+    _cmd_id = 3
+    structure = (
+        ('request_id', sedes.big_endian_int),
+        ('state_root', trie_root),
+        ('prefix', sedes.binary),  # encoded in the same way trie nibbles are
+    )
+
+
+class NodeChunk(Command):
+    _cmd_id = 4
+    structure = (
+        ('request_id', sedes.big_endian_int),
+        sedes.CountableList(sedes.binary),  # a list of rlp-encoded nodes
+    )
+
+
 # Requests
 
 
@@ -171,6 +193,19 @@ class GetLeafCountRequest(BaseRequest[BigEndianInt]):
 
     def __init__(self, request_id: int, state_root: Hash32, prefix: Nibbles) -> None:
         nibbles = encode_nibbles(prefix)
+        self.command_payload = (
+            request_id,
+            state_root,
+            nibbles,
+        )
+
+
+class GetNodeChunkRequest(BaseRequest[Tuple[int, Hash32, bytes]]):
+    cmd_type = GetNodeChunk
+    response_type = NodeChunk
+
+    def __init__(self, request_id: int, state_root: Hash32, prefix: Nibbles) -> None:
+        nibbles = cast(bytes, encode_nibbles(prefix))
         self.command_payload = (
             request_id,
             state_root,
@@ -189,6 +224,17 @@ class GetLeafCountTracker(BasePerformanceTracker[GetLeafCountRequest, BigEndianI
         return len(result)
 
     def _get_result_item_count(self, result: BigEndianInt) -> int:
+        return len(result)
+
+
+class GetNodeChunkTracker(BasePerformanceTracker[GetNodeChunkRequest, None]):
+    def _get_request_size(self, request: GetNodeChunkRequest) -> Optional[int]:
+        return len(request.command_payload)
+
+    def _get_result_size(self, result: None) -> int:
+        return len(result)
+
+    def _get_result_item_count(self, result: None) -> int:
         return len(result)
 
 
@@ -225,15 +271,40 @@ class GetLeafCountExchange(BaseExchange[BigEndianInt, BigEndianInt, BigEndianInt
             timeout,
         )
 
+
+class GetNodeChunkExchange(BaseExchange[Tuple[int, Hash32, bytes], None, None]):
+    _normalizer = NoopNormalizer[None]()
+    request_class = GetNodeChunkRequest
+    tracker_class = GetNodeChunkTracker
+
+    async def __call__(self, state_root: Hash32, prefix: Nibbles,  # type: ignore
+                       timeout: float = None) -> None:
+        validator = GetLeafCountValidator()
+        request = self.request_class(
+            request_id=1,
+            state_root=state_root,
+            prefix=prefix,
+        )
+
+        return await self.get_result(
+            request,
+            self._normalizer,
+            validator,
+            noop_payload_validator,
+            timeout,
+        )
+
 # Handlers
 
 
 class FirehoseExchangeHandler(BaseExchangeHandler):
     _exchange_config = {
         'get_leaf_count': GetLeafCountExchange,
+        'get_node_chunk': GetNodeChunkExchange,
     }
 
     get_leaf_count: GetLeafCountExchange
+    get_node_chunk: GetNodeChunkExchange
 
 
 # Protocol
@@ -245,8 +316,9 @@ class FirehoseProtocol(Protocol):
     _commands = (
         Status,
         GetLeafCount, LeafCount,
+        GetNodeChunk, NodeChunk,
     )
-    cmd_length = 3
+    cmd_length = 5
 
     peer: 'FirehosePeer'
 
@@ -266,6 +338,12 @@ class FirehoseProtocol(Protocol):
     def send_leaf_count(self, request_id: int, leaf_count: int) -> None:
         cmd = LeafCount(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode((request_id, leaf_count))
+        self.transport.send(header, body)
+
+    def send_node_chunk(self, request_id: int, nodes: List[bytes]) -> None:
+        # TODO: what type should nodes have?
+        cmd = NodeChunk(self.cmd_id_offset, self.snappy_support)
+        header, body = cmd.encode((request_id, nodes))
         self.transport.send(header, body)
 
 
@@ -326,6 +404,12 @@ class FirehoseRequestServer(BaseRequestServer):
             state_root = cast(Hash32, msg['state_root'])  # TODO: is this cast correct?
             prefix = cast(bytes, msg['prefix'])
             await self.handle_get_leaf_count(peer, request_id, state_root, prefix)
+        elif isinstance(cmd, GetNodeChunk):
+            msg = cast(Dict[str, Any], msg)
+            request_id = cast(int, msg['request_id'])
+            state_root = cast(Hash32, msg['state_root'])
+            prefix = cast(bytes, msg['prefix'])
+            await self.handle_get_node_chunk(peer, request_id, state_root, prefix)
 
     async def handle_get_leaf_count(self, peer: FirehosePeer, request_id: int,
                                     state_root: Hash32, prefix: bytes) -> None:
@@ -338,3 +422,8 @@ class FirehoseRequestServer(BaseRequestServer):
             count += 1
 
         peer.sub_proto.send_leaf_count(request_id, leaf_count=count)
+
+    async def handle_get_node_chunk(self, peer: FirehosePeer, request_id: int,
+                                    state_root: Hash32, prefix: bytes) -> None:
+        nodes: List[bytes] = []
+        peer.sub_proto.send_node_chunk(request_id, nodes)
