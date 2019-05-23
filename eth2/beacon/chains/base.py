@@ -40,6 +40,9 @@ from eth2.beacon.exceptions import (
     BlockClassError,
     StateMachineNotFound,
 )
+from eth2.beacon.types.attestations import (
+    Attestation,
+)
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
 )
@@ -414,3 +417,11 @@ class BeaconChain(BaseBeaconChain):
         )
 
         return imported_block, new_canonical_blocks, old_canonical_blocks
+    #
+    # Attestation API
+    #
+
+    def get_attestation_by_root(self, attestation_root: Hash32)-> Attestation:
+        block_root = self.chaindb.get_canonical_head_root()
+        block_class = self.get_block_class(block_root)
+        return self.chaindb.get_attestation_by_root(attestation_root, block_class)

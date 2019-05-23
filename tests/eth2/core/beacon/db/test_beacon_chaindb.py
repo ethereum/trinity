@@ -52,6 +52,20 @@ def state(sample_beacon_state_params):
     return BeaconState(**sample_beacon_state_params)
 
 
+@pytest.fixture()
+def block_with_attestation(chaindb, sample_block, sample_attestation):
+    genesis = sample_block
+    chaindb.persist_block(genesis, genesis.__class__)
+    block1 = genesis.copy(
+        previous_block_root=genesis.signing_root,
+        slot=genesis.slot + 1,
+        body=genesis.body.copy(
+            attestations=(sample_attestation,),
+        )
+    )
+    return block1, sample_attestation
+
+
 def test_chaindb_add_block_number_to_root_lookup(chaindb, block):
     block_slot_to_root_key = SchemaV1.make_block_slot_to_root_lookup_key(block.slot)
     assert not chaindb.exists(block_slot_to_root_key)
@@ -240,3 +254,19 @@ def test_get_slot_by_root(chaindb, block):
     block_slot = block.slot
     result_slot = chaindb.get_slot_by_root(block.signing_root)
     assert result_slot == block_slot
+
+
+def test_chaindb_add_attestations_root_to_block_lookup(chaindb, block_with_attestation):
+    block, attestation = block_with_attestation
+    attestation_root_to_block_key = SchemaV1.make_attestation_root_to_block_lookup_key(
+        attestation.root,
+    )
+    assert not chaindb.exists(attestation_root_to_block_key)
+    chaindb.persist_block(block, block.__class__)
+    assert chaindb.exists(attestation_root_to_block_key)
+
+
+def test_chaindb_get_attestation_by_root(chaindb, block_with_attestation):
+    block, attestation = block_with_attestation
+    chaindb.persist_block(block, block.__class__)
+    assert chaindb.get_attestation_by_root(attestation.root, block.__class__) == attestation

@@ -18,7 +18,10 @@ from eth_typing import Hash32
 from eth2.beacon.types.states import (
     BeaconState,
 )
-from eth2.beacon.types.blocks import (  # noqa: F401
+from eth2.beacon.types.attestations import (
+    Attestation,
+)
+from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
 )
 
@@ -104,10 +107,19 @@ class BaseAsyncBeaconChainDB(ABC):
     async def coro_persist_state(self,
                                  state: BeaconState) -> None:
         pass
+    #
+    # Attestation API
+    #
 
+    @abstractmethod
+    def coro_get_attestation_by_root(self,
+                                     attestation_root: Hash32,
+                                     block_class: Type[BaseBeaconBlock]) -> Attestation:
+        pass
     #
     # Raw Database API
     #
+
     @abstractmethod
     async def coro_exists(self, key: bytes) -> bool:
         pass
@@ -136,6 +148,7 @@ class AsyncBeaconChainDBPreProxy(BaseAsyncBeaconChainDB):
     coro_persist_block_chain = async_method('persist_block_chain')
     coro_get_state_by_root = async_method('get_state_by_root')
     coro_persist_state = async_method('persist_state')
+    coro_get_attestation_by_root = async_method('get_attestation_by_root')
     coro_exists = async_method('exists')
     coro_get = async_method('get')
 
