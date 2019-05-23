@@ -32,6 +32,7 @@ from eth_utils import (
 from eth2._utils.ssz import (
     validate_imported_block_unchanged,
 )
+from eth2.beacon.fork_choice import higher_slot_scoring
 from eth2.beacon.db.chain import (
     BaseBeaconChainDB,
     BeaconChainDB,
@@ -273,6 +274,7 @@ class BeaconChain(BaseBeaconChain):
         return sm_class(
             chaindb=self.chaindb,
             block=block,
+            fork_choice_rule=higher_slot_scoring,
         )
 
     @classmethod
@@ -408,14 +410,14 @@ class BeaconChain(BaseBeaconChain):
         self.chaindb.persist_block_without_scoring(imported_block, imported_block.__class__)
 
         fork_choice_rule = state_machine.fork_choice_rule
-        score = fork_choice_rule.score_block(block, self.chaindb)
+        score = fork_choice_rule(block, self.chaindb)
 
         self.chaindb.set_score(block, score)
 
         (
             new_canonical_blocks,
             old_canonical_blocks,
-        ) = self.chaindb.update_canonical_head_if_needed(block)
+        ) = self.chaindb.update_canonical_head_if_needed(block, block.__class__)
 
         self.logger.debug(
             'IMPORTED_BLOCK: slot %s | signed root %s',

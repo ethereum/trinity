@@ -10,6 +10,7 @@ from eth2.configs import (
 from eth2.beacon.committee_helpers import (
     get_beacon_proposer_index,
 )
+from eth2.beacon.fork_choice import higher_slot_scoring
 from eth2.beacon.helpers import (
     get_epoch_start_slot,
 )
@@ -53,6 +54,7 @@ def test_process_max_attestations(genesis_state,
         state_machine=fixture_sm_class(
             chaindb,
             genesis_block,
+            higher_slot_scoring,
         ),
         attestation_slot=attestation_slot,
         beacon_block_root=genesis_block.signing_root,
@@ -269,6 +271,7 @@ def test_process_attestations(genesis_state,
         state_machine=fixture_sm_class(
             chaindb,
             genesis_block,
+            higher_slot_scoring,
         ),
         attestation_slot=attestation_slot,
         beacon_block_root=genesis_block.signing_root,

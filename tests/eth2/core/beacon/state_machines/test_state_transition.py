@@ -1,5 +1,6 @@
 import pytest
 
+from eth2.beacon.fork_choice import higher_slot_scoring
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
 )
@@ -64,6 +65,7 @@ def test_per_slot_transition(chaindb,
         state_machine=fixture_sm_class(
             chaindb,
             genesis_block,
+            higher_slot_scoring,
         ),
         block_class=SerenityBeaconBlock,
         parent_block=genesis_block,
@@ -78,6 +80,7 @@ def test_per_slot_transition(chaindb,
     sm = fixture_sm_class(
         chaindb,
         block,
+        higher_slot_scoring,
     )
 
     # Get state transition instance

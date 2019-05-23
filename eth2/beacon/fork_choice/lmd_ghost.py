@@ -6,6 +6,9 @@ from eth2.beacon.helpers import (
     get_active_validator_indices,
     slot_to_epoch,
 )
+from eth2.beacon.typing import (
+    ValidatorIndex,
+)
 
 
 class Store:

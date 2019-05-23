@@ -150,7 +150,7 @@ class BaseBeaconChainDB(ABC):
         pass
 
     @abstractmethod
-    def update_canonical_head_if_needed(self, block: BaseBeaconBlock)-> Tuple[Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]]:
+    def update_canonical_head_if_needed(self, block: BaseBeaconBlock, block_class: Type[BaseBeaconBlock])-> Tuple[Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]]:
         pass
 
     @abstractmethod
@@ -473,7 +473,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         return score
 
     def set_score(self, block: BaseBeaconBlock, score: int) -> None:
-        db.set(
+        self.db.set(
             SchemaV1.make_block_root_to_score_lookup_key(block.signing_root),
             ssz.encode(score, sedes=ssz.sedes.uint64),
         )
