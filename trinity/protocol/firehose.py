@@ -1,3 +1,4 @@
+import enum
 from typing import (
     Any,
     cast,
@@ -5,6 +6,7 @@ from typing import (
     FrozenSet,
     Iterable,
     List,
+    NamedTuple,
     Optional,
     Tuple,
     Type,
@@ -14,6 +16,8 @@ from cancel_token import CancelToken
 
 from eth.db.chain import ChainDB
 from eth.rlp.sedes import trie_root
+
+from eth_hash.auto import keccak
 
 from eth_utils import (
     to_tuple,
@@ -61,10 +65,12 @@ from p2p.protocol import (
 
 from trinity.protocol.common.exchanges import BaseExchange
 from trinity.protocol.common.handlers import BaseExchangeHandler
-from trinity.protocol.common.normalizers import NoopNormalizer
+from trinity.protocol.common.normalizers import BaseNormalizer, NoopNormalizer
 from trinity.protocol.common.servers import BaseRequestServer
 from trinity.protocol.common.trackers import BasePerformanceTracker
 from trinity.protocol.common.validators import BaseValidator, noop_payload_validator
+
+from trinity.sync.full.hexary_trie import _get_children
 
 
 # Trie Utils
@@ -73,7 +79,29 @@ from trinity.protocol.common.validators import BaseValidator, noop_payload_valid
 Nibbles = Tuple[int, ...]
 
 
-def is_nibbles_within_prefix(prefix: Nibbles, nibbles: Nibbles) -> bool:
+class NodeKind(enum.Enum):
+    BLANK = NODE_TYPE_BLANK
+    LEAF = NODE_TYPE_LEAF
+    EXTENSION = NODE_TYPE_EXTENSION
+    BRANCH = NODE_TYPE_BRANCH
+
+
+class Node(NamedTuple):
+    kind: NodeKind
+    rlp: bytes
+    obj: List[bytes]  # this type is wrong but mypy doesn't support recursive types
+    keccak: bytes
+
+    def __str__(self) -> str:
+        return f"Node(kind={self.kind.name} hash={self.keccak.hex()})"
+
+    @property
+    def path_rest(self) -> Nibbles:
+        # careful: this doesn't make any sense for branches
+        return cast(Nibbles, extract_key(self.obj))
+
+
+def is_subtree(prefix: Nibbles, nibbles: Nibbles) -> bool:
     """
     Returns True if {nibbles} represents a subtree of {prefix}.
     """
@@ -84,51 +112,156 @@ def is_nibbles_within_prefix(prefix: Nibbles, nibbles: Nibbles) -> bool:
 
 
 @to_tuple
-def _get_children_with_nibbles(node: List[bytes],  # TODO: what's the correct type of node
-                               prefix: Nibbles) -> Iterable[Tuple[bool, Nibbles, Hash32]]:
+def _get_children_with_nibbles(node: Node, prefix: Nibbles) -> Iterable[Tuple[Nibbles, Hash32]]:
     """
     Return the children of the given node at the given path, including their full paths
     """
-    node_type = get_node_type(node)
-
-    if node_type == NODE_TYPE_BLANK:
+    if node.kind == NodeKind.BLANK:
         return
-    elif node_type == NODE_TYPE_LEAF:
-        path_rest = cast(Nibbles, extract_key(node))
-        full_path = prefix + path_rest
-        yield (True, full_path, cast(Hash32, node[1]))
-    elif node_type == NODE_TYPE_EXTENSION:
-        path_rest = cast(Nibbles, extract_key(node))
-        full_path = prefix + path_rest
+    elif node.kind == NodeKind.LEAF:
+        full_path = prefix + node.path_rest
+        yield (full_path, cast(Hash32, node.obj[1]))
+    elif node.kind == NodeKind.EXTENSION:
+        full_path = prefix + node.path_rest
         # TODO: this cast to a Hash32 is not right, nodes smaller than 32 are inlined
-        yield (False, full_path, cast(Hash32, node[1]))
-    elif node_type == NODE_TYPE_BRANCH:
+        yield (full_path, cast(Hash32, node.obj[1]))
+    elif node.kind == NodeKind.BRANCH:
         for i in range(17):
             full_path = prefix + (i,)
-            yield (False, full_path, cast(Hash32, node[i]))
+            yield (full_path, cast(Hash32, node.obj[i]))
 
 
-def iterate_trie(db: ChainDB,
-                 node_hash: Hash32,
-                 sub_trie: Nibbles = (),
-                 prefix: Nibbles = ()) -> Iterable[Tuple[Nibbles, Hash32]]:
+def _get_node(db: ChainDB, node_hash: Hash32) -> Node:
     if len(node_hash) < 32:
         node_rlp = node_hash
     else:
         node_rlp = db.get(node_hash)
+
     node = decode_node(node_rlp)
+    node_type = get_node_type(node)
 
-    children = _get_children_with_nibbles(node, prefix)
-    for is_leaf, path, child in children:
-        if is_leaf and is_nibbles_within_prefix(sub_trie, path):
-            yield (path, child)
-            continue
+    return Node(kind=NodeKind(node_type), rlp=node_rlp, obj=node, keccak=node_hash)
 
-        child_of_sub_trie = is_nibbles_within_prefix(sub_trie, path)
-        parent_of_sub_trie = is_nibbles_within_prefix(path, sub_trie)
 
-        if child_of_sub_trie or parent_of_sub_trie:
-            yield from iterate_trie(db, child, sub_trie, path)
+def _iterate_trie(db: ChainDB,
+                  node: Node,  # the node we should look at
+                  sub_trie: Nibbles,  # which sub_trie to return nodes from
+                  prefix: Nibbles,  # our current path in the trie
+                  ) -> Iterable[Tuple[Nibbles, Node]]:
+
+    if node.kind == NodeKind.BLANK:
+        return
+
+    if node.kind == NodeKind.LEAF:
+        full_path = prefix + node.path_rest
+
+        if is_subtree(sub_trie, prefix) or is_subtree(sub_trie, full_path):
+            # also check full_path because either the node or the item the node points to
+            # might be part of the desired subtree
+            yield (prefix, node)
+
+        # there's no need to recur, this is a leaf
+        return
+
+    child_of_sub_trie = is_subtree(sub_trie, prefix)
+
+    if child_of_sub_trie:
+        # this node is part of the subtrie which should be returned
+        yield (prefix, node)
+
+    parent_of_sub_trie = is_subtree(prefix, sub_trie)
+
+    if child_of_sub_trie or parent_of_sub_trie:
+        for path, child_hash in _get_children_with_nibbles(node, prefix):
+            child_node = _get_node(db, child_hash)
+            yield from _iterate_trie(db, child_node, sub_trie, path)
+
+
+def iterate_trie(db: ChainDB, root_hash: Hash32,
+                 sub_trie: Nibbles = ()) -> Iterable[Tuple[Nibbles, Node]]:
+
+    root_node = _get_node(db, root_hash)
+
+    yield from _iterate_trie(
+        db, root_node, sub_trie,
+        prefix=(),
+    )
+
+
+def iterate_leaves(db: ChainDB, root_hash: Hash32,
+                   sub_trie: Nibbles = ()) -> Iterable[Tuple[Nibbles, bytes]]:
+    """
+    Rather than returning the raw nodes, this returns just the leaves (usually, accounts),
+    along with their full paths
+    """
+
+    node_iterator = iterate_trie(db, root_hash, sub_trie)
+
+    for path, node in node_iterator:
+        if node.kind == NodeKind.LEAF:
+            full_path = path + node.path_rest
+            yield (full_path, node.obj[1])
+
+
+def _iterate_node_chunk(db: ChainDB,
+                        node: Node,
+                        sub_trie: Nibbles,
+                        prefix: Nibbles,
+                        target_depth: int) -> Iterable[Tuple[Nibbles, Node]]:
+
+    def recur(new_depth: int) -> Iterable[Tuple[Nibbles, Node]]:
+        for path, child_hash in _get_children_with_nibbles(node, prefix):
+            child_node = _get_node(db, child_hash)
+            yield from _iterate_node_chunk(db, child_node, sub_trie, path, new_depth)
+
+    if node.kind == NodeKind.BLANK:
+        return
+
+    if node.kind == NodeKind.LEAF:
+        full_path = prefix + node.path_rest
+
+        if is_subtree(sub_trie, prefix) or is_subtree(sub_trie, full_path):
+            yield (prefix, node)
+
+        # there's no need to recur, this is a leaf
+        return
+
+    child_of_sub_trie = is_subtree(sub_trie, prefix)
+
+    if child_of_sub_trie:
+        # the node is part of the sub_trie which we want to return
+        yield (prefix, node)
+
+    if target_depth == 0:
+        # there's no point in recursing
+        return
+
+    parent_of_sub_trie = is_subtree(prefix, sub_trie)
+
+    if child_of_sub_trie:
+        # if we're returning nodes start decrementing the count
+        yield from recur(target_depth - 1)
+    elif parent_of_sub_trie:
+        # if we're still looking for the sub_trie just recur
+        yield from recur(target_depth)
+
+
+def iterate_node_chunk(db: ChainDB,
+                       root_hash: Hash32,
+                       sub_trie: Nibbles,
+                       target_depth: int) -> Iterable[Tuple[Nibbles, Node]]:
+    """
+    Get all the nodes up to {target_depth} deep from the given sub_trie.
+
+    Does a truncated breadth-first search rooted at the given node and returns everything
+    it finds.
+    """
+    # TODO: notice BLANK_NODE_HASH and fail fast?
+    root_node = _get_node(db, root_hash)
+
+    yield from _iterate_node_chunk(
+        db, root_node, sub_trie, prefix=(), target_depth=target_depth,
+    )
 
 
 # Commands
@@ -155,6 +288,7 @@ class GetLeafCount(Command):
 
 
 class LeafCount(Command):
+    # TODO: add a boolean, "more_than", to return when it's taking too long to iterate
     _cmd_id = 2
     structure = (
         ('request_id', sedes.big_endian_int),
@@ -177,10 +311,12 @@ class GetNodeChunk(Command):
 
 
 class NodeChunk(Command):
+    # TODO: There's no way to statelessly validate this response. Maybe it should include
+    # a proof of the requested bucket, that would make middleware easier to write?
     _cmd_id = 4
     structure = (
         ('request_id', sedes.big_endian_int),
-        sedes.CountableList(sedes.binary),  # a list of rlp-encoded nodes
+        ('nodes', sedes.CountableList(sedes.binary)),  # a list of rlp-encoded nodes
     )
 
 
@@ -227,15 +363,15 @@ class GetLeafCountTracker(BasePerformanceTracker[GetLeafCountRequest, BigEndianI
         return len(result)
 
 
-class GetNodeChunkTracker(BasePerformanceTracker[GetNodeChunkRequest, None]):
+class GetNodeChunkTracker(BasePerformanceTracker[GetNodeChunkRequest, NodeChunk]):
     def _get_request_size(self, request: GetNodeChunkRequest) -> Optional[int]:
         return len(request.command_payload)
 
-    def _get_result_size(self, result: None) -> int:
-        return len(result)
+    def _get_result_size(self, result: NodeChunk) -> int:
+        return 0
 
-    def _get_result_item_count(self, result: None) -> int:
-        return len(result)
+    def _get_result_item_count(self, result: NodeChunk) -> int:
+        return 0
 
 
 # Validators
@@ -244,6 +380,52 @@ class GetNodeChunkTracker(BasePerformanceTracker[GetNodeChunkRequest, None]):
 class GetLeafCountValidator(BaseValidator[None]):
     def validate_result(self, response: None) -> None:
         return
+
+
+class GetNodeChunkValidator(BaseValidator[NodeChunk]):
+    """
+    Each node must be a direct child of a node which precedes it in the response.
+
+    This does not fully validate the response. In order to do that we would need to know
+    the expected hash of the root of the returned subtrie. Other parts of the code-base
+    know the expected hash however it hasn't been threaded into here and keeping this
+    class stateless sounds valuable. So, this only checks that the returned nodes form *a*
+    valid sub-trie, and it's up to the requester to validate that that form the requested
+    sub-trie (which they can do by checking the hash of the first node)
+    """
+
+    def validate_result(self, response: NodeChunk) -> None:
+        """
+        TODO: This does not check that the trie is in any way balanced, though maybe it
+        should.
+        """
+        print(f'response: {type(response)}')
+
+        def children_of(node_rlp: bytes) -> Tuple[Hash32, ...]:
+            node_obj = decode_node(node_rlp)
+            references, _leaves = _get_children(node_obj, depth=0)
+            return tuple(node_hash for (_depth, node_hash) in references)
+
+        # TODO: response is a Dict, not a NodeChunk. Fixing this will take a while.
+        first, *rest = response['nodes']  # type: ignore
+        expected_hashes = set(children_of(first))
+
+        for node_rlp in rest:
+            node_hash = keccak(node_rlp)
+            if node_hash not in expected_hashes:
+                raise Exception(f'Unexpected node: {node_rlp} hash: {node_hash.hex()}')
+
+            expected_hashes.remove(node_hash)
+            expected_hashes.update(children_of(node_rlp))
+
+
+# Normalizers
+
+
+class GetNodeChunkNormalizer(BaseNormalizer[None, NodeChunk]):
+    @staticmethod
+    def normalize_result(message: None) -> NodeChunk:
+        return message
 
 
 # Exchanges
@@ -272,14 +454,18 @@ class GetLeafCountExchange(BaseExchange[BigEndianInt, BigEndianInt, BigEndianInt
         )
 
 
-class GetNodeChunkExchange(BaseExchange[Tuple[int, Hash32, bytes], None, None]):
-    _normalizer = NoopNormalizer[None]()
+class GetNodeChunkExchange(BaseExchange[Tuple[int, Hash32, bytes], None, NodeChunk]):
+    _normalizer = GetNodeChunkNormalizer()
     request_class = GetNodeChunkRequest
     tracker_class = GetNodeChunkTracker
 
     async def __call__(self, state_root: Hash32, prefix: Nibbles,  # type: ignore
-                       timeout: float = None) -> None:
-        validator = GetLeafCountValidator()
+                       timeout: float = None) -> NodeChunk:
+        # TODO: in order to validate we need to know the expected hash. However, all we
+        # have here is the state_root and the requested prefix. How do we get the hash of
+        # the node at said prefix? Maybe all responses should include a proof from the
+        # root?
+        validator = GetNodeChunkValidator()
         request = self.request_class(
             request_id=1,
             state_root=state_root,
@@ -328,12 +514,6 @@ class FirehoseProtocol(Protocol):
         }
         cmd = Status(self.cmd_id_offset, self.snappy_support)
         self.transport.send(*cmd.encode(resp))
-
-    def send_get_leaf_count(self) -> None:
-        raise Exception('')  # this code isn't exercised yet
-        cmd = GetLeafCount(self.cmd_id_offset, self.snappy_support)
-        header, body = cmd.encode((1,))
-        self.transport.send(header, body)
 
     def send_leaf_count(self, request_id: int, leaf_count: int) -> None:
         cmd = LeafCount(self.cmd_id_offset, self.snappy_support)
@@ -386,7 +566,7 @@ class FirehosePeerPool(BasePeerPool):
 
 class FirehoseRequestServer(BaseRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
-        GetLeafCount, LeafCount,
+        GetLeafCount, GetNodeChunk,
     })
 
     def __init__(self, db: ChainDB,
@@ -417,7 +597,7 @@ class FirehoseRequestServer(BaseRequestServer):
         nibbles = decode_nibbles(prefix)
 
         count = 0
-        for _ in iterate_trie(self.db, state_root, nibbles):
+        for _ in iterate_leaves(self.db, state_root, nibbles):
             # TODO: time out if this operation takes too long
             count += 1
 
@@ -425,5 +605,24 @@ class FirehoseRequestServer(BaseRequestServer):
 
     async def handle_get_node_chunk(self, peer: FirehosePeer, request_id: int,
                                     state_root: Hash32, prefix: bytes) -> None:
-        nodes: List[bytes] = []
+        # TODO: You don't technically need to return every node. The nodes at the last
+        # level (including "" (0x80) to represent NULL nodes) are sufficient for
+        # reconstructing the higher levels. Over the course of an entire sync not sending
+        # the extra nodes could lead to a reasonable savings.
+
+        # How many nodes should be returned?
+        # - each branch is 512 bytes (16*32)
+        # - there are 256 nodes at depth 2
+        # - a response with all depth-2 nodes consumes 128kb
+        # - all the nodes up to depth-2 -> 136.5kb
+
+        # TODO: figure out how to test this
+        # TODO: ensure this doesn't take too long to generate, or return too much data
+        # TODO: validate that "prefix" has the correct format
+
+        nibbles = decode_nibbles(prefix)
+        iterator = iterate_node_chunk(
+            self.db, state_root, sub_trie=nibbles, target_depth=2,
+        )
+        nodes = [node.rlp for (_prefix, node) in iterator]
         peer.sub_proto.send_node_chunk(request_id, nodes)
