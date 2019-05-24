@@ -55,6 +55,7 @@ from trinity._utils.ipc import (
 )
 from trinity._utils.logging import (
     enable_warnings_by_default,
+    set_all_logger_to_level,
     setup_log_levels,
     setup_trinity_stderr_logging,
     setup_trinity_file_and_queue_logging,
@@ -117,6 +118,15 @@ def main_entry(trinity_boot: BootFn,
     plugin_manager.amend_argparser_config(parser, subparser)
     args = parser.parse_args()
 
+    # The common log level is the level that we preassign every logger
+    # This may still be overwritten by a more specific configuration (e.g -l p2p=DEBUG2)
+    # The `--file-log-level` and `--stderr-log-level` flags act as additional filter on
+    # top of all configured log level.
+    if args.log_levels is None or None not in args.log_levels:
+        common_log_level = logging.INFO
+    else:
+        common_log_level = args.log_levels.get(None)
+
     if not args.genesis and args.network_id not in PRECONFIGURED_NETWORKS:
         raise NotImplementedError(
             f"Unsupported network id: {args.network_id}. To use a network besides "
@@ -125,26 +135,13 @@ def main_entry(trinity_boot: BootFn,
             "directory with `--data-dir path/to/data/directory`"
         )
 
-    has_ambigous_logging_config = (
-        args.log_levels is not None and
-        None in args.log_levels and
-        args.stderr_log_level is not None
-    )
-    if has_ambigous_logging_config:
-        parser.error(
-            "\n"
-            "Ambiguous logging configuration: The logging level for stderr was "
-            "configured with both `--stderr-log-level` and `--log-level`. "
-            "Please remove one of these flags",
-        )
-
     if is_prerelease():
         # this modifies the asyncio logger, but will be overridden by any custom settings below
         enable_warnings_by_default()
 
-    stderr_logger, formatter, handler_stream = setup_trinity_stderr_logging(
-        args.stderr_log_level or (args.log_levels and args.log_levels.get(None))
-    )
+    set_all_logger_to_level(common_log_level)
+
+    stderr_logger, formatter, handler_stream = setup_trinity_stderr_logging(args.stderr_log_level)
 
     if args.log_levels:
         setup_log_levels(args.log_levels)
@@ -181,16 +178,9 @@ def main_entry(trinity_boot: BootFn,
 
     display_launch_logs(trinity_config)
 
-    # compute the minimum configured log level across all configured loggers.
-    min_configured_log_level = min(
-        stderr_logger.level,
-        file_logger.level,
-        *(args.log_levels or {}).values()
-    )
-
     extra_kwargs = {
         'log_queue': log_queue,
-        'log_level': min_configured_log_level,
+        'log_level': common_log_level,
         'log_levels': args.log_levels if args.log_levels else {},
         'profile': args.profile,
     }

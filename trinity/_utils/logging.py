@@ -12,6 +12,7 @@ from logging.handlers import (
 )
 import os
 from pathlib import Path
+import pkgutil
 import sys
 from typing import (
     Any,
@@ -69,18 +70,40 @@ class HasExtendedDebugLogger:
         return self._logger
 
 
+def set_logger_level(logger_name: str, level: int) -> None:
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(level)
+
+
+def set_all_logger_to_level(level: int) -> None:
+    for module_info in pkgutil.iter_modules():
+        set_logger_level(module_info.name, level)
+
+    adjust_noisy_loggers()
+
+
+def adjust_noisy_loggers() -> None:
+    module_names = ['sqlalchemy']
+    for name in module_names:
+        set_logger_level(name, logging.ERROR)
+
+
 def setup_log_levels(log_levels: Dict[str, int]) -> None:
     for name, level in log_levels.items():
-        logger = logging.getLogger(name)
-        logger.setLevel(level)
+        set_logger_level(name, level)
 
 
 def setup_trinity_stderr_logging(level: int=None,
                                  ) -> Tuple[Logger, Formatter, StreamHandler]:
+
+    # The stderr logging is only filtered if `--stderr-log-level` is provided. Otherwise
+    # the log level is determined by each individual logger which by default is
+    # set to the `INFO` level.
+
     if level is None:
-        level = logging.INFO
+        level = 0
+
     logger = logging.getLogger('trinity')
-    logger.setLevel(logging.DEBUG)
 
     handler_stream = logging.StreamHandler(sys.stderr)
     handler_stream.setLevel(level)
@@ -108,8 +131,12 @@ def setup_trinity_file_and_queue_logging(
         level: int=None) -> Tuple[Logger, 'Queue[str]', QueueListener]:
     from .mp import ctx
 
+    # The file logging is only filtered if `--file-log-level` is provided. Otherwise
+    # the log level is determined by each individual logger which by default is
+    # set to the `INFO` level.
+
     if level is None:
-        level = logging.DEBUG
+        level = 0
 
     log_queue = ctx.Queue()
 
@@ -136,12 +163,9 @@ def setup_trinity_file_and_queue_logging(
 
 def setup_queue_logging(log_queue: 'Queue[str]', level: int) -> None:
     queue_handler = QueueHandler(log_queue)
-    queue_handler.setLevel(level)
-
+    set_all_logger_to_level(level)
     logger = cast(ExtendedDebugLogger, logging.getLogger())
     logger.addHandler(queue_handler)
-    logger.setLevel(level)
-
     logger.debug('Logging initialized: PID=%s', os.getpid())
 
 
