@@ -71,16 +71,28 @@ class HasExtendedDebugLogger:
 
 def setup_log_levels(log_levels: Dict[str, int]) -> None:
     for name, level in log_levels.items():
+        formatter = TrinityLogFormatter(
+            fmt='%(levelname)8s  %(asctime)s  %(shortname)20s  %(message)s',
+            datefmt='%m-%d %H:%M:%S'
+        )
+
+        handler_stream = logging.StreamHandler(sys.stderr)
+        handler_stream.setLevel(level)
+        handler_stream.setFormatter(formatter)
+
         logger = logging.getLogger(name)
         logger.setLevel(level)
+        logger.addHandler(handler_stream)
+
+        logger.info('SETUP LOGGER FOR: %s=%s', name, logging.getLevelName(level))
 
 
 def setup_trinity_stderr_logging(level: int=None,
                                  ) -> Tuple[Logger, Formatter, StreamHandler]:
     if level is None:
         level = logging.INFO
-    logger = logging.getLogger('trinity')
-    logger.setLevel(logging.DEBUG)
+    logger = logging.getLogger()
+    logger.setLevel(0)
 
     handler_stream = logging.StreamHandler(sys.stderr)
     handler_stream.setLevel(level)
