@@ -14,6 +14,10 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
 )
 from eth2.beacon.tools.builder.proposer import (
     create_mock_block,
+
+)
+from eth2.beacon.tools.builder.validator import (
+    create_mock_signed_attestations_at_slot,
 )
 from eth2.beacon.types.blocks import (
     BeaconBlock,
@@ -140,3 +144,58 @@ def test_from_genesis(base_db,
             block,
             config,
         )
+
+
+@pytest.mark.long
+@pytest.mark.parametrize(
+    (
+        'num_validators,'
+        'slots_per_epoch,'
+        'target_committee_size,'
+        'shard_count,'
+        'min_attestation_inclusion_delay,'
+    ),
+    [
+        (100, 16, 10, 10, 2),
+    ]
+)
+def test_get_attestation_root(valid_chain,
+                              genesis_block,
+                              genesis_state,
+                              config,
+                              keymap,
+                              min_attestation_inclusion_delay):
+
+    state = genesis_state
+    blocks = (genesis_block,)
+
+    def build_block(state, blocks, attestations):
+        return create_mock_block(
+            state=state,
+            config=config,
+            state_machine=valid_chain.get_state_machine(blocks[-1]),
+            block_class=genesis_block.__class__,
+            parent_block=blocks[-1],
+            keymap=keymap,
+            slot=state.slot + 2,
+            attestations=attestations,
+        )
+    for _ in range(min_attestation_inclusion_delay + 1):
+        block = build_block(state, blocks, tuple())
+        valid_chain.import_block(block)
+        state = valid_chain.get_state_machine(block).state
+        blocks += (block,)
+
+    attested_block = blocks[-(min_attestation_inclusion_delay + 1)]
+    attestations = create_mock_signed_attestations_at_slot(
+        state=state,
+        config=config,
+        state_machine=valid_chain.get_state_machine(blocks[-1]),
+        attestation_slot=attested_block.slot,
+        beacon_block_root=attested_block.signing_root,
+        keymap=keymap,
+    )
+    block = build_block(state, blocks, attestations, )
+    valid_chain.import_block(block)
+    for a in attestations:
+        assert valid_chain.get_attestation_by_root(a.root) == a
