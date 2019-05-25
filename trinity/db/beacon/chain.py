@@ -118,7 +118,6 @@ class BaseAsyncBeaconChainDB(ABC):
     #
     # Raw Database API
     #
-
     @abstractmethod
     async def coro_exists(self, key: bytes) -> bool:
         pass
