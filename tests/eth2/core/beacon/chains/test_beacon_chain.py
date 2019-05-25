@@ -177,7 +177,7 @@ def test_get_attestation_root(valid_chain,
             block_class=genesis_block.__class__,
             parent_block=blocks[-1],
             keymap=keymap,
-            slot=state.slot + 2,
+            slot=state.slot + 1,
             attestations=attestations,
         )
     for _ in range(min_attestation_inclusion_delay + 1):
