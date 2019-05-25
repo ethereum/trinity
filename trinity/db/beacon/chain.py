@@ -110,7 +110,6 @@ class BaseAsyncBeaconChainDB(ABC):
     #
     # Attestation API
     #
-
     @abstractmethod
     def coro_get_attestation_by_root(self,
                                      attestation_root: Hash32,
