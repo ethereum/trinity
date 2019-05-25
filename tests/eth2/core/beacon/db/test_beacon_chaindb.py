@@ -22,6 +22,7 @@ from eth2._utils.ssz import (
 )
 
 from eth2.beacon.db.exceptions import (
+    AttestationRootNotFound,
     FinalizedHeadNotFound,
     JustifiedHeadNotFound,
 )
@@ -268,5 +269,7 @@ def test_chaindb_add_attestations_root_to_block_lookup(chaindb, block_with_attes
 
 def test_chaindb_get_attestation_by_root(chaindb, block_with_attestation):
     block, attestation = block_with_attestation
+    with pytest.raises(AttestationRootNotFound):
+        chaindb.get_attestation_by_root(attestation.root, block.__class__)
     chaindb.persist_block(block, block.__class__)
     assert chaindb.get_attestation_by_root(attestation.root, block.__class__) == attestation

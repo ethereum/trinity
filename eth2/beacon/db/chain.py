@@ -59,6 +59,7 @@ from eth2.beacon.validation import (
 )
 
 from eth2.beacon.db.exceptions import (
+    AttestationRootNotFound,
     FinalizedHeadNotFound,
     JustifiedHeadNotFound,
 )
@@ -757,7 +758,12 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     @staticmethod
     def _get_attestation_key_by_root(db: BaseDB, attestation_root: Hash32) -> Tuple[Hash32, int]:
-        encoded_key = db[SchemaV1.make_attestation_root_to_block_lookup_key(attestation_root)]
+        try:
+            encoded_key = db[SchemaV1.make_attestation_root_to_block_lookup_key(attestation_root)]
+        except KeyError:
+            raise AttestationRootNotFound(
+                "Attestation root {0} not found".format(encode_hex(attestation_root))
+            )
         attestation_key = ssz.decode(encoded_key, sedes=AttestationKey)
         return attestation_key.block_root, attestation_key.index
 

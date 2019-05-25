@@ -417,6 +417,7 @@ class BeaconChain(BaseBeaconChain):
         )
 
         return imported_block, new_canonical_blocks, old_canonical_blocks
+
     #
     # Attestation API
     #

@@ -107,6 +107,7 @@ class BaseAsyncBeaconChainDB(ABC):
     async def coro_persist_state(self,
                                  state: BeaconState) -> None:
         pass
+
     #
     # Attestation API
     #
@@ -115,6 +116,7 @@ class BaseAsyncBeaconChainDB(ABC):
                                      attestation_root: Hash32,
                                      block_class: Type[BaseBeaconBlock]) -> Attestation:
         pass
+
     #
     # Raw Database API
     #
