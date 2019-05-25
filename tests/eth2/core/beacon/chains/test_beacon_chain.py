@@ -195,7 +195,7 @@ def test_get_attestation_root(valid_chain,
         beacon_block_root=attested_block.signing_root,
         keymap=keymap,
     )
-    block = build_block(state, blocks, attestations, )
+    block = build_block(state, blocks, attestations)
     valid_chain.import_block(block)
     for a in attestations:
         assert valid_chain.get_attestation_by_root(a.root) == a
