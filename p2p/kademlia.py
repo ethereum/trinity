@@ -12,6 +12,8 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Set,
+    Sequence,
     Sized,
     Tuple,
 )
@@ -21,7 +23,9 @@ from eth_utils import (
     big_endian_to_int,
     decode_hex,
     remove_0x_prefix,
+    to_tuple,
 )
+from eth_utils.toolz import take
 
 from eth_keys import (
     datatypes,
@@ -86,8 +90,8 @@ class Address:
     def __repr__(self) -> str:
         return 'Address(%s:udp:%s|tcp:%s)' % (self.ip, self.udp_port, self.tcp_port)
 
-    def to_endpoint(self) -> List[bytes]:
-        return [self._ip.packed, enc_port(self.udp_port), enc_port(self.tcp_port)]
+    def to_endpoint(self) -> Tuple[bytes, ...]:
+        return (self._ip.packed, enc_port(self.udp_port), enc_port(self.tcp_port))
 
     @classmethod
     def from_endpoint(cls, ip: str, udp_port: bytes, tcp_port: bytes = b'\x00\x00') -> 'Address':
@@ -173,8 +177,8 @@ class KBucket(Sized):
     def distance_to(self, id: int) -> int:
         return self.midpoint ^ id
 
-    def nodes_by_distance_to(self, id: int) -> List[Node]:
-        return sorted(self.nodes, key=operator.methodcaller('distance_to', id))
+    def nodes_by_distance_to(self, id: int) -> Tuple[Node, ...]:
+        return tuple(sorted(self.nodes, key=operator.methodcaller('distance_to', id)))
 
     def split(self) -> Tuple['KBucket', 'KBucket']:
         """Split at the median id"""
@@ -261,7 +265,7 @@ class RoutingTable:
                     len(self),
                 )
             count = len(self)
-        seen: List[Node] = []
+        seen: Set[Node] = set()
         # This is a rather inneficient way of randomizing nodes from all buckets, but even if we
         # iterate over all nodes in the routing table, the time it takes would still be
         # insignificant compared to the time it takes for the network roundtrips when connecting
@@ -273,7 +277,7 @@ class RoutingTable:
             node = random.choice(bucket.nodes)
             if node not in seen:
                 yield node
-                seen.append(node)
+                seen.add(node)
 
     def split_bucket(self, index: int) -> None:
         bucket = self.buckets[index]
@@ -312,8 +316,8 @@ class RoutingTable:
     def get_bucket_for_node(self, node: Node) -> KBucket:
         return binary_get_bucket_for_node(self.buckets, node)
 
-    def buckets_by_distance_to(self, id: int) -> List[KBucket]:
-        return sorted(self.buckets, key=operator.methodcaller('distance_to', id))
+    def buckets_by_distance_to(self, id: int) -> Tuple[KBucket, ...]:
+        return tuple(sorted(self.buckets, key=operator.methodcaller('distance_to', id)))
 
     def __contains__(self, node: Node) -> bool:
         return node in self.get_bucket_for_node(node)
@@ -326,17 +330,18 @@ class RoutingTable:
             for n in b.nodes:
                 yield n
 
-    def neighbours(self, node_id: int, k: int = k_bucket_size) -> List[Node]:
+    @to_tuple
+    def neighbours(self, node_id: int, k: int = k_bucket_size) -> Iterable[Node]:
         """Return up to k neighbours of the given node."""
-        nodes = []
         # Sorting by bucket.midpoint does not work in edge cases, so build a short list of k * 2
         # nodes and sort it by distance_to.
-        for bucket in self.buckets_by_distance_to(node_id):
-            for n in bucket.nodes_by_distance_to(node_id):
-                if n.id is not node_id:
-                    nodes.append(n)
-                    if len(nodes) == k * 2:
-                        break
+        nodes_gen = (
+            node
+            for bucket in self.buckets_by_distance_to(node_id)
+            for node in bucket.nodes_by_distance_to(node_id)
+            if node.id != node_id
+        )
+        nodes = take(k * 2, nodes_gen)
         return sort_by_distance(nodes, node_id)[:k]
 
 
@@ -357,9 +362,9 @@ def check_relayed_addr(sender: Address, addr: Address) -> bool:
     return True
 
 
-def binary_get_bucket_for_node(buckets: List[KBucket], node: Node) -> KBucket:
+def binary_get_bucket_for_node(buckets: Sequence[KBucket], node: Node) -> KBucket:
     """Given a list of ordered buckets, returns the bucket for a given node."""
-    bucket_ends = [bucket.end for bucket in buckets]
+    bucket_ends = tuple(bucket.end for bucket in buckets)
     bucket_position = bisect.bisect_left(bucket_ends, node.id)
     # Prevents edge cases where bisect_left returns an out of range index
     try:
@@ -370,7 +375,7 @@ def binary_get_bucket_for_node(buckets: List[KBucket], node: Node) -> KBucket:
         raise ValueError(f"No bucket found for node with id {node.id}")
 
 
-def _compute_shared_prefix_bits(nodes: List[Node]) -> int:
+def _compute_shared_prefix_bits(nodes: Sequence[Node]) -> int:
     """Count the number of prefix bits shared by all nodes."""
     def to_binary(x: int) -> str:  # left padded bit representation
         b = bin(x)[2:]
@@ -388,5 +393,5 @@ def _compute_shared_prefix_bits(nodes: List[Node]) -> int:
     raise AssertionError("Unable to calculate number of shared prefix bits")
 
 
-def sort_by_distance(nodes: Tuple[Node, ...], target_id: int) -> Tuple[Node, ...]:
+def sort_by_distance(nodes: Sequence[Node], target_id: int) -> Tuple[Node, ...]:
     return tuple(sorted(nodes, key=operator.methodcaller('distance_to', target_id)))

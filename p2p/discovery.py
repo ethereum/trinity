@@ -46,7 +46,6 @@ from eth_utils import (
     text_if_str,
     to_bytes,
     to_hex,
-    to_list,
     to_tuple,
     int_to_big_endian,
     big_endian_to_int,
@@ -190,7 +189,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             return False
 
         if self.use_v5:
-            token = self.send_ping_v5(node, [])
+            token = self.send_ping_v5(node, ())
             log_version = "v5"
         else:
             token = self.send_ping_v4(node)
@@ -283,7 +282,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         event = asyncio.Event()
         neighbours: List[kademlia.Node] = []
 
-        def process(response: List[kademlia.Node]) -> None:
+        def process(response: Sequence[kademlia.Node]) -> None:
             neighbours.extend(response)
             # This callback is expected to be called multiple times because nodes usually
             # split the neighbours replies into multiple packets, so we only call event.set() once
@@ -342,11 +341,13 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             self.logger.debug2("bonded with %s candidates", bonded.count(True))
             return tuple(c for c in candidates if bonded[candidates.index(c)])
 
-        def _exclude_if_asked(nodes: Iterable[kademlia.Node]) -> List[kademlia.Node]:
-            nodes_to_ask = list(set(nodes).difference(nodes_asked))
-            return kademlia.sort_by_distance(nodes_to_ask, node_id)[:kademlia.k_find_concurrency]
+        def _exclude_if_asked(nodes: Iterable[kademlia.Node]) -> Tuple[kademlia.Node, ...]:
+            nodes_not_asked = tuple(set(nodes).difference(nodes_asked))
+            return kademlia.sort_by_distance(nodes_not_asked, node_id)[:kademlia.k_find_concurrency]
 
-        closest = self.routing.neighbours(node_id)
+        # We make `closest` mutable so that re can accumulate the incoming
+        # results
+        closest = list(self.routing.neighbours(node_id))
         self.logger.debug("starting lookup; initial neighbours: %s", closest)
         nodes_to_ask = _exclude_if_asked(closest)
         while nodes_to_ask:
@@ -360,7 +361,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             ))
             for candidates in results:
                 closest.extend(candidates)
-            closest = kademlia.sort_by_distance(closest, node_id)[:kademlia.k_bucket_size]
+            closest = list(kademlia.sort_by_distance(closest, node_id)[:kademlia.k_bucket_size])
             nodes_to_ask = _exclude_if_asked(closest)
 
         self.logger.debug(
@@ -534,21 +535,23 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         message = _pack_v4(CMD_PONG.id, payload, self.privkey)
         self.send(node, message)
 
-    def send_neighbours_v4(self, node: kademlia.Node, neighbours: List[kademlia.Node]) -> None:
-        nodes = []
-        neighbours = sorted(neighbours)
-        for n in neighbours:
-            nodes.append(n.address.to_endpoint() + [n.pubkey.to_bytes()])
+    def send_neighbours_v4(self,
+                           node: kademlia.Node,
+                           neighbours: Tuple[kademlia.Node, ...]) -> None:
+        nodes = tuple(
+            (node.address.to_endpoint() + (node.pubkey.to_bytes(),))
+            for node in sorted(neighbours)
+        )
 
         max_neighbours = self._get_max_neighbours_per_packet()
-        for i in range(0, len(nodes), max_neighbours):
-            message = _pack_v4(
-                CMD_NEIGHBOURS.id, tuple([nodes[i:i + max_neighbours]]), self.privkey)
-            self.logger.debug2('>>> neighbours to %s: %s',
-                               node, neighbours[i:i + max_neighbours])
+        for batch in eth_utils.toolz.partition_all(max_neighbours, nodes):
+            message = _pack_v4(CMD_NEIGHBOURS.id, batch, self.privkey)
+            self.logger.debug2('>>> neighbours to %s: %s', node, batch)
             self.send(node, message)
 
-    def process_neighbours(self, remote: kademlia.Node, neighbours: List[kademlia.Node]) -> None:
+    def process_neighbours(self,
+                           remote: kademlia.Node,
+                           neighbours: Tuple[kademlia.Node, ...]) -> None:
         """Process a neighbours response.
 
         Neighbours responses should only be received as a reply to a find_node, and that is only
@@ -667,7 +670,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         topic_hash = keccak(rlp.encode(topics))
         ticket_serial = self.topic_table.issue_ticket(node)
         # TODO: Generate wait_periods list according to spec.
-        wait_periods: List[int] = [60] * len(topics)
+        wait_periods: Tuple[int, ...] = (60,) * len(topics)
         self.send_pong_v5(node, message_hash, topic_hash, ticket_serial, wait_periods)
 
     def recv_pong_v5(
@@ -724,7 +727,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         else:
             callback(echo, nodes)
 
-    def send_ping_v5(self, node: kademlia.Node, topics: List[bytes]) -> Hash32:
+    def send_ping_v5(self, node: kademlia.Node, topics: Tuple[bytes, ...]) -> Hash32:
         version = rlp.sedes.big_endian_int.serialize(PROTO_VERSION_V5)
         payload = (
             version, self.address.to_endpoint(), node.address.to_endpoint(),
@@ -737,11 +740,16 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
 
     def send_pong_v5(
             self, node: kademlia.Node, token: Hash32, topic_hash: Hash32,
-            ticket_serial: int, wait_periods: List[int]) -> None:
+            ticket_serial: int, wait_periods: Tuple[int, ...]) -> None:
         self.logger.debug2('>>> pong (v5) %s', node)
         payload = (
-            node.address.to_endpoint(), token, _get_msg_expiration(), topic_hash, ticket_serial,
-            wait_periods)
+            node.address.to_endpoint(),
+            token,
+            _get_msg_expiration(),
+            topic_hash,
+            ticket_serial,
+            wait_periods,
+        )
         message = _pack_v5(CMD_PONG_V5.id, payload, self.privkey)
         self.send_v5(node, message)
 
@@ -759,7 +767,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         return self.send_v5(node, message)
 
     def send_topic_register(
-            self, node: kademlia.Node, topics: List[bytes], idx: int, pong: bytes) -> None:
+            self, node: kademlia.Node, topics: Tuple[bytes, ...], idx: int, pong: bytes) -> None:
         if idx >= len(topics):
             raise ValueError(f"Invalid topic idx: {idx}")
         message = _pack_v5(CMD_TOPIC_REGISTER.id, (topics, idx, pong), self.privkey)
@@ -769,8 +777,9 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
     def send_topic_nodes(
             self, node: kademlia.Node, echo: Hash32, nodes: Tuple[kademlia.Node, ...]) -> None:
         encoded_nodes = tuple(
-            n.address.to_endpoint() + [n.pubkey.to_bytes()]
-            for n in nodes)
+            n.address.to_endpoint() + (n.pubkey.to_bytes(),)
+            for n in nodes
+        )
         max_neighbours = self._get_max_neighbours_per_packet()
         for batch in eth_utils.toolz.partition_all(max_neighbours, encoded_nodes):
             message = _pack_v5(CMD_TOPIC_NODES.id, (echo, batch), self.privkey)
@@ -786,7 +795,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         event = asyncio.Event()
         nodes: List[kademlia.Node] = []
 
-        def process(received_echo: Hash32, response: List[kademlia.Node]) -> None:
+        def process(received_echo: Hash32, response: Sequence[kademlia.Node]) -> None:
             if received_echo != echo:
                 self.logger.warning(
                     "Unexpected topic_nodes from %s, expected echo %s, got %s",
@@ -814,7 +823,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
 
         return tuple(n for n in nodes if n != self.this_node)
 
-    async def get_ticket(self, node: kademlia.Node, topics: List[bytes]) -> 'Ticket':
+    async def get_ticket(self, node: kademlia.Node, topics: Tuple[bytes, ...]) -> 'Ticket':
         token = self.send_ping_v5(node, topics)
         try:
             got_pong, raw_pong, wait_periods = await self.wait_pong_v5(node, token)
@@ -828,12 +837,12 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         return Ticket(node, raw_pong, topics, wait_periods)
 
     async def wait_pong_v5(
-            self, remote: kademlia.Node, token: Hash32) -> Tuple[bool, bytes, List[float]]:
+            self, remote: kademlia.Node, token: Hash32) -> Tuple[bool, bytes, Tuple[float, ...]]:
         event = asyncio.Event()
-        wait_periods: List[float] = []
+        wait_periods: Tuple[float, ...] = ()
         pong: bytes = None
 
-        def callback(raw_msg: bytes, wps: List[float]) -> None:
+        def callback(raw_msg: bytes, wps: Tuple[float, ...]) -> None:
             nonlocal pong, wait_periods
             event.set()
             pong = raw_msg
@@ -843,7 +852,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         return got_pong, pong, wait_periods
 
     def process_pong_v5(self, remote: kademlia.Node, token: Hash32, raw_msg: bytes,
-                        wait_periods: List[float]) -> None:
+                        wait_periods: Tuple[float, ...]) -> None:
         pingid = self._mkpingid(token, remote)
         try:
             callback = self.pong_callbacks.get_callback(pingid)
@@ -1178,8 +1187,8 @@ class TopicTable:
 
 class Ticket:
 
-    def __init__(self, node: kademlia.Node, pong: bytes, topics: List[bytes],
-                 wait_periods: List[float]) -> None:
+    def __init__(self, node: kademlia.Node, pong: bytes, topics: Tuple[bytes, ...],
+                 wait_periods: Tuple[float, ...]) -> None:
         now = time.time()
         self.issue_time = now
         self.node = node
@@ -1191,10 +1200,10 @@ class Ticket:
         return 'Ticket(%s:%s)' % (self.node, self.topics)
 
 
-@to_list
+@to_tuple
 def _extract_nodes_from_payload(
         sender: kademlia.Address,
-        payload: List[Tuple[str, bytes, bytes, bytes]],
+        payload: Tuple[Tuple[str, bytes, bytes, bytes], ...],
         logger: ExtendedDebugLogger) -> Iterator[kademlia.Node]:
     for item in payload:
         ip, udp_port, tcp_port, node_id = item
@@ -1213,7 +1222,7 @@ def _get_max_neighbours_per_packet() -> int:
     # Use an IPv6 address here as we're interested in the size of the biggest possible node
     # representation.
     addr = kademlia.Address('::1', 30303, 30303)
-    node_data = addr.to_endpoint() + [b'\x00' * (kademlia.k_pubkey_size // 8)]
+    node_data = addr.to_endpoint() + (b'\x00' * (kademlia.k_pubkey_size // 8),)
     neighbours = [node_data]
     expiration = rlp.sedes.big_endian_int.serialize(_get_msg_expiration())
     payload = rlp.encode([neighbours] + [expiration])
@@ -1231,7 +1240,7 @@ def _pack_v4(cmd_id: int, payload: Tuple[Any, ...], privkey: datatypes.PrivateKe
     """
     cmd_id = to_bytes(cmd_id)
     expiration = rlp.sedes.big_endian_int.serialize(_get_msg_expiration())
-    encoded_data = cmd_id + rlp.encode(payload + tuple([expiration]))
+    encoded_data = cmd_id + rlp.encode(payload + tuple(expiration,))
     signature = privkey.sign_msg(encoded_data)
     message_hash = keccak(signature.to_bytes() + encoded_data)
     return message_hash + signature.to_bytes() + encoded_data
