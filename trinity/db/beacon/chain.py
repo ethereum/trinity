@@ -111,6 +111,11 @@ class BaseAsyncBeaconChainDB(ABC):
     #
     # Attestation API
     #
+
+    @abstractmethod
+    def coro_attestation_exists(self, attestation_root: Hash32) -> bool:
+        pass
+
     @abstractmethod
     def coro_get_attestation_by_root(self,
                                      attestation_root: Hash32,
@@ -148,6 +153,7 @@ class AsyncBeaconChainDBPreProxy(BaseAsyncBeaconChainDB):
     coro_persist_block_chain = async_method('persist_block_chain')
     coro_get_state_by_root = async_method('get_state_by_root')
     coro_persist_state = async_method('persist_state')
+    coro_attestation_exists = async_method('attestation_exists')
     coro_get_attestation_by_root = async_method('get_attestation_by_root')
     coro_exists = async_method('exists')
     coro_get = async_method('get')

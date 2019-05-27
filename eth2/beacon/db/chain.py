@@ -167,6 +167,11 @@ class BaseBeaconChainDB(ABC):
     #
     # Attestation API
     #
+
+    @abstractmethod
+    def attestation_exists(self, attestation_root: Hash32) -> bool:
+        pass
+
     @abstractmethod
     def get_attestation_by_root(self,
                                 attestation_root: Hash32,
@@ -766,6 +771,10 @@ class BeaconChainDB(BaseBeaconChainDB):
             )
         attestation_key = ssz.decode(encoded_key, sedes=AttestationKey)
         return attestation_key.block_root, attestation_key.index
+
+    def attestation_exists(self, attestation_root: Hash32) -> bool:
+        lookup_key = SchemaV1.make_attestation_root_to_block_lookup_key(attestation_root)
+        return self.exists(lookup_key)
 
     def get_attestation_by_root(self,
                                 attestation_root: Hash32,

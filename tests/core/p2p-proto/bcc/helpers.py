@@ -61,6 +61,7 @@ class FakeAsyncBeaconChainDB(BaseAsyncBeaconChainDB, BeaconChainDB):
     coro_persist_block_chain = async_passthrough('persist_block_chain')
     coro_get_state_by_root = async_passthrough('get_state_by_root')
     coro_persist_state = async_passthrough('persist_state')
+    coro_attestation_exists = async_passthrough('attestation_exists')
     coro_get_attestation_by_root = async_passthrough('get_attestation_by_root')
     coro_exists = async_passthrough('exists')
     coro_get = async_passthrough('get')

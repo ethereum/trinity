@@ -259,12 +259,9 @@ def test_get_slot_by_root(chaindb, block):
 
 def test_chaindb_add_attestations_root_to_block_lookup(chaindb, block_with_attestation):
     block, attestation = block_with_attestation
-    attestation_root_to_block_key = SchemaV1.make_attestation_root_to_block_lookup_key(
-        attestation.root,
-    )
-    assert not chaindb.exists(attestation_root_to_block_key)
+    assert not chaindb.attestation_exists(attestation.root)
     chaindb.persist_block(block, block.__class__)
-    assert chaindb.exists(attestation_root_to_block_key)
+    assert chaindb.attestation_exists(attestation.root)
 
 
 def test_chaindb_get_attestation_by_root(chaindb, block_with_attestation):
