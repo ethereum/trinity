@@ -156,7 +156,7 @@ def test_from_genesis(base_db,
         'min_attestation_inclusion_delay,'
     ),
     [
-        (100, 16, 10, 10, 2),
+        (100, 16, 10, 10, 0),
     ]
 )
 def test_get_attestation_root(valid_chain,
@@ -165,37 +165,26 @@ def test_get_attestation_root(valid_chain,
                               config,
                               keymap,
                               min_attestation_inclusion_delay):
-
-    state = genesis_state
-    blocks = (genesis_block,)
-
-    def build_block(state, blocks, attestations):
-        return create_mock_block(
-            state=state,
-            config=config,
-            state_machine=valid_chain.get_state_machine(blocks[-1]),
-            block_class=genesis_block.__class__,
-            parent_block=blocks[-1],
-            keymap=keymap,
-            slot=state.slot + 1,
-            attestations=attestations,
-        )
-    for _ in range(min_attestation_inclusion_delay + 1):
-        block = build_block(state, blocks, tuple())
-        valid_chain.import_block(block)
-        state = valid_chain.get_state_machine(block).state
-        blocks += (block,)
-
-    attested_block = blocks[-(min_attestation_inclusion_delay + 1)]
+    state_machine = valid_chain.get_state_machine(genesis_block)
     attestations = create_mock_signed_attestations_at_slot(
-        state=state,
+        state=genesis_state,
         config=config,
-        state_machine=valid_chain.get_state_machine(blocks[-1]),
-        attestation_slot=attested_block.slot,
-        beacon_block_root=attested_block.signing_root,
+        state_machine=state_machine,
+        attestation_slot=genesis_block.slot,
+        beacon_block_root=genesis_block.signing_root,
         keymap=keymap,
     )
-    block = build_block(state, blocks, attestations)
+    block = create_mock_block(
+        state=genesis_state,
+        config=config,
+        state_machine=state_machine,
+        block_class=genesis_block.__class__,
+        parent_block=genesis_block,
+        keymap=keymap,
+        slot=genesis_state.slot + 1,
+        attestations=attestations,
+    )
     valid_chain.import_block(block)
-    for a in attestations:
-        assert valid_chain.get_attestation_by_root(a.root) == a
+    # Only one attestation in attestations, so just check that one
+    a0 = attestations[0]
+    assert valid_chain.get_attestation_by_root(a0.root) == a0
