@@ -422,6 +422,6 @@ class BeaconChain(BaseBeaconChain):
     # Attestation API
     #
     def get_attestation_by_root(self, attestation_root: Hash32)-> Attestation:
-        block_root = self.chaindb.get_canonical_head_root()
-        block_class = self.get_block_class(block_root)
-        return self.chaindb.get_attestation_by_root(attestation_root, block_class)
+        block_root, index = self.chaindb.get_attestation_key_by_root(attestation_root)
+        block = self.get_block_by_root(block_root)
+        return block.body.attestations[index]

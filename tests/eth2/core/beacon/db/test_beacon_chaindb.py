@@ -264,9 +264,9 @@ def test_chaindb_add_attestations_root_to_block_lookup(chaindb, block_with_attes
     assert chaindb.attestation_exists(attestation.root)
 
 
-def test_chaindb_get_attestation_by_root(chaindb, block_with_attestation):
+def test_chaindb_get_attestation_key_by_root(chaindb, block_with_attestation):
     block, attestation = block_with_attestation
     with pytest.raises(AttestationRootNotFound):
-        chaindb.get_attestation_by_root(attestation.root, block.__class__)
+        chaindb.get_attestation_key_by_root(attestation.root)
     chaindb.persist_block(block, block.__class__)
-    assert chaindb.get_attestation_by_root(attestation.root, block.__class__) == attestation
+    assert chaindb.get_attestation_key_by_root(attestation.root) == (block.signing_root, 0)

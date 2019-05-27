@@ -46,9 +46,6 @@ from eth2.beacon.typing import (
     Epoch,
     Slot,
 )
-from eth2.beacon.types.attestations import (
-    Attestation,
-)
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.types.blocks import (  # noqa: F401
     BaseBeaconBlock,
@@ -167,15 +164,12 @@ class BaseBeaconChainDB(ABC):
     #
     # Attestation API
     #
-
     @abstractmethod
-    def attestation_exists(self, attestation_root: Hash32) -> bool:
+    def get_attestation_key_by_root(self, attestation_root: Hash32)-> Tuple[Hash32, int]:
         pass
 
     @abstractmethod
-    def get_attestation_by_root(self,
-                                attestation_root: Hash32,
-                                block_class: Type[BaseBeaconBlock]) -> Attestation:
+    def attestation_exists(self, attestation_root: Hash32) -> bool:
         pass
 
     #
@@ -761,6 +755,9 @@ class BeaconChainDB(BaseBeaconChainDB):
                 ssz.encode(attestation_key),
             )
 
+    def get_attestation_key_by_root(self, attestation_root: Hash32)-> Tuple[Hash32, int]:
+        return self._get_attestation_key_by_root(self.db, attestation_root)
+
     @staticmethod
     def _get_attestation_key_by_root(db: BaseDB, attestation_root: Hash32) -> Tuple[Hash32, int]:
         try:
@@ -775,13 +772,6 @@ class BeaconChainDB(BaseBeaconChainDB):
     def attestation_exists(self, attestation_root: Hash32) -> bool:
         lookup_key = SchemaV1.make_attestation_root_to_block_lookup_key(attestation_root)
         return self.exists(lookup_key)
-
-    def get_attestation_by_root(self,
-                                attestation_root: Hash32,
-                                block_class: Type[BaseBeaconBlock]) -> Attestation:
-        block_root, index = self._get_attestation_key_by_root(self.db, attestation_root)
-        block = self._get_block_by_root(self.db, block_root, block_class)
-        return block.body.attestations[index]
 
     #
     # Raw Database API
