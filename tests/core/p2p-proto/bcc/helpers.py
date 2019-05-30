@@ -39,14 +39,19 @@ from tests.core.integration_test_helpers import (
     async_passthrough,
 )
 from eth2.beacon.state_machines.forks.serenity import SERENITY_CONFIG
+from eth2.configs import (
+    Eth2GenesisConfig,
+)
+
+SERENITY_GENESIS_CONFIG = Eth2GenesisConfig(SERENITY_CONFIG)
 
 
 class FakeAsyncBeaconChainDB(BaseAsyncBeaconChainDB, BeaconChainDB):
 
     coro_persist_block = async_passthrough('persist_block')
     coro_get_canonical_block_root = async_passthrough('get_canonical_block_root')
+    coro_get_genesis_block_root = async_passthrough('get_genesis_block_root')
     coro_get_canonical_block_by_slot = async_passthrough('get_canonical_block_by_slot')
-    coro_get_canonical_block_root_by_slot = async_passthrough('get_canonical_block_root_by_slot')
     coro_get_canonical_head = async_passthrough('get_canonical_head')
     coro_get_canonical_head_root = async_passthrough('get_canonical_head_root')
     coro_get_finalized_head = async_passthrough('get_finalized_head')
@@ -56,13 +61,15 @@ class FakeAsyncBeaconChainDB(BaseAsyncBeaconChainDB, BeaconChainDB):
     coro_persist_block_chain = async_passthrough('persist_block_chain')
     coro_get_state_by_root = async_passthrough('get_state_by_root')
     coro_persist_state = async_passthrough('persist_state')
+    coro_get_attestation_key_by_root = async_passthrough('get_attestation_key_by_root')
+    coro_attestation_exists = async_passthrough('attestation_exists')
     coro_exists = async_passthrough('exists')
     coro_get = async_passthrough('get')
 
 
-def create_test_block(parent=None, **kwargs):
+def create_test_block(parent=None, genesis_config=SERENITY_GENESIS_CONFIG, **kwargs):
     defaults = {
-        "slot": SERENITY_CONFIG.GENESIS_SLOT,
+        "slot": genesis_config.GENESIS_SLOT,
         "previous_block_root": ZERO_HASH32,
         "state_root": ZERO_HASH32,  # note: not the actual genesis state root
         "signature": EMPTY_SIGNATURE,
@@ -93,16 +100,16 @@ def create_branch(length, root=None, **start_kwargs):
         parent = child
 
 
-async def get_chain_db(blocks=(), config=SERENITY_CONFIG):
+async def get_chain_db(blocks=(), genesis_config=SERENITY_GENESIS_CONFIG):
     db = AtomicDB()
-    chain_db = FakeAsyncBeaconChainDB(db=db, config=config)
+    chain_db = FakeAsyncBeaconChainDB(db=db, genesis_config=genesis_config)
     await chain_db.coro_persist_block_chain(blocks, BeaconBlock)
     return chain_db
 
 
-async def get_genesis_chain_db(config=SERENITY_CONFIG):
-    genesis = create_test_block()
-    return await get_chain_db((genesis,), config=config)
+async def get_genesis_chain_db(genesis_config=SERENITY_GENESIS_CONFIG):
+    genesis = create_test_block(genesis_config=genesis_config)
+    return await get_chain_db((genesis,), genesis_config=genesis_config)
 
 
 async def _setup_alice_and_bob_factories(alice_chain_db, bob_chain_db):
@@ -165,15 +172,19 @@ async def get_directly_linked_peers(request, event_loop, alice_chain_db, bob_cha
 async def get_directly_linked_peers_in_peer_pools(request,
                                                   event_loop,
                                                   alice_chain_db,
-                                                  bob_chain_db):
+                                                  bob_chain_db,
+                                                  alice_peer_pool_event_bus=None,
+                                                  bob_peer_pool_event_bus=None):
     alice, bob = await get_directly_linked_peers(
         request,
         event_loop,
         alice_chain_db=alice_chain_db,
         bob_chain_db=bob_chain_db,
     )
-    alice_peer_pool = BCCPeerPool(alice.transport._private_key, alice.context)
-    bob_peer_pool = BCCPeerPool(bob.transport._private_key, bob.context)
+    alice_peer_pool = BCCPeerPool(
+        alice.transport._private_key, alice.context, event_bus=alice_peer_pool_event_bus)
+    bob_peer_pool = BCCPeerPool(
+        bob.transport._private_key, bob.context, event_bus=bob_peer_pool_event_bus)
 
     asyncio.ensure_future(alice_peer_pool.run())
     asyncio.ensure_future(bob_peer_pool.run())

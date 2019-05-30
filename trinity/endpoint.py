@@ -5,7 +5,7 @@ from typing import (
 from lahja import (
     BroadcastConfig,
     ConnectionConfig,
-    Endpoint,
+    AsyncioEndpoint,
 )
 
 from trinity.constants import (
@@ -18,7 +18,7 @@ from trinity.events import (
 )
 
 
-class TrinityEventBusEndpoint(Endpoint):
+class TrinityEventBusEndpoint(AsyncioEndpoint):
     """
     Lahja Endpoint with some Trinity specific logic.
     """
@@ -32,8 +32,8 @@ class TrinityEventBusEndpoint(Endpoint):
             BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT)
         )
 
-    def connect_to_other_endpoints(self,
-                                   ev: AvailableEndpointsUpdated) -> None:
+    async def connect_to_other_endpoints(self,
+                                         ev: AvailableEndpointsUpdated) -> None:
 
         for connection_config in ev.available_endpoints:
             if connection_config.name == self.name:
@@ -46,13 +46,14 @@ class TrinityEventBusEndpoint(Endpoint):
                     self.name,
                     connection_config.name
                 )
-                self.connect_to_endpoints_nowait(connection_config)
+                await self.connect_to_endpoints(connection_config)
 
-    def auto_connect_new_announced_endpoints(self) -> None:
+    async def auto_connect_new_announced_endpoints(self) -> None:
         """
         Connect this endpoint to all new endpoints that are announced
         """
-        self.subscribe(AvailableEndpointsUpdated, self.connect_to_other_endpoints)
+        async for event in self.stream(AvailableEndpointsUpdated):
+            await self.connect_to_other_endpoints(event)
 
     async def announce_endpoint(self) -> None:
         """

@@ -4,7 +4,7 @@ async def run_command_and_detect_errors(async_process_runner, command, time):
     throw an Exception in case any unresolved Exceptions are detected in the output of the command.
     """
     await async_process_runner.run(command, timeout_sec=time)
-    scan_for_errors(async_process_runner.stderr)
+    await scan_for_errors(async_process_runner.stderr)
 
 
 async def scan_for_errors(async_iterable):
@@ -13,7 +13,11 @@ async def scan_for_errors(async_iterable):
     uncaught exception.
     """
 
-    error_trigger = ("exception was never retrieved", "Traceback (most recent call last)")
+    error_trigger = (
+        "exception was never retrieved",
+        "Task was destroyed but it is pending",
+        "Traceback (most recent call last)",
+    )
 
     lines_since_error = 0
     async for line in async_iterable:

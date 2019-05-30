@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import (
-    Iterable,
+    Set,
+    Tuple,
 )
 
 from lahja import (
-    Endpoint,
+    AsyncioEndpoint,
     BroadcastConfig,
 )
 
@@ -24,7 +25,7 @@ class BasePeerBackend(ABC):
     @abstractmethod
     async def get_peer_candidates(self,
                                   num_requested: int,
-                                  num_connected_peers: int) -> Iterable[Node]:
+                                  connected_remotes: Set[Node]) -> Tuple[Node, ...]:
         pass
 
 
@@ -32,32 +33,40 @@ TO_DISCOVERY_BROADCAST_CONFIG = BroadcastConfig(filter_endpoint=DISCOVERY_EVENTB
 
 
 class DiscoveryPeerBackend(BasePeerBackend):
-    def __init__(self, event_bus: Endpoint) -> None:
+    def __init__(self, event_bus: AsyncioEndpoint) -> None:
         self.event_bus = event_bus
 
     async def get_peer_candidates(self,
                                   num_requested: int,
-                                  num_connected_peers: int) -> Iterable[Node]:
+                                  connected_remotes: Set[Node]) -> Tuple[Node, ...]:
         response = await self.event_bus.request(
             PeerCandidatesRequest(num_requested),
             TO_DISCOVERY_BROADCAST_CONFIG,
         )
-        return response.candidates
+        return tuple(
+            candidate
+            for candidate in response.candidates
+            if candidate not in connected_remotes
+        )
 
 
 class BootnodesPeerBackend(BasePeerBackend):
-    def __init__(self, event_bus: Endpoint) -> None:
+    def __init__(self, event_bus: AsyncioEndpoint) -> None:
         self.event_bus = event_bus
 
     async def get_peer_candidates(self,
                                   num_requested: int,
-                                  num_connected_peers: int) -> Iterable[Node]:
-        if num_connected_peers == 0:
+                                  connected_remotes: Set[Node]) -> Tuple[Node, ...]:
+        if len(connected_remotes) == 0:
             response = await self.event_bus.request(
                 RandomBootnodeRequest(),
                 TO_DISCOVERY_BROADCAST_CONFIG
             )
 
-            return response.candidates
+            return tuple(
+                candidate
+                for candidate in response.candidates
+                if candidate not in connected_remotes
+            )
         else:
             return ()

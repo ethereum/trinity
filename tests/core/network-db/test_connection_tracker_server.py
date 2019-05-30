@@ -8,6 +8,7 @@ from p2p.tools.factories import NodeFactory
 from trinity.constants import (
     NETWORKING_EVENTBUS_ENDPOINT,
 )
+from trinity.plugins.builtin.network_db.connection.events import ShouldConnectToPeerRequest
 from trinity.plugins.builtin.network_db.connection.server import ConnectionTrackerServer
 from trinity.plugins.builtin.network_db.connection.tracker import (
     ConnectionTrackerClient,
@@ -19,7 +20,7 @@ from trinity.plugins.builtin.network_db.connection.tracker import (
 async def test_connection_tracker_server_and_client(event_loop, event_bus):
     tracker = MemoryConnectionTracker()
     remote_a = NodeFactory()
-    await tracker.record_blacklist(remote_a, 60, "testing")
+    tracker.record_blacklist(remote_a, 60, "testing")
 
     assert await tracker.should_connect_to(remote_a) is False
 
@@ -32,6 +33,8 @@ async def test_connection_tracker_server_and_client(event_loop, event_bus):
     config = BroadcastConfig(filter_endpoint=NETWORKING_EVENTBUS_ENDPOINT)
     bus_tracker = ConnectionTrackerClient(event_bus, config=config)
 
+    # Give `bus_tracker` a moment to setup subscriptions
+    await event_bus.wait_until_all_connections_subscribed_to(ShouldConnectToPeerRequest)
     # ensure we can read from the tracker over the event bus
     assert await bus_tracker.should_connect_to(remote_a) is False
 
@@ -40,7 +43,9 @@ async def test_connection_tracker_server_and_client(event_loop, event_bus):
 
     assert await bus_tracker.should_connect_to(remote_b) is True
 
-    await bus_tracker.record_blacklist(remote_b, 60, "testing")
+    bus_tracker.record_blacklist(remote_b, 60, "testing")
+    # let the underlying broadcast_nowait execute
+    await asyncio.sleep(0.01)
 
     assert await bus_tracker.should_connect_to(remote_b) is False
     assert await tracker.should_connect_to(remote_b) is False

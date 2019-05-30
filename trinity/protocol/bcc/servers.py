@@ -1,32 +1,57 @@
 from typing import (
-    cast,
     AsyncIterator,
     Dict,
     FrozenSet,
+    Iterable,
     List,
     Set,
     Tuple,
     Type,
+    Union,
+    cast,
 )
 
+from cancel_token import (
+    CancelToken,
+)
+from eth.exceptions import (
+    BlockNotFound,
+)
 from eth_typing import (
     Hash32,
 )
+from eth_utils import (
+    ValidationError,
+    encode_hex,
+    to_tuple,
+)
 
-from cancel_token import CancelToken
+from lahja import (
+    BroadcastConfig,
+)
 
 import ssz
 
 from p2p import protocol
+from p2p.kademlia import (
+    Node,
+)
 from p2p.peer import (
     BasePeer,
 )
-from p2p.protocol import Command
+from p2p.protocol import (
+    Command,
+)
 
-from eth.exceptions import BlockNotFound
-
-from eth2.beacon.chains.base import BaseBeaconChain
-
+from eth2.beacon.chains.base import (
+    BaseBeaconChain,
+)
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_attestation,
+)
+from eth2.beacon.types.attestations import (
+    Attestation,
+)
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
     BeaconBlock,
@@ -34,16 +59,29 @@ from eth2.beacon.types.blocks import (
 from eth2.beacon.typing import (
     Slot,
 )
-
-from trinity._utils.shellart import (
-    bold_red,
+from eth2.configs import (
+    CommitteeConfig,
 )
+
 from trinity._utils.les import (
     gen_request_id,
 )
-from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
-from trinity.protocol.common.servers import BaseRequestServer
+from trinity._utils.shellart import (
+    bold_red,
+)
+from trinity.endpoint import (
+    TrinityEventBusEndpoint
+)
+from trinity.db.beacon.chain import (
+    BaseAsyncBeaconChainDB,
+)
+from trinity.protocol.common.servers import (
+    BaseRequestServer,
+    BaseIsolatedRequestServer,
+)
 from trinity.protocol.bcc.commands import (
+    Attestations,
+    AttestationsMessage,
     BeaconBlocks,
     BeaconBlocksMessage,
     GetBeaconBlocks,
@@ -51,36 +89,48 @@ from trinity.protocol.bcc.commands import (
     NewBeaconBlock,
     NewBeaconBlockMessage,
 )
+from trinity.protocol.bcc.events import (
+    GetBeaconBlocksEvent,
+)
 from trinity.protocol.bcc.peer import (
+    BCCProxyPeer,
     BCCPeer,
     BCCPeerPool,
 )
 
 
-class BCCRequestServer(BaseRequestServer):
+class BCCRequestServer(BaseIsolatedRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
         GetBeaconBlocks,
     })
 
     def __init__(self,
+                 event_bus: TrinityEventBusEndpoint,
+                 broadcast_config: BroadcastConfig,
                  db: BaseAsyncBeaconChainDB,
-                 peer_pool: BCCPeerPool,
                  token: CancelToken = None) -> None:
-        super().__init__(peer_pool, token)
+        super().__init__(
+            event_bus,
+            broadcast_config,
+            (GetBeaconBlocksEvent,),
+            token,
+        )
         self.db = db
 
-    async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
+    async def _handle_msg(self,
+                          remote: Node,
+                          cmd: Command,
                           msg: protocol._DecodedMsgType) -> None:
-        peer = cast(BCCPeer, base_peer)
+
         self.logger.debug("cmd %s" % cmd)
         if isinstance(cmd, GetBeaconBlocks):
-            await self._handle_get_beacon_blocks(peer, cast(GetBeaconBlocksMessage, msg))
+            await self._handle_get_beacon_blocks(remote, cast(GetBeaconBlocksMessage, msg))
         else:
             raise Exception(f"Invariant: Only subscribed to {self.subscription_msg_types}")
 
-    async def _handle_get_beacon_blocks(self, peer: BCCPeer, msg: GetBeaconBlocksMessage) -> None:
-        if not peer.is_operational:
-            return
+    async def _handle_get_beacon_blocks(self, remote: Node, msg: GetBeaconBlocksMessage) -> None:
+
+        peer = BCCProxyPeer.from_node(remote, self.event_bus, self.broadcast_config)
 
         request_id = msg["request_id"]
         max_blocks = msg["max_blocks"]
@@ -164,11 +214,28 @@ class BaseReceiveServer(BaseRequestServer):
 
 
 class OrphanBlockPool:
+    """
+    Stores the orphan blocks(the blocks who arrive before their parents).
+    """
     # TODO: can probably use lru-cache or even database
     _pool: Set[BaseBeaconBlock]
 
     def __init__(self) -> None:
         self._pool = set()
+
+    def __contains__(self, block_or_block_root: Union[BaseBeaconBlock, Hash32]) -> bool:
+        block_root: Hash32
+        if isinstance(block_or_block_root, BaseBeaconBlock):
+            block_root = block_or_block_root.signing_root
+        elif isinstance(block_or_block_root, bytes):
+            block_root = block_or_block_root
+        else:
+            raise TypeError("`block_or_block_root` should be `BaseBeaconBlock` or `Hash32`")
+        try:
+            self.get(block_root)
+            return True
+        except BlockNotFound:
+            return False
 
     def get(self, block_root: Hash32) -> BaseBeaconBlock:
         for block in self._pool:
@@ -181,11 +248,11 @@ class OrphanBlockPool:
             return
         self._pool.add(block)
 
-    def pop_children(self, block: BaseBeaconBlock) -> Tuple[BaseBeaconBlock, ...]:
+    def pop_children(self, block_root: Hash32) -> Tuple[BaseBeaconBlock, ...]:
         children = tuple(
             orphan_block
             for orphan_block in self._pool
-            if orphan_block.previous_block_root == block.signing_root
+            if orphan_block.previous_block_root == block_root
         )
         self._pool.difference_update(children)
         return children
@@ -193,6 +260,7 @@ class OrphanBlockPool:
 
 class BCCReceiveServer(BaseReceiveServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
+        Attestations,
         BeaconBlocks,
         NewBeaconBlock,
     })
@@ -214,12 +282,38 @@ class BCCReceiveServer(BaseReceiveServer):
                           msg: protocol._DecodedMsgType) -> None:
         peer = cast(BCCPeer, base_peer)
         self.logger.debug("cmd %s" % cmd)
-        if isinstance(cmd, NewBeaconBlock):
+        if isinstance(cmd, Attestations):
+            await self._handle_attestations(peer, cast(AttestationsMessage, msg))
+        elif isinstance(cmd, NewBeaconBlock):
             await self._handle_new_beacon_block(peer, cast(NewBeaconBlockMessage, msg))
         elif isinstance(cmd, BeaconBlocks):
             await self._handle_beacon_blocks(peer, cast(BeaconBlocksMessage, msg))
         else:
             raise Exception(f"Invariant: Only subscribed to {self.subscription_msg_types}")
+
+    async def _handle_attestations(self, peer: BCCPeer, msg: AttestationsMessage) -> None:
+        if not peer.is_operational:
+            return
+        encoded_attestations = msg["encoded_attestations"]
+        attestations = tuple(
+            ssz.decode(encoded_attestation, Attestation)
+            for encoded_attestation in encoded_attestations
+        )
+        self.logger.debug("Received attestations=%s", attestations)
+
+        # Validate attestations
+        valid_attestations = self._validate_attestations(attestations)
+        if len(valid_attestations) == 0:
+            return
+
+        # Check if attestations has been seen already.
+        # Filter out those seen already
+        valid_new_attestations = filter(
+            self._is_attestation_new,
+            valid_attestations,
+        )
+        # Broadcast the valid and newly received attestations
+        self._broadcast_attestations(tuple(valid_new_attestations), peer)
 
     async def _handle_beacon_blocks(self, peer: BCCPeer, msg: BeaconBlocksMessage) -> None:
         if not peer.is_operational:
@@ -232,14 +326,14 @@ class BCCReceiveServer(BaseReceiveServer):
         #   block at a time.
         if len(encoded_blocks) != 1:
             raise Exception("should only receive 1 block from our requests")
-        resp_block = ssz.decode(encoded_blocks[0], BeaconBlock)
-        if resp_block.signing_root != self.map_request_id_block_root[request_id]:
+        block = ssz.decode(encoded_blocks[0], BeaconBlock)
+        if block.signing_root != self.map_request_id_block_root[request_id]:
             raise Exception(
-                f"block signing_root {resp_block.signing_root} does not correpond to"
+                f"block signing_root {block.signing_root} does not correpond to"
                 "the one we requested"
             )
-        self.logger.debug(f"received request_id={request_id}, resp_block={resp_block}")
-        self._try_import_or_handle_orphan(resp_block)
+        self.logger.debug("Received request_id=%s, block=%s", request_id, block)
+        self._process_received_block(block)
         del self.map_request_id_block_root[request_id]
 
     async def _handle_new_beacon_block(self, peer: BCCPeer, msg: NewBeaconBlockMessage) -> None:
@@ -249,44 +343,128 @@ class BCCReceiveServer(BaseReceiveServer):
         block = ssz.decode(encoded_block, BeaconBlock)
         if self._is_block_seen(block):
             raise Exception(f"block {block} is seen before")
-        self.logger.debug(f"received block={block}")
+        self.logger.debug("Received new block=%s", block)
         # TODO: check the proposer signature before importing the block
-        self._try_import_or_handle_orphan(block)
-        # TODO: relay the block if it is valid
+        if self._process_received_block(block):
+            self._broadcast_block(block, from_peer=peer)
 
-    def _try_import_or_handle_orphan(self, block: BeaconBlock) -> None:
-        blocks_to_be_imported: List[BeaconBlock] = []
+    def _is_attestation_new(self, attestation: Attestation) -> bool:
+        """
+        Check if the attestation is already in the database or the attestion pool.
+        """
+        # stub
+        return False
 
-        blocks_to_be_imported.append(block)
-        while len(blocks_to_be_imported) != 0:
-            block = blocks_to_be_imported.pop()
-            # try to import the block
-            if not self._is_block_root_in_db(block.previous_block_root):
-                self.logger.debug(f"found orphan block={block}")
-                # if failed, add the block and the rest of the queue back to the pool
-                self.orphan_block_pool.add(block)
-                self._request_block_by_root(block_root=block.previous_block_root)
-                continue
-            # only import the block when its parent is in db
-            self.logger.debug(f"try to import block={block}")
-            self.chain.import_block(block)
-            self.logger.debug(f"successfully imported block={block}")
-
-            # if succeeded, handle the orphan blocks which depend on this block.
-            matched_orphan_blocks = self.orphan_block_pool.pop_children(block)
-            if len(matched_orphan_blocks) > 0:
-                self.logger.debug(
-                    f"blocks {matched_orphan_blocks} match their parent {block}"
+    @to_tuple
+    def _validate_attestations(self,
+                               attestations: Iterable[Attestation]) -> Iterable[Attestation]:
+        state_machine = self.chain.get_state_machine()
+        config = state_machine.config
+        state = state_machine.state
+        for attestation in attestations:
+            # Fast forward to state in future slot in order to pass
+            # attestation.data.slot validity check
+            future_state = state_machine.state_transition.apply_state_transition_without_block(
+                state,
+                attestation.data.slot + config.MIN_ATTESTATION_INCLUSION_DELAY,
+            )
+            try:
+                validate_attestation(
+                    future_state,
+                    attestation,
+                    config.MIN_ATTESTATION_INCLUSION_DELAY,
+                    config.SLOTS_PER_HISTORICAL_ROOT,
+                    CommitteeConfig(config),
                 )
-            blocks_to_be_imported.extend(matched_orphan_blocks)
+                yield attestation
+            except ValidationError:
+                pass
 
-    def _request_block_by_root(self, block_root: Hash32) -> None:
+    def _broadcast_attestations(self,
+                                attestations: Tuple[Attestation, ...],
+                                from_peer: BCCPeer = None) ->None:
+        """
+        Broadcast the attestations to peers, except for ``from_peer``.
+        """
+        for peer in self._peer_pool.connected_nodes.values():
+            peer = cast(BCCPeer, peer)
+            # skip the peer who send the attestations to us
+            if from_peer is not None and peer == from_peer:
+                continue
+            self.logger.debug(bold_red("Send attestations=%s to peer=%s"), attestations, peer)
+            peer.sub_proto.send_attestation_records(attestations)
+
+    def _process_received_block(self, block: BaseBeaconBlock) -> bool:
+        """
+        Process the block received from other peers, and returns whether the block should be
+        further broadcast to other peers.
+        """
+        # If the block is an orphan, put it directly to the pool and request for its parent.
+        if not self._is_block_root_in_db(block.previous_block_root):
+            if block not in self.orphan_block_pool:
+                self.logger.debug("Found orphan_block=%s", block)
+                self.orphan_block_pool.add(block)
+                self._request_block_from_peers(block_root=block.previous_block_root)
+            return False
+        try:
+            self.chain.import_block(block)
+        # If the block is invalid, we should drop it.
+        except ValidationError:
+            # TODO: Possibly drop all of its descendants in `self.orphan_block_pool`?
+            return False
+        # If the other exceptions occurred, raise it.
+        except Exception:
+            # Unexpected result
+            raise
+        else:
+            # Successfully imported the block. See if anyone in `self.orphan_block_pool` which
+            # depends on it. If there are, try to import them.
+            # TODO: should be done asynchronously?
+            self._try_import_orphan_blocks(block.signing_root)
+            return True
+
+    def _try_import_orphan_blocks(self, parent_root: Hash32) -> None:
+        """
+        Perform ``chain.import`` on the blocks in ``self.orphan_block_pool`` in breadth-first
+        order, starting from the children of ``parent_root``.
+        """
+        imported_roots: List[Hash32] = []
+
+        imported_roots.append(parent_root)
+        while len(imported_roots) != 0:
+            current_parent_root = imported_roots.pop()
+            # Only process the children if the `current_parent_root` is already in db.
+            if not self._is_block_root_in_db(block_root=current_parent_root):
+                continue
+            # If succeeded, handle the orphan blocks which depend on this block.
+            children = self.orphan_block_pool.pop_children(current_parent_root)
+            if len(children) > 0:
+                self.logger.debug(
+                    "Blocks=%s match their parent block, parent_root=%s",
+                    children,
+                    current_parent_root,
+                )
+            for block in children:
+                try:
+                    self.chain.import_block(block)
+                    self.logger.debug("Successfully imported block=%s", block)
+                    imported_roots.append(block.signing_root)
+                except ValidationError as e:
+                    # TODO: Possibly drop all of its descendants in `self.orphan_block_pool`?
+                    self.logger.debug("Fail to import invalid block=%s  reason=%s", block, e)
+                    pass
+
+    def _request_block_from_peers(self, block_root: Hash32) -> None:
         for peer in self._peer_pool.connected_nodes.values():
             peer = cast(BCCPeer, peer)
             request_id = gen_request_id()
             self.logger.debug(
-                bold_red(f"send block request to: request_id={request_id}, peer={peer}")
+                bold_red("Send block request with request_id=%s root=%s to peer=%s"),
+                request_id,
+                encode_hex(block_root),
+                peer,
             )
+
             self.map_request_id_block_root[request_id] = block_root
             peer.sub_proto.send_get_blocks(
                 block_root,
@@ -294,12 +472,20 @@ class BCCReceiveServer(BaseReceiveServer):
                 request_id=request_id,
             )
 
+    def _broadcast_block(self, block: BaseBeaconBlock, from_peer: BCCPeer = None) -> None:
+        """
+        Broadcast the block to peers, except for ``from_peer``.
+        """
+        for peer in self._peer_pool.connected_nodes.values():
+            peer = cast(BCCPeer, peer)
+            # skip the peer who send the block to us
+            if from_peer is not None and peer == from_peer:
+                continue
+            self.logger.debug(bold_red("Send block=%s to peer=%s"), block, peer)
+            peer.sub_proto.send_new_block(block=block)
+
     def _is_block_root_in_orphan_block_pool(self, block_root: Hash32) -> bool:
-        try:
-            self.orphan_block_pool.get(block_root=block_root)
-            return True
-        except BlockNotFound:
-            return False
+        return block_root in self.orphan_block_pool
 
     def _is_block_root_in_db(self, block_root: Hash32) -> bool:
         try:

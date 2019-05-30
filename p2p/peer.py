@@ -17,11 +17,9 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from lahja import Endpoint
+from lahja import AsyncioEndpoint
 
 from cached_property import cached_property
-
-import rlp
 
 from eth_utils import (
     to_tuple,
@@ -31,7 +29,10 @@ from eth_keys import datatypes
 
 from cancel_token import CancelToken
 
-from p2p._utils import get_devp2p_cmd_id
+from p2p._utils import (
+    get_devp2p_cmd_id,
+    trim_middle,
+)
 from p2p.exceptions import (
     DecryptionError,
     HandshakeFailure,
@@ -67,6 +68,7 @@ from p2p.tracking.connection import (
 
 from .constants import (
     BLACKLIST_SECONDS_BAD_PROTOCOL,
+    BLACKLIST_SECONDS_QUICK_DISCONNECT,
     SNAPPY_PROTOCOL_VERSION,
 )
 
@@ -138,13 +140,13 @@ class BasePeer(BaseService):
     sub_proto: Protocol = None
     disconnect_reason: DisconnectReason = None
 
-    _event_bus: Endpoint = None
+    _event_bus: AsyncioEndpoint = None
 
     def __init__(self,
                  transport: Transport,
                  context: BasePeerContext,
                  inbound: bool = False,
-                 event_bus: Endpoint = None,
+                 event_bus: AsyncioEndpoint = None,
                  token: CancelToken = None,
                  ) -> None:
         super().__init__(token)
@@ -189,7 +191,7 @@ class BasePeer(BaseService):
     def has_event_bus(self) -> bool:
         return self._event_bus is not None
 
-    def get_event_bus(self) -> Endpoint:
+    def get_event_bus(self) -> AsyncioEndpoint:
         if self._event_bus is None:
             raise AttributeError(f"No event bus configured for peer {self}")
         return self._event_bus
@@ -274,9 +276,15 @@ class BasePeer(BaseService):
             cmd, msg = await self.read_msg()
         if isinstance(cmd, Disconnect):
             msg = cast(Dict[str, Any], msg)
-            # Peers sometimes send a disconnect msg before they send the sub-proto handshake.
-            if msg['reason'] == DisconnectReason.too_many_peers.value:
-                raise TooManyPeersFailure(f'{self} disconnected from us before handshake')
+            try:
+                reason = DisconnectReason(msg['reason'])
+            except TypeError:
+                self.logger.warning('Unrecognized disconnect reason: %s', msg['reason'])
+            else:
+                self.disconnect_reason = reason
+                # Peers sometimes send a disconnect msg before they send the sub-proto handshake.
+                if reason is DisconnectReason.too_many_peers:
+                    raise TooManyPeersFailure(f'{self} disconnected from us before handshake')
             raise HandshakeFailure(
                 f"{self} disconnected before completing sub-proto handshake: {msg['reason_name']}"
             )
@@ -290,12 +298,7 @@ class BasePeer(BaseService):
         """
         self.base_protocol.send_handshake()
 
-        try:
-            cmd, msg = await self.read_msg()
-        except rlp.DecodingError:
-            raise HandshakeFailure("Got invalid rlp data during handshake")
-        except MalformedMessage as e:
-            raise HandshakeFailure("Got malformed message during handshake") from e
+        cmd, msg = await self.read_msg()
 
         if isinstance(cmd, Disconnect):
             msg = cast(Dict[str, Any], msg)
@@ -351,6 +354,12 @@ class BasePeer(BaseService):
             try:
                 self.process_msg(cmd, msg)
             except RemoteDisconnected as e:
+                if self.uptime < BLACKLIST_SECONDS_QUICK_DISCONNECT:
+                    self.connection_tracker.record_blacklist(
+                        self.remote,
+                        BLACKLIST_SECONDS_QUICK_DISCONNECT,
+                        "Quick disconnect",
+                    )
                 self.logger.debug("%r disconnected: %s", self, e)
                 return
 
@@ -370,7 +379,11 @@ class BasePeer(BaseService):
             )
             raise
         else:
-            self.logger.debug2("Successfully decoded %s msg: %s", cmd, decoded_msg)
+            self.logger.debug2(
+                "Successfully decoded %s msg: %s",
+                cmd,
+                trim_middle(str(decoded_msg), 500),
+            )
             self.received_msgs[cmd] += 1
             return cmd, decoded_msg
 
@@ -378,6 +391,12 @@ class BasePeer(BaseService):
         """Handle the base protocol (P2P) messages."""
         if isinstance(cmd, Disconnect):
             msg = cast(Dict[str, Any], msg)
+            try:
+                reason = DisconnectReason(msg['reason'])
+            except TypeError:
+                self.logger.info('Unrecognized reason: %s', msg['reason'])
+            else:
+                self.disconnect_reason = reason
             raise RemoteDisconnected(msg['reason_name'])
         elif isinstance(cmd, Ping):
             self.base_protocol.send_pong()
@@ -477,6 +496,7 @@ class BasePeer(BaseService):
                 f"Reason must be an item of DisconnectReason, got {reason}"
             )
 
+        self.disconnect_reason = reason
         if reason is DisconnectReason.bad_protocol:
             self.connection_tracker.record_blacklist(
                 self.remote,
@@ -486,7 +506,6 @@ class BasePeer(BaseService):
 
         self.logger.debug("Disconnecting from remote peer %s; reason: %s", self.remote, reason.name)
         self.base_protocol.send_disconnect(reason.value)
-        self.disconnect_reason = reason
         self.transport.close()
 
     async def disconnect(self, reason: DisconnectReason) -> None:
@@ -677,7 +696,7 @@ class BasePeerFactory(ABC):
                  privkey: datatypes.PrivateKey,
                  context: BasePeerContext,
                  token: CancelToken,
-                 event_bus: Endpoint = None) -> None:
+                 event_bus: AsyncioEndpoint = None) -> None:
         self.privkey = privkey
         self.context = context
         self.cancel_token = token

@@ -3,56 +3,66 @@ from abc import (
     abstractmethod,
 )
 import argparse
-from contextlib import contextmanager
+from contextlib import (
+    contextmanager,
+)
 from enum import (
-    auto,
     Enum,
+    auto,
 )
 import json
-from pathlib import Path
+from pathlib import (
+    Path,
+)
 from typing import (
+    TYPE_CHECKING,
     Any,
-    cast,
     Dict,
     Iterable,
     NamedTuple,
-    TYPE_CHECKING,
     Tuple,
     Type,
     TypeVar,
     Union,
+    cast,
 )
 
+from eth.db.backends.base import (
+    BaseAtomicDB,
+)
+from eth.typing import (
+    VMConfiguration,
+)
+from eth_keys import (
+    keys,
+)
+from eth_keys.datatypes import (
+    PrivateKey,
+)
 from eth_typing import (
     Address,
     BLSPubkey,
 )
 
-from eth_keys import keys
-from eth_keys.datatypes import PrivateKey
-
-from eth.db.backends.base import BaseAtomicDB
-from eth.typing import VMConfiguration
-
-from eth2.configs import Eth2Config
-from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
-
-from p2p.kademlia import Node as KademliaNode
+from eth2.beacon.chains.testnet import (
+    TestnetChain,
+)
+from eth2.beacon.genesis import (
+    get_genesis_block,
+)
+from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import (
+    Timestamp,
+)
+from eth2.configs import (
+    Eth2GenesisConfig,
+)
 from p2p.constants import (
     MAINNET_BOOTNODES,
     ROPSTEN_BOOTNODES,
 )
-
-from trinity.constants import (
-    ASSETS_DIR,
-    DEFAULT_PREFERRED_NODES,
-    IPC_DIR,
-    LOG_DIR,
-    LOG_FILE,
-    MAINNET_NETWORK_ID,
-    PID_DIR,
-    ROPSTEN_NETWORK_ID,
-    SYNC_LIGHT,
+from p2p.kademlia import (
+    Node as KademliaNode,
 )
 from trinity._utils.chains import (
     construct_trinity_config_params,
@@ -74,14 +84,26 @@ from trinity._utils.filesystem import (
 from trinity._utils.xdg import (
     get_xdg_trinity_root,
 )
-
-from eth2.beacon.chains.testnet import TestnetChain
-from eth2.beacon.typing import (
-    Slot,
-    Timestamp,
+from trinity.constants import (
+    ASSETS_DIR,
+    DEFAULT_PREFERRED_NODES,
+    IPC_DIR,
+    LOG_DIR,
+    LOG_FILE,
+    MAINNET_NETWORK_ID,
+    PID_DIR,
+    ROPSTEN_NETWORK_ID,
+    SYNC_LIGHT,
 )
-from eth2.beacon.tools.builder.initializer import (
-    create_mock_genesis,
+from trinity.plugins.eth2.beacon.utils import (
+    extract_genesis_state_from_stream,
+    extract_privkeys_from_dir,
+)
+from trinity.plugins.eth2.constants import (
+    VALIDATOR_KEY_DIR,
+)
+from trinity.plugins.eth2.network_generator.constants import (
+    GENESIS_FILE,
 )
 
 
@@ -91,6 +113,7 @@ if TYPE_CHECKING:
     from trinity.chains.full import FullChain  # noqa: F401
     from trinity.chains.light import LightDispatchChain  # noqa: F401
     from eth2.beacon.chains.base import BeaconChain  # noqa: F401
+    from eth2.beacon.state_machines.base import BaseBeaconStateMachine  # noqa: F401
 
 DATABASE_DIR_NAME = 'chain'
 
@@ -583,36 +606,41 @@ class Eth1AppConfig(BaseAppConfig):
 
 
 class BeaconGenesisData(NamedTuple):
+    """
+    Use this data to initialize BeaconChainConfig
+    """
     genesis_time: Timestamp
-    genesis_slot: Slot
-    keymap: Dict[BLSPubkey, int]
-    num_validators: int
+    # TODO: Should come from eth2.beacon.genesis.get_genesis_beacon_state
+    state: BeaconState
+    # TODO: Trinity should have no knowledge of validators' private keys
+    validator_keymap: Dict[BLSPubkey, int]
     # TODO: Maybe Validator deposit data
 
 
 class BeaconChainConfig:
+    network_id: int
+    genesis_data: BeaconGenesisData
+    _chain_name: str
+    _beacon_chain_class: Type['BeaconChain'] = None
+    _genesis_config: Eth2GenesisConfig = None
+
     def __init__(self,
                  chain_name: str=None,
                  genesis_data: BeaconGenesisData=None) -> None:
-        self._chain_name = chain_name
+
         self.network_id = 5567
         self.genesis_data = genesis_data
-        self._beacon_chain_class = None
+
+        self._chain_name = chain_name
 
     @property
-    def genesis_time(self) -> Timestamp:
-        return self.genesis_data.genesis_time
+    def genesis_config(self) -> Eth2GenesisConfig:
+        if self._genesis_config is None:
+            self._genesis_config = Eth2GenesisConfig(
+                self.beacon_chain_class.get_genesis_state_machine_class().config,
+            )
 
-    @property
-    def genesis_slot(self) -> Slot:
-        return self.genesis_data.genesis_slot
-
-    # TODO(ralexstokes):
-    # NOTE(ralexstokes), this is temporary to merge in some other work
-    # will want to revisit this as we move towards our MVP testnet
-    @property
-    def eth2_config(self) -> Eth2Config:
-        return SERENITY_CONFIG
+        return self._genesis_config
 
     @property
     def chain_name(self) -> str:
@@ -631,29 +659,42 @@ class BeaconChainConfig:
             )
         return self._beacon_chain_class
 
+    @classmethod
+    def from_genesis_files(cls,
+                           root_dir: Path,
+                           chain_name: str=None) -> 'BeaconChainConfig':
+        # parse `genesis_state`
+        genesis_file_path = root_dir / GENESIS_FILE
+        state = extract_genesis_state_from_stream(genesis_file_path)
+        # parse privkeys and build `validator_keymap`
+        keys_path = root_dir / VALIDATOR_KEY_DIR
+        validator_keymap = extract_privkeys_from_dir(keys_path)
+        # set `genesis_data`
+        genesis_data = BeaconGenesisData(
+            genesis_time=state.genesis_time,
+            state=state,
+            validator_keymap=validator_keymap,
+        )
+        return cls(
+            genesis_data=genesis_data,
+            chain_name=chain_name,
+        )
+
     def initialize_chain(self,
                          base_db: BaseAtomicDB) -> 'BeaconChain':
-        # TODO(ralexstokes):
-        # NOTE(ralexstokes), this is temporary to merge in some other work
-        # will want to revisit this as we move towards our MVP testnet
-        config = SERENITY_CONFIG
-
-        # Only used for testing
         chain_class = self.beacon_chain_class
-        _, state_machine = chain_class.sm_configuration[0]
-        state, block = create_mock_genesis(
-            num_validators=self.genesis_data.num_validators,
-            config=state_machine.config,
-            keymap=self.genesis_data.keymap,
-            genesis_block_class=state_machine.block_class,
-            genesis_time=self.genesis_time,
+        state = self.genesis_data.state
+        block = get_genesis_block(
+            genesis_state_root=state.root,
+            genesis_slot=self.genesis_config.GENESIS_SLOT,
+            block_class=chain_class.get_genesis_state_machine_class().block_class,
         )
-        return cast('BeaconChain', chain_class.from_genesis(
+        return chain_class.from_genesis(
             base_db=base_db,
             genesis_state=state,
             genesis_block=block,
-            config=config,
-        ))
+            genesis_config=self.genesis_config,
+        )
 
 
 class BeaconAppConfig(BaseAppConfig):
@@ -683,4 +724,7 @@ class BeaconAppConfig(BaseAppConfig):
         return self.trinity_config.with_app_suffix(path) / "full"
 
     def get_chain_config(self) -> BeaconChainConfig:
-        return BeaconChainConfig("TestnetChain")
+        return BeaconChainConfig.from_genesis_files(
+            root_dir=self.trinity_config.trinity_root_dir,
+            chain_name="TestnetChain",
+        )

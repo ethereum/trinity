@@ -85,7 +85,11 @@ def can_decode_json(potential):
 async def get_ipc_response(
         jsonrpc_ipc_pipe_path,
         request_msg,
-        event_loop):
+        event_loop,
+        event_bus):
+
+    # Give event subsriptions a moment to propagate.
+    await asyncio.sleep(0.01)
 
     assert wait_for(jsonrpc_ipc_pipe_path), "IPC server did not successfully start with IPC file"
 
@@ -216,8 +220,9 @@ async def test_ipc_requests(
         request_msg,
         expected,
         event_loop,
+        event_bus,
         ipc_server):
-    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop)
+    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
     assert result == expected
 
 
@@ -232,7 +237,7 @@ async def test_network_id_ipc_request(
         mock_request_response(NetworkIdRequest, NetworkIdResponse(1337))(event_bus))
     request_msg = build_request('net_version')
     expected = {'result': '1337', 'id': 3, 'jsonrpc': '2.0'}
-    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop)
+    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
     assert result == expected
 
 
@@ -322,8 +327,9 @@ async def test_estimate_gas_on_ipc(
         request_msg,
         expected,
         event_loop,
+        event_bus,
         ipc_server):
-    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop)
+    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
     assert result == expected
 
 
@@ -350,8 +356,9 @@ async def test_eth_call_on_ipc(
         request_msg,
         expected,
         event_loop,
+        event_bus,
         ipc_server):
-    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop)
+    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
     assert result == expected
 
 
@@ -424,6 +431,7 @@ async def test_eth_call_with_contract_on_ipc(
         gas_price,
         event_loop,
         ipc_server,
+        event_bus,
         expected):
     function_selector = function_signature_to_4byte_selector(signature)
     transaction = {
@@ -433,7 +441,7 @@ async def test_eth_call_with_contract_on_ipc(
         'data': to_hex(function_selector),
     }
     request_msg = build_request('eth_call', params=[transaction, 'latest'])
-    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop)
+    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
     assert result == expected
 
 
@@ -470,7 +478,8 @@ async def test_peer_pool_over_ipc(
     result = await get_ipc_response(
         jsonrpc_ipc_pipe_path,
         request_msg,
-        event_loop
+        event_loop,
+        event_bus,
     )
     assert result == expected
 
@@ -509,7 +518,8 @@ async def test_eth_over_ipc(
     result = await get_ipc_response(
         jsonrpc_ipc_pipe_path,
         request_msg,
-        event_loop
+        event_loop,
+        event_bus,
     )
     assert result == expected
 
@@ -547,13 +557,15 @@ async def test_admin_addPeer_error_messages(
         jsonrpc_ipc_pipe_path,
         request_msg,
         event_loop,
+        event_bus,
         expected,
         ipc_server):
 
     result = await get_ipc_response(
         jsonrpc_ipc_pipe_path,
         request_msg,
-        event_loop
+        event_loop,
+        event_bus,
     )
     assert result == expected
 
@@ -575,7 +587,8 @@ async def test_admin_addPeer_fires_message(
     result = await get_ipc_response(
         jsonrpc_ipc_pipe_path,
         request,
-        event_loop
+        event_loop,
+        event_bus
     )
     assert result == {'id': 3, 'jsonrpc': '2.0', 'result': None}
 

@@ -29,7 +29,7 @@ from eth_utils.toolz import (
     take,
 )
 from lahja import (
-    Endpoint,
+    AsyncioEndpoint,
     BroadcastConfig,
 )
 
@@ -106,14 +106,14 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     """
     _report_interval = 60
     _peer_boot_timeout = DEFAULT_PEER_BOOT_TIMEOUT
-    _event_bus: Endpoint = None
+    _event_bus: AsyncioEndpoint = None
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  context: BasePeerContext,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  token: CancelToken = None,
-                 event_bus: Endpoint = None,
+                 event_bus: AsyncioEndpoint = None,
                  ) -> None:
         super().__init__(token)
 
@@ -135,7 +135,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     def has_event_bus(self) -> bool:
         return self._event_bus is not None
 
-    def get_event_bus(self) -> Endpoint:
+    def get_event_bus(self) -> AsyncioEndpoint:
         if self._event_bus is None:
             raise AttributeError("No event bus configured for this peer pool")
         return self._event_bus
@@ -161,10 +161,13 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         available_slots = self.max_peers - len(self)
 
         try:
+            connected_remotes = {
+                peer.remote for peer in self.connected_nodes.values()
+            }
             candidates = await self.wait(
                 backend.get_peer_candidates(
                     num_requested=available_slots,
-                    num_connected_peers=len(self),
+                    connected_remotes=connected_remotes,
                 ),
                 timeout=REQUEST_PEER_CANDIDATE_TIMEOUT,
             )
@@ -242,24 +245,26 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     async def start_peer(self, peer: BasePeer) -> None:
         self.run_child_service(peer)
         await self.wait(peer.events.started.wait(), timeout=1)
+        if peer.is_operational:
+            self._add_peer(peer, ())
+        else:
+            self.logger.debug("%s was cancelled immediately, not adding to pool", peer)
+
         try:
-            with peer.collect_sub_proto_messages() as buffer:
-                await self.wait(
-                    peer.boot_manager.events.finished.wait(),
-                    timeout=self._peer_boot_timeout
-                )
+            await self.wait(
+                peer.boot_manager.events.finished.wait(),
+                timeout=self._peer_boot_timeout
+            )
         except TimeoutError as err:
             self.logger.debug('Timout waiting for peer to boot: %s', err)
             await peer.disconnect(DisconnectReason.timeout)
             return
         except HandshakeFailure as err:
-            await self.connection_tracker.record_failure(peer.remote, err)
+            self.connection_tracker.record_failure(peer.remote, err)
             raise
         else:
-            if peer.is_operational:
-                self._add_peer(peer, buffer.get_messages())
-            else:
-                self.logger.debug('%s disconnected during boot-up, not adding to pool', peer)
+            if not peer.is_operational:
+                self.logger.debug('%s disconnected during boot-up, dropped from pool', peer)
 
     def _add_peer(self,
                   peer: BasePeer,
@@ -348,7 +353,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             raise
         except HandshakeFailure as e:
             self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
-            await self.connection_tracker.record_failure(remote, e)
+            self.connection_tracker.record_failure(remote, e)
             raise
         except COMMON_PEER_CONNECTION_EXCEPTIONS as e:
             self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
@@ -427,7 +432,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         """
         peer = cast(BasePeer, peer)
         if peer.remote in self.connected_nodes:
-            self.logger.info("%s finished, removing from pool", peer)
+            self.logger.info("%s finished[%s], removing from pool", peer, peer.disconnect_reason)
             self.connected_nodes.pop(peer.remote)
         else:
             self.logger.warning(

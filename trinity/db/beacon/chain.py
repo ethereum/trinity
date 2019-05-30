@@ -18,7 +18,7 @@ from eth_typing import Hash32
 from eth2.beacon.types.states import (
     BeaconState,
 )
-from eth2.beacon.types.blocks import (  # noqa: F401
+from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
 )
 
@@ -49,14 +49,14 @@ class BaseAsyncBeaconChainDB(ABC):
         pass
 
     @abstractmethod
+    async def coro_get_genesis_block_root(self) -> Hash32:
+        pass
+
+    @abstractmethod
     async def coro_get_canonical_block_by_slot(
             self,
             slot: int,
             block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
-        pass
-
-    @abstractmethod
-    async def coro_get_canonical_block_root_by_slot(self, slot: int) -> Hash32:
         pass
 
     @abstractmethod
@@ -106,6 +106,17 @@ class BaseAsyncBeaconChainDB(ABC):
         pass
 
     #
+    # Attestation API
+    #
+    @abstractmethod
+    def coro_get_attestation_key_by_root(self, attestation_root: Hash32)-> Tuple[Hash32, int]:
+        pass
+
+    @abstractmethod
+    def coro_attestation_exists(self, attestation_root: Hash32) -> bool:
+        pass
+
+    #
     # Raw Database API
     #
     @abstractmethod
@@ -125,8 +136,8 @@ class AsyncBeaconChainDBPreProxy(BaseAsyncBeaconChainDB):
 
     coro_persist_block = async_method('persist_block')
     coro_get_canonical_block_root = async_method('get_canonical_block_root')
+    coro_get_genesis_block_root = async_method('get_genesis_block_root')
     coro_get_canonical_block_by_slot = async_method('get_canonical_block_by_slot')
-    coro_get_canonical_block_root_by_slot = async_method('get_canonical_block_root_by_slot')
     coro_get_canonical_head = async_method('get_canonical_head')
     coro_get_canonical_head_root = async_method('get_canonical_head_root')
     coro_get_finalized_head = async_method('get_finalized_head')
@@ -136,6 +147,8 @@ class AsyncBeaconChainDBPreProxy(BaseAsyncBeaconChainDB):
     coro_persist_block_chain = async_method('persist_block_chain')
     coro_get_state_by_root = async_method('get_state_by_root')
     coro_persist_state = async_method('persist_state')
+    coro_get_attestation_key_by_root = async_method('get_attestation_key_by_root')
+    coro_attestation_exists = async_method('attestation_exists')
     coro_exists = async_method('exists')
     coro_get = async_method('get')
 

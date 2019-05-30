@@ -11,6 +11,7 @@ from typing import (
     Awaitable,
     Callable,
     Dict,
+    Iterable,
     List,
     NamedTuple,
     FrozenSet,
@@ -24,6 +25,7 @@ from eth_typing import Hash32
 from eth_utils import (
     humanize_hash,
     humanize_seconds,
+    to_tuple,
     ValidationError,
 )
 from eth_utils.toolz import (
@@ -39,6 +41,7 @@ from eth.constants import (
     EMPTY_UNCLE_HASH,
 )
 from eth.exceptions import HeaderNotFound
+from eth.rlp.blocks import BaseBlock
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransaction
@@ -82,6 +85,9 @@ from trinity._utils.datastructures import (
 from trinity._utils.ema import EMA
 from trinity._utils.headers import (
     skip_complete_headers,
+)
+from trinity._utils.humanize import (
+    humanize_integer_sequence,
 )
 from trinity._utils.timer import Timer
 
@@ -178,15 +184,16 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
                 #   - a bug: old headers were pruned out of the tracker, but not in DB yet
 
                 # Skip over all headers found in db, (could happen with a long backtrack)
-                new_headers = await self.wait(
-                    skip_complete_headers(headers, self.logger, completion_check)
+                completed_headers, new_headers = await self.wait(
+                    skip_complete_headers(headers, completion_check)
                 )
-                if len(new_headers) < len(headers):
+                if completed_headers:
                     self.logger.debug(
-                        "Sync skipping over already stored headers (%d) from %s..%s",
-                        len(headers),
-                        headers[0],
-                        headers[-1],
+                        "Chain sync skipping over (%d) already stored headers %s: %s..%s",
+                        len(completed_headers),
+                        humanize_integer_sequence(h.block_number for h in completed_headers),
+                        completed_headers[0],
+                        completed_headers[-1],
                     )
                     if not new_headers:
                         # no new headers to process, wait for next batch to come in
@@ -204,16 +211,19 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
                     # Nowhere to go from here, re-raise
                     raise
 
-                # This appears to be a fork, since the parent header is persisted,
-                self.logger.info(
-                    "Received a header before processing its parent during regular sync. "
-                    "Canonical head is %s, the received header "
-                    "is %s, with parent %s. This might be a fork, importing to determine if it is "
-                    "the longest chain",
-                    await self.db.coro_get_canonical_head(),
-                    new_headers[0],
-                    parent_header,
-                )
+                # If this isn't a trivial case, log it as a possible fork
+                canonical_head = await self.db.coro_get_canonical_head()
+                if canonical_head not in new_headers and canonical_head != parent_header:
+                    self.logger.info(
+                        "Received a header before processing its parent during regular sync. "
+                        "Canonical head is %s, the received header "
+                        "is %s, with parent %s. This might be a fork, importing to determine if it "
+                        "is the longest chain",
+                        canonical_head,
+                        new_headers[0],
+                        parent_header,
+                    )
+
                 # Set first header's parent as finished
                 task_integrator.set_finished_dependency(parent_header)
                 # Re-register the header tasks, which will now succeed
@@ -963,12 +973,16 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         )
         self._block_importer = block_importer
 
+        # Track if any headers have been received yet
+        self._got_first_header = asyncio.Event()
+
     async def _run(self) -> None:
         head = await self.wait(self.db.coro_get_canonical_head())
         self._block_import_tracker.set_finished_dependency(head)
         self.run_daemon_task(self._launch_prerequisite_tasks())
         self.run_daemon_task(self._assign_body_download_to_peers())
         self.run_daemon_task(self._import_ready_blocks())
+        self.run_daemon_task(self._display_stats())
         await super()._run()
 
     def register_peer(self, peer: BasePeer) -> None:
@@ -1045,6 +1059,37 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
 
         :param headers: headers that have the block bodies downloaded
         """
+        unimported_blocks = self._headers_to_blocks(headers)
+
+        for block in unimported_blocks:
+            timer = Timer()
+            _, new_canonical_blocks, old_canonical_blocks = await self.wait(
+                self._block_importer.import_block(block)
+            )
+
+            if new_canonical_blocks == (block,):
+                # simple import of a single new block.
+                self.logger.info("Imported block %d (%d txs) in %.2f seconds",
+                                 block.number, len(block.transactions), timer.elapsed)
+            elif not new_canonical_blocks:
+                # imported block from a fork.
+                self.logger.info("Imported non-canonical block %d (%d txs) in %.2f seconds",
+                                 block.number, len(block.transactions), timer.elapsed)
+            elif old_canonical_blocks:
+                self.logger.info(
+                    "Chain Reorganization: Imported block %d (%d txs) in %.2f "
+                    "seconds, %d blocks discarded and %d new canonical blocks added",
+                    block.number,
+                    len(block.transactions),
+                    timer.elapsed,
+                    len(old_canonical_blocks),
+                    len(new_canonical_blocks),
+                )
+            else:
+                raise Exception("Invariant: unreachable code path")
+
+    @to_tuple
+    def _headers_to_blocks(self, headers: Iterable[BlockHeader]) -> Iterable[BaseBlock]:
         for header in headers:
             vm_class = self.chain.get_vm_class(header)
             block_class = vm_class.get_block_class()
@@ -1059,32 +1104,22 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
                                 for tx in body.transactions]
                 uncles = body.uncles
 
-            block = block_class(header, transactions, uncles)
-            timer = Timer()
-            _, new_canonical_blocks, old_canonical_blocks = await self.wait(
-                self._block_importer.import_block(block)
-            )
+            yield block_class(header, transactions, uncles)
 
-            if new_canonical_blocks == (block,):
-                # simple import of a single new block.
-                self.logger.info("Imported block %d (%d txs) in %.2f seconds",
-                                 block.number, len(transactions), timer.elapsed)
-            elif not new_canonical_blocks:
-                # imported block from a fork.
-                self.logger.info("Imported non-canonical block %d (%d txs) in %.2f seconds",
-                                 block.number, len(transactions), timer.elapsed)
-            elif old_canonical_blocks:
-                self.logger.info(
-                    "Chain Reorganization: Imported block %d (%d txs) in %.2f "
-                    "seconds, %d blocks discarded and %d new canonical blocks added",
-                    block.number,
-                    len(transactions),
-                    timer.elapsed,
-                    len(old_canonical_blocks),
-                    len(new_canonical_blocks),
-                )
-            else:
-                raise Exception("Invariant: unreachable code path")
+    async def _display_stats(self) -> None:
+        self.logger.debug("Regular sync waiting for first header to arrive")
+        await self.wait(self._got_first_header.wait())
+        self.logger.debug("Regular sync first header arrived")
+
+        while self.is_operational:
+            await self.sleep(5)
+            self.logger.debug(
+                "(in progress, queued, max size) of bodies, receipts: %r. Write capacity? %s",
+                [(q.num_in_progress(), len(q), q._maxsize) for q in (
+                    self._block_body_tasks,
+                )],
+                "yes" if self._db_buffer_capacity.is_set() else "no",
+            )
 
 
 def _is_body_empty(header: BlockHeader) -> bool:

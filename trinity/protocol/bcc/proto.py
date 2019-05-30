@@ -7,9 +7,12 @@ from typing import (
 from eth_typing import (
     Hash32,
 )
-
+from lahja import (
+    BroadcastConfig,
+)
 import ssz
 
+from p2p.kademlia import Node
 from p2p.protocol import Protocol
 
 from eth2.beacon.types.blocks import BaseBeaconBlock
@@ -18,6 +21,9 @@ from eth2.beacon.typing import (
     Slot,
 )
 
+from trinity.endpoint import (
+    TrinityEventBusEndpoint,
+)
 from trinity.protocol.bcc.commands import (
     Status,
     StatusMessage,
@@ -28,6 +34,10 @@ from trinity.protocol.bcc.commands import (
     NewBeaconBlock,
     NewBeaconBlockMessage,
     Attestations,
+    AttestationsMessage,
+)
+from trinity.protocol.bcc.events import (
+    SendBeaconBlocksEvent,
 )
 
 from trinity._utils.logging import HasExtendedDebugLogger
@@ -51,13 +61,13 @@ class BCCProtocol(HasExtendedDebugLogger, Protocol):
     peer: "BCCPeer"
 
     def send_handshake(self,
-                       genesis_hash: Hash32,
+                       genesis_root: Hash32,
                        head_slot: Slot,
                        network_id: int) -> None:
         resp = StatusMessage(
             protocol_version=self.version,
             network_id=network_id,
-            genesis_hash=genesis_hash,
+            genesis_root=genesis_root,
             head_slot=head_slot,
         )
         cmd = Status(self.cmd_id_offset, self.snappy_support)
@@ -86,7 +96,9 @@ class BCCProtocol(HasExtendedDebugLogger, Protocol):
 
     def send_attestation_records(self, attestations: Tuple[Attestation, ...]) -> None:
         cmd = Attestations(self.cmd_id_offset, self.snappy_support)
-        header, body = cmd.encode(tuple(ssz.encode(attestation) for attestation in attestations))
+        header, body = cmd.encode(AttestationsMessage(
+            encoded_attestations=tuple(ssz.encode(attestation) for attestation in attestations)),
+        )
         self.transport.send(header, body)
 
     def send_new_block(self, block: BaseBeaconBlock) -> None:
@@ -95,3 +107,36 @@ class BCCProtocol(HasExtendedDebugLogger, Protocol):
             encoded_block=ssz.encode(block),
         ))
         self.transport.send(header, body)
+
+
+class ProxyBCCProtocol:
+    """
+    A ``BCCProtocol`` that can be used outside of the process that runs the peer pool. Any
+    action performed on this class is delegated to the process that runs the peer pool.
+    """
+
+    def __init__(self,
+                 remote: Node,
+                 event_bus: TrinityEventBusEndpoint,
+                 broadcast_config: BroadcastConfig):
+        self.remote = remote
+        self._event_bus = event_bus
+        self._broadcast_config = broadcast_config
+
+    def send_get_blocks(self,
+                        block_slot_or_root: Union[Slot, Hash32],
+                        max_blocks: int,
+                        request_id: int) -> None:
+        raise NotImplementedError("Not yet implemented")
+
+    def send_blocks(self, blocks: Tuple[BaseBeaconBlock, ...], request_id: int) -> None:
+        self._event_bus.broadcast_nowait(
+            SendBeaconBlocksEvent(self.remote, blocks, request_id),
+            self._broadcast_config,
+        )
+
+    def send_attestation_records(self, attestations: Tuple[Attestation, ...]) -> None:
+        raise NotImplementedError("Not yet implemented")
+
+    def send_new_block(self, block: BaseBeaconBlock) -> None:
+        raise NotImplementedError("Not yet implemented")

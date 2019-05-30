@@ -5,6 +5,9 @@ from typing import (
 from eth_utils import (
     encode_hex,
 )
+from eth_typing import (
+    Hash32,
+)
 
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
 from eth2.beacon.types.blocks import (
@@ -13,6 +16,9 @@ from eth2.beacon.types.blocks import (
 
 from eth2.beacon.typing import (
     Slot,
+)
+from lahja import (
+    BroadcastConfig,
 )
 
 from p2p.peer import (
@@ -25,20 +31,49 @@ from p2p.peer_pool import (
 from p2p.protocol import (
     Command,
     _DecodedMsgType,
+    PayloadType,
 )
 from p2p.exceptions import HandshakeFailure
+from p2p.kademlia import Node
 from p2p.p2p_proto import DisconnectReason
 
+from trinity.endpoint import TrinityEventBusEndpoint
 from trinity.protocol.bcc.handlers import BCCExchangeHandler
 
-from trinity.protocol.bcc.proto import BCCProtocol
+from trinity.protocol.bcc.proto import BCCProtocol, ProxyBCCProtocol
 from trinity.protocol.bcc.commands import (
+    GetBeaconBlocks,
     Status,
     StatusMessage,
 )
 from trinity.protocol.bcc.context import (
     BeaconContext,
 )
+from trinity.protocol.common.peer_pool_event_bus import (
+    PeerPoolEventServer,
+)
+from .events import (
+    GetBeaconBlocksEvent,
+    SendBeaconBlocksEvent,
+)
+
+
+class BCCProxyPeer:
+    """
+    A ``BCCPeer`` that can be used from any process instead of the actual peer pool peer.
+    Any action performed on the ``BCCProxyPeer`` is delegated to the actual peer in the pool.
+    This does not yet mimic all APIs of the real peer.
+    """
+
+    def __init__(self, sub_proto: ProxyBCCProtocol):
+        self.sub_proto = sub_proto
+
+    @classmethod
+    def from_node(cls,
+                  remote: Node,
+                  event_bus: TrinityEventBusEndpoint,
+                  broadcast_config: BroadcastConfig) -> 'BCCProxyPeer':
+        return cls(ProxyBCCProtocol(remote, event_bus, broadcast_config))
 
 
 class BCCPeer(BasePeer):
@@ -52,14 +87,12 @@ class BCCPeer(BasePeer):
 
     head_slot: Slot = None
 
+    _genesis_root: Hash32 = None
+
     async def send_sub_proto_handshake(self) -> None:
-        # TODO: pass accurate `block_class: Type[BaseBeaconBlock]` under per BeaconStateMachine fork
-        genesis = await self.chain_db.coro_get_canonical_block_by_slot(
-            self.context.genesis_slot,
-            BeaconBlock,
-        )
+        genesis_root = await self.get_genesis_root()
         head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
-        self.sub_proto.send_handshake(genesis.signing_root, head.slot, self.network_id)
+        self.sub_proto.send_handshake(genesis_root, head.slot, self.network_id)
 
     async def process_sub_proto_handshake(self, cmd: Command, msg: _DecodedMsgType) -> None:
         if not isinstance(cmd, Status):
@@ -73,20 +106,21 @@ class BCCPeer(BasePeer):
                 f"{self} network ({msg['network_id']}) does not match ours "
                 f"({self.network_id}), disconnecting"
             )
-        # TODO: pass accurate `block_class: Type[BaseBeaconBlock]` under per BeaconStateMachine fork
-        genesis_block = await self.chain_db.coro_get_canonical_block_by_slot(
-            self.context.genesis_slot,
-            BeaconBlock,
-        )
-        # TODO change message descriptor to 'genesis_root', accounting for the spec
-        if msg['genesis_hash'] != genesis_block.signing_root:
+        genesis_root = await self.get_genesis_root()
+
+        if msg['genesis_root'] != genesis_root:
             await self.disconnect(DisconnectReason.useless_peer)
             raise HandshakeFailure(
-                f"{self} genesis ({encode_hex(msg['genesis_hash'])}) does not "
-                f"match ours ({encode_hex(genesis_block.signing_root)}), disconnecting"
+                f"{self} genesis ({encode_hex(msg['genesis_root'])}) does not "
+                f"match ours ({encode_hex(genesis_root)}), disconnecting"
             )
 
         self.head_slot = msg['head_slot']
+
+    async def get_genesis_root(self) -> Hash32:
+        if self._genesis_root is None:
+            self._genesis_root = await self.chain_db.coro_get_genesis_block_root()
+        return self._genesis_root
 
     @property
     def network_id(self) -> int:
@@ -110,3 +144,30 @@ class BCCPeerFactory(BasePeerFactory):
 
 class BCCPeerPool(BasePeerPool):
     peer_factory_class = BCCPeerFactory
+
+
+class BCCPeerPoolEventServer(PeerPoolEventServer[BCCPeer]):
+    """
+    BCC protocol specific ``PeerPoolEventServer``. See ``PeerPoolEventServer`` for more info.
+    """
+
+    subscription_msg_types = frozenset({GetBeaconBlocks})
+
+    async def _run(self) -> None:
+
+        self.run_daemon_event(
+            SendBeaconBlocksEvent,
+            lambda peer, ev: peer.sub_proto.send_blocks(ev.blocks, ev.request_id)
+        )
+
+        await super()._run()
+
+    async def handle_native_peer_message(self,
+                                         remote: Node,
+                                         cmd: Command,
+                                         msg: PayloadType) -> None:
+
+        if isinstance(cmd, GetBeaconBlocks):
+            await self.event_bus.broadcast(GetBeaconBlocksEvent(remote, cmd, msg))
+        else:
+            raise Exception(f"Command {cmd} is not broadcasted")
