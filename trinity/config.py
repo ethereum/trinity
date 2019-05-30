@@ -616,11 +616,11 @@ class Eth1AppConfig(BaseAppConfig):
         """
         Return the ``Node`` class that trinity uses.
         """
-        from trinity.nodes.full import FullNode
         from trinity.nodes.light import LightNode
+        from trinity.nodes.bzzeth import BZZETHNode
 
         if self.database_mode is Eth1DbMode.FULL:
-            return FullNode
+            return BZZETHNode
         elif self.database_mode is Eth1DbMode.LIGHT:
             return LightNode
         else:

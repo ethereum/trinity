@@ -49,6 +49,10 @@ from trinity.protocol.bcc.peer import BCCPeerPool
 from trinity.protocol.bcc.servers import (
     BCCReceiveServer,
 )
+from trinity.protocol.bzzeth import (
+    BZZETHPeerPool,
+    BZZETHContext,
+)
 
 DIAL_IN_OUT_RATIO = 0.75
 BOUND_IP = '0.0.0.0'
@@ -301,6 +305,18 @@ class BCCServer(BaseServer[BCCPeerPool]):
             chain=cast(BeaconChain, self.chain),
             peer_pool=self.peer_pool,
             token=self.cancel_token,
+        )
+
+
+class BZZETHServer(BaseServer[BZZETHPeerPool]):
+    def _make_peer_pool(self) -> BZZETHPeerPool:
+        context = BZZETHContext()
+        return BZZETHPeerPool(
+            privkey=self.privkey,
+            max_peers=self.max_peers,
+            context=context,
+            token=self.cancel_token,
+            event_bus=self.event_bus
         )
 
 
