@@ -11,10 +11,12 @@ from typing import (
     Tuple,
     Type,
 )
+import queue
 
 from cancel_token import CancelToken
 
 from eth.db.chain import ChainDB
+from eth.db.atomic import AtomicDB
 from eth.rlp.sedes import trie_root
 
 from eth_hash.auto import keccak
@@ -90,7 +92,7 @@ class Node(NamedTuple):
     kind: NodeKind
     rlp: bytes
     obj: List[bytes]  # this type is wrong but mypy doesn't support recursive types
-    keccak: bytes
+    keccak: Hash32
 
     def __str__(self) -> str:
         return f"Node(kind={self.kind.name} hash={self.keccak.hex()})"
@@ -399,14 +401,17 @@ class GetNodeChunkValidator(BaseValidator[NodeChunk]):
         TODO: This does not check that the trie is in any way balanced, though maybe it
         should.
         """
-        print(f'response: {type(response)}')
-
         def children_of(node_rlp: bytes) -> Tuple[Hash32, ...]:
             node_obj = decode_node(node_rlp)
             references, _leaves = _get_children(node_obj, depth=0)
             return tuple(node_hash for (_depth, node_hash) in references)
 
         # TODO: response is a Dict, not a NodeChunk. Fixing this will take a while.
+
+        if len(response['nodes']) == 0:  # type: ignore
+            # the caller should figure this out
+            return
+
         first, *rest = response['nodes']  # type: ignore
         expected_hashes = set(children_of(first))
 
@@ -626,3 +631,77 @@ class FirehoseRequestServer(BaseRequestServer):
         )
         nodes = [node.rlp for (_prefix, node) in iterator]
         peer.sub_proto.send_node_chunk(request_id, nodes)
+
+
+# Syncer
+
+
+async def simple_get_chunk_sync(db: AtomicDB, peer: FirehosePeer, state_root: Hash32) -> None:
+    """
+    Sends GetNodeChunk requests to the remote peer until we've finished syncing. This is
+    not much faster than Fast Sync but it should still be some improvement: we can
+    batch requests more intelligently.
+
+    TODO: pipelining requests should improve performance by a lot
+
+    Rough strategy:
+    - You have a queue of unexplored hashes, which starts as just the state_root
+    - fire off a GetNodeChunk request for the first unexplored hash
+    - validate that the response was rooted in the sub-trie you asked for
+    - insert the received nodes into the local database
+      - add the un-returned children of these nodes to the unexplored hash queue
+    - repeat until there are no more unexplored hashes
+
+    A productionized strategy might use a priority queue rather than a queue, where
+    priority is the key of the node. I think this would minimize the size of the queue and
+    also allow a basic progress indicator.
+    """
+
+    unexplored_hashes: queue.Queue[Tuple[Nibbles, Hash32]] = queue.Queue()
+    unexplored_hashes.put(((), state_root))
+
+    def make_node(node_rlp: bytes) -> Node:
+        node = decode_node(node_rlp)
+        node_type = get_node_type(node)
+        node_hash = keccak(node_rlp)
+
+        return Node(
+            kind=NodeKind(node_type),
+            rlp=node_rlp,
+            obj=node,
+            keccak=node_hash
+        )
+
+    while not unexplored_hashes.empty():
+        path, requested_node_hash = unexplored_hashes.get()
+        result = await peer.requests.get_node_chunk(
+            state_root,
+            path,
+            timeout=1,
+        )
+        # TODO: result is a Dict, not a Command, this is likely what normalizers are for
+        nodes = result['nodes']  # type: ignore
+        assert len(nodes)  # TODO: do something smarter here
+
+        expected_nodes: Dict[Hash32, Nibbles] = {requested_node_hash: path}
+
+        for node_rlp in nodes:
+            node = make_node(node_rlp)
+
+            # if we weren't expecting this node the remote sent us bad data
+            assert node.keccak in expected_nodes
+
+            db.set(node.keccak, node.rlp)
+            node_path = expected_nodes.pop(node.keccak)
+
+            if node.kind == NodeKind.LEAF:
+                continue
+
+            children = _get_children_with_nibbles(node, node_path)
+            for child_path, child_hash in children:
+                if child_hash == b'':
+                    continue
+                expected_nodes[child_hash] = child_path
+
+        for node_hash, node_path in expected_nodes.items():
+            unexplored_hashes.put((node_path, node_hash))

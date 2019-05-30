@@ -214,9 +214,8 @@ class MockPeerPool(firehose.FirehosePeerPool):
             self.connected_nodes[peer.remote] = peer
 
 
-@pytest.mark.asyncio
-async def test_firehose(request, event_loop):
-    # TODO: consider using chaindb_1000, we're building a database with fake data
+@pytest.fixture
+async def linked_peers(request, event_loop):
     cancel_token = CancelToken('test_firehose')
 
     alice_factory = firehose.FirehosePeerFactory(
@@ -234,6 +233,14 @@ async def test_firehose(request, event_loop):
     alice, bob = await get_directly_linked_peers(
         request, event_loop, alice_factory, bob_factory
     )
+
+    return alice, bob, cancel_token
+
+
+@pytest.mark.asyncio
+async def test_firehose(linked_peers):
+    # TODO: consider using chaindb_1000, we're building a database with fake data
+    alice, bob, cancel_token = linked_peers
 
     random.seed(4000)  # make the test deterministic
     trie = make_random_trie(2000)
@@ -290,3 +297,50 @@ async def test_firehose(request, event_loop):
     assert len(result['nodes']) == 122  # TODO: check that this number is correct
 
     await request_server.cancel()
+
+
+@pytest.mark.asyncio
+async def test_get_chunk_sync(linked_peers):
+    alice, bob, cancel_token = linked_peers
+
+    # 1. Create a database with many nodes
+
+    random.seed(5000)
+    trie = make_random_trie(1000)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    # 2. Sit a request server atop it
+
+    alice_peer_pool = MockPeerPool([alice])
+    request_server = firehose.FirehoseRequestServer(
+        db=chaindb,
+        peer_pool=alice_peer_pool,
+        token=cancel_token,
+    )
+
+    asyncio.ensure_future(request_server.run())
+
+    current_task = asyncio.current_task()
+    current_task.add_done_callback(
+        lambda _: asyncio.ensure_future(request_server.cancel())
+    )
+
+    await asyncio.sleep(0)
+
+    # 3. Start a syncer and watch it go
+
+    db = dict()
+    bob_atomic = AtomicDB(db)
+
+    await firehose.simple_get_chunk_sync(
+        bob_atomic, bob, state_root=trie.root_hash
+    )
+
+    # 4. Check that the final result matches the original database
+
+    assert len(trie.db) == len(db)
+    for key in trie.db.keys():
+        assert key in db
+        assert db[key] == trie.db[key]
