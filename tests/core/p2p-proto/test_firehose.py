@@ -234,7 +234,9 @@ async def linked_peers(request, event_loop):
         request, event_loop, alice_factory, bob_factory
     )
 
-    return alice, bob, cancel_token
+    yield alice, bob, cancel_token
+
+    cancel_token.trigger()
 
 
 @pytest.mark.asyncio
@@ -321,11 +323,6 @@ async def test_get_chunk_sync(linked_peers):
     )
 
     asyncio.ensure_future(request_server.run())
-
-    current_task = asyncio.current_task()
-    current_task.add_done_callback(
-        lambda _: asyncio.ensure_future(request_server.cancel())
-    )
 
     await asyncio.sleep(0)
 
