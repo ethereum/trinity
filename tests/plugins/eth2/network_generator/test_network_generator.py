@@ -7,7 +7,8 @@ from trinity._utils.async_iter import (
 @pytest.mark.parametrize(
     'command',
     (
-        ('trinity-beacon', 'testnet', "--num=5"),
+        ('trinity-beacon', 'testnet', "--num=1", "--genesis-delay=10"),
+        ('trinity-beacon', 'testnet', "--num=1", "--genesis-time=1559315137"),
     )
 )
 @pytest.mark.asyncio
