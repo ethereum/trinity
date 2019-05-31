@@ -139,7 +139,7 @@ class NetworkGeneratorPlugin(BaseMainProcessPlugin):
         logger.info("Generating testnet")
         network_dir = args.network_dir
         if len(os.listdir(network_dir)) > 0:
-            logger.error("This directory is not empty, won't create network files here.")
+            logger.error("This directory is not empty, won't create network files here")
             sys.exit(1)
 
         clients = cls.generate_trinity_root_dirs(network_dir)
@@ -161,7 +161,7 @@ class NetworkGeneratorPlugin(BaseMainProcessPlugin):
                       network_dir: Path,
                       clients: Tuple[Client, ...]) -> Dict[Any, Any]:
         logger = cls.get_logger()
-        logger.info(f"Creating {num} validators' keys")
+        logger.info("Creating %s validators' keys", num)
         keys_dir = network_dir / KEYS_DIR
         keys_dir.mkdir()
 
@@ -206,7 +206,8 @@ class NetworkGeneratorPlugin(BaseMainProcessPlugin):
         genesis_time = get_genesis_time()
         print(genesis_time)
         logger.info(
-            f"Genesis time will be {humanize_seconds(genesis_time-int(time.time()))} from now"
+            "Genesis time will be %s from now",
+            humanize_seconds(genesis_time - int(time.time())),
         )
         state = state.copy(
             genesis_time=genesis_time,
