@@ -122,7 +122,7 @@ class NetworkGeneratorPlugin(BaseMainProcessPlugin):
         )
         genesis_time_group.add_argument(
             "--genesis-delay",
-            help="Seconds before genesis time from now",
+            help="Set seconds delay after the genesis state is created as genesis time",
             type=int,
         )
         genesis_time_group.add_argument(
@@ -204,7 +204,6 @@ class NetworkGeneratorPlugin(BaseMainProcessPlugin):
             genesis_time=dummy_time,
         )
         genesis_time = get_genesis_time()
-        print(genesis_time)
         logger.info(
             "Genesis time will be %s from now",
             humanize_seconds(genesis_time - int(time.time())),
