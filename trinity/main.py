@@ -3,6 +3,7 @@ import asyncio
 import logging
 import multiprocessing
 from typing import (
+    cast,
     Any,
     Dict,
     Iterable,
@@ -146,31 +147,30 @@ def launch_node(args: Namespace, trinity_config: TrinityConfig) -> None:
 
 
 async def launch_node_coro(args: Namespace, trinity_config: TrinityConfig) -> None:
-    endpoint = TrinityEventBusEndpoint()
-    NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
-    node = NodeClass(endpoint, trinity_config)
-
     networking_connection_config = ConnectionConfig.from_name(
         NETWORKING_EVENTBUS_ENDPOINT,
         trinity_config.ipc_dir
     )
+    async with TrinityEventBusEndpoint.serve(networking_connection_config) as endpoint:
+        # this is a temporary fix to make mypy happy until we get rid of the
+        # trinity specific endpoint subclass
+        endpoint = cast(TrinityEventBusEndpoint, endpoint)
 
-    await endpoint.start_serving(networking_connection_config)
-    asyncio.ensure_future(endpoint.auto_connect_new_announced_endpoints())
-    await endpoint.connect_to_endpoints(
-        ConnectionConfig.from_name(MAIN_EVENTBUS_ENDPOINT, trinity_config.ipc_dir),
-        # Plugins that run within the networking process broadcast and receive on the
-        # the same endpoint
-        networking_connection_config,
-    )
-    await endpoint.announce_endpoint()
+        NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
+        node = NodeClass(endpoint, trinity_config)
 
-    # This is a second PluginManager instance governing plugins in a shared process.
-    plugin_manager = PluginManager(SharedProcessScope(endpoint), get_all_plugins())
-    plugin_manager.prepare(args, trinity_config)
+        asyncio.ensure_future(endpoint.auto_connect_new_announced_endpoints())
+        await endpoint.connect_to_endpoints(
+            ConnectionConfig.from_name(MAIN_EVENTBUS_ENDPOINT, trinity_config.ipc_dir),
+        )
+        await endpoint.announce_endpoint()
 
-    asyncio.ensure_future(handle_networking_exit(node, plugin_manager, endpoint))
-    asyncio.ensure_future(node.run())
+        # This is a second PluginManager instance governing plugins in a shared process.
+        plugin_manager = PluginManager(SharedProcessScope(endpoint), get_all_plugins())
+        plugin_manager.prepare(args, trinity_config)
+
+        asyncio.ensure_future(handle_networking_exit(node, plugin_manager, endpoint))
+        await node.run()
 
 
 @setup_cprofiler('run_database_process')

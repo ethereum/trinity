@@ -15,7 +15,7 @@ class AsyncioIsolatedPlugin(BaseIsolatedPlugin):
     @property
     def event_bus(self) -> TrinityEventBusEndpoint:
         if self._event_bus is None:
-            self._event_bus = TrinityEventBusEndpoint()
+            self._event_bus = TrinityEventBusEndpoint(self.normalized_name)
         return self._event_bus
 
     def _spawn_start(self) -> None:
@@ -30,9 +30,11 @@ class AsyncioIsolatedPlugin(BaseIsolatedPlugin):
     async def _prepare_start(self) -> None:
         connection_config = ConnectionConfig.from_name(
             self.normalized_name,
-            self.boot_info.trinity_config.ipc_dir,
+            self.boot_info.trinity_config.ipc_dir
         )
-        await self.event_bus.start_serving(connection_config)
+        await self.event_bus.start()
+        await self.event_bus.start_server(connection_config.path)
+
         await self.event_bus.connect_to_endpoints(
             ConnectionConfig.from_name(
                 MAIN_EVENTBUS_ENDPOINT, self.boot_info.trinity_config.ipc_dir
