@@ -4,6 +4,7 @@ Trinity
 v0.1.0-alpha.26
 --------------------------
 
+- `#696 <https://github.com/ethereum/trinity/pull/696>`_: Feature: Expose events for Transaction and NewBlockHashes commands on the EventBus
 - `#682 <https://github.com/ethereum/trinity/pull/682>`_: Feature: Make logging config more ergonomic, flexible and consistent
 - `#636 <https://github.com/ethereum/trinity/pull/636>`_: Feature: Run UPnP Service as an isolated plugin
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Feature: Expose certain peer pool events and move RequestServer into an isolated plugin
