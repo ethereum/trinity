@@ -71,7 +71,32 @@ TConnectedStreams = Tuple[
 ]
 
 
+class DelayReader(asyncio.StreamReader):
+    DELAY = 0.002
+
+    async def readuntil(self, separator=b'\n'):
+        await asyncio.sleep(self.DELAY)
+        return await super().readuntil(separator)
+
+    async def read(self, n=-1):
+        await asyncio.sleep(self.DELAY)
+        return await super().read(n)
+
+    async def readexactly(self, n):
+        await asyncio.sleep(self.DELAY)
+        return await super().readexactly(n)
+
+    async def __anext__(self):
+        await asyncio.sleep(self.DELAY)
+        val = await self.readline()
+        if val == b'':
+            raise StopAsyncIteration
+        return val
+
+
 def get_directly_connected_streams() -> TConnectedStreams:
+#    bob_reader = DelayReader()
+#    alice_reader = DelayReader()
     bob_reader = asyncio.StreamReader()
     alice_reader = asyncio.StreamReader()
     # Link the alice's writer to the bob's reader, and the bob's writer to the
