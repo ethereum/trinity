@@ -1,7 +1,10 @@
+import asyncio
 import enum
+import itertools
 from typing import (
     Any,
     cast,
+    Callable,
     Dict,
     FrozenSet,
     Iterable,
@@ -53,9 +56,9 @@ from trie.utils.nodes import (
     get_node_type,
 )
 
-from p2p.exceptions import HandshakeFailure
+from p2p.exceptions import HandshakeFailure, PeerConnectionLost
 from p2p.p2p_proto import DisconnectReason
-from p2p.peer import BasePeer, BasePeerFactory
+from p2p.peer import BasePeer, BasePeerFactory, PeerSubscriber
 from p2p.peer_pool import BasePeerPool
 from p2p.protocol import (
     BaseRequest,
@@ -64,6 +67,7 @@ from p2p.protocol import (
     PayloadType,
     Protocol,
 )
+from p2p.service import BaseService
 
 from trinity.protocol.common.exchanges import BaseExchange
 from trinity.protocol.common.handlers import BaseExchangeHandler
@@ -71,6 +75,8 @@ from trinity.protocol.common.normalizers import BaseNormalizer, NoopNormalizer
 from trinity.protocol.common.servers import BaseRequestServer
 from trinity.protocol.common.trackers import BasePerformanceTracker
 from trinity.protocol.common.validators import BaseValidator, noop_payload_validator
+
+from trinity.protocol.common.managers import ExchangeManager
 
 from trinity.sync.full.hexary_trie import _get_children
 
@@ -445,7 +451,7 @@ class GetLeafCountExchange(BaseExchange[BigEndianInt, BigEndianInt, BigEndianInt
                        timeout: float = None) -> None:
         validator = GetLeafCountValidator()
         request = self.request_class(
-            request_id=1,
+            request_id=1,  # this will be replaced later
             state_root=state_root,
             prefix=prefix,
         )
@@ -472,7 +478,7 @@ class GetNodeChunkExchange(BaseExchange[Tuple[int, Hash32, bytes], None, NodeChu
         # root?
         validator = GetNodeChunkValidator()
         request = self.request_class(
-            request_id=1,
+            request_id=1,  # this will be replaced later
             state_root=state_root,
             prefix=prefix,
         )
@@ -488,7 +494,7 @@ class GetNodeChunkExchange(BaseExchange[Tuple[int, Hash32, bytes], None, NodeChu
 # Handlers
 
 
-class FirehoseExchangeHandler(BaseExchangeHandler):
+class AFirehoseExchangeHandler(BaseExchangeHandler):
     _exchange_config = {
         'get_leaf_count': GetLeafCountExchange,
         'get_node_chunk': GetNodeChunkExchange,
@@ -496,6 +502,113 @@ class FirehoseExchangeHandler(BaseExchangeHandler):
 
     get_leaf_count: GetLeafCountExchange
     get_node_chunk: GetNodeChunkExchange
+
+
+class FirehoseExchangeManager(PeerSubscriber, BaseService):
+    """
+    A hacky minimal replacement for ExchangeManager
+    """
+
+    msg_queue_maxsize = 100
+
+    def __init__(self, peer: BasePeer, msg_types: FrozenSet[Type[Command]]) -> None:
+        self.peer = peer
+        self.cancel_token = peer.cancel_token
+        super().__init__(token=self.cancel_token)
+        self._msg_types = msg_types
+
+        self.pending_requests: Dict[int, asyncio.Future] = {}
+        self.counter = itertools.count()
+
+    @property
+    def subscription_msg_types(self):
+        return self._msg_types
+
+    async def launch_service(self) -> None:
+        self.peer.run_daemon(self)
+        await self.events.started.wait()
+
+    async def get_result(
+            self,
+            request: BaseRequest,
+            normalizer: BaseNormalizer,
+            validate_result: Callable,
+            payload_validator: Callable,
+            tracker: BasePerformanceTracker,
+            timeout: float = None) -> Any:
+        # TODO: play with a timeout_bucket? record a blacklist? use the tracker?
+
+        # TODO: maybe the request_id belongs in a header? Wrap this message in another?
+        request_id = next(self.counter)
+        assert isinstance(request.command_payload, tuple)
+        request.command_payload = (request_id,) + request.command_payload[1:]
+
+        assert request_id not in self.pending_requests
+        self.pending_requests[request_id] = future = asyncio.Future()
+
+        self.peer.sub_proto.send_request(request)
+
+        try:
+            payload = await self.wait(future, timeout=timeout)
+        except TimeoutError as err:
+            del self.pending_requests[request_id]
+            tracker.record_timeout()
+            raise
+
+        payload_validator(payload)
+        result = normalizer.normalize_result(payload)
+        validate_result(result)
+
+        return result
+
+    async def _run(self) -> None:
+        with self.subscribe_peer(self.peer):
+            while self.is_operational:
+                _peer, cmd, msg = await self.wait(self.msg_queue.get())
+
+                request_id = msg['request_id']
+
+                # TODO: log and continue, don't crash!
+                assert request_id in self.pending_requests
+
+                future = self.pending_requests[request_id]
+                future.set_result(msg)
+
+    def deregister_peer(self, peer: BasePeer) -> None:
+        # notify all the pending futures, the response is never coming
+        for future in self.pending_requests.values():
+            # TODO: check that this unblocks the wait()ing coros
+            future.set_exception(PeerConnectionLost(''))
+        # TODO: stop the service, our work here is done
+
+
+class FirehoseExchangeHandler:
+    """
+    A (hopefully simpler) replacement for BaseExchangeHandler
+    """
+    def __init__(self, peer: BasePeer) -> None:
+        self.peer = peer
+
+        self.manager = FirehoseExchangeManager(peer, frozenset((
+            GetLeafCountExchange.response_cmd_type,
+            GetNodeChunkExchange.response_cmd_type,
+        )))
+
+        self.get_leaf_count = GetLeafCountExchange(self.manager)
+        self.get_node_chunk = GetNodeChunkExchange(self.manager)
+
+#        self.get_leaf_count = GetLeafCountExchange(
+#            ExchangeManager(peer, GetLeafCountExchange.response_cmd_type, peer.cancel_token)
+#        )
+#        self.get_node_chunk = GetNodeChunkExchange(
+#            ExchangeManager(peer, GetNodeChunkExchange.response_cmd_type, peer.cancel_token)
+#        )
+
+    def get_stats(self) -> Dict[str, str]:
+        """
+        Part of the BaseExchangeHandler interface
+        """
+        raise NotImplemented()
 
 
 # Protocol
