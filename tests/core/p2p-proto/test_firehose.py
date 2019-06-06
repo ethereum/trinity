@@ -341,3 +341,47 @@ async def test_get_chunk_sync(linked_peers):
     for key in trie.db.keys():
         assert key in db
         assert db[key] == trie.db[key]
+
+
+
+@pytest.mark.asyncio
+async def test_parallel_get_chunk_sync(linked_peers):
+    alice, bob, cancel_token = linked_peers
+
+    # 1. Create a database with many nodes
+
+    random.seed(5000)
+    trie = make_random_trie(1000)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    # 2. Sit a request server atop it
+
+    alice_peer_pool = MockPeerPool([alice])
+    request_server = firehose.FirehoseRequestServer(
+        db=chaindb,
+        peer_pool=alice_peer_pool,
+        token=cancel_token,
+    )
+
+    asyncio.ensure_future(request_server.run())
+
+    await asyncio.sleep(0)
+
+    # 3. Start a syncer and watch it go
+
+    db = dict()
+    bob_atomic = AtomicDB(db)
+
+    syncer = firehose.ParallelSimpleChunkSync(
+        bob_atomic, bob, state_root=trie.root_hash
+    )
+    await syncer.run()
+
+    # 4. Check that the final result matches the original database
+
+    assert len(trie.db) == len(db)
+    for key in trie.db.keys():
+        assert key in db
+        assert db[key] == trie.db[key]

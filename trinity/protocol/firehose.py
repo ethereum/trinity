@@ -749,6 +749,19 @@ class FirehoseRequestServer(BaseRequestServer):
 # Syncer
 
 
+def make_node(node_rlp: bytes) -> Node:
+    node = decode_node(node_rlp)
+    node_type = get_node_type(node)
+    node_hash = keccak(node_rlp)
+
+    return Node(
+        kind=NodeKind(node_type),
+        rlp=node_rlp,
+        obj=node,
+        keccak=node_hash
+    )
+
+
 async def simple_get_chunk_sync(db: AtomicDB, peer: FirehosePeer, state_root: Hash32) -> None:
     """
     Sends GetNodeChunk requests to the remote peer until we've finished syncing. This is
@@ -772,18 +785,6 @@ async def simple_get_chunk_sync(db: AtomicDB, peer: FirehosePeer, state_root: Ha
 
     unexplored_hashes: queue.Queue[Tuple[Nibbles, Hash32]] = queue.Queue()
     unexplored_hashes.put(((), state_root))
-
-    def make_node(node_rlp: bytes) -> Node:
-        node = decode_node(node_rlp)
-        node_type = get_node_type(node)
-        node_hash = keccak(node_rlp)
-
-        return Node(
-            kind=NodeKind(node_type),
-            rlp=node_rlp,
-            obj=node,
-            keccak=node_hash
-        )
 
     while not unexplored_hashes.empty():
         path, requested_node_hash = unexplored_hashes.get()
@@ -818,3 +819,78 @@ async def simple_get_chunk_sync(db: AtomicDB, peer: FirehosePeer, state_root: Ha
 
         for node_hash, node_path in expected_nodes.items():
             unexplored_hashes.put((node_path, node_hash))
+
+
+class ParallelSimpleChunkSync:
+    """
+    A syncer which takes advantage of request pipelining
+    """
+    def __init__(self, db: AtomicDB, peer: FirehosePeer, state_root: Hash32):
+        self.db = db
+        self.peer = peer
+        self.state_root = state_root
+
+        self.unexplored_hashes = queue.Queue()
+        self.unexplored_hashes.put(((), state_root))
+
+        self.max_concurrency = 5
+
+        # If a fetch is running other coros will block until it is not running
+        self.fetch_not_running = asyncio.Event()
+        self.fetch_not_running.set()
+
+    async def run(self):
+        coros = [self._run() for _ in range(self.max_concurrency)]
+        await asyncio.gather(*coros)
+
+    async def _run(self):
+        while True:
+            while True:
+                try:
+                    path, node_hash = self.unexplored_hashes.get_nowait()
+                    break
+                except queue.Empty:
+                    if self.fetch_not_running.is_set():
+                        # the queue is empty and no other coros are working, we're done!
+                        return
+                    # the queue is empty but other coros are working, wait until they're done
+                    await self.fetch_not_running.wait()
+
+            self.fetch_not_running.clear()  # the fetch has begun!
+            try:
+                await self.fetch(path, node_hash)
+            finally:
+                self.fetch_not_running.set()
+
+    async def fetch(self, path: Nibbles, requested_node_hash: Hash32):
+        result = await self.peer.requests.get_node_chunk(
+            self.state_root,
+            path,
+            timeout=1,
+        )
+
+        nodes = result['nodes']  # type: ignore
+        assert len(nodes)  # TODO: do something smarter here
+
+        expected_nodes: Dict[Hash32, Nibbles] = {requested_node_hash: path}
+
+        for node_rlp in nodes:
+            node = make_node(node_rlp)
+
+            # if we weren't expecting this node the remote sent us bad data
+            assert node.keccak in expected_nodes
+
+            self.db.set(node.keccak, node.rlp)
+            node_path = expected_nodes.pop(node.keccak)
+
+            if node.kind == NodeKind.LEAF:
+                continue
+
+            children = _get_children_with_nibbles(node, node_path)
+            for child_path, child_hash in children:
+                if child_hash == b'':
+                    continue
+                expected_nodes[child_hash] = child_path
+
+        for node_hash, node_path in expected_nodes.items():
+            self.unexplored_hashes.put((node_path, node_hash))
