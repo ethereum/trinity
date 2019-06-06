@@ -273,20 +273,17 @@ class Validator(BaseService):
                    state_machine: BaseBeaconStateMachine) -> Hash32:
         post_state = state_machine.state_transition.apply_state_transition_without_block(
             state,
-            # TODO: Change back to `slot` instead of `slot + 1`.
-            # Currently `apply_state_transition_without_block` only returns the post state
-            # of `slot - 1`, so we increment it by one to get the post state of `slot`.
-            cast(Slot, slot + 1),
+            slot,
         )
         self.logger.debug(
-            bold_green("Skip block at slot=%s  post_state_root=%s"),
+            bold_green("Skip block at slot=%s  post_state=%s"),
             slot,
-            encode_hex(post_state.root),
+            post_state,
         )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
         self.chain.chaindb.persist_state(post_state)
-        return post_state.root
+        return post_state
 
     def _is_attesting(self,
                       validator_index: ValidatorIndex,
