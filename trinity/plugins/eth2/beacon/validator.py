@@ -17,9 +17,6 @@ from typing import (
 from cancel_token import (
     CancelToken,
 )
-from eth_typing import (
-    Hash32,
-)
 from eth_utils import (
     encode_hex,
     to_tuple,
@@ -270,7 +267,7 @@ class Validator(BaseService):
     def skip_block(self,
                    slot: Slot,
                    state: BeaconState,
-                   state_machine: BaseBeaconStateMachine) -> Hash32:
+                   state_machine: BaseBeaconStateMachine) -> BeaconState:
         post_state = state_machine.state_transition.apply_state_transition_without_block(
             state,
             slot,
