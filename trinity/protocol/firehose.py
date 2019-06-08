@@ -1,6 +1,7 @@
 import asyncio
 import enum
 import itertools
+import struct
 from typing import (
     Any,
     cast,
@@ -18,9 +19,13 @@ import queue
 
 from cancel_token import CancelToken
 
-from eth.db.chain import ChainDB
 from eth.db.atomic import AtomicDB
+from eth.db.chain import BaseChainDB, ChainDB
+from eth.db.backends.base import BaseAtomicDB
+from eth.db.header import BaseHeaderDB
+from eth.rlp.headers import BlockHeader
 from eth.rlp.sedes import trie_root
+from eth.rlp.receipts import Receipt
 
 from eth_hash.auto import keccak
 
@@ -29,9 +34,11 @@ from eth_utils import (
 )
 
 from eth_typing import (
+    BlockNumber,
     Hash32,
 )
 
+import rlp
 from rlp import sedes
 from rlp.sedes import (
     BigEndianInt,
@@ -79,6 +86,264 @@ from trinity.protocol.common.validators import BaseValidator, noop_payload_valid
 from trinity.protocol.common.managers import ExchangeManager
 
 from trinity.sync.full.hexary_trie import _get_children
+
+from trinity.rlp.block_body import BlockBody
+
+
+# trinity.db.eth1.chain
+
+
+"""
+TODO: Full Sync trinity for 1000 blocks and Full Sync geth for 1000 blocks, then commit
+both databases to the repository. Once those are in write some tests which assert that all
+these methods give the same answers.
+"""
+
+
+class GethHeaderDB(BaseHeaderDB):
+    """
+    An implemention of HeaderDB which can read from Geth's database format
+    """
+    # from https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go
+    LAST_BLOCK = b'LastBlock'
+
+    HEADER_PREFIX = b'h'
+    HEADER_HASH_SUFFIX = b'n'
+    HEADER_NUMBER_PREFIX = b'H'
+    HEADER_TD_SUFFIX = b't'
+
+    ### Helpers
+
+    @staticmethod
+    def _encode_block_number(num: int) -> bytes:
+        # big-endian 8-byte unsigned int
+        return struct.pack('>Q', num)
+
+    @staticmethod
+    def _decode_block_number(num: bytes) -> int:
+        # big-endian 8-byte unsigned int
+        return struct.unpack('>Q', num)[0]
+
+    @classmethod
+    def _header_key(cls, encoded_block_number: bytes, block_hash: Hash32) -> bytes:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L81
+        return cls.HEADER_PREFIX + encoded_block_number + block_hash
+
+    @classmethod
+    def _block_number_key(cls, block_hash: Hash32) -> bytes:
+        return cls.HEADER_NUMBER_PREFIX + block_hash
+
+    def _number_for_block(self, block_hash: Hash32) -> bytes:
+        key = self._block_number_key(block_hash)
+        return self.db.get(key)
+
+    ### Canonical Chain API
+
+    def get_canonical_block_hash(self, block_number: BlockNumber) -> Hash32:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L91
+
+        encoded_block_num = self._encode_block_number(block_number)
+        return self.db.get(
+            self.HEADER_PREFIX + encoded_block_num + self.HEADER_HASH_SUFFIX
+        )
+
+    def get_canonical_block_header_by_number(self, block_number: BlockNumber) -> BlockHeader:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L45
+        block_hash = self.get_canonical_block_hash(block_number)
+
+        encoded_block_number = self._encode_block_number(block_number)
+        # TODO: rlp.decode this block header?
+        encoded_header = self.db.get(self._header_key(encoded_block_number, block_hash))
+        return rlp.decode(encoded_header, sedes=BlockHeader)
+
+    def get_canonical_head(self) -> BlockHeader:
+        last_head_hash = self.db.get(self.LAST_BLOCK)
+
+        return self.get_block_header_by_hash(last_head_hash)
+
+    ### Header API
+
+    def get_block_header_by_hash(self, block_hash: Hash32) -> BlockHeader:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L48
+
+        # TODO: does block_hash need to be encoded in some way?
+        encoded_block_number = self._number_for_block(block_hash)
+        block_key = self._header_key(encoded_block_number, block_hash)
+        encoded_header = self.db.get(block_key)
+
+        return rlp.decode(encoded_header, sedes=BlockHeader)
+
+    def get_score(self, block_hash: Hash32) -> int:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L46
+
+        block_num = self._number_for_block(block_hash)
+        block_key = self._header_key(block_num, block_hash)
+
+        td = self.db.get(block_key + self.HEADER_TD_SUFFIX)
+        return rlp.decode(td, sedes=sedes.big_endian_int)
+
+    def header_exists(self, block_hash: Hash32) -> bool:
+        block_number_key = self._block_number_key(block_hash)
+        if not self.db.exists(block_number_key):
+            return False
+
+        encoded_block_number = self._number_for_block(block_hash)
+        block_key = self._header_key(encoded_block_number, block_hash)
+
+        return self.db.exists(block_key)
+
+    def persist_header(self,
+                       header: BlockHeader
+                       ) -> Tuple[Tuple[BlockHeader, ...], Tuple[BlockHeader, ...]]:
+        raise NotImplementedError("Writing to Geth databases is not supported")
+
+    def persist_header_chain(self,
+                             headers: Iterable[BlockHeader]
+                             ) -> Tuple[Tuple[BlockHeader, ...], Tuple[BlockHeader, ...]]:
+        raise NotImplementedError("Writing to Geth databases is not supported")
+
+
+class GethChainDB(GethHeaderDB, BaseChainDB):
+    """
+    An implementation of ChainDB which can read from Geth's database format
+    """
+
+    def __init__(self, db: BaseAtomicDB) -> None:
+        self.db = db
+
+    ### Helpers
+
+    BLOCK_BODY_PREFIX = b'b'
+    TX_LOOKUP_PREFIX = b'l'
+    BLOCK_RECEIPTS_PREFIX = b'r'
+
+    @classmethod
+    def _block_body_key(cls, encoded_block_number: bytes, block_hash: Hash32) -> bytes:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L50
+        return cls.BLOCK_BODY_PREFIX + encoded_block_number + block_hash
+
+    def _get_block_body(self, block_hash: Hash32) -> BlockBody:
+        block_number = self._number_for_block(block_hash)
+        key = self._block_body_key(block_number, block_hash)
+        encoded_body = self.db.get(key)
+        return rlp.decode(encoded_body, sedes=BlockBody)
+
+    def _get_block_transactions(self,
+                                block_header: BlockHeader) -> Iterable['BaseTransaction']:
+        body = self._get_block_body(block_hash)
+        return body.transactions
+
+    ### Header API
+
+    def get_block_uncles(self, uncles_hash: Hash32) -> List[BlockHeader]:
+        body = self._get_block_body(uncles_hash)
+        return list(body.uncles)  # (it's naturally a tuple)
+
+    ### Block API
+
+    def persist_block(self,
+                      block: 'BaseBlock'
+                      ) -> Tuple[Tuple[Hash32, ...], Tuple[Hash32, ...]]:
+        raise NotImplementedError("Writing to Geth databases is not supported")
+
+    def persist_uncles(self, uncles: Tuple[BlockHeader]) -> Hash32:
+        raise NotImplementedError("Writing to Geth databases is not supported")
+
+    ### Transaction API
+
+    def add_receipt(self,
+                    block_header: BlockHeader,
+                    index_key: int, receipt: Receipt) -> Hash32:
+        raise NotImplementedError("Writing to Geth databases is not supported")
+
+    def add_transaction(self,
+                        block_header: BlockHeader,
+                        index_key: int, transaction: 'BaseTransaction') -> Hash32:
+        raise NotImplementedError("Writing to Geth databases is not supported")
+
+    def get_block_transactions(
+            self,
+            block_header: BlockHeader,
+            transaction_class: Type['BaseTransaction']) -> Iterable['BaseTransaction']:
+        body = self._get_block_body(block_header.hash)
+
+        encoded = [rlp.encode(txn) for txn in body.transactions]
+        decoded = [rlp.decode(txn, sedes=transaction_class) for txn in encoded]
+
+        return decoded
+
+    def get_block_transaction_hashes(self, block_header: BlockHeader) -> Iterable[Hash32]:
+        body = self._get_block_body(block_header.hash)
+        return [txn.hash for txn in body.transactions]
+
+    def get_receipt_by_index(self,
+                             block_number: BlockNumber,
+                             receipt_index: int) -> Receipt:
+
+        # 1. Fetch the header from the database
+        # 2. Read the requested receipt out of it
+
+        # TODO: implement receipts
+
+        raise NotImplementedError("ChainDB classes must implement this method")
+
+    def get_receipts(self,
+                     header: BlockHeader,
+                     receipt_class: Type[Receipt]) -> Iterable[Receipt]:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L51
+
+        # geth stores receipts with a custom RLP:
+
+        # type receiptStorageRLP struct {
+        #	PostStateOrStatus []byte
+        #   CumulativeGasUsed uint64
+        #   TxHash            common.Hash
+        #   ContractAddress   common.Address
+        #   Logs              []*LogForStorage
+        #   GasUsed           uint64
+        # }
+
+        # TODO: implement receipts
+
+        raise NotImplementedError("ChainDB classes must implement this method")
+
+    def get_transaction_by_index(
+            self,
+            block_number: BlockNumber,
+            transaction_index: int,
+            transaction_class: Type['BaseTransaction']) -> 'BaseTransaction':
+
+        block_header = self.get_canonical_block_header_by_number(block_number)
+        txns = self.get_block_transactions(block_header, transaction_class)
+        return txns[transaction_index]
+
+    def get_transaction_index(self, transaction_hash: Hash32) -> Tuple[BlockNumber, int]:
+        # https://github.com/ethereum/go-ethereum/blob/v1.8.27/core/rawdb/schema.go#L53
+
+        block_hash = self.db.get(self.TX_LOOKUP_PREFIX + transaction_hash)
+        # https://github.com/ethereum/go-ethereum/blob/f9aa1cd21f776a4d3267d9c89772bdc622468d6d/core/rawdb/accessors_indexes.go#L36
+        # there was also a legacy thing which went here
+        assert len(block_hash) == 32
+
+        encoded_block_num = self._number_for_block(block_hash)
+        block_num = self._decode_block_number(encoded_block_num)
+
+        body = self._get_block_body(block_hash)
+        for index, transaction in enumerate(body.transactions):
+            if transaction.hash == transaction_hash:
+                return block_num, index
+        raise Exception('could not find transaction')
+
+    ### Raw Database API
+
+    def exists(self, key: bytes) -> bool:
+        return self.db.exists(key)
+
+    def get(self, key: bytes) -> bytes:
+        return self.db[key]
+
+    def persist_trie_data_dict(self, trie_data_dict: Dict[Hash32, bytes]) -> None:
+        raise NotImplementedError("Writing to Geth databases is not supported")
 
 
 # Trie Utils
@@ -825,7 +1090,7 @@ class ParallelSimpleChunkSync:
     """
     A syncer which takes advantage of request pipelining
     """
-    def __init__(self, db: AtomicDB, peer: FirehosePeer, state_root: Hash32):
+    def __init__(self, db: AtomicDB, peer: FirehosePeer, state_root: Hash32, concurrency):
         self.db = db
         self.peer = peer
         self.state_root = state_root
@@ -833,7 +1098,7 @@ class ParallelSimpleChunkSync:
         self.unexplored_hashes = queue.Queue()
         self.unexplored_hashes.put(((), state_root))
 
-        self.max_concurrency = 5
+        self.max_concurrency = concurrency
 
         # If a fetch is running other coros will block until it is not running
         self.fetch_not_running = asyncio.Event()
