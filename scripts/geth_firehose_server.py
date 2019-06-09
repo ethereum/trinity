@@ -1,7 +1,11 @@
 """
 A firehose peer which serves requests using a geth database
 """
+import asyncio
 import argparse
+import logging
+
+from cancel_token import CancelToken
 
 from eth.db.backends.level import LevelDB
 from eth.db.chain import ChainDB
@@ -9,44 +13,41 @@ from eth.vm.forks import HomesteadVM
 
 from p2p import ecies
 
-from trinity.protocol.firehose import GethChainDB
+from trinity.protocol import firehose
+
+
+logger = logging.getLogger('firehose')
 
 
 def main(args):
-    #privkey = ecies.generate_privkey()
-
-    # TODO: add an option to throw an error if the db doesn't exist
+    # TODO: throw an error if the db doesn't exist, don't just make a new one!
     base_db = LevelDB(db_path=args.db)
-    chaindb = GethChainDB(base_db)
+    chaindb = firehose.GethChainDB(base_db)
 
-    # Make a PeerPool (it has to implement at least the below:
-    """
-    BaseServer uses self.peer_pool:
-        peer_pool.get_peer_factory()
-        peer_pool.is_full
-        peer_pool.is_valid_connection_candidate(peer.remote)
-        peer_pool.connected_nodes  - this part is annoying!
-        peer_pool.start_peer()
-    """
+    state_root = chaindb.get_canonical_head().state_root
+    logger.info(f'State root: {state_root.hex()}')
 
-    # Make a tcp listener which listens on a port
+    cancel_token = CancelToken('server')
+    privkey = ecies.generate_privkey()
 
-    # Pull out the handshaking code and run it on incoming connections
+    peer_pool = firehose.MiniPeerPool(privkey, cancel_token)
+    listener = firehose.FirehoseListener(privkey, args.port, peer_pool, cancel_token)
+    server = firehose.FirehoseRequestServer(chaindb, peer_pool, cancel_token)
 
-    # Start a request server which subscribes to the peer pool
+    async def wait_shutdown():
+        await asyncio.wait_for(server.events.finished.wait(), timeout=1)
+        await asyncio.wait_for(listener.events.finished.wait(), timeout=1)
+        await asyncio.wait_for(peer_pool.events.finished.wait(), timeout=1)
 
-    # Run forever!
-
-    """
-    FirehoseListener - protocol.firehose
-    test_firehose_listener - tests.core.p2p_proto
-
-    A Peer Pool is a bag of peers, to make it easier to talk about "all peers"
-    FirehoseListener is a server which accepts incoming connections and sends them to peer
-      pool once the handshake has succeeded
-    """
-
-    pass
+    loop = asyncio.get_event_loop()
+    try:
+        loop.create_task(server.run())
+        loop.create_task(peer_pool.run())
+        loop.create_task(listener.run())
+        loop.run_forever()
+    except KeyboardInterrupt:
+        cancel_token.trigger()
+        loop.run_until_complete(wait_shutdown())
 
 
 def test_gethchaindb(args):
@@ -56,7 +57,7 @@ def test_gethchaindb(args):
     hypothesis test all these calls to ensure they give the same results.
     """
     base_db = LevelDB(db_path=args.db)
-    chaindb = GethChainDB(base_db)
+    chaindb = firehose.GethChainDB(base_db)
 
     print(chaindb.get_canonical_head())
 
@@ -105,6 +106,8 @@ def test_gethchaindb(args):
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-db', type=str, required=True, help="The geth database to serve from"
@@ -114,4 +117,4 @@ if __name__ == '__main__':
     )
 
     args = parser.parse_args()
-    test_gethchaindb(args)
+    main(args)

@@ -15,9 +15,10 @@ from typing import (
     Tuple,
     Type,
 )
+import secrets
 import queue
 
-from cancel_token import CancelToken
+from cancel_token import CancelToken, OperationCancelled
 
 from eth.db.atomic import AtomicDB
 from eth.db.chain import BaseChainDB, ChainDB
@@ -29,7 +30,9 @@ from eth.rlp.receipts import Receipt
 
 from eth_hash.auto import keccak
 
+from eth_keys import datatypes
 from eth_utils import (
+    big_endian_to_int,
     to_tuple,
 )
 
@@ -63,7 +66,21 @@ from trie.utils.nodes import (
     get_node_type,
 )
 
-from p2p.exceptions import HandshakeFailure, PeerConnectionLost
+from p2p.auth import (
+    decode_authentication,
+    HandshakeResponder,
+    HandshakeInitiator,
+    _handshake
+)
+from p2p.constants import (
+    DEFAULT_PEER_BOOT_TIMEOUT,
+    ENCRYPTED_AUTH_MSG_LEN,
+    HASH_LEN,
+    REPLY_TIMEOUT,
+)
+from p2p import ecies
+from p2p.exceptions import HandshakeFailure, PeerConnectionLost, DecryptionError
+from p2p.kademlia import Address, Node
 from p2p.p2p_proto import DisconnectReason
 from p2p.peer import BasePeer, BasePeerFactory, PeerSubscriber
 from p2p.peer_pool import BasePeerPool
@@ -75,6 +92,7 @@ from p2p.protocol import (
     Protocol,
 )
 from p2p.service import BaseService
+from p2p.transport import Transport
 
 from trinity.protocol.common.exchanges import BaseExchange
 from trinity.protocol.common.handlers import BaseExchangeHandler
@@ -359,14 +377,14 @@ class NodeKind(enum.Enum):
     BRANCH = NODE_TYPE_BRANCH
 
 
-class Node(NamedTuple):
+class TrieNode(NamedTuple):
     kind: NodeKind
     rlp: bytes
     obj: List[bytes]  # this type is wrong but mypy doesn't support recursive types
     keccak: Hash32
 
     def __str__(self) -> str:
-        return f"Node(kind={self.kind.name} hash={self.keccak.hex()})"
+        return f"TrieNode(kind={self.kind.name} hash={self.keccak.hex()})"
 
     @property
     def path_rest(self) -> Nibbles:
@@ -385,7 +403,7 @@ def is_subtree(prefix: Nibbles, nibbles: Nibbles) -> bool:
 
 
 @to_tuple
-def _get_children_with_nibbles(node: Node, prefix: Nibbles) -> Iterable[Tuple[Nibbles, Hash32]]:
+def _get_children_with_nibbles(node: TrieNode, prefix: Nibbles) -> Iterable[Tuple[Nibbles, Hash32]]:
     """
     Return the children of the given node at the given path, including their full paths
     """
@@ -404,7 +422,7 @@ def _get_children_with_nibbles(node: Node, prefix: Nibbles) -> Iterable[Tuple[Ni
             yield (full_path, cast(Hash32, node.obj[i]))
 
 
-def _get_node(db: ChainDB, node_hash: Hash32) -> Node:
+def _get_node(db: ChainDB, node_hash: Hash32) -> TrieNode:
     if len(node_hash) < 32:
         node_rlp = node_hash
     else:
@@ -413,14 +431,14 @@ def _get_node(db: ChainDB, node_hash: Hash32) -> Node:
     node = decode_node(node_rlp)
     node_type = get_node_type(node)
 
-    return Node(kind=NodeKind(node_type), rlp=node_rlp, obj=node, keccak=node_hash)
+    return TrieNode(kind=NodeKind(node_type), rlp=node_rlp, obj=node, keccak=node_hash)
 
 
 def _iterate_trie(db: ChainDB,
-                  node: Node,  # the node we should look at
+                  node: TrieNode,  # the node we should look at
                   sub_trie: Nibbles,  # which sub_trie to return nodes from
                   prefix: Nibbles,  # our current path in the trie
-                  ) -> Iterable[Tuple[Nibbles, Node]]:
+                  ) -> Iterable[Tuple[Nibbles, TrieNode]]:
 
     if node.kind == NodeKind.BLANK:
         return
@@ -451,7 +469,7 @@ def _iterate_trie(db: ChainDB,
 
 
 def iterate_trie(db: ChainDB, root_hash: Hash32,
-                 sub_trie: Nibbles = ()) -> Iterable[Tuple[Nibbles, Node]]:
+                 sub_trie: Nibbles = ()) -> Iterable[Tuple[Nibbles, TrieNode]]:
 
     root_node = _get_node(db, root_hash)
 
@@ -477,12 +495,12 @@ def iterate_leaves(db: ChainDB, root_hash: Hash32,
 
 
 def _iterate_node_chunk(db: ChainDB,
-                        node: Node,
+                        node: TrieNode,
                         sub_trie: Nibbles,
                         prefix: Nibbles,
-                        target_depth: int) -> Iterable[Tuple[Nibbles, Node]]:
+                        target_depth: int) -> Iterable[Tuple[Nibbles, TrieNode]]:
 
-    def recur(new_depth: int) -> Iterable[Tuple[Nibbles, Node]]:
+    def recur(new_depth: int) -> Iterable[Tuple[Nibbles, TrieNode]]:
         for path, child_hash in _get_children_with_nibbles(node, prefix):
             child_node = _get_node(db, child_hash)
             yield from _iterate_node_chunk(db, child_node, sub_trie, path, new_depth)
@@ -522,7 +540,7 @@ def _iterate_node_chunk(db: ChainDB,
 def iterate_node_chunk(db: ChainDB,
                        root_hash: Hash32,
                        sub_trie: Nibbles,
-                       target_depth: int) -> Iterable[Tuple[Nibbles, Node]]:
+                       target_depth: int) -> Iterable[Tuple[Nibbles, TrieNode]]:
     """
     Get all the nodes up to {target_depth} deep from the given sub_trie.
 
@@ -1011,15 +1029,276 @@ class FirehoseRequestServer(BaseRequestServer):
         peer.sub_proto.send_node_chunk(request_id, nodes)
 
 
+class FirehoseListener(BaseService):
+
+    def __init__(self,
+                 privkey: datatypes.PrivateKey,
+                 port: int,
+                 peer_pool: FirehosePeerPool,
+                 token: CancelToken):
+        super().__init__(token)
+
+        self.privkey = privkey
+        self.port = port
+        self.peer_pool = peer_pool
+
+    async def _start_tcp_listener(self) -> None:
+        self._tcp_listener = await asyncio.start_server(
+            self.receive_handshake,
+            host='127.0.0.1',
+            port=self.port,
+        )
+
+    async def _close_tcp_listener(self) -> None:
+        if self._tcp_listener:
+            self._tcp_listener.close()
+            await self._tcp_listener.wait_closed()
+
+    async def _run(self) -> None:
+        await self._start_tcp_listener()
+        self.logger.info(
+            "Starting firehose listener: enode://%s@127.0.0.1:%s",
+            self.privkey.public_key.to_hex()[2:],
+            self.port,
+        )
+        try:
+            await self.cancel_token.wait()
+        finally:
+            await self._close_tcp_listener()
+
+    async def receive_handshake(
+            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        expected_exceptions = (
+            TimeoutError,
+            PeerConnectionLost,
+            HandshakeFailure,
+            asyncio.IncompleteReadError,
+        )
+
+        def cleanup_reader_and_writer() -> None:
+            if not reader.at_eof():
+                reader.feed_eof()
+            writer.close()
+
+        try:
+            await self._receive_handshake(reader, writer)
+        except expected_exceptions as e:
+            self.logger.debug("Could not complete handshake: %s", e)
+            cleanup_reader_and_writer()
+        except OperationCancelled:
+            pass
+        except Exception as e:
+            self.logger.exception("Unexpected error handling handshake")
+            cleanup_reader_and_writer()
+
+    async def _receive_handshake(
+            self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        # TODO: this belongs somewhere in the p2p module
+        msg = await self.wait(
+            reader.read(ENCRYPTED_AUTH_MSG_LEN),
+            timeout=REPLY_TIMEOUT)
+
+        peername = writer.get_extra_info("peername")
+        if peername is None:
+            socket = writer.get_extra_info("socket")
+            sockname = writer.get_extra_info("sockname")
+            raise HandshakeFailure(
+                "Received incoming connection with no remote information:"
+                f"socket={repr(socket)}  sockname={sockname}"
+            )
+
+        ip, socket, *_ = peername
+        remote_address = Address(ip, socket)
+        self.logger.debug("Receiving handshake from %s", remote_address)
+
+        try:
+            ephem_pubkey, initiator_nonce, initiator_pubkey = decode_authentication(
+                msg, self.privkey)
+        except DecryptionError as non_eip8_err:
+            # Try to decode as EIP8
+            got_eip8 = True
+            msg_size = big_endian_to_int(msg[:2])
+            remaining_bytes = msg_size - ENCRYPTED_AUTH_MSG_LEN + 2
+            msg += await self.wait(
+                reader.read(remaining_bytes),
+                timeout=REPLY_TIMEOUT)
+            try:
+                ephem_pubkey, initiator_nonce, initiator_pubkey = decode_authentication(
+                    msg, self.privkey)
+            except DecryptionError as eip8_err:
+                raise HandshakeFailure(
+                    f"Failed to decrypt both EIP8 handshake: {eip8_err}  and "
+                    f"non-EIP8 handshake: {non_eip8_err}"
+                )
+        else:
+            got_eip8 = False
+
+        initiator_remote = Node(initiator_pubkey, remote_address)
+        responder = HandshakeResponder(initiator_remote, self.privkey, got_eip8, self.cancel_token)
+
+        responder_nonce = secrets.token_bytes(HASH_LEN)
+        auth_ack_msg = responder.create_auth_ack_message(responder_nonce)
+        auth_ack_ciphertext = responder.encrypt_auth_ack_message(auth_ack_msg)
+
+        # Use the `writer` to send the reply to the remote
+        writer.write(auth_ack_ciphertext)
+        await self.wait(writer.drain())
+
+        # Call `HandshakeResponder.derive_shared_secrets()` and use return values to create `Peer`
+        aes_secret, mac_secret, egress_mac, ingress_mac = responder.derive_secrets(
+            initiator_nonce=initiator_nonce,
+            responder_nonce=responder_nonce,
+            remote_ephemeral_pubkey=ephem_pubkey,
+            auth_init_ciphertext=msg,
+            auth_ack_ciphertext=auth_ack_ciphertext
+        )
+
+        transport = Transport(
+            remote=initiator_remote,
+            private_key=self.privkey,
+            reader=reader,
+            writer=writer,
+            aes_secret=aes_secret,
+            mac_secret=mac_secret,
+            egress_mac=egress_mac,
+            ingress_mac=ingress_mac,
+        )
+
+        # Create and register peer in peer_pool
+        peer = self.peer_pool.get_peer_factory().create_peer(
+            transport=transport,
+            inbound=True,
+        )
+
+        # TODO: maybe check whether the peer pool is full?
+
+        # We use self.wait() here as a workaround for
+        # https://github.com/ethereum/py-evm/issues/670.
+        await self.wait(self.do_handshake(peer))
+
+    async def do_handshake(self, peer: FirehosePeer) -> None:
+        await peer.do_p2p_handshake()
+        await peer.do_sub_proto_handshake()
+        await self.peer_pool.start_peer(peer)
+
+
+class MiniPeerPool(BaseService):
+    def __init__(self,
+                 privkey: datatypes.PrivateKey,
+                 cancel_token: CancelToken) -> None:
+        super().__init__(cancel_token)
+
+        self.privkey = privkey
+        self.connected_nodes: Dict[Node, BasePeer] = {}
+
+        self._subscribers: List[PeerSubscriber] = list()
+
+    def get_peer_factory(self) -> BasePeerFactory:
+        return FirehosePeerFactory(
+            privkey=self.privkey,
+            context=None,
+            event_bus=None,
+            token=self.cancel_token,
+        )
+
+    async def start_peer(self, peer: FirehosePeer) -> None:
+        self.run_child_service(peer)
+        await self.wait(peer.events.started.wait(), timeout=1)
+        if peer.is_operational:
+            self._add_peer(peer)
+        else:
+            self.logger.debug("%s was cancelled immediately, not adding to pool", peer)
+
+        try:
+            await self.wait(
+                peer.boot_manager.events.finished.wait(),
+                timeout=DEFAULT_PEER_BOOT_TIMEOUT,
+            )
+        except TimeoutError as err:
+            self.logger.debug('Timout waiting for peer to boot: %s', err)
+            await peer.disconnect(DisconnectReason.timeout)
+            return
+        except HandshakeFailure as err:
+            raise
+
+        if not peer.is_operational:
+            self.logger.debug('%s disconnected during boot-up', peer)
+
+    async def _run(self) -> None:
+        await self.cancel_token.wait()
+
+    def _add_peer(self, peer: FirehosePeer) -> None:
+        self.logger.info('Adding %s to pool', peer)
+        self.connected_nodes[peer.remote] = peer
+        peer.add_finished_callback(lambda _: self._peer_finished(peer))
+        for subscriber in self._subscribers:
+            subscriber.register_peer(peer)
+            peer.add_subscriber(subscriber)
+
+    def _peer_finished(self, peer: FirehosePeer) -> None:
+        self.connected_nodes.pop(peer.remote)
+        for subscriber in self._subscribers:
+            subscriber.deregister_peer(peer)
+
+    def subscribe(self, subscriber: PeerSubscriber) -> None:
+        self._subscribers.append(subscriber)
+        for peer in self.connected_nodes.values():
+            subscriber.register_peer(peer)
+            peer.add_subscriber(subscriber)
+
+    def unsubscribe(self, subscriber: PeerSubscriber) -> None:
+        self._subscribers.remove(subscriber)
+        for peer in self.connected_nodes.values():
+            peer.remove_subscriber(subscriber)
+
+
+async def connect_to(pubkey: datatypes.PublicKey, host: str, port: int) -> FirehosePeer:
+    # taken from test_server_incoming_connection
+    use_eip8 = False
+    token = CancelToken('initiator')
+
+    # TODO: connect_to(Node) is probably the better interface
+    receiver = Node(pubkey, Address(host, udp_port=port, tcp_port=port))
+
+    privkey = ecies.generate_privkey()
+
+    initiator = HandshakeInitiator(receiver, privkey, use_eip8, token)
+    reader, writer = await initiator.connect()
+    aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
+        initiator, reader, writer, token)
+
+    transport = Transport(
+        remote=receiver,
+        private_key=initiator.privkey,
+        reader=reader,
+        writer=writer,
+        aes_secret=aes_secret,
+        mac_secret=mac_secret,
+        egress_mac=egress_mac,
+        ingress_mac=ingress_mac,
+    )
+    initiator_peer = FirehosePeer(
+        transport=transport,
+        context=None,
+        inbound=True,
+        token=token,
+    )
+
+    await initiator_peer.do_p2p_handshake()
+    await initiator_peer.do_sub_proto_handshake()
+
+    return initiator_peer
+
+
 # Syncer
 
 
-def make_node(node_rlp: bytes) -> Node:
+def make_node(node_rlp: bytes) -> TrieNode:
     node = decode_node(node_rlp)
     node_type = get_node_type(node)
     node_hash = keccak(node_rlp)
 
-    return Node(
+    return TrieNode(
         kind=NodeKind(node_type),
         rlp=node_rlp,
         obj=node,

@@ -15,9 +15,14 @@ from trie.hexary import HexaryTrie
 from trie.utils.nibbles import bytes_to_nibbles
 
 from p2p import ecies
+from p2p.kademlia import Node, Address
+from p2p.auth import HandshakeInitiator, _handshake
+from p2p.tools.factories import get_open_port
 from p2p.tools.paragon.helpers import (
     get_directly_linked_peers,
 )
+from p2p.transport import Transport
+
 from trinity.protocol import firehose
 
 
@@ -375,7 +380,7 @@ async def test_parallel_get_chunk_sync(linked_peers):
     bob_atomic = AtomicDB(db)
 
     syncer = firehose.ParallelSimpleChunkSync(
-        bob_atomic, bob, state_root=trie.root_hash
+        bob_atomic, bob, state_root=trie.root_hash, concurrency=2,
     )
     await syncer.run()
 
@@ -385,3 +390,117 @@ async def test_parallel_get_chunk_sync(linked_peers):
     for key in trie.db.keys():
         assert key in db
         assert db[key] == trie.db[key]
+
+
+@pytest.fixture
+async def firehose_listener():
+    cancel_token = CancelToken('listener')
+    privkey = ecies.generate_privkey()
+
+    peer_pool = firehose.MiniPeerPool(privkey, cancel_token)
+    port = get_open_port()
+    listener = firehose.FirehoseListener(
+        privkey,
+        port,
+        peer_pool,
+        cancel_token
+    )
+
+    asyncio.ensure_future(peer_pool.run())
+    await peer_pool.events.started.wait()
+
+    asyncio.ensure_future(listener.run())
+    await listener.events.started.wait()
+
+    yield listener
+
+    cancel_token.trigger()
+    await asyncio.wait_for(listener.events.finished.wait(), timeout=1)
+    await asyncio.wait_for(peer_pool.events.finished.wait(), timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_firehose_listener(firehose_listener):
+    peer_pool = firehose_listener.peer_pool
+    port = firehose_listener.port
+
+    # 1. connect a peer to our pool
+
+    pubkey = firehose_listener.privkey.public_key
+    assert len(peer_pool.connected_nodes) == 0
+    peer = await firehose.connect_to(pubkey, '127.0.0.1', port)
+
+    # 2. check that the peer pool has our peer
+
+    while len(peer_pool.connected_nodes) == 0:
+        await asyncio.sleep(0.01)
+    assert len(peer_pool.connected_nodes) == 1
+
+
+@pytest.mark.asyncio
+async def test_listener_server(firehose_listener):
+    """
+    Check that the request server subscribes to the pool
+    """
+    random.seed(6000)
+
+    peer_pool = firehose_listener.peer_pool
+    port = firehose_listener.port
+    token = firehose_listener.cancel_token
+
+    trie = make_random_trie(10)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    server = firehose.FirehoseRequestServer(
+        db=chaindb,
+        peer_pool=peer_pool,
+        token=token
+    )
+    asyncio.ensure_future(server.run())
+    await asyncio.sleep(0)
+
+    # 1. connect a peer to our pool
+
+    pubkey = firehose_listener.privkey.public_key
+    assert len(peer_pool.connected_nodes) == 0
+    peer = await firehose.connect_to(pubkey, '127.0.0.1', port)
+
+    asyncio.ensure_future(peer.run())
+    await asyncio.wait_for(peer.events.started.wait(), timeout=1)
+
+    # 2. check that the peer pool has our peer
+
+    while len(peer_pool.connected_nodes) == 0:
+        await asyncio.sleep(0.01)
+    assert len(peer_pool.connected_nodes) == 1
+
+    # 3. Can the peer make a request and get a response back?
+
+    state_root = trie.root_hash
+    result = await peer.requests.get_node_chunk(
+        state_root, prefix=(0,), timeout=1
+    )
+    assert len(result['nodes']) == 1
+
+    # Make sure everything continues to work when the peer leaves and another peer joins
+
+    peer.cancel_token.trigger()
+    await asyncio.wait_for(peer.events.finished.wait(), timeout=1)
+
+    peer2 = await firehose.connect_to(pubkey, '127.0.0.1', port)
+    asyncio.ensure_future(peer2.run())
+    await asyncio.wait_for(peer2.events.started.wait(), timeout=1)
+
+    result = await peer2.requests.get_node_chunk(
+        state_root, prefix=(0,), timeout=1
+    )
+    assert len(result['nodes']) == 1
+
+    peer2.cancel_token.trigger()
+    await asyncio.wait_for(peer2.events.finished.wait(), timeout=1)
+
+    while len(peer_pool.connected_nodes) != 0:
+        await asyncio.sleep(0.01)
+    assert len(peer_pool.connected_nodes) == 0
