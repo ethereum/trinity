@@ -39,6 +39,7 @@ deps = {
         "ruamel.yaml>=0.15.87",
     ],
     'test': [
+        "eth-tester",
         "hypothesis==3.69.5",
         "pexpect>=4.6, <5",
         "factory-boy==2.11.1",
