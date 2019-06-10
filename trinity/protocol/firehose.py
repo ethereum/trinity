@@ -632,16 +632,18 @@ class Leaves(Command):
     If the leaves for the requested prefix all fit into the max response size {prefix}
     will be the same as {GetLeaves.prefix}. If there were too many leaves then the largest
     prefix for which all nodes fit into the max response size will be included.
-
-    TODO: It's not enough to return the leaves, this also needs to return the full path of
-    each returned leaf.
     """
     _cmd_id = 6
     structure = (
         ('request_id', sedes.big_endian_int),
         ('prefix', sedes.binary),  # encoded in the same way trie nibbles are
-        ('leaves', sedes.CountableList(sedes.binary)),
+
+        # A list of (fullpath, leafrlp) pairs
+        # TODO: blindly copied from Status.capabilities, is it correct?
+        ('leaves', sedes.CountableList(sedes.List([sedes.binary, sedes.binary]))),
     )
+
+    LeafType = List[Tuple[bytes, bytes]]
 
 
 # Requests
@@ -1018,10 +1020,15 @@ class FirehoseProtocol(Protocol):
         header, body = cmd.encode((request_id, nodes))
         self.transport.send(header, body)
 
-    def send_leaves(self, request_id: int, prefix: Nibbles, leaves: List[bytes]) -> None:
+    def send_leaves(self, request_id: int,
+                    prefix: Nibbles, leaves: Leaves.LeafType) -> None:
         cmd = Leaves(self.cmd_id_offset, self.snappy_support)
         nibbles = cast(bytes, encode_nibbles(prefix))
-        header, body = cmd.encode((request_id, nibbles, leaves))
+        encoded_leaves = [
+            (encode_nibbles(path), leaf_rlp)
+            for path, leaf_rlp in leaves
+        ]
+        header, body = cmd.encode((request_id, nibbles, encoded_leaves))
         self.transport.send(header, body)
 
 
@@ -1062,10 +1069,95 @@ class FirehosePeerPool(BasePeerPool):
 # Servers
 
 
+def common_prefix(left: Nibbles, right: Nibbles) -> Nibbles:
+    result = []
+    for left, right in zip(left, right):
+        if left != right:
+            return tuple(result)
+        result.append(left)
+    return min(left, right)  # TODO: more verbose code might be easier to read
+
+
+def get_leaves_response(db: ChainDB,
+                        state_root: Hash32,
+                        nibbles,
+                        max_leaves: int) -> Dict:
+    """A pure method without any asyncio is much easier to use pdb with"""
+
+    # Iterate over all leaves, rooted at the given prefix
+    iterator = iterate_leaves(db, state_root, nibbles)
+
+    # Don't return more than {max_leaves} leaves
+    sliced = list(itertools.islice(iterator, max_leaves + 1))
+
+    # If we ran out of leaves then {sliced} contains every leaf in the requested prefix.
+    # It can be returned directly.
+    if len(sliced) <= max_leaves:
+        return {
+            'prefix': nibbles,
+            'leaves': sliced,
+        }
+
+    # Return the largest subset of {sliced} which constitutes a full bucket.
+    # This is the shortest prefix which not all nodes have in common.
+    # e.g. if all nodes in {sliced} have a prefix of (1,) then we can't fit the entire
+    #      (1,) bucket into a single response. Try to return a longer prefix instead.
+
+    assert len(sliced) > 2  # {max_leaves} should be 2 or larger
+
+    # It's cool that this is a single pass but there has to be a more understandable
+    # way to do this.
+
+    first, *rest = sliced
+    first_path = first[0]
+
+    # once we have all the nodes for a given bucket they're added here
+    leaves_to_return = [first]
+
+    # while we're still trying to fill the next-larger bucket nodes are queued in here
+    leaves_which_might_fit = []
+
+    # the bucket which we're trying to fill
+    last_prefix = None
+    current_prefix = None
+
+    for path, leaf in rest:
+        if current_prefix is None:
+            # this is the second node
+            current_prefix = common_prefix(first_path, path)
+            leaves_to_return.append((path, leaf))
+            continue
+
+        diff = common_prefix(first_path, path)
+        if diff == current_prefix:
+            # this leaf is part of the bucket we're trying to fill
+            leaves_which_might_fit.append((path, leaf))
+            continue
+
+        # this leaf is part of a new bucket!
+        leaves_to_return.extend(leaves_which_might_fit)  # add this bucket to our output
+        leaves_which_might_fit = []
+        leaves_which_might_fit.append((path, leaf))  # add this leaf to the new bucket
+        last_prefix = current_prefix
+        current_prefix = diff
+        continue
+
+    # TODO: what if last_prefix was never set?
+
+    assert len(leaves_to_return) <= max_leaves
+    return {
+        'prefix': last_prefix,
+        'leaves': leaves_to_return
+    }
+
+
 class FirehoseRequestServer(BaseRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
         GetLeafCount, GetNodeChunk, GetLeaves,
     })
+
+    # TODO: think about what a good value for this would be
+    MAX_LEAVES = 1000  # the maximum number of leaves to return in each request
 
     def __init__(self, db: ChainDB,
                  peer_pool: FirehosePeerPool, token: CancelToken = None) -> None:
@@ -1134,8 +1226,15 @@ class FirehoseRequestServer(BaseRequestServer):
     async def handle_get_leaves(self, peer: FirehosePeer, request_id: int,
                                 state_root: Hash32, prefix: bytes) -> None:
         nibbles = decode_nibbles(prefix)
-        # TODO: complete me!
-        peer.sub_proto.send_leaves(request_id, prefix, [])
+        response = get_leaves_response(
+            self.db, state_root, nibbles, self.MAX_LEAVES
+        )
+
+        peer.sub_proto.send_leaves(
+            request_id,
+            response['prefix'],
+            response['leaves'],
+        )
 
 
 class FirehoseListener(BaseService):

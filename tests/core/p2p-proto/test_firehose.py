@@ -332,11 +332,64 @@ async def test_get_leaves(linked_peers):
 
     # 3. Make a request!
 
+    request_server.MAX_LEAVES = 1000
     result = await bob.requests.get_leaves(
         trie.root_hash,
         prefix=(),
         timeout=1,
     )
+    assert len(result['leaves']) == 100
+
+
+def test_get_leaves_response():
+    random.seed(8000)
+    trie = make_random_trie(100)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    # if we want to fetch more than exist.. we get all the leaves!
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(), max_leaves=1000,
+    )
+    assert len(result['leaves']) <= 100
+    assert result['prefix'] == ()
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(), max_leaves=10,
+    )
+    assert len(result['leaves']) <= 10
+
+    assert firehose.is_subtree((), result['prefix'])
+    for path, leaf in result['leaves']:
+        assert firehose.is_subtree(result['prefix'], path)
+
+    # with random.seed(8000) there are 9 nodes with a prefix of (0,)
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(), max_leaves=9,
+    )
+    assert result['prefix'] == (0,)
+    assert len(result['leaves']) == 9
+
+    assert firehose.is_subtree((), result['prefix'])
+    for path, leaf in result['leaves']:
+        assert firehose.is_subtree(result['prefix'], path)
+
+    # with random.seed(8000) there are 2 node with a prefix of (0, 1)
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(), max_leaves=8,
+    )
+    assert result['prefix'] == (0, 1)
+    assert len(result['leaves']) == 2
+
+    # even if we ask for a lot of nodes we can only fill one bucket
+    # a better response format would include the other buckets we're also able to fill!
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(), max_leaves=90,
+    )
+    assert result['prefix'] == (0,)
+    assert len(result['leaves']) == 9
 
 
 @pytest.mark.asyncio
@@ -444,6 +497,8 @@ async def firehose_listener():
 
     asyncio.ensure_future(listener.run())
     await listener.events.started.wait()
+
+    await asyncio.sleep(0.05)  # give it just a little longer to call bind()
 
     yield listener
 
