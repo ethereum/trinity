@@ -307,6 +307,39 @@ async def test_firehose(linked_peers):
 
 
 @pytest.mark.asyncio
+async def test_get_leaves(linked_peers):
+    # TODO: the peer pool and server should also be broken out into a fixture
+    alice, bob, cancel_token = linked_peers
+
+    # 1. Create a database with some nodes
+
+    random.seed(8000)
+    trie = make_random_trie(100)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    # 2. Sit a request server atop it
+
+    alice_peer_pool = MockPeerPool([alice])
+    request_server = firehose.FirehoseRequestServer(
+        db=chaindb,
+        peer_pool=alice_peer_pool,
+        token=cancel_token,
+    )
+    asyncio.ensure_future(request_server.run())
+    await asyncio.sleep(0)
+
+    # 3. Make a request!
+
+    result = await bob.requests.get_leaves(
+        trie.root_hash,
+        prefix=(),
+        timeout=1,
+    )
+
+
+@pytest.mark.asyncio
 async def test_get_chunk_sync(linked_peers):
     alice, bob, cancel_token = linked_peers
 

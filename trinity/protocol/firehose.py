@@ -611,6 +611,39 @@ class NodeChunk(Command):
     )
 
 
+class GetLeaves(Command):
+    """
+    Return all the leaves under the given prefix, unless there are too many
+
+    TODO: accept a list of prefixes and return the leaves for each
+    TODO: Ask Jason what he calls these. They're not trie leaves! They're the things the
+    trie leaves point to...
+    """
+    _cmd_id = 5
+    structure = (
+        ('request_id', sedes.big_endian_int),
+        ('state_root', trie_root),
+        ('prefix', sedes.binary),  # encoded in the same way trie nibbles are
+    )
+
+
+class Leaves(Command):
+    """
+    If the leaves for the requested prefix all fit into the max response size {prefix}
+    will be the same as {GetLeaves.prefix}. If there were too many leaves then the largest
+    prefix for which all nodes fit into the max response size will be included.
+
+    TODO: It's not enough to return the leaves, this also needs to return the full path of
+    each returned leaf.
+    """
+    _cmd_id = 6
+    structure = (
+        ('request_id', sedes.big_endian_int),
+        ('prefix', sedes.binary),  # encoded in the same way trie nibbles are
+        ('leaves', sedes.CountableList(sedes.binary)),
+    )
+
+
 # Requests
 
 
@@ -630,6 +663,19 @@ class GetLeafCountRequest(BaseRequest[BigEndianInt]):
 class GetNodeChunkRequest(BaseRequest[Tuple[int, Hash32, bytes]]):
     cmd_type = GetNodeChunk
     response_type = NodeChunk
+
+    def __init__(self, request_id: int, state_root: Hash32, prefix: Nibbles) -> None:
+        nibbles = cast(bytes, encode_nibbles(prefix))
+        self.command_payload = (
+            request_id,
+            state_root,
+            nibbles,
+        )
+
+
+class GetLeavesRequest(BaseRequest[Tuple[int, Hash32, bytes]]):
+    cmd_type = GetLeaves
+    response_type = Leaves
 
     def __init__(self, request_id: int, state_root: Hash32, prefix: Nibbles) -> None:
         nibbles = cast(bytes, encode_nibbles(prefix))
@@ -662,6 +708,17 @@ class GetNodeChunkTracker(BasePerformanceTracker[GetNodeChunkRequest, NodeChunk]
         return 0
 
     def _get_result_item_count(self, result: NodeChunk) -> int:
+        return 0
+
+
+class GetLeavesTracker(BasePerformanceTracker[GetLeavesRequest, Leaves]):
+    def _get_request_size(self, request: GetLeavesRequest) -> Optional[int]:
+        return len(request.command_payload)
+
+    def _get_result_size(self, result: Leaves) -> int:
+        return 0
+
+    def _get_result_item_count(self, result: Leaves) -> int:
         return 0
 
 
@@ -711,6 +768,11 @@ class GetNodeChunkValidator(BaseValidator[NodeChunk]):
 
             expected_hashes.remove(node_hash)
             expected_hashes.update(children_of(node_rlp))
+
+
+class GetLeavesValidator(BaseValidator[Leaves]):
+    def validate_result(self, response: Leaves) -> None:
+        return
 
 
 # Normalizers
@@ -774,6 +836,30 @@ class GetNodeChunkExchange(BaseExchange[Tuple[int, Hash32, bytes], None, NodeChu
             timeout,
         )
 
+
+class GetLeavesExchange(BaseExchange[Tuple[int, Hash32, bytes], None, Leaves]):
+    _normalizer = NoopNormalizer()
+    request_class = GetLeavesRequest
+    tracker_class = GetLeavesTracker
+
+    async def __call__(self, state_root: Hash32, prefix: Nibbles,  # type: ignore
+                       timeout: float = None) -> Leaves:
+        validator = GetLeavesValidator()
+        request = self.request_class(
+            request_id=1,  # this will be replaced later
+            state_root=state_root,
+            prefix=prefix,
+        )
+
+        return await self.get_result(
+            request,
+            self._normalizer,
+            validator,
+            noop_payload_validator,
+            timeout,
+        )
+
+
 # Handlers
 
 
@@ -781,10 +867,12 @@ class AFirehoseExchangeHandler(BaseExchangeHandler):
     _exchange_config = {
         'get_leaf_count': GetLeafCountExchange,
         'get_node_chunk': GetNodeChunkExchange,
+        'get_leaves': GetLeavesExchange,
     }
 
     get_leaf_count: GetLeafCountExchange
     get_node_chunk: GetNodeChunkExchange
+    get_leaves: GetLeavesExchange
 
 
 class FirehoseExchangeManager(PeerSubscriber, BaseService):
@@ -875,10 +963,12 @@ class FirehoseExchangeHandler:
         self.manager = FirehoseExchangeManager(peer, frozenset((
             GetLeafCountExchange.response_cmd_type,
             GetNodeChunkExchange.response_cmd_type,
+            GetLeavesExchange.response_cmd_type,
         )))
 
         self.get_leaf_count = GetLeafCountExchange(self.manager)
         self.get_node_chunk = GetNodeChunkExchange(self.manager)
+        self.get_leaves = GetLeavesExchange(self.manager)
 
 #        self.get_leaf_count = GetLeafCountExchange(
 #            ExchangeManager(peer, GetLeafCountExchange.response_cmd_type, peer.cancel_token)
@@ -904,8 +994,9 @@ class FirehoseProtocol(Protocol):
         Status,
         GetLeafCount, LeafCount,
         GetNodeChunk, NodeChunk,
+        GetLeaves, Leaves,
     )
-    cmd_length = 5
+    cmd_length = 7
 
     peer: 'FirehosePeer'
 
@@ -925,6 +1016,12 @@ class FirehoseProtocol(Protocol):
         # TODO: what type should nodes have?
         cmd = NodeChunk(self.cmd_id_offset, self.snappy_support)
         header, body = cmd.encode((request_id, nodes))
+        self.transport.send(header, body)
+
+    def send_leaves(self, request_id: int, prefix: Nibbles, leaves: List[bytes]) -> None:
+        cmd = Leaves(self.cmd_id_offset, self.snappy_support)
+        nibbles = cast(bytes, encode_nibbles(prefix))
+        header, body = cmd.encode((request_id, nibbles, leaves))
         self.transport.send(header, body)
 
 
@@ -967,7 +1064,7 @@ class FirehosePeerPool(BasePeerPool):
 
 class FirehoseRequestServer(BaseRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
-        GetLeafCount, GetNodeChunk,
+        GetLeafCount, GetNodeChunk, GetLeaves,
     })
 
     def __init__(self, db: ChainDB,
@@ -991,6 +1088,12 @@ class FirehoseRequestServer(BaseRequestServer):
             state_root = cast(Hash32, msg['state_root'])
             prefix = cast(bytes, msg['prefix'])
             await self.handle_get_node_chunk(peer, request_id, state_root, prefix)
+        elif isinstance(cmd, GetLeaves):
+            msg = cast(Dict[str, Any], msg)
+            request_id = cast(int, msg['request_id'])
+            state_root = cast(Hash32, msg['state_root'])
+            prefix = cast(bytes, msg['prefix'])
+            await self.handle_get_leaves(peer, request_id, state_root, prefix)
 
     async def handle_get_leaf_count(self, peer: FirehosePeer, request_id: int,
                                     state_root: Hash32, prefix: bytes) -> None:
@@ -1027,6 +1130,12 @@ class FirehoseRequestServer(BaseRequestServer):
         )
         nodes = [node.rlp for (_prefix, node) in iterator]
         peer.sub_proto.send_node_chunk(request_id, nodes)
+
+    async def handle_get_leaves(self, peer: FirehosePeer, request_id: int,
+                                state_root: Hash32, prefix: bytes) -> None:
+        nibbles = decode_nibbles(prefix)
+        # TODO: complete me!
+        peer.sub_proto.send_leaves(request_id, prefix, [])
 
 
 class FirehoseListener(BaseService):
