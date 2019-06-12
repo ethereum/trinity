@@ -1822,6 +1822,7 @@ async def simple_get_leaves_sync(db: AtomicDB,
         result = await peer.requests.get_leaves(
             state_root, path, timeout=1,
         )
+        # print(f'req: {path} res: {result.prefix} leaves: {len(result.leaves)}')
 
         proof_nodes_to_insert: List[TrieNode] = []
 
@@ -1835,7 +1836,6 @@ async def simple_get_leaves_sync(db: AtomicDB,
 
             # TODO: check that the first generated node is part of {proven_hashes}
             #       that check probably belongs in the response Validator
-
 
             # TODO: this logic is nearly identical to simple_get_chunk_sync. Extract a
             #       method?
