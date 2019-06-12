@@ -12,7 +12,9 @@ from eth.db.atomic import AtomicDB
 from eth.db.chain import ChainDB
 from trie.constants import BLANK_NODE_HASH
 from trie.hexary import HexaryTrie
-from trie.utils.nibbles import bytes_to_nibbles
+from trie.utils.nibbles import bytes_to_nibbles, nibbles_to_bytes, decode_nibbles
+
+from eth_hash.auto import keccak
 
 from p2p import ecies
 from p2p.kademlia import Node, Address
@@ -24,6 +26,8 @@ from p2p.tools.paragon.helpers import (
 from p2p.transport import Transport
 
 from trinity.protocol import firehose
+
+import rlp
 
 
 # Trie tests (move to a different file eventually)
@@ -338,7 +342,69 @@ async def test_get_leaves(linked_peers):
         prefix=(),
         timeout=1,
     )
-    assert len(result['leaves']) == 100
+    assert len(result.leaves) == 100
+    assert len(result.proof) == 0  # everything was returned, no proof necessary
+
+    request_server.MAX_LEAVES = 10
+    result = await bob.requests.get_leaves(
+        trie.root_hash,
+        prefix=(),
+        timeout=1,
+    )
+    assert result.prefix == (0,)
+    assert len(result.leaves) == 9
+    assert len(result.proof) == 1  # the top-level node should have been returned
+
+
+def test_single_leaf_response():
+    # regression test, this failed during a sync test
+    # (7, ) has more than 10 leaves
+    # (7, 1) only has one leaf
+
+    random.seed(5000)
+    trie = make_random_trie(1000)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(7,), max_leaves=10,
+    )
+
+    generated_nodes = firehose.nodes_from_leaves(result['prefix'], result['leaves'])
+    leaf = next(generated_nodes)
+    assert leaf[0] == (7, 0)
+    assert leaf[1].keccak in trie.db
+
+    with pytest.raises(StopIteration):
+        next(generated_nodes)
+
+
+def test_nodes_from_leaves_creates_extension():
+    # regression test, this failed during a sync test
+    # if the returned leaves all belong to a deeper path than the requested one then an
+    # extension node must be returned
+
+    random.seed(5000)
+    trie = make_random_trie(1000)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(13, 14), max_leaves=10,
+    )
+
+    generated_nodes = list(firehose.nodes_from_leaves(result['prefix'], result['leaves']))
+    generated_hashes = [node.keccak for _, node in generated_nodes]
+
+    for generated_hash in generated_hashes:
+        assert generated_hash in trie.db
+
+    extension_hash = bytes.fromhex(
+        'c6061101906cd8f0e831b8103268b949af1b30842618e44eb51c834b23887827'
+    )
+    assert extension_hash in generated_hashes
 
 
 def test_get_leaves_response():
@@ -354,6 +420,7 @@ def test_get_leaves_response():
     )
     assert len(result['leaves']) <= 100
     assert result['prefix'] == ()
+    assert result['proof'] == ()
 
     result = firehose.get_leaves_response(
         chaindb, trie.root_hash, nibbles=(), max_leaves=10,
@@ -364,6 +431,8 @@ def test_get_leaves_response():
     for path, leaf in result['leaves']:
         assert firehose.is_subtree(result['prefix'], path)
 
+    assert len(result['proof']) == len(result['prefix']) - 0
+
     # with random.seed(8000) there are 9 nodes with a prefix of (0,)
 
     result = firehose.get_leaves_response(
@@ -371,6 +440,7 @@ def test_get_leaves_response():
     )
     assert result['prefix'] == (0,)
     assert len(result['leaves']) == 9
+    assert len(result['proof']) == len(result['prefix']) - 0
 
     assert firehose.is_subtree((), result['prefix'])
     for path, leaf in result['leaves']:
@@ -382,6 +452,15 @@ def test_get_leaves_response():
     )
     assert result['prefix'] == (0, 1)
     assert len(result['leaves']) == 2
+    assert len(result['proof']) == len(result['prefix']) - 0
+
+    # assert that we can understand the response
+
+    nodes = firehose.nodes_from_leaves(result['prefix'], result['leaves'])
+    first_node_path, first_node = next(nodes)
+    assert first_node_path == result['prefix']
+    expected_first_node = firehose.get_trie_node_at(trie, (0, 1))
+    assert first_node.obj == expected_first_node
 
     # even if we ask for a lot of nodes we can only fill one bucket
     # a better response format would include the other buckets we're also able to fill!
@@ -390,6 +469,36 @@ def test_get_leaves_response():
     )
     assert result['prefix'] == (0,)
     assert len(result['leaves']) == 9
+    assert len(result['proof']) == len(result['prefix']) - 0
+
+    # Make sure the proof is of the correct format
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(), max_leaves=8,
+    )
+    proof = result['proof']
+    assert len(proof) == 2
+
+    # TODO: the tests are made complicated by how many stages there are:
+    #       unencoded response -> encoded response -> decoded response
+    potential_first_node_hashes = firehose.check_proof(
+        trie.root_hash, [rlp.encode(node) for node in result['proof']]
+    )
+
+    # the first element of the proof proves (0,)
+    root = trie.get_node(trie.root_hash)
+    assert root == proof[0]
+
+    # the second element of the proof proves (0, 1)
+    node_at_0 = trie.get_node(root[0])
+    assert node_at_0 == proof[1]
+
+    # the first node we derive from the provided leaves should be the node at (0, 1)
+    nodes = firehose.nodes_from_leaves(result['prefix'], result['leaves'])
+    first_node_path, first_node = next(nodes)
+    assert node_at_0[1] == first_node.keccak
+
+    assert first_node.keccak in potential_first_node_hashes
 
 
 @pytest.mark.asyncio
@@ -592,3 +701,80 @@ async def test_listener_server(firehose_listener):
     while len(peer_pool.connected_nodes) != 0:
         await asyncio.sleep(0.01)
     assert len(peer_pool.connected_nodes) == 0
+
+
+@pytest.mark.asyncio
+async def test_simple_get_leaves_sync(linked_peers):
+    alice, bob, cancel_token = linked_peers
+
+    # 1. Create a database with many nodes
+
+    random.seed(5000)
+    trie = make_random_trie(1000)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    # 2. Sit a request server atop it
+
+    alice_peer_pool = MockPeerPool([alice])
+    request_server = firehose.FirehoseRequestServer(
+        db=chaindb,
+        peer_pool=alice_peer_pool,
+        token=cancel_token,
+    )
+
+    asyncio.ensure_future(request_server.run())
+
+    await asyncio.sleep(0)
+
+    request_server.MAX_LEAVES=10000  # all leaves are returned in single request
+    # 3. Start a syncer and watch it go
+
+    db = dict()
+    bob_atomic = AtomicDB(db)
+
+    await firehose.simple_get_leaves_sync(
+        bob_atomic, bob, state_root=trie.root_hash
+    )
+
+    # 4. Check that the final result matches the original database
+
+    assert len(trie.db) == len(db)
+    for key in trie.db.keys():
+        assert key in db
+        assert db[key] == trie.db[key]
+
+    request_server.MAX_LEAVES=100  # each bucket of len == 1 fits into one request
+    # 3. Start a syncer and watch it go
+
+    db = dict()
+    bob_atomic = AtomicDB(db)
+
+    await firehose.simple_get_leaves_sync(
+        bob_atomic, bob, state_root=trie.root_hash
+    )
+
+    # 4. Check that the final result matches the original database
+
+    assert len(trie.db) == len(db)
+    for key in trie.db.keys():
+        assert key in db
+        assert db[key] == trie.db[key]
+
+    request_server.MAX_LEAVES=10  # each request only fits a len(2) bucket
+    # 3. Start a syncer and watch it go
+
+    db = dict()
+    bob_atomic = AtomicDB(db)
+
+    await firehose.simple_get_leaves_sync(
+        bob_atomic, bob, state_root=trie.root_hash
+    )
+
+    # 4. Check that the final result matches the original database
+
+    assert len(trie.db) == len(db)
+    for key in trie.db.keys():
+        assert key in db
+        assert db[key] == trie.db[key]

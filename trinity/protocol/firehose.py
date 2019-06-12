@@ -14,6 +14,7 @@ from typing import (
     Optional,
     Tuple,
     Type,
+    Set,
 )
 import secrets
 import queue
@@ -42,6 +43,7 @@ from eth_typing import (
 )
 
 import rlp
+import rlp.codec
 from rlp import sedes
 from rlp.sedes import (
     BigEndianInt,
@@ -54,9 +56,12 @@ from trie.constants import (
     NODE_TYPE_LEAF,
 )
 
+from trie.hexary import HexaryTrie
+
 from trie.utils.nibbles import (
     encode_nibbles,
     decode_nibbles,
+    nibbles_to_bytes,
 )
 
 from trie.utils.nodes import (
@@ -64,6 +69,8 @@ from trie.utils.nodes import (
     decode_node,
     extract_key,
     get_node_type,
+    compute_leaf_key,
+    compute_extension_key,
 )
 
 from p2p.auth import (
@@ -384,6 +391,14 @@ class TrieNode(NamedTuple):
     keccak: Hash32
 
     def __str__(self) -> str:
+        if self.kind == NodeKind.EXTENSION:
+            return (
+                "TrieNode(Extension,"
+                f" hash={self.keccak.hex()}"
+                f" path={self.path_rest}"
+                f" child={self.obj[1].hex()}"
+                 ")"
+            )
         return f"TrieNode(kind={self.kind.name} hash={self.keccak.hex()})"
 
     @property
@@ -641,9 +656,19 @@ class Leaves(Command):
         # A list of (fullpath, leafrlp) pairs
         # TODO: blindly copied from Status.capabilities, is it correct?
         ('leaves', sedes.CountableList(sedes.List([sedes.binary, sedes.binary]))),
+
+        # proves the returned prefix if it's different than the requested prefix
+        ('proof', sedes.CountableList(sedes.binary)),
     )
 
     LeafType = List[Tuple[bytes, bytes]]
+
+
+# not sure where to put this
+class LeafResponse(NamedTuple):
+    prefix: Nibbles
+    leaves: Iterable[Tuple[Nibbles, bytes]]
+    proof: Iterable[bytes]
 
 
 # Requests
@@ -732,6 +757,12 @@ class GetLeafCountValidator(BaseValidator[None]):
         return
 
 
+def children_of(node_rlp: bytes) -> Tuple[Hash32, ...]:
+    node_obj = decode_node(node_rlp)
+    references, _leaves = _get_children(node_obj, depth=0)
+    return tuple(node_hash for (_depth, node_hash) in references)
+
+
 class GetNodeChunkValidator(BaseValidator[NodeChunk]):
     """
     Each node must be a direct child of a node which precedes it in the response.
@@ -749,11 +780,6 @@ class GetNodeChunkValidator(BaseValidator[NodeChunk]):
         TODO: This does not check that the trie is in any way balanced, though maybe it
         should.
         """
-        def children_of(node_rlp: bytes) -> Tuple[Hash32, ...]:
-            node_obj = decode_node(node_rlp)
-            references, _leaves = _get_children(node_obj, depth=0)
-            return tuple(node_hash for (_depth, node_hash) in references)
-
         # TODO: response is a Dict, not a NodeChunk. Fixing this will take a while.
 
         if len(response['nodes']) == 0:  # type: ignore
@@ -772,8 +798,8 @@ class GetNodeChunkValidator(BaseValidator[NodeChunk]):
             expected_hashes.update(children_of(node_rlp))
 
 
-class GetLeavesValidator(BaseValidator[Leaves]):
-    def validate_result(self, response: Leaves) -> None:
+class GetLeavesValidator(BaseValidator[LeafResponse]):
+    def validate_result(self, response: LeafResponse) -> None:
         return
 
 
@@ -784,6 +810,18 @@ class GetNodeChunkNormalizer(BaseNormalizer[None, NodeChunk]):
     @staticmethod
     def normalize_result(message: None) -> NodeChunk:
         return message
+
+
+class GetLeavesNormalizer(BaseNormalizer[Leaves, LeafResponse]):
+    @staticmethod
+    def normalize_result(message: Leaves) -> LeafResponse:
+        return LeafResponse(
+            prefix=decode_nibbles(message['prefix']),
+            leaves=[
+                (decode_nibbles(path), leaf_rlp) for path, leaf_rlp in message['leaves']
+            ],
+            proof=message['proof'],
+        )
 
 
 # Exchanges
@@ -840,7 +878,7 @@ class GetNodeChunkExchange(BaseExchange[Tuple[int, Hash32, bytes], None, NodeChu
 
 
 class GetLeavesExchange(BaseExchange[Tuple[int, Hash32, bytes], None, Leaves]):
-    _normalizer = NoopNormalizer()
+    _normalizer = GetLeavesNormalizer()
     request_class = GetLeavesRequest
     tracker_class = GetLeavesTracker
 
@@ -1021,14 +1059,18 @@ class FirehoseProtocol(Protocol):
         self.transport.send(header, body)
 
     def send_leaves(self, request_id: int,
-                    prefix: Nibbles, leaves: Leaves.LeafType) -> None:
+                    prefix: Nibbles,
+                    leaves: Leaves.LeafType,
+                    proof: Iterable[bytes]) -> None:
+        # TODO: the reverse of this method is GetLeavesNormalizer, make that more explicit
         cmd = Leaves(self.cmd_id_offset, self.snappy_support)
         nibbles = cast(bytes, encode_nibbles(prefix))
         encoded_leaves = [
             (encode_nibbles(path), leaf_rlp)
             for path, leaf_rlp in leaves
         ]
-        header, body = cmd.encode((request_id, nibbles, encoded_leaves))
+        encoded_proof = [rlp.encode(node) for node in proof]
+        header, body = cmd.encode((request_id, nibbles, encoded_leaves, encoded_proof))
         self.transport.send(header, body)
 
 
@@ -1070,17 +1112,19 @@ class FirehosePeerPool(BasePeerPool):
 
 
 def common_prefix(left: Nibbles, right: Nibbles) -> Nibbles:
+    # TODO: test this more thoroughly
+
     result = []
-    for left, right in zip(left, right):
-        if left != right:
+    for left_nibble, right_nibble in zip(left, right):
+        if left_nibble != right_nibble:
             return tuple(result)
-        result.append(left)
+        result.append(left_nibble)
     return min(left, right)  # TODO: more verbose code might be easier to read
 
 
 def get_leaves_response(db: ChainDB,
                         state_root: Hash32,
-                        nibbles,
+                        nibbles: Nibbles,
                         max_leaves: int) -> Dict:
     """A pure method without any asyncio is much easier to use pdb with"""
 
@@ -1096,6 +1140,7 @@ def get_leaves_response(db: ChainDB,
         return {
             'prefix': nibbles,
             'leaves': sliced,
+            'proof': tuple(),
         }
 
     # Return the largest subset of {sliced} which constitutes a full bucket.
@@ -1107,6 +1152,7 @@ def get_leaves_response(db: ChainDB,
 
     # It's cool that this is a single pass but there has to be a more understandable
     # way to do this.
+    # - The first version of this had a bug which slipped through initial testing
 
     first, *rest = sliced
     first_path = first[0]
@@ -1125,7 +1171,13 @@ def get_leaves_response(db: ChainDB,
         if current_prefix is None:
             # this is the second node
             current_prefix = common_prefix(first_path, path)
-            leaves_to_return.append((path, leaf))
+
+            # special logic in case the first node is the only thing which fits into the
+            # requested {max_leaves}.
+            assert len(current_prefix) > 0
+            last_prefix = first_path[:len(current_prefix)+1]
+
+            leaves_which_might_fit.append((path, leaf))
             continue
 
         diff = common_prefix(first_path, path)
@@ -1144,10 +1196,25 @@ def get_leaves_response(db: ChainDB,
 
     # TODO: what if last_prefix was never set?
 
+    # we're returning a smaller prefix than requested so we also need to prove the prefix
+    # that we're returning
+
+    trie = HexaryTrie(db.db, root_hash=state_root)
+    trie_root = trie.get_node(trie.root_hash)
+    proof = trie._get_proof(trie_root, last_prefix)
+
+    # proof[-1] is the node at {last_prefix}, the caller can rederive it
+    proof = proof[:-1]
+
+    # proof also includes a proof of the node at {nibbles}. If the caller is asking for
+    # {nibbles} they presumibly already have this part of the proof:
+    proof = proof[len(nibbles):]
+
     assert len(leaves_to_return) <= max_leaves
     return {
         'prefix': last_prefix,
-        'leaves': leaves_to_return
+        'leaves': leaves_to_return,
+        'proof': proof,
     }
 
 
@@ -1226,6 +1293,7 @@ class FirehoseRequestServer(BaseRequestServer):
     async def handle_get_leaves(self, peer: FirehosePeer, request_id: int,
                                 state_root: Hash32, prefix: bytes) -> None:
         nibbles = decode_nibbles(prefix)
+
         response = get_leaves_response(
             self.db, state_root, nibbles, self.MAX_LEAVES
         )
@@ -1234,6 +1302,7 @@ class FirehoseRequestServer(BaseRequestServer):
             request_id,
             response['prefix'],
             response['leaves'],
+            response['proof'],
         )
 
 
@@ -1541,9 +1610,7 @@ async def simple_get_chunk_sync(db: AtomicDB, peer: FirehosePeer, state_root: Ha
     while not unexplored_hashes.empty():
         path, requested_node_hash = unexplored_hashes.get()
         result = await peer.requests.get_node_chunk(
-            state_root,
-            path,
-            timeout=1,
+            state_root, path, timeout=1,
         )
         # TODO: result is a Dict, not a Command, this is likely what normalizers are for
         nodes = result['nodes']  # type: ignore
@@ -1646,3 +1713,176 @@ class ParallelSimpleChunkSync:
 
         for node_hash, node_path in expected_nodes.items():
             self.unexplored_hashes.put((node_path, node_hash))
+
+
+def nodes_from_leaves(prefix: Nibbles, leaves: Leaves.LeafType) -> Iterable[bytes]:
+    """
+    Given a response from the server which only includes the leaves generate all the nodes
+    rooted at the returned prefix.
+
+    Returns them in an insertable order (highest to lowest)
+    """
+
+    if len(leaves) == 1:
+        # this requires a special case, the below code would create a trie which consists
+        # of nothing but the one leaf. We need a trie *rooted at the given prefix* which
+        # contains the one leaf. It can be built manually:
+
+        original_path, original_payload = leaves[0]
+
+        assert common_prefix(original_path, prefix) == prefix
+        truncated_path = original_path[len(prefix):]
+        key = compute_leaf_key(truncated_path)
+        node_rlp = rlp.codec.encode_raw([key, original_payload])
+        node = make_node(node_rlp)
+        yield (prefix, node)
+        return
+
+    fake_db = dict()
+    fake_trie = HexaryTrie(fake_db)
+
+    for path, leaf in leaves:
+        assert is_subtree(prefix, path)
+        key = nibbles_to_bytes(path)
+        fake_trie.set(key, leaf)
+
+
+    # TODO: accept an expected hash for the node at prefix and verify it here
+
+    nodes_to_return = iterate_trie(fake_db, fake_trie.root_hash, prefix)
+    first_path, first_node = next(nodes_to_return)
+
+    if first_path != prefix:
+        assert is_subtree(prefix, first_path)  # sanity check
+
+        # Alt: the first node in the trie is an extension node which points to {first_path}
+        # instead of ignoring the first node we could inspect it and modify it if it
+        # doesn't point to {prefix}. I think that would enable merging this branch with
+        # the len(leaves) == 1 branch
+
+        """
+        The syncer only asked for this node because it definitely existed. The caller
+        usually even knows what hash it's expecting. If we're about to return a node which
+        isn't the node at the requested path, then the requested node is an extension node
+        wich should be built and returned
+        """
+
+        path_rest = first_path[len(prefix):]
+        key = compute_extension_key(path_rest)
+        node_rlp = rlp.codec.encode_raw([key, first_node.keccak])
+        node = make_node(node_rlp)
+        yield (prefix, node)
+
+    yield first_path, first_node
+    yield from nodes_to_return
+
+
+def get_trie_node_at(trie: HexaryTrie, prefix: Nibbles) -> bytes:  # TODO: it's not bytes
+    encoded = nibbles_to_bytes(prefix)
+    return trie.get_proof(encoded)[-1]
+
+
+
+def check_proof(requested_hash: Hash32, proof: Iterable[bytes]) -> Set[Hash32]:
+    """
+    Verifies that the proof is a valid branch of the trie starting at {requested_hash}.
+
+    Returns the set of nodes this proof proves.
+
+    TODO: Also verify that the proof proves the specified prefix
+    """
+    expected_hashes = {requested_hash}
+    for node_rlp in proof:
+        assert keccak(node_rlp) in expected_hashes
+        expected_hashes = {*children_of(node_rlp)}
+    return expected_hashes
+
+
+async def simple_get_leaves_sync(db: AtomicDB,
+                                 peer: FirehosePeer,
+                                 state_root: Hash32) -> None:
+    """
+    Sends GetLeaves requests to the remote peer until it's received the entire trie.
+    """
+
+    # when it asks for a prefix and is given a smaller prefix:
+    # 1. verifies that the given proof matches the requested item
+    # 2. generates the nodes for the given leaves
+    # 3. inserts everything into the database, from parent down
+    # 4. remembers which hashes need to be recursed into
+
+    # keeps track of all the unexplored hashes (starting w/ just the root)
+    unexplored_hashes: queue.Queue[Tuple[Nibbles, Hash32]] = queue.Queue()
+    unexplored_hashes.put(((), state_root))
+
+    while not unexplored_hashes.empty():
+        path, requested_node_hash = unexplored_hashes.get()
+        expected_nodes: Dict[Hash32, Nibbles] = {requested_node_hash: path}
+
+        result = await peer.requests.get_leaves(
+            state_root, path, timeout=1,
+        )
+
+        proof_nodes_to_insert: List[TrieNode] = []
+
+        # 1. check the proof
+
+        if result.prefix != path:
+            # the bucket we asked for held too many leaves
+
+            assert is_subtree(path, result.prefix)
+            proven_hashes = check_proof(requested_node_hash, result.proof)
+
+            # TODO: check that the first generated node is part of {proven_hashes}
+            #       that check probably belongs in the response Validator
+
+
+            # TODO: this logic is nearly identical to simple_get_chunk_sync. Extract a
+            #       method?
+
+            for proof_node_rlp in result.proof:
+                proof_node = make_node(proof_node_rlp)
+
+                assert proof_node.keccak in expected_nodes
+                proof_node_path = expected_nodes.pop(proof_node.keccak)
+
+                proof_nodes_to_insert.append(proof_node)
+
+                # leaves can't prove anything
+                assert proof_node.kind in (NodeKind.EXTENSION, NodeKind.BRANCH)
+
+                children = _get_children_with_nibbles(proof_node, proof_node_path)
+                for child_path, child_hash in children:
+                    if child_hash == b'':
+                        continue
+                    expected_nodes[child_hash] = child_path
+
+        nodes_to_insert = nodes_from_leaves(result.prefix, result.leaves)
+
+        # 2. check that the proof proves the leaves we were given
+
+        first_node_path, first_node = next(nodes_to_insert)
+
+        if result.prefix != path:
+            hexified = first_node.keccak.hex()
+            assert first_node.keccak in proven_hashes
+        else:
+            fnk = first_node.keccak.hex()
+            rnk = requested_node_hash.hex()
+            assert first_node.keccak == requested_node_hash
+
+        assert first_node.keccak in expected_nodes
+        expected_nodes.pop(first_node.keccak)
+
+        # 3. insert the proof into the database
+        for trie_node in proof_nodes_to_insert:
+            db.set(trie_node.keccak, trie_node.rlp)
+
+        # 4. insert all the generated nodes
+        db.set(first_node.keccak, first_node.rlp)
+        for _node_path, node in nodes_to_insert:
+            db.set(node.keccak, node.rlp)
+
+        # 5. recurse on the proven nodes which weren't returned
+        for node_hash, node_path in expected_nodes.items():
+            unexplored_hashes.put((node_path, node_hash))
