@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 import enum
 import itertools
 import struct
@@ -1798,6 +1799,49 @@ def check_proof(requested_hash: Hash32, proof: Iterable[bytes]) -> Set[Hash32]:
     return expected_hashes
 
 
+class TrieProgress:
+    "Remembers completed work and reports on how much of the trie has been completed"
+
+    """
+    The simplest way to do this is probably recursively...
+    """
+
+    def __init__(self) -> None:
+        self.subtries = [None] * 16
+        self.completed = False
+
+    def complete_bucket(self, nibbles: Nibbles) -> None:
+        if len(nibbles) == 0:
+            self.completed = True
+            return
+
+        first_nibble, *rest = nibbles
+
+        if self.subtries[first_nibble] is None:
+            subtrie = self.subtries[first_nibble] = TrieProgress()
+        else:
+            subtrie = self.subtries[first_nibble]
+
+        subtrie.complete_bucket(rest)
+
+    def _completed_nibbles(self) -> int:
+        return 0
+
+    def progress(self) -> float:
+        if self.completed:
+            return 1.0
+
+        progress = 0
+        for subtrie in self.subtries:
+            if subtrie is None:
+                continue
+
+            subprogress = subtrie.progress()
+            progress += subprogress * (1/16)
+
+        return progress
+
+
 async def simple_get_leaves_sync(db: AtomicDB,
                                  peer: FirehosePeer,
                                  state_root: Hash32) -> None:
@@ -1815,14 +1859,20 @@ async def simple_get_leaves_sync(db: AtomicDB,
     unexplored_hashes: queue.Queue[Tuple[Nibbles, Hash32]] = queue.Queue()
     unexplored_hashes.put(((), state_root))
 
+    progress_tracker = TrieProgress()
+
     while not unexplored_hashes.empty():
         path, requested_node_hash = unexplored_hashes.get()
         expected_nodes: Dict[Hash32, Nibbles] = {requested_node_hash: path}
 
         result = await peer.requests.get_leaves(
-            state_root, path, timeout=1,
+            state_root, path, timeout=60,
         )
-        # print(f'req: {path} res: {result.prefix} leaves: {len(result.leaves)}')
+
+        # progress_tracker.complete_bucket(result.prefix)
+        # progress = f'{progress_tracker.progress()*100:2.6}'
+        # now = datetime.now().isoformat()
+        # print(f'[{now}] req: {path} res: {result.prefix} leaves: {len(result.leaves)} progress: {progress}')
 
         proof_nodes_to_insert: List[TrieNode] = []
 

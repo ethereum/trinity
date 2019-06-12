@@ -778,3 +778,9 @@ async def test_simple_get_leaves_sync(linked_peers):
     for key in trie.db.keys():
         assert key in db
         assert db[key] == trie.db[key]
+
+
+def test_progress():
+    progress = firehose.TrieProgress()
+    progress.complete_bucket((0, ))
+    assert progress.progress() == (1/16)
