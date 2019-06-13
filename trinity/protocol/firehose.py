@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 import enum
+from functools import reduce
 import itertools
 import struct
 from typing import (
@@ -19,6 +20,11 @@ from typing import (
 )
 import secrets
 import queue
+import pickle
+import logging
+
+import plyvel
+import time
 
 from cancel_token import CancelToken, OperationCancelled
 
@@ -36,6 +42,12 @@ from eth_keys import datatypes
 from eth_utils import (
     big_endian_to_int,
     to_tuple,
+)
+
+from eth_utils.toolz import (
+    first,
+    compose,
+    groupby,
 )
 
 from eth_typing import (
@@ -63,6 +75,7 @@ from trie.utils.nibbles import (
     encode_nibbles,
     decode_nibbles,
     nibbles_to_bytes,
+    add_nibbles_terminator,
 )
 
 from trie.utils.nodes import (
@@ -398,6 +411,13 @@ class TrieNode(NamedTuple):
                 f" hash={self.keccak.hex()}"
                 f" path={self.path_rest}"
                 f" child={self.obj[1].hex()}"
+                 ")"
+            )
+        if self.kind == NodeKind.LEAF:
+            return (
+                "TrieNode(Leaf,"
+                f" hash={self.keccak.hex()}"
+                f" path={self.path_rest[:10]}..."
                  ")"
             )
         return f"TrieNode(kind={self.kind.name} hash={self.keccak.hex()})"
@@ -1219,6 +1239,62 @@ def get_leaves_response(db: ChainDB,
     }
 
 
+class LeavesCache:
+    """
+    TODO: This needs to be async, blocking the entire server for this isn't reasonable.
+
+    Assumes all requests are for the same state root.
+    Also assumes that MAX_LEAVES never changes
+    """
+
+    def __init__(self, db_path: str):
+        self.db = plyvel.DB(
+            db_path,
+            create_if_missing=True,
+            error_if_exists=True,
+            max_open_files=256,
+        )
+
+    @staticmethod
+    def _next_bucket(previous: Nibbles) -> Nibbles:
+        result = list(previous)
+        result[-1] += 1
+        return tuple(result)
+
+    def save_response(self,
+                      prefix: Nibbles,
+                      leaves: Leaves.LeafType,
+                      proof: Iterable[bytes]) -> None:
+        assert len(prefix)
+
+        key = bytes(prefix)
+        assert self.db.get(key) is None
+        self.db.put(key, pickle.dumps((leaves, proof)))
+
+    def lookup_prefix(self, prefix: Nibbles) -> Optional[Dict]:
+        assert len(prefix)
+
+        it = self.db.iterator(
+            start=bytes(prefix),
+            stop=bytes(self._next_bucket(prefix)),
+            include_start=True,
+            include_stop=False,
+        )
+        try:
+            key, value = next(it)
+        except StopIteration:
+            return None
+        it.close()
+
+        leaves, proof = pickle.loads(value)
+
+        return {
+            'prefix': tuple(key),
+            'leaves': leaves,
+            'proof': proof,
+        }
+
+
 class FirehoseRequestServer(BaseRequestServer):
     subscription_msg_types: FrozenSet[Type[Command]] = frozenset({
         GetLeafCount, GetNodeChunk, GetLeaves,
@@ -1228,9 +1304,13 @@ class FirehoseRequestServer(BaseRequestServer):
     MAX_LEAVES = 1000  # the maximum number of leaves to return in each request
 
     def __init__(self, db: ChainDB,
-                 peer_pool: FirehosePeerPool, token: CancelToken = None) -> None:
+                 peer_pool: FirehosePeerPool,
+                 cache: LeavesCache = None,
+                 token: CancelToken = None) -> None:
         super().__init__(peer_pool, token)
         self.db = db
+
+        self.cache = cache
 
     async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
                           msg: _DecodedMsgType) -> None:
@@ -1293,11 +1373,26 @@ class FirehoseRequestServer(BaseRequestServer):
 
     async def handle_get_leaves(self, peer: FirehosePeer, request_id: int,
                                 state_root: Hash32, prefix: bytes) -> None:
+        start = time.perf_counter()
+
         nibbles = decode_nibbles(prefix)
 
-        response = get_leaves_response(
-            self.db, state_root, nibbles, self.MAX_LEAVES
-        )
+        response = None
+
+        if self.cache and len(nibbles):
+            response = self.cache.lookup_prefix(nibbles)
+
+        if response is None:
+            response = get_leaves_response(
+                self.db, state_root, nibbles, self.MAX_LEAVES
+            )
+            if self.cache and len(nibbles):
+                self.cache.save_response(
+                    response['prefix'], response['leaves'], response['proof']
+                )
+
+        end = time.perf_counter()
+        self.logger.info(f'request={nibbles} time={end-start:.2}')
 
         peer.sub_proto.send_leaves(
             request_id,
@@ -1571,7 +1666,49 @@ async def connect_to(pubkey: datatypes.PublicKey, host: str, port: int) -> Fireh
 # Syncer
 
 
+class MemoTrieNode:
+    """
+    Profiling showed that decode_node and get_node_type took up ~4% of processing time
+    during get_leaves syncing, this is a stop-gap to test whether not calling decode_node
+    will really speed things up. The next step is to refactor the syncer to not call
+    make_node, it only really cares about (keccak, rlp).
+    """
+    def __init__(self, node_rlp) -> None:
+        self.rlp = node_rlp
+
+        self._type = None
+        self._node = None
+        self._hash = None
+        self._kind = None
+
+    @property
+    def kind(self):
+        if not self._kind:
+            self._kind = NodeKind(self.node_type)
+        return self._kind
+
+    @property
+    def keccak(self):
+        if not self._hash:
+            self._hash = keccak(self.rlp)
+        return self._hash
+
+    @property
+    def obj(self):
+        if not self._node:
+            self._node = decode_node(self.rlp)
+        return self._node
+
+    @property
+    def node_type(self):
+        if not self._type:
+            self._type = get_node_type(self.obj)
+        return self._type
+
+
 def make_node(node_rlp: bytes) -> TrieNode:
+    return MemoTrieNode(node_rlp)
+
     node = decode_node(node_rlp)
     node_type = get_node_type(node)
     node_hash = keccak(node_rlp)
@@ -1716,12 +1853,36 @@ class ParallelSimpleChunkSync:
             self.unexplored_hashes.put((node_path, node_hash))
 
 
-def nodes_from_leaves(prefix: Nibbles, leaves: Leaves.LeafType) -> Iterable[bytes]:
+def make_leaf(path: Nibbles, payload: bytes) -> TrieNode:
+
+    ### key = compute_leaf_key(path)
+    term = add_nibbles_terminator(path)
+    key = encode_nibbles(term)  # %4.58 of runtime
+    ###
+
+    node_rlp = rlp.codec.encode_raw([key, payload])
+    node = make_node(node_rlp)
+    return node
+
+
+def make_extension(path: Nibbles, ref: Hash32) -> TrieNode:
+    key = compute_extension_key(path)
+    node_rlp = rlp.codec.encode_raw([key, ref])
+    node = make_node(node_rlp)
+    return node
+
+
+def nodes_from_leaves(prefix: Nibbles,
+                      leaves: Leaves.LeafType) -> Iterable[Tuple[bytes, TrieNode]]:
     """
     Given a response from the server which only includes the leaves generate all the nodes
     rooted at the returned prefix.
 
     Returns them in an insertable order (highest to lowest)
+
+    TODO: I believe these special cases can be avoided by first truncating {prefix} from
+    the beginning of all these paths, then inserting them into the trie and reading out
+    every node from it.
     """
 
     if len(leaves) == 1:
@@ -1733,9 +1894,8 @@ def nodes_from_leaves(prefix: Nibbles, leaves: Leaves.LeafType) -> Iterable[byte
 
         assert common_prefix(original_path, prefix) == prefix
         truncated_path = original_path[len(prefix):]
-        key = compute_leaf_key(truncated_path)
-        node_rlp = rlp.codec.encode_raw([key, original_payload])
-        node = make_node(node_rlp)
+
+        node = make_leaf(truncated_path, original_payload)
         yield (prefix, node)
         return
 
@@ -1746,7 +1906,6 @@ def nodes_from_leaves(prefix: Nibbles, leaves: Leaves.LeafType) -> Iterable[byte
         assert is_subtree(prefix, path)
         key = nibbles_to_bytes(path)
         fake_trie.set(key, leaf)
-
 
     # TODO: accept an expected hash for the node at prefix and verify it here
 
@@ -1769,19 +1928,117 @@ def nodes_from_leaves(prefix: Nibbles, leaves: Leaves.LeafType) -> Iterable[byte
         """
 
         path_rest = first_path[len(prefix):]
-        key = compute_extension_key(path_rest)
-        node_rlp = rlp.codec.encode_raw([key, first_node.keccak])
-        node = make_node(node_rlp)
+        node = make_extension(path_rest, first_node.keccak)
         yield (prefix, node)
 
     yield first_path, first_node
     yield from nodes_to_return
 
 
+NodeGen = Iterable[Tuple[Nibbles, TrieNode]]
+
+
+def nibbles_prepended(nibbles: Nibbles, nodes: NodeGen) -> NodeGen:
+    for path, leaf in nodes:
+        yield (
+            nibbles + path,
+            leaf
+        )
+
+
+def n_nibbles_dropped(n: int, nodes):
+    return [
+        (path[n:], leaf) for path, leaf in nodes
+    ]
+
+
+def fast_nodes_from_leaves(prefix: Nibbles,
+                           leaves: Iterable[Leaves.LeafType]) -> Iterable[Tuple[Nibbles, TrieNode]]:
+
+    # 1. truncate the prefixes
+    truncated = n_nibbles_dropped(len(prefix), leaves)
+
+    # 2. call the inner method
+    builder = trie_builder(truncated)
+
+    # 3. append the prefix back onto the returned nodes
+    yield from nibbles_prepended(prefix, builder)
+
+
+def trie_builder(leaves: Iterable[Leaves.LeafType]) -> Iterable[Tuple[Nibbles, TrieNode]]:
+    """
+    Go from a bunch of leaves to a bunch of insertable trie nodes.
+
+    TODO: This code is horrible and I'm embarrassed to even commit it with the intent to
+    refactor it soon.
+    """
+    if len(leaves) == 1:
+        # the base-case, build the leaf and send it back up
+        # what path do we give the leaf? What does it mean to return a path?
+        path, payload = first(leaves)
+        yield ((), make_leaf(path, payload))
+        return
+
+    first_nibble_of_path = compose(first, first)
+    leaf_groups = groupby(first_nibble_of_path, leaves)
+
+    if len(leaf_groups) == 1:
+        # build an extension node
+
+        group_nibble = first(leaf_groups)
+        group = leaf_groups[group_nibble]
+
+        paths = map(first, group)
+        max_common_prefix = reduce(common_prefix, paths)
+
+        dropped = n_nibbles_dropped(len(max_common_prefix), group)
+        subtrie = trie_builder(dropped)
+        prepended = nibbles_prepended(max_common_prefix, subtrie)
+
+        first_path, first_node = next(prepended)
+
+        extension = make_extension(max_common_prefix, first_node.keccak)
+        yield (), extension
+        yield first_path, first_node
+        yield from prepended
+        return
+
+    # build a branch node!
+    node_groups = dict()
+    for nibble, leaf_group in leaf_groups.items():
+        dropped = n_nibbles_dropped(1, leaf_group)
+        subtrie = trie_builder(dropped)
+        node_groups[nibble] = nibbles_prepended((nibble,), subtrie)
+
+    first_nodes = []
+
+    branch = [b''] * 17
+    for i in range(16):
+        try:
+            ith_group = node_groups[i]
+        except KeyError:
+            continue
+
+        first_path, first_node = next(ith_group)
+        first_nodes.append((first_path, first_node))
+
+        branch[i] = first_node.keccak
+
+    branch_rlp = rlp.codec.encode_raw(branch)
+    branch_node = make_node(branch_rlp)
+
+    yield (), branch_node
+
+    for node in first_nodes:
+        yield node
+
+    for nibble, node_group in node_groups.items():
+        yield from node_group
+
+
 def get_trie_node_at(trie: HexaryTrie, prefix: Nibbles) -> bytes:  # TODO: it's not bytes
     encoded = nibbles_to_bytes(prefix)
     return trie.get_proof(encoded)[-1]
-
 
 
 def check_proof(requested_hash: Hash32, proof: Iterable[bytes]) -> Set[Hash32]:
@@ -1802,18 +2059,22 @@ def check_proof(requested_hash: Hash32, proof: Iterable[bytes]) -> Set[Hash32]:
 class TrieProgress:
     "Remembers completed work and reports on how much of the trie has been completed"
 
-    """
-    The simplest way to do this is probably recursively...
-    """
-
     def __init__(self) -> None:
         self.subtries = [None] * 16
+
+        self.completed_subtries = 0
         self.completed = False
 
-    def complete_bucket(self, nibbles: Nibbles) -> None:
+    def complete_bucket(self, nibbles: Nibbles) -> bool:
+        """
+        Returns whether this subtrie has been completed
+        """
+        assert not self.completed
+        assert self.completed_subtries < 16
+
         if len(nibbles) == 0:
             self.completed = True
-            return
+            return True
 
         first_nibble, *rest = nibbles
 
@@ -1822,16 +2083,21 @@ class TrieProgress:
         else:
             subtrie = self.subtries[first_nibble]
 
-        subtrie.complete_bucket(rest)
+        subtrie_completed = subtrie.complete_bucket(rest)
+        if subtrie_completed:
+            self.completed_subtries += 1
+            if self.completed_subtries == 16:
+                self.completed = True
+                self.subtries = [None] * 16  # save some space
+                return True
 
-    def _completed_nibbles(self) -> int:
-        return 0
+        return False
 
     def progress(self) -> float:
         if self.completed:
             return 1.0
 
-        progress = 0
+        progress = 0.0
         for subtrie in self.subtries:
             if subtrie is None:
                 continue
@@ -1861,18 +2127,24 @@ async def simple_get_leaves_sync(db: AtomicDB,
 
     progress_tracker = TrieProgress()
 
+    logger = logging.getLogger('leaf-sync')
+
     while not unexplored_hashes.empty():
         path, requested_node_hash = unexplored_hashes.get()
         expected_nodes: Dict[Hash32, Nibbles] = {requested_node_hash: path}
+
+        t_start = time.perf_counter()
 
         result = await peer.requests.get_leaves(
             state_root, path, timeout=60,
         )
 
-        # progress_tracker.complete_bucket(result.prefix)
-        # progress = f'{progress_tracker.progress()*100:2.6}'
-        # now = datetime.now().isoformat()
-        # print(f'[{now}] req: {path} res: {result.prefix} leaves: {len(result.leaves)} progress: {progress}')
+        t_req = time.perf_counter()
+
+        progress_tracker.complete_bucket(result.prefix)
+        progress = f'{progress_tracker.progress()*100:2.6}'
+        now = datetime.now().isoformat()
+        print(f'[{now}] req: {path} res: {result.prefix} leaves: {len(result.leaves)} progress: {progress}')
 
         proof_nodes_to_insert: List[TrieNode] = []
 
@@ -1907,11 +2179,13 @@ async def simple_get_leaves_sync(db: AtomicDB,
                         continue
                     expected_nodes[child_hash] = child_path
 
-        nodes_to_insert = nodes_from_leaves(result.prefix, result.leaves)
+        nodes_to_insert = fast_nodes_from_leaves(result.prefix, result.leaves)
 
         # 2. check that the proof proves the leaves we were given
 
+        t_first_leaf = time.perf_counter()
         first_node_path, first_node = next(nodes_to_insert)
+        t_first_leaf_e = time.perf_counter()
 
         if result.prefix != path:
             hexified = first_node.keccak.hex()
@@ -1924,9 +2198,13 @@ async def simple_get_leaves_sync(db: AtomicDB,
         assert first_node.keccak in expected_nodes
         expected_nodes.pop(first_node.keccak)
 
+        t_rest_leaves = time.perf_counter()
+
         # 3. insert the proof into the database
         for trie_node in proof_nodes_to_insert:
             db.set(trie_node.keccak, trie_node.rlp)
+
+        t_rest_leaves_e = time.perf_counter()
 
         # 4. insert all the generated nodes
         db.set(first_node.keccak, first_node.rlp)
@@ -1936,3 +2214,16 @@ async def simple_get_leaves_sync(db: AtomicDB,
         # 5. recurse on the proven nodes which weren't returned
         for node_hash, node_path in expected_nodes.items():
             unexplored_hashes.put((node_path, node_hash))
+
+        t_end = time.perf_counter()
+
+        total_time = t_end - t_start
+        server_time = t_req - t_start
+        process_time = t_end - t_req
+        first_leaf_time = t_first_leaf_e - t_first_leaf
+        rest_leaves_time = t_rest_leaves_e - t_rest_leaves
+        all_leaf_time = first_leaf_time + rest_leaves_time
+
+        logger.info(
+            f't: {total_time} s: {server_time} p: {process_time} l: {all_leaf_time}'
+        )

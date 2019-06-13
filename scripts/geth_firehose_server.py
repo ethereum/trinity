@@ -30,9 +30,14 @@ def main(args):
     cancel_token = CancelToken('server')
     privkey = ecies.generate_privkey()
 
+    if args.cachedb:
+        cache = firehose.LeavesCache(args.cachedb)
+    else:
+        cache = None
+
     peer_pool = firehose.MiniPeerPool(privkey, cancel_token)
     listener = firehose.FirehoseListener(privkey, args.port, peer_pool, cancel_token)
-    server = firehose.FirehoseRequestServer(chaindb, peer_pool, cancel_token)
+    server = firehose.FirehoseRequestServer(chaindb, peer_pool, cache, cancel_token)
 
     async def wait_shutdown():
         await asyncio.wait_for(server.events.finished.wait(), timeout=1)
@@ -114,6 +119,9 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-port', type=int, required=True, help="The port to serve from"
+    )
+    parser.add_argument(
+        '-cachedb', type=str, required=False, help="Where to save generated node chunks"
     )
 
     args = parser.parse_args()

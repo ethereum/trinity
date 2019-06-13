@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 
 import pytest
 from hypothesis import (
@@ -356,6 +357,56 @@ async def test_get_leaves(linked_peers):
     assert len(result.proof) == 1  # the top-level node should have been returned
 
 
+
+def run_trie_builder_comparison(seed, count, debug=False):
+    random.seed(seed)
+    trie = make_random_trie(count)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    orig_nodes = list(firehose.iterate_trie(chaindb, trie.root_hash))
+    leaves = list(firehose.iterate_leaves(chaindb, trie.root_hash))
+    gen_nodes = list(firehose.trie_builder(leaves))
+
+    if debug:
+        print('\n===nodes===\n')
+        for path, node in orig_nodes:
+            print(bytes(path).hex(), node)
+
+        print('\n===leaves===\n')
+        for path, node in leaves:
+            print(nibbles_to_bytes(path).hex(), node)
+
+        print('\n===gen===\n')
+        for path, node in gen_nodes:
+            print(bytes(path).hex(), node)
+
+    for path, node in orig_nodes:
+        assert (path, node) in gen_nodes
+
+
+@pytest.mark.parametrize("seed,count", [
+    (8000, 2),  # the two nodes are parented by a branch node
+    (8006, 2),  # the two leaves are parented by an extension node and a branch
+])
+def test_trie_builder_regression(seed, count):
+    run_trie_builder_comparison(seed, count)
+
+
+def test_trie_builder_many():
+    for i in range(1000):
+        run_trie_builder_comparison(i, 2)
+
+    for i in range(100):
+        run_trie_builder_comparison(i, 5)
+
+    for i in range(10):
+        run_trie_builder_comparison(i, 100)
+
+    run_trie_builder_comparison(9000, 1000)
+
+
 def test_single_leaf_response():
     # regression test, this failed during a sync test
     # (7, ) has more than 10 leaves
@@ -704,7 +755,7 @@ async def test_listener_server(firehose_listener):
 
 
 @pytest.mark.asyncio
-async def test_simple_get_leaves_sync(linked_peers):
+async def test_simple_get_leaves_sync(linked_peers, tmpdir):
     alice, bob, cancel_token = linked_peers
 
     # 1. Create a database with many nodes
@@ -717,10 +768,12 @@ async def test_simple_get_leaves_sync(linked_peers):
 
     # 2. Sit a request server atop it
 
+    cache = firehose.LeavesCache(str(tmpdir))
     alice_peer_pool = MockPeerPool([alice])
     request_server = firehose.FirehoseRequestServer(
         db=chaindb,
         peer_pool=alice_peer_pool,
+        cache=cache,
         token=cancel_token,
     )
 
@@ -781,6 +834,22 @@ async def test_simple_get_leaves_sync(linked_peers):
 
 
 def test_progress():
+    # TODO: test this more thoroughly 
+
     progress = firehose.TrieProgress()
     progress.complete_bucket((0, ))
     assert progress.progress() == (1/16)
+
+    progress = firehose.TrieProgress()
+    for i in range(16):
+        progress.complete_bucket((0, i))
+    assert progress.progress() == (1/16)
+
+
+def test_next_nibble():
+    func = firehose.LeavesCache._next_bucket
+
+    assert func((0,)) == (1,)
+    assert func((15,)) == (16,)
+    assert func((1, 4, 15,)) == (1, 4, 16,)
+
