@@ -1375,24 +1375,47 @@ class FirehoseRequestServer(BaseRequestServer):
                                 state_root: Hash32, prefix: bytes) -> None:
         start = time.perf_counter()
 
+        cache_lookup_time = None
+        generate_response_time = None
+        cache_save_time = None
+
         nibbles = decode_nibbles(prefix)
 
         response = None
 
         if self.cache and len(nibbles):
+            t_cache_start = time.perf_counter()
             response = self.cache.lookup_prefix(nibbles)
+            cache_lookup_time = time.perf_counter() - t_cache_start
 
         if response is None:
+            cache_lookup_time = None  # don't fill the log with cache misses
+            t_response_start = time.perf_counter()
             response = get_leaves_response(
                 self.db, state_root, nibbles, self.MAX_LEAVES
             )
+            t_response_end = time.perf_counter()
+            generate_response_time = t_response_end - t_response_start
             if self.cache and len(nibbles):
                 self.cache.save_response(
                     response['prefix'], response['leaves'], response['proof']
                 )
+                cache_save_time = time.perf_counter() - t_response_end
 
         end = time.perf_counter()
-        self.logger.info(f'request={nibbles} time={end-start:.2}')
+
+        log_line = f'request={nibbles} response={response["prefix"]} total={end-start:.2}'
+
+        if cache_lookup_time:
+            log_line += f' cache={cache_lookup_time:.2}'
+
+        if generate_response_time:
+            log_line += f' response={generate_response_time:.2}'
+
+        if cache_save_time:
+            log_line += f' save={cache_save_time:.2}'
+
+        self.logger.info(log_line)
 
         peer.sub_proto.send_leaves(
             request_id,
@@ -1971,6 +1994,10 @@ def trie_builder(leaves: Iterable[Leaves.LeafType]) -> Iterable[Tuple[Nibbles, T
 
     TODO: This code is horrible and I'm embarrassed to even commit it with the intent to
     refactor it soon.
+
+    TODO: Much of the complication comes from the fact that while the uptimate caller
+    cares about every subnode, each recursive call only cares about the first node which
+    is returned. Maybe those two things should be returned via different mechanisms.
     """
     if len(leaves) == 1:
         # the base-case, build the leaf and send it back up
