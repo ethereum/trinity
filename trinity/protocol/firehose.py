@@ -1254,7 +1254,7 @@ class LeavesCache:
         self.db = plyvel.DB(
             db_path,
             create_if_missing=True,
-            error_if_exists=True,
+            error_if_exists=False,
             max_open_files=256,
         )
 
