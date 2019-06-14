@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from datetime import datetime
 import enum
 from functools import reduce
@@ -979,6 +980,7 @@ class FirehoseExchangeManager(PeerSubscriber, BaseService):
         self.pending_requests[request_id] = future = asyncio.Future()
 
         self.peer.sub_proto.send_request(request)
+        # self.logger.debug(f'sent message: {request_id}')
 
         try:
             payload = await self.wait(future, timeout=timeout)
@@ -1003,6 +1005,7 @@ class FirehoseExchangeManager(PeerSubscriber, BaseService):
                 # TODO: log and continue, don't crash!
                 assert request_id in self.pending_requests
 
+                # self.logger.debug(f'received message: {request_id}')
                 future = self.pending_requests[request_id]
                 future.set_result(msg)
 
@@ -1396,6 +1399,7 @@ class FirehoseRequestServer(BaseRequestServer):
             )
             t_response_end = time.perf_counter()
             generate_response_time = t_response_end - t_response_start
+            # TODO: this means requests for () don't have their responses saved
             if self.cache and len(nibbles):
                 self.cache.save_response(
                     response['prefix'], response['leaves'], response['proof']
@@ -1728,9 +1732,14 @@ class MemoTrieNode:
             self._type = get_node_type(self.obj)
         return self._type
 
+    @property
+    def path_rest(self) -> Nibbles:
+        # careful: this doesn't make any sense for branches
+        return cast(Nibbles, extract_key(self.obj))
+
 
 def make_node(node_rlp: bytes) -> TrieNode:
-    return MemoTrieNode(node_rlp)
+    # return MemoTrieNode(node_rlp)
 
     node = decode_node(node_rlp)
     node_type = get_node_type(node)
@@ -2171,7 +2180,7 @@ async def simple_get_leaves_sync(db: AtomicDB,
         progress_tracker.complete_bucket(result.prefix)
         progress = f'{progress_tracker.progress()*100:2.6}'
         now = datetime.now().isoformat()
-        print(f'[{now}] req: {path} res: {result.prefix} leaves: {len(result.leaves)} progress: {progress}')
+        self.logger.info(f'[{now}] req: {path} res: {result.prefix} leaves: {len(result.leaves)} progress: {progress}')
 
         proof_nodes_to_insert: List[TrieNode] = []
 
@@ -2254,3 +2263,145 @@ async def simple_get_leaves_sync(db: AtomicDB,
         logger.info(
             f't: {total_time} s: {server_time} p: {process_time} l: {all_leaf_time}'
         )
+
+
+class ParallelGetLeavesSync:
+
+    logger = logging.getLogger('leaf-sync')
+
+    def __init__(self, db: AtomicDB, peer: FirehosePeer, state_root: Hash32,
+                 concurrency: int = 1, target: float = 1) -> None:
+        self.db = db
+        self.peer = peer
+        self.state_root = state_root
+        self.max_concurrency = concurrency
+        self.target = target
+
+        self.unexplored_hashes = queue.Queue()
+        self.unexplored_hashes.put(((), state_root))
+
+        self.running_fetches = 0
+        self.fetch_finished = asyncio.Event()
+
+        self.progress_tracker = TrieProgress()
+
+    async def run(self):
+        self.spawn_fetches()
+
+        while self.running_fetches > 0:
+            await self.fetch_finished.wait()
+
+            if self.progress_tracker.progress() > self.target:
+                self.logger.info('sync reached target, exiting')
+                break
+
+            self.fetch_finished.clear()
+            self.spawn_fetches()
+
+        # wait for all the outstanding fetches to finish
+        while self.running_fetches > 0:
+            await self.fetch_finished.wait()
+            self.fetch_finished.clear()
+
+    def spawn_fetches(self):
+        while self.running_fetches < self.max_concurrency:
+            try:
+                self.spawn_fetch()
+            except queue.Empty:
+                return
+
+    def spawn_fetch(self):
+        def fetch_finished(_fut):
+            self.running_fetches -= 1
+            self.fetch_finished.set()
+
+        next_fetch = self.unexplored_hashes.get_nowait()
+        self.running_fetches += 1
+        # self.logger.debug(f'[{self.running_fetches}] spawning fetch: {next_fetch[0]}')
+        task = asyncio.create_task(self.fetch(*next_fetch))
+        task.add_done_callback(fetch_finished)
+
+    def check_proof(self, path: Nibbles, expected_hash: Hash32, result):
+        assert result.prefix != path
+
+        # result must be proving something we know how to verify the proof of
+        assert is_subtree(path, result.prefix)
+
+        expected_nodes: Dict[Hash32, Nibbles] = {expected_hash: path}
+
+        for proof_node_rlp in result.proof:
+            proof_node = make_node(proof_node_rlp)
+
+            assert proof_node.keccak in expected_nodes
+            proof_node_path = expected_nodes.pop(proof_node.keccak)
+
+            # we've verified that this node belongs in the database
+            self.db.set(proof_node.keccak, proof_node.rlp)
+
+            # leaves can't prove anything
+            assert proof_node.kind in (NodeKind.EXTENSION, NodeKind.BRANCH)
+
+            children = _get_children_with_nibbles(proof_node, proof_node_path)
+            for child_path, child_hash in children:
+                if child_hash == b'':
+                    continue
+                expected_nodes[child_hash] = child_path
+
+        return expected_nodes
+
+    def process_no_proof(self, expected_hash, result):
+        nodes_to_insert = fast_nodes_from_leaves(result.prefix, result.leaves)
+
+        first_node_path, first_node = next(nodes_to_insert)
+        assert first_node.keccak == expected_hash
+
+        self.db.set(first_node.keccak, first_node.rlp)
+        for _path, node in nodes_to_insert:
+            self.db.set(node.keccak, node.rlp)
+
+    async def fetch(self, path: Nibbles, requested_node_hash: Hash32):
+        """
+        Something which might be simpler to code, but maybe not simpler to profile, would
+        be to structure this as a generator which returned a stream of 
+           REF: (path, hash) | NODE: (keccak, rlp)
+        we could collect the stream and insert all the nodes and remember all the
+        references
+        """
+
+        t_start = time.perf_counter()
+        result = await self.peer.requests.get_leaves(
+            self.state_root, path, timeout=60,
+        )
+        t_end = time.perf_counter()
+        server_time = t_end - t_start
+
+        self.progress_tracker.complete_bucket(result.prefix)
+        progress = f'{self.progress_tracker.progress():.6}'
+
+        now = datetime.now().isoformat()
+        self.logger.info(f'time={now} req={path} res={result.prefix} progress={progress}')
+
+        # If there's no proof it's easy, just generate all the nodes and insert them
+        if result.prefix == path:
+            self.process_no_proof(requested_node_hash, result)
+            # self.logger.debug(f'[{self.running_fetches}] fetch finishing: {path}')
+            return
+
+        expected_nodes = self.check_proof(path, requested_node_hash, result)
+        nodes_to_insert = fast_nodes_from_leaves(result.prefix, result.leaves)
+
+        # 2. check that the proof proves the leaves we were given
+        first_node_path, first_node = next(nodes_to_insert)
+        assert first_node.keccak in expected_nodes
+        expected_nodes.pop(first_node.keccak)
+
+        # 3. insert all the generated nodes
+        self.db.set(first_node.keccak, first_node.rlp)
+        for _node_path, node in nodes_to_insert:
+            self.db.set(node.keccak, node.rlp)
+
+        # 4. recurse on the proven nodes which weren't returned
+        for node_hash, node_path in expected_nodes.items():
+            self.unexplored_hashes.put((node_path, node_hash))
+
+        # self.logger.debug(f'[{self.running_fetches}] fetch finishing: {path}')

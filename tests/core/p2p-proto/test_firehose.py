@@ -357,6 +357,51 @@ async def test_get_leaves(linked_peers):
     assert len(result.proof) == 1  # the top-level node should have been returned
 
 
+@pytest.mark.asyncio
+async def test_parallel_get_leaves_sync(linked_peers):
+    alice, bob, cancel_token = linked_peers
+
+    # 1. Create a database with many nodes
+
+    random.seed(5000)
+    trie = make_random_trie(100)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    # 2. Sit a request server atop it
+
+    alice_peer_pool = MockPeerPool([alice])
+    request_server = firehose.FirehoseRequestServer(
+        db=chaindb,
+        peer_pool=alice_peer_pool,
+        token=cancel_token,
+    )
+
+    asyncio.ensure_future(request_server.run())
+
+    await asyncio.sleep(0)
+
+    # 3. Start a syncer and watch it go
+
+    db = dict()
+    bob_atomic = AtomicDB(db)
+
+    request_server.MAX_LEAVES = 1000
+    syncer = firehose.ParallelGetLeavesSync(
+        bob_atomic, bob, state_root=trie.root_hash, concurrency=5,
+    )
+    await syncer.run()
+
+    # 4. Check that the final result matches the original database
+
+    assert len(trie.db) == len(db)
+    for key in trie.db.keys():
+        assert key in db
+        assert db[key] == trie.db[key]
+
+
+
 
 def run_trie_builder_comparison(seed, count, debug=False):
     random.seed(seed)

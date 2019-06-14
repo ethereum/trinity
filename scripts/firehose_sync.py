@@ -22,7 +22,13 @@ async def run_sync(node, state_root, base_db):
     await asyncio.wait_for(peer.events.started.wait(), timeout=1)
 
     atomic = AtomicDB(base_db)
-    await firehose.simple_get_leaves_sync(atomic, peer, state_root)
+
+    #await firehose.simple_get_leaves_sync(atomic, peer, state_root)
+
+    syncer = firehose.ParallelGetLeavesSync(
+        atomic, peer, state_root, concurrency=5, target=args.target
+    )
+    await syncer.run()
 
     logger.info(f'finished syncing')
 
@@ -59,6 +65,9 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-db', type=str, required=True, help="Where to save the received data"
+    )
+    parser.add_argument(
+        '-target', type=float, default=1.0, help="When to stop syncing"
     )
     args = parser.parse_args()
 
