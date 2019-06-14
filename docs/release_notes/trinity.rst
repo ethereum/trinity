@@ -4,11 +4,14 @@ Trinity
 v0.1.0-alpha.26
 --------------------------
 
+Unreleased
+
 - `#696 <https://github.com/ethereum/trinity/pull/696>`_: Feature: Expose events for Transaction and NewBlockHashes commands on the EventBus
 - `#682 <https://github.com/ethereum/trinity/pull/682>`_: Feature: Make logging config more ergonomic, flexible and consistent
 - `#636 <https://github.com/ethereum/trinity/pull/636>`_: Feature: Run UPnP Service as an isolated plugin
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Feature: Expose certain peer pool events and move RequestServer into an isolated plugin
 - `#646 <https://github.com/ethereum/trinity/pull/646>`_: Feature: Log the gap time between the imported header and now; don't blast screen with logs when regular syncing a lot
+- `#641 <https://github.com/ethereum/trinity/pull/641>`_: Feature: [Experimental] New "Beam Sync" strategy that downloads just enough state to execute a block, then saves it and the result
 - `#704 <https://github.com/ethereum/trinity/pull/704>`_: Bugfix: Header syncing is now limited in how far ahead of block sync it will go
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Performance: Upgrade to new Lahja version with improved performance
 
