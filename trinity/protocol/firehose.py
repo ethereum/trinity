@@ -77,6 +77,7 @@ from trie.utils.nibbles import (
     decode_nibbles,
     nibbles_to_bytes,
     add_nibbles_terminator,
+    bytes_to_nibbles,
 )
 
 from trie.utils.nodes import (
@@ -1146,14 +1147,12 @@ def common_prefix(left: Nibbles, right: Nibbles) -> Nibbles:
     return min(left, right)  # TODO: more verbose code might be easier to read
 
 
-def get_leaves_response(db: ChainDB,
-                        state_root: Hash32,
-                        nibbles: Nibbles,
-                        max_leaves: int) -> Dict:
+def _get_leaves_response(db: ChainDB,
+                         state_root: Hash32,
+                         nibbles: Nibbles,
+                         max_leaves: int,
+                         iterator) -> Dict:
     """A pure method without any asyncio is much easier to use pdb with"""
-
-    # Iterate over all leaves, rooted at the given prefix
-    iterator = iterate_leaves(db, state_root, nibbles)
 
     # Don't return more than {max_leaves} leaves
     sliced = list(itertools.islice(iterator, max_leaves + 1))
@@ -1196,8 +1195,8 @@ def get_leaves_response(db: ChainDB,
             # this is the second node
             current_prefix = common_prefix(first_path, path)
 
-            # special logic in case the first node is the only thing which fits into the
-            # requested {max_leaves}.
+            # special logic in case the first node is the only thing which fits into
+            # the requested {max_leaves}.
             assert len(current_prefix) > 0
             last_prefix = first_path[:len(current_prefix)+1]
 
@@ -1217,8 +1216,6 @@ def get_leaves_response(db: ChainDB,
         last_prefix = current_prefix
         current_prefix = diff
         continue
-
-    # TODO: what if last_prefix was never set?
 
     # we're returning a smaller prefix than requested so we also need to prove the prefix
     # that we're returning
@@ -1240,6 +1237,64 @@ def get_leaves_response(db: ChainDB,
         'leaves': leaves_to_return,
         'proof': proof,
     }
+
+
+def get_leaves_response(db: ChainDB,
+                        state_root: Hash32,
+                        nibbles: Nibbles,
+                        max_leaves: int) -> Dict:
+    """A pure method without any asyncio is much easier to use pdb with"""
+
+    # Iterate over all leaves, rooted at the given prefix
+    iterator = iterate_leaves(db, state_root, nibbles)
+
+    return _get_leaves_response(
+        db,
+        state_root,
+        nibbles,
+        max_leaves,
+        iterator
+    )
+
+
+def fast_get_leaves_response(
+        chaindb, leavesdb, prefix: Nibbles, state_root: Hash32, max_leaves: int):
+    """
+    This stores the leaves in key:value form.
+
+    When a request for a given prefix comes in, it tries to fill a response with nodes
+    from that prefix.
+
+    If it couldn't fill the bucket it then builds and returns a proof using ChainDB
+    """
+
+    if len(prefix) % 2 != 0:
+        start_prefix = prefix + (0, )
+    else:
+        start_prefix = prefix
+
+    iterator = leavesdb.iterator(
+        start=nibbles_to_bytes(start_prefix),
+        include_start=True,
+    )
+
+    adapted = (
+        (bytes_to_nibbles(key), value)
+        for key, value in iterator
+    )
+
+    def is_in_subtree(item):
+        key, value = item
+        return is_subtree(prefix, key)
+    clipped = itertools.takewhile(is_in_subtree, adapted)
+
+    return _get_leaves_response(
+        chaindb,
+        state_root,
+        prefix,
+        max_leaves,
+        clipped,
+    )
 
 
 class LeavesCache:
@@ -1308,12 +1363,11 @@ class FirehoseRequestServer(BaseRequestServer):
 
     def __init__(self, db: ChainDB,
                  peer_pool: FirehosePeerPool,
-                 cache: LeavesCache = None,
+                 leaves_db = None,
                  token: CancelToken = None) -> None:
         super().__init__(peer_pool, token)
         self.db = db
-
-        self.cache = cache
+        self.leaves_db = leaves_db
 
     async def _handle_msg(self, base_peer: BasePeer, cmd: Command,
                           msg: _DecodedMsgType) -> None:
@@ -1378,46 +1432,29 @@ class FirehoseRequestServer(BaseRequestServer):
                                 state_root: Hash32, prefix: bytes) -> None:
         start = time.perf_counter()
 
-        cache_lookup_time = None
         generate_response_time = None
-        cache_save_time = None
 
         nibbles = decode_nibbles(prefix)
 
-        response = None
-
-        if self.cache and len(nibbles):
-            t_cache_start = time.perf_counter()
-            response = self.cache.lookup_prefix(nibbles)
-            cache_lookup_time = time.perf_counter() - t_cache_start
-
-        if response is None:
-            cache_lookup_time = None  # don't fill the log with cache misses
-            t_response_start = time.perf_counter()
+        t_response_start = time.perf_counter()
+        if self.leaves_db:
+            response = fast_get_leaves_response(
+                self.db, self.leaves_db,
+                nibbles, state_root, self.MAX_LEAVES,
+            )
+        else:
             response = get_leaves_response(
                 self.db, state_root, nibbles, self.MAX_LEAVES
             )
-            t_response_end = time.perf_counter()
-            generate_response_time = t_response_end - t_response_start
-            # TODO: this means requests for () don't have their responses saved
-            if self.cache and len(nibbles):
-                self.cache.save_response(
-                    response['prefix'], response['leaves'], response['proof']
-                )
-                cache_save_time = time.perf_counter() - t_response_end
+        t_response_end = time.perf_counter()
+        generate_response_time = t_response_end - t_response_start
 
         end = time.perf_counter()
 
         log_line = f'request={nibbles} response={response["prefix"]} total={end-start:.2}'
 
-        if cache_lookup_time:
-            log_line += f' cache={cache_lookup_time:.2}'
-
         if generate_response_time:
             log_line += f' response={generate_response_time:.2}'
-
-        if cache_save_time:
-            log_line += f' save={cache_save_time:.2}'
 
         self.logger.info(log_line)
 
@@ -2172,7 +2209,7 @@ async def simple_get_leaves_sync(db: AtomicDB,
         t_start = time.perf_counter()
 
         result = await peer.requests.get_leaves(
-            state_root, path, timeout=60,
+            state_root, path, timeout=1,
         )
 
         t_req = time.perf_counter()
@@ -2180,7 +2217,7 @@ async def simple_get_leaves_sync(db: AtomicDB,
         progress_tracker.complete_bucket(result.prefix)
         progress = f'{progress_tracker.progress()*100:2.6}'
         now = datetime.now().isoformat()
-        self.logger.info(f'[{now}] req: {path} res: {result.prefix} leaves: {len(result.leaves)} progress: {progress}')
+        logger.info(f'[{now}] req: {path} res: {result.prefix} leaves: {len(result.leaves)} progress: {progress}')
 
         proof_nodes_to_insert: List[TrieNode] = []
 

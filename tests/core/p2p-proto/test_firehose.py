@@ -2,6 +2,8 @@ import asyncio
 import random
 import time
 
+import plyvel
+
 import pytest
 from hypothesis import (
     given,
@@ -503,6 +505,55 @@ def test_nodes_from_leaves_creates_extension():
     assert extension_hash in generated_hashes
 
 
+def test_fast_get_leaves(tmpdir):
+    random.seed(5000)
+    trie = make_random_trie(1000)
+
+    atomic = AtomicDB(trie.db)
+    chaindb = ChainDB(atomic)
+
+    leaves_db = plyvel.DB(
+        str(tmpdir),
+        create_if_missing=True,
+        error_if_exists=True,
+    )
+    all_nodes = firehose.iterate_leaves(chaindb, trie.root_hash)
+    for path, leaf in all_nodes:
+        leaves_db.put(nibbles_to_bytes(path), leaf)
+
+    # Each of these are tests which failed during sync tests
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(0, 14), max_leaves=10,
+    )
+
+    other_result = firehose.fast_get_leaves_response(
+        chaindb, leaves_db, prefix=(0, 14), state_root=trie.root_hash, max_leaves=10
+    )
+
+    assert result == other_result
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(7, 15), max_leaves=10,
+    )
+
+    other_result = firehose.fast_get_leaves_response(
+        chaindb, leaves_db, prefix=(7, 15), state_root=trie.root_hash, max_leaves=10
+    )
+
+    assert result == other_result
+
+    result = firehose.get_leaves_response(
+        chaindb, trie.root_hash, nibbles=(15, 14), max_leaves=10,
+    )
+
+    other_result = firehose.fast_get_leaves_response(
+        chaindb, leaves_db, prefix=(15, 14), state_root=trie.root_hash, max_leaves=10
+    )
+
+    assert result == other_result
+
+
 def test_get_leaves_response():
     random.seed(8000)
     trie = make_random_trie(100)
@@ -813,12 +864,22 @@ async def test_simple_get_leaves_sync(linked_peers, tmpdir):
 
     # 2. Sit a request server atop it
 
-    cache = firehose.LeavesCache(str(tmpdir))
+    ### populate a leavesdb
+    leaves_db = plyvel.DB(
+        str(tmpdir),
+        create_if_missing=True,
+        error_if_exists=True,
+    )
+    all_nodes = firehose.iterate_leaves(chaindb, trie.root_hash)
+    for path, leaf in all_nodes:
+        leaves_db.put(nibbles_to_bytes(path), leaf)
+    ###
+
     alice_peer_pool = MockPeerPool([alice])
     request_server = firehose.FirehoseRequestServer(
         db=chaindb,
         peer_pool=alice_peer_pool,
-        cache=cache,
+        leaves_db=leaves_db,
         token=cancel_token,
     )
 
