@@ -5,6 +5,8 @@ import asyncio
 import argparse
 import logging
 
+import plyvel
+
 from cancel_token import CancelToken
 
 from eth.db.backends.level import LevelDB
