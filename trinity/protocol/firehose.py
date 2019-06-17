@@ -2181,6 +2181,53 @@ class TrieProgress:
         return progress
 
 
+class SavingsTracker:
+    """
+    Used to estimate how much data is not being sent over the network.
+
+    There's not a super clean way to do this with the given architecture. Preferably this
+    would have access to both
+    1. the size of each database write
+    2. the size of each response packet
+
+    But those things happen at different levels of abstraction and injecting this tracker
+    into the right places would take some effort.
+
+    Alternatively, it might be possible to rearchitect the syncer to be a pure function
+    from response_packet -> list of database writes, but that would also take some doing.
+    This solution is relatively clean and should be good enough for now.
+
+    The best solution is probably to build two candidate packets, rlp-encode both of them,
+    snappy compress both of them, and compare their sizes.
+    """
+    def __init__(self, wrapped_db: AtomicDB):
+        self.db = wrapped_db
+
+        # we want to know how many bytes were written but not received
+        self.total_received_bytes = 0
+        self.total_written_bytes = 0
+
+    def register_result(self, result: Leaves):
+        received_bytes = 0
+        """
+        This misses the prefix and also the devp2p and rlp overhead of devp2p and rlp
+        """
+        for node_rlp in result.proof:
+            received_bytes += len(node_rlp)
+        for nibbles, leaf_value in result.leaves:
+            received_bytes += len(encode_nibbles(nibbles))
+            received_bytes += len(leaf_value)
+
+        self.total_received_bytes += received_bytes
+
+    def set(self, key: bytes, value: bytes):
+        self.db.set(key, value)
+
+        # only increment if the write succeeds
+        written_bytes = len(key) + len(value)
+        self.total_written_bytes += written_bytes
+
+
 async def simple_get_leaves_sync(db: AtomicDB,
                                  peer: FirehosePeer,
                                  state_root: Hash32) -> None:
@@ -2308,7 +2355,7 @@ class ParallelGetLeavesSync:
 
     def __init__(self, db: AtomicDB, peer: FirehosePeer, state_root: Hash32,
                  concurrency: int = 1, target: float = 1) -> None:
-        self.db = db
+        self.db = SavingsTracker(db)
         self.peer = peer
         self.state_root = state_root
         self.max_concurrency = concurrency
@@ -2339,6 +2386,11 @@ class ParallelGetLeavesSync:
         while self.running_fetches > 0:
             await self.fetch_finished.wait()
             self.fetch_finished.clear()
+
+        written = self.db.total_written_bytes
+        generated = self.db.total_written_bytes - self.db.total_received_bytes
+        savings = f'generated={generated} written={written} ({(100*generated)/written:2.4}%)'
+        self.logger.info(f'sync finished. final stats: {savings}')
 
     def spawn_fetches(self):
         while self.running_fetches < self.max_concurrency:
@@ -2413,10 +2465,7 @@ class ParallelGetLeavesSync:
         server_time = t_end - t_start
 
         self.progress_tracker.complete_bucket(result.prefix)
-        progress = f'{self.progress_tracker.progress():.6}'
-
-        now = datetime.now().isoformat()
-        self.logger.info(f'time={now} req={path} res={result.prefix} progress={progress}')
+        self.db.register_result(result)
 
         # If there's no proof it's easy, just generate all the nodes and insert them
         if result.prefix == path:
@@ -2440,5 +2489,12 @@ class ParallelGetLeavesSync:
         # 4. recurse on the proven nodes which weren't returned
         for node_hash, node_path in expected_nodes.items():
             self.unexplored_hashes.put((node_path, node_hash))
+
+        written = self.db.total_written_bytes
+        generated = self.db.total_written_bytes - self.db.total_received_bytes
+        savings = f'generated={generated} written={written}'
+        progress = f'{self.progress_tracker.progress():.6}'
+        now = datetime.now().isoformat()
+        self.logger.info(f'time={now} req={path} res={result.prefix} progress={progress} {savings}')
 
         # self.logger.debug(f'[{self.running_fetches}] fetch finishing: {path}')
