@@ -1,6 +1,5 @@
 from eth.db.atomic import AtomicDB
 import logging
-import threading
 import socket
 import trio
 import pathlib
@@ -290,7 +289,7 @@ async def test_atomic_db_with_set_and_delete(db, async_client_db):
     with pytest.raises(KeyError):
         db[b'key-1']
 
-    # Existance API
     with pytest.raises(KeyError):
         await async_client_db.get(b'key-1')
+
     assert not await async_client_db.exists(b'key-1')
