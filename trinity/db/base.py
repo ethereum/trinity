@@ -47,11 +47,13 @@ class AsyncDBPreProxy(BaseAsyncDB):
         'exists',
         'get',
         'set',
+        'coro_get',
     )
 
     def __init__(self) -> None:
         pass
 
+    coro_get = async_method('get')
     coro_set = async_method('set')
     coro_exists = async_method('exists')
 

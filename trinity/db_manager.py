@@ -64,7 +64,7 @@ class DBManager:
                 self.logger.debug("closing connection, no operation %s", error)
                 return
             if operation == b'\x00':
-                self.logger.debug("GET")
+                # self.logger.debug("GET")
                 key_length_data = await read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
                 key = await read_exactly(key_length)
@@ -77,7 +77,7 @@ class DBManager:
                     value_length = 0
                     await s.send_all(value_length.to_bytes(4, 'little'))
             elif operation == b'\x01':
-                self.logger.debug("SET")
+                # self.logger.debug("SET")
                 key_length_data = await read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
                 key = await read_exactly(key_length)
@@ -87,19 +87,19 @@ class DBManager:
                 self.db[key] = value
                 await s.send_all((1).to_bytes(1, 'little'))
             elif operation == b'\x02':
-                self.logger.debug("DEL")
+                # self.logger.debug("DEL")
                 key_length_data = await read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
                 key = await read_exactly(key_length)
                 del self.db[key]
                 await s.send_all(b'\x00')
             elif operation == b'\x03':
-                self.logger.debug("EXIST")
+                # self.logger.debug("EXIST")
                 key_length_data = await read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
                 key = await read_exactly(key_length)
                 result = key in self.db
-                self.logger.debug("Existance of %s, %s", key, result)
+                # self.logger.debug("Existance of %s, %s", key, result)
                 await s.send_all(result.to_bytes(1, 'little'))
             else:
                 raise Exception(f"Got unknown operation {operation}")
