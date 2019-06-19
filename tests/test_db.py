@@ -1,6 +1,5 @@
 from eth.db.atomic import AtomicDB
 import logging
-import threading
 import socket
 import trio
 import pathlib
@@ -68,9 +67,39 @@ class DBManager:
                 key_length_data = await read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
                 key = await read_exactly(key_length)
-                value = self.db[key]
-                value_length = len(value)
-                await s.send_all(value_length.to_bytes(4, 'little') + value)
+                try:
+                    value = self.db[key]
+                    value_length = len(value)
+                    await s.send_all(value_length.to_bytes(4, 'little') + value)
+                except KeyError:
+                    self.logger.debug("Key %s doesn't exist", key)
+                    value_length = 0
+                    await s.send_all(value_length.to_bytes(4, 'little'))
+            elif operation == b'\x01':
+                self.logger.debug("SET")
+                key_length_data = await read_exactly(4)
+                key_length = int.from_bytes(key_length_data, 'little')
+                key = await read_exactly(key_length)
+                value_length_data = await read_exactly(4)
+                value_length = int.from_bytes(value_length_data, 'little')
+                value = await read_exactly(value_length)
+                self.db[key] = value
+                await s.send_all((1).to_bytes(1, 'little'))
+            elif operation == b'\x02':
+                self.logger.debug("DEL")
+                key_length_data = await read_exactly(4)
+                key_length = int.from_bytes(key_length_data, 'little')
+                key = await read_exactly(key_length)
+                del self.db[key]
+                await s.send_all(b'\x00')
+            elif operation == b'\x03':
+                self.logger.debug("EXIST")
+                key_length_data = await read_exactly(4)
+                key_length = int.from_bytes(key_length_data, 'little')
+                key = await read_exactly(key_length)
+                result = key in self.db
+                self.logger.debug("Existance of %s, %s", key, result)
+                await s.send_all(result.to_bytes(1, 'little'))
             else:
                 raise Exception(f"Got unknown operation {operation}")
 
@@ -155,8 +184,38 @@ class AsyncDBClient:
             await self._socket.send_all(b'\x00' + key_length.to_bytes(4, 'little') + key)
             value_length_data = await self.read_exactly(4)
             value_length = int.from_bytes(value_length_data, 'little')
+            if value_length == 0:
+                raise KeyError(f"Key {key} doesn't exist")
             value = await self.read_exactly(value_length)
             return value
+
+    async def set(self, key, value):
+        async with self._lock:
+            key_length = len(key)
+            value_length = len(value)
+            await self._socket.send_all(
+                b'\x01' + key_length.to_bytes(4, 'little') + key +
+                value_length.to_bytes(4, 'little') + value
+            )
+            result = await self.read_exactly(1)
+            if int.from_bytes(result, 'little') != 1:
+                raise Exception(f"Fail to Write {key}:{value}")
+
+    async def delete(self, key):
+        async with self._lock:
+            key_length = len(key)
+            await self._socket.send_all(b'\x02' + key_length.to_bytes(4, 'little') + key)
+            await self.read_exactly(1)
+
+    async def exists(self, key):
+        async with self._lock:
+            key_length = len(key)
+            await self._socket.send_all(b'\x03' + key_length.to_bytes(4, 'little') + key)
+            result_data = await self.read_exactly(1)
+            if int.from_bytes(result_data, "little") == 1:
+                return True
+            else:
+                return False
 
     @classmethod
     async def connect(cls, path: pathlib.Path) -> "TrioConnection":
@@ -188,6 +247,12 @@ async def manager(db, ipc_path):
         yield m
 
 
+@pytest_trio.trio_fixture
+async def async_client_db(manager, ipc_path):
+    client_db = await AsyncDBClient.connect(ipc_path)
+    return client_db
+
+
 @pytest.mark.trio
 async def test_the_thing(ipc_path, db, manager):
     db[b'key'] = b'value'
@@ -205,3 +270,26 @@ async def test_another(ipc_path, db, manager):
         assert client_db.get(b'key') == b'value'
 
     await trio.run_sync_in_worker_thread(do_client)
+
+
+@pytest.mark.trio
+async def test_atomic_db_with_set_and_get(db, async_client_db):
+
+    await async_client_db.set(b'key-1', b'value-1')
+    await async_client_db.set(b'key-2', b'value-2')
+    assert await async_client_db.get(b'key-1') == b'value-1'
+    assert await async_client_db.get(b'key-2') == b'value-2'
+
+
+@pytest.mark.trio
+async def test_atomic_db_with_set_and_delete(db, async_client_db):
+    db[b'key-1'] = b'origin'
+
+    await async_client_db.delete(b'key-1')
+    with pytest.raises(KeyError):
+        db[b'key-1']
+
+    with pytest.raises(KeyError):
+        await async_client_db.get(b'key-1')
+
+    assert not await async_client_db.exists(b'key-1')
