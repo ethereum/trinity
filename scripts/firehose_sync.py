@@ -15,7 +15,7 @@ from trinity.protocol import firehose
 logger = logging.getLogger('firehose')
 
 
-async def run_sync(node, state_root, base_db):
+async def run_sync(node, state_root, base_db, concurrency):
     peer = await firehose.connect_to(node.pubkey, node.address.ip, node.address.udp_port)
 
     asyncio.create_task(peer.run())
@@ -26,7 +26,7 @@ async def run_sync(node, state_root, base_db):
     #await firehose.simple_get_leaves_sync(atomic, peer, state_root)
 
     syncer = firehose.ParallelGetLeavesSync(
-        atomic, peer, state_root, concurrency=5, target=args.target
+        atomic, peer, state_root, concurrency, target=args.target
     )
     await syncer.run()
 
@@ -50,7 +50,7 @@ def main(args):
 
     # TODO: cleanly handle KeyboardInterrupt?
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_sync(node, root, base_db))
+    loop.run_until_complete(run_sync(node, root, base_db, args.concurrency))
 
 
 if __name__ == '__main__':
@@ -68,6 +68,9 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '-target', type=float, default=1.0, help="When to stop syncing"
+    )
+    parser.add_argument(
+        '-concurrency', type=int, required=False, default=5
     )
     args = parser.parse_args()
 
