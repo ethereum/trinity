@@ -157,7 +157,7 @@ def execute_state_transtion(test_case, base_db):
     post_state = pre_state.copy()
     for block in blocks:
         sm = sm_class(chaindb, None, post_state)
-        post_state, _ = sm.import_block(block)
+        post_state, _ = sm.import_block(block, post_state)
 
     # Use dict diff, easier to see the diff
     dict_post_state = to_formatted_dict(post_state, BeaconState)

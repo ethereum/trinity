@@ -77,6 +77,7 @@ class BaseBeaconStateMachine(Configurable, ABC):
     @abstractmethod
     def import_block(self,
                      block: BaseBeaconBlock,
+                     state: BeaconState,
                      check_proposer_signature: bool=True) -> Tuple[BeaconState, BaseBeaconBlock]:
         pass
 
