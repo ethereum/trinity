@@ -16,12 +16,16 @@ from eth2.beacon.db.exceptions import (
 from eth2.beacon.types.blocks import (
     BeaconBlock,
 )
+from eth2.beacon.types.eth1_data import (
+    Eth1Data,
+)
 from eth2.beacon.tools.builder.proposer import (
     create_mock_block,
 
 )
 from eth2.beacon.tools.builder.validator import (
     create_mock_signed_attestations_at_slot,
+    sign_transaction,
 )
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
@@ -245,3 +249,69 @@ def test_get_attestation_root(valid_chain,
     with pytest.raises(AttestationRootNotFound):
         valid_chain.get_attestation_by_root(fake_attestation.root)
     assert not valid_chain.attestation_exists(fake_attestation.root)
+
+
+
+@pytest.mark.long
+@pytest.mark.parametrize(
+    (
+        'num_validators,slots_per_epoch,target_committee_size,shard_count'
+    ),
+    [
+        (100, 16, 10, 10),
+    ]
+)
+def test_state_cache(valid_chain,
+                     genesis_block,
+                     genesis_state,
+                     config,
+                     keymap):
+    state = genesis_state
+    blocks = (genesis_block,)
+    valid_chain_2 = copy.deepcopy(valid_chain)
+    for _ in range(3):
+        block = create_mock_block(
+            state=state,
+            config=config,
+            state_machine=valid_chain.get_state_machine(blocks[-1].slot),
+            block_class=genesis_block.__class__,
+            parent_block=blocks[-1],
+            keymap=keymap,
+            slot=state.slot + 2,
+        )
+
+        valid_chain.import_block(block)
+        assert valid_chain.get_canonical_head() == block
+
+        state = valid_chain.get_state_by_slot(block.slot)
+
+        assert block == valid_chain.get_canonical_block_by_slot(
+            block.slot
+        )
+        assert block.signing_root == valid_chain.get_canonical_block_root(
+            block.slot
+        )
+        blocks += (block,)
+
+    block_2_body = blocks[2].body.copy(
+        eth1_data=Eth1Data.create_empty_data().copy(
+            block_hash=b'\x56' * 32,
+        )
+    )
+    new_block_2 = blocks[2].copy(
+        body=block_2_body,
+    )
+
+    valid_chain.import_block(new_block_2, perform_validation=False)
+
+    assert valid_chain.get_canonical_head() != valid_chain_2.get_canonical_head()
+
+    for block in blocks[1:]:
+        valid_chain_2.import_block(block)
+
+    assert valid_chain.get_canonical_head() == valid_chain_2.get_canonical_head()
+    assert valid_chain.get_state_by_slot(blocks[-1].slot).slot != 0
+    assert (
+        valid_chain.get_state_by_slot(blocks[-1].slot) ==
+        valid_chain_2.get_state_by_slot(blocks[-1].slot)
+    )

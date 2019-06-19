@@ -342,8 +342,8 @@ class BeaconChain(BaseBeaconChain):
         )
         return self.get_state_by_slot(latest_epoch_boundary_state_slot)
 
-    def update_state_cache(self, state: BeaconState, block_root: Hash32) -> None:
-        self.state_cache[block_root] = state
+    def update_state_cache(self, state: BeaconState, state_root: Hash32) -> None:
+        self.state_cache[state_root] = state
 
     #
     # Block API
@@ -467,6 +467,7 @@ class BeaconChain(BaseBeaconChain):
         is_epoch_boundary = True if (state.slot + 1) % config.SLOTS_PER_EPOCH == 0 else False
         is_epoch_boundary = True
         self.chaindb.persist_state(state, is_epoch_boundary=is_epoch_boundary)
+        self.update_state_cache(state, state.root)
 
         fork_choice_scoring = state_machine.get_fork_choice_scoring()
         (
