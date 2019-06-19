@@ -4,6 +4,7 @@ from abc import (
 )
 import logging
 from typing import (
+    Dict,
     TYPE_CHECKING,
     Tuple,
     Type,
@@ -39,6 +40,9 @@ from eth2.beacon.db.chain import (
 from eth2.beacon.exceptions import (
     BlockClassError,
     StateMachineNotFound,
+)
+from eth2.beacon.db.exceptions import (
+    StateSlotNotFound,
 )
 from eth2.beacon.fork_choice import (
     ForkChoiceScoring,
@@ -195,6 +199,8 @@ class BeaconChain(BaseBeaconChain):
 
     chaindb_class = BeaconChainDB  # type: Type[BaseBeaconChainDB]
 
+    state_cache:  Dict[Hash32, BeaconState] = {}  # state_root -> BeaconState
+
     def __init__(self, base_db: BaseAtomicDB, genesis_config: Eth2GenesisConfig) -> None:
         if not self.sm_configuration:
             raise ValueError(
@@ -215,6 +221,9 @@ class BeaconChain(BaseBeaconChain):
         if cls.chaindb_class is None:
             raise AttributeError("`chaindb_class` not set")
         return cls.chaindb_class
+
+    def get_config_by_slot(self, slot: Slot) -> Eth2GenesisConfig:
+        return self.get_state_machine_class_for_block_slot(slot).config
 
     #
     # Chain API
@@ -313,7 +322,27 @@ class BeaconChain(BaseBeaconChain):
         validate_slot(slot)
         sm_class = self.get_state_machine_class_for_block_slot(slot)
         state_class = sm_class.get_state_class()
-        return self.chaindb.get_state_by_slot(slot, state_class)
+        state_root = self.chaindb.get_state_root_by_slot(slot)
+        if state_root in self.state_cache:
+            return self.state_cache[state_root]
+        try:
+            state = self.chaindb.get_state_by_root(state_root, state_class)
+            return state
+        except StateSlotNotFound:
+            return self.rebuild_state()
+
+    def rebuild_state(self):
+        # TODO
+        head_slot = self.get_canonical_head().slot
+        config = self.get_config_by_slot(head_slot)
+        latest_epoch_boundary_state_slot = max(
+            config.GENESIS_SLOT,
+            head_slot - (config.SLOTS_PER_EPOCH * (head_slot // config.GENESIS_SLOT)),
+        )
+        return self.get_state_by_slot(latest_epoch_boundary_state_slot)
+
+    def update_state_cache(self, state: BeaconState, block_root= Hash32) -> None:
+        self.state_cache[block_root] = state
 
     #
     # Block API
@@ -384,6 +413,10 @@ class BeaconChain(BaseBeaconChain):
         """
         return self.chaindb.get_canonical_block_root(slot)
 
+    def get_head_state(self):
+        head_state_slot = self.chaindb.get_head_state_slot()
+        return self.get_state_by_slot(head_state_slot)
+
     def import_block(
             self,
             block: BaseBeaconBlock,
@@ -418,15 +451,17 @@ class BeaconChain(BaseBeaconChain):
             prev_state_slot = head_state_slot
 
         state_machine = self.get_state_machine(prev_state_slot)
-
-        state, imported_block = state_machine.import_block(block)
+        state = self.get_state_by_slot(prev_state_slot)
+        state, imported_block = state_machine.import_block(block, state, check_proposer_signature=perform_validation)
 
         # Validate the imported block.
         if perform_validation:
             validate_imported_block_unchanged(imported_block, block)
 
-        # TODO: Now it just persists all state. Should design how to clean up the old state.
-        self.chaindb.persist_state(state)
+        config = self.get_state_machine_class_for_block_slot(block.slot).config
+        is_epoch_boundary = True if (state.slot + 1) % config.SLOTS_PER_EPOCH == 0 else False
+        is_epoch_boundary = True
+        self.chaindb.persist_state(state, is_epoch_boundary=is_epoch_boundary)
 
         fork_choice_scoring = state_machine.get_fork_choice_scoring()
         (

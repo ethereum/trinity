@@ -98,14 +98,14 @@ class BeaconStateMachine(BaseBeaconStateMachine):
         else:
             self.slot = slot
 
-    @property
-    def state(self) -> BeaconState:
-        if self._state is None:
-            self._state = self.chaindb.get_state_by_slot(
-                self.slot,
-                self.get_state_class()
-            )
-        return self._state
+    # @property
+    # def state(self) -> BeaconState:
+    #     if self._state is None:
+    #         self._state = self.chaindb.get_state_by_slot(
+    #             self.slot,
+    #             self.get_state_class()
+    #         )
+    #     return self._state
 
     @classmethod
     def get_block_class(cls) -> Type[BaseBeaconBlock]:
@@ -149,9 +149,10 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     #
     def import_block(self,
                      block: BaseBeaconBlock,
+                     state: BeaconState,
                      check_proposer_signature: bool=True) -> Tuple[BeaconState, BaseBeaconBlock]:
         state = self.state_transition.apply_state_transition(
-            self.state,
+            state,
             block,
             check_proposer_signature,
         )

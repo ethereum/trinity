@@ -88,7 +88,7 @@ def test_get_state_by_slot(valid_chain,
                            keymap):
     # Fisrt, skip block and check if `get_state_by_slot` returns the expected state
     state_machine = valid_chain.get_state_machine(genesis_block.slot)
-    state = state_machine.state
+    state = valid_chain.get_head_state()
     block_skipped_slot = genesis_block.slot + 1
     block_skipped_state = state_machine.state_transition.apply_state_transition_without_block(
         state,
@@ -112,7 +112,7 @@ def test_get_state_by_slot(valid_chain,
         attestations=(),
     )
     valid_chain.import_block(block)
-    state = valid_chain.get_state_machine().state
+    state = valid_chain.get_head_state()
     assert valid_chain.get_state_by_slot(proposed_slot).root == state.root
 
 

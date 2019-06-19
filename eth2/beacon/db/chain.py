@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import functools
 
 from typing import (
+    Dict,
     Iterable,
     Optional,
     Tuple,
@@ -718,11 +719,27 @@ class BeaconChainDB(BaseBeaconChainDB):
             )
 
         state_root = ssz.decode(state_root_ssz, sedes=ssz.sedes.byte_list)
+        return self._get_state_by_root(db, state_root, state_class)
+
+    def get_state_root_by_slot(self, slot: Slot) -> Hash32:
+        return self._get_state_root_by_slot(self.db, slot)
+
+    @staticmethod
+    def _get_state_root_by_slot(db: BaseDB, slot: Slot) -> Hash32:
+        """
+        Return the requested beacon state as specified by slot.
+
+        Raises StateSlotNotFound if it is not present in the db.
+        """
+        slot_to_state_root_key = SchemaV1.make_slot_to_state_root_lookup_key(slot)
         try:
-            state_ssz = db[state_root]
+            state_root_ssz = db[slot_to_state_root_key]
         except KeyError:
-            raise StateRootNotFound(f"No state with root {encode_hex(state_root)} found")
-        return _decode_state(state_ssz, state_class)
+            raise StateSlotNotFound(
+                "No state root for slot #{0}".format(slot)
+            )
+        state_root = ssz.decode(state_root_ssz, sedes=ssz.sedes.byte_list)
+        return state_root
 
     def get_state_by_root(self, state_root: Hash32, state_class: Type[BeaconState]) -> BeaconState:
         return self._get_state_by_root(self.db, state_root, state_class)
@@ -743,20 +760,21 @@ class BeaconChainDB(BaseBeaconChainDB):
             raise StateRootNotFound(f"No state with root {encode_hex(state_root)} found")
         return _decode_state(state_ssz, state_class)
 
-    def persist_state(self,
-                      state: BeaconState) -> None:
+    def persist_state(self, state: BeaconState, is_epoch_boundary: bool=True) -> None:
         """
         Persist the given BeaconState.
 
         This includes the finality data contained in the BeaconState.
         """
-        return self._persist_state(state)
+        return self._persist_state(state, is_epoch_boundary)
 
-    def _persist_state(self, state: BeaconState) -> None:
-        self.db.set(
-            state.root,
-            ssz.encode(state),
-        )
+    def _persist_state(self, state: BeaconState, is_epoch_boundary: bool) -> None:
+        if is_epoch_boundary:
+            self.db.set(
+                state.root,
+                ssz.encode(state),
+            )
+
         self._add_slot_to_state_root_lookup(state.slot, state.root)
 
         self._persist_finalized_head(state)
