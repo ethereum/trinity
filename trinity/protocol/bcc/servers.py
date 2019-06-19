@@ -429,7 +429,7 @@ class BCCReceiveServer(BaseReceiveServer):
                                attestations: Iterable[Attestation]) -> Iterable[Attestation]:
         state_machine = self.chain.get_state_machine()
         config = state_machine.config
-        state = state_machine.state
+        state = self.chain.get_head_state()
         for attestation in attestations:
             # Fast forward to state in future slot in order to pass
             # attestation.data.slot validity check
