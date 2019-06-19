@@ -64,6 +64,7 @@ from eth2.beacon.validation import (
     validate_slot,
 )
 from eth2.configs import (
+    Eth2Config,
     Eth2GenesisConfig,
 )
 
@@ -199,7 +200,7 @@ class BeaconChain(BaseBeaconChain):
 
     chaindb_class = BeaconChainDB  # type: Type[BaseBeaconChainDB]
 
-    state_cache:  Dict[Hash32, BeaconState] = {}  # state_root -> BeaconState
+    state_cache: Dict[Hash32, BeaconState] = {}  # state_root -> BeaconState
 
     def __init__(self, base_db: BaseAtomicDB, genesis_config: Eth2GenesisConfig) -> None:
         if not self.sm_configuration:
@@ -222,7 +223,7 @@ class BeaconChain(BaseBeaconChain):
             raise AttributeError("`chaindb_class` not set")
         return cls.chaindb_class
 
-    def get_config_by_slot(self, slot: Slot) -> Eth2GenesisConfig:
+    def get_config_by_slot(self, slot: Slot) -> Eth2Config:
         return self.get_state_machine_class_for_block_slot(slot).config
 
     #
@@ -331,7 +332,7 @@ class BeaconChain(BaseBeaconChain):
         except StateSlotNotFound:
             return self.rebuild_state()
 
-    def rebuild_state(self):
+    def rebuild_state(self) -> BeaconState:
         # TODO
         head_slot = self.get_canonical_head().slot
         config = self.get_config_by_slot(head_slot)
@@ -341,7 +342,7 @@ class BeaconChain(BaseBeaconChain):
         )
         return self.get_state_by_slot(latest_epoch_boundary_state_slot)
 
-    def update_state_cache(self, state: BeaconState, block_root= Hash32) -> None:
+    def update_state_cache(self, state: BeaconState, block_root: Hash32) -> None:
         self.state_cache[block_root] = state
 
     #
@@ -413,7 +414,7 @@ class BeaconChain(BaseBeaconChain):
         """
         return self.chaindb.get_canonical_block_root(slot)
 
-    def get_head_state(self):
+    def get_head_state(self) -> BeaconState:
         head_state_slot = self.chaindb.get_head_state_slot()
         return self.get_state_by_slot(head_state_slot)
 
@@ -452,7 +453,11 @@ class BeaconChain(BaseBeaconChain):
 
         state_machine = self.get_state_machine(prev_state_slot)
         state = self.get_state_by_slot(prev_state_slot)
-        state, imported_block = state_machine.import_block(block, state, check_proposer_signature=perform_validation)
+        state, imported_block = state_machine.import_block(
+            block,
+            state,
+            check_proposer_signature=perform_validation,
+        )
 
         # Validate the imported block.
         if perform_validation:

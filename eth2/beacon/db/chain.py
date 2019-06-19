@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 import functools
 
 from typing import (
-    Dict,
     Iterable,
     Optional,
     Tuple,
@@ -170,12 +169,15 @@ class BaseBeaconChainDB(ABC):
         pass
 
     @abstractmethod
+    def get_state_root_by_slot(self, slot: Slot) -> Hash32:
+        pass
+
+    @abstractmethod
     def get_state_by_root(self, state_root: Hash32, state_class: Type[BeaconState]) -> BeaconState:
         pass
 
     @abstractmethod
-    def persist_state(self,
-                      state: BeaconState) -> None:
+    def persist_state(self, state: BeaconState, is_epoch_boundary: bool=True) -> None:
         pass
 
     #

@@ -96,13 +96,12 @@ def create_block_on_chain(chain: BeaconChain,
                           slot: Slot,
                           proposer_index: ValidatorIndex,
                           proposer_privkey: int,
-                          attestations: Sequence[Attestation]):
+                          attestations: Sequence[Attestation]) -> BaseBeaconBlock:
     state = chain.get_head_state()
     state_machine = chain.get_state_machine()
     config = state_machine.config
     block_class = state_machine.block_class
     parent_block = chain.get_canonical_head()
-
 
     block = create_block_on_state(
         state=state,
