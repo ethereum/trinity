@@ -50,8 +50,7 @@ class DBManager:
                 data = await s.receive_some(4096)
 
                 if data == b"":
-                    self.logger.debug("Connection closed")
-                    return
+                    raise Exception("Connection closed")
 
                 buffer.extend(data)
             payload = buffer[:num_bytes]
@@ -59,7 +58,11 @@ class DBManager:
             return bytes(payload)
 
         while True:
-            operation = await read_exactly(1)
+            try:
+                operation = await read_exactly(1)
+            except Exception as error:
+                self.logger.debug("closing connection, no operation %s", error)
+                return
             if operation == b'\x00':
                 self.logger.debug("GET")
                 key_length_data = await read_exactly(4)
