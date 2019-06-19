@@ -1,11 +1,14 @@
-from trinity.db_manager import (
-    DBManager,
-    AsyncDBClient,
-    DBClient,
-    _wait_for_path,
-)
+
+import asyncio
 from eth.db.atomic import AtomicDB
 import multiprocessing
+from trinity.db.base import AsyncDBProxy
+from multiprocessing.managers import (
+    BaseManager,
+)
+from trinity.db.beacon.manager import (
+    create_db_consumer_manager,
+)
 
 import trio
 import os
@@ -14,7 +17,7 @@ import pathlib
 import time
 import random
 
-IPC_PATH = trio.Path("./foo.ipc")
+IPC_PATH = pathlib.Path("./foo.ipc")
 
 
 def random_bytes(num):
@@ -29,21 +32,33 @@ key_values = {
 
 def run_server(ipc_path):
     db = AtomicDB()
-    manager = DBManager(db)
+
+    class DBManager(BaseManager):
+        pass
+
+    if ipc_path.exists():
+        ipc_path.unlink()
+    DBManager.register(
+        'get_db', callable=lambda: db, proxytype=AsyncDBProxy)
+    manager = DBManager(address=str(ipc_path))
+    server = manager.get_server()
+
     try:
-        trio.run(manager.serve, ipc_path)
+        server.serve_forever()
         print("Exit run server")
     except KeyboardInterrupt:
         pathlib.Path(ipc_path).unlink()
 
 
 async def run_async_client(ipc_path):
-    db_client = await AsyncDBClient.connect(ipc_path)
+    db_manager = create_db_consumer_manager(ipc_path)
+    db_client = db_manager.get_db()
+
     start = time.perf_counter()
 
     for key, value in key_values.items():
-        await db_client.set(key, value)
-        await db_client.get(key)
+        await db_client.coro_set(key, value)
+        await db_client.coro_get(key)
     end = time.perf_counter()
     duration = end - start
 
@@ -53,7 +68,8 @@ async def run_async_client(ipc_path):
 
 
 def outer(ipc_path):
-    trio.run(run_async_client, ipc_path)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run_async_client(ipc_path))
 
 
 if __name__ == '__main__':
