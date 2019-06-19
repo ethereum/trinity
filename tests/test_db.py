@@ -90,6 +90,43 @@ class DBClient:
 
     def __init__(self, s):
         self._socket = s
+        self._buffer = bytearray()
+
+    def read_exactly(self, num_bytes):
+
+        while len(self._buffer) < num_bytes:
+
+            data = self._socket.recv(4096)
+
+            if data == b"":
+                raise Exception("socket closed")
+
+            self._buffer.extend(data)
+        payload = self._buffer[:num_bytes]
+        self._buffer = self._buffer[num_bytes:]
+        return bytes(payload)
+
+    def get(self, key):
+        key_length = len(key)
+        self._socket.sendall(b'\x00' + key_length.to_bytes(4, 'little') + key)
+        value_length_data = self.read_exactly(4)
+        value_length = int.from_bytes(value_length_data, 'little')
+        value = self.read_exactly(value_length)
+        return value
+
+    @classmethod
+    def connect(cls, path: pathlib.Path) -> "TrioConnection":
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        cls.logger.debug("Opened connection to %s: %s", path, s)
+        s.connect(str(path))
+        return cls(s)
+
+
+class AsyncDBClient:
+    logger = logging.getLogger('async_client')
+
+    def __init__(self, s):
+        self._socket = s
         self._lock = trio.Lock()
         self._buffer = bytearray()
 
@@ -117,7 +154,6 @@ class DBClient:
             value_length = int.from_bytes(value_length_data, 'little')
             value = await self.read_exactly(value_length)
             return value
-
 
     @classmethod
     async def connect(cls, path: pathlib.Path) -> "TrioConnection":
@@ -153,5 +189,16 @@ async def manager(db, ipc_path):
 async def test_the_thing(ipc_path, db, manager):
     db[b'key'] = b'value'
 
-    client_db = await DBClient.connect(ipc_path)
+    client_db = await AsyncDBClient.connect(ipc_path)
     assert await client_db.get(b'key') == b'value'
+
+
+@pytest.mark.trio
+async def test_another(ipc_path, db, manager):
+    db[b'key'] = b'value'
+
+    def do_client():
+        client_db = DBClient.connect(ipc_path)
+        assert client_db.get(b'key') == b'value'
+
+    await trio.run_sync_in_worker_thread(do_client)
