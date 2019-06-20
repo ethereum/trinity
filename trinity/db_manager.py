@@ -3,6 +3,7 @@ import socket
 from async_generator import asynccontextmanager
 import trio
 import pathlib
+import io
 
 
 async def _wait_for_path(path):
@@ -52,7 +53,7 @@ class DBManager:
                 if data == b"":
                     raise Exception("Connection closed")
 
-                buffer.extend(data)
+                buffer += data
             payload = buffer[:num_bytes]
             buffer = buffer[num_bytes:]
             return bytes(payload)
@@ -82,7 +83,7 @@ class DBManager:
                 key_length = int.from_bytes(length_data[:4], 'little')
                 value_length = int.from_bytes(length_data[4:], 'little')
                 payload = await read_exactly(key_length + value_length)
-                key, value = payload[:key_length], payload[key_length:value_length]
+                key, value = payload[:key_length], payload[key_length:]
                 self.db[key] = value
                 await s.send_all((1).to_bytes(1, 'little'))
             elif operation == b'\x02':
@@ -181,7 +182,12 @@ class AsyncDBClient:
     async def get(self, key):
         async with self._lock:
             key_length = len(key)
-            await self._socket.send_all(b'\x00' + key_length.to_bytes(4, 'little') + key)
+            payload = io.BytesIO()
+            payload.write(b'\x00')
+            payload.write(key_length.to_bytes(4, 'little'))
+            payload.write(key)
+            d = payload.getvalue()
+            await self._socket.send_all(d)
             value_length_data = await self.read_exactly(4)
             value_length = int.from_bytes(value_length_data, 'little')
             if value_length == 0:
@@ -193,10 +199,14 @@ class AsyncDBClient:
         async with self._lock:
             key_length = len(key)
             value_length = len(value)
-            await self._socket.send_all(
-                b'\x01' + key_length.to_bytes(4, 'little') + value_length.to_bytes(4, 'little') +
-                key + value
-            )
+            payload = io.BytesIO()
+            payload.write(b'\x01')
+            payload.write(key_length.to_bytes(4, 'little'))
+            payload.write(value_length.to_bytes(4, 'little'))
+            payload.write(key)
+            payload.write(value)
+            d = payload.getvalue()
+            await self._socket.send_all(d)
             result = await self.read_exactly(1)
             if int.from_bytes(result, 'little') != 1:
                 raise Exception(f"Fail to Write {key}:{value}")
