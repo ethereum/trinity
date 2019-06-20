@@ -48,10 +48,8 @@ async def run_async_client(ipc_path):
     duration = end - start
 
     num_keys = len(key_values)
-    print(
-        f"Takes {duration} seconds to do {num_keys} times of get-set.",
-        f"avg {duration/num_keys *1000000} µs per get-set."
-    )
+    print(f"Takes {duration} seconds to do {num_keys} times of get-set.")
+    print(f"{num_keys/duration} get-set per second")
 
 
 def outer(ipc_path):
