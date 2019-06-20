@@ -53,7 +53,7 @@ class DBManager:
                 if data == b"":
                     raise Exception("Connection closed")
 
-                buffer.extend(data)
+                buffer += data
             payload = buffer[:num_bytes]
             buffer = buffer[num_bytes:]
             return bytes(payload)
