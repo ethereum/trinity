@@ -8,7 +8,7 @@ Unreleased
 
 - `#696 <https://github.com/ethereum/trinity/pull/696>`_: Feature: Expose events for Transaction and NewBlockHashes commands on the EventBus
 - `#682 <https://github.com/ethereum/trinity/pull/682>`_: Feature: Make logging config more ergonomic, flexible and consistent
-- `#636 <https://github.com/ethereum/trinity/pull/636>`_: Feature: Run UPnP Service as an isolated plugin
+- `#636 <https://github.com/ethereum/trinity/pull/636>`_: Feature: Run UPnP Service as an isolated plugin (plus `#730 <https://github.com/ethereum/trinity/pull/730>`_ fixup)
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Feature: Expose certain peer pool events and move RequestServer into an isolated plugin
 - `#646 <https://github.com/ethereum/trinity/pull/646>`_: Feature: Log the gap time between the imported header and now; don't blast screen with logs when regular syncing a lot
 - `#641 <https://github.com/ethereum/trinity/pull/641>`_: Feature: [Experimental] New "Beam Sync" strategy that downloads just enough state to execute a block, then saves it and the result
