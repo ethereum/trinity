@@ -78,12 +78,11 @@ class DBManager:
                     await s.send_all(value_length.to_bytes(4, 'little'))
             elif operation == b'\x01':
                 # self.logger.debug("SET")
-                key_length_data = await read_exactly(4)
-                key_length = int.from_bytes(key_length_data, 'little')
-                key = await read_exactly(key_length)
-                value_length_data = await read_exactly(4)
-                value_length = int.from_bytes(value_length_data, 'little')
-                value = await read_exactly(value_length)
+                length_data = await read_exactly(8)
+                key_length = int.from_bytes(length_data[:4], 'little')
+                value_length = int.from_bytes(length_data[4:], 'little')
+                payload = await read_exactly(key_length + value_length)
+                key, value = payload[:key_length], payload[key_length:value_length]
                 self.db[key] = value
                 await s.send_all((1).to_bytes(1, 'little'))
             elif operation == b'\x02':
@@ -195,8 +194,8 @@ class AsyncDBClient:
             key_length = len(key)
             value_length = len(value)
             await self._socket.send_all(
-                b'\x01' + key_length.to_bytes(4, 'little') + key +
-                value_length.to_bytes(4, 'little') + value
+                b'\x01' + key_length.to_bytes(4, 'little') + value_length.to_bytes(4, 'little') +
+                key + value
             )
             result = await self.read_exactly(1)
             if int.from_bytes(result, 'little') != 1:
