@@ -39,17 +39,18 @@ def run_server(ipc_path):
 
 async def run_async_client(ipc_path):
     db_client = await AsyncDBClient.connect(ipc_path)
-    start = time.perf_counter()
 
-    for key, value in key_values.items():
-        await db_client.set(key, value)
-        await db_client.get(key)
-    end = time.perf_counter()
-    duration = end - start
+    for _ in range(3):
+        start = time.perf_counter()
+        for key, value in key_values.items():
+            await db_client.set(key, value)
+            await db_client.get(key)
+        end = time.perf_counter()
+        duration = end - start
 
-    num_keys = len(key_values)
-    print(f"Takes {duration} seconds to do {num_keys} times of get-set.")
-    print(f"{num_keys/duration} get-set per second")
+        num_keys = len(key_values)
+        print(f"The new: Takes {duration} seconds to do {num_keys} times of get-set.")
+        print(f"{num_keys/duration} get-set per second")
 
 
 def outer(ipc_path):
