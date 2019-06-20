@@ -58,8 +58,8 @@ async def run_async_client(ipc_path):
         start = time.perf_counter()
 
         for key, value in key_values.items():
-            await db_client.coro_set(key, value)
-            await db_client.coro_get(key)
+            db_client.set(key, value)
+            db_client.get(key)
         end = time.perf_counter()
         duration = end - start
 

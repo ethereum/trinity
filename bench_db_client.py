@@ -13,6 +13,7 @@ import signal
 import pathlib
 import time
 import random
+from trinity._utils.profiling import profiler
 
 IPC_PATH = trio.Path("./foo.ipc")
 
@@ -28,6 +29,7 @@ key_values = {
 
 
 def run_server(ipc_path):
+    # with profiler("server.prof"):
     db = AtomicDB()
     manager = DBManager(db)
     try:
@@ -38,13 +40,15 @@ def run_server(ipc_path):
 
 
 async def run_async_client(ipc_path):
-    db_client = await AsyncDBClient.connect(ipc_path)
+    # with profiler("client.prof"):
+    await _wait_for_path(ipc_path)
+    db_client = DBClient.connect(ipc_path)
 
     for _ in range(3):
         start = time.perf_counter()
         for key, value in key_values.items():
-            await db_client.set(key, value)
-            await db_client.get(key)
+            db_client.set(key, value)
+            db_client.get(key)
         end = time.perf_counter()
         duration = end - start
 
