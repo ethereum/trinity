@@ -83,7 +83,7 @@ class DBManager:
                 key_length = int.from_bytes(length_data[:4], 'little')
                 value_length = int.from_bytes(length_data[4:], 'little')
                 payload = await read_exactly(key_length + value_length)
-                key, value = payload[:key_length], payload[key_length:value_length]
+                key, value = payload[:key_length], payload[key_length:]
                 self.db[key] = value
                 await s.send_all((1).to_bytes(1, 'little'))
             elif operation == b'\x02':
