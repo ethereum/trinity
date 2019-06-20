@@ -147,6 +147,18 @@ class DBClient:
         value = self.read_exactly(value_length)
         return value
 
+    def set(self, key, value):
+        key_length = len(key)
+        value_length = len(value)
+        self._socket.sendall(
+            b'\x01' +
+            key_length.to_bytes(4, 'little') +
+            value_length.to_bytes(4, 'little') +
+            key + value)
+        result = self.read_exactly(1)
+        if int.from_bytes(result, 'little') != 1:
+            raise Exception(f"Fail to Write {key}:{value}")
+
     @classmethod
     def connect(cls, path: pathlib.Path) -> "TrioConnection":
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
