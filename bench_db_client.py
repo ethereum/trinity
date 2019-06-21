@@ -1,23 +1,21 @@
+import pathlib
 from trinity.db_manager import (
     DBManager,
-    AsyncDBClient,
     DBClient,
-    _wait_for_path,
 )
-from eth.db.atomic import AtomicDB
 from eth.db.backends.level import LevelDB
+from eth.db.atomic import AtomicDB
 
 import multiprocessing
 
-import trio
 import os
 import signal
-import pathlib
 import time
 import random
 from trinity._utils.profiling import profiler
 
-IPC_PATH = trio.Path("./foo.ipc")
+IPC_PATH = pathlib.Path("./foo.ipc")
+DB_PATH = pathlib.Path("./tmp-db")
 
 
 def random_bytes(num):
@@ -31,18 +29,19 @@ key_values = {
 
 
 def run_server(ipc_path):
-    db = LevelDB("./bar")
+    db = LevelDB(db_path=DB_PATH)
     manager = DBManager(db)
-    try:
-        trio.run(manager.serve, ipc_path)
-        print("Exit run server")
-    except KeyboardInterrupt:
-        pathlib.Path(ipc_path).unlink()
+
+    with manager.run(ipc_path):
+        try:
+            manager.wait_stopped()
+        except KeyboardInterrupt:
+            pass
+
+    ipc_path.unlink()
 
 
-async def run_async_client(ipc_path):
-    # with profiler("client.prof"):
-    await _wait_for_path(ipc_path)
+def run_client(ipc_path):
     db_client = DBClient.connect(ipc_path)
 
     for _ in range(3):
@@ -58,14 +57,12 @@ async def run_async_client(ipc_path):
         print(f"{num_keys/duration} get-set per second")
 
 
-def outer(ipc_path):
-    trio.run(run_async_client, ipc_path)
-
-
 if __name__ == '__main__':
+    if IPC_PATH.exists():
+        IPC_PATH.unlink()
 
     server = multiprocessing.Process(target=run_server, args=[IPC_PATH])
-    client = multiprocessing.Process(target=outer, args=[IPC_PATH])
+    client = multiprocessing.Process(target=run_client, args=[IPC_PATH])
     server.start()
     client.start()
     client.join(600)
