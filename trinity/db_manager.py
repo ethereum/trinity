@@ -1,54 +1,96 @@
+from contextlib import contextmanager
+import time
 import logging
 import socket
-from async_generator import asynccontextmanager
-import trio
 import pathlib
 import io
+import threading
+import trio
 
 
-async def _wait_for_path(path):
+def _block_for_path(path):
+    while not path.exists():
+        time.sleep(0.001)
+
+
+async def _wait_for_path(path: trio.Path):
     while not await path.exists():
-        await trio.sleep(0.005)
+        await trio.sleep(0.001)
 
 
 class DBManager:
     logger = logging.getLogger('manager')
 
     def __init__(self, db):
-        self._server_running = trio.Event()
+        self._started = threading.Event()
+        self._stopped = threading.Event()
         self.db = db
 
-    async def serve(self, ipc_path) -> None:
-        async with trio.open_nursery() as nursery:
-            # Store nursery on self so that we can access it for cancellation
-            self._server_nursery = nursery
+    def is_started(self) -> bool:
+        return self._stopped.is_set()
 
-            self.logger.debug("%s: server starting", self)
-            s = trio.socket.socket(trio.socket.AF_UNIX, trio.socket.SOCK_STREAM)
-            await s.bind(ipc_path.__fspath__())
-            s.listen(1)
-            listener = trio.SocketListener(s)
+    def is_running(self) -> bool:
+        return self.is_started and self.is_stopped
 
-            self._server_running.set()
+    def is_stopped(self) -> bool:
+        return self._stopped.is_set()
 
-            try:
-                await trio.serve_listeners(
-                    handler=self._accept_conn,
-                    listeners=(listener,),
-                    handler_nursery=nursery,
-                )
-            finally:
+    def wait_started(self) -> None:
+        self._started.wait()
+
+    def wait_stopped(self) -> None:
+        self._stopped.wait()
+
+    def start(self, ipc_path: pathlib.Path) -> None:
+        threading.Thread(
+            target=self.serve,
+            args=(ipc_path,),
+            daemon=False,
+        ).start()
+        self.wait_started()
+
+    def stop(self) -> None:
+        self._stopped.set()
+
+    def _close_socket_on_stop(self, sock: socket.socket) -> None:
+        self.wait_stopped()
+        socket.close()
+
+    def serve(self, ipc_path: pathlib.Path) -> None:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            # background task to close the socket.
+            threading.Thread(
+                target=self._close_socket_on_stop,
+                args=(sock,),
+                daemon=False,
+            ).start()
+
+            sock.bind(str(ipc_path))
+            sock.listen(1)
+
+            _block_for_path(ipc_path)
+            self._started.set()
+
+            while self.is_running:
+                conn, addr = sock.accept()
+                self.logger.debug('Server accepted connection from %s', addr)
+                threading.Thread(
+                    target=self._serve_conn,
+                    args=(conn,),
+                    daemon=False,
+                ).start()
+
                 self.logger.debug("%s: server stopping", self)
 
-    async def _accept_conn(self, s: trio.SocketStream) -> None:
-        self.logger.debug("%s: starting client handler for %s", self, s)
+    def _serve_conn(self, sock: socket.socket) -> None:
+        self.logger.debug("%s: starting client handler for %s", self, sock)
         buffer = bytearray()
 
-        async def read_exactly(num_bytes):
+        def read_exactly(num_bytes):
             nonlocal buffer
             while len(buffer) < num_bytes:
 
-                data = await s.receive_some(4096)
+                data = sock.recv(4096)
 
                 if data == b"":
                     raise Exception("Connection closed")
@@ -58,64 +100,61 @@ class DBManager:
             buffer = buffer[num_bytes:]
             return bytes(payload)
 
-        while True:
+        while self.is_running:
             try:
-                operation = await read_exactly(1)
+                operation = read_exactly(1)
             except Exception as error:
                 self.logger.debug("closing connection, no operation %s", error)
                 return
+
             if operation == b'\x00':
                 # self.logger.debug("GET")
-                key_length_data = await read_exactly(4)
+                key_length_data = read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
-                key = await read_exactly(key_length)
+                key = read_exactly(key_length)
                 try:
                     value = self.db[key]
                     value_length = len(value)
-                    await s.send_all(value_length.to_bytes(4, 'little') + value)
+                    sock.sendall(b'\x01' + value_length.to_bytes(4, 'little') + value)
                 except KeyError:
-                    self.logger.debug("Key %s doesn't exist", key)
-                    value_length = 0
-                    await s.send_all(value_length.to_bytes(4, 'little'))
+                    # self.logger.debug("Key %s doesn't exist", key)
+                    sock.sendall(b'\x00')
             elif operation == b'\x01':
                 # self.logger.debug("SET")
-                length_data = await read_exactly(8)
+                length_data = read_exactly(8)
                 key_length = int.from_bytes(length_data[:4], 'little')
                 value_length = int.from_bytes(length_data[4:], 'little')
-                payload = await read_exactly(key_length + value_length)
+                payload = read_exactly(key_length + value_length)
                 key, value = payload[:key_length], payload[key_length:]
                 self.db[key] = value
-                await s.send_all((1).to_bytes(1, 'little'))
+                sock.sendall((1).to_bytes(1, 'little'))
             elif operation == b'\x02':
                 # self.logger.debug("DEL")
-                key_length_data = await read_exactly(4)
+                key_length_data = read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
-                key = await read_exactly(key_length)
+                key = read_exactly(key_length)
                 del self.db[key]
-                await s.send_all(b'\x00')
+                sock.sendall(b'\x00')
             elif operation == b'\x03':
                 # self.logger.debug("EXIST")
-                key_length_data = await read_exactly(4)
+                key_length_data = read_exactly(4)
                 key_length = int.from_bytes(key_length_data, 'little')
-                key = await read_exactly(key_length)
+                key = read_exactly(key_length)
                 result = key in self.db
                 # self.logger.debug("Existance of %s, %s", key, result)
-                await s.send_all(result.to_bytes(1, 'little'))
+                sock.sendall(result.to_bytes(1, 'little'))
             else:
                 raise Exception(f"Got unknown operation {operation}")
 
         assert False
 
-    @asynccontextmanager
-    async def run(self, ipc_path):
-        async with trio.open_nursery() as nursery:
-            nursery.start_soon(self.serve, ipc_path)
-            await self._server_running.wait()
-            await _wait_for_path(trio.Path(ipc_path))
-            try:
-                yield self
-            finally:
-                nursery.cancel_scope.cancel()
+    @contextmanager
+    def run(self, ipc_path):
+        self.start(ipc_path)
+        try:
+            yield self
+        finally:
+            self.stop()
 
 
 class DBClient:
@@ -139,15 +178,20 @@ class DBClient:
         self._buffer = self._buffer[num_bytes:]
         return bytes(payload)
 
-    def get(self, key):
+    def get(self, key: bytes) -> bytes:
         key_length = len(key)
         self._socket.sendall(b'\x00' + key_length.to_bytes(4, 'little') + key)
+
+        value_exists = self.read_exactly(1)
+        if value_exists == b'\x00':
+            raise KeyError(f"Key does not exist: {key}")
+
         value_length_data = self.read_exactly(4)
         value_length = int.from_bytes(value_length_data, 'little')
         value = self.read_exactly(value_length)
         return value
 
-    def set(self, key, value):
+    def set(self, key: bytes, value: bytes) -> None:
         key_length = len(key)
         value_length = len(value)
         self._socket.sendall(
@@ -161,6 +205,7 @@ class DBClient:
 
     @classmethod
     def connect(cls, path: pathlib.Path) -> "TrioConnection":
+        _block_for_path(path)
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         cls.logger.debug("Opened connection to %s: %s", path, s)
         s.connect(str(path))
