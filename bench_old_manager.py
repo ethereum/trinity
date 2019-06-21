@@ -1,6 +1,5 @@
-
-import asyncio
 from eth.db.atomic import AtomicDB
+from eth.db.backends.level import LevelDB
 import multiprocessing
 from trinity.db.base import AsyncDBProxy
 from multiprocessing.managers import (
@@ -10,7 +9,6 @@ from trinity.db.beacon.manager import (
     create_db_consumer_manager,
 )
 
-import trio
 import os
 import signal
 import pathlib
@@ -18,7 +16,9 @@ import time
 import random
 
 IPC_PATH = pathlib.Path("./foo.ipc")
+DB_PATH = pathlib.Path("./tmp-db")
 
+DB = LevelDB(db_path=DB_PATH)
 
 def random_bytes(num):
     return random.getrandbits(8 * num).to_bytes(num, 'little')
@@ -30,8 +30,7 @@ key_values = {
 }
 
 
-def run_server(ipc_path):
-    db = AtomicDB()
+def run_server(ipc_path, db):
 
     class DBManager(BaseManager):
         pass
@@ -50,7 +49,7 @@ def run_server(ipc_path):
         pathlib.Path(ipc_path).unlink()
 
 
-async def run_async_client(ipc_path):
+def run_client(ipc_path):
     db_manager = create_db_consumer_manager(ipc_path)
     db_client = db_manager.get_db()
 
@@ -58,8 +57,8 @@ async def run_async_client(ipc_path):
         start = time.perf_counter()
 
         for key, value in key_values.items():
-            await db_client.coro_set(key, value)
-            await db_client.coro_get(key)
+            db_client.set(key, value)
+            db_client.get(key)
         end = time.perf_counter()
         duration = end - start
 
@@ -68,15 +67,10 @@ async def run_async_client(ipc_path):
         print(f"{num_keys/duration} get-set per second")
 
 
-def outer(ipc_path):
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_async_client(ipc_path))
-
-
 if __name__ == '__main__':
 
-    server = multiprocessing.Process(target=run_server, args=[IPC_PATH])
-    client = multiprocessing.Process(target=outer, args=[IPC_PATH])
+    server = multiprocessing.Process(target=run_server, args=[IPC_PATH, DB])
+    client = multiprocessing.Process(target=run_client, args=[IPC_PATH])
     server.start()
     client.start()
     client.join(600)
