@@ -23,12 +23,6 @@ def random_bytes(num):
     return random.getrandbits(8 * num).to_bytes(num, 'little')
 
 
-key_values = {
-    random_bytes(32): random_bytes(256)
-    for i in range(10000)
-}
-
-
 def run_server(ipc_path):
     db = LevelDB(db_path=DB_PATH)
     manager = DBManager(db)
@@ -42,7 +36,13 @@ def run_server(ipc_path):
     ipc_path.unlink()
 
 
-def run_client(ipc_path):
+def run_client(ipc_path, client_id):
+
+    key_values = {
+        random_bytes(32): random_bytes(256)
+        for i in range(10000)
+    }
+
     db_client = DBClient.connect(ipc_path)
 
     for _ in range(3):
@@ -54,8 +54,7 @@ def run_client(ipc_path):
         duration = end - start
 
         num_keys = len(key_values)
-        print(f"The new: Takes {duration} seconds to do {num_keys} times of get-set.")
-        print(f"{num_keys/duration} get-set per second")
+        print(f"Client {client_id}: {num_keys/duration} get-set per second")
 
 
 if __name__ == '__main__':
@@ -63,10 +62,16 @@ if __name__ == '__main__':
         IPC_PATH.unlink()
 
     server = multiprocessing.Process(target=run_server, args=[IPC_PATH])
-    client = multiprocessing.Process(target=run_client, args=[IPC_PATH])
+
+    clients = [
+        multiprocessing.Process(target=run_client, args=[IPC_PATH, i])
+        for i in range(6)
+    ]
     server.start()
-    client.start()
-    client.join(600)
+    for client in clients:
+        client.start()
+    for client in clients:
+        client.join(600)
 
     os.kill(server.pid, signal.SIGINT)
     server.join(1)

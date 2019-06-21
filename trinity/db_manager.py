@@ -54,7 +54,7 @@ class DBManager:
 
     def _close_socket_on_stop(self, sock: socket.socket) -> None:
         self.wait_stopped()
-        socket.close()
+        sock.close()
 
     def serve(self, ipc_path: pathlib.Path) -> None:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -72,7 +72,11 @@ class DBManager:
             self._started.set()
 
             while self.is_running:
-                conn, addr = sock.accept()
+                try:
+                    conn, addr = sock.accept()
+                except ConnectionAbortedError:
+                    self._stopped.set()
+                    return
                 self.logger.debug('Server accepted connection from %s', addr)
                 threading.Thread(
                     target=self._serve_conn,
