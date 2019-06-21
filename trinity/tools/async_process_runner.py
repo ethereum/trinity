@@ -10,6 +10,13 @@ from typing import (
 )
 
 
+def ensure_child_watcher_loop() -> None:
+    loop = asyncio.get_event_loop()
+    watcher = asyncio.get_child_watcher()
+    if watcher._loop is None:
+        watcher.attach_loop(loop)
+
+
 class AsyncProcessRunner():
     logger = logging.getLogger("trinity.tools.async_process_runner.AsyncProcessRunner")
 
@@ -25,6 +32,7 @@ class AsyncProcessRunner():
         return runner
 
     async def run(self, cmds: Tuple[str, ...], timeout_sec: int=10) -> None:
+        ensure_child_watcher_loop()
         proc = await asyncio.create_subprocess_exec(
             *cmds,
             stdout=asyncio.subprocess.PIPE,
@@ -70,3 +78,5 @@ class AsyncProcessRunner():
             os.killpg(os.getpgid(self.proc.pid), sig)
         except ProcessLookupError:
             self.logger.info("Process %s has already disappeared", self.proc.pid)
+        except AttributeError:
+            self.logger.warning("Process attribute was never set")

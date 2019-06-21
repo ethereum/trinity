@@ -43,11 +43,11 @@ class UpnpPlugin(AsyncioIsolatedPlugin):
             help="Disable upnp mapping",
         )
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
         port = self.boot_info.trinity_config.port
         self.upnp_service = UPnPService(port)
         asyncio.ensure_future(exit_with_services(
             self.upnp_service,
             self._event_bus_service,
         ))
-        asyncio.ensure_future(self.upnp_service.run())
+        await self.upnp_service.run()

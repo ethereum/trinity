@@ -114,7 +114,7 @@ class EthstatsPlugin(AsyncioIsolatedPlugin):
 
         self.start()
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
         service = EthstatsService(
             self.boot_info,
             self.event_bus,
@@ -129,4 +129,4 @@ class EthstatsPlugin(AsyncioIsolatedPlugin):
             service,
             self._event_bus_service,
         ))
-        asyncio.ensure_future(service.run())
+        await service.run()

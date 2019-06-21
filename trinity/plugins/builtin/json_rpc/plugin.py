@@ -88,7 +88,7 @@ class JsonRpcServerPlugin(AsyncioIsolatedPlugin):
 
         return initialize_beacon_modules(None, self.event_bus)
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
 
         trinity_config = self.boot_info.trinity_config
 
@@ -106,4 +106,4 @@ class JsonRpcServerPlugin(AsyncioIsolatedPlugin):
             ipc_server,
             self._event_bus_service,
         ))
-        asyncio.ensure_future(ipc_server.run())
+        await ipc_server.run()

@@ -71,7 +71,7 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
         if self.boot_info.trinity_config.has_app_config(BeaconAppConfig):
             self.start()
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
         trinity_config = self.boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
@@ -146,15 +146,17 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
         )
 
         asyncio.ensure_future(exit_with_services(
-            server,
-            syncer,
-            slot_ticker,
-            validator,
             event_server,
+            server,
+            slot_ticker,
+            syncer,
+            validator,
             self._event_bus_service,
         ))
-        asyncio.ensure_future(event_server.run())
-        asyncio.ensure_future(server.run())
-        asyncio.ensure_future(syncer.run())
-        asyncio.ensure_future(slot_ticker.run())
-        asyncio.ensure_future(validator.run())
+        await asyncio.gather(
+            event_server.run(),
+            server.run(),
+            slot_ticker.run(),
+            syncer.run(),
+            validator.run(),
+        )

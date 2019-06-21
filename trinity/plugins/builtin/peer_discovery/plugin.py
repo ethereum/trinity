@@ -172,7 +172,7 @@ class PeerDiscoveryPlugin(AsyncioIsolatedPlugin):
             help="Disable peer discovery",
         )
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
         discovery_bootstrap = DiscoveryBootstrapService(
             self.boot_info.args.disable_discovery,
             self.event_bus,
@@ -182,4 +182,4 @@ class PeerDiscoveryPlugin(AsyncioIsolatedPlugin):
             discovery_bootstrap,
             self._event_bus_service,
         ))
-        asyncio.ensure_future(discovery_bootstrap.run())
+        await discovery_bootstrap.run()

@@ -70,7 +70,7 @@ class TxPlugin(AsyncioIsolatedPlugin):
                 unsupported_msg,
             ))
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
 
         trinity_config = self.boot_info.trinity_config
         db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)

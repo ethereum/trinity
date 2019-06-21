@@ -234,7 +234,7 @@ class NetworkDBPlugin(AsyncioIsolatedPlugin):
         else:
             yield self._get_eth1_peer_server()
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
         try:
             tracker_services = self._get_services()
         except BadDatabaseError as err:
@@ -244,5 +244,4 @@ class NetworkDBPlugin(AsyncioIsolatedPlugin):
                 self._event_bus_service,
                 *tracker_services,
             ))
-            for service in tracker_services:
-                asyncio.ensure_future(service.run())
+            await asyncio.gather(*(service.run() for service in tracker_services))

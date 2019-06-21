@@ -63,7 +63,7 @@ class RequestServerPlugin(AsyncioIsolatedPlugin):
             help="Disables the Request Server",
         )
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
 
         trinity_config = self.boot_info.trinity_config
 
@@ -83,7 +83,7 @@ class RequestServerPlugin(AsyncioIsolatedPlugin):
             raise Exception("Trinity config must have either eth1 or beacon chain config")
 
         asyncio.ensure_future(exit_with_services(server, self._event_bus_service))
-        asyncio.ensure_future(server.run())
+        await server.run()
 
     def make_eth1_request_server(self,
                                  app_config: Eth1AppConfig,

@@ -35,10 +35,12 @@ deps = {
         "web3==4.4.1",
         "lahja>=0.14.0,<0.15.0",
         "termcolor>=1.1.0,<2.0.0",
-        "uvloop==0.11.2;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
         "websockets==5.0.1",
         "jsonschema==3.0.1",
         "mypy_extensions>=0.4.1,<1.0.0",
+        "trio>=0.11.0,<0.12",
+        "trio-asyncio>=0.10.0,<0.11",
+        "trio-typing>=0.2.0,<0.3",
         "typing_extensions>=3.7.2,<4.0.0",
         "ruamel.yaml==0.15.98",
         "argcomplete>=1.10.0,<2",

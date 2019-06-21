@@ -36,7 +36,7 @@ class BeamChainExecutionPlugin(AsyncioIsolatedPlugin):
         if self.boot_info.args.sync_mode.upper() == SYNC_BEAM.upper():
             self.start()
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
         trinity_config = self.boot_info.trinity_config
         app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
@@ -53,4 +53,4 @@ class BeamChainExecutionPlugin(AsyncioIsolatedPlugin):
 
         import_server = BlockImportServer(self.event_bus, self._beam_chain)
         asyncio.ensure_future(exit_with_services(import_server, self._event_bus_service))
-        asyncio.ensure_future(import_server.run())
+        await import_server.run()

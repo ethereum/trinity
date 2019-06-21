@@ -1,5 +1,9 @@
 import asyncio
 
+
+import trio
+import trio_asyncio
+
 from lahja import AsyncioEndpoint
 
 from trinity.extensibility.events import PluginStartedEvent
@@ -21,11 +25,13 @@ class AsyncioIsolatedPlugin(BaseIsolatedPlugin):
         self._setup_logging()
 
         with self.boot_info.trinity_config.process_id_file(self.normalized_name):
-            self._loop = asyncio.get_event_loop()
-            asyncio.ensure_future(self._prepare_start())
-            self._loop.run_forever()
-            self._loop.close()
+            trio.run(self._spawn_start_coro)
 
+    async def _spawn_start_coro(self) -> None:
+        async with trio_asyncio.open_loop():
+            await self._prepare_start()
+
+    @trio_asyncio.aio_as_trio
     async def _prepare_start(self) -> None:
         # prevent circular import
         from trinity.event_bus import AsyncioEventBusService
@@ -42,4 +48,8 @@ class AsyncioIsolatedPlugin(BaseIsolatedPlugin):
             PluginStartedEvent(type(self))
         )
 
-        self.do_start()
+        # Whenever new EventBus Endpoints come up the `main` process broadcasts this event
+        # and we connect to every Endpoint directly
+        asyncio.ensure_future(self.event_bus.auto_connect_new_announced_endpoints())
+
+        await self.do_start()

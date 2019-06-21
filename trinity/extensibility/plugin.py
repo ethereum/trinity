@@ -156,7 +156,7 @@ class BasePlugin(ABC):
         )
         self.logger.info("Plugin started: %s", self.name)
 
-    def do_start(self) -> None:
+    def do_start(self) -> Any:
         """
         Perform the actual plugin start routine. In the case of a `BaseIsolatedPlugin` this method
         will be called in a separate process.

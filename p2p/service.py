@@ -240,8 +240,10 @@ class BaseService(ABC, CancellableMixin):
         self.run_task(_call_later_wrapped())
 
     async def _run_in_executor(self,
-                               executor: concurrent.futures.Executor,
-                               callback: Callable[..., Any], *args: Any) -> Any:
+                               callback: Callable[..., Any],
+                               *args: Any,
+                               executor: concurrent.futures.Executor = None,
+                               ) -> Any:
 
         loop = self.get_event_loop()
         try:

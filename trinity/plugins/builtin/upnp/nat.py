@@ -1,7 +1,4 @@
 import asyncio
-from concurrent.futures import (
-    ThreadPoolExecutor,
-)
 import ipaddress
 from typing import (
     AsyncGenerator,
@@ -153,11 +150,10 @@ class UPnPService(BaseService):
     async def _discover_upnp_devices(self) -> AsyncGenerator[upnpclient.upnp.Device, None]:
         loop = asyncio.get_event_loop()
         # Use loop.run_in_executor() because upnpclient.discover() is blocking and may take a
-        # while to complete. We must use a ThreadPoolExecutor() because the
-        # response from upnpclient.discover() can't be pickled.
+        # while to complete.
         try:
             devices = await self.wait(
-                loop.run_in_executor(ThreadPoolExecutor(max_workers=1), upnpclient.discover),
+                loop.run_in_executor(None, upnpclient.discover),
                 timeout=UPNP_DISCOVER_TIMEOUT_SECONDS,
             )
         except TimeoutError:
