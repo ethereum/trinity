@@ -9,6 +9,7 @@ from multiprocessing.managers import (
 from trinity.db.beacon.manager import (
     create_db_consumer_manager,
 )
+from eth.db.backends.level import LevelDB
 
 import trio
 import os
@@ -31,7 +32,8 @@ key_values = {
 
 
 def run_server(ipc_path):
-    db = AtomicDB()
+    db = LevelDB(db_path=str(pathlib.Path("./baz")))
+    # db = AtomicDB()
 
     class DBManager(BaseManager):
         pass

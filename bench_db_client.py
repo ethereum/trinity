@@ -5,6 +5,8 @@ from trinity.db_manager import (
     _wait_for_path,
 )
 from eth.db.atomic import AtomicDB
+from eth.db.backends.level import LevelDB
+
 import multiprocessing
 
 import trio
@@ -29,8 +31,7 @@ key_values = {
 
 
 def run_server(ipc_path):
-    # with profiler("server.prof"):
-    db = AtomicDB()
+    db = LevelDB("./bar")
     manager = DBManager(db)
     try:
         trio.run(manager.serve, ipc_path)
