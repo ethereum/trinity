@@ -6,6 +6,7 @@ import pathlib
 import io
 import threading
 import trio
+from async_generator import (asynccontextmanager)
 
 
 def _block_for_path(path):
@@ -159,6 +160,113 @@ class DBManager:
             yield self
         finally:
             self.stop()
+
+
+class AsyncDBManager:
+    logger = logging.getLogger('manager')
+
+    def __init__(self, db):
+        self._server_running = trio.Event()
+        self.db = db
+
+    async def serve(self, ipc_path) -> None:
+        async with trio.open_nursery() as nursery:
+            # Store nursery on self so that we can access it for cancellation
+            self._server_nursery = nursery
+
+            self.logger.debug("%s: server starting", self)
+            s = trio.socket.socket(trio.socket.AF_UNIX, trio.socket.SOCK_STREAM)
+            await s.bind(ipc_path.__fspath__())
+            s.listen(1)
+            listener = trio.SocketListener(s)
+
+            self._server_running.set()
+
+            try:
+                await trio.serve_listeners(
+                    handler=self._accept_conn,
+                    listeners=(listener,),
+                    handler_nursery=nursery,
+                )
+            finally:
+                self.logger.debug("%s: server stopping", self)
+
+    async def _accept_conn(self, s: trio.SocketStream) -> None:
+        self.logger.debug("%s: starting client handler for %s", self, s)
+        buffer = bytearray()
+
+        async def read_exactly(num_bytes):
+            nonlocal buffer
+            while len(buffer) < num_bytes:
+
+                data = await s.receive_some(4096)
+
+                if data == b"":
+                    raise Exception("Connection closed")
+
+                buffer += data
+            payload = buffer[:num_bytes]
+            buffer = buffer[num_bytes:]
+            return bytes(payload)
+
+        while True:
+            try:
+                operation = await read_exactly(1)
+            except Exception as error:
+                self.logger.debug("closing connection, no operation %s", error)
+                return
+            if operation == b'\x00':
+                # self.logger.debug("GET")
+                key_length_data = await read_exactly(4)
+                key_length = int.from_bytes(key_length_data, 'little')
+                key = await read_exactly(key_length)
+                try:
+                    value = self.db[key]
+                    value_length = len(value)
+                    await s.send_all(value_length.to_bytes(4, 'little') + value)
+                except KeyError:
+                    self.logger.debug("Key %s doesn't exist", key)
+                    value_length = 0
+                    await s.send_all(value_length.to_bytes(4, 'little'))
+            elif operation == b'\x01':
+                # self.logger.debug("SET")
+                length_data = await read_exactly(8)
+                key_length = int.from_bytes(length_data[:4], 'little')
+                value_length = int.from_bytes(length_data[4:], 'little')
+                payload = await read_exactly(key_length + value_length)
+                key, value = payload[:key_length], payload[key_length:]
+                self.db[key] = value
+                await s.send_all((1).to_bytes(1, 'little'))
+            elif operation == b'\x02':
+                # self.logger.debug("DEL")
+                key_length_data = await read_exactly(4)
+                key_length = int.from_bytes(key_length_data, 'little')
+                key = await read_exactly(key_length)
+                del self.db[key]
+                await s.send_all(b'\x00')
+            elif operation == b'\x03':
+                # self.logger.debug("EXIST")
+                key_length_data = await read_exactly(4)
+                key_length = int.from_bytes(key_length_data, 'little')
+                key = await read_exactly(key_length)
+                result = key in self.db
+                # self.logger.debug("Existance of %s, %s", key, result)
+                await s.send_all(result.to_bytes(1, 'little'))
+            else:
+                raise Exception(f"Got unknown operation {operation}")
+
+        assert False
+
+    @asynccontextmanager
+    async def run(self, ipc_path):
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self.serve, ipc_path)
+            await self._server_running.wait()
+            await _wait_for_path(trio.Path(ipc_path))
+            try:
+                yield self
+            finally:
+                nursery.cancel_scope.cancel()
 
 
 class DBClient:

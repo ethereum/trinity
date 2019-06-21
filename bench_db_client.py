@@ -2,6 +2,7 @@ import pathlib
 from trinity.db_manager import (
     DBManager,
     DBClient,
+    AsyncDBManager,
 )
 from eth.db.backends.level import LevelDB
 from eth.db.atomic import AtomicDB
@@ -25,7 +26,7 @@ def random_bytes(num):
 
 def run_server(ipc_path):
     db = LevelDB(db_path=DB_PATH)
-    manager = DBManager(db)
+    manager = AsyncDBManager(db)
 
     with manager.run(ipc_path):
         try:
@@ -65,7 +66,7 @@ if __name__ == '__main__':
 
     clients = [
         multiprocessing.Process(target=run_client, args=[IPC_PATH, i])
-        for i in range(6)
+        for i in range(3)
     ]
     server.start()
     for client in clients:
