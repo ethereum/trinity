@@ -35,6 +35,7 @@ class DBManager:
         self._stopped.wait()
 
     def start(self, ipc_path: pathlib.Path) -> None:
+        print("start")
         threading.Thread(
             target=self.serve,
             args=(ipc_path,),
@@ -50,6 +51,8 @@ class DBManager:
         sock.close()
 
     def serve(self, ipc_path: pathlib.Path) -> None:
+        self.logger.info("server connect")
+
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             # background task to close the socket.
             threading.Thread(
@@ -57,7 +60,7 @@ class DBManager:
                 args=(sock,),
                 daemon=False,
             ).start()
-
+            
             sock.bind(str(ipc_path))
             sock.listen(1)
 
@@ -147,6 +150,7 @@ class DBManager:
 
     @contextmanager
     def run(self, ipc_path):
+        self.logger.info("server")
         self.start(ipc_path)
         try:
             yield self

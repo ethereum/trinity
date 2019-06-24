@@ -3,6 +3,7 @@ import socket
 import pathlib
 import io
 import trio
+import time
 
 
 def _block_for_path(path):
@@ -11,6 +12,7 @@ def _block_for_path(path):
 
 
 async def _wait_for_path(path: trio.Path):
+    path = trio.Path(path)
     while not await path.exists():
         await trio.sleep(0.001)
 
