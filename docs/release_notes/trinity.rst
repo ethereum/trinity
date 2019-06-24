@@ -6,6 +6,8 @@ v0.1.0-alpha.26
 
 Unreleased
 
+- `#734 <https://github.com/ethereum/trinity/pull/734>`_: Feature: Move TransactionPool into its own process
+- `#734 <https://github.com/ethereum/trinity/pull/734>`_: Feature: Create ProxyPeerPool that partially exposes peer pool functionality to any process
 - `#696 <https://github.com/ethereum/trinity/pull/696>`_: Feature: Expose events for Transaction and NewBlockHashes commands on the EventBus
 - `#682 <https://github.com/ethereum/trinity/pull/682>`_: Feature: Make logging config more ergonomic, flexible and consistent
 - `#636 <https://github.com/ethereum/trinity/pull/636>`_: Feature: Run UPnP Service as an isolated plugin (plus `#730 <https://github.com/ethereum/trinity/pull/730>`_ fixup)
