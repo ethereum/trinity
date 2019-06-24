@@ -40,4 +40,4 @@ class PendingAttestation(ssz.Serializable):
         )
 
     def __repr__(self) -> str:
-        return f"<PA inclusion_slot={self.inclusion_slot}>"
+        return f"<PendingAttestation inclusion_slot={self.inclusion_slot}>"
