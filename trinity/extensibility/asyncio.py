@@ -28,7 +28,8 @@ class AsyncioIsolatedPlugin(BaseIsolatedPlugin):
             trio.run(self._spawn_start_coro)
 
     async def _spawn_start_coro(self) -> None:
-        async with trio_asyncio.open_loop():
+        async with trio_asyncio.open_loop() as loop:
+            self._loop = loop
             await self._prepare_start()
 
     @trio_asyncio.aio_as_trio
@@ -47,9 +48,5 @@ class AsyncioIsolatedPlugin(BaseIsolatedPlugin):
         await self.event_bus.broadcast(
             PluginStartedEvent(type(self))
         )
-
-        # Whenever new EventBus Endpoints come up the `main` process broadcasts this event
-        # and we connect to every Endpoint directly
-        asyncio.ensure_future(self.event_bus.auto_connect_new_announced_endpoints())
 
         await self.do_start()

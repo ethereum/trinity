@@ -289,7 +289,7 @@ class SyncerPlugin(AsyncioIsolatedPlugin):
 
         self.start()
 
-    def do_start(self) -> None:
+    async def do_start(self) -> None:
 
         trinity_config = self.boot_info.trinity_config
         NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
@@ -301,7 +301,7 @@ class SyncerPlugin(AsyncioIsolatedPlugin):
             node,
             self._event_bus_service,
         ))
-        asyncio.ensure_future(node.run())
+        await node.run()
 
     async def launch_sync(self, node: Node[BasePeer]) -> None:
         await node.events.started.wait()

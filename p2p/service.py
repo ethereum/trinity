@@ -123,7 +123,8 @@ class BaseService(ABC, CancellableMixin):
             # Trigger our cancel token to ensure all pending asyncio tasks and background
             # coroutines started by this service exit cleanly.
             self.events.cancelled.set()
-            self.cancel_token.trigger()
+            if not self.get_event_loop().is_closed():
+                self.cancel_token.trigger()
 
             await self.cleanup()
 

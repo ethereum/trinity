@@ -17,8 +17,10 @@ from multiprocessing import (
 )
 from typing import (
     Any,
+    Awaitable,
     Dict,
     NamedTuple,
+    Union,
 )
 
 from lahja.base import EndpointAPI
@@ -156,7 +158,7 @@ class BasePlugin(ABC):
         )
         self.logger.info("Plugin started: %s", self.name)
 
-    def do_start(self) -> Any:
+    def do_start(self) -> Union[None, Awaitable[None]]:
         """
         Perform the actual plugin start routine. In the case of a `BaseIsolatedPlugin` this method
         will be called in a separate process.
