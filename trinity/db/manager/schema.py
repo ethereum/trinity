@@ -15,6 +15,9 @@ from typing import (
     Tuple,
     Callable,
 )
+from .exceptions import (
+    OperationError,
+)
 
 
 def read_key(read_exactly: Callable[[int], bytes]) -> bytes:
@@ -46,6 +49,15 @@ class GET(Operation):
     def server_responds_success_message(value) -> bytes:
         return SUCCESS_BYTE + len_bytes(value) + value
 
+    @staticmethod
+    def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> bytes:
+        sucess = read_exactly(1)
+        if sucess == FAIL_BYTE:
+            raise OperationError()
+        value_length_data = read_exactly(LEN_BYTES)
+        value = read_exactly(bytes_to_int(value_length_data))
+        return value
+
 
 class SET(Operation):
     code = b'\x01'
@@ -67,6 +79,12 @@ class SET(Operation):
     def server_responds_success_message() -> bytes:
         return SUCCESS_BYTE
 
+    @staticmethod
+    def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> None:
+        sucess = read_exactly(1)
+        if sucess == FAIL_BYTE:
+            raise OperationError()
+
 
 class DELETE(Operation):
     code = b'\x02'
@@ -83,6 +101,12 @@ class DELETE(Operation):
     def server_responds_success_message() -> bytes:
         return SUCCESS_BYTE
 
+    @staticmethod
+    def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> None:
+        sucess = read_exactly(1)
+        if sucess == FAIL_BYTE:
+            raise OperationError()
+
 
 class EXIST(Operation):
     code = b'\x03'
@@ -98,3 +122,11 @@ class EXIST(Operation):
     @staticmethod
     def server_responds_success_message(result: bool) -> bytes:
         return SUCCESS_BYTE + result.to_bytes(1, 'little')
+
+    @staticmethod
+    def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> bool:
+        data = read_exactly(2)
+        sucess, exist = data[0], data[1]
+        if sucess == FAIL_BYTE:
+            raise OperationError()
+        return exist

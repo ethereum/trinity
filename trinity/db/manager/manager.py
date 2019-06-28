@@ -16,9 +16,6 @@ from .schema import (
     GET,
     SET,
 )
-from .utils import (
-    bytes_to_int,
-)
 
 
 class DBManager:

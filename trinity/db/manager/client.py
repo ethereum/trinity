@@ -14,6 +14,9 @@ from .schema import (
     GET,
     SET,
 )
+from .exceptions import (
+    OperationError,
+)
 
 
 async def _wait_for_path(path: trio.Path):
@@ -46,34 +49,30 @@ class SyncDBClient:
     def get(self, key: bytes) -> bytes:
         message = GET.client_request_message(key)
         self._socket.sendall(message)
-
-        value_exists = self.read_exactly(1)
-        if value_exists == b'\x00':
+        try:
+            value = GET.client_reads_server_response_sync(self.read_exactly)
+            return value
+        except OperationError as e:
             raise KeyError(f"Key does not exist: {key}")
-
-        value_length_data = self.read_exactly(4)
-        value_length = int.from_bytes(value_length_data, 'little')
-        value = self.read_exactly(value_length)
-        return value
 
     def set(self, key: bytes, value: bytes) -> None:
         message = SET.client_request_message(key, value)
         self._socket.sendall(message)
-        self.read_exactly(1)
+        SET.client_reads_server_response_sync(self.read_exactly)
 
     def delete(self, key):
         message = DELETE.client_request_message(key)
         self._socket.sendall(message)
-        self.read_exactly(1)
+        DELETE.client_reads_server_response_sync(self.read_exactly)
 
     def exists(self, key):
         message = EXIST.client_request_message(key)
         self._socket.sendall(message)
-        result_data = self.read_exactly(1)
-        if int.from_bytes(result_data, "little") == 1:
-            return True
-        else:
-            return False
+        try:
+            exist = EXIST.client_reads_server_response_sync(self.read_exactly)
+            return exist
+        except OperationError:
+            raise KeyError(f"Key does not exist: {key}")
 
     @classmethod
     def connect(cls, path: pathlib.Path) -> "TrioConnection":
