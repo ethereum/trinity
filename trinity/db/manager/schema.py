@@ -52,7 +52,7 @@ class SET(Operation):
 
     @classmethod
     def client_request_message(cls, key, value) -> bytes:
-        return cls.code + len_bytes(key) + + len_bytes(value) + key + value
+        return cls.code + len_bytes(key) + len_bytes(value) + key + value
 
     @staticmethod
     def server_reads_client_request(read_exactly: Callable[[int], bytes]) -> Tuple[bytes, bytes]:

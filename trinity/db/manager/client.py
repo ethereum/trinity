@@ -1,8 +1,19 @@
 import logging
-import socket
 import pathlib
+import socket
+
 import trio
-from trinity._utils.ipc import wait_for_ipc
+
+from trinity._utils.ipc import (
+    wait_for_ipc,
+)
+
+from .schema import (
+    DELETE,
+    EXIST,
+    GET,
+    SET,
+)
 
 
 async def _wait_for_path(path: trio.Path):
@@ -33,9 +44,8 @@ class SyncDBClient:
         return bytes(payload)
 
     def get(self, key: bytes) -> bytes:
-        key_length = len(key)
-        get_msg = b'\x00' + key_length.to_bytes(4, 'little') + key
-        self._socket.sendall(get_msg)
+        message = GET.client_request_message(key)
+        self._socket.sendall(message)
 
         value_exists = self.read_exactly(1)
         if value_exists == b'\x00':
@@ -47,24 +57,18 @@ class SyncDBClient:
         return value
 
     def set(self, key: bytes, value: bytes) -> None:
-        key_length = len(key)
-        value_length = len(value)
-        self._socket.sendall(
-            b'\x01' +
-            key_length.to_bytes(4, 'little') +
-            value_length.to_bytes(4, 'little') +
-            key + value
-        )
+        message = SET.client_request_message(key, value)
+        self._socket.sendall(message)
         self.read_exactly(1)
 
     def delete(self, key):
-        key_length = len(key)
-        self._socket.sendall(b'\x02' + key_length.to_bytes(4, 'little') + key)
+        message = DELETE.client_request_message(key)
+        self._socket.sendall(message)
         self.read_exactly(1)
 
     def exists(self, key):
-        key_length = len(key)
-        self._socket.sendall(b'\x03' + key_length.to_bytes(4, 'little') + key)
+        message = EXIST.client_request_message(key)
+        self._socket.sendall(message)
         result_data = self.read_exactly(1)
         if int.from_bytes(result_data, "little") == 1:
             return True
@@ -106,10 +110,8 @@ class AsyncDBClient:
 
     async def get(self, key):
         async with self._lock:
-            key_length = len(key)
-            get_msg = b'\x00' + key_length.to_bytes(4, 'little') + key
-            await self._socket.send_all(get_msg)
-            self.logger.info("Client sends %s", get_msg)
+            message = GET.client_request_message(key)
+            await self._socket.send_all(message)
             success = await self.read_exactly(1)
             if success == b'\x00':
                 raise KeyError(f"Key {key} doesn't exist")
@@ -122,25 +124,22 @@ class AsyncDBClient:
 
     async def set(self, key, value):
         async with self._lock:
-            key_length = len(key)
-            value_length = len(value)
-            msg = b'\x01' + key_length.to_bytes(4, 'little') + \
-                value_length.to_bytes(4, 'little') + key + value
-            await self._socket.send_all(msg)
+            message = SET.client_request_message(key, value)
+            await self._socket.send_all(message)
             result = await self.read_exactly(1)
             if int.from_bytes(result, 'little') != 1:
                 raise Exception(f"Fail to Write {key}:{value}")
 
     async def delete(self, key):
         async with self._lock:
-            key_length = len(key)
-            await self._socket.send_all(b'\x02' + key_length.to_bytes(4, 'little') + key)
+            message = DELETE.client_request_message(key)
+            await self._socket.send_all(message)
             await self.read_exactly(1)
 
     async def exists(self, key):
         async with self._lock:
-            key_length = len(key)
-            await self._socket.send_all(b'\x03' + key_length.to_bytes(4, 'little') + key)
+            message = EXIST.client_request_message(key)
+            await self._socket.send_all(message)
             result_data = await self.read_exactly(1)
             if int.from_bytes(result_data, "little") == 1:
                 return True
