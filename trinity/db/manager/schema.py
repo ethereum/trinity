@@ -51,10 +51,19 @@ class GET(Operation):
 
     @staticmethod
     def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> bytes:
-        sucess = read_exactly(1)
-        if sucess == FAIL_BYTE:
+        success = read_exactly(1)
+        if success == FAIL_BYTE:
             raise OperationError()
         value_length_data = read_exactly(LEN_BYTES)
+        value = read_exactly(bytes_to_int(value_length_data))
+        return value
+
+    @staticmethod
+    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> bytes:
+        success = await read_exactly(1)
+        if success == FAIL_BYTE:
+            raise OperationError()
+        value_length_data = await read_exactly(LEN_BYTES)
         value = read_exactly(bytes_to_int(value_length_data))
         return value
 
@@ -81,8 +90,14 @@ class SET(Operation):
 
     @staticmethod
     def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> None:
-        sucess = read_exactly(1)
-        if sucess == FAIL_BYTE:
+        success = read_exactly(1)
+        if success == FAIL_BYTE:
+            raise OperationError()
+
+    @staticmethod
+    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> None:
+        success = await read_exactly(1)
+        if success == FAIL_BYTE:
             raise OperationError()
 
 
@@ -103,8 +118,14 @@ class DELETE(Operation):
 
     @staticmethod
     def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> None:
-        sucess = read_exactly(1)
-        if sucess == FAIL_BYTE:
+        success = read_exactly(1)
+        if success == FAIL_BYTE:
+            raise OperationError()
+
+    @staticmethod
+    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> None:
+        success = await read_exactly(1)
+        if success == FAIL_BYTE:
             raise OperationError()
 
 
@@ -126,7 +147,15 @@ class EXIST(Operation):
     @staticmethod
     def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> bool:
         data = read_exactly(2)
-        sucess, exist = data[0], data[1]
-        if sucess == FAIL_BYTE:
+        success, exist = data[0], data[1]
+        if success == FAIL_BYTE:
+            raise OperationError()
+        return exist
+
+    @staticmethod
+    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> None:
+        data = await read_exactly(2)
+        success, exist = data[0], data[1]
+        if success == FAIL_BYTE:
             raise OperationError()
         return exist
