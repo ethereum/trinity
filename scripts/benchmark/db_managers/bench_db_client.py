@@ -2,10 +2,7 @@ import pathlib
 from trinity.db_manager import (
     DBManager,
     DBClient,
-    AsyncDBManager,
 )
-from eth.db.backends.level import LevelDB
-from eth.db.atomic import AtomicDB
 from eth.db.backends.level import LevelDB
 
 import multiprocessing
@@ -14,10 +11,9 @@ import os
 import signal
 import time
 import random
-from trinity._utils.profiling import profiler
 
 IPC_PATH = pathlib.Path("./foo.ipc")
-DB_PATH = pathlib.Path("./tmp-db")
+DB_PATH = pathlib.Path("./tmp-db/")
 
 
 def random_bytes(num):
@@ -26,7 +22,7 @@ def random_bytes(num):
 
 def run_server(ipc_path):
     db = LevelDB(db_path=DB_PATH)
-    manager = AsyncDBManager(db)
+    manager = DBManager(db)
 
     with manager.run(ipc_path):
         try:

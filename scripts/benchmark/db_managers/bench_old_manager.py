@@ -70,7 +70,7 @@ if __name__ == '__main__':
     server = multiprocessing.Process(target=run_server, args=[IPC_PATH, DB])
     clients = [
         multiprocessing.Process(target=run_client, args=[IPC_PATH, i])
-        for i in range(6)
+        for i in range(3)
     ]
     server.start()
     for client in clients:
