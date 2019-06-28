@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-import time
 import logging
 import socket
 import pathlib

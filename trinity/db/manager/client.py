@@ -2,12 +2,7 @@ import logging
 import socket
 import pathlib
 import trio
-import time
-
-
-def _block_for_path(path):
-    while not path.exists():
-        time.sleep(0.001)
+from trinity._utils.ipc import wait_for_ipc
 
 
 async def _wait_for_path(path: trio.Path):
@@ -78,7 +73,7 @@ class SyncDBClient:
 
     @classmethod
     def connect(cls, path: pathlib.Path) -> "TrioConnection":
-        _block_for_path(path)
+        wait_for_ipc(path)
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         cls.logger.debug("Opened connection to %s: %s", path, s)
         s.connect(str(path))
