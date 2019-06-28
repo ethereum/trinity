@@ -14,6 +14,7 @@ from .utils import (
 from typing import (
     Tuple,
     Callable,
+    Awaitable,
 )
 from .exceptions import (
     OperationError,
@@ -38,7 +39,7 @@ class GET(Operation):
     code = b'\x00'
 
     @classmethod
-    def client_request_message(cls, key) -> bytes:
+    def client_request_message(cls, key: bytes) -> bytes:
         return cls.code + len_bytes(key) + key
 
     @staticmethod
@@ -46,7 +47,7 @@ class GET(Operation):
         return read_key(read_exactly)
 
     @staticmethod
-    def server_responds_success_message(value) -> bytes:
+    def server_responds_success_message(value: bytes) -> bytes:
         return SUCCESS_BYTE + len_bytes(value) + value
 
     @staticmethod
@@ -59,12 +60,13 @@ class GET(Operation):
         return value
 
     @staticmethod
-    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> bytes:
+    async def client_reads_server_response_async(
+            read_exactly: Callable[[int], Awaitable[bytes]]) -> bytes:
         success = await read_exactly(1)
         if success == FAIL_BYTE:
             raise OperationError()
         value_length_data = await read_exactly(LEN_BYTES)
-        value = read_exactly(bytes_to_int(value_length_data))
+        value = await read_exactly(bytes_to_int(value_length_data))
         return value
 
 
@@ -72,7 +74,7 @@ class SET(Operation):
     code = b'\x01'
 
     @classmethod
-    def client_request_message(cls, key, value) -> bytes:
+    def client_request_message(cls, key: bytes, value: bytes) -> bytes:
         return cls.code + len_bytes(key) + len_bytes(value) + key + value
 
     @staticmethod
@@ -95,7 +97,8 @@ class SET(Operation):
             raise OperationError()
 
     @staticmethod
-    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> None:
+    async def client_reads_server_response_async(
+            read_exactly: Callable[[int], Awaitable[bytes]]) -> None:
         success = await read_exactly(1)
         if success == FAIL_BYTE:
             raise OperationError()
@@ -105,7 +108,7 @@ class DELETE(Operation):
     code = b'\x02'
 
     @classmethod
-    def client_request_message(cls, key) -> bytes:
+    def client_request_message(cls, key: bytes) -> bytes:
         return cls.code + len_bytes(key) + key
 
     @staticmethod
@@ -123,7 +126,8 @@ class DELETE(Operation):
             raise OperationError()
 
     @staticmethod
-    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> None:
+    async def client_reads_server_response_async(
+            read_exactly: Callable[[int], Awaitable[bytes]]) -> None:
         success = await read_exactly(1)
         if success == FAIL_BYTE:
             raise OperationError()
@@ -133,7 +137,7 @@ class EXIST(Operation):
     code = b'\x03'
 
     @classmethod
-    def client_request_message(cls, key) -> bytes:
+    def client_request_message(cls, key: bytes) -> bytes:
         return cls.code + len_bytes(key) + key
 
     @staticmethod
@@ -147,15 +151,16 @@ class EXIST(Operation):
     @staticmethod
     def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> bool:
         data = read_exactly(2)
-        success, exist = data[0], data[1]
+        success, exist = data[:1], bool(data[1])
         if success == FAIL_BYTE:
             raise OperationError()
         return exist
 
     @staticmethod
-    async def client_reads_server_response_async(read_exactly: Callable[[int], bytes]) -> None:
+    async def client_reads_server_response_async(
+            read_exactly: Callable[[int], Awaitable[bytes]]) -> bool:
         data = await read_exactly(2)
-        success, exist = data[0], data[1]
+        success, exist = data[:1], bool(data[1])
         if success == FAIL_BYTE:
             raise OperationError()
         return exist

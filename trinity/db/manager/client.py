@@ -19,7 +19,7 @@ from .exceptions import (
 )
 
 
-async def _wait_for_path(path: trio.Path):
+async def _wait_for_path(path: trio.Path) -> None:
     path = trio.Path(path)
     while not await path.exists():
         await trio.sleep(0.001)
@@ -28,11 +28,11 @@ async def _wait_for_path(path: trio.Path):
 class SyncDBClient:
     logger = logging.getLogger('client')
 
-    def __init__(self, s):
+    def __init__(self, s: socket.socket):
         self._socket = s
         self._buffer = bytearray()
 
-    def read_exactly(self, num_bytes):
+    def read_exactly(self, num_bytes: int) -> bytes:
 
         while len(self._buffer) < num_bytes:
 
@@ -63,7 +63,7 @@ class SyncDBClient:
         except OperationError:
             raise Exception(f"Fail to Write {key}:{value}")
 
-    def delete(self, key):
+    def delete(self, key: bytes) -> None:
         message = DELETE.client_request_message(key)
         self._socket.sendall(message)
         try:
@@ -71,7 +71,7 @@ class SyncDBClient:
         except OperationError:
             raise Exception(f"Fail to delete {key}")
 
-    def exists(self, key):
+    def exists(self, key: bytes) -> bool:
         message = EXIST.client_request_message(key)
         self._socket.sendall(message)
         try:
@@ -81,7 +81,7 @@ class SyncDBClient:
             raise Exception(f"Fail to query existence of key: {key}")
 
     @classmethod
-    def connect(cls, path: pathlib.Path) -> "TrioConnection":
+    def connect(cls, path: pathlib.Path) -> "SyncDBClient":
         wait_for_ipc(path)
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         cls.logger.debug("Opened connection to %s: %s", path, s)
@@ -92,12 +92,12 @@ class SyncDBClient:
 class AsyncDBClient:
     logger = logging.getLogger('async_client')
 
-    def __init__(self, s):
+    def __init__(self, s: trio.SocketStream):
         self._socket = s
         self._lock = trio.Lock()
         self._buffer = bytearray()
 
-    async def read_exactly(self, num_bytes):
+    async def read_exactly(self, num_bytes: int) -> bytes:
         if not self._lock.locked():
             raise Exception("Not locked")
 
@@ -113,46 +113,46 @@ class AsyncDBClient:
         self._buffer = self._buffer[num_bytes:]
         return bytes(payload)
 
-    async def get(self, key):
+    async def get(self, key: bytes) -> bytes:
         async with self._lock:
             message = GET.client_request_message(key)
             await self._socket.send_all(message)
             try:
-                value = await GET.client_reads_server_response_sync(self.read_exactly)
+                value = await GET.client_reads_server_response_async(self.read_exactly)
                 return value
             except OperationError as e:
                 raise KeyError(f"Key does not exist: {key}")
 
-    async def set(self, key, value):
+    async def set(self, key: bytes, value: bytes) -> None:
         async with self._lock:
             message = SET.client_request_message(key, value)
             await self._socket.send_all(message)
             try:
-                await SET.client_reads_server_response_sync(self.read_exactly)
+                await SET.client_reads_server_response_async(self.read_exactly)
             except OperationError:
                 raise Exception(f"Fail to Write {key}:{value}")
 
-    async def delete(self, key):
+    async def delete(self, key: bytes) -> None:
         async with self._lock:
             message = DELETE.client_request_message(key)
             await self._socket.send_all(message)
             try:
-                await DELETE.client_reads_server_response_sync(self.read_exactly)
+                await DELETE.client_reads_server_response_async(self.read_exactly)
             except OperationError:
                 raise Exception(f"Fail to delete {key}")
 
-    async def exists(self, key):
+    async def exists(self, key: bytes) -> bool:
         async with self._lock:
             message = EXIST.client_request_message(key)
             await self._socket.send_all(message)
             try:
-                exist = await EXIST.client_reads_server_response_sync(self.read_exactly)
+                exist = await EXIST.client_reads_server_response_async(self.read_exactly)
                 return exist
             except OperationError:
                 raise Exception(f"Fail to query existence of key: {key}")
 
     @classmethod
-    async def connect(cls, path: pathlib.Path) -> "TrioConnection":
+    async def connect(cls, path: pathlib.Path) -> "AsyncDBClient":
         await _wait_for_path(path)
         s = await trio.open_unix_socket(str(path))
         cls.logger.debug("Opened connection to %s: %s", path, s)

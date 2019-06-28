@@ -5,9 +5,15 @@ import logging
 import pathlib
 import socket
 import threading
+from typing import (
+    Iterator,
+)
 
 from trinity._utils.ipc import (
     wait_for_ipc,
+)
+from trinity.db.base import (
+    BaseDB,
 )
 
 from .schema import (
@@ -21,7 +27,7 @@ from .schema import (
 class DBManager:
     logger = logging.getLogger('manager')
 
-    def __init__(self, db):
+    def __init__(self, db: BaseDB):
         self._started = threading.Event()
         self._stopped = threading.Event()
         self.db = db
@@ -96,7 +102,7 @@ class DBManager:
         self.logger.debug("%s: starting client handler for %s", self, sock)
         buffer = bytearray()
 
-        def read_exactly(num_bytes):
+        def read_exactly(num_bytes: int) -> bytes:
             nonlocal buffer
             while len(buffer) < num_bytes:
 
@@ -149,7 +155,7 @@ class DBManager:
                 raise Exception(f"Got unknown operation {operation}")
 
     @contextmanager
-    def run(self, ipc_path):
+    def run(self, ipc_path: pathlib.Path) -> Iterator['DBManager']:
         self.start(ipc_path)
         try:
             yield self
