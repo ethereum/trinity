@@ -3,7 +3,6 @@ from eth.db.atomic import AtomicDB
 import pathlib
 import pytest
 import tempfile
-import pytest_trio
 from trinity.db.manager.manager import (
     DBManager,
 )
@@ -32,7 +31,7 @@ def db_manager(db, ipc_path):
         yield running_manager
 
 
-@pytest_trio.trio_fixture
+@pytest.fixture
 async def async_client_db(ipc_path, db_manager):
     client_db = await AsyncDBClient.connect(ipc_path)
     yield client_db
