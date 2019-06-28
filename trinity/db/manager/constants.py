@@ -1,0 +1,6 @@
+
+
+LEN_BYTES = 4
+
+SUCCESS_BYTE = b'\x01'
+FAIL_BYTE = b'\x00'

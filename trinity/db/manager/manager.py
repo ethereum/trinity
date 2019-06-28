@@ -1,9 +1,24 @@
-from contextlib import contextmanager
+from contextlib import (
+    contextmanager,
+)
 import logging
-import socket
 import pathlib
+import socket
 import threading
-from trinity._utils.ipc import wait_for_ipc
+
+from trinity._utils.ipc import (
+    wait_for_ipc,
+)
+
+from .schema import (
+    DELETE,
+    EXIST,
+    GET,
+    SET,
+)
+from .utils import (
+    bytes_to_int,
+)
 
 
 class DBManager:
@@ -105,46 +120,34 @@ class DBManager:
                 self.logger.info("closing connection, no operation %s", error)
                 return
             self.logger.info("Server listening here, got operation %s", operation)
-            if operation == b'\x00':
-                # self.logger.debug("GET")
-                key_length_data = read_exactly(4)
-                self.logger.info("server reads %s", key_length_data)
-                key_length = int.from_bytes(key_length_data, 'little')
-                key = read_exactly(key_length)
+            if operation == GET.code:
+                key = GET.server_reads_client_request(read_exactly)
                 try:
                     value = self.db[key]
-                    self.logger.debug("Server: value is %s", value)
-                    value_length = len(value)
-                    msg = b'\x01' + value_length.to_bytes(4, 'little') + value
-                    sock.sendall(msg)
-                    self.logger.debug("Server: sent %s", msg)
+                    sock.sendall(GET.server_responds_success_message(value))
                 except KeyError:
-                    self.logger.debug("Server: Key %s doesn't exist", key)
-                    sock.sendall(b'\x00')
-            elif operation == b'\x01':
-                # self.logger.debug("SET")
-                length_data = read_exactly(8)
-                key_length = int.from_bytes(length_data[:4], 'little')
-                value_length = int.from_bytes(length_data[4:], 'little')
-                payload = read_exactly(key_length + value_length)
-                key, value = payload[:key_length], payload[key_length:]
-                self.db[key] = value
-                sock.sendall((1).to_bytes(1, 'little'))
-            elif operation == b'\x02':
-                # self.logger.debug("DEL")
-                key_length_data = read_exactly(4)
-                key_length = int.from_bytes(key_length_data, 'little')
-                key = read_exactly(key_length)
-                del self.db[key]
-                sock.sendall(b'\x00')
-            elif operation == b'\x03':
-                # self.logger.debug("EXIST")
-                key_length_data = read_exactly(4)
-                key_length = int.from_bytes(key_length_data, 'little')
-                key = read_exactly(key_length)
-                result = key in self.db
-                # self.logger.debug("Existance of %s, %s", key, result)
-                sock.sendall(result.to_bytes(1, 'little'))
+                    sock.sendall(GET.server_responds_fail_message())
+            elif operation == SET.code:
+                key, value = SET.server_reads_client_request(read_exactly)
+                try:
+                    self.db[key] = value
+                    sock.sendall(SET.server_responds_success_message())
+                except Exception as error:
+                    sock.sendall(SET.server_responds_fail_message())
+            elif operation == DELETE.code:
+                key = DELETE.server_reads_client_request(read_exactly)
+                try:
+                    del self.db[key]
+                    sock.sendall(DELETE.server_responds_success_message())
+                except Exception as error:
+                    sock.sendall(DELETE.server_responds_fail_message())
+            elif operation == EXIST.code:
+                key = EXIST.server_reads_client_request(read_exactly)
+                try:
+                    result = key in self.db
+                    sock.sendall(EXIST.server_responds_success_message(result))
+                except Exception as error:
+                    sock.sendall(EXIST.server_responds_fail_message())
             else:
                 raise Exception(f"Got unknown operation {operation}")
 

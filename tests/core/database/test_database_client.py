@@ -1,6 +1,5 @@
 from eth.db.atomic import AtomicDB
 
-import trio
 import pathlib
 import pytest
 import tempfile
