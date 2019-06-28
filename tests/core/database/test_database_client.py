@@ -10,7 +10,7 @@ from trinity.db.manager.manager import (
 )
 from trinity.db.manager.client import (
     AsyncDBClient,
-    DBClient,
+    SyncDBClient,
 )
 
 
@@ -40,6 +40,13 @@ async def async_client_db(ipc_path, db_manager):
     await client_db._socket.aclose()
 
 
+@pytest.fixture
+def sync_client_db(ipc_path, db_manager):
+    client_db = SyncDBClient.connect(ipc_path)
+    yield client_db
+    client_db._socket.close()
+
+
 @pytest.mark.trio
 async def test_read_sanity(ipc_path, db, db_manager):
     db[b'key'] = b'value'
@@ -67,3 +74,33 @@ async def test_atomic_db_with_set_and_delete(db, async_client_db):
         await async_client_db.get(b'key-1')
 
     assert not await async_client_db.exists(b'key-1')
+
+#
+# Test SyncDBClient
+#
+
+
+def test_read_sanity_sync(ipc_path, db, db_manager):
+    db[b'key'] = b'value'
+    client_db = SyncDBClient.connect(ipc_path)
+    assert client_db.get(b'key') == b'value'
+
+
+def test_atomic_db_with_set_and_get_sync(sync_client_db):
+    sync_client_db.set(b'key-1', b'value-1')
+    sync_client_db.set(b'key-2', b'value-2')
+    assert sync_client_db.get(b'key-1') == b'value-1'
+    assert sync_client_db.get(b'key-2') == b'value-2'
+
+
+def test_atomic_db_with_set_and_delete_sync(db, sync_client_db):
+    db[b'key-1'] = b'origin'
+
+    sync_client_db.delete(b'key-1')
+    with pytest.raises(KeyError):
+        db[b'key-1']
+
+    with pytest.raises(KeyError):
+        sync_client_db.get(b'key-1')
+
+    assert not sync_client_db.exists(b'key-1')

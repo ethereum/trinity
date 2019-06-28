@@ -1,7 +1,6 @@
 import logging
 import socket
 import pathlib
-import io
 import trio
 import time
 
@@ -17,7 +16,7 @@ async def _wait_for_path(path: trio.Path):
         await trio.sleep(0.001)
 
 
-class DBClient:
+class SyncDBClient:
     logger = logging.getLogger('client')
 
     def __init__(self, s):
@@ -62,6 +61,20 @@ class DBClient:
             key + value
         )
         self.read_exactly(1)
+
+    def delete(self, key):
+        key_length = len(key)
+        self._socket.sendall(b'\x02' + key_length.to_bytes(4, 'little') + key)
+        self.read_exactly(1)
+
+    def exists(self, key):
+        key_length = len(key)
+        self._socket.sendall(b'\x03' + key_length.to_bytes(4, 'little') + key)
+        result_data = self.read_exactly(1)
+        if int.from_bytes(result_data, "little") == 1:
+            return True
+        else:
+            return False
 
     @classmethod
     def connect(cls, path: pathlib.Path) -> "TrioConnection":
