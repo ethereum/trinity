@@ -1,4 +1,3 @@
-from eth.db.atomic import AtomicDB
 from eth.db.backends.level import LevelDB
 import multiprocessing
 from trinity.db.base import AsyncDBProxy
@@ -8,7 +7,6 @@ from multiprocessing.managers import (
 from trinity.db.beacon.manager import (
     create_db_consumer_manager,
 )
-from eth.db.backends.level import LevelDB
 
 import os
 import signal
@@ -16,10 +14,11 @@ import pathlib
 import time
 import random
 
-IPC_PATH = pathlib.Path("./foo.ipc")
+IPC_PATH = pathlib.Path("./tmp.ipc")
 DB_PATH = pathlib.Path("./tmp-db")
 
 DB = LevelDB(db_path=DB_PATH)
+
 
 def random_bytes(num):
     return random.getrandbits(8 * num).to_bytes(num, 'little')

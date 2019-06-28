@@ -1,7 +1,9 @@
 import pathlib
-from trinity.db_manager import (
+from trinity.db.manager.manager import (
     DBManager,
-    DBClient,
+)
+from trinity.db.manager.client import (
+    SyncDBClient,
 )
 from eth.db.backends.level import LevelDB
 
@@ -12,7 +14,7 @@ import signal
 import time
 import random
 
-IPC_PATH = pathlib.Path("./foo.ipc")
+IPC_PATH = pathlib.Path("./tmp.ipc")
 DB_PATH = pathlib.Path("./tmp-db/")
 
 
@@ -40,7 +42,7 @@ def run_client(ipc_path, client_id):
         for i in range(10000)
     }
 
-    db_client = DBClient.connect(ipc_path)
+    db_client = SyncDBClient.connect(ipc_path)
 
     for _ in range(3):
         start = time.perf_counter()
