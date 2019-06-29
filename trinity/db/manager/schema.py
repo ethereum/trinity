@@ -8,8 +8,8 @@ from .constants import (
 )
 
 from .utils import (
-    len_bytes,
-    bytes_to_int,
+    encode_length,
+    decode_length,
 )
 from typing import (
     Tuple,
@@ -23,7 +23,7 @@ from .exceptions import (
 
 def read_key(read_exactly: Callable[[int], bytes]) -> bytes:
     key_length_data = read_exactly(LEN_BYTES)
-    key = read_exactly(bytes_to_int(key_length_data))
+    key = read_exactly(decode_length(key_length_data))
     return key
 
 
@@ -40,7 +40,7 @@ class GET(Operation):
 
     @classmethod
     def client_request_message(cls, key: bytes) -> bytes:
-        return cls.code + len_bytes(key) + key
+        return cls.code + encode_length(key) + key
 
     @staticmethod
     def server_reads_client_request(read_exactly: Callable[[int], bytes]) -> bytes:
@@ -48,7 +48,7 @@ class GET(Operation):
 
     @staticmethod
     def server_responds_success_message(value: bytes) -> bytes:
-        return SUCCESS_BYTE + len_bytes(value) + value
+        return SUCCESS_BYTE + encode_length(value) + value
 
     @staticmethod
     def client_reads_server_response_sync(read_exactly: Callable[[int], bytes]) -> bytes:
@@ -56,7 +56,7 @@ class GET(Operation):
         if success == FAIL_BYTE:
             raise OperationError()
         value_length_data = read_exactly(LEN_BYTES)
-        value = read_exactly(bytes_to_int(value_length_data))
+        value = read_exactly(decode_length(value_length_data))
         return value
 
     @staticmethod
@@ -66,7 +66,7 @@ class GET(Operation):
         if success == FAIL_BYTE:
             raise OperationError()
         value_length_data = await read_exactly(LEN_BYTES)
-        value = await read_exactly(bytes_to_int(value_length_data))
+        value = await read_exactly(decode_length(value_length_data))
         return value
 
 
@@ -75,13 +75,13 @@ class SET(Operation):
 
     @classmethod
     def client_request_message(cls, key: bytes, value: bytes) -> bytes:
-        return cls.code + len_bytes(key) + len_bytes(value) + key + value
+        return cls.code + encode_length(key) + encode_length(value) + key + value
 
     @staticmethod
     def server_reads_client_request(read_exactly: Callable[[int], bytes]) -> Tuple[bytes, bytes]:
         length_data = read_exactly(LEN_BYTES + LEN_BYTES)
-        key_length = bytes_to_int(length_data[:LEN_BYTES])
-        value_length = bytes_to_int(length_data[LEN_BYTES:])
+        key_length = decode_length(length_data[:LEN_BYTES])
+        value_length = decode_length(length_data[LEN_BYTES:])
         payload = read_exactly(key_length + value_length)
         key, value = payload[:key_length], payload[key_length:]
         return key, value
@@ -109,7 +109,7 @@ class DELETE(Operation):
 
     @classmethod
     def client_request_message(cls, key: bytes) -> bytes:
-        return cls.code + len_bytes(key) + key
+        return cls.code + encode_length(key) + key
 
     @staticmethod
     def server_reads_client_request(read_exactly: Callable[[int], bytes]) -> bytes:
@@ -138,7 +138,7 @@ class EXIST(Operation):
 
     @classmethod
     def client_request_message(cls, key: bytes) -> bytes:
-        return cls.code + len_bytes(key) + key
+        return cls.code + encode_length(key) + key
 
     @staticmethod
     def server_reads_client_request(read_exactly: Callable[[int], bytes]) -> bytes:
