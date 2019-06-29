@@ -152,6 +152,7 @@ class DBManager:
                 except Exception as error:
                     sock.sendall(EXIST.server_responds_fail_message())
             else:
+                self.logger.error("Got unknown operation %s", operation)
                 raise Exception(f"Got unknown operation {operation}")
 
     @contextmanager
