@@ -80,6 +80,9 @@ class SyncDBClient:
         except OperationError:
             raise Exception(f"Fail to query existence of key: {key}")
 
+    def close(self) -> None:
+        self._socket.close()
+
     @classmethod
     def connect(cls, path: pathlib.Path) -> "SyncDBClient":
         wait_for_ipc(path)
@@ -150,6 +153,9 @@ class AsyncDBClient:
                 return exist
             except OperationError:
                 raise Exception(f"Fail to query existence of key: {key}")
+
+    async def aclose(self) -> None:
+        await self._socket.aclose()
 
     @classmethod
     async def connect(cls, path: pathlib.Path) -> "AsyncDBClient":

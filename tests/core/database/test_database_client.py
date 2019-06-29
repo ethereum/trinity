@@ -35,14 +35,14 @@ def db_manager(db, ipc_path):
 async def async_client_db(ipc_path, db_manager):
     client_db = await AsyncDBClient.connect(ipc_path)
     yield client_db
-    await client_db._socket.aclose()
+    await client_db.aclose()
 
 
 @pytest.fixture
 def sync_client_db(ipc_path, db_manager):
     client_db = SyncDBClient.connect(ipc_path)
     yield client_db
-    client_db._socket.close()
+    client_db.close()
 
 
 @pytest.mark.trio
