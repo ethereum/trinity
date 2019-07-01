@@ -586,7 +586,7 @@ class Eth1AppConfig(BaseAppConfig):
             return Eth1DbMode.FULL
 
     @property
-    def node_class(self) -> Type['Node']:
+    def node_class(self) -> Type['Node[Any]']:
         """
         The ``Node`` class that trinity will use.
         """
