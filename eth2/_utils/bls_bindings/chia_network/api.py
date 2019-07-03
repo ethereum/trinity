@@ -14,9 +14,46 @@ from eth_utils import (
     ValidationError,
 )
 
+from py_ecc.optimized_bls12_381 import (
+    curve_order,
+)
 
-def _privkey_int_to_bytes(privkey: int) -> bytes:
-    return privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
+from eth2.beacon.constants import (
+    EMPTY_PUBKEY,
+    EMPTY_SIGNATURE,
+)
+
+
+def _privkey_from_int(privkey: int) -> 'bls_chia.PrivateKey':
+    if privkey <= 0 or privkey >= curve_order:
+        raise ValidationError(
+            f"Invalid private key: Expect integer between 0 and {curve_order}, got {privkey}"
+        )
+    privkey_bytes = privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
+    try:
+        return bls_chia.PrivateKey.from_bytes(privkey_bytes)
+    except RuntimeError as error:
+        raise ValidationError(f"Bad private key: {privkey}, {error}")
+
+
+def _pubkey_from_bytes(pubkey: BLSPubkey) -> 'bls_chia.PublicKey':
+    try:
+        return bls_chia.PublicKey.from_bytes(pubkey)
+    except (RuntimeError, ValueError) as error:
+        raise ValidationError(f"Bad public key: {pubkey}, {error}")
+
+
+def _signature_from_bytes(signature: BLSSignature) -> 'bls_chia.Signature':
+    if signature == EMPTY_SIGNATURE:
+        raise ValidationError(f"Invalid signature (EMPTY_SIGNATURE): {signature}")
+    elif len(signature) != 96:
+        raise ValidationError(
+            f"Invalid signaute length, expect 96 got {len(signature)}. Signature: {signature}"
+        )
+    try:
+        return bls_chia.Signature.from_bytes(signature)
+    except (RuntimeError, ValueError) as error:
+        raise ValidationError(f"Bad signature: {signature}, {error}")
 
 
 def combine_domain(message_hash: Hash32, domain: int) -> bytes:
@@ -26,7 +63,7 @@ def combine_domain(message_hash: Hash32, domain: int) -> bytes:
 def sign(message_hash: Hash32,
          privkey: int,
          domain: int) -> BLSSignature:
-    privkey_chia = bls_chia.PrivateKey.from_bytes(_privkey_int_to_bytes(privkey))
+    privkey_chia = _privkey_from_int(privkey)
     sig_chia = privkey_chia.sign_insecure(
         combine_domain(message_hash, domain)
     )
@@ -35,13 +72,13 @@ def sign(message_hash: Hash32,
 
 
 def privtopub(k: int) -> BLSPubkey:
-    privkey_chia = bls_chia.PrivateKey.from_bytes(_privkey_int_to_bytes(k))
+    privkey_chia = _privkey_from_int(k)
     return cast(BLSPubkey, privkey_chia.get_public_key().serialize())
 
 
 def verify(message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, domain: int) -> bool:
-    pubkey_chia = bls_chia.PublicKey.from_bytes(pubkey)
-    signature_chia = bls_chia.Signature.from_bytes(signature)
+    pubkey_chia = _pubkey_from_bytes(pubkey)
+    signature_chia = _signature_from_bytes(signature)
     signature_chia.set_aggregation_info(
         bls_chia.AggregationInfo.from_msg(
             pubkey_chia,
@@ -52,6 +89,9 @@ def verify(message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, dom
 
 
 def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+    if len(signatures) == 0:
+        return EMPTY_SIGNATURE
+
     signatures_chia = [
         bls_chia.InsecureSignature.from_bytes(signature)
         for signature in signatures
@@ -62,8 +102,10 @@ def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
 
 
 def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+    if len(pubkeys) == 0:
+        return EMPTY_PUBKEY
     pubkeys_chia = [
-        bls_chia.PublicKey.from_bytes(pubkey)
+        _pubkey_from_bytes(pubkey)
         for pubkey in pubkeys
     ]
     aggregated_pubkey_chia = bls_chia.PublicKey.aggregate_insecure(pubkeys_chia)
@@ -74,13 +116,13 @@ def verify_multiple(pubkeys: Sequence[BLSPubkey],
                     message_hashes: Sequence[Hash32],
                     signature: BLSSignature,
                     domain: int) -> bool:
-
     len_msgs = len(message_hashes)
+    len_pubkeys = len(pubkeys)
 
-    if len(pubkeys) != len_msgs:
+    if len_pubkeys != len_msgs:
         raise ValidationError(
             "len(pubkeys) (%s) should be equal to len(message_hashes) (%s)" % (
-                len(pubkeys), len_msgs
+                len_pubkeys, len_msgs
             )
         )
 
@@ -88,13 +130,13 @@ def verify_multiple(pubkeys: Sequence[BLSPubkey],
         combine_domain(message_hash, domain)
         for message_hash in message_hashes
     ]
-    pubkeys_chia = map(bls_chia.PublicKey.from_bytes, pubkeys)
+    pubkeys_chia = map(_pubkey_from_bytes, pubkeys)
     aggregate_infos = [
         bls_chia.AggregationInfo.from_msg(pubkey_chia, message_hash)
         for pubkey_chia, message_hash in zip(pubkeys_chia, message_hashes_with_domain)
     ]
     merged_info = bls_chia.AggregationInfo.merge_infos(aggregate_infos)
 
-    signature_chia = bls_chia.Signature.from_bytes(signature)
+    signature_chia = _signature_from_bytes(signature)
     signature_chia.set_aggregation_info(merged_info)
     return cast(bool, signature_chia.verify())

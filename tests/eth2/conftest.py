@@ -4,7 +4,7 @@ import eth_utils.toolz as toolz
 
 import pytest
 
-from py_ecc import bls
+from eth2._utils.bls import eth2_bls as bls
 
 ETH2_BLS_KEY_PYTEST_CACHE_KEY = "eth2/bls/key-cache"
 

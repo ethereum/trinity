@@ -2,7 +2,7 @@ from eth_utils import (
     encode_hex,
     ValidationError,
 )
-from py_ecc import bls
+from eth2._utils.bls import eth2_bls as bls
 
 from eth2._utils.merkle.common import (
     verify_merkle_branch,

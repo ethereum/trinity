@@ -45,8 +45,8 @@ def mock_bls_verify_multiple(pubkeys,
 
 @pytest.fixture(autouse=True)
 def mock_bls(mocker, request):
-    mocker.patch('py_ecc.bls.verify', side_effect=mock_bls_verify)
-    mocker.patch('py_ecc.bls.verify_multiple', side_effect=mock_bls_verify_multiple)
+    mocker.patch('eth2._utils.bls.eth2_bls.verify', side_effect=mock_bls_verify)
+    mocker.patch('eth2._utils.bls.eth2_bls.verify_multiple', side_effect=mock_bls_verify_multiple)
 
 
 @pytest.fixture
