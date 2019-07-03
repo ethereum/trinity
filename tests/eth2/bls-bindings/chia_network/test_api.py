@@ -16,6 +16,11 @@ from eth_utils import (
     ValidationError,
 )
 
+from eth2.beacon.constants import (
+    EMPTY_PUBKEY,
+    EMPTY_SIGNATURE,
+)
+
 
 def assert_pubkey(obj):
     assert isinstance(obj, bytes) and len(obj) == 48
@@ -100,8 +105,8 @@ def test_bls_core(privkey, success):
 
 
 def test_empty_aggregation():
-    assert aggregate_pubkeys([]) == tuple()
-    assert aggregate_signatures([]) == tuple()
+    assert aggregate_pubkeys([]) == EMPTY_PUBKEY
+    assert aggregate_signatures([]) == EMPTY_SIGNATURE
 
 
 @pytest.mark.parametrize(

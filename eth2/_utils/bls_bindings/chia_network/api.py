@@ -18,6 +18,11 @@ from py_ecc.optimized_bls12_381 import (
     curve_order,
 )
 
+from eth2.beacon.constants import (
+    EMPTY_PUBKEY,
+    EMPTY_SIGNATURE,
+)
+
 
 def _privkey_int_to_bytes(privkey: int) -> bytes:
     if privkey <= 0 or privkey >= curve_order:
@@ -60,7 +65,7 @@ def verify(message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, dom
 
 def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
     if len(signatures) == 0:
-        return tuple()
+        return EMPTY_SIGNATURE
 
     signatures_chia = [
         bls_chia.InsecureSignature.from_bytes(signature)
@@ -73,7 +78,7 @@ def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
 
 def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
     if len(pubkeys) == 0:
-        return tuple()
+        return EMPTY_PUBKEY
     pubkeys_chia = [
         bls_chia.PublicKey.from_bytes(pubkey)
         for pubkey in pubkeys
