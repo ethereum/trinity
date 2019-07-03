@@ -11,7 +11,7 @@ def privkeys():
     2. Using ``2**i`` instead of ``i``:
         If using ``i``, the combinations of privkeys would not lead to unique pubkeys.
     """
-    return [2 ** i for i in range(100)]
+    return [2 ** i for i in range(1, 101)]
 
 
 @pytest.fixture(scope="session")
