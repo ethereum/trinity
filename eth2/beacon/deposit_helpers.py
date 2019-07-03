@@ -1,7 +1,7 @@
 from eth_utils import (
     ValidationError,
 )
-from py_ecc import bls
+from eth2._utils.bls import eth2_bls as bls
 import ssz
 
 from eth2._utils.hash import (

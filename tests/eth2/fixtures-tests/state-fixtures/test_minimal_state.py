@@ -7,7 +7,7 @@ from ruamel.yaml import (
 from eth_utils import (
     to_tuple,
 )
-from py_ecc import bls  # noqa: F401
+from eth2._utils.bls import eth2_bls as bls
 from ssz.tools import (
     from_formatted_dict,
     to_formatted_dict,

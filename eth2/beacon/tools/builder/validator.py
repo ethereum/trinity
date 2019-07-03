@@ -24,7 +24,7 @@ from eth_utils import (
 from eth.constants import (
     ZERO_HASH32,
 )
-from py_ecc import bls
+from eth2._utils.bls import eth2_bls as bls
 
 from eth2._utils.bitfield import (
     get_empty_bitfield,

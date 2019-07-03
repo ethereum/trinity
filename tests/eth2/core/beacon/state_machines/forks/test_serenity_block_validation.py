@@ -13,7 +13,7 @@ from eth_utils.toolz import (
     assoc,
 )
 
-from py_ecc import bls
+from eth2._utils.bls import eth2_bls as bls
 from eth2._utils.bitfield import (
     get_empty_bitfield,
     set_voted,
