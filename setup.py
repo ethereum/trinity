@@ -125,7 +125,7 @@ deps['dev'] = (
 )
 
 
-install_requires = deps['trinity'] + deps['p2p'] + deps['eth2']
+install_requires = deps['trinity'] + deps['p2p']
 
 
 with open('./README.md') as readme:
