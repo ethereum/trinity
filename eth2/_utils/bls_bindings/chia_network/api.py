@@ -14,6 +14,10 @@ from eth_utils import (
     ValidationError,
 )
 
+from py_ecc.optimized_bls12_381 import (
+    curve_order,
+)
+
 
 def _privkey_int_to_bytes(privkey: int) -> bytes:
     return privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
@@ -35,6 +39,9 @@ def sign(message_hash: Hash32,
 
 
 def privtopub(k: int) -> BLSPubkey:
+    if k <= 0 or k >= curve_order:
+        raise ValidationError(f"Expect integer between 0 and {curve_order}, got {k}")
+
     privkey_chia = bls_chia.PrivateKey.from_bytes(_privkey_int_to_bytes(k))
     return cast(BLSPubkey, privkey_chia.get_public_key().serialize())
 
@@ -74,7 +81,6 @@ def verify_multiple(pubkeys: Sequence[BLSPubkey],
                     message_hashes: Sequence[Hash32],
                     signature: BLSSignature,
                     domain: int) -> bool:
-
     len_msgs = len(message_hashes)
 
     if len(pubkeys) != len_msgs:
