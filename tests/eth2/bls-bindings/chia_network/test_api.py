@@ -12,6 +12,9 @@ from eth2._utils.bls_bindings.chia_network.api import (
     verify,
     verify_multiple,
 )
+from eth_utils import (
+    ValidationError,
+)
 
 
 def assert_pubkey(obj):
@@ -67,23 +70,38 @@ def test_sanity():
 
 
 @pytest.mark.parametrize(
-    'privkey',
+    'privkey,success',
     [
-        (1),
-        (5),
-        (124),
-        (735),
-        (127409812145),
-        (90768492698215092512159),
-        (curve_order - 1),
+        (1, True),
+        (5, True),
+        (124, True),
+        (735, True),
+        (127409812145, True),
+        (90768492698215092512159, True),
+        (curve_order - 1, True),
+        (0, False),
+        (curve_order, False),
+        (curve_order + 1, False),
     ]
 )
-def test_bls_core(privkey):
+def test_bls_core(privkey, success):
     domain = 0
     msg = str(privkey).encode('utf-8')
-    sig = sign(msg, privkey, domain=domain)
-    pub = privtopub(privkey)
-    assert verify(msg, pub, sig, domain=domain)
+    if success:
+        sig = sign(msg, privkey, domain=domain)
+        pub = privtopub(privkey)
+        assert verify(msg, pub, sig, domain=domain)
+    else:
+        with pytest.raises(ValidationError):
+            sig = sign(msg, privkey, domain=domain)
+
+        with pytest.raises(ValidationError):
+            pub = privtopub(privkey)
+
+
+def test_empty_aggregation():
+    assert aggregate_pubkeys([]) == tuple()
+    assert aggregate_signatures([]) == tuple()
 
 
 @pytest.mark.parametrize(

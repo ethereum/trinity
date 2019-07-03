@@ -20,6 +20,9 @@ from py_ecc.optimized_bls12_381 import (
 
 
 def _privkey_int_to_bytes(privkey: int) -> bytes:
+    if privkey <= 0 or privkey >= curve_order:
+        raise ValidationError(f"Expect integer between 0 and {curve_order}, got {privkey}")
+
     return privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
 
 
@@ -39,9 +42,6 @@ def sign(message_hash: Hash32,
 
 
 def privtopub(k: int) -> BLSPubkey:
-    if k <= 0 or k >= curve_order:
-        raise ValidationError(f"Expect integer between 0 and {curve_order}, got {k}")
-
     privkey_chia = bls_chia.PrivateKey.from_bytes(_privkey_int_to_bytes(k))
     return cast(BLSPubkey, privkey_chia.get_public_key().serialize())
 
@@ -59,6 +59,9 @@ def verify(message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, dom
 
 
 def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+    if len(signatures) == 0:
+        return tuple()
+
     signatures_chia = [
         bls_chia.InsecureSignature.from_bytes(signature)
         for signature in signatures
@@ -69,6 +72,8 @@ def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
 
 
 def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+    if len(pubkeys) == 0:
+        return tuple()
     pubkeys_chia = [
         bls_chia.PublicKey.from_bytes(pubkey)
         for pubkey in pubkeys
