@@ -2,12 +2,12 @@ from pathlib import Path
 import pytest
 from ruamel.yaml import (
     YAML,
+    YAMLError,
 )
 
 from eth_utils import (
     to_tuple,
 )
-from eth2._utils.bls import eth2_bls as bls
 from ssz.tools import (
     from_formatted_dict,
     to_formatted_dict,
@@ -58,8 +58,8 @@ def mock_bls(mocker, request):
     if 'noautofixture' in request.keywords:
         return
 
-    mocker.patch('py_ecc.bls.verify', side_effect=mock_bls_verify)
-    mocker.patch('py_ecc.bls.verify_multiple', side_effect=mock_bls_verify_multiple)
+    mocker.patch('eth2._utils.bls.eth2_bls.verify', side_effect=mock_bls_verify)
+    mocker.patch('eth2._utils.bls.eth2_bls.verify_multiple', side_effect=mock_bls_verify_multiple)
 
 
 #
@@ -77,7 +77,7 @@ def get_all_test_cases(file_names):
             try:
                 data = yaml.load(new_text)
                 test_cases[file_name] = data['test_cases']
-            except yaml.YAMLError as exc:
+            except YAMLError as exc:
                 print(exc)
     return test_cases
 

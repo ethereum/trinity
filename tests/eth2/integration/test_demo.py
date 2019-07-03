@@ -23,6 +23,9 @@ from eth2.beacon.tools.builder.proposer import (
 from eth2.beacon.tools.builder.validator import (
     create_mock_signed_attestations_at_slot,
 )
+from eth2.beacon.tools.misc.ssz_vector import (
+    override_vector_lengths,
+)
 
 
 #
@@ -41,8 +44,8 @@ def mock_bls_verify_multiple(pubkeys,
 
 @pytest.fixture(autouse=True)
 def mock_bls(mocker, request):
-    mocker.patch('py_ecc.bls.verify', side_effect=mock_bls_verify)
-    mocker.patch('py_ecc.bls.verify_multiple', side_effect=mock_bls_verify_multiple)
+    mocker.patch('eth2._utils.bls.eth2_bls.verify', side_effect=mock_bls_verify)
+    mocker.patch('eth2._utils.bls.eth2_bls.verify_multiple', side_effect=mock_bls_verify_multiple)
 
 
 @pytest.fixture
@@ -61,6 +64,7 @@ def test_demo(base_db,
         SHARD_COUNT=2,
         MIN_ATTESTATION_INCLUSION_DELAY=2,
     )
+    override_vector_lengths(config)
     fixture_sm_class = SerenityStateMachine.configure(
         __name__='SerenityStateMachineForTesting',
         config=config,
