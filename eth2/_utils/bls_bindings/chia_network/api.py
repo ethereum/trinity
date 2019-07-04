@@ -24,11 +24,16 @@ from eth2.beacon.constants import (
 )
 
 
-def _privkey_int_to_bytes(privkey: int) -> bytes:
+def _privkey_from_int(privkey: int) -> bytes:
     if privkey <= 0 or privkey >= curve_order:
-        raise ValidationError(f"Expect integer between 0 and {curve_order}, got {privkey}")
-
-    return privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
+        raise ValidationError(
+            f"Invalid private key: Expect integer between 0 and {curve_order}, got {privkey}"
+        )
+    privkey_bytes = privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
+    try:
+        return bls_chia.PrivateKey.from_bytes(privkey_bytes)
+    except RuntimeError:
+        raise ValidationError(f"Invalid private key: {privkey}")
 
 
 def _pubkey_from_bytes(pubkey: BLSPubkey) -> bytes:
@@ -45,7 +50,7 @@ def combine_domain(message_hash: Hash32, domain: int) -> bytes:
 def sign(message_hash: Hash32,
          privkey: int,
          domain: int) -> BLSSignature:
-    privkey_chia = bls_chia.PrivateKey.from_bytes(_privkey_int_to_bytes(privkey))
+    privkey_chia = _privkey_from_int(privkey)
     sig_chia = privkey_chia.sign_insecure(
         combine_domain(message_hash, domain)
     )
@@ -54,7 +59,7 @@ def sign(message_hash: Hash32,
 
 
 def privtopub(k: int) -> BLSPubkey:
-    privkey_chia = bls_chia.PrivateKey.from_bytes(_privkey_int_to_bytes(k))
+    privkey_chia = _privkey_from_int(k)
     return cast(BLSPubkey, privkey_chia.get_public_key().serialize())
 
 
