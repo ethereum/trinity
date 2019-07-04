@@ -22,6 +22,9 @@ from eth2.beacon.tools.builder.validator import (
     get_committee_assignment,
     verify_votes,
 )
+from eth_utils import (
+    ValidationError,
+)
 
 
 @pytest.mark.slow
@@ -79,7 +82,11 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
     assert len(voted_index) == len(votes)
 
     aggregated_pubs = bls.aggregate_pubkeys(pubs)
-    assert bls.verify(message_hash, aggregated_pubs, sigs, domain)
+    if votes_count == 0:
+        with pytest.raises(ValidationError):
+            bls.verify(message_hash, aggregated_pubs, sigs, domain)
+    else:
+        assert bls.verify(message_hash, aggregated_pubs, sigs, domain)
 
 
 @pytest.mark.parametrize(
