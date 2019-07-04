@@ -58,12 +58,37 @@ class BaseBLSBackend(ABC):
 
 
 class ChiaBackend(BaseBLSBackend):
-    privtopub = staticmethod(chia_api.privtopub)
-    sign = staticmethod(chia_api.sign)
-    verify = staticmethod(chia_api.verify)
-    aggregate_signatures = staticmethod(chia_api.aggregate_signatures)
-    aggregate_pubkeys = staticmethod(chia_api.aggregate_pubkeys)
-    verify_multiple = staticmethod(chia_api.verify_multiple)
+    @staticmethod
+    def privtopub(k: int) -> BLSPubkey:
+        return chia_api.privtopub(k)
+
+    @staticmethod
+    def sign(message_hash: Hash32,
+             privkey: int,
+             domain: int) -> BLSSignature:
+        return chia_api.sign(message_hash, privkey, domain)
+
+    @staticmethod
+    def verify(message_hash: Hash32,
+               pubkey: BLSPubkey,
+               signature: BLSSignature,
+               domain: int) -> bool:
+        return chia_api.verify(message_hash, pubkey, signature, domain)
+
+    @staticmethod
+    def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+        return chia_api.aggregate_signatures(signatures)
+
+    @staticmethod
+    def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+        return chia_api.aggregate_pubkeys(pubkeys)
+
+    @staticmethod
+    def verify_multiple(pubkeys: Sequence[BLSPubkey],
+                        message_hashes: Sequence[Hash32],
+                        signature: BLSSignature,
+                        domain: int) -> bool:
+        return chia_api.verify_multiple(pubkeys, message_hashes, signature, domain)
 
 
 eth2_bls = ChiaBackend()
