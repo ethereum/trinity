@@ -39,7 +39,7 @@ def _privkey_from_int(privkey: int) -> bytes:
 def _pubkey_from_bytes(pubkey: BLSPubkey) -> bytes:
     try:
         return bls_chia.PublicKey.from_bytes(pubkey)
-    except RuntimeError:
+    except (RuntimeError, ValueError):
         raise ValidationError(f"Invalid public key: {pubkey}")
 
 
