@@ -31,6 +31,13 @@ def _privkey_int_to_bytes(privkey: int) -> bytes:
     return privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
 
 
+def _pubkey_from_bytes(pubkey: BLSPubkey) -> bytes:
+    try:
+        return bls_chia.PublicKey.from_bytes(pubkey)
+    except RuntimeError:
+        raise ValidationError(f"Invalid public key: {pubkey}")
+
+
 def combine_domain(message_hash: Hash32, domain: int) -> bytes:
     return message_hash + domain.to_bytes(8, 'big')
 
@@ -52,7 +59,7 @@ def privtopub(k: int) -> BLSPubkey:
 
 
 def verify(message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, domain: int) -> bool:
-    pubkey_chia = bls_chia.PublicKey.from_bytes(pubkey)
+    pubkey_chia = _pubkey_from_bytes(pubkey)
     signature_chia = bls_chia.Signature.from_bytes(signature)
     signature_chia.set_aggregation_info(
         bls_chia.AggregationInfo.from_msg(
@@ -80,7 +87,7 @@ def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
     if len(pubkeys) == 0:
         return EMPTY_PUBKEY
     pubkeys_chia = [
-        bls_chia.PublicKey.from_bytes(pubkey)
+        _pubkey_from_bytes(pubkey)
         for pubkey in pubkeys
     ]
     aggregated_pubkey_chia = bls_chia.PublicKey.aggregate_insecure(pubkeys_chia)
@@ -104,7 +111,7 @@ def verify_multiple(pubkeys: Sequence[BLSPubkey],
         combine_domain(message_hash, domain)
         for message_hash in message_hashes
     ]
-    pubkeys_chia = map(bls_chia.PublicKey.from_bytes, pubkeys)
+    pubkeys_chia = map(_pubkey_from_bytes, pubkeys)
     aggregate_infos = [
         bls_chia.AggregationInfo.from_msg(pubkey_chia, message_hash)
         for pubkey_chia, message_hash in zip(pubkeys_chia, message_hashes_with_domain)
