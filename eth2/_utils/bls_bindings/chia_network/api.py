@@ -24,7 +24,7 @@ from eth2.beacon.constants import (
 )
 
 
-def _privkey_from_int(privkey: int) -> 'bls_chia.PrivateKey':
+def _privkey_from_int(privkey: int) -> bls_chia.PrivateKey:
     if privkey <= 0 or privkey >= curve_order:
         raise ValidationError(
             f"Invalid private key: Expect integer between 0 and {curve_order}, got {privkey}"
