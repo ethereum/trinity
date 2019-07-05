@@ -46,7 +46,7 @@ def _pubkey_from_bytes(pubkey: BLSPubkey) -> 'bls_chia.PublicKey':
 def _signature_from_bytes(signature: BLSSignature) -> 'bls_chia.Signature':
     if signature == EMPTY_SIGNATURE:
         raise ValidationError(f"Invalid signature (EMPTY_SIGNATURE): {signature}")
-    elif len(signature) != 96:
+    elif len(signature) != bls_chia.SIgnature.SIGNATURE_SIZE:
         raise ValidationError(
             f"Invalid signaute length, expect 96 got {len(signature)}. Signature: {signature}"
         )
