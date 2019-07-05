@@ -36,17 +36,17 @@ def _privkey_from_int(privkey: int) -> bls_chia.PrivateKey:
         raise ValidationError(f"Bad private key: {privkey}, {error}")
 
 
-def _pubkey_from_bytes(pubkey: BLSPubkey) -> 'bls_chia.PublicKey':
+def _pubkey_from_bytes(pubkey: BLSPubkey) -> bls_chia.PublicKey:
     try:
         return bls_chia.PublicKey.from_bytes(pubkey)
     except (RuntimeError, ValueError) as error:
         raise ValidationError(f"Bad public key: {pubkey}, {error}")
 
 
-def _signature_from_bytes(signature: BLSSignature) -> 'bls_chia.Signature':
+def _signature_from_bytes(signature: BLSSignature) -> bls_chia.Signature:
     if signature == EMPTY_SIGNATURE:
         raise ValidationError(f"Invalid signature (EMPTY_SIGNATURE): {signature}")
-    elif len(signature) != bls_chia.SIgnature.SIGNATURE_SIZE:
+    elif len(signature) != bls_chia.Signature.SIGNATURE_SIZE:
         raise ValidationError(
             f"Invalid signaute length, expect 96 got {len(signature)}. Signature: {signature}"
         )
