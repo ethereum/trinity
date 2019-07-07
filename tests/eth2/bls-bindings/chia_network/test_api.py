@@ -137,6 +137,8 @@ def test_signature_aggregation(msg, privkeys):
         (tuple(range(1, 11)), tuple(range(1, 11))),
         ((1, 2, 3), (4, 5, 6, 7)),
         ((1, 2, 3), (2, 3, 4, 5)),
+        ((1, 2, 3), ()),
+        ((), (2, 3, 4, 5)),
     ]
 )
 def test_multi_aggregation(msg_1, msg_2, privkeys_1, privkeys_2):
@@ -144,17 +146,15 @@ def test_multi_aggregation(msg_1, msg_2, privkeys_1, privkeys_2):
 
     sigs_1 = [sign(msg_1, k, domain=domain) for k in privkeys_1]  # signatures to msg_1
     pubs_1 = [privtopub(k) for k in privkeys_1]
-    aggsig_1 = aggregate_signatures(sigs_1)
     aggpub_1 = aggregate_pubkeys(pubs_1)  # sig_1 to msg_1
 
     sigs_2 = [sign(msg_2, k, domain=domain) for k in privkeys_2]  # signatures to msg_2
     pubs_2 = [privtopub(k) for k in privkeys_2]
-    aggsig_2 = aggregate_signatures(sigs_2)
     aggpub_2 = aggregate_pubkeys(pubs_2)  # sig_2 to msg_2
 
     message_hashes = [msg_1, msg_2]
     pubs = [aggpub_1, aggpub_2]
-    aggsig = aggregate_signatures([aggsig_1, aggsig_2])
+    aggsig = aggregate_signatures(sigs_1 + sigs_2)
 
     assert verify_multiple(
         pubkeys=pubs,
