@@ -14,6 +14,9 @@ from eth_typing import (
     BLSSignature,
     Hash32,
 )
+from eth_utils import (
+    ValidationError,
+)
 
 
 class BaseBLSBackend(ABC):
@@ -32,11 +35,26 @@ class BaseBLSBackend(ABC):
 
     @staticmethod
     @abstractmethod
-    def verify(message_hash: Hash32,
+    def _verify(message_hash: Hash32,
+                pubkey: BLSPubkey,
+                signature: BLSSignature,
+                domain: int) -> bool:
+        pass
+
+    @classmethod
+    def verify(cls,
+               message_hash: Hash32,
                pubkey: BLSPubkey,
                signature: BLSSignature,
-               domain: int) -> bool:
-        pass
+               domain: int) -> None:
+        if not cls._verify(message_hash, pubkey, signature, domain):
+            raise ValidationError((
+                "Verification failed:\n"
+                f"message_hash {message_hash}\n"
+                f"pubkey {pubkey}\n"
+                f"signature {signature}\n"
+                f"domain {domain}"
+            ))
 
     @staticmethod
     @abstractmethod
@@ -50,11 +68,26 @@ class BaseBLSBackend(ABC):
 
     @staticmethod
     @abstractmethod
-    def verify_multiple(pubkeys: Sequence[BLSPubkey],
+    def _verify_multiple(pubkeys: Sequence[BLSPubkey],
+                         message_hashes: Sequence[Hash32],
+                         signature: BLSSignature,
+                         domain: int) -> bool:
+        pass
+
+    @classmethod
+    def verify_multiple(cls,
+                        pubkeys: Sequence[BLSPubkey],
                         message_hashes: Sequence[Hash32],
                         signature: BLSSignature,
-                        domain: int) -> bool:
-        pass
+                        domain: int) -> None:
+        if not cls._verify_multiple(pubkeys, message_hashes, signature, domain):
+            raise ValidationError((
+                "Verification failed:\n"
+                f"pubkeys {pubkeys}\n"
+                f"message_hashes {message_hashes}\n"
+                f"signature {signature}\n"
+                f"domain {domain}"
+            ))
 
 
 class ChiaBackend(BaseBLSBackend):
@@ -69,10 +102,10 @@ class ChiaBackend(BaseBLSBackend):
         return chia_api.sign(message_hash, privkey, domain)
 
     @staticmethod
-    def verify(message_hash: Hash32,
-               pubkey: BLSPubkey,
-               signature: BLSSignature,
-               domain: int) -> bool:
+    def _verify(message_hash: Hash32,
+                pubkey: BLSPubkey,
+                signature: BLSSignature,
+                domain: int) -> bool:
         return chia_api.verify(message_hash, pubkey, signature, domain)
 
     @staticmethod
@@ -84,10 +117,10 @@ class ChiaBackend(BaseBLSBackend):
         return chia_api.aggregate_pubkeys(pubkeys)
 
     @staticmethod
-    def verify_multiple(pubkeys: Sequence[BLSPubkey],
-                        message_hashes: Sequence[Hash32],
-                        signature: BLSSignature,
-                        domain: int) -> bool:
+    def _verify_multiple(pubkeys: Sequence[BLSPubkey],
+                         message_hashes: Sequence[Hash32],
+                         signature: BLSSignature,
+                         domain: int) -> bool:
         return chia_api.verify_multiple(pubkeys, message_hashes, signature, domain)
 
 
