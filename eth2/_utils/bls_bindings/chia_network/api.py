@@ -10,9 +10,6 @@ from eth_typing import (
     BLSSignature,
     Hash32,
 )
-from eth_utils import (
-    ValidationError,
-)
 
 from py_ecc.optimized_bls12_381 import (
     curve_order,
@@ -22,18 +19,21 @@ from eth2.beacon.constants import (
     EMPTY_PUBKEY,
     EMPTY_SIGNATURE,
 )
+from eth_utils import (
+    ValidationError,
+)
 
 
 def _privkey_from_int(privkey: int) -> 'bls_chia.PrivateKey':
     if privkey <= 0 or privkey >= curve_order:
-        raise ValidationError(
+        raise ValueError(
             f"Invalid private key: Expect integer between 0 and {curve_order}, got {privkey}"
         )
     privkey_bytes = privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
     try:
         return bls_chia.PrivateKey.from_bytes(privkey_bytes)
     except RuntimeError as error:
-        raise ValidationError(f"Bad private key: {privkey}, {error}")
+        raise ValueError(f"Bad private key: {privkey}, {error}")
 
 
 def _pubkey_from_bytes(pubkey: BLSPubkey) -> 'bls_chia.PublicKey':
@@ -45,9 +45,9 @@ def _pubkey_from_bytes(pubkey: BLSPubkey) -> 'bls_chia.PublicKey':
 
 def _signature_from_bytes(signature: BLSSignature) -> 'bls_chia.Signature':
     if signature == EMPTY_SIGNATURE:
-        raise ValidationError(f"Invalid signature (EMPTY_SIGNATURE): {signature}")
+        raise ValueError(f"Invalid signature (EMPTY_SIGNATURE): {signature}")
     elif len(signature) != 96:
-        raise ValidationError(
+        raise ValueError(
             f"Invalid signaute length, expect 96 got {len(signature)}. Signature: {signature}"
         )
     try:
@@ -120,7 +120,7 @@ def verify_multiple(pubkeys: Sequence[BLSPubkey],
     len_pubkeys = len(pubkeys)
 
     if len_pubkeys != len_msgs:
-        raise ValidationError(
+        raise ValueError(
             "len(pubkeys) (%s) should be equal to len(message_hashes) (%s)" % (
                 len_pubkeys, len_msgs
             )
