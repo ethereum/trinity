@@ -12,7 +12,7 @@ class PostInstallCommand(install):
     def run(self):
         """Post-install script which activate argcomplete library."""
         subprocess.call('register-python-argcomplete trinity >> ~/.bashrc', shell=True)
-        # To start using CLI with autocomplete immediately: 
+        # To start using CLI with autocomplete immediately:
         subprocess.call('eval "$(register-python-argcomplete trinity)"', shell=True)
         install.run(self)
 
