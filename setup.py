@@ -1,9 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import os
+import subprocess
 from setuptools import setup, find_packages
+from setuptools.command.install import install
 
 PYEVM_DEPENDENCY = "py-evm==0.3.0a1"
+
+
+class PostInstallCommand(install):
+    def run(self):
+        """Post-install script which activate argcomplete library."""
+        subprocess.call('register-python-argcomplete trinity >> ~/.bashrc', shell=True)
+        # To start using CLI with autocomplete immediately: 
+        subprocess.call('eval "$(register-python-argcomplete trinity)"', shell=True)
+        install.run(self)
 
 
 deps = {
@@ -165,5 +176,8 @@ setup(
             'trinity=trinity:main',
             'trinity-beacon=trinity:main_beacon'
         ],
+    },
+    cmdclass={
+        'install': PostInstallCommand,
     },
 )
