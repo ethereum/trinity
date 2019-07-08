@@ -15,6 +15,7 @@ Unreleased
 - `#636 <https://github.com/ethereum/trinity/pull/636>`_: Feature: Run UPnP Service as an isolated plugin (plus `#730 <https://github.com/ethereum/trinity/pull/730>`_ fixup)
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Feature: Expose certain peer pool events and move RequestServer into an isolated plugin
 - `#646 <https://github.com/ethereum/trinity/pull/646>`_: Feature: Log the gap time between the imported header and now; don't blast screen with logs when regular syncing a lot
+- `#728 <https://github.com/ethereum/trinity/pull/728>`_: Feature: Use ``trinity db-shell`` to connect to a running process and inspect its database
 - `#641 <https://github.com/ethereum/trinity/pull/641>`_: Feature: [Experimental] New "Beam Sync" strategy that downloads just enough state to execute a block, then saves it and the result
 - `#704 <https://github.com/ethereum/trinity/pull/704>`_: Bugfix: Header syncing is now limited in how far ahead of block sync it will go
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Performance: Upgrade to new Lahja version with improved performance
