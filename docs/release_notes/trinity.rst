@@ -7,7 +7,6 @@ v0.1.0-alpha.26
 Unreleased
 
 - `#734 <https://github.com/ethereum/trinity/pull/734>`_: Feature: Move TransactionPool into its own process
-- `#734 <https://github.com/ethereum/trinity/pull/734>`_: Feature: Move TransactionPool into its own process
 - `#734 <https://github.com/ethereum/trinity/pull/734>`_: Feature: Create ProxyPeerPool that partially exposes peer pool functionality to any process
 - `#696 <https://github.com/ethereum/trinity/pull/696>`_: Feature: Expose events for Transaction and NewBlockHashes commands on the EventBus
 - `#693 <https://github.com/ethereum/trinity/pull/693>`_: Feature: In-memory ``Transport`` for use in testing.
@@ -18,6 +17,7 @@ Unreleased
 - `#728 <https://github.com/ethereum/trinity/pull/728>`_: Feature: Use ``trinity db-shell`` to connect to a running process and inspect its database
 - `#641 <https://github.com/ethereum/trinity/pull/641>`_: Feature: [Experimental] New "Beam Sync" strategy that downloads just enough state to execute a block, then saves it and the result
 - `#704 <https://github.com/ethereum/trinity/pull/704>`_: Bugfix: Header syncing is now limited in how far ahead of block sync it will go
+- `#731 <https://github.com/ethereum/trinity/pull/731>`_: Bugfix: Prevent ``KeyError`` exception raised at ``del self._dependencies[prune_task_id]`` during syncing
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Performance: Upgrade to new Lahja version with improved performance
 
 v0.1.0-alpha.25
