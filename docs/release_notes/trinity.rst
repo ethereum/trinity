@@ -19,6 +19,7 @@ Unreleased
 - `#641 <https://github.com/ethereum/trinity/pull/641>`_: Feature: [Experimental] New "Beam Sync" strategy that downloads just enough state to execute a block, then saves it and the result
 - `#704 <https://github.com/ethereum/trinity/pull/704>`_: Bugfix: Header syncing is now limited in how far ahead of block sync it will go
 - `#731 <https://github.com/ethereum/trinity/pull/731>`_: Bugfix: Prevent ``KeyError`` exception raised at ``del self._dependencies[prune_task_id]`` during syncing
+- `#772 <https://github.com/ethereum/trinity/pull/772>`_: Bugfix: Several very uncommon issues during syncing, would have been more likely during beam sync
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Performance: Upgrade to new Lahja version with improved performance
 - `#771 <https://github.com/ethereum/trinity/pull/771>`_: Maintenance: The ``get_chain_config`` API was moved from the ``TrinityConfig`` to the ``Eth1AppConfig``
 - `#766 <https://github.com/ethereum/trinity/pull/766>`_: Docs: Cover ``trinity.protocol`` events in API docs
