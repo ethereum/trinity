@@ -101,3 +101,22 @@ The following table shows various combinations of how to use logging in Trinity 
 
 .. [5] **Increasing** the per-module log level above the general ``--file-log-level`` is not yet supported
        (See `issue 689 <https://github.com/ethereum/trinity/issues/689>`_ )
+
+
+Enabling tab completion
+~~~~~~~~~~~~~~~~~~~~~~~
+
+It is possible to configure tab-complete for trinity greater then v0.1.0a25.
+
+For permanent, not global tab complete activation, use:
+
+.. code:: sh
+
+    register-python-argcomplete trinity >> ~/.bashrc
+
+
+For one-time activation of argcomplete for trinity, use:
+
+.. code:: sh
+
+    eval "$(register-python-argcomplete trinity)"
