@@ -106,7 +106,7 @@ The following table shows various combinations of how to use logging in Trinity 
 Enabling tab completion
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-It is possible to configure tab-complete for trinity greater then v0.1.0a25.
+Trinity can be configured to auto complete commands when the <tab> key is pressed.
 
 For permanent, not global tab complete activation, use:
 
