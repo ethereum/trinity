@@ -6,6 +6,7 @@ v0.1.0-alpha.26
 
 Unreleased
 
+
 - `#734 <https://github.com/ethereum/trinity/pull/734>`_: Feature: Move TransactionPool into its own process
 - `#734 <https://github.com/ethereum/trinity/pull/734>`_: Feature: Create ProxyPeerPool that partially exposes peer pool functionality to any process
 - `#696 <https://github.com/ethereum/trinity/pull/696>`_: Feature: Expose events for Transaction and NewBlockHashes commands on the EventBus
@@ -19,6 +20,7 @@ Unreleased
 - `#704 <https://github.com/ethereum/trinity/pull/704>`_: Bugfix: Header syncing is now limited in how far ahead of block sync it will go
 - `#731 <https://github.com/ethereum/trinity/pull/731>`_: Bugfix: Prevent ``KeyError`` exception raised at ``del self._dependencies[prune_task_id]`` during syncing
 - `#617 <https://github.com/ethereum/trinity/pull/617>`_: Performance: Upgrade to new Lahja version with improved performance
+- `#771 <https://github.com/ethereum/trinity/pull/771>`_: Maintenance: The ``get_chain_config`` API was moved from the ``TrinityConfig`` to the ``Eth1AppConfig``
 
 v0.1.0-alpha.25
 --------------------------
