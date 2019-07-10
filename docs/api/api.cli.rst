@@ -108,7 +108,7 @@ Enabling tab completion
 
 Trinity can be configured to auto complete commands when the <tab> key is pressed.
 
-For permanent, not global tab complete activation, use:
+After installing trinity, to activate tab-completion in future bash prompts, use:
 
 .. code:: sh
 
