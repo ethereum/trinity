@@ -1,4 +1,12 @@
 from pathlib import Path
+from typing import (
+    Sequence,
+    Optional,
+)
+
+from dataclasses import (
+    dataclass,
+)
 import pytest
 from ruamel.yaml import (
     YAML,
@@ -10,23 +18,22 @@ from eth_utils import (
 from py_ecc import bls  # noqa: F401
 from ssz.tools import (
     from_formatted_dict,
-    to_formatted_dict,
 )
 
 
 from eth2.configs import (
     Eth2Config,
-    Eth2GenesisConfig,
 )
-from eth2.beacon.db.chain import BeaconChainDB
-from eth2.beacon.operations.attestation_pool import AttestationPool
 from eth2.beacon.tools.misc.ssz_vector import (
     override_vector_lengths,
 )
+from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
-from eth2.beacon.state_machines.forks.serenity import (
-    SerenityStateMachine,
+from eth2.beacon.typing import (
+    Slot,
+)
+from eth2.beacon.state_machines.forks.serenity.configs import (
+    SERENITY_CONFIG,
 )
 
 # Test files
@@ -42,6 +49,25 @@ FIXTURE_FILE_NAMES = [
     "sanity_slots_minimal.yaml",
     # "sanity_slots_mainnet.yaml",
 ]
+
+
+# test_format
+@dataclass
+class TestCase:
+    line_number: int
+    bls_setting: bool
+    description: str
+    pre: BeaconState
+    post: BeaconState
+    slots: Optional[Sequence[Slot]] = None
+    blocks: Optional[Sequence[BeaconBlock]] = None
+
+
+@dataclass
+class TestFile:
+    file_name: str
+    config: Eth2Config
+    test_cases: Sequence[TestCase]
 
 
 #
@@ -70,21 +96,58 @@ def mock_bls(mocker, request):
 #
 # Helpers for generating test suite
 #
-def get_all_test_cases(file_names):
-    test_cases = {}
+def get_all_test_files(file_names):
+    test_files = ()
     yaml = YAML()
     for file_name in file_names:
         file_to_open = SLOTS_FIXTURE_PATH / file_name
         with open(file_to_open, 'U') as f:
-            # TODO: `proof_of_possession` is used in v0.5.1 spec and will be renamed to `signature`
-            # Trinity renamed it ahead due to py-ssz signing_root requirements
-            new_text = f.read().replace('proof_of_possession', 'signature')
+            new_text = f.read()
             try:
                 data = yaml.load(new_text)
-                test_cases[file_name] = data['test_cases']
+                config = SERENITY_CONFIG
+                # TODO: use minimal config to override it
+                parsed_test_cases = tuple(
+                    parse_test_case(test_case, config)
+                    for test_case in data['test_cases']
+                )
+                test_file = TestFile(
+                    file_name=file_name,
+                    config=config,
+                    test_cases=parsed_test_cases,
+                )
             except yaml.YAMLError as exc:
                 print(exc)
-    return test_cases
+            test_files += test_file
+    return test_files
+
+
+def parse_test_case(test_case, config):
+    if 'bls_setting' not in test_case or test_case['bls_setting'] == 2:
+        bls_setting = False
+    else:
+        bls_setting = True
+
+    description = test_case['description']
+    override_vector_lengths(config)
+    pre = from_formatted_dict(test_case['pre'], BeaconState)
+    post = from_formatted_dict(test_case['post'], BeaconState)
+
+    if 'blocks' in test_case:
+        blocks = tuple(from_formatted_dict(block, BeaconBlock) for block in test_case['blocks'])
+    else:
+        blocks = None
+
+    slots = test_case['slots'] if 'slots' in test_case else None
+    return TestCase(
+        line_number=test_case.lc.line,
+        bls_setting=bls_setting,
+        description=description,
+        pre=pre,
+        post=post,
+        slots=slots,
+        blocks=blocks,
+    )
 
 
 def state_fixture_mark_fn(fixture_name):
@@ -96,12 +159,12 @@ def state_fixture_mark_fn(fixture_name):
 
 @to_tuple
 def get_test_cases(fixture_file_names):
-    test_cases = get_all_test_cases(fixture_file_names)
-    for file_name, test_cases in test_cases.items():
-        for test_case in test_cases:
-            test_name = test_case['description']
-            test_id = f"{file_name}::{test_name}:{test_case.lc.line}"
-            mark = state_fixture_mark_fn(test_name)
+    # TODO: batch reading files
+    test_files = get_all_test_files(fixture_file_names)
+    for test_file in test_files:
+        for test_case in test_file.test_cases:
+            test_id = f"{test_file.file_name}::{test_case.description}:{test_case.line_number}"
+            mark = state_fixture_mark_fn(test_case.description)
             if mark is not None:
                 yield pytest.param(test_case, id=test_id, marks=(mark,))
             else:
@@ -116,8 +179,7 @@ all_test_cases = get_test_cases(FIXTURE_FILE_NAMES)
     all_test_cases
 )
 def test_state(base_db, test_case):
-    print(f"slot={test_case['pre']['slot']}")
-    # execute_state_transtion(test_case, base_db)
+    execute_state_transtion(test_case, base_db)
 
 
 def generate_config_by_dict(dict_config):
@@ -128,47 +190,5 @@ def generate_config_by_dict(dict_config):
     return Eth2Config(**dict_config)
 
 
-# def execute_state_transtion(test_case, base_db):
-#     dict_config = test_case['config']
-#     verify_signatures = test_case['verify_signatures']
-#     dict_initial_state = test_case['initial_state']
-#     dict_blocks = test_case['blocks']
-#     dict_expected_state = test_case['expected_state']
-
-#     # TODO: make it case by case
-#     assert verify_signatures is False
-
-#     # Set config
-#     config = generate_config_by_dict(dict_config)
-
-#     # Set Vector fields
-#     override_vector_lengths(config)
-
-#     # Set pre_state
-#     pre_state = from_formatted_dict(dict_initial_state, BeaconState)
-
-#     # Set blocks
-#     blocks = ()
-#     for dict_block in dict_blocks:
-#         block = from_formatted_dict(dict_block, SerenityBeaconBlock)
-#         blocks += (block,)
-
-    # sm_class = SerenityStateMachine.configure(
-    #     __name__='SerenityStateMachineForTesting',
-    #     config=config,
-    # )
-    # chaindb = BeaconChainDB(base_db, Eth2GenesisConfig(config))
-    # attestation_pool = AttestationPool()
-
-    # post_state = pre_state.copy()
-    # for block in blocks:
-    #     sm = sm_class(chaindb, attestation_pool, None, post_state)
-    #     post_state, _ = sm.import_block(block)
-
-#     # Use dict diff, easier to see the diff
-#     dict_post_state = to_formatted_dict(post_state, BeaconState)
-
-#     for key, value in dict_expected_state.items():
-#         if isinstance(value, list):
-#             value = tuple(value)
-#         assert dict_post_state[key] == value
+def execute_state_transtion(test_case, base_db):
+    pass
