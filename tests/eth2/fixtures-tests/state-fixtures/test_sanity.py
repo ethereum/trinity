@@ -31,9 +31,9 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     Slot,
 )
-from eth2.beacon.state_machines.forks.serenity.configs import (
-    SERENITY_CONFIG,
-)
+# from eth2.beacon.state_machines.forks.serenity.configs import (
+#     SERENITY_CONFIG,
+# )
 from eth2.beacon.tools.fixtures.loading import (
     BaseStateTestCase,
     TestFile,
@@ -95,8 +95,9 @@ def get_all_test_files(file_names):
             new_text = f.read()
             try:
                 data = yaml.load(new_text)
-                config = SERENITY_CONFIG
-                # TODO: use minimal config to override it
+                # config = SERENITY_CONFIG
+                config_name = data['config']
+                config = get_config(config_name)
                 parsed_test_cases = tuple(
                     parse_test_case(test_case, config)
                     for test_case in data['test_cases']
@@ -110,6 +111,21 @@ def get_all_test_files(file_names):
                 print(exc)
             test_files += test_file
     return test_files
+
+
+def get_config(config_name):
+    # TODO: change the path after the constants presets are copied to submodule
+    path = ROOT_PROJECT_DIR / 'tests/eth2/fixtures-tests'
+    yaml = YAML()
+    file_name = config_name + '.yaml'
+    file_to_open = path / file_name
+    with open(file_to_open, 'U') as f:
+        new_text = f.read()
+        try:
+            data = yaml.load(new_text)
+        except yaml.YAMLError as exc:
+            print(exc)
+    return Eth2Config(**data)
 
 
 def parse_test_case(test_case, config):
