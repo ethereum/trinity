@@ -1,4 +1,3 @@
-
 from .bls_bindings.chia_network import (
     api as chia_api,
 )
@@ -21,7 +20,6 @@ from eth2.beacon.exceptions import (
 
 
 class BaseBLSBackend(ABC):
-
     @staticmethod
     @abstractmethod
     def privtopub(k: int) -> BLSPubkey:
