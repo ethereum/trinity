@@ -114,13 +114,8 @@ class BLSKeyCache:
             self.backing_cache_writer(self._serialize())
 
     def _get_privkey_for(self, index):
-        """
-        Rationales:
-        1. Making the privkeys be small integers to make multiplying easier for tests.
-        2. Using ``2**i`` instead of ``i``:
-           If using ``i``, the combinations of privkeys would not lead to unique pubkeys.
-        """
-        privkey = int.from_bytes(hash_eth2(index.to_bytes(32, 'little')), 'little') % 2**32
+        # Want privkey an intger slightly less than the curve order
+        privkey = int.from_bytes(hash_eth2(index.to_bytes(32, 'little')), 'little') % 2**254
         self.all_privkeys_by_index[index] = privkey
         return privkey
 
