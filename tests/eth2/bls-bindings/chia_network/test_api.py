@@ -72,33 +72,40 @@ def test_sanity():
 
 
 @pytest.mark.parametrize(
-    'privkey,success',
+    'privkey',
     [
-        (1, True),
-        (5, True),
-        (124, True),
-        (735, True),
-        (127409812145, True),
-        (90768492698215092512159, True),
-        (curve_order - 1, True),
-        (0, False),
-        (curve_order, False),
-        (curve_order + 1, False),
+        (1),
+        (5),
+        (124),
+        (735),
+        (127409812145),
+        (90768492698215092512159),
+        (curve_order - 1),
     ]
 )
-def test_bls_core(privkey, success):
+def test_bls_core_succeed(privkey):
     domain = 0
     msg = str(privkey).encode('utf-8')
-    if success:
-        sig = sign(msg, privkey, domain=domain)
-        pub = privtopub(privkey)
-        assert verify(msg, pub, sig, domain=domain)
-    else:
-        with pytest.raises(ValueError):
-            sig = sign(msg, privkey, domain=domain)
+    sig = sign(msg, privkey, domain=domain)
+    pub = privtopub(privkey)
+    assert verify(msg, pub, sig, domain=domain)
 
-        with pytest.raises(ValueError):
-            pub = privtopub(privkey)
+
+@pytest.mark.parametrize(
+    'privkey',
+    [
+        (0),
+        (curve_order),
+        (curve_order + 1),
+    ]
+)
+def test_invalid_private_key(privkey):
+    domain = 0
+    msg = str(privkey).encode('utf-8')
+    with pytest.raises(ValueError):
+        privtopub(privkey)
+    with pytest.raises(ValueError):
+        sign(msg, privkey, domain=domain)
 
 
 def test_empty_aggregation():
