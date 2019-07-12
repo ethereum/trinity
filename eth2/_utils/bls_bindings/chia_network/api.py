@@ -3,7 +3,13 @@ from typing import (
     cast,
 )
 
-import blspy as bls_chia
+from blspy import (
+    AggregationInfo,
+    InsecureSignature,
+    PrivateKey,
+    PublicKey,
+    Signature,
+)
 
 from eth_typing import (
     BLSPubkey,
@@ -24,26 +30,26 @@ from eth_utils import (
 )
 
 
-def _privkey_from_int(privkey: int) -> 'bls_chia.PrivateKey':
+def _privkey_from_int(privkey: int) -> PrivateKey:
     if privkey <= 0 or privkey >= curve_order:
         raise ValueError(
             f"Invalid private key: Expect integer between 0 and {curve_order}, got {privkey}"
         )
-    privkey_bytes = privkey.to_bytes(bls_chia.PrivateKey.PRIVATE_KEY_SIZE, "big")
+    privkey_bytes = privkey.to_bytes(PrivateKey.PRIVATE_KEY_SIZE, "big")
     try:
-        return bls_chia.PrivateKey.from_bytes(privkey_bytes)
+        return PrivateKey.from_bytes(privkey_bytes)
     except RuntimeError as error:
         raise ValueError(f"Bad private key: {privkey}, {error}")
 
 
-def _pubkey_from_bytes(pubkey: BLSPubkey) -> 'bls_chia.PublicKey':
+def _pubkey_from_bytes(pubkey: BLSPubkey) -> PublicKey:
     try:
-        return bls_chia.PublicKey.from_bytes(pubkey)
+        return PublicKey.from_bytes(pubkey)
     except (RuntimeError, ValueError) as error:
         raise ValidationError(f"Bad public key: {pubkey}, {error}")
 
 
-def _signature_from_bytes(signature: BLSSignature) -> 'bls_chia.Signature':
+def _signature_from_bytes(signature: BLSSignature) -> Signature:
     if signature == EMPTY_SIGNATURE:
         raise ValueError(f"Invalid signature (EMPTY_SIGNATURE): {signature}")
     elif len(signature) != 96:
@@ -51,7 +57,7 @@ def _signature_from_bytes(signature: BLSSignature) -> 'bls_chia.Signature':
             f"Invalid signaute length, expect 96 got {len(signature)}. Signature: {signature}"
         )
     try:
-        return bls_chia.Signature.from_bytes(signature)
+        return Signature.from_bytes(signature)
     except (RuntimeError, ValueError) as error:
         raise ValidationError(f"Bad signature: {signature}, {error}")
 
@@ -80,7 +86,7 @@ def verify(message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, dom
     pubkey_chia = _pubkey_from_bytes(pubkey)
     signature_chia = _signature_from_bytes(signature)
     signature_chia.set_aggregation_info(
-        bls_chia.AggregationInfo.from_msg(
+        AggregationInfo.from_msg(
             pubkey_chia,
             combine_domain(message_hash, domain),
         )
@@ -93,10 +99,10 @@ def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
         return EMPTY_SIGNATURE
 
     signatures_chia = [
-        bls_chia.InsecureSignature.from_bytes(signature)
+        InsecureSignature.from_bytes(signature)
         for signature in signatures
     ]
-    aggregated_signature = bls_chia.InsecureSignature.aggregate(signatures_chia)
+    aggregated_signature = InsecureSignature.aggregate(signatures_chia)
     aggregated_signature_bytes = aggregated_signature.serialize()
     return cast(BLSSignature, aggregated_signature_bytes)
 
@@ -108,7 +114,7 @@ def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
         _pubkey_from_bytes(pubkey)
         for pubkey in pubkeys
     ]
-    aggregated_pubkey_chia = bls_chia.PublicKey.aggregate_insecure(pubkeys_chia)
+    aggregated_pubkey_chia = PublicKey.aggregate_insecure(pubkeys_chia)
     return cast(BLSPubkey, aggregated_pubkey_chia.serialize())
 
 
@@ -132,10 +138,10 @@ def verify_multiple(pubkeys: Sequence[BLSPubkey],
     ]
     pubkeys_chia = map(_pubkey_from_bytes, pubkeys)
     aggregate_infos = [
-        bls_chia.AggregationInfo.from_msg(pubkey_chia, message_hash)
+        AggregationInfo.from_msg(pubkey_chia, message_hash)
         for pubkey_chia, message_hash in zip(pubkeys_chia, message_hashes_with_domain)
     ]
-    merged_info = bls_chia.AggregationInfo.merge_infos(aggregate_infos)
+    merged_info = AggregationInfo.merge_infos(aggregate_infos)
 
     signature_chia = _signature_from_bytes(signature)
     signature_chia.set_aggregation_info(merged_info)
