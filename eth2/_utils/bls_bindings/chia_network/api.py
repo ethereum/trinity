@@ -33,7 +33,7 @@ from eth_utils import (
 def _privkey_from_int(privkey: int) -> PrivateKey:
     if privkey <= 0 or privkey >= curve_order:
         raise ValueError(
-            f"Invalid private key: Expect integer between 0 and {curve_order}, got {privkey}"
+            f"Invalid private key: Expect integer between 1 and {curve_order - 1}, got {privkey}"
         )
     privkey_bytes = privkey.to_bytes(PrivateKey.PRIVATE_KEY_SIZE, "big")
     try:

@@ -438,3 +438,6 @@ workflows:
       - py37-lint
 
       - docker-image-build-test
+
+      - py36-bls-bindings
+      - py37-bls-bindings

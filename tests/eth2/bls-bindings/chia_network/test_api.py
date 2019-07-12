@@ -12,9 +12,6 @@ from eth2._utils.bls_bindings.chia_network.api import (
     verify,
     verify_multiple,
 )
-from eth_utils import (
-    ValidationError,
-)
 
 from eth2.beacon.constants import (
     EMPTY_PUBKEY,
@@ -97,10 +94,10 @@ def test_bls_core(privkey, success):
         pub = privtopub(privkey)
         assert verify(msg, pub, sig, domain=domain)
     else:
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValueError):
             sig = sign(msg, privkey, domain=domain)
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValueError):
             pub = privtopub(privkey)
 
 
