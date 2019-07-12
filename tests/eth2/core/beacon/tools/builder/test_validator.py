@@ -79,6 +79,6 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
     if votes_count != 0:
         bls.validate(message_hash, aggregated_pubs, sigs, domain)
     else:
-        # EMPTY_SIGNATURE is consider invalid
+        # EMPTY_SIGNATURE is considered invalid
         with pytest.raises(ValueError):
             bls.validate(message_hash, aggregated_pubs, sigs, domain)
