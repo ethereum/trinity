@@ -10,23 +10,21 @@ from blspy import (
     PublicKey,
     Signature,
 )
-
 from eth_typing import (
     BLSPubkey,
     BLSSignature,
     Hash32,
 )
-
-from py_ecc.optimized_bls12_381 import (
-    curve_order,
+from eth_utils import (
+    ValidationError,
 )
 
 from eth2.beacon.constants import (
     EMPTY_PUBKEY,
     EMPTY_SIGNATURE,
 )
-from eth_utils import (
-    ValidationError,
+from py_ecc.optimized_bls12_381 import (
+    curve_order,
 )
 
 
