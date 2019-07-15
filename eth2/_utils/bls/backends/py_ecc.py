@@ -24,6 +24,11 @@ from py_ecc.bls.typing import (
     Domain,
 )
 
+from eth2.beacon.constants import (
+    EMPTY_PUBKEY,
+    EMPTY_SIGNATURE,
+)
+
 
 def to_bytes(domain: int) -> Domain:
     return cast(Domain, domain.to_bytes(8, 'little'))
@@ -49,10 +54,16 @@ class PyECCBackend(BaseBLSBackend):
 
     @staticmethod
     def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+        # py_ecc use a different EMPTY_SIGNATURE. Return the Trinity one here:
+        if len(signatures) == 0:
+            return EMPTY_SIGNATURE
         return aggregate_signatures(signatures)
 
     @staticmethod
     def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+        # py_ecc use a different EMPTY_PUBKEY. Return the Trinity one here:
+        if len(pubkeys) == 0:
+            return EMPTY_PUBKEY
         return aggregate_pubkeys(pubkeys)
 
     @staticmethod
