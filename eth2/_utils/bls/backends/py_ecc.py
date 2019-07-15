@@ -1,5 +1,6 @@
 from typing import (
     Sequence,
+    cast,
 )
 
 from eth_typing import (
@@ -24,6 +25,10 @@ from py_ecc.bls.typing import (
 )
 
 
+def to_bytes(domain: int) -> Domain:
+    return cast(Domain, domain.to_bytes(8, 'little'))
+
+
 class PyECCBackend(BaseBLSBackend):
     @staticmethod
     def privtopub(k: int) -> BLSPubkey:
@@ -33,16 +38,14 @@ class PyECCBackend(BaseBLSBackend):
     def sign(message_hash: Hash32,
              privkey: int,
              domain: int) -> BLSSignature:
-        domain_bytes = Domain(domain.to_bytes(8, 'little'))
-        return sign(message_hash, privkey, domain_bytes)
+        return sign(message_hash, privkey, to_bytes(domain))
 
     @staticmethod
     def verify(message_hash: Hash32,
                pubkey: BLSPubkey,
                signature: BLSSignature,
                domain: int) -> bool:
-        domain_bytes = Domain(domain.to_bytes(8, 'little'))
-        return verify(message_hash, pubkey, signature, domain_bytes)
+        return verify(message_hash, pubkey, signature, to_bytes(domain))
 
     @staticmethod
     def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
@@ -57,5 +60,4 @@ class PyECCBackend(BaseBLSBackend):
                         message_hashes: Sequence[Hash32],
                         signature: BLSSignature,
                         domain: int) -> bool:
-        domain_bytes = Domain(domain.to_bytes(8, 'little'))
-        return verify_multiple(pubkeys, message_hashes, signature, domain_bytes)
+        return verify_multiple(pubkeys, message_hashes, signature, to_bytes(domain))
