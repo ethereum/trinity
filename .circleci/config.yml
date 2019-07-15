@@ -263,12 +263,6 @@ jobs:
         environment:
           TOXENV: py36-libp2p
     <<: *p2pd_steps
-  py36-bls-bindings:
-    <<: *common
-    docker:
-      - image: circleci/python:3.6
-        environment:
-          TOXENV: py36-bls-bindings
   py36-wheel-cli:
     <<: *common
     docker:
@@ -355,12 +349,6 @@ jobs:
         environment:
           TOXENV: py37-libp2p
     <<: *p2pd_steps
-  py37-bls-bindings:
-    <<: *common
-    docker:
-      - image: circleci/python:3.7
-        environment:
-          TOXENV: py37-bls-bindings
   py37-wheel-cli:
     <<: *common
     docker:
@@ -438,6 +426,3 @@ workflows:
       - py37-lint
 
       - docker-image-build-test
-
-      - py36-bls-bindings
-      - py37-bls-bindings
