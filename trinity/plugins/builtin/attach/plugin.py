@@ -9,6 +9,7 @@ import pathlib
 
 from trinity.config import (
     Eth1AppConfig,
+    BeaconAppConfig,
     TrinityConfig,
 )
 from trinity.extensibility import (
@@ -86,7 +87,10 @@ class DbShellPlugin(BaseMainProcessPlugin):
         if trinity_config.has_app_config(Eth1AppConfig):
             config = trinity_config.get_app_config(Eth1AppConfig)
             db_shell(is_ipython_available(), config.database_dir, trinity_config)
+        elif trinity_config.has_app_config(BeaconAppConfig):
+            beacon_config = trinity_config.get_app_config(BeaconAppConfig)
+            db_shell(is_ipython_available(), beacon_config.database_dir, trinity_config)
         else:
             cls.get_logger().error(
-                "DB Shell only supports the Ethereum 1 node at this time"
+                "DB Shell only supports the Ethereum 1 and Beacon nodes at this time"
             )
