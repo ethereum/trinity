@@ -1,6 +1,5 @@
 from typing import (
     Sequence,
-    cast,
 )
 
 from eth_typing import (
@@ -20,9 +19,7 @@ from py_ecc.bls import (
     verify,
     verify_multiple,
 )
-from py_ecc.bls.typing import (
-    Domain,
-)
+
 
 from eth2.beacon.constants import (
     EMPTY_PUBKEY,
@@ -30,8 +27,8 @@ from eth2.beacon.constants import (
 )
 
 
-def to_bytes(domain: int) -> Domain:
-    return cast(Domain, domain.to_bytes(8, 'little'))
+def to_bytes(domain: int) -> bytes:
+    return domain.to_bytes(8, 'little')
 
 
 class PyECCBackend(BaseBLSBackend):
