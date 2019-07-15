@@ -62,7 +62,7 @@ BEACON_NODE_PLUGINS: Tuple[Type[BasePlugin], ...] = (
 
 
 ETH1_NODE_PLUGINS: Tuple[Type[BasePlugin], ...] = (
-    BeamChainExecutionPlugin,
+    #BeamChainExecutionPlugin,
     DbShellPlugin,
     EthstatsPlugin,
     SyncerPlugin,

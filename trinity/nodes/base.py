@@ -133,7 +133,7 @@ class Node(BaseService, Generic[TPeer]):
         ensure_global_asyncio_executor()
         self.run_daemon_task(self.handle_network_id_requests())
         self.run_daemon(self.get_p2p_server())
-        self.run_daemon(self.get_event_server())
+        #self.run_daemon(self.get_event_server())
         await self.cancellation()
 
     async def _cleanup(self) -> None:

@@ -48,5 +48,10 @@ class BZZETHNode(Node):
             )
         return self._p2p_server
 
+    _peer_pool_event_server = None
+
+    def get_event_server(self):
+        pass
+
     def get_peer_pool(self) -> BasePeerPool:
         return self.get_p2p_server().peer_pool

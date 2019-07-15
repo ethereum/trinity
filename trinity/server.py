@@ -52,6 +52,7 @@ from trinity.protocol.bcc.servers import (
 from trinity.protocol.bzzeth import (
     BZZETHPeerPool,
     BZZETHContext,
+    BZZETHHeaderServer,
 )
 
 DIAL_IN_OUT_RATIO = 0.75
@@ -310,14 +311,34 @@ class BCCServer(BaseServer[BCCPeerPool]):
 
 class BZZETHServer(BaseServer[BZZETHPeerPool]):
     def _make_peer_pool(self) -> BZZETHPeerPool:
+        from eth.db.header import HeaderDB
+        from eth.db.atomic import AtomicDB
+        from eth.rlp.headers import BlockHeader
+        from trinity._utils.db import MemoryDB
+        from trinity.constants import ASSETS_DIR
+        import rlp
+        import codecs
+        db = AtomicDB(MemoryDB())
+        headerdb = HeaderDB(db)
+        with open(ASSETS_DIR / 'bzzeth-headers.rlp') as fixture_file:
+            for header_hex in fixture_file:
+                header_data = codecs.decode(header_hex.strip(), 'hex')
+                header = rlp.decode(header_data, sedes=BlockHeader)
+                headerdb.persist_header(header)
+
+        assert headerdb.get_canonical_head().block_number == 2047
         context = BZZETHContext()
-        return BZZETHPeerPool(
+        peer_pool = BZZETHPeerPool(
             privkey=self.privkey,
             max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
             event_bus=self.event_bus
         )
+        header_server = BZZETHHeaderServer(peer_pool.cancel_token, headerdb)
+        peer_pool.subscribe(header_server)
+        self.run_child_service(header_server)
+        return peer_pool
 
 
 def _test() -> None:

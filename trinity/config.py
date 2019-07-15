@@ -616,15 +616,9 @@ class Eth1AppConfig(BaseAppConfig):
         """
         Return the ``Node`` class that trinity uses.
         """
-        from trinity.nodes.light import LightNode
         from trinity.nodes.bzzeth import BZZETHNode
 
-        if self.database_mode is Eth1DbMode.FULL:
-            return BZZETHNode
-        elif self.database_mode is Eth1DbMode.LIGHT:
-            return LightNode
-        else:
-            raise NotImplementedError(f"Database mode {self.database_mode} not supported")
+        return BZZETHNode
 
     @property
     def sync_mode(self) -> str:
