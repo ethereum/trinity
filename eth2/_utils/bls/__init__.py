@@ -26,6 +26,10 @@ class Eth2BLS:
     backend: Type[BaseBLSBackend]
 
     @classmethod
+    def use(cls, backend: Type[BaseBLSBackend]) -> None:
+        cls.backend = backend
+
+    @classmethod
     def use_default_backend(cls) -> None:
         cls.backend = DEFAULT_BACKEND
 
