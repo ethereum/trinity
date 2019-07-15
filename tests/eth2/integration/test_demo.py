@@ -27,26 +27,7 @@ from eth2.beacon.tools.builder.validator import (
 from eth2.beacon.tools.misc.ssz_vector import (
     override_vector_lengths,
 )
-
-
-#
-# Mock bls verification for these tests
-#
-def mock_bls_verify(message_hash, pubkey, signature, domain):
-    return True
-
-
-def mock_bls_verify_multiple(pubkeys,
-                             message_hashes,
-                             signature,
-                             domain):
-    return True
-
-
-@pytest.fixture(autouse=True)
-def mock_bls(mocker, request):
-    mocker.patch('eth2._utils.bls.eth2_bls.verify', side_effect=mock_bls_verify)
-    mocker.patch('eth2._utils.bls.eth2_bls.verify_multiple', side_effect=mock_bls_verify_multiple)
+from eth2._utils.bls import eth2_bls
 
 
 @pytest.fixture
@@ -67,6 +48,7 @@ def test_demo(base_db,
               keymap,
               pubkeys,
               fork_choice_scoring):
+    eth2_bls.use_noop_backend()
     slots_per_epoch = 8
     config = SERENITY_CONFIG._replace(
         SLOTS_PER_EPOCH=slots_per_epoch,

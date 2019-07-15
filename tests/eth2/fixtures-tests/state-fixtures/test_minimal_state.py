@@ -28,6 +28,8 @@ from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.state_machines.forks.serenity import (
     SerenityStateMachine,
 )
+from eth2._utils.bls import eth2_bls
+
 
 # Test files
 ROOT_PROJECT_DIR = Path(__file__).cwd()
@@ -38,29 +40,6 @@ FIXTURE_FILE_NAMES = [
     "sanity-check_small-config_32-vals.yaml",
     "sanity-check_default-config_100-vals.yaml",
 ]
-
-
-#
-# Mock bls verification for these tests
-#
-def mock_bls_verify(message_hash, pubkey, signature, domain):
-    return True
-
-
-def mock_bls_verify_multiple(pubkeys,
-                             message_hashes,
-                             signature,
-                             domain):
-    return True
-
-
-@pytest.fixture(autouse=True)
-def mock_bls(mocker, request):
-    if 'noautofixture' in request.keywords:
-        return
-
-    mocker.patch('eth2._utils.bls.eth2_bls.verify', side_effect=mock_bls_verify)
-    mocker.patch('eth2._utils.bls.eth2_bls.verify_multiple', side_effect=mock_bls_verify_multiple)
 
 
 #
@@ -124,6 +103,7 @@ def generate_config_by_dict(dict_config):
 
 
 def execute_state_transtion(test_case, base_db):
+    eth2_bls.use_noop_backend()
     dict_config = test_case['config']
     verify_signatures = test_case['verify_signatures']
     dict_initial_state = test_case['initial_state']

@@ -17,6 +17,10 @@ from eth_typing import (
 from eth2.beacon.exceptions import (
     SignatureError,
 )
+from eth2.beacon.constants import (
+    EMPTY_PUBKEY,
+    EMPTY_SIGNATURE,
+)
 
 
 class BaseBLSBackend(ABC):
@@ -40,20 +44,6 @@ class BaseBLSBackend(ABC):
                domain: int) -> bool:
         pass
 
-    @classmethod
-    def validate(cls,
-                 message_hash: Hash32,
-                 pubkey: BLSPubkey,
-                 signature: BLSSignature,
-                 domain: int) -> None:
-        if not cls.verify(message_hash, pubkey, signature, domain):
-            raise SignatureError(
-                f"message_hash {message_hash}\n"
-                f"pubkey {pubkey}\n"
-                f"signature {signature}\n"
-                f"domain {domain}"
-            )
-
     @staticmethod
     @abstractmethod
     def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
@@ -72,19 +62,39 @@ class BaseBLSBackend(ABC):
                         domain: int) -> bool:
         pass
 
-    @classmethod
-    def validate_multiple(cls,
-                          pubkeys: Sequence[BLSPubkey],
-                          message_hashes: Sequence[Hash32],
-                          signature: BLSSignature,
-                          domain: int) -> None:
-        if not cls.verify_multiple(pubkeys, message_hashes, signature, domain):
-            raise SignatureError(
-                f"pubkeys {pubkeys}\n"
-                f"message_hashes {message_hashes}\n"
-                f"signature {signature}\n"
-                f"domain {domain}"
-            )
+
+class NoOpBackend(BaseBLSBackend):
+    @staticmethod
+    def privtopub(k: int) -> BLSPubkey:
+        return EMPTY_PUBKEY
+
+    @staticmethod
+    def sign(message_hash: Hash32,
+             privkey: int,
+             domain: int) -> BLSSignature:
+        return EMPTY_SIGNATURE
+
+    @staticmethod
+    def verify(message_hash: Hash32,
+               pubkey: BLSPubkey,
+               signature: BLSSignature,
+               domain: int) -> bool:
+        return True
+
+    @staticmethod
+    def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+        return EMPTY_SIGNATURE
+
+    @staticmethod
+    def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+        return EMPTY_PUBKEY
+
+    @staticmethod
+    def verify_multiple(pubkeys: Sequence[BLSPubkey],
+                        message_hashes: Sequence[Hash32],
+                        signature: BLSSignature,
+                        domain: int) -> bool:
+        return True
 
 
 class ChiaBackend(BaseBLSBackend):
@@ -121,4 +131,59 @@ class ChiaBackend(BaseBLSBackend):
         return chia_api.verify_multiple(pubkeys, message_hashes, signature, domain)
 
 
-eth2_bls = ChiaBackend()
+class Eth2BLS:
+    backend: BaseBLSBackend
+
+    def __init__(self, backend):
+        self.backend = backend
+
+    def use_noop_backend(self):
+        self.backend = NoOpBackend()
+
+    def privtopub(self,
+                  k: int) -> BLSPubkey:
+        return self.backend.privtopub(k)
+
+    def sign(self,
+             message_hash: Hash32,
+             privkey: int,
+             domain: int) -> BLSSignature:
+        return self.backend.sign(message_hash, privkey, domain)
+
+    def aggregate_signatures(self,
+                             signatures: Sequence[BLSSignature]) -> BLSSignature:
+        return self.backend.aggregate_signatures(signatures)
+
+    def aggregate_pubkeys(self,
+                          pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+        return self.backend.aggregate_pubkeys(pubkeys)
+
+    def validate(self,
+                 message_hash: Hash32,
+                 pubkey: BLSPubkey,
+                 signature: BLSSignature,
+                 domain: int) -> None:
+        if not self.backend.verify(message_hash, pubkey, signature, domain):
+            raise SignatureError(
+                f"message_hash {message_hash}\n"
+                f"pubkey {pubkey}\n"
+                f"signature {signature}\n"
+                f"domain {domain}"
+            )
+
+    def validate_multiple(self,
+                          pubkeys: Sequence[BLSPubkey],
+                          message_hashes: Sequence[Hash32],
+                          signature: BLSSignature,
+                          domain: int) -> None:
+        if not self.backend.verify_multiple(pubkeys, message_hashes, signature, domain):
+            raise SignatureError(
+                f"pubkeys {pubkeys}\n"
+                f"message_hashes {message_hashes}\n"
+                f"signature {signature}\n"
+                f"domain {domain}"
+            )
+
+
+default_backend = ChiaBackend()
+eth2_bls = Eth2BLS(backend=default_backend)
