@@ -21,7 +21,7 @@ from .base import (
 class NoOpBackend(BaseBLSBackend):
     @staticmethod
     def privtopub(k: int) -> BLSPubkey:
-        return EMPTY_PUBKEY
+        return BLSPubkey(k.to_bytes(48, 'little'))
 
     @staticmethod
     def sign(message_hash: Hash32,
