@@ -20,6 +20,9 @@ from .backends import (
 from .backends.base import (
     BaseBLSBackend,
 )
+from .validation import (
+    validate_private_key,
+)
 
 
 class Eth2BLS:
@@ -39,14 +42,16 @@ class Eth2BLS:
 
     @classmethod
     def privtopub(cls,
-                  k: int) -> BLSPubkey:
-        return cls.backend.privtopub(k)
+                  privkey: int) -> BLSPubkey:
+        validate_private_key(privkey)
+        return cls.backend.privtopub(privkey)
 
     @classmethod
     def sign(cls,
              message_hash: Hash32,
              privkey: int,
              domain: int) -> BLSSignature:
+        validate_private_key(privkey)
         return cls.backend.sign(message_hash, privkey, domain)
 
     @classmethod
@@ -81,8 +86,9 @@ class Eth2BLS:
                  pubkey: BLSPubkey,
                  signature: BLSSignature,
                  domain: int) -> None:
-        if not cls.backend.verify(message_hash, pubkey, signature, domain):
+        if not cls.verify(message_hash, pubkey, signature, domain):
             raise SignatureError(
+                f"backend {cls.backend.__name__}\n"
                 f"message_hash {message_hash}\n"
                 f"pubkey {pubkey}\n"
                 f"signature {signature}\n"
@@ -95,8 +101,9 @@ class Eth2BLS:
                           message_hashes: Sequence[Hash32],
                           signature: BLSSignature,
                           domain: int) -> None:
-        if not cls.backend.verify_multiple(pubkeys, message_hashes, signature, domain):
+        if not cls.verify_multiple(pubkeys, message_hashes, signature, domain):
             raise SignatureError(
+                f"backend {cls.backend.__name__}\n"
                 f"pubkeys {pubkeys}\n"
                 f"message_hashes {message_hashes}\n"
                 f"signature {signature}\n"

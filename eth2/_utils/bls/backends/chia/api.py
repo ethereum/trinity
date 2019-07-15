@@ -23,16 +23,9 @@ from eth2.beacon.constants import (
     EMPTY_PUBKEY,
     EMPTY_SIGNATURE,
 )
-from py_ecc.optimized_bls12_381 import (
-    curve_order,
-)
 
 
 def _privkey_from_int(privkey: int) -> PrivateKey:
-    if privkey <= 0 or privkey >= curve_order:
-        raise ValueError(
-            f"Invalid private key: Expect integer between 1 and {curve_order - 1}, got {privkey}"
-        )
     privkey_bytes = privkey.to_bytes(PrivateKey.PRIVATE_KEY_SIZE, "big")
     try:
         return PrivateKey.from_bytes(privkey_bytes)
