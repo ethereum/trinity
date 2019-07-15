@@ -27,10 +27,6 @@ from eth2.beacon.constants import (
 )
 
 
-def to_bytes(domain: int) -> bytes:
-    return domain.to_bytes(8, 'little')
-
-
 class PyECCBackend(BaseBLSBackend):
     @staticmethod
     def privtopub(k: int) -> BLSPubkey:
@@ -40,14 +36,14 @@ class PyECCBackend(BaseBLSBackend):
     def sign(message_hash: Hash32,
              privkey: int,
              domain: int) -> BLSSignature:
-        return sign(message_hash, privkey, to_bytes(domain))
+        return sign(message_hash, privkey, domain)
 
     @staticmethod
     def verify(message_hash: Hash32,
                pubkey: BLSPubkey,
                signature: BLSSignature,
                domain: int) -> bool:
-        return verify(message_hash, pubkey, signature, to_bytes(domain))
+        return verify(message_hash, pubkey, signature, domain)
 
     @staticmethod
     def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
@@ -68,4 +64,4 @@ class PyECCBackend(BaseBLSBackend):
                         message_hashes: Sequence[Hash32],
                         signature: BLSSignature,
                         domain: int) -> bool:
-        return verify_multiple(pubkeys, message_hashes, signature, to_bytes(domain))
+        return verify_multiple(pubkeys, message_hashes, signature, domain)
