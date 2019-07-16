@@ -24,7 +24,7 @@ from eth_utils.toolz import (
     pipe,
     keymap as keymapper,
 )
-from eth2._utils.bls import eth2_bls as bls
+from eth2._utils.bls import bls
 
 from eth2._utils.bitfield import (
     get_empty_bitfield,

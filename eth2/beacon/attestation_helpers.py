@@ -1,5 +1,5 @@
 from eth2._utils.bls import (
-    eth2_bls as bls,
+    bls,
 )
 
 from eth_utils import (

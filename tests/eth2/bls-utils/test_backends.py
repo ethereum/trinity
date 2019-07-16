@@ -8,7 +8,7 @@ from eth2._utils.bls.backends import (
     AVAILABLE_BACKENDS,
 )
 from eth2._utils.bls import (
-    eth2_bls as bls,
+    bls,
 )
 
 from eth2.beacon.constants import (

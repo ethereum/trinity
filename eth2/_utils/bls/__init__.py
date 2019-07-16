@@ -111,5 +111,5 @@ class Eth2BLS:
             )
 
 
-eth2_bls = Eth2BLS
-eth2_bls.use_default_backend()
+bls = Eth2BLS
+bls.use_default_backend()

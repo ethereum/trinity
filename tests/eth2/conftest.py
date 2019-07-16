@@ -4,7 +4,7 @@ import eth_utils.toolz as toolz
 
 import pytest
 
-from eth2._utils.bls import eth2_bls as bls
+from eth2._utils.bls import bls
 from eth2._utils.hash import (
     hash_eth2,
 )

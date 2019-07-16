@@ -2,7 +2,7 @@ import pytest
 from eth_utils import (
     ValidationError,
 )
-from eth2._utils.bls import eth2_bls as bls
+from eth2._utils.bls import bls
 from eth2.configs import (
     CommitteeConfig,
 )

@@ -12,7 +12,7 @@ from eth_utils.toolz import (
     concat,
 )
 
-from eth2._utils.bls import eth2_bls as bls
+from eth2._utils.bls import bls
 
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.eth1_data import Eth1Data

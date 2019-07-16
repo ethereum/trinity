@@ -28,7 +28,7 @@ from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.state_machines.forks.serenity import (
     SerenityStateMachine,
 )
-from eth2._utils.bls import eth2_bls
+from eth2._utils.bls import bls
 
 
 # Test files
@@ -103,7 +103,7 @@ def generate_config_by_dict(dict_config):
 
 
 def execute_state_transtion(test_case, base_db):
-    eth2_bls.use_noop_backend()
+    bls.use_noop_backend()
     dict_config = test_case['config']
     verify_signatures = test_case['verify_signatures']
     dict_initial_state = test_case['initial_state']

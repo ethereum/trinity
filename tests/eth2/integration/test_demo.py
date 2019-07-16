@@ -27,7 +27,7 @@ from eth2.beacon.tools.builder.validator import (
 from eth2.beacon.tools.misc.ssz_vector import (
     override_vector_lengths,
 )
-from eth2._utils.bls import eth2_bls
+from eth2._utils.bls import bls
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def test_demo(base_db,
               keymap,
               pubkeys,
               fork_choice_scoring):
-    eth2_bls.use_noop_backend()
+    bls.use_noop_backend()
     slots_per_epoch = 8
     config = SERENITY_CONFIG._replace(
         SLOTS_PER_EPOCH=slots_per_epoch,

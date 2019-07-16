@@ -1,7 +1,7 @@
 import importlib
 import time
 
-from eth2._utils.bls import eth2_bls as bls
+from eth2._utils.bls import bls
 
 from eth2._utils.hash import (
     hash_eth2,

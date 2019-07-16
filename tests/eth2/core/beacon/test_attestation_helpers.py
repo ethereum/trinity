@@ -3,7 +3,7 @@ import random
 
 import pytest
 
-from eth2._utils.bls import eth2_bls as bls
+from eth2._utils.bls import bls
 
 from eth_utils import (
     ValidationError,
