@@ -28,17 +28,20 @@ from .validation import (
 class Eth2BLS:
     backend: Type[BaseBLSBackend]
 
+    def __init__(self) -> None:
+        self.use_default_backend()
+
     @classmethod
     def use(cls, backend: Type[BaseBLSBackend]) -> None:
         cls.backend = backend
 
     @classmethod
     def use_default_backend(cls) -> None:
-        cls.backend = DEFAULT_BACKEND
+        cls.use(DEFAULT_BACKEND)
 
     @classmethod
     def use_noop_backend(cls) -> None:
-        cls.backend = NoOpBackend
+        cls.use(NoOpBackend)
 
     @classmethod
     def privtopub(cls,
@@ -111,5 +114,4 @@ class Eth2BLS:
             )
 
 
-bls = Eth2BLS
-bls.use_default_backend()
+bls = Eth2BLS()
