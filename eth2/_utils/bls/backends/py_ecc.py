@@ -43,6 +43,8 @@ class PyECCBackend(BaseBLSBackend):
                pubkey: BLSPubkey,
                signature: BLSSignature,
                domain: int) -> bool:
+        if signature == EMPTY_SIGNATURE:
+            return False
         return verify(message_hash, pubkey, signature, domain)
 
     @staticmethod
@@ -64,4 +66,6 @@ class PyECCBackend(BaseBLSBackend):
                         message_hashes: Sequence[Hash32],
                         signature: BLSSignature,
                         domain: int) -> bool:
+        if signature == EMPTY_SIGNATURE:
+            return False
         return verify_multiple(pubkeys, message_hashes, signature, domain)

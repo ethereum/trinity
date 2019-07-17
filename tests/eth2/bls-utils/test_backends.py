@@ -6,6 +6,7 @@ from py_ecc.optimized_bls12_381 import (
 
 from eth2._utils.bls.backends import (
     AVAILABLE_BACKENDS,
+    NoOpBackend,
 )
 from eth2._utils.bls import (
     bls,
@@ -125,6 +126,28 @@ def test_empty_aggregation(backend):
     bls.use(backend)
     assert bls.aggregate_pubkeys([]) == EMPTY_PUBKEY
     assert bls.aggregate_signatures([]) == EMPTY_SIGNATURE
+
+
+@pytest.mark.parametrize(
+    "backend",
+    (backend for backend in AVAILABLE_BACKENDS if backend != NoOpBackend),
+)
+def test_verify_empty_signatures(backend):
+    # Want EMPTY_SIGNATURE to fail in Trinity
+    bls.use(backend)
+    assert not bls.verify(b'\x11' * 32, EMPTY_PUBKEY, EMPTY_SIGNATURE, 1000)
+    assert not bls.verify_multiple(
+        pubkeys=(),
+        message_hashes=(),
+        signature=EMPTY_SIGNATURE,
+        domain=1000,
+    )
+    assert not bls.verify_multiple(
+        pubkeys=(EMPTY_PUBKEY, EMPTY_PUBKEY),
+        message_hashes=(b'\x11' * 32, b'\x12' * 32),
+        signature=EMPTY_SIGNATURE,
+        domain=1000,
+    )
 
 
 @pytest.mark.parametrize(
