@@ -19,6 +19,8 @@ from trinity.extensibility import (
 from trinity.plugins.builtin.attach.console import (
     console,
     db_shell,
+    eth1_db_shell,
+    beacon_db_shell,
 )
 
 
@@ -78,7 +80,6 @@ class DbShellPlugin(BaseMainProcessPlugin):
             'db-shell',
             help='open a REPL to inspect the db',
         )
-
         attach_parser.set_defaults(func=cls.run_shell)
 
     @classmethod
@@ -86,10 +87,12 @@ class DbShellPlugin(BaseMainProcessPlugin):
 
         if trinity_config.has_app_config(Eth1AppConfig):
             config = trinity_config.get_app_config(Eth1AppConfig)
-            db_shell(is_ipython_available(), config.database_dir, trinity_config)
+            context = eth1_db_shell(config.database_dir, trinity_config)
+            db_shell(is_ipython_available(), context)
         elif trinity_config.has_app_config(BeaconAppConfig):
-            beacon_config = trinity_config.get_app_config(BeaconAppConfig)
-            db_shell(is_ipython_available(), beacon_config.database_dir, trinity_config)
+            config = trinity_config.get_app_config(BeaconAppConfig)
+            context = beacon_db_shell(config.database_dir, trinity_config)
+            db_shell(is_ipython_available(), context)
         else:
             cls.get_logger().error(
                 "DB Shell only supports the Ethereum 1 and Beacon nodes at this time"
