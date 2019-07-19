@@ -99,7 +99,7 @@ def console(ipc_path: Path,
     shell(use_ipython, namespace, banner)
 
 
-def db_shell(use_ipython: bool, config: Dict) -> None:
+def db_shell(use_ipython: bool, config: Dict[str, str]) -> None:
     greeter = """
     Head: #%(head_block_number)s
     Hash: %(hex_hash)s
@@ -124,14 +124,14 @@ def db_shell(use_ipython: bool, config: Dict) -> None:
     shell(use_ipython, namespace, DB_SHELL_BANNER + greeter)
 
 
-def eth1_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict:
+def eth1_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
     app_config = trinity_config.get_app_config(Eth1AppConfig)
     ipc_path = trinity_config.database_ipc_path
 
     trinity_already_running = ipc_path.exists()
     if trinity_already_running:
-        db_manager = eth1.manager.create_db_consumer_manager(ipc_path)
-        db = db_manager.get_db()  # type: ignore
+        db_manager = eth1.manager.create_db_consumer_manager(ipc_path)  # type: ignore
+        db = db_manager.get_db()
     else:
         db = LevelDB(database_dir)
 
@@ -152,15 +152,15 @@ def eth1_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict:
     }
 
 
-def beacon_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict:
+def beacon_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
     app_config = trinity_config.get_app_config(BeaconAppConfig)
 
     ipc_path = trinity_config.database_ipc_path
 
     trinity_already_running = ipc_path.exists()
     if trinity_already_running:
-        db_manager = beacon.manager.create_db_consumer_manager(ipc_path)
-        db = db_manager.get_db()  # type: ignore
+        db_manager = beacon.manager.create_db_consumer_manager(ipc_path)  # type: ignore
+        db = db_manager.get_db()
     else:
         db = LevelDB(database_dir)
 
