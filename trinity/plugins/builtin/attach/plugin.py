@@ -20,8 +20,8 @@ from trinity.extensibility import (
 from trinity.plugins.builtin.attach.console import (
     console,
     db_shell,
-    eth1_db_shell,
-    beacon_db_shell,
+    get_eth1_shell_context,
+    get_beacon_shell_context,
 )
 
 
@@ -89,11 +89,11 @@ class DbShellPlugin(BaseMainProcessPlugin):
 
         if trinity_config.has_app_config(Eth1AppConfig):
             config = trinity_config.get_app_config(Eth1AppConfig)
-            context = eth1_db_shell(config.database_dir, trinity_config)
+            context = get_eth1_shell_context(config.database_dir, trinity_config)
             db_shell(is_ipython_available(), context)
         elif trinity_config.has_app_config(BeaconAppConfig):
             config = trinity_config.get_app_config(BeaconAppConfig)
-            context = beacon_db_shell(config.database_dir, trinity_config)
+            context = get_beacon_shell_context(config.database_dir, trinity_config)
             db_shell(is_ipython_available(), context)
         else:
             cls.get_logger().error(

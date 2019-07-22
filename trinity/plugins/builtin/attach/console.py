@@ -124,7 +124,7 @@ def db_shell(use_ipython: bool, config: Dict[str, str]) -> None:
     shell(use_ipython, namespace, DB_SHELL_BANNER + greeter)
 
 
-def eth1_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
+def get_eth1_shell_context(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
     app_config = trinity_config.get_app_config(Eth1AppConfig)
     ipc_path = trinity_config.database_ipc_path
 
@@ -152,7 +152,7 @@ def eth1_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str
     }
 
 
-def beacon_db_shell(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
+def get_beacon_shell_context(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
     app_config = trinity_config.get_app_config(BeaconAppConfig)
 
     ipc_path = trinity_config.database_ipc_path
