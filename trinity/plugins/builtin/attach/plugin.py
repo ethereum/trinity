@@ -6,9 +6,9 @@ from argparse import (
 import pkg_resources
 import sys
 import pathlib
-from typing import Union
 
 from trinity.config import (
+    BaseAppConfig,
     Eth1AppConfig,
     BeaconAppConfig,
     TrinityConfig,
@@ -85,7 +85,7 @@ class DbShellPlugin(BaseMainProcessPlugin):
 
     @classmethod
     def run_shell(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        config: Union[Eth1AppConfig, BeaconAppConfig]
+        config: BaseAppConfig
 
         if trinity_config.has_app_config(Eth1AppConfig):
             config = trinity_config.get_app_config(Eth1AppConfig)

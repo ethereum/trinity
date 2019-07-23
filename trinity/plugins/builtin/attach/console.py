@@ -14,6 +14,7 @@ from eth.db.backends.level import LevelDB
 
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.types.blocks import BeaconBlock
+from eth2.beacon.operations.attestation_pool import AttestationPool
 
 from trinity.config import (
     Eth1AppConfig,
@@ -101,7 +102,7 @@ def console(ipc_path: Path,
 
 def db_shell(use_ipython: bool, config: Dict[str, str]) -> None:
     greeter = """
-    Head: #%(head_block_number)s
+    Head: #%(block_number)s
     Hash: %(hex_hash)s
     State Root: %(state_root_hex)s
     Inspecting active Trinity? %(trinity_already_running)s
@@ -145,7 +146,7 @@ def get_eth1_shell_context(database_dir: Path, trinity_config: TrinityConfig) ->
         'trinity_config': trinity_config,
         'chain_config': chain_config,
         'chain': chain,
-        'head_block_number': head.block_number,
+        'block_number': head.block_number,
         'hex_hash': head.hex_hash,
         'state_root_hex': encode_hex(head.state_root),
         'trinity_already_running': trinity_already_running,
@@ -166,6 +167,12 @@ def get_beacon_shell_context(database_dir: Path, trinity_config: TrinityConfig) 
 
     chain_config = app_config.get_chain_config()
     chain = chain_config.beacon_chain_class
+    attestation_pool = AttestationPool()
+    chain = chain_config.beacon_chain_class(
+        db,
+        attestation_pool,
+        chain_config.genesis_config
+    )
 
     chaindb = BeaconChainDB(db, chain_config.genesis_config)
     head = chaindb.get_canonical_head(BeaconBlock)
@@ -175,7 +182,7 @@ def get_beacon_shell_context(database_dir: Path, trinity_config: TrinityConfig) 
         'trinity_config': trinity_config,
         'chain_config': chain_config,
         'chain': chain,
-        'head_block_number': head.slot,
+        'block_number': head.slot,
         'hex_hash': head.hash_tree_root.hex(),
         'state_root_hex': encode_hex(head.state_root),
         'trinity_already_running': trinity_already_running

@@ -11,6 +11,9 @@ from trinity.config import (
     BeaconAppConfig,
     TrinityConfig,
 )
+from trinity.constants import (
+    AUTH_KEY,
+)
 from trinity.db.base import AsyncDBProxy
 from trinity.db.beacon.chain import AsyncBeaconChainDBProxy
 
@@ -22,8 +25,6 @@ from trinity.initialization import (
 from eth2.beacon.types.blocks import (
     BeaconBlock,
 )
-
-AUTH_KEY = b"not secure, but only connect over IPC"
 
 
 def create_db_server_manager(trinity_config: TrinityConfig,
