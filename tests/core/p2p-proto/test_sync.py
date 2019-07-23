@@ -1,18 +1,19 @@
 import asyncio
 import uuid
-
+from async_generator import asynccontextmanager
 from eth.exceptions import HeaderNotFound
 from lahja import ConnectionConfig, AsyncioEndpoint
 from p2p.service import BaseService
 import pytest
 
-from trinity.protocol.eth.peer import ETHPeerPoolEventServer
+from trinity.protocol.eth.peer import ETHPeer, ETHProxyPeerPool, ETHPeerPoolEventServer
 from trinity.sync.beam.importer import (
     pausing_vm_decorator,
     BlockImportServer,
 )
+from trinity.protocol.eth.servers import ETHRequestServer
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
-from trinity.protocol.les.peer import LESPeer
+from trinity.protocol.les.peer import LESPeer, LESProxyPeerPool
 from trinity.protocol.les.servers import LightRequestServer
 from trinity.sync.common.chain import (
     SimpleBlockImporter,
@@ -42,6 +43,7 @@ from tests.core.integration_test_helpers import (
     load_mining_chain,
     run_peer_pool_event_server,
     run_request_server,
+    run_proxy_peer_pool,
 )
 from tests.core.peer_helpers import (
     get_directly_linked_peers,
@@ -59,31 +61,72 @@ def small_header_batches(monkeypatch):
     monkeypatch.setattr(constants, 'MAX_BODIES_FETCH', 5)
 
 
-@pytest.mark.asyncio
-async def test_fast_syncer(request,
-                           event_bus,
-                           event_loop,
-                           chaindb_fresh,
-                           chaindb_20):
+@asynccontextmanager
+async def get_test_setup(request,
+                         event_loop,
+                         event_bus,
+                         other_event_bus,
+                         chaindb_fresh,
+                         chaindb,
+                         les_setup=False):
+
+    if les_setup:
+        peer_class = LESPeer
+        event_server_class = LESPeerPoolEventServer
+        request_server_class = LightRequestServer
+        peer_pool_class = LESProxyPeerPool
+    else:
+        peer_class = ETHPeer
+        event_server_class = ETHPeerPoolEventServer
+        request_server_class = ETHRequestServer
+        peer_pool_class = ETHProxyPeerPool
+
+    client_event_bus = event_bus
+    server_event_bus = other_event_bus
+
     client_peer, server_peer = await get_directly_linked_peers(
         request, event_loop,
         alice_headerdb=FakeAsyncHeaderDB(chaindb_fresh.db),
-        bob_headerdb=FakeAsyncHeaderDB(chaindb_20.db))
-    client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer])
-    client = FastChainSyncer(LatestTestChain(chaindb_fresh.db), chaindb_fresh, client_peer_pool)
-    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+        alice_peer_class=peer_class,
+        bob_headerdb=FakeAsyncHeaderDB(chaindb.db))
+
+    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
+    client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
 
     async with run_peer_pool_event_server(
-        event_bus,
-        server_peer_pool,
-        handler_type=ETHPeerPoolEventServer,
+        server_event_bus, server_peer_pool, handler_type=event_server_class
+    ), run_peer_pool_event_server(
+        client_event_bus, client_peer_pool, handler_type=event_server_class
     ), run_request_server(
-        event_bus,
-        FakeAsyncChainDB(chaindb_20.db),
-    ):
+        server_event_bus, FakeAsyncChainDB(chaindb.db), server_type=request_server_class
+    ), run_proxy_peer_pool(
+        client_event_bus,
+        peer_pool_type=peer_pool_class
+    ) as client_proxy_peer_pool:
+        server_peer.logger.info("%s is serving blocks", server_peer)
+        client_peer.logger.info("%s is syncing blocks", client_peer)
+        yield client_proxy_peer_pool
 
-        server_peer.logger.info("%s is serving 20 blocks", server_peer)
-        client_peer.logger.info("%s is syncing up 20", client_peer)
+
+@pytest.mark.asyncio
+async def test_fast_syncer(request,
+                           event_bus,
+                           other_event_bus,
+                           event_loop,
+                           chaindb_fresh,
+                           chaindb_20):
+
+    async with get_test_setup(
+        request,
+        event_loop,
+        event_bus,
+        other_event_bus,
+        chaindb_fresh,
+        chaindb_20
+    ) as client_proxy_peer_pool:
+
+        client = FastChainSyncer(
+            LatestTestChain(chaindb_fresh.db), chaindb_fresh, client_proxy_peer_pool)
 
         # FastChainSyncer.run() will return as soon as it's caught up with the peer.
         await asyncio.wait_for(client.run(), timeout=2)
@@ -93,30 +136,31 @@ async def test_fast_syncer(request,
 
         # Now download the state for the chain's head.
         state_downloader = StateDownloader(
-            chaindb_fresh, chaindb_fresh.db, head.state_root, client_peer_pool)
+            chaindb_fresh, chaindb_fresh.db, head.state_root, client_proxy_peer_pool)
         await asyncio.wait_for(state_downloader.run(), timeout=2)
 
         assert head.state_root in chaindb_fresh.db
 
 
 @pytest.mark.asyncio
-async def test_skeleton_syncer(request, event_loop, event_bus, chaindb_fresh, chaindb_1000):
-    client_peer, server_peer = await get_directly_linked_peers(
-        request, event_loop,
-        alice_headerdb=FakeAsyncHeaderDB(chaindb_fresh.db),
-        bob_headerdb=FakeAsyncHeaderDB(chaindb_1000.db))
-    client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer])
-    client = FastChainSyncer(LatestTestChain(chaindb_fresh.db), chaindb_fresh, client_peer_pool)
-    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+async def test_skeleton_syncer(request,
+                               event_loop,
+                               event_bus,
+                               other_event_bus,
+                               chaindb_fresh,
+                               chaindb_1000):
 
-    async with run_peer_pool_event_server(
-        event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_request_server(
-        event_bus, FakeAsyncChainDB(chaindb_1000.db)
-    ):
+    async with get_test_setup(
+        request,
+        event_loop,
+        event_bus,
+        other_event_bus,
+        chaindb_fresh,
+        chaindb_1000
+    ) as client_proxy_peer_pool:
 
-        client_peer.logger.info("%s is serving 1000 blocks", client_peer)
-        server_peer.logger.info("%s is syncing up 1000 blocks", server_peer)
+        client = FastChainSyncer(
+            LatestTestChain(chaindb_fresh.db), chaindb_fresh, client_proxy_peer_pool)
 
         await asyncio.wait_for(client.run(), timeout=20)
 
@@ -125,7 +169,7 @@ async def test_skeleton_syncer(request, event_loop, event_bus, chaindb_fresh, ch
 
         # Now download the state for the chain's head.
         state_downloader = StateDownloader(
-            chaindb_fresh, chaindb_fresh.db, head.state_root, client_peer_pool)
+            chaindb_fresh, chaindb_fresh.db, head.state_root, client_proxy_peer_pool)
         await asyncio.wait_for(state_downloader.run(), timeout=20)
 
         assert head.state_root in chaindb_fresh.db
@@ -146,14 +190,10 @@ async def test_beam_syncer(
         request,
         event_loop,
         event_bus,
+        other_event_bus,
         chaindb_fresh,
         chaindb_churner,
         beam_to_block):
-
-    client_peer, server_peer = await get_directly_linked_peers(
-        request, event_loop,
-        alice_headerdb=FakeAsyncHeaderDB(chaindb_fresh.db),
-        bob_headerdb=FakeAsyncHeaderDB(chaindb_churner.db))
 
     # Need a name that will be unique per xdist-process, otherwise
     #   lahja IPC endpoints in each process will clobber each other
@@ -165,14 +205,14 @@ async def test_beam_syncer(
     # manually add endpoint for trie data gatherer to serve requests
     gatherer_config = ConnectionConfig.from_name(f"GathererEndpoint-{unique_process_name}")
 
-    client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer])
-    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
-
-    async with run_peer_pool_event_server(
-        event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_request_server(
-        event_bus, FakeAsyncChainDB(chaindb_churner.db)
-    ), AsyncioEndpoint.serve(
+    async with get_test_setup(
+        request,
+        event_loop,
+        event_bus,
+        other_event_bus,
+        chaindb_fresh,
+        chaindb_churner
+    ) as client_proxy_peer_pool, AsyncioEndpoint.serve(
         pausing_config
     ) as pausing_endpoint, AsyncioEndpoint.serve(gatherer_config) as gatherer_endpoint:
 
@@ -187,13 +227,10 @@ async def test_beam_syncer(
             client_chain,
             chaindb_fresh.db,
             client_chain.chaindb,
-            client_peer_pool,
+            client_proxy_peer_pool,
             gatherer_endpoint,
             beam_to_block,
         )
-
-        client_peer.logger.info("%s is serving churner blocks", client_peer)
-        server_peer.logger.info("%s is syncing up churner blocks", server_peer)
 
         import_server = BlockImportServer(pausing_endpoint, client_chain, token=client.cancel_token)
         asyncio.ensure_future(import_server.run())
@@ -215,33 +252,34 @@ async def test_beam_syncer(
 
 
 @pytest.mark.asyncio
-async def test_regular_syncer(request, event_loop, event_bus, chaindb_fresh, chaindb_20):
-    client_peer, server_peer = await get_directly_linked_peers(
-        request, event_loop,
-        alice_headerdb=FakeAsyncHeaderDB(chaindb_fresh.db),
-        bob_headerdb=FakeAsyncHeaderDB(chaindb_20.db))
-    client = RegularChainSyncer(
-        ByzantiumTestChain(chaindb_fresh.db),
+async def test_regular_syncer(request,
+                              event_loop,
+                              event_bus,
+                              other_event_bus,
+                              chaindb_fresh,
+                              chaindb_20):
+    async with get_test_setup(
+        request,
+        event_loop,
+        event_bus,
+        other_event_bus,
         chaindb_fresh,
-        MockPeerPoolWithConnectedPeers([client_peer]))
-    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+        chaindb_20
+    ) as client_proxy_peer_pool:
 
-    async with run_peer_pool_event_server(
-        event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_request_server(
-        event_bus, FakeAsyncChainDB(chaindb_20.db)
-    ):
-
-        server_peer.logger.info("%s is serving 20 blocks", server_peer)
-        client_peer.logger.info("%s is syncing up 20", client_peer)
+        syncer = RegularChainSyncer(
+            ByzantiumTestChain(chaindb_fresh.db),
+            chaindb_fresh,
+            client_proxy_peer_pool,
+        )
 
         def finalizer():
-            event_loop.run_until_complete(client.cancel())
+            event_loop.run_until_complete(syncer.cancel())
             # Yield control so that client/server.run() returns, otherwise asyncio will complain.
             event_loop.run_until_complete(asyncio.sleep(0.1))
         request.addfinalizer(finalizer)
 
-        asyncio.ensure_future(client.run())
+        asyncio.ensure_future(syncer.run())
 
         await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
         head = chaindb_fresh.get_canonical_head()
@@ -326,36 +364,37 @@ class FallbackTesting_RegularChainSyncer(BaseService):
 
 
 @pytest.mark.asyncio
-async def test_regular_syncer_fallback(request, event_loop, event_bus, chaindb_fresh, chaindb_20):
+async def test_regular_syncer_fallback(request,
+                                       event_loop,
+                                       event_bus,
+                                       other_event_bus,
+                                       chaindb_fresh,
+                                       chaindb_20):
     """
     Test the scenario where a header comes in that's not in memory (but is in the DB)
     """
-    client_peer, server_peer = await get_directly_linked_peers(
-        request, event_loop,
-        alice_headerdb=FakeAsyncHeaderDB(chaindb_fresh.db),
-        bob_headerdb=FakeAsyncHeaderDB(chaindb_20.db))
-    client = FallbackTesting_RegularChainSyncer(
-        ByzantiumTestChain(chaindb_fresh.db),
+    async with get_test_setup(
+        request,
+        event_loop,
+        event_bus,
+        other_event_bus,
         chaindb_fresh,
-        MockPeerPoolWithConnectedPeers([client_peer]))
-    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+        chaindb_20
+    ) as client_proxy_peer_pool:
 
-    async with run_peer_pool_event_server(
-        event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_request_server(
-        event_bus, FakeAsyncChainDB(chaindb_20.db)
-    ):
-
-        server_peer.logger.info("%s is serving 20 blocks", server_peer)
-        client_peer.logger.info("%s is syncing up 20", client_peer)
+        syncer = FallbackTesting_RegularChainSyncer(
+            ByzantiumTestChain(chaindb_fresh.db),
+            chaindb_fresh,
+            client_proxy_peer_pool,
+        )
 
         def finalizer():
-            event_loop.run_until_complete(client.cancel())
+            event_loop.run_until_complete(syncer.cancel())
             # Yield control so that client/server.run() returns, otherwise asyncio will complain.
             event_loop.run_until_complete(asyncio.sleep(0.1))
         request.addfinalizer(finalizer)
 
-        asyncio.ensure_future(client.run())
+        asyncio.ensure_future(syncer.run())
 
         await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
         head = chaindb_fresh.get_canonical_head()
@@ -366,27 +405,25 @@ async def test_regular_syncer_fallback(request, event_loop, event_bus, chaindb_f
 async def test_light_syncer(request,
                             event_loop,
                             event_bus,
+                            other_event_bus,
                             chaindb_fresh,
                             chaindb_20):
-    client_peer, server_peer = await get_directly_linked_peers(
-        request, event_loop,
-        alice_peer_class=LESPeer,
-        alice_headerdb=FakeAsyncHeaderDB(chaindb_fresh.db),
-        bob_headerdb=FakeAsyncHeaderDB(chaindb_20.db))
-    client = LightChainSyncer(
-        LatestTestChain(chaindb_fresh.db),
+
+    async with get_test_setup(
+        request,
+        event_loop,
+        event_bus,
+        other_event_bus,
         chaindb_fresh,
-        MockPeerPoolWithConnectedPeers([client_peer]))
-    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+        chaindb_20,
+        les_setup=True,
+    ) as client_proxy_peer_pool:
 
-    async with run_peer_pool_event_server(
-        event_bus, server_peer_pool, handler_type=LESPeerPoolEventServer
-    ), run_request_server(
-        event_bus, FakeAsyncChainDB(chaindb_20.db), server_type=LightRequestServer
-    ):
-
-        server_peer.logger.info("%s is serving 20 blocks", server_peer)
-        client_peer.logger.info("%s is syncing up 20", client_peer)
+        client = LightChainSyncer(
+            LatestTestChain(chaindb_fresh.db),
+            chaindb_fresh,
+            client_proxy_peer_pool
+        )
 
         def finalizer():
             event_loop.run_until_complete(client.cancel())
@@ -411,7 +448,7 @@ def chaindb_churner(leveldb_churner):
     return chain.chaindb
 
 
-async def wait_for_head(headerdb, header, sync_timeout=3):
+async def wait_for_head(headerdb, header, sync_timeout=30):
     # A full header sync may involve several round trips, so we must be willing to wait a little
     # bit for them.
 

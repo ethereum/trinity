@@ -5,6 +5,7 @@ from typing import (
     Generic,
     Type,
     TypeVar,
+    Union,
 )
 
 from eth_utils import (
@@ -13,12 +14,13 @@ from eth_utils import (
 
 from p2p.protocol import Command
 
-from trinity.protocol.common.peer import BaseChainPeer
+from trinity.protocol.eth.peer import ETHProxyPeer
+from trinity.protocol.les.peer import LESProxyPeer
 from trinity._utils.datastructures import (
     SortableTask,
 )
 
-TChainPeer = TypeVar('TChainPeer', bound=BaseChainPeer)
+TChainPeer = TypeVar('TChainPeer', bound=Union[ETHProxyPeer, LESProxyPeer])
 
 
 class WaitingPeers(Generic[TChainPeer]):
@@ -35,9 +37,9 @@ class WaitingPeers(Generic[TChainPeer]):
 
     def _get_peer_rank(self, peer: TChainPeer) -> float:
         relevant_throughputs = [
-            exchange.tracker.items_per_second_ema.value
-            for exchange in peer.requests
-            if issubclass(exchange.response_cmd_type, self._response_command_type)
+            items_per_second
+            for response_cmd_type, items_per_second in peer.perf_metrics.items()
+            if issubclass(response_cmd_type, self._response_command_type)
         ]
 
         if len(relevant_throughputs) == 0:
@@ -51,7 +53,8 @@ class WaitingPeers(Generic[TChainPeer]):
         # high throughput peers should pop out of the queue first, so ranked as negative
         return -1 * avg_throughput
 
-    def put_nowait(self, peer: TChainPeer) -> None:
+    async def put(self, peer: TChainPeer) -> None:
+        await peer.get_perf_metrics()
         self._waiting_peers.put_nowait(self._peer_wrapper(peer))
 
     async def get_fastest(self) -> TChainPeer:

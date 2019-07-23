@@ -14,6 +14,7 @@ from multiprocessing.managers import (
     BaseManager,
 )
 from typing import (
+    Any,
     cast,
     Iterable,
     Type,
@@ -34,29 +35,30 @@ from trinity.config import (
     Eth1AppConfig,
 )
 from trinity.constants import (
-    NETWORKING_EVENTBUS_ENDPOINT,
     SYNC_FAST,
     SYNC_FULL,
     SYNC_LIGHT,
     SYNC_BEAM,
+    TO_NETWORKING_BROADCAST_CONFIG,
+)
+from trinity.db.eth1.manager import (
+    create_db_consumer_manager,
+)
+from trinity.events import (
+    ShutdownRequest,
 )
 from trinity.extensibility.asyncio import (
     AsyncioIsolatedPlugin
 )
-from trinity.nodes.base import (
-    Node,
-)
-from trinity.events import ShutdownRequest
-from trinity.protocol.common.peer import (
-    BasePeer,
-    BasePeerPool,
+from trinity.protocol.common.peer_pool_event_bus import (
+    BaseProxyPeerPool,
 )
 from trinity.protocol.eth.peer import (
     BaseChainPeerPool,
-    ETHPeerPool,
+    ETHProxyPeerPool,
 )
 from trinity.protocol.les.peer import (
-    LESPeerPool,
+    LESProxyPeerPool,
 )
 from trinity.sync.full.service import (
     FastThenFullChainSyncer,
@@ -93,7 +95,7 @@ class BaseSyncStrategy(ABC):
                    logger: Logger,
                    chain: BaseChain,
                    db_manager: BaseManager,
-                   peer_pool: BasePeerPool,
+                   peer_pool: BaseProxyPeerPool[Any],
                    event_bus: EndpointAPI,
                    cancel_token: CancelToken) -> None:
         ...
@@ -113,7 +115,7 @@ class NoopSyncStrategy(BaseSyncStrategy):
                    logger: Logger,
                    chain: BaseChain,
                    db_manager: BaseManager,
-                   peer_pool: BasePeerPool,
+                   peer_pool: BaseProxyPeerPool[Any],
                    event_bus: EndpointAPI,
                    cancel_token: CancelToken) -> None:
 
@@ -130,7 +132,7 @@ class FullSyncStrategy(BaseSyncStrategy):
                    logger: Logger,
                    chain: BaseChain,
                    db_manager: BaseManager,
-                   peer_pool: BasePeerPool,
+                   peer_pool: BaseProxyPeerPool[Any],
                    event_bus: EndpointAPI,
                    cancel_token: CancelToken) -> None:
 
@@ -138,7 +140,7 @@ class FullSyncStrategy(BaseSyncStrategy):
             chain,
             db_manager.get_chaindb(),  # type: ignore
             db_manager.get_db(),  # type: ignore
-            cast(ETHPeerPool, peer_pool),
+            cast(ETHProxyPeerPool, peer_pool),
             cancel_token,
         )
 
@@ -155,7 +157,7 @@ class FastThenFullSyncStrategy(BaseSyncStrategy):
                    logger: Logger,
                    chain: BaseChain,
                    db_manager: BaseManager,
-                   peer_pool: BasePeerPool,
+                   peer_pool: BaseProxyPeerPool[Any],
                    event_bus: EndpointAPI,
                    cancel_token: CancelToken) -> None:
 
@@ -163,7 +165,7 @@ class FastThenFullSyncStrategy(BaseSyncStrategy):
             chain,
             db_manager.get_chaindb(),  # type: ignore
             db_manager.get_db(),  # type: ignore
-            cast(ETHPeerPool, peer_pool),
+            cast(ETHProxyPeerPool, peer_pool),
             cancel_token,
         )
 
@@ -180,7 +182,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
                    logger: Logger,
                    chain: BaseChain,
                    db_manager: BaseManager,
-                   peer_pool: BasePeerPool,
+                   peer_pool: BaseProxyPeerPool[Any],
                    event_bus: EndpointAPI,
                    cancel_token: CancelToken) -> None:
 
@@ -188,7 +190,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
             chain,
             db_manager.get_chaindb(),  # type: ignore
             db_manager.get_db(),  # type: ignore
-            cast(ETHPeerPool, peer_pool),
+            cast(ETHProxyPeerPool, peer_pool),
             event_bus,
             cancel_token,
         )
@@ -206,14 +208,14 @@ class LightSyncStrategy(BaseSyncStrategy):
                    logger: Logger,
                    chain: BaseChain,
                    db_manager: BaseManager,
-                   peer_pool: BasePeerPool,
+                   peer_pool: BaseProxyPeerPool[Any],
                    event_bus: EndpointAPI,
                    cancel_token: CancelToken) -> None:
 
         syncer = LightChainSyncer(
             chain,
             db_manager.get_headerdb(),  # type: ignore
-            cast(LESPeerPool, peer_pool),
+            cast(LESProxyPeerPool, peer_pool),
             cancel_token,
         )
 
@@ -239,11 +241,7 @@ class SyncerPlugin(AsyncioIsolatedPlugin):
 
     @property
     def name(self) -> str:
-        return "Sync / PeerPool"
-
-    @property
-    def normalized_name(self) -> str:
-        return NETWORKING_EVENTBUS_ENDPOINT
+        return "Sync"
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -290,28 +288,27 @@ class SyncerPlugin(AsyncioIsolatedPlugin):
         self.start()
 
     def do_start(self) -> None:
+        asyncio.ensure_future(self.launch_sync())
 
+    async def launch_sync(self) -> None:
         trinity_config = self.boot_info.trinity_config
-        NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
-        node = NodeClass(self.event_bus, trinity_config)
+        app_config = trinity_config.get_app_config(Eth1AppConfig)
+        chain_config = app_config.get_chain_config()
+        db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
 
-        asyncio.ensure_future(self.launch_sync(node))
+        chain = chain_config.full_chain_class(db_manager.get_db())  # type: ignore
 
-        asyncio.ensure_future(exit_with_services(
-            node,
-            self._event_bus_service,
-        ))
-        asyncio.ensure_future(node.run())
+        proxy_peer_pool = ETHProxyPeerPool(self.event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        asyncio.ensure_future(exit_with_services(self._event_bus_service, proxy_peer_pool))
+        asyncio.ensure_future(proxy_peer_pool.run())
 
-    async def launch_sync(self, node: Node[BasePeer]) -> None:
-        await node.events.started.wait()
         await self.active_strategy.sync(
             self.logger,
-            node.get_chain(),
-            node.db_manager,
-            node.get_peer_pool(),
+            chain,
+            db_manager,
+            proxy_peer_pool,
             self.event_bus,
-            node.cancel_token
+            proxy_peer_pool.cancel_token
         )
 
         if self.active_strategy.shutdown_node_on_halt:

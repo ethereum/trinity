@@ -1,6 +1,8 @@
 from trinity.protocol.common.monitors import BaseChainTipMonitor
-from trinity.protocol.eth import commands
+from trinity.protocol.eth.peer import ETHProxyPeer
+from trinity.protocol.eth.events import NewBlockEvent
 
 
-class ETHChainTipMonitor(BaseChainTipMonitor):
-    subscription_msg_types = frozenset({commands.NewBlock})
+class ETHChainTipMonitor(BaseChainTipMonitor[ETHProxyPeer]):
+
+    monitor_event_type = NewBlockEvent

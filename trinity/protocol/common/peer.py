@@ -4,6 +4,7 @@ import random
 from typing import (
     Dict,
     List,
+    Iterable,
     NamedTuple,
     Tuple,
     Type,
@@ -19,11 +20,14 @@ from eth_typing import (
 )
 
 from eth_utils.toolz import groupby
+from eth_utils import (
+    to_dict,
+)
 
 from eth.constants import GENESIS_BLOCK_NUMBER
 from eth.vm.base import BaseVM
 
-from p2p.abc import NodeAPI
+from p2p.abc import NodeAPI, CommandAPI
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import NoConnectedPeers
 from p2p.peer import (
@@ -52,11 +56,17 @@ from trinity.plugins.builtin.network_db.eth1_peer_db.tracker import (
     EventBusEth1PeerTracker,
     NoopEth1PeerTracker,
 )
+from trinity._utils.errors import (
+    pass_or_raise,
+)
 
 from .boot import DAOCheckBootManager
 from .context import ChainContext
 from .events import (
+    ChainPeerMetaData,
     DisconnectPeerEvent,
+    GetPeerMetaDataRequest,
+    GetPeerPerfMetricsRequest,
 )
 
 
@@ -133,6 +143,11 @@ class BaseChainPeer(BasePeer):
             )
             return NoopConnectionTracker()
 
+    @to_dict
+    def collect_performance_metrics(self) -> Iterable[Tuple[Type[CommandAPI], float]]:
+        for exchange in self.requests:
+            yield exchange.response_cmd_type, exchange.tracker.items_per_second_ema.value
+
 
 class BaseProxyPeer(BaseService):
     """
@@ -162,6 +177,60 @@ class BaseProxyPeer(BaseService):
             TO_NETWORKING_BROADCAST_CONFIG,
         )
         await self.cancel()
+
+
+class BaseChainProxyPeer(BaseProxyPeer):
+
+    def __init__(self,
+                 remote: NodeAPI,
+                 event_bus: EndpointAPI,
+                 token: CancelToken = None):
+        super().__init__(remote, event_bus, token)
+        self._meta_data: ChainPeerMetaData = None
+        self._perf_metrics: Dict[Type[CommandAPI], float] = None
+
+    @property
+    def perf_metrics(self) -> Dict[Type[CommandAPI], float]:
+        """
+        Return the latest available performance metrics from cache.
+        """
+
+        if self._perf_metrics is None:
+            raise Exception("Run get_perf_metrics first")
+
+        return self._perf_metrics
+
+    async def get_meta_data(self, use_cache: bool=True) -> ChainPeerMetaData:
+
+        if self._meta_data is None or not use_cache:
+            await self.event_bus.wait_until_any_endpoint_subscribed_to(GetPeerMetaDataRequest)
+            response = await self.wait(
+                self.event_bus.request(
+                    GetPeerMetaDataRequest(self.remote),
+                    TO_NETWORKING_BROADCAST_CONFIG
+                ),
+            )
+
+            pass_or_raise(response)
+
+            self._meta_data = response.meta_data
+
+        return self._meta_data
+
+    async def get_perf_metrics(self) -> Dict[Type[CommandAPI], float]:
+        await self.event_bus.wait_until_any_endpoint_subscribed_to(GetPeerPerfMetricsRequest)
+        response = await self.wait(
+            self.event_bus.request(
+                GetPeerPerfMetricsRequest(self.remote),
+                TO_NETWORKING_BROADCAST_CONFIG
+            )
+        )
+
+        pass_or_raise(response)
+
+        self._perf_metrics = response.metrics
+
+        return response.metrics
 
 
 class BaseChainPeerFactory(BasePeerFactory):

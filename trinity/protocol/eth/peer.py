@@ -3,6 +3,7 @@ from typing import (
     cast,
     Dict,
     Tuple,
+    Type,
 )
 
 from lahja import EndpointAPI
@@ -26,13 +27,19 @@ from trinity.exceptions import (
     WrongNetworkFailure,
     WrongGenesisFailure,
 )
+from trinity.protocol.common.events import (
+    ChainPeerMetaData,
+    GetPeerMetaDataRequest,
+    GetPeerPerfMetricsRequest,
+    GetHighestTDPeerRequest,
+)
 from trinity.protocol.common.peer import (
     BaseChainPeer,
     BaseChainPeerFactory,
     BaseChainPeerPool,
+    BaseChainProxyPeer,
 )
 from trinity.protocol.common.peer_pool_event_bus import (
-    BaseProxyPeer,
     BaseProxyPeerPool,
     PeerPoolEventServer,
 )
@@ -138,7 +145,7 @@ class ETHPeer(BaseChainPeer):
             )
 
 
-class ETHProxyPeer(BaseProxyPeer):
+class ETHProxyPeer(BaseChainProxyPeer):
     """
     A ``ETHPeer`` that can be used from any process instead of the actual peer pool peer.
     Any action performed on the ``BCCProxyPeer`` is delegated to the actual peer in the pool.
@@ -165,7 +172,7 @@ class ETHProxyPeer(BaseProxyPeer):
             remote,
             event_bus,
             ProxyETHProtocol(remote, event_bus, broadcast_config),
-            ProxyETHExchangeHandler(remote, event_bus, broadcast_config)
+            ProxyETHExchangeHandler(remote, event_bus, broadcast_config),
         )
 
 
@@ -223,6 +230,9 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         self.run_daemon_request(GetReceiptsRequest, self.handle_get_receipts_request)
         self.run_daemon_request(GetBlockBodiesRequest, self.handle_get_block_bodies_request)
         self.run_daemon_request(GetNodeDataRequest, self.handle_get_node_data_request)
+        self.run_daemon_request(GetPeerMetaDataRequest, self.handle_get_metadata_request)
+        self.run_daemon_request(GetPeerPerfMetricsRequest, self.handle_get_perfmetrics_request)
+        self.run_daemon_request(GetHighestTDPeerRequest, self.handle_get_highest_td_peer_request)
 
         await super()._run()
 
@@ -261,6 +271,28 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
             event.remote,
             event.timeout,
             lambda peer: peer.requests.get_node_data(event.node_hashes)
+        )
+
+    async def handle_get_perfmetrics_request(
+            self,
+            event: GetPeerPerfMetricsRequest) -> Dict[Type[CommandAPI], float]:
+
+        peer = self.get_peer(event.remote)
+        return peer.collect_performance_metrics()
+
+    async def handle_get_highest_td_peer_request(self,
+                                                 event: GetHighestTDPeerRequest) -> NodeAPI:
+        peer_pool = cast(BaseChainPeerPool, self.peer_pool)
+        return peer_pool.highest_td_peer.remote
+
+    async def handle_get_metadata_request(self,
+                                          event: GetPeerMetaDataRequest) -> ChainPeerMetaData:
+        peer = self.get_peer(event.remote)
+        return ChainPeerMetaData(
+            head_td=peer.head_td,
+            head_hash=peer.head_hash,
+            head_number=peer.head_number,
+            max_headers_fetch=peer.max_headers_fetch
         )
 
     async def handle_native_peer_message(self,

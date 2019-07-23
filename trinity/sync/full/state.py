@@ -4,7 +4,6 @@ from pathlib import Path
 import tempfile
 import time
 from typing import (
-    cast,
     Dict,
     Iterable,
     List,
@@ -43,7 +42,6 @@ from p2p.exceptions import (
     NoEligiblePeers,
     NoIdlePeers,
 )
-from p2p.peer import BasePeer, PeerSubscriber
 
 from trinity.db.base import BaseAsyncDB
 from trinity.db.eth1.chain import BaseAsyncChainDB
@@ -51,7 +49,10 @@ from trinity.exceptions import (
     AlreadyWaiting,
     SyncRequestAlreadyProcessed,
 )
-from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
+from trinity.protocol.common.peer_pool_event_bus import (
+    ProxyPeerRemoved,
+)
+from trinity.protocol.eth.peer import ETHProxyPeer, ETHProxyPeerPool
 from trinity.protocol.eth import (
     constants as eth_constants,
 )
@@ -63,7 +64,7 @@ from trinity._utils.os import get_open_fd_limit
 from trinity._utils.timer import Timer
 
 
-class StateDownloader(BaseService, PeerSubscriber):
+class StateDownloader(BaseService):
     _total_processed_nodes = 0
     _report_interval = 10  # Number of seconds between progress reports.
     _reply_timeout = 20  # seconds
@@ -74,7 +75,7 @@ class StateDownloader(BaseService, PeerSubscriber):
                  chaindb: BaseAsyncChainDB,
                  account_db: BaseAsyncDB,
                  root_hash: Hash32,
-                 peer_pool: ETHPeerPool,
+                 peer_pool: ETHProxyPeerPool,
                  token: CancelToken = None) -> None:
         super().__init__(token)
         self.chaindb = chaindb
@@ -95,7 +96,7 @@ class StateDownloader(BaseService, PeerSubscriber):
             self.logger
         )
         self.request_tracker = TrieNodeRequestTracker(self._reply_timeout, self.logger)
-        self._peer_missing_nodes: Dict[ETHPeer, Set[Hash32]] = collections.defaultdict(set)
+        self._peer_missing_nodes: Dict[ETHProxyPeer, Set[Hash32]] = collections.defaultdict(set)
 
     # We are only interested in peers entering or leaving the pool
     subscription_msg_types: FrozenSet[Type[CommandAPI]] = frozenset()
@@ -105,21 +106,14 @@ class StateDownloader(BaseService, PeerSubscriber):
     # now.
     msg_queue_maxsize: int = 2000
 
-    def deregister_peer(self, peer: BasePeer) -> None:
-        # Use .pop() with a default value as it's possible we never requested anything to this
-        # peer or it had all the trie nodes we requested, so there'd be no entry in
-        # self._peer_missing_nodes for it.
-        self._peer_missing_nodes.pop(cast(ETHPeer, peer), None)
-
-    async def get_peer_for_request(self, node_keys: Set[Hash32]) -> ETHPeer:
+    async def get_peer_for_request(self, node_keys: Set[Hash32]) -> ETHProxyPeer:
         """Return an idle peer that may have any of the trie nodes in node_keys.
 
         If none of our peers have any of the given node keys, raise NoEligiblePeers. If none of
         the peers which may have at least one of the given node keys is idle, raise NoIdlePeers.
         """
         has_eligible_peers = False
-        async for peer in self.peer_pool:
-            peer = cast(ETHPeer, peer)
+        for peer in await self.peer_pool.get_peers():
             if self._peer_missing_nodes[peer].issuperset(node_keys):
                 self.logger.debug2("%s doesn't have any of the nodes we want, skipping it", peer)
                 continue
@@ -174,7 +168,9 @@ class StateDownloader(BaseService, PeerSubscriber):
             self.request_tracker.active_requests[peer] = (time.time(), batch)
             self.run_task(self._request_and_process_nodes(peer, batch))
 
-    async def _request_and_process_nodes(self, peer: ETHPeer, batch: Tuple[Hash32, ...]) -> None:
+    async def _request_and_process_nodes(self,
+                                         peer: ETHProxyPeer,
+                                         batch: Tuple[Hash32, ...]) -> None:
         self.logger.debug("Requesting %d trie nodes from %s", len(batch), peer)
         try:
             node_data = await peer.requests.get_node_data(batch)
@@ -242,6 +238,13 @@ class StateDownloader(BaseService, PeerSubscriber):
             next_timeout = self.request_tracker.get_next_timeout()
             await self.sleep(next_timeout - time.time())
 
+    async def _remove_gone_peers(self) -> None:
+        async for event in self.wait_iter(self.peer_pool.event_bus.stream(ProxyPeerRemoved)):
+            # Use .pop() with a default value as it's possible we never requested anything to this
+            # peer or it had all the trie nodes we requested, so there'd be no entry in
+            # self._peer_missing_nodes for it.
+            self._peer_missing_nodes.pop(event.peer, None)
+
     async def _run(self) -> None:
         """Fetch all trie nodes starting from self.root_hash, and store them in self.db.
 
@@ -251,24 +254,25 @@ class StateDownloader(BaseService, PeerSubscriber):
         self.logger.info("Starting state sync for root hash %s", encode_hex(self.root_hash))
         self.run_task(self._periodically_report_progress())
         self.run_task(self._periodically_retry_timedout_and_missing())
-        with self.subscribe(self.peer_pool):
-            while self.scheduler.has_pending_requests:
-                # This ensures we yield control and give _handle_msg() a chance to process any nodes
-                # we may have received already, also ensuring we exit when our cancel token is
-                # triggered.
-                await self.sleep(0)
+        self.run_daemon_task(self._remove_gone_peers())
 
-                requests = self.scheduler.next_batch(eth_constants.MAX_STATE_FETCH)
-                if not requests:
-                    # Although we frequently yield control above, to let our msg handler process
-                    # received nodes (scheduling new requests), there may be cases when the
-                    # pending nodes take a while to arrive thus causing the scheduler to run out
-                    # of new requests for a while.
-                    self.logger.debug("Scheduler queue is empty, sleeping a bit")
-                    await self.sleep(0.5)
-                    continue
+        while self.scheduler.has_pending_requests:
+            # This ensures we yield control and give _handle_msg() a chance to process any nodes
+            # we may have received already, also ensuring we exit when our cancel token is
+            # triggered.
+            await self.sleep(0)
 
-                await self.request_nodes([request.node_key for request in requests])
+            requests = self.scheduler.next_batch(eth_constants.MAX_STATE_FETCH)
+            if not requests:
+                # Although we frequently yield control above, to let our msg handler process
+                # received nodes (scheduling new requests), there may be cases when the
+                # pending nodes take a while to arrive thus causing the scheduler to run out
+                # of new requests for a while.
+                self.logger.debug("Scheduler queue is empty, sleeping a bit")
+                await self.sleep(0.5)
+                continue
+
+            await self.request_nodes([request.node_key for request in requests])
 
         self.logger.info("Finished state sync with root hash %s", encode_hex(self.root_hash))
 
@@ -293,7 +297,7 @@ class TrieNodeRequestTracker:
     def __init__(self, reply_timeout: int, logger: ExtendedDebugLogger) -> None:
         self.reply_timeout = reply_timeout
         self.logger = logger
-        self.active_requests: Dict[ETHPeer, Tuple[float, Tuple[Hash32, ...]]] = {}
+        self.active_requests: Dict[ETHProxyPeer, Tuple[float, Tuple[Hash32, ...]]] = {}
         self.missing: Dict[float, List[Hash32]] = {}
 
     def get_timed_out(self) -> List[Hash32]:

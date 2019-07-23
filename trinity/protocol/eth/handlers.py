@@ -91,7 +91,6 @@ class ProxyETHExchangeHandler:
                                 skip: int = 0,
                                 reverse: bool = True,
                                 timeout: float = None) -> Tuple[BlockHeader, ...]:
-
         response = await self._event_bus.request(
             GetBlockHeadersRequest(
                 self.remote,

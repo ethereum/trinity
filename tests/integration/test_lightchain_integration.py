@@ -26,7 +26,11 @@ from p2p.kademlia import Node
 
 from trinity.constants import ROPSTEN_NETWORK_ID
 from trinity.protocol.common.context import ChainContext
-from trinity.protocol.les.peer import LESPeerPool
+from trinity.protocol.les.peer import (
+    LESPeerPool,
+    LESPeerPoolEventServer,
+    LESProxyPeerPool,
+)
 from trinity.sync.light.chain import LightChainSyncer
 from trinity.sync.light.service import LightPeerChain
 from trinity._utils.ipc import (
@@ -38,6 +42,8 @@ from tests.core.integration_test_helpers import (
     FakeAsyncRopstenChain,
     FakeAsyncHeaderDB,
     connect_to_peers_loop,
+    run_peer_pool_event_server,
+    run_proxy_peer_pool,
 )
 
 
@@ -133,6 +139,7 @@ def wait_for_socket(ipc_path, timeout=10):
 async def test_lightchain_integration(
         request,
         event_loop,
+        event_bus,
         caplog,
         geth_ipc_path,
         enode,
@@ -174,54 +181,65 @@ async def test_lightchain_integration(
         privkey=ecies.generate_privkey(),
         context=context,
     )
+    # Passing the event_bus directly in the constructor causes the backends/tracker to get set up.
+    # There's something that throws this test of when these are enabled and the test only needs
+    # the event_bus for other things so setting the property directly does the trick for now.
+    peer_pool._event_bus = event_bus
     chain = FakeAsyncRopstenChain(base_db)
-    syncer = LightChainSyncer(chain, chaindb, peer_pool)
-    syncer.min_peers_to_sync = 1
-    peer_chain = LightPeerChain(headerdb, peer_pool)
 
-    asyncio.ensure_future(peer_pool.run())
-    asyncio.ensure_future(connect_to_peers_loop(peer_pool, tuple([remote])))
-    asyncio.ensure_future(peer_chain.run())
-    asyncio.ensure_future(syncer.run())
-    await asyncio.sleep(0)  # Yield control to give the LightChainSyncer a chance to start
+    async with run_peer_pool_event_server(
+        event_bus,
+        peer_pool,
+        handler_type=LESPeerPoolEventServer
+    ), run_proxy_peer_pool(event_bus, peer_pool_type=LESProxyPeerPool) as proxy_peer_pool:
 
-    def finalizer():
-        event_loop.run_until_complete(peer_pool.cancel())
-        event_loop.run_until_complete(peer_chain.cancel())
-        event_loop.run_until_complete(syncer.cancel())
+        syncer = LightChainSyncer(chain, chaindb, proxy_peer_pool)
+        syncer.min_peers_to_sync = 1
+        peer_chain = LightPeerChain(headerdb, peer_pool)
 
-    request.addfinalizer(finalizer)
+        asyncio.ensure_future(peer_pool.run())
+        asyncio.ensure_future(connect_to_peers_loop(peer_pool, tuple([remote])))
+        asyncio.ensure_future(peer_chain.run())
+        asyncio.ensure_future(syncer.run())
+        await asyncio.sleep(0)  # Yield control to give the LightChainSyncer a chance to start
 
-    n = 11
+        def finalizer():
+            event_loop.run_until_complete(peer_pool.cancel())
+            event_loop.run_until_complete(peer_chain.cancel())
+            event_loop.run_until_complete(syncer.cancel())
 
-    # Wait for the chain to sync a few headers.
-    async def wait_for_header_sync(block_number):
-        while headerdb.get_canonical_head().block_number < block_number:
-            await asyncio.sleep(0.1)
-    await asyncio.wait_for(wait_for_header_sync(n), 5)
+        request.addfinalizer(finalizer)
 
-    # https://ropsten.etherscan.io/block/11
-    header = headerdb.get_canonical_block_header_by_number(n)
-    body = await peer_chain.coro_get_block_body_by_hash(header.hash)
-    assert len(body['transactions']) == 15
+        n = 11
 
-    receipts = await peer_chain.coro_get_receipts(header.hash)
-    assert len(receipts) == 15
-    assert encode_hex(keccak(rlp.encode(receipts[0]))) == (
-        '0xf709ed2c57efc18a1675e8c740f3294c9e2cb36ba7bb3b89d3ab4c8fef9d8860')
+        # Wait for the chain to sync a few headers.
+        async def wait_for_header_sync(block_number):
+            while headerdb.get_canonical_head().block_number < block_number:
+                await asyncio.sleep(0.1)
+        await asyncio.wait_for(wait_for_header_sync(n), 10)
 
-    assert len(peer_pool) == 1
-    peer = peer_pool.highest_td_peer
-    head = await peer_chain.coro_get_block_header_by_hash(peer.head_hash)
+        # https://ropsten.etherscan.io/block/11
+        header = headerdb.get_canonical_block_header_by_number(n)
+        body = await peer_chain.coro_get_block_body_by_hash(header.hash)
+        assert len(body['transactions']) == 15
 
-    # In order to answer queries for contract code, geth needs the state trie entry for the block
-    # we specify in the query, but because of fast sync we can only assume it has that for recent
-    # blocks, so we use the current head to lookup the code for the contract below.
-    # https://ropsten.etherscan.io/address/0x95a48dca999c89e4e284930d9b9af973a7481287
-    contract_addr = decode_hex('0x8B09D9ac6A4F7778fCb22852e879C7F3B2bEeF81')
-    contract_code = await peer_chain.coro_get_contract_code(head.hash, contract_addr)
-    assert encode_hex(contract_code) == '0x600060006000600060006000356000f1'
+        receipts = await peer_chain.coro_get_receipts(header.hash)
+        assert len(receipts) == 15
+        assert encode_hex(keccak(rlp.encode(receipts[0]))) == (
+            '0xf709ed2c57efc18a1675e8c740f3294c9e2cb36ba7bb3b89d3ab4c8fef9d8860')
 
-    account = await peer_chain.coro_get_account(head.hash, contract_addr)
-    assert account.code_hash == keccak(contract_code)
-    assert account.balance == 0
+        assert len(peer_pool) == 1
+        peer = peer_pool.highest_td_peer
+        head = await peer_chain.coro_get_block_header_by_hash(peer.head_hash)
+
+        # In order to answer queries for contract code, geth needs the state trie entry for the
+        # block we specify in the query, but because of fast sync we can only assume it has that
+        # for recent blocks, so we use the current head to lookup the code for the contract below.
+        # https://ropsten.etherscan.io/address/0x95a48dca999c89e4e284930d9b9af973a7481287
+        contract_addr = decode_hex('0x8B09D9ac6A4F7778fCb22852e879C7F3B2bEeF81')
+        contract_code = await peer_chain.coro_get_contract_code(head.hash, contract_addr)
+        assert encode_hex(contract_code) == '0x600060006000600060006000356000f1'
+
+        account = await peer_chain.coro_get_account(head.hash, contract_addr)
+        assert account.code_hash == keccak(contract_code)
+        assert account.balance == 0

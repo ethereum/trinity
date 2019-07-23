@@ -14,6 +14,9 @@ from trinity.plugins.builtin.attach.plugin import (
 from trinity.plugins.builtin.beam_exec.plugin import (
     BeamChainExecutionPlugin,
 )
+from trinity.plugins.builtin.peer_pool.plugin import (
+    PeerPoolPlugin,
+)
 from trinity.plugins.builtin.ethstats.plugin import (
     EthstatsPlugin,
 )
@@ -65,6 +68,7 @@ BEACON_NODE_PLUGINS: Tuple[Type[BasePlugin], ...] = (
 ETH1_NODE_PLUGINS: Tuple[Type[BasePlugin], ...] = (
     BeamChainExecutionPlugin,
     EthstatsPlugin,
+    PeerPoolPlugin,
     SyncerPlugin,
     TxPlugin,
 )

@@ -12,6 +12,7 @@ from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth_typing import (
     Address,
+    BlockIdentifier,
     Hash32,
 )
 
@@ -25,6 +26,14 @@ from trinity.protocol.common.events import (
     PeerPoolMessageEvent,
 )
 from trinity.rlp.block_body import BlockBody
+
+
+class AnnounceEvent(PeerPoolMessageEvent):
+    """
+    Event to carry an ``Announce`` command from the peer pool to any process that
+    subscribes the event through the event bus.
+    """
+    pass
 
 
 @dataclass
@@ -132,3 +141,25 @@ class SendBlockHeadersEvent(BaseEvent):
     headers: Tuple[BlockHeader, ...]
     buffer_value: int
     request_id: int
+
+
+@dataclass
+class GetBlockHeadersResponse(BaseEvent):
+
+    headers: Tuple[BlockHeader, ...]
+    error: Exception = None
+
+
+@dataclass
+class GetBlockHeadersRequest(BaseRequestResponseEvent[GetBlockHeadersResponse]):
+
+    remote: NodeAPI
+    block_number_or_hash: BlockIdentifier
+    max_headers: int
+    skip: int
+    reverse: bool
+    timeout: float
+
+    @staticmethod
+    def expected_response_type() -> Type[GetBlockHeadersResponse]:
+        return GetBlockHeadersResponse

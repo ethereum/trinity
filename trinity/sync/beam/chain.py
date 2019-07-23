@@ -28,7 +28,7 @@ from trinity.chains.base import BaseAsyncChain
 from trinity.db.base import BaseAsyncDB
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.protocol.eth.peer import ETHPeerPool
+from trinity.protocol.eth.peer import ETHProxyPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.sync.common.chain import (
     BaseBlockImporter,
@@ -85,7 +85,7 @@ class BeamSyncer(BaseService):
             chain: BaseAsyncChain,
             db: BaseAsyncDB,
             chain_db: BaseAsyncChainDB,
-            peer_pool: ETHPeerPool,
+            peer_pool: ETHProxyPeerPool,
             event_bus: EndpointAPI,
             force_beam_block_number: int = None,
             token: CancelToken = None) -> None:

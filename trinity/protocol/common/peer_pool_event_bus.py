@@ -13,7 +13,12 @@ from typing import (
     Type,
     TypeVar,
 )
-from cancel_token import CancelToken
+from cancel_token import (
+    CancelToken,
+)
+from dataclasses import (
+    dataclass,
+)
 
 from lahja import (
     BaseEvent,
@@ -32,11 +37,16 @@ from p2p.peer_pool import BasePeerPool
 from p2p.service import BaseService
 from p2p.typing import Payload
 
+from trinity._utils.errors import (
+    pass_or_raise,
+)
+
 from .events import (
     ConnectToNodeCommand,
     DisconnectPeerEvent,
     GetConnectedPeersRequest,
     GetConnectedPeersResponse,
+    GetHighestTDPeerRequest,
     PeerCountRequest,
     PeerCountResponse,
     PeerJoinedEvent,
@@ -229,6 +239,12 @@ class DefaultPeerPoolEventServer(PeerPoolEventServer[BasePeer]):
 TProxyPeer = TypeVar('TProxyPeer', bound=BaseProxyPeer)
 
 
+@dataclass
+class ProxyPeerRemoved(BaseEvent, Generic[TProxyPeer]):
+
+    peer: TProxyPeer
+
+
 class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
     """
     Base class for peer pools that can be used from any process instead of the actual peer pool
@@ -271,9 +287,14 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
                 # TODO: Double check based on some session id if we are indeed
                 # removing the right peer
                 await proxy_peer.cancel()
+                await self.event_bus.broadcast(
+                    ProxyPeerRemoved(proxy_peer),
+                    BroadcastConfig(internal=True)
+                )
                 self.logger.warning("Removed proxy peer from proxy pool %s", ev.remote)
 
     async def fetch_initial_peers(self) -> Tuple[TProxyPeer, ...]:
+        await self.event_bus.wait_until_any_endpoint_subscribed_to(GetConnectedPeersRequest)
         response = await self.wait(
             self.event_bus.request(GetConnectedPeersRequest(), self.broadcast_config)
         )
@@ -292,6 +313,15 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
         if not any(self.connected_peers):
             await self.fetch_initial_peers()
         return tuple(self.connected_peers.values())
+
+    async def get_highest_td_peer(self) -> TProxyPeer:
+        await self.event_bus.wait_until_any_endpoint_subscribed_to(GetHighestTDPeerRequest)
+        response = await self.wait(
+            self.event_bus.request(GetHighestTDPeerRequest(5), self.broadcast_config)
+        )
+        pass_or_raise(response)
+
+        return await self.ensure_proxy_peer(response.remote)
 
     @abstractmethod
     def convert_node_to_proxy_peer(self,

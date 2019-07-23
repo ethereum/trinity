@@ -10,6 +10,7 @@ from typing import (
     Callable,
     List,
     Optional,
+    Union,
     cast,
 )
 from weakref import WeakSet
@@ -230,12 +231,18 @@ class BaseService(ABC, CancellableMixin):
 
         self.run_task(_run_daemon_wrapper())
 
-    def call_later(self, delay: float, callback: 'Callable[..., None]', *args: Any) -> None:
+    def call_later(self,
+                   delay: float,
+                   callback: Callable[..., Union[None, Awaitable[None]]],
+                   *args: Any) -> None:
 
         @functools.wraps(callback)
         async def _call_later_wrapped() -> None:
             await self.sleep(delay)
-            callback(*args)
+            if asyncio.iscoroutinefunction(callback):
+                await callback(*args)
+            else:
+                callback(*args)
 
         self.run_task(_call_later_wrapped())
 

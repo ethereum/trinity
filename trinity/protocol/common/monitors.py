@@ -2,21 +2,29 @@ import asyncio
 from contextlib import contextmanager
 from typing import (
     AsyncIterator,
+    Generic,
     Iterator,
     Set,
+    Type,
+    TypeVar,
 )
 
 from cancel_token import CancelToken
 from eth_utils import ValidationError
+from lahja import BaseEvent
 
 from p2p.exceptions import NoConnectedPeers
-from p2p.peer import BasePeer, PeerSubscriber
 from p2p.service import BaseService
 
-from trinity.protocol.common.peer import BaseChainPeer, BaseChainPeerPool
+from trinity.protocol.common.events import PeerJoinedEvent
+from trinity.protocol.common.peer import BaseChainProxyPeer
+from trinity.protocol.eth.peer import BaseProxyPeerPool
 
 
-class BaseChainTipMonitor(BaseService, PeerSubscriber):
+TProxyPeer = TypeVar('TProxyPeer', bound=BaseChainProxyPeer)
+
+
+class BaseChainTipMonitor(BaseService, Generic[TProxyPeer]):
     """
     Monitor for potential changes to the tip of the chain: a new peer or a new block
 
@@ -27,16 +35,18 @@ class BaseChainTipMonitor(BaseService, PeerSubscriber):
     # now.
     msg_queue_maxsize = 2000
 
+    monitor_event_type: Type[BaseEvent]
+
     def __init__(
             self,
-            peer_pool: BaseChainPeerPool,
+            proxy_peer_pool: BaseProxyPeerPool[TProxyPeer],
             token: CancelToken = None) -> None:
         super().__init__(token)
-        self._peer_pool = peer_pool
+        self._proxy_peer_pool = proxy_peer_pool
         # There is one event for each subscriber, each one gets set any time new tip info arrives
         self._subscriber_notices: Set[asyncio.Event] = set()
 
-    async def wait_tip_info(self) -> AsyncIterator[BaseChainPeer]:
+    async def wait_tip_info(self) -> AsyncIterator[TProxyPeer]:
         """
         This iterator waits until there is potentially new tip information.
         New tip information means a new peer connected or a new block arrived.
@@ -51,7 +61,10 @@ class BaseChainTipMonitor(BaseService, PeerSubscriber):
         with self._subscriber() as new_tip_event:
             while self.is_operational:
                 try:
-                    highest_td_peer = self._peer_pool.highest_td_peer
+                    highest_td_peer = await self.wait(self._proxy_peer_pool.get_highest_td_peer())
+                except TimeoutError:
+                    self.logger.warning("Timed out waiting on peer with highest td")
+                    pass
                 except NoConnectedPeers:
                     # no peers are available right now, skip the new tip info yield
                     pass
@@ -61,24 +74,23 @@ class BaseChainTipMonitor(BaseService, PeerSubscriber):
                 await self.wait(new_tip_event.wait())
                 new_tip_event.clear()
 
-    def register_peer(self, peer: BasePeer) -> None:
-        self._notify_tip()
-
-    async def _handle_msg_loop(self) -> None:
-        new_tip_types = tuple(self.subscription_msg_types)
-        while self.is_operational:
-            peer, cmd, msg = await self.wait(self.msg_queue.get())
-            if isinstance(cmd, new_tip_types):
-                self._notify_tip()
-
     def _notify_tip(self) -> None:
         for new_tip_event in self._subscriber_notices:
             new_tip_event.set()
 
     async def _run(self) -> None:
-        self.run_daemon_task(self._handle_msg_loop())
-        with self.subscribe(self._peer_pool):
-            await self.cancellation()
+        monitor_subscription = self._proxy_peer_pool.event_bus.subscribe(
+            self.monitor_event_type,
+            lambda ev: self._notify_tip()
+        )
+        joined_subscription = self._proxy_peer_pool.event_bus.subscribe(
+            PeerJoinedEvent,
+            lambda ev: self._notify_tip()
+        )
+
+        await self.cancellation()
+        monitor_subscription.unsubscribe()
+        joined_subscription.unsubscribe()
 
     @contextmanager
     def _subscriber(self) -> Iterator[asyncio.Event]:

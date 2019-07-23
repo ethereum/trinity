@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import asyncio
 from concurrent.futures import CancelledError
 import datetime
@@ -12,12 +13,13 @@ from typing import (
     Awaitable,
     Callable,
     Dict,
+    Generic,
     List,
     NamedTuple,
     FrozenSet,
     Tuple,
     Type,
-    cast,
+    TypeVar,
 )
 
 from cancel_token import CancelToken, OperationCancelled
@@ -48,7 +50,6 @@ from eth.rlp.transactions import BaseTransaction
 from p2p.abc import CommandAPI
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
-from p2p.peer import BasePeer, PeerSubscriber
 from p2p.service import BaseService
 from p2p.token_bucket import TokenBucket
 
@@ -60,7 +61,9 @@ from trinity.protocol.eth.constants import (
     MAX_BODIES_FETCH,
     MAX_RECEIPTS_FETCH,
 )
-from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
+from trinity.protocol.common.peer import BaseChainProxyPeer
+from trinity.protocol.common.peer_pool_event_bus import BaseProxyPeerPool
+from trinity.protocol.eth.peer import ETHProxyPeer, ETHProxyPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.rlp.block_body import BlockBody
 from trinity.sync.common.chain import (
@@ -104,8 +107,10 @@ BlockBodyBundle = Tuple[
 # How big should the pending request queue get, as a multiple of the largest request size
 REQUEST_BUFFER_MULTIPLIER = 16
 
+TProxyPeer = TypeVar('TProxyPeer', bound=BaseChainProxyPeer)
 
-class BaseBodyChainSyncer(BaseService, PeerSubscriber):
+
+class BaseBodyChainSyncer(BaseService, Generic[TProxyPeer], ABC):
 
     NO_PEER_RETRY_PAUSE = 5.0
     "If no peers are available for downloading the chain data, retry after this many seconds"
@@ -125,19 +130,19 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
     def __init__(self,
                  chain: BaseAsyncChain,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
+                 proxy_peer_pool: BaseProxyPeerPool[TProxyPeer],
                  header_syncer: HeaderSyncerAPI,
                  token: CancelToken = None) -> None:
         super().__init__(token=token)
         self.chain = chain
         self.db = db
-        self._peer_pool = peer_pool
+        self.proxy_peer_pool = proxy_peer_pool
         self._pending_bodies = {}
 
         self._header_syncer = header_syncer
 
         # queue up any idle peers, in order of how fast they return block bodies
-        self._body_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.BlockBodies)
+        self._body_peers: WaitingPeers[ETHProxyPeer] = WaitingPeers(commands.BlockBodies)
 
         # Track incomplete block body download tasks
         # - arbitrarily allow several requests-worth of headers queued up
@@ -153,8 +158,16 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         self._got_first_header = asyncio.Event()
 
     async def _run(self) -> None:
-        with self.subscribe(self._peer_pool):
-            await self.cancellation()
+        self.run_daemon_task(self._watch_new_peers())
+        await self.cancellation()
+
+    async def _watch_new_peers(self) -> None:
+        async for peer in self.wait_iter(self.proxy_peer_pool.stream_existing_and_joining_peers()):
+            await self.register_proxy_peer(peer)
+
+    @abstractmethod
+    async def register_proxy_peer(self, proxy_peer: TProxyPeer) -> None:
+        pass
 
     async def _sync_from_headers(
             self,
@@ -265,14 +278,13 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
 
     async def _run_body_download_batch(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             batch_id: int,
             all_headers: Tuple[BlockHeader, ...]) -> None:
         """
         Given a single batch retrieved from self._block_body_tasks, get as many of the block bodies
         as possible, and mark them as complete.
         """
-
         non_trivial_headers = tuple(header for header in all_headers if not _is_body_empty(header))
         trivial_headers = tuple(header for header in all_headers if _is_body_empty(header))
 
@@ -288,7 +300,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
 
         try:
             if non_trivial_headers:
-                bundles, received_headers = await peer.wait(
+                bundles, received_headers = await self.wait(
                     self._get_block_bodies(peer, non_trivial_headers)
                 )
                 await self._block_body_bundle_processing(bundles)
@@ -300,16 +312,16 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         else:
             if len(non_trivial_headers) == 0:
                 # peer had nothing to do, so have it get back in line for processing
-                self._body_peers.put_nowait(peer)
+                await self._body_peers.put(peer)
             elif len(completed_headers) > 0:
                 # peer completed with at least 1 result, so have it get back in line for processing
-                self._body_peers.put_nowait(peer)
+                await self._body_peers.put(peer)
             else:
                 # peer returned no results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
                 self.logger.debug("Pausing %s for %.1fs, for sending 0 block bodies", peer, delay)
                 loop = self.get_event_loop()
-                loop.call_later(delay, partial(self._body_peers.put_nowait, peer))
+                loop.call_later(delay, partial(self._body_peers.put, peer))
         finally:
             self._mark_body_download_complete(batch_id, completed_headers)
 
@@ -321,7 +333,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
 
     async def _get_block_bodies(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             headers: Tuple[BlockHeader, ...],
     ) -> Tuple[Tuple[BlockBodyBundle, ...], Tuple[BlockHeader, ...]]:
         """
@@ -376,7 +388,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
 
     async def _request_block_bodies(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             batch: Tuple[BlockHeader, ...]) -> Tuple[BlockBodyBundle, ...]:
         """
         Requests the batch of block bodies from the given peer, returning the
@@ -450,14 +462,19 @@ class FastChainSyncer(BaseService):
     def __init__(self,
                  chain: BaseAsyncChain,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
+                 proxy_peer_pool: ETHProxyPeerPool,
                  token: CancelToken = None) -> None:
         super().__init__(token=token)
-        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool, self.cancel_token)
+        self._header_syncer = ETHHeaderChainSyncer(
+            chain,
+            db,
+            proxy_peer_pool,
+            self.cancel_token
+        )
         self._body_syncer = FastChainBodySyncer(
             chain,
             db,
-            peer_pool,
+            proxy_peer_pool,
             self._header_syncer,
             self.cancel_token,
         )
@@ -543,7 +560,7 @@ class ChainSyncPerformanceTracker:
         return stats
 
 
-class FastChainBodySyncer(BaseBodyChainSyncer):
+class FastChainBodySyncer(BaseBodyChainSyncer[ETHProxyPeer]):
     """
     Sync with the Ethereum network by fetching block headers/bodies and storing them in our DB.
 
@@ -554,13 +571,13 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
     def __init__(self,
                  chain: BaseAsyncChain,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
+                 proxy_peer_pool: ETHProxyPeerPool,
                  header_syncer: HeaderSyncerAPI,
                  token: CancelToken = None) -> None:
-        super().__init__(chain, db, peer_pool, header_syncer, token)
+        super().__init__(chain, db, proxy_peer_pool, header_syncer, token)
 
         # queue up any idle peers, in order of how fast they return receipts
-        self._receipt_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.Receipts)
+        self._receipt_peers: WaitingPeers[ETHProxyPeer] = WaitingPeers(commands.Receipts)
 
         # Track receipt download tasks
         # - arbitrarily allow several requests-worth of headers queued up
@@ -597,12 +614,9 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         self.run_daemon_task(self._display_stats())
         await super()._run()
 
-    def register_peer(self, peer: BasePeer) -> None:
-        # when a new peer is added to the pool, add it to the idle peer lists
-        super().register_peer(peer)
-        peer = cast(ETHPeer, peer)
-        self._body_peers.put_nowait(peer)
-        self._receipt_peers.put_nowait(peer)
+    async def register_proxy_peer(self, proxy_peer: ETHProxyPeer) -> None:
+        await self._body_peers.put(proxy_peer)
+        await self._receipt_peers.put(proxy_peer)
 
     async def _should_skip_header(self, header: BlockHeader) -> bool:
         """
@@ -738,7 +752,6 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         while self.is_operational:
             # from all the peers that are not currently downloading receipts, get the fastest
             peer = await self.wait(self._receipt_peers.get_fastest())
-
             # get headers for receipts that we need to download, preferring lowest block number
             batch_id, headers = await self.wait(self._receipt_tasks.get(MAX_RECEIPTS_FETCH))
 
@@ -757,7 +770,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
     async def _run_receipt_download_batch(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             batch_id: int,
             headers: Tuple[BlockHeader, ...]) -> None:
         """
@@ -781,12 +794,12 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             # peer completed successfully, so have it get back in line for processing
             if len(completed_headers) > 0:
                 # peer completed successfully, so have it get back in line for processing
-                self._receipt_peers.put_nowait(peer)
+                await self._receipt_peers.put(peer)
             else:
                 # peer returned no results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
                 self.logger.debug("Pausing %s for %.1fs, for sending 0 receipts", peer, delay)
-                self.call_later(delay, self._receipt_peers.put_nowait, peer)
+                self.call_later(delay, self._receipt_peers.put, peer)
         finally:
             self._receipt_tasks.complete(batch_id, completed_headers)
 
@@ -800,7 +813,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
     async def _process_receipts(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             all_headers: Tuple[BlockHeader, ...]) -> Tuple[BlockHeader, ...]:
         """
         Downloads and persists the receipts for the given set of block headers.
@@ -896,7 +909,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
     async def _request_receipts(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             batch: Tuple[BlockHeader, ...]) -> Tuple[ReceiptBundle, ...]:
         """
         Requests the batch of receipts from the given peer, returning the
@@ -933,10 +946,11 @@ class RegularChainSyncer(BaseService):
     def __init__(self,
                  chain: BaseAsyncChain,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
+                 peer_pool: ETHProxyPeerPool,
                  token: CancelToken = None) -> None:
         super().__init__(token=token)
-        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool, self.cancel_token)
+        self._header_syncer = ETHHeaderChainSyncer(
+            chain, db, peer_pool, self.cancel_token)
         self._body_syncer = RegularChainBodySyncer(
             chain,
             db,
@@ -957,7 +971,7 @@ class BlockImportPrereqs(enum.Enum):
     StoreBlockBodies = enum.auto()
 
 
-class RegularChainBodySyncer(BaseBodyChainSyncer):
+class RegularChainBodySyncer(BaseBodyChainSyncer[ETHProxyPeer]):
     """
     Sync with the Ethereum network by fetching block headers/bodies and importing them.
 
@@ -967,7 +981,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
     def __init__(self,
                  chain: BaseAsyncChain,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
+                 peer_pool: ETHProxyPeerPool,
                  header_syncer: HeaderSyncerAPI,
                  block_importer: BaseBlockImporter,
                  token: CancelToken = None) -> None:
@@ -1008,10 +1022,8 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         self.run_daemon_task(self._display_stats())
         await super()._run()
 
-    def register_peer(self, peer: BasePeer) -> None:
-        # when a new peer is added to the pool, add it to the idle peer list
-        super().register_peer(peer)
-        self._body_peers.put_nowait(cast(ETHPeer, peer))
+    async def register_proxy_peer(self, proxy_peer: ETHProxyPeer) -> None:
+        await self._body_peers.put(proxy_peer)
 
     async def _should_skip_header(self, header: BlockHeader) -> bool:
         """

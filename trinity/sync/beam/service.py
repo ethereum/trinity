@@ -7,7 +7,7 @@ from p2p.service import BaseService
 from trinity.chains.base import BaseAsyncChain
 from trinity.db.base import BaseAsyncDB
 from trinity.db.eth1.chain import BaseAsyncChainDB
-from trinity.protocol.eth.peer import ETHPeerPool
+from trinity.protocol.eth.peer import ETHProxyPeerPool
 
 from .chain import BeamSyncer
 
@@ -19,7 +19,7 @@ class BeamSyncService(BaseService):
             chain: BaseAsyncChain,
             chaindb: BaseAsyncChainDB,
             base_db: BaseAsyncDB,
-            peer_pool: ETHPeerPool,
+            peer_pool: ETHProxyPeerPool,
             event_bus: EndpointAPI,
             token: CancelToken = None) -> None:
         super().__init__(token)

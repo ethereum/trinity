@@ -11,7 +11,7 @@ from p2p.service import BaseService
 from trinity.chains.base import BaseAsyncChain
 from trinity.db.base import BaseAsyncDB
 from trinity.db.eth1.chain import BaseAsyncChainDB
-from trinity.protocol.eth.peer import ETHPeerPool
+from trinity.protocol.eth.peer import ETHProxyPeerPool
 
 from .chain import FastChainSyncer, RegularChainSyncer
 from .constants import FAST_SYNC_CUTOFF
@@ -23,7 +23,7 @@ async def ensure_state_then_sync_full(logger: logging.Logger,
                                       base_db: BaseAsyncDB,
                                       chaindb: BaseAsyncChainDB,
                                       chain: BaseAsyncChain,
-                                      peer_pool: ETHPeerPool,
+                                      peer_pool: ETHProxyPeerPool,
                                       cancel_token: CancelToken) -> None:
     # Ensure we have the state for our current head.
     if head.state_root != BLANK_ROOT_HASH and head.state_root not in base_db:
@@ -50,7 +50,7 @@ class FullChainSyncer(BaseService):
                  chain: BaseAsyncChain,
                  chaindb: BaseAsyncChainDB,
                  base_db: BaseAsyncDB,
-                 peer_pool: ETHPeerPool,
+                 peer_pool: ETHProxyPeerPool,
                  token: CancelToken = None) -> None:
         super().__init__(token)
         self.chain = chain
@@ -81,7 +81,7 @@ class FastThenFullChainSyncer(BaseService):
                  chain: BaseAsyncChain,
                  chaindb: BaseAsyncChainDB,
                  base_db: BaseAsyncDB,
-                 peer_pool: ETHPeerPool,
+                 peer_pool: ETHProxyPeerPool,
                  token: CancelToken = None) -> None:
         super().__init__(token)
         self.chain = chain

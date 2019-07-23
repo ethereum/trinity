@@ -26,7 +26,6 @@ from cancel_token import CancelToken, OperationCancelled
 
 from p2p.abc import CommandAPI
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
-from p2p.peer import BasePeer, PeerSubscriber
 from p2p.service import BaseService
 
 from trie import HexaryTrie
@@ -44,7 +43,7 @@ from trinity.protocol.eth.commands import (
 from trinity.protocol.eth.constants import (
     MAX_STATE_FETCH,
 )
-from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
+from trinity.protocol.eth.peer import ETHProxyPeer, ETHProxyPeerPool
 from trinity.protocol.eth import (
     constants as eth_constants,
 )
@@ -61,7 +60,7 @@ def _is_hash(maybe_hash: bytes) -> bool:
     return isinstance(maybe_hash, bytes) and len(maybe_hash) == 32
 
 
-class BeamDownloader(BaseService, PeerSubscriber):
+class BeamDownloader(BaseService):
     """
     Coordinate the request of needed state data: accounts, storage, bytecodes, and
     other arbitrary intermediate nodes in the trie.
@@ -88,13 +87,13 @@ class BeamDownloader(BaseService, PeerSubscriber):
     def __init__(
             self,
             db: BaseAsyncDB,
-            peer_pool: ETHPeerPool,
+            peer_pool: ETHProxyPeerPool,
             event_bus: EndpointAPI,
             token: CancelToken = None) -> None:
         super().__init__(token)
         self._db = db
         self._trie_db = HexaryTrie(db)
-        self._node_data_peers = WaitingPeers[ETHPeer](NodeData)
+        self._node_data_peers = WaitingPeers[ETHProxyPeer](NodeData)
         self._event_bus = event_bus
 
         # Track the needed node data that is urgent and important:
@@ -113,7 +112,7 @@ class BeamDownloader(BaseService, PeerSubscriber):
             lambda node_hash: 0,
         )
 
-        self._peers_without_full_trie: Set[ETHPeer] = set()
+        self._peers_without_full_trie: Set[ETHProxyPeer] = set()
 
         # It's possible that you are connected to a peer that doesn't have a full state DB
         # In that case, we may get stuck requesting predictive nodes from them over and over
@@ -296,7 +295,7 @@ class BeamDownloader(BaseService, PeerSubscriber):
                 # We will make a request of all-predictive nodes
                 if peer in self._peers_without_full_trie:
                     self.logger.warning("Skipping all-predictive loading on %s", peer)
-                    self._node_data_peers.put_nowait(peer)
+                    await self._node_data_peers.put(peer)
                     self._maybe_useful_nodes.complete(predictive_batch_id, ())
                     self._allow_predictive_only = False
                     continue
@@ -361,7 +360,7 @@ class BeamDownloader(BaseService, PeerSubscriber):
 
     async def _get_nodes_from_peer(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             node_hashes: Tuple[Hash32, ...],
             urgent_batch_id: int,
             urgent_node_hashes: Tuple[Hash32, ...],
@@ -439,14 +438,14 @@ class BeamDownloader(BaseService, PeerSubscriber):
 
         self._new_data_events.remove(new_data)
 
-    def register_peer(self, peer: BasePeer) -> None:
-        super().register_peer(peer)
-        # when a new peer is added to the pool, add it to the idle peer list
-        self._node_data_peers.put_nowait(peer)  # type: ignore
+    async def _watch_new_peers(self) -> None:
+        async for peer in self.wait_iter(self._peer_pool.stream_existing_and_joining_peers()):
+            # when a new peer is added to the pool, add it to the idle peer list
+            await self._node_data_peers.put(peer)
 
     async def _request_nodes(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             node_hashes: Tuple[Hash32, ...]) -> NodeDataBundles:
         try:
             completed_nodes = await self._make_node_request(peer, node_hashes)
@@ -474,7 +473,7 @@ class BeamDownloader(BaseService, PeerSubscriber):
         else:
             if len(completed_nodes) > 0:
                 # peer completed successfully, so have it get back in line for processing
-                self._node_data_peers.put_nowait(peer)
+                await self._node_data_peers.put(peer)
             else:
                 # peer didn't return enough results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
@@ -485,12 +484,12 @@ class BeamDownloader(BaseService, PeerSubscriber):
                     delay,
                     [encode_hex(h) for h in node_hashes],
                 )
-                self.call_later(delay, self._node_data_peers.put_nowait, peer)
+                self.call_later(delay, self._node_data_peers.put, peer)
             return completed_nodes
 
     async def _make_node_request(
             self,
-            peer: ETHPeer,
+            peer: ETHProxyPeer,
             original_node_hashes: Tuple[Hash32, ...]) -> NodeDataBundles:
         node_hashes = tuple(set(original_node_hashes))
         num_nodes = len(node_hashes)
@@ -511,8 +510,10 @@ class BeamDownloader(BaseService, PeerSubscriber):
         self._timer.start()
         self.logger.info("Starting beam state sync")
         self.run_task(self._periodically_report_progress())
-        with self.subscribe(self._peer_pool):
-            await self.wait(self._match_node_requests_to_peers())
+        self.run_daemon_task(self._match_node_requests_to_peers())
+        self.run_daemon_task(self._watch_new_peers())
+
+        await self.cancellation()
 
     async def _periodically_report_progress(self) -> None:
         while self.is_operational:

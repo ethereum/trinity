@@ -2,8 +2,15 @@ from dataclasses import (
     dataclass,
 )
 from typing import (
+    Dict,
+    NamedTuple,
     Tuple,
     Type,
+)
+
+from eth_typing import (
+    BlockNumber,
+    Hash32,
 )
 
 from lahja import (
@@ -66,6 +73,64 @@ class PeerLeftEvent(BaseEvent):
     Event broadcasted when a peer left the pool.
     """
     remote: NodeAPI
+
+
+class ChainPeerMetaData(NamedTuple):
+    head_td: int
+    head_hash: Hash32
+    head_number: BlockNumber
+    max_headers_fetch: int
+
+
+@dataclass
+class GetPeerMetaDataResponse(BaseEvent):
+
+    meta_data: ChainPeerMetaData
+    error: Exception = None
+
+
+@dataclass
+class GetPeerMetaDataRequest(BaseRequestResponseEvent[GetPeerMetaDataResponse]):
+
+    remote: NodeAPI
+
+    @staticmethod
+    def expected_response_type() -> Type[GetPeerMetaDataResponse]:
+        return GetPeerMetaDataResponse
+
+
+@dataclass
+class GetPeerPerfMetricsResponse(BaseEvent):
+
+    metrics: Dict[Type[CommandAPI], float]
+    error: Exception = None
+
+
+@dataclass
+class GetPeerPerfMetricsRequest(BaseRequestResponseEvent[GetPeerPerfMetricsResponse]):
+
+    remote: NodeAPI
+
+    @staticmethod
+    def expected_response_type() -> Type[GetPeerPerfMetricsResponse]:
+        return GetPeerPerfMetricsResponse
+
+
+@dataclass
+class GetHighestTDPeerResponse(BaseEvent):
+
+    remote: NodeAPI
+    error: Exception = None
+
+
+@dataclass
+class GetHighestTDPeerRequest(BaseRequestResponseEvent[GetHighestTDPeerResponse]):
+
+    timeout: float
+
+    @staticmethod
+    def expected_response_type() -> Type[GetHighestTDPeerResponse]:
+        return GetHighestTDPeerResponse
 
 
 @dataclass
