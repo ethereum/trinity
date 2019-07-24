@@ -129,7 +129,7 @@ def decrypt(data: bytes, privkey: datatypes.PrivateKey, shared_mac_data: bytes =
     # 2) Verify tag
     expected_tag = hmac_sha256(key_mac, data[1 + PUBKEY_LEN:- KEY_LEN] + shared_mac_data)
     if not bytes_eq(expected_tag, tag):
-        raise DecryptionError("Failed to verify tag")
+        raise DecryptionError(f"Failed to verify tag:\n - {expected_tag}\n - {tag}")
 
     # 3) Decrypt
     algo = CIPHER(key_enc)

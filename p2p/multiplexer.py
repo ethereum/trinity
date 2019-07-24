@@ -2,6 +2,7 @@ import asyncio
 import collections
 import logging
 from typing import (
+    Any,
     AsyncIterator,
     cast,
     DefaultDict,
@@ -79,7 +80,7 @@ async def stream_transport_messages(transport: TransportAPI,
 
         msg_proto = cmd_id_cache[cmd_id]
         cmd = msg_proto.cmd_by_id[cmd_id]
-        msg = cmd.decode(raw_msg)
+        msg = cast(Dict[str, Any], cmd.decode(raw_msg))
 
         yield msg_proto, cmd, msg
 

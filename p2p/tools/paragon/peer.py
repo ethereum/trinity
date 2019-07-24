@@ -59,6 +59,15 @@ class ParagonHandshaker(Handshaker):
         return HandshakeReceipt(protocol)
 
 
+class ParagonHandshaker(Handshaker):
+    protocol_class = ParagonProtocol
+
+    async def do_handshake(self,
+                           multiplexer: MultiplexerAPI,
+                           protocol: Protocol) -> HandshakeReceipt:
+        return HandshakeReceipt(protocol)
+
+
 class ParagonPeerFactory(BasePeerFactory):
     peer_class = ParagonPeer
     context: ParagonContext

@@ -13,9 +13,9 @@ from p2p.service import (
 )
 
 from trinity.config import (
-    BeaconAppConfig,
     Eth1AppConfig,
     Eth1DbMode,
+    BeaconAppConfig,
 )
 from trinity.constants import (
     TO_NETWORKING_BROADCAST_CONFIG,
@@ -27,18 +27,10 @@ from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.extensibility import (
     AsyncioIsolatedPlugin,
 )
-from trinity.protocol.bcc.servers import (
-    BCCRequestServer,
-)
-from trinity.protocol.eth.servers import (
-    ETHRequestServer
-)
-from trinity.protocol.les.servers import (
-    LightRequestServer,
-)
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
+from trinity.protocol.bcc.servers import BCCRequestServer
+from trinity.protocol.eth.servers import ETHRequestServer
+from trinity.protocol.les.servers import LightRequestServer
+from trinity._utils.shutdown import exit_with_services
 
 
 class RequestServerPlugin(AsyncioIsolatedPlugin):

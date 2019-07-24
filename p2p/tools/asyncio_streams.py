@@ -63,6 +63,15 @@ class MemoryTransport(asyncio.WriteTransport):
     def abort(self) -> None:
         self._is_closing = True
 
+    async def drain(self) -> None:
+        pass
+
+    def set_extra_info(self, name: str, value: Any) -> None:
+        self._extra_info[name] = value
+
+    def get_extra_info(self, name: str) -> Any:
+        return self._extra_info.get(name)
+
 
 TConnectedStreams = Tuple[
     Tuple[asyncio.StreamReader, asyncio.StreamWriter],

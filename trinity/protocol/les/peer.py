@@ -112,14 +112,14 @@ class LESPeer(BaseChainPeer):
             self._requests = LESExchangeHandler(self)
         return self._requests
 
-    def handle_sub_proto_msg(self, cmd: CommandAPI, msg: Payload) -> None:
-        if isinstance(cmd, Announce):
-            head_info = cast(Dict[str, Union[int, Hash32, BlockNumber]], msg)
-            self.head_td = cast(int, head_info['head_td'])
-            self.head_hash = cast(Hash32, head_info['head_hash'])
-            self.head_number = cast(BlockNumber, head_info['head_number'])
+    def setup_protocol_handlers(self) -> None:
+        self.connection.add_command_handler(Announce, self._handle_announce)
 
-        super().handle_sub_proto_msg(cmd, msg)
+    async def _handle_announce(self, msg: Payload) -> None:
+        head_info = cast(Dict[str, Union[int, Hash32, BlockNumber]], msg)
+        self.head_td = cast(int, head_info['head_td'])
+        self.head_hash = cast(Hash32, head_info['head_hash'])
+        self.head_number = cast(BlockNumber, head_info['head_number'])
 
 
 class LESProxyPeer(BaseProxyPeer):

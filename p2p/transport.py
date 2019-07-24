@@ -84,6 +84,9 @@ class Transport(TransportAPI):
         mac_cipher = Cipher(algorithms.AES(mac_secret), modes.ECB(), default_backend())
         self._mac_enc = mac_cipher.encryptor().update
 
+        self._received_message_count = 0
+        self._sent_message_count = 0
+
     @classmethod
     async def connect(cls,
                       remote: NodeAPI,
@@ -233,6 +236,7 @@ class Transport(TransportAPI):
             raise PeerConnectionLost from err
 
     def write(self, data: bytes) -> None:
+        self.logger.debug2("Sending %d bytes to %s", len(data), self.remote)
         self._writer.write(data)
 
     async def recv(self, token: CancelToken) -> bytes:
@@ -268,7 +272,6 @@ class Transport(TransportAPI):
             self.logger.error(
                 "Attempted to send msg with cmd id %d to disconnected peer %s", cmd_id, self)
             return
-
         self.write(self._encrypt(header, body))
 
     def close(self) -> None:

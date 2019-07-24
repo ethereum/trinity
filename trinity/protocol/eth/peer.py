@@ -106,17 +106,18 @@ class ETHPeer(BaseChainPeer):
             self._requests = ETHExchangeHandler(self)
         return self._requests
 
-    def handle_sub_proto_msg(self, cmd: CommandAPI, msg: Payload) -> None:
-        if isinstance(cmd, NewBlock):
-            msg = cast(Dict[str, Any], msg)
-            header, _, _ = msg['block']
-            actual_head = header.parent_hash
-            actual_td = msg['total_difficulty'] - header.difficulty
-            if actual_td > self.head_td:
-                self.head_hash = actual_head
-                self.head_td = actual_td
+    def setup_protocol_handlers(self) -> None:
+        self.connection.add_command_handler(NewBlock, self._handle_new_block)
 
-        super().handle_sub_proto_msg(cmd, msg)
+    async def _handle_new_block(self, msg: Payload) -> None:
+        msg = cast(Dict[str, Any], msg)
+        header, _, _ = msg['block']
+        actual_head = header.parent_hash
+        actual_td = msg['total_difficulty'] - header.difficulty
+
+        if actual_td > self.head_td:
+            self.head_hash = actual_head
+            self.head_td = actual_td
 
 
 class ETHProxyPeer(BaseProxyPeer):
