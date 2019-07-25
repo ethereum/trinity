@@ -1,5 +1,6 @@
 from eth_utils.toolz import curry
 
+from eth2 import impure
 from eth2._utils.tuple import update_tuple_item_with_fn
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.constants import FAR_FUTURE_EPOCH
@@ -92,6 +93,7 @@ def _set_validator_slashed(
     )
 
 
+@impure
 def slash_validator(
     state: BeaconState,
     index: ValidatorIndex,
@@ -117,13 +119,11 @@ def slash_validator(
 
     slashed_balance = state.validators[index].effective_balance
     slashed_epoch = current_epoch % config.EPOCHS_PER_SLASHINGS_VECTOR
-    state = state.copy(
-        slashings=update_tuple_item_with_fn(
-            state.slashings,
-            slashed_epoch,
-            lambda balance, slashed_balance: Gwei(balance + slashed_balance),
-            slashed_balance,
-        )
+    state.slashings = update_tuple_item_with_fn(
+        state.slashings,
+        slashed_epoch,
+        lambda balance, slashed_balance: Gwei(balance + slashed_balance),
+        slashed_balance,
     )
     state = decrease_balance(
         state, index, slashed_balance // config.MIN_SLASHING_PENALTY_QUOTIENT

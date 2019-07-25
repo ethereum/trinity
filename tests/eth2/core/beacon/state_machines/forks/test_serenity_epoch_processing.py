@@ -187,7 +187,7 @@ def test_process_justification_and_finalization(
         )
         state = state.copy(current_epoch_attestations=attestations)
 
-    post_state = process_justification_and_finalization(state, config)
+    post_state = process_justification_and_finalization(state.copy(), config)
 
     assert (
         post_state.previous_justified_checkpoint.epoch
@@ -267,7 +267,7 @@ def test_process_crosslinks(
         current_epoch_attestations=current_epoch_attestations,
     )
 
-    post_state = process_crosslinks(state, config)
+    post_state = process_crosslinks(state.copy(), config)
 
     assert post_state.previous_crosslinks == state.current_crosslinks
 
@@ -511,7 +511,7 @@ def test_process_registry_updates(
     )
 
     # handles activations
-    post_state = process_registry_updates(state, config)
+    post_state = process_registry_updates(state.copy(), config)
 
     # Check if the activating_validator is activated
     pre_activation_validator = state.validators[activation_index]
@@ -635,7 +635,7 @@ def test_process_slashings(
     )
     state = state.update_validator(slashing_validator_index, validator)
 
-    result_state = process_slashings(state, config)
+    result_state = process_slashings(state.copy(), config)
     penalty = (
         state.balances[slashing_validator_index]
         - result_state.balances[slashing_validator_index]

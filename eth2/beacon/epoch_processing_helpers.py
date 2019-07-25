@@ -4,6 +4,7 @@ from eth_typing import Hash32
 from eth_utils import ValidationError, to_tuple
 from eth_utils.toolz import curry, groupby, thread_first
 
+from eth2 import impure
 from eth2._utils.bitfield import Bitfield, has_voted
 from eth2._utils.numeric import integer_squareroot
 from eth2._utils.tuple import update_tuple_item_with_fn
@@ -26,26 +27,26 @@ from eth2.beacon.typing import Epoch, Gwei, Shard, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
 
 
+@impure
 def increase_balance(
     state: BeaconState, index: ValidatorIndex, delta: Gwei
 ) -> BeaconState:
-    return state.copy(
-        balances=update_tuple_item_with_fn(
-            state.balances, index, lambda balance, *_: Gwei(balance + delta)
-        )
+    state.balances = update_tuple_item_with_fn(
+        state.balances, index, lambda balance, *_: Gwei(balance + delta)
     )
+    return state
 
 
+@impure
 def decrease_balance(
     state: BeaconState, index: ValidatorIndex, delta: Gwei
 ) -> BeaconState:
-    return state.copy(
-        balances=update_tuple_item_with_fn(
-            state.balances,
-            index,
-            lambda balance, *_: Gwei(0) if delta > balance else Gwei(balance - delta),
-        )
+    state.balances = update_tuple_item_with_fn(
+        state.balances,
+        index,
+        lambda balance, *_: Gwei(0) if delta > balance else Gwei(balance - delta),
     )
+    return state
 
 
 def get_attesting_indices(

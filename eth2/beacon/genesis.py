@@ -3,6 +3,7 @@ from typing import Sequence, Type
 from eth_typing import Hash32
 import ssz
 
+from eth2 import impure
 from eth2.beacon.committee_helpers import get_compact_committees_root
 from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH, SECONDS_PER_DAY
 from eth2.beacon.deposit_helpers import process_deposit
@@ -35,6 +36,7 @@ def is_genesis_trigger(
     return active_validator_count == config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
 
 
+@impure
 def state_with_validator_digests(state: BeaconState, config: Eth2Config) -> BeaconState:
     active_validator_indices = get_active_validator_indices(
         state.validators, config.GENESIS_EPOCH
@@ -47,10 +49,9 @@ def state_with_validator_digests(state: BeaconState, config: Eth2Config) -> Beac
         state, config.GENESIS_EPOCH, CommitteeConfig(config)
     )
     compact_committees_roots = (committee_root,) * config.EPOCHS_PER_HISTORICAL_VECTOR
-    return state.copy(
-        active_index_roots=active_index_roots,
-        compact_committees_roots=compact_committees_roots,
-    )
+    state.active_index_roots = active_index_roots
+    state.compact_committees_roots = compact_committees_roots
+    return state
 
 
 def _genesis_time_from_eth1_timestamp(eth1_timestamp: Timestamp) -> Timestamp:
@@ -59,6 +60,7 @@ def _genesis_time_from_eth1_timestamp(eth1_timestamp: Timestamp) -> Timestamp:
     )
 
 
+@impure
 def initialize_beacon_state_from_eth1(
     *,
     eth1_block_hash: Hash32,
@@ -78,12 +80,10 @@ def initialize_beacon_state_from_eth1(
     # Process genesis deposits
     for index, deposit in enumerate(deposits):
         deposit_data_list = tuple(deposit.data for deposit in deposits[: index + 1])
-        state = state.copy(
-            eth1_data=state.eth1_data.copy(
-                deposit_root=ssz.get_hash_tree_root(
-                    deposit_data_list,
-                    ssz.List(DepositData, 2 ** DEPOSIT_CONTRACT_TREE_DEPTH),
-                )
+        state.eth1_data = state.eth1_data.copy(
+            deposit_root=ssz.get_hash_tree_root(
+                deposit_data_list,
+                ssz.List(DepositData, 2 ** DEPOSIT_CONTRACT_TREE_DEPTH),
             )
         )
         state = process_deposit(state=state, deposit=deposit, config=config)

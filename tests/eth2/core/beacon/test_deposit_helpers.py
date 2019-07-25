@@ -48,12 +48,11 @@ def test_process_deposit(
         state, pubkey, keymap, withdrawal_credentials, config
     )
 
-    validator_count_before_deposit = state.validator_count
-
-    result_state = process_deposit(state=state, deposit=deposit, config=config)
-
-    # test immutability
-    assert len(state.validators) == validator_count_before_deposit
+    result_state = process_deposit(
+        state=state.copy(),
+        deposit=deposit,
+        config=config,
+    )
 
     validator = result_state.validators[validator_index]
     if is_new_validator:

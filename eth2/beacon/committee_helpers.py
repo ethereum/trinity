@@ -1,6 +1,6 @@
 from typing import Iterable, Sequence, Tuple
 
-from eth_typing import BLSPubkey, Hash32
+from eth_typing import Hash32
 from eth_utils import ValidationError, to_tuple
 import ssz
 
@@ -79,7 +79,7 @@ def get_start_shard(state: BeaconState, epoch: Epoch, config: CommitteeConfig) -
             + config.SHARD_COUNT
             - get_shard_delta(state, Epoch(check_epoch), config)
         ) % config.SHARD_COUNT
-    return shard
+    return Shard(shard)
 
 
 MAX_ROUNDS = 100

@@ -4,6 +4,7 @@ from eth_typing import Hash32
 from eth_utils.toolz import curry
 import ssz
 
+from eth2 import impure
 from eth2._utils.tuple import update_tuple_item, update_tuple_item_with_fn
 from eth2.beacon.committee_helpers import (
     get_committee_count,
@@ -126,7 +127,7 @@ def _determine_new_justified_epoch_and_bitfield(
         current_epoch_justifiable,
         current_epoch,
         state.current_justified_checkpoint.epoch,
-        (False,) + state.justification_bits[:-1],
+        Bitfield((False,) + state.justification_bits[:-1]),
     )
 
     return (new_current_justified_epoch, justification_bits)
@@ -226,6 +227,7 @@ def _determine_new_finalized_checkpoint(
     return Checkpoint(epoch=new_finalized_epoch, root=new_finalized_root)
 
 
+@impure
 def process_justification_and_finalization(
     state: BeaconState, config: Eth2Config
 ) -> BeaconState:
@@ -244,12 +246,11 @@ def process_justification_and_finalization(
         state, justification_bits, config
     )
 
-    return state.copy(
-        justification_bits=justification_bits,
-        previous_justified_checkpoint=state.current_justified_checkpoint,
-        current_justified_checkpoint=new_current_justified_checkpoint,
-        finalized_checkpoint=new_finalized_checkpoint,
-    )
+    state.justification_bits = justification_bits
+    state.previous_justified_checkpoint = state.current_justified_checkpoint
+    state.current_justified_checkpoint = new_current_justified_checkpoint
+    state.finalized_checkpoint = new_finalized_checkpoint
+    return state
 
 
 def _is_threshold_met_against_committee(
@@ -262,6 +263,7 @@ def _is_threshold_met_against_committee(
     return _bft_threshold_met(total_attesting_balance, total_committee_balance)
 
 
+@impure
 def process_crosslinks(state: BeaconState, config: Eth2Config) -> BeaconState:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH)
@@ -300,10 +302,9 @@ def process_crosslinks(state: BeaconState, config: Eth2Config) -> BeaconState:
                     new_current_crosslinks, shard, winning_crosslink
                 )
 
-    return state.copy(
-        previous_crosslinks=state.current_crosslinks,
-        current_crosslinks=new_current_crosslinks,
-    )
+    state.previous_crosslinks = state.current_crosslinks
+    state.current_crosslinks = new_current_crosslinks
+    return state
 
 
 def get_attestation_deltas(
@@ -536,6 +537,7 @@ def _update_validator_activation_epoch(
         return validator
 
 
+@impure
 def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconState:
     new_validators = tuple(
         _process_activation_eligibility_or_ejections(state, validator, config)
@@ -560,7 +562,8 @@ def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconSt
             new_validators, index, _update_validator_activation_epoch(state, config)
         )
 
-    return state.copy(validators=new_validators)
+    state.validators = new_validators
+    return state
 
 
 def _determine_slashing_penalty(
@@ -626,10 +629,13 @@ def _update_effective_balances(
 
 def _compute_next_start_shard(state: BeaconState, config: Eth2Config) -> Shard:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    return (
-        state.start_shard
-        + get_shard_delta(state, current_epoch, CommitteeConfig(config))
-    ) % config.SHARD_COUNT
+    return Shard(
+        (
+            state.start_shard
+            + get_shard_delta(state, current_epoch, CommitteeConfig(config))
+        )
+        % config.SHARD_COUNT
+    )
 
 
 def _compute_next_active_index_roots(
@@ -695,30 +701,31 @@ def _compute_next_historical_roots(
     return new_historical_roots
 
 
+@impure
 def process_final_updates(state: BeaconState, config: Eth2Config) -> BeaconState:
     new_eth1_data_votes = _determine_next_eth1_votes(state, config)
     new_validators = _update_effective_balances(state, config)
     new_start_shard = _compute_next_start_shard(state, config)
     new_active_index_roots = _compute_next_active_index_roots(state, config)
-    new_compact_committees_roots = _compute_next_compact_committees_roots(
-        state.copy(validators=new_validators, start_shard=new_start_shard), config
-    )
+    state.validators = new_validators
+    state.start_shard = new_start_shard
+    new_compact_committees_roots = _compute_next_compact_committees_roots(state, config)
     new_slashings = _compute_next_slashings(state, config)
     new_randao_mixes = _compute_next_randao_mixes(state, config)
     new_historical_roots = _compute_next_historical_roots(state, config)
 
-    return state.copy(
-        eth1_data_votes=new_eth1_data_votes,
-        validators=new_validators,
-        start_shard=new_start_shard,
-        active_index_roots=new_active_index_roots,
-        compact_committees_roots=new_compact_committees_roots,
-        slashings=new_slashings,
-        randao_mixes=new_randao_mixes,
-        historical_roots=new_historical_roots,
-        previous_epoch_attestations=state.current_epoch_attestations,
-        current_epoch_attestations=tuple(),
-    )
+    state.eth1_data_votes = new_eth1_data_votes
+    state.validators = new_validators
+    state.start_shard = new_start_shard
+    state.active_index_roots = new_active_index_roots
+    state.compact_committees_roots = new_compact_committees_roots
+    state.slashings = new_slashings
+    state.randao_mixes = new_randao_mixes
+    state.historical_roots = new_historical_roots
+    state.previous_epoch_attestations = state.current_epoch_attestations
+    state.current_epoch_attestations = tuple()
+
+    return state
 
 
 def process_epoch(state: BeaconState, config: Eth2Config) -> BeaconState:

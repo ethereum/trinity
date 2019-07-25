@@ -694,7 +694,9 @@ class BeaconChainDB(BaseBeaconChainDB):
         return self._persist_state(state)
 
     def _persist_state(self, state: BeaconState) -> None:
-        self.db.set(state.hash_tree_root, ssz.encode(state))
+        self.db.set(
+            state.hash_tree_root, ssz.encode(state.ssz_object, sedes=state.ssz_class)
+        )
         self._add_slot_to_state_root_lookup(state.slot, state.hash_tree_root)
 
         self._persist_finalized_head(state)
@@ -855,4 +857,6 @@ def _decode_block(block_ssz: bytes, sedes: Type[BaseBeaconBlock]) -> BaseBeaconB
 
 @functools.lru_cache(128)
 def _decode_state(state_ssz: bytes, state_class: Type[BeaconState]) -> BeaconState:
-    return ssz.decode(state_ssz, sedes=state_class)
+    ssz_object = ssz.decode(state_ssz, sedes=state_class.ssz_class)
+    dataclass_object = state_class.from_ssz_object(ssz_object)
+    return dataclass_object

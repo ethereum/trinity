@@ -1,5 +1,6 @@
 from eth_utils import ValidationError, encode_hex
 
+from eth2 import impure
 from eth2._utils.bls import bls
 from eth2._utils.merkle.common import verify_merkle_branch
 from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
@@ -36,6 +37,7 @@ def validate_deposit_proof(
         )
 
 
+@impure
 def process_deposit(
     state: BeaconState, deposit: Deposit, config: Eth2Config
 ) -> BeaconState:
@@ -48,7 +50,7 @@ def process_deposit(
     # needs to be done here because while the deposit contract will never
     # create an invalid Merkle branch, it may admit an invalid deposit
     # object, and we need to be able to skip over it
-    state = state.copy(eth1_deposit_index=state.eth1_deposit_index + 1)
+    state.eth1_deposit_index = state.eth1_deposit_index + 1
 
     pubkey = deposit.data.pubkey
     amount = deposit.data.amount
@@ -72,10 +74,9 @@ def process_deposit(
             pubkey, withdrawal_credentials, amount, config
         )
 
-        return state.copy(
-            validators=state.validators + (validator,),
-            balances=state.balances + (amount,),
-        )
+        state.validators = state.validators + (validator,)
+        state.balances = state.balances + (amount,)
+        return state
     else:
         index = ValidatorIndex(validator_pubkeys.index(pubkey))
         return increase_balance(state, index, amount)

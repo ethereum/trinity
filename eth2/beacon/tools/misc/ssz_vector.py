@@ -8,7 +8,7 @@ from eth2.beacon.types.blocks import BeaconBlockBody
 from eth2.beacon.types.compact_committees import CompactCommittee
 from eth2.beacon.types.historical_batch import HistoricalBatch
 from eth2.beacon.types.pending_attestations import PendingAttestation
-from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.states import SSZBeaconState
 from eth2.configs import Eth2Config
 
 
@@ -26,7 +26,7 @@ def _mk_overrides(config: Eth2Config) -> Dict[ssz.Serializable, Dict[str, int]]:
             "voluntary_exits": config.MAX_VOLUNTARY_EXITS,
             "transfers": config.MAX_TRANSFERS,
         },
-        BeaconState: {
+        SSZBeaconState: {
             "block_roots": config.SLOTS_PER_HISTORICAL_ROOT,
             "state_roots": config.SLOTS_PER_HISTORICAL_ROOT,
             "historical_roots": config.HISTORICAL_ROOTS_LIMIT,

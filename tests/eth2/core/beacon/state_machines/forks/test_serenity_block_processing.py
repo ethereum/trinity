@@ -51,7 +51,7 @@ def test_randao_processing(
 
     block = SerenityBeaconBlock(**sample_beacon_block_params).copy(body=block_body)
 
-    new_state = process_randao(state, block, config)
+    new_state = process_randao(state.copy(), block, config)
 
     updated_index = epoch % config.EPOCHS_PER_HISTORICAL_VECTOR
     original_mixes = state.randao_mixes

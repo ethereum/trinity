@@ -24,6 +24,7 @@ class SerenityStateTransition(BaseStateTransition):
         # NOTE: Callers should request a transition to some slot past the ``state.slot``.
         # This can be done by providing either a ``block`` *or* a ``future_slot``.
         # We enforce this invariant with the assertion on ``target_slot``.
+        state = state.copy()
         target_slot = block.slot if block else future_slot
         assert target_slot is not None
 
