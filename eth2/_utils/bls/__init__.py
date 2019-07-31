@@ -1,34 +1,15 @@
-from typing import (
-    Sequence,
-    Type,
-)
+from typing import Sequence, Type
 
-from eth_typing import (
-    BLSPubkey,
-    BLSSignature,
-    Hash32,
-)
-from eth_utils import (
-    ValidationError,
-)
+from eth_typing import BLSPubkey, BLSSignature, Hash32
+from eth_utils import ValidationError
 
 from py_ecc.bls.typing import Domain
 
-from eth2.beacon.exceptions import (
-    SignatureError,
-)
+from eth2.beacon.exceptions import SignatureError
 
-from .backends import (
-    DEFAULT_BACKEND,
-    NoOpBackend,
-)
-from .backends.base import (
-    BaseBLSBackend,
-)
-from .validation import (
-    validate_private_key,
-    validate_signature,
-)
+from .backends import DEFAULT_BACKEND, NoOpBackend
+from .backends.base import BaseBLSBackend
+from .validation import validate_private_key, validate_signature
 
 
 class Eth2BLS:
@@ -50,35 +31,31 @@ class Eth2BLS:
         cls.use(NoOpBackend)
 
     @classmethod
-    def privtopub(cls,
-                  privkey: int) -> BLSPubkey:
+    def privtopub(cls, privkey: int) -> BLSPubkey:
         validate_private_key(privkey)
         return cls.backend.privtopub(privkey)
 
     @classmethod
-    def sign(cls,
-             message_hash: Hash32,
-             privkey: int,
-             domain: Domain) -> BLSSignature:
+    def sign(cls, message_hash: Hash32, privkey: int, domain: Domain) -> BLSSignature:
         validate_private_key(privkey)
         return cls.backend.sign(message_hash, privkey, domain)
 
     @classmethod
-    def aggregate_signatures(cls,
-                             signatures: Sequence[BLSSignature]) -> BLSSignature:
+    def aggregate_signatures(cls, signatures: Sequence[BLSSignature]) -> BLSSignature:
         return cls.backend.aggregate_signatures(signatures)
 
     @classmethod
-    def aggregate_pubkeys(cls,
-                          pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+    def aggregate_pubkeys(cls, pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
         return cls.backend.aggregate_pubkeys(pubkeys)
 
     @classmethod
-    def verify(cls,
-               message_hash: Hash32,
-               pubkey: BLSPubkey,
-               signature: BLSSignature,
-               domain: Domain) -> bool:
+    def verify(
+        cls,
+        message_hash: Hash32,
+        pubkey: BLSPubkey,
+        signature: BLSSignature,
+        domain: Domain,
+    ) -> bool:
         if cls.backend != NoOpBackend:
             try:
                 validate_signature(signature)
@@ -88,11 +65,13 @@ class Eth2BLS:
         return cls.backend.verify(message_hash, pubkey, signature, domain)
 
     @classmethod
-    def verify_multiple(cls,
-                        pubkeys: Sequence[BLSPubkey],
-                        message_hashes: Sequence[Hash32],
-                        signature: BLSSignature,
-                        domain: Domain) -> bool:
+    def verify_multiple(
+        cls,
+        pubkeys: Sequence[BLSPubkey],
+        message_hashes: Sequence[Hash32],
+        signature: BLSSignature,
+        domain: Domain,
+    ) -> bool:
         if cls.backend != NoOpBackend:
             try:
                 validate_signature(signature)
@@ -102,11 +81,13 @@ class Eth2BLS:
         return cls.backend.verify_multiple(pubkeys, message_hashes, signature, domain)
 
     @classmethod
-    def validate(cls,
-                 message_hash: Hash32,
-                 pubkey: BLSPubkey,
-                 signature: BLSSignature,
-                 domain: Domain) -> None:
+    def validate(
+        cls,
+        message_hash: Hash32,
+        pubkey: BLSPubkey,
+        signature: BLSSignature,
+        domain: Domain,
+    ) -> None:
         if not cls.verify(message_hash, pubkey, signature, domain):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
@@ -117,11 +98,13 @@ class Eth2BLS:
             )
 
     @classmethod
-    def validate_multiple(cls,
-                          pubkeys: Sequence[BLSPubkey],
-                          message_hashes: Sequence[Hash32],
-                          signature: BLSSignature,
-                          domain: Domain) -> None:
+    def validate_multiple(
+        cls,
+        pubkeys: Sequence[BLSPubkey],
+        message_hashes: Sequence[Hash32],
+        signature: BLSSignature,
+        domain: Domain,
+    ) -> None:
         if not cls.verify_multiple(pubkeys, message_hashes, signature, domain):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"

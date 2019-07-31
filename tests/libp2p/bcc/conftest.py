@@ -2,9 +2,7 @@ import asyncio
 
 import pytest
 
-from trinity.tools.factories import (
-    NodeFactory,
-)
+from trinity.tools.factories import NodeFactory
 
 
 @pytest.fixture
