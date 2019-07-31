@@ -8,9 +8,9 @@ from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 
 from eth2.beacon.state_machines.base import BeaconStateMachine
-from eth2.beacon.state_machines.state_transitions import (
+from eth2.beacon.state_machines.state_transitions import (  # noqa: F401
     BaseStateTransition,
-)  # noqa: F401
+)
 
 from .configs import SERENITY_CONFIG
 from .blocks import create_serenity_block_from_parent, SerenityBeaconBlock
