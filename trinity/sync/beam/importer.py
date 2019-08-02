@@ -10,10 +10,13 @@ from typing import (
 )
 
 from cancel_token import CancelToken
-from eth.db.backends.base import BaseAtomicDB
-from eth.rlp.blocks import BaseBlock
-from eth.vm.state import BaseState
-from eth.vm.base import BaseVM
+
+from eth.abc import (
+    AtomicDatabaseAPI,
+    BlockAPI,
+    StateAPI,
+    VirtualMachineAPI,
+)
 from eth.vm.interrupt import (
     MissingAccountTrieNode,
     MissingBytecode,
@@ -39,13 +42,13 @@ from trinity.sync.common.events import (
     StatelessBlockImportDone,
 )
 
-ImportBlockType = Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]
+ImportBlockType = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
 
 
 def make_pausing_beam_chain(
-        vm_config: Tuple[Tuple[int, BaseVM], ...],
+        vm_config: Tuple[Tuple[int, VirtualMachineAPI], ...],
         chain_id: int,
-        db: BaseAtomicDB,
+        db: AtomicDatabaseAPI,
         event_bus: EndpointAPI,
         loop: asyncio.AbstractEventLoop) -> FullChain:
     """
@@ -67,9 +70,9 @@ TVMFuncReturn = TypeVar('TVMFuncReturn')
 
 
 def pausing_vm_decorator(
-        original_vm_class: Type[BaseVM],
+        original_vm_class: Type[VirtualMachineAPI],
         event_bus: EndpointAPI,
-        loop: asyncio.AbstractEventLoop) -> Type[BaseVM]:
+        loop: asyncio.AbstractEventLoop) -> Type[VirtualMachineAPI]:
     """
     Decorate a py-evm VM so that it will pause when data is missing
     """
@@ -203,7 +206,7 @@ def pausing_vm_decorator(
 
     class PausingVM(original_vm_class):  # type: ignore
         @classmethod
-        def get_state_class(cls) -> Type[BaseState]:
+        def get_state_class(cls) -> Type[StateAPI]:
             return PausingVMState
 
     return PausingVM
@@ -211,7 +214,7 @@ def pausing_vm_decorator(
 
 def _broadcast_import_complete(
         event_bus: EndpointAPI,
-        block: BaseBlock,
+        block: BlockAPI,
         broadcast_config: BroadcastConfig,
         future: 'asyncio.Future[ImportBlockType]') -> None:
     completed = not future.cancelled()
