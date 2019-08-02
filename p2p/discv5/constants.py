@@ -8,6 +8,9 @@ NONCE_SIZE = 12  # size of an AESGCM nonce
 TAG_SIZE = 32  # size of the tag packet prefix
 MAGIC_SIZE = 32  # size of the magic hash in the who are you packet
 
+RANDOM_ENCRYPTED_DATA_SIZE = 12  # size of the random data we put in packets before handshake
+ID_NONCE_SIZE = 12  # size of the id nonce we generate for the peer during handshake
+
 MAX_PACKET_SIZE = 1280  # maximum allowed size of a packet
 
 ZERO_NONCE = Nonce(b"\x00" * NONCE_SIZE)  # nonce used for the auth header packet

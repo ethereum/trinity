@@ -1,5 +1,5 @@
 import hashlib
-
+import os
 from typing import (
     cast,
     NamedTuple,
@@ -47,9 +47,12 @@ from p2p.discv5.enr import (
 )
 from p2p.discv5.constants import (
     AUTH_SCHEME_NAME,
+    RANDOM_ENCRYPTED_DATA_SIZE,
+    ID_NONCE_SIZE,
     MAX_PACKET_SIZE,
     TAG_SIZE,
     MAGIC_SIZE,
+    NONCE_SIZE,
     ZERO_NONCE,
     WHO_ARE_YOU_MAGIC_SUFFIX,
 )
@@ -508,3 +511,18 @@ def _decrypt_message(initiator_key: AES128Key,
         raise ValidationError("Encrypted message does not contain valid RLP") from error
 
     return message
+
+
+#
+# Random content
+#
+def get_random_id_nonce() -> bytes:
+    return os.urandom(ID_NONCE_SIZE)
+
+
+def get_random_auth_tag() -> Nonce:
+    return Nonce(os.urandom(NONCE_SIZE))
+
+
+def get_random_encrypted_data() -> bytes:
+    return os.urandom(RANDOM_ENCRYPTED_DATA_SIZE)
