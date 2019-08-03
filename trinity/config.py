@@ -68,6 +68,7 @@ from trinity._utils.chains import (
     construct_trinity_config_params,
     get_data_dir_for_network_id,
     get_database_socket_path,
+    get_graphql_socket_path,
     get_jsonrpc_socket_path,
     get_nodekey_path,
     load_nodekey,
@@ -408,6 +409,13 @@ class TrinityConfig:
         Return the path for the JSON-RPC server IPC socket.
         """
         return get_jsonrpc_socket_path(self.ipc_dir)
+
+    @property
+    def graphql_ipc_path(self) -> Path:
+        """
+            Return the path for the GRAPHQL-RPC server IPC socket.
+        """
+        return get_graphql_socket_path(self.ipc_dir)
 
     @property
     def nodekey_path(self) -> Path:

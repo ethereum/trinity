@@ -90,6 +90,7 @@ def get_database_socket_path(data_dir: Path) -> Path:
 
 
 JSONRPC_SOCKET_FILENAME = 'jsonrpc.ipc'
+GRAPHQL_SOCKET_FILENAME = 'graphql.ipc'
 
 
 def get_jsonrpc_socket_path(data_dir: Path) -> Path:
@@ -102,6 +103,13 @@ def get_jsonrpc_socket_path(data_dir: Path) -> Path:
     return Path(os.environ.get(
         'TRINITY_JSONRPC_IPC',
         data_dir / JSONRPC_SOCKET_FILENAME,
+    ))
+
+
+def get_graphql_socket_path(data_dir: Path) -> Path:
+    return Path(os.environ.get(
+        'GRAPHQL_JSONRPC_IPC',
+        data_dir / GRAPHQL_SOCKET_FILENAME,
     ))
 
 

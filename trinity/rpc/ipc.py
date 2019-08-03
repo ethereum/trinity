@@ -55,6 +55,7 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
                           cancel_token: CancelToken) -> None:
     # TODO: we should look into using an io.StrinIO here for more efficient
     # writing to the end of the string.
+    logger = logging.getLogger('trinity.rpc.ipc')
     raw_request = ''
     while True:
         request_bytes = b''
@@ -80,6 +81,7 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
 
         try:
             request = json.loads(raw_request)
+            logger.info(f'got request {request}')
         except json.JSONDecodeError:
             # invalid json request, keep reading data until a valid json is formed
             logger.debug("Invalid JSON, waiting for rest of message: %r", raw_request)
@@ -97,6 +99,7 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
 
         try:
             result = await execute_rpc(request)
+            logger.info(f'got result {result}')
         except Exception as e:
             logger.exception("Unrecognized exception while executing RPC")
             await cancel_token.cancellable_wait(

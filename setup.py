@@ -49,6 +49,7 @@ deps = {
         "multiaddr>=0.0.8,<0.1.0",
         "pymultihash>=0.8.2",
         "libp2p>=0.1.1,<0.2",
+        "graphene>=2.1.7"
     ],
     'test': [
         "async-timeout>=3.0.1,<4",
