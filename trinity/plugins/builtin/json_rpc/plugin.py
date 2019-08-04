@@ -102,16 +102,3 @@ class JsonRpcServerPlugin(AsyncioIsolatedPlugin):
             self._event_bus_service,
         ))
         asyncio.ensure_future(ipc_server.run())
-
-
-from web3 import  IPCProvider
-import json
-from eth_utils import to_bytes
-
-
-class IPCClient(IPCProvider):
-
-    def encode_rpc_request(self, method, query):
-        params = {"query": query}
-        text = json.dumps(params)
-        return to_bytes(text=text)

@@ -1,6 +1,7 @@
 from eth_utils import (
     encode_hex,
     int_to_big_endian,
+    to_bytes
 )
 from graphene import (
     ObjectType,
@@ -78,11 +79,15 @@ class Block(ObjectType):
     async def resolve_difficulty(self, info):
         return hex(self.header.difficulty)
 
-    async def resolve_difficulty(self, info):
+    async def resolve_totalDifficulty(self, info):
         chain = info.context.get('chain')
         return hex(chain.get_score(self.hash))
+
+
 import logging
 logger = logging.getLogger("GraphQlServer")
+
+
 class Query(ObjectType):
     block = Field(Block, number=Int(), hash=String())
 
@@ -96,7 +101,7 @@ class Query(ObjectType):
             logger.info(f'resolve_block result {result}')
             return result
         elif hash:
-            return await chain.coro_get_block_by_hash(hash)
+            return await chain.coro_get_block_by_hash(to_bytes(hexstr=hash))
         else:
             return await chain.coro_get_canonical_block_by_number(
                 chain.get_canonical_head().block_number

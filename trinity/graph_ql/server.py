@@ -18,7 +18,10 @@ class GraphQlServer:
 
     async def execute(self, query: dict) -> str:
         self.logger.info(f'got query {query["query"]}')
-        result = schema.execute(query['query'], executor=AsyncioExecutor(), context={'chain': self.chain})
+        result = await schema.execute_async(query['query'], executor=AsyncioExecutor(), context={'chain': self.chain})
         self.logger.info(f'generated result {result.data}')
         self.logger.info(f'generated error {result.errors}')
-        return json.dumps(result.data)
+        return json.dumps({
+            'result': result.data,
+            'errors': result.errors,
+        })
