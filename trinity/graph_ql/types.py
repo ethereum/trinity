@@ -9,7 +9,49 @@ from graphene import (
     Field,
     Int,
     Schema,
+    List,
 )
+from trinity.rpc.modules.eth import state_at_block
+
+
+class Account(ObjectType):
+    address = String()
+    balance = String()
+
+    async def resolve_address(self, info):
+        return encode_hex(self)
+
+    async def resolve_balance(self, info):
+        chain = info.context.get('chain')
+        state = await state_at_block(chain, 'latest')
+        return state.get_balance(self)
+
+
+class Transaction(ObjectType):
+    hash = String()
+    nonce = String()
+    value = String()
+    index = String()
+    sender = Field(Account, name='from')
+    to = Field(Account)
+
+    async def resolve_hash(self, info):
+        return encode_hex(self.hash)
+
+    async def resolve_nonce(self, info):
+        return hex(self.nonce)
+
+    async def resolve_value(self, info):
+        return hex(self.value)
+
+    async def resolve_index(self, info):
+        return hex(self.value)
+
+    async def resolve_sender(self, info):
+        return self.sender
+
+    async def resolve_to(self, info):
+        return self.to
 
 
 class Block(ObjectType):
@@ -29,6 +71,7 @@ class Block(ObjectType):
     mixHash = String()
     difficulty = String()
     totalDifficulty = String()
+    transactions = List(Transaction)
 
     async def resolve_number(self, info):
         return hex(self.number)  # type: ignore
@@ -83,22 +126,20 @@ class Block(ObjectType):
         chain = info.context.get('chain')
         return hex(chain.get_score(self.hash))
 
-
-import logging
-logger = logging.getLogger("GraphQlServer")
+    async def resolve_transactions(self, info):
+        return self.transactions
 
 
 class Query(ObjectType):
     block = Field(Block, number=Int(), hash=String())
+    transaction = Field(Transaction, hash=String())
 
     async def resolve_block(self, info, number=None, hash=None):
-        logger.info(f'inisde resolve_block')
         chain = info.context.get('chain')
         if number and hash:
             raise Exception('either pass number or hash')
         if number:
             result = await chain.coro_get_canonical_block_by_number(number)
-            logger.info(f'resolve_block result {result}')
             return result
         elif hash:
             return await chain.coro_get_block_by_hash(to_bytes(hexstr=hash))
@@ -106,6 +147,10 @@ class Query(ObjectType):
             return await chain.coro_get_canonical_block_by_number(
                 chain.get_canonical_head().block_number
             )
+
+    async def resolve_transaction(self, info, hash):
+        chain = info.context.get('chain')
+        return chain.get_canonical_transaction(to_bytes(hexstr=hash))
 
 
 schema = Schema(query=Query)
