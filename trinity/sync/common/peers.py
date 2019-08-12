@@ -28,25 +28,38 @@ class WaitingPeers(Generic[TChainPeer]):
     """
     _waiting_peers: 'PriorityQueue[SortableTask[TChainPeer]]'
 
-    def __init__(self, response_command_type: Type[Command]) -> None:
+    def __init__(self, response_command_type: Type[Command], latency_focused: bool=False) -> None:
+        """
+        :param latency_focused: should we prefer peers that respond quickly over total bandwidth?
+        """
         self._waiting_peers = PriorityQueue()
         self._response_command_type = response_command_type
         self._peer_wrapper = SortableTask.orderable_by_func(self._get_peer_rank)
+        self._latency_focused = latency_focused
 
     def _get_peer_rank(self, peer: TChainPeer) -> float:
-        relevant_throughputs = [
-            exchange.tracker.items_per_second_ema.value
+        relevant_trackers = [
+            exchange.tracker
             for exchange in peer.requests
             if issubclass(exchange.response_cmd_type, self._response_command_type)
         ]
 
-        if len(relevant_throughputs) == 0:
+        if self._latency_focused:
+            relevant_speeds = [
+                tracker.messages_per_second_ema.value for tracker in relevant_trackers
+            ]
+        else:
+            relevant_speeds = [
+                tracker.items_per_second_ema.value for tracker in relevant_trackers
+            ]
+
+        if len(relevant_speeds) == 0:
             raise ValidationError(
                 f"Could not find any exchanges on {peer} "
                 f"with response {self._response_command_type!r}"
             )
 
-        avg_throughput = sum(relevant_throughputs) / len(relevant_throughputs)
+        avg_throughput = sum(relevant_speeds) / len(relevant_speeds)
 
         # high throughput peers should pop out of the queue first, so ranked as negative
         return -1 * avg_throughput

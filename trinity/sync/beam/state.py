@@ -94,7 +94,7 @@ class BeamDownloader(BaseService, PeerSubscriber):
         super().__init__(token)
         self._db = db
         self._trie_db = HexaryTrie(db)
-        self._node_data_peers = WaitingPeers[ETHPeer](NodeData)
+        self._node_data_peers = WaitingPeers[ETHPeer](NodeData, latency_focused=True)
         self._event_bus = event_bus
 
         # Track the needed node data that is urgent and important:
