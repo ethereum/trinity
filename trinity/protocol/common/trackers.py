@@ -42,6 +42,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
 
         # an EMA of the items per second
         self.items_per_second_ema = EMA(initial_value=0, smoothing_factor=0.05)
+        self.messages_per_second_ema = EMA(initial_value=0, smoothing_factor=0.05)
 
     @abstractmethod
     def _get_request_size(self, request: TRequest) -> Optional[int]:
@@ -100,6 +101,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
             f"msgs={self.total_msgs}  items={self.total_items}  "
             f"rtt={self.round_trip_ema.value:.2f}/{rt99:.2f}/{rt_stddev:.2f}  "
             f"ips={self.items_per_second_ema.value:.5f}  "
+            f"mps={self.messages_per_second_ema.value:.5f}  "
             f"timeouts={self.total_timeouts}  quality={int(self.response_quality_ema.value)}"
         )
 
@@ -108,6 +110,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         self.total_timeouts += 1
         self.response_quality_ema.update(0)
         self.items_per_second_ema.update(0)
+        self.messages_per_second_ema.update(0)
 
     def record_response(self,
                         elapsed: float,
@@ -155,6 +158,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         if elapsed > 0:
             throughput = num_items / elapsed
             self.items_per_second_ema.update(throughput)
+            self.messages_per_second_ema.update(1 / elapsed)
         else:
             self.logger.warning(
                 "%s encountered response time of zero.  This should never happen",
