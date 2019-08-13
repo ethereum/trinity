@@ -45,24 +45,23 @@ class WaitingPeers(Generic[TChainPeer]):
         ]
 
         if self._latency_focused:
-            relevant_speeds = [
-                tracker.messages_per_second_ema.value for tracker in relevant_trackers
+            # Low latency should pop out of queue first, so rank as positive
+            scores = [
+                tracker.latency for tracker in relevant_trackers
             ]
         else:
-            relevant_speeds = [
-                tracker.items_per_second_ema.value for tracker in relevant_trackers
+            # High speed should pop out of queue first, so rank as negative
+            scores = [
+                -1 * tracker.items_per_second_ema.value for tracker in relevant_trackers
             ]
 
-        if len(relevant_speeds) == 0:
+        if len(scores) == 0:
             raise ValidationError(
                 f"Could not find any exchanges on {peer} "
                 f"with response {self._response_command_type!r}"
             )
 
-        avg_throughput = sum(relevant_speeds) / len(relevant_speeds)
-
-        # high throughput peers should pop out of the queue first, so ranked as negative
-        return -1 * avg_throughput
+        return sum(scores) / len(scores)
 
     def put_nowait(self, peer: TChainPeer) -> None:
         self._waiting_peers.put_nowait(self._peer_wrapper(peer))
