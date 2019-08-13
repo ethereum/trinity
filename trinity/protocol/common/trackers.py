@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from functools import partial
 from typing import (
     Any,
     Generic,
@@ -43,6 +44,10 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         # an EMA of the items per second
         self.items_per_second_ema = EMA(initial_value=0, smoothing_factor=0.05)
         self.messages_per_second_ema = EMA(initial_value=0, smoothing_factor=0.05)
+
+        # inference of latency, by tracking performance per message count
+        self.round_trip_by_items = defaultdict(partial(EMA, initial_value=0, smoothing_factor=0.05))
+        self.latency = 0
 
     @abstractmethod
     def _get_request_size(self, request: TRequest) -> Optional[int]:
@@ -94,6 +99,8 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         # items: total number of items
         # rtt: round-trip-time (ema/99th/stddev)
         # ips: items-per-second (ema)
+        # mps: messages-per-second (ema)
+        # lat: inferred latency (regression)
         # timeouts: total number of timeouts
         # missing: total number of missing response items
         # quality: 0-100 for how complete responses are
@@ -102,6 +109,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
             f"rtt={self.round_trip_ema.value:.2f}/{rt99:.2f}/{rt_stddev:.2f}  "
             f"ips={self.items_per_second_ema.value:.5f}  "
             f"mps={self.messages_per_second_ema.value:.5f}  "
+            f"lat={self.messages_per_second_ema.value:.4f}  "
             f"timeouts={self.total_timeouts}  quality={int(self.response_quality_ema.value)}"
         )
 
@@ -154,6 +162,13 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         self.round_trip_ema.update(elapsed)
         self.round_trip_99th.update(elapsed)
         self.round_trip_stddev.update(elapsed)
+        self.round_trip_by_items[num_items].update(elapsed)
+
+        if len(self.round_trip_by_items) > 1:
+            _, self.latency = linear_regression(tuple(
+                (num_items, ema.value) for num_items, ema in self.round_trip_by_items.items()
+            ))
+
 
         if elapsed > 0:
             throughput = num_items / elapsed
