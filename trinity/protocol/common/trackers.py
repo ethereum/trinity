@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from functools import partial
 from typing import (
     Any,
@@ -13,6 +14,7 @@ from p2p.abc import RequestAPI
 from trinity._utils.ema import EMA
 from trinity._utils.logging import HasExtendedDebugLogger
 from trinity._utils.percentile import Percentile
+from trinity._utils.regression import linear_regression
 from trinity._utils.stddev import StandardDeviation
 from .constants import ROUND_TRIP_TIMEOUT
 from .types import (
@@ -109,7 +111,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
             f"rtt={self.round_trip_ema.value:.2f}/{rt99:.2f}/{rt_stddev:.2f}  "
             f"ips={self.items_per_second_ema.value:.5f}  "
             f"mps={self.messages_per_second_ema.value:.5f}  "
-            f"lat={self.messages_per_second_ema.value:.4f}  "
+            f"lat={self.messages_per_second_ema.value:.4f}s  "
             f"timeouts={self.total_timeouts}  quality={int(self.response_quality_ema.value)}"
         )
 
@@ -168,7 +170,6 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
             _, self.latency = linear_regression(tuple(
                 (num_items, ema.value) for num_items, ema in self.round_trip_by_items.items()
             ))
-
 
         if elapsed > 0:
             throughput = num_items / elapsed
