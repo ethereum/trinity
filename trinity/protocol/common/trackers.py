@@ -50,6 +50,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         # inference of latency, by tracking performance per message count
         self.round_trip_by_items = defaultdict(partial(EMA, initial_value=0, smoothing_factor=0.05))
         self.latency = 0
+        self.marginal_item_time = 0
 
     @abstractmethod
     def _get_request_size(self, request: TRequest) -> Optional[int]:
@@ -103,6 +104,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         # ips: items-per-second (ema)
         # mps: messages-per-second (ema)
         # lat: inferred latency (regression)
+        # spi: seconds per item, separate from latency (regression)
         # timeouts: total number of timeouts
         # missing: total number of missing response items
         # quality: 0-100 for how complete responses are
@@ -112,6 +114,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
             f"ips={self.items_per_second_ema.value:.5f}  "
             f"mps={self.messages_per_second_ema.value:.5f}  "
             f"lat={self.latency:.4f}s  "
+            f"spi={self.marginal_item_time:.6f}s  "
             f"timeouts={self.total_timeouts}  quality={int(self.response_quality_ema.value)}"
         )
 
@@ -167,7 +170,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
         self.round_trip_by_items[num_items].update(elapsed)
 
         if len(self.round_trip_by_items) > 1:
-            _, self.latency = linear_regression(tuple(
+            self.marginal_item_time, self.latency = linear_regression(tuple(
                 (num_items, ema.value) for num_items, ema in self.round_trip_by_items.items()
             ))
 
