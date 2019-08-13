@@ -111,7 +111,7 @@ class BasePerformanceTracker(ABC, HasExtendedDebugLogger, Generic[TRequest, TRes
             f"rtt={self.round_trip_ema.value:.2f}/{rt99:.2f}/{rt_stddev:.2f}  "
             f"ips={self.items_per_second_ema.value:.5f}  "
             f"mps={self.messages_per_second_ema.value:.5f}  "
-            f"lat={self.messages_per_second_ema.value:.4f}s  "
+            f"lat={self.latency:.4f}s  "
             f"timeouts={self.total_timeouts}  quality={int(self.response_quality_ema.value)}"
         )
 
