@@ -1,8 +1,7 @@
 from eth_keys import datatypes
+from libp2p.peer.id import id_b58_decode
 
 from trinity.protocol.bcc_libp2p.utils import peer_id_from_pubkey
-
-from libp2p.peer.id import id_b58_decode
 
 
 def test_peer_id_from_pubkey():

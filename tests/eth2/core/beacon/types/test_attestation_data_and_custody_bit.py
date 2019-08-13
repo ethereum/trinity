@@ -1,6 +1,4 @@
-from eth2.beacon.types.attestation_data_and_custody_bits import (
-    AttestationDataAndCustodyBit,
-)
+from eth2.beacon.types.attestation_data_and_custody_bits import AttestationDataAndCustodyBit
 
 
 def test_defaults(sample_attestation_data_and_custody_bit_params):

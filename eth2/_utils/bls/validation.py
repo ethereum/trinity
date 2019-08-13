@@ -1,6 +1,6 @@
-from py_ecc.optimized_bls12_381 import curve_order
 from eth_typing import BLSSignature
 from eth_utils import ValidationError
+from py_ecc.optimized_bls12_381 import curve_order
 
 
 def validate_private_key(privkey: int) -> None:

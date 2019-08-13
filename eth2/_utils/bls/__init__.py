@@ -2,7 +2,6 @@ from typing import Sequence, Type
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import ValidationError
-
 from py_ecc.bls.typing import Domain
 
 from eth2.beacon.exceptions import SignatureError

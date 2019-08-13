@@ -3,15 +3,9 @@ import ssz
 from ssz.sedes import bytes48, bytes96, uint64
 
 from eth2.beacon.constants import EMPTY_SIGNATURE
-
 from eth2.beacon.typing import Gwei, Slot, ValidatorIndex
 
-from .defaults import (
-    default_validator_index,
-    default_gwei,
-    default_slot,
-    default_bls_pubkey,
-)
+from .defaults import default_bls_pubkey, default_gwei, default_slot, default_validator_index
 
 
 class Transfer(ssz.SignedSerializable):
