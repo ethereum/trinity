@@ -10,7 +10,9 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
-from eth2.beacon.types.attestation_data_and_custody_bits import AttestationDataAndCustodyBit
+from eth2.beacon.types.attestation_data_and_custody_bits import (
+    AttestationDataAndCustodyBit,
+)
 from eth2.beacon.types.attestations import IndexedAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot

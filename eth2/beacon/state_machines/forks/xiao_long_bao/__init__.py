@@ -5,7 +5,9 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
     create_serenity_block_from_parent,
 )
-from eth2.beacon.state_machines.forks.serenity.state_transitions import SerenityStateTransition
+from eth2.beacon.state_machines.forks.serenity.state_transitions import (
+    SerenityStateTransition,
+)
 from eth2.beacon.state_machines.forks.serenity.states import SerenityBeaconState
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.typing import FromBlockParams

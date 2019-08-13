@@ -5,7 +5,14 @@ from py_ecc.bls.typing import Domain
 
 from eth2._utils.bls.backends.base import BaseBLSBackend
 
-from .api import aggregate_pubkeys, aggregate_signatures, privtopub, sign, verify, verify_multiple
+from .api import (
+    aggregate_pubkeys,
+    aggregate_signatures,
+    privtopub,
+    sign,
+    verify,
+    verify_multiple,
+)
 
 
 class ChiaBackend(BaseBLSBackend):

@@ -9,7 +9,11 @@ from eth2.beacon.committee_helpers import (
     get_shard_delta,
     get_start_shard,
 )
-from eth2.beacon.constants import FAR_FUTURE_EPOCH, GWEI_PER_ETH, JUSTIFICATION_BITS_LENGTH
+from eth2.beacon.constants import (
+    FAR_FUTURE_EPOCH,
+    GWEI_PER_ETH,
+    JUSTIFICATION_BITS_LENGTH,
+)
 from eth2.beacon.epoch_processing_helpers import get_base_reward
 from eth2.beacon.helpers import (
     compute_epoch_of_slot,

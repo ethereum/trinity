@@ -9,7 +9,15 @@ from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 from eth2._utils.tuple import update_tuple_item, update_tuple_item_with_fn
 from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH
 from eth2.beacon.helpers import compute_epoch_of_slot
-from eth2.beacon.typing import Bitfield, Epoch, Gwei, Shard, Slot, Timestamp, ValidatorIndex
+from eth2.beacon.typing import (
+    Bitfield,
+    Epoch,
+    Gwei,
+    Shard,
+    Slot,
+    Timestamp,
+    ValidatorIndex,
+)
 from eth2.configs import Eth2Config
 
 from .block_headers import BeaconBlockHeader, default_beacon_block_header

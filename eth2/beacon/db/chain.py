@@ -5,7 +5,12 @@ from typing import Iterable, Optional, Tuple, Type
 from cytoolz import concat, first, sliding_window
 from eth.constants import ZERO_HASH32
 from eth.db.backends.base import BaseAtomicDB, BaseDB
-from eth.exceptions import BlockNotFound, CanonicalHeadNotFound, ParentNotFound, StateRootNotFound
+from eth.exceptions import (
+    BlockNotFound,
+    CanonicalHeadNotFound,
+    ParentNotFound,
+    StateRootNotFound,
+)
 from eth.validation import validate_word
 from eth_typing import Hash32
 from eth_utils import ValidationError, encode_hex, to_tuple

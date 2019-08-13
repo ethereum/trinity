@@ -9,7 +9,10 @@ from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_bala
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.validator_status_helpers import initiate_validator_exit, slash_validator
+from eth2.beacon.validator_status_helpers import (
+    initiate_validator_exit,
+    slash_validator,
+)
 from eth2.configs import CommitteeConfig, Eth2Config
 
 from .block_validation import (

@@ -1,7 +1,15 @@
 import random
 
 from eth_utils import to_dict
-from eth_utils.toolz import first, keyfilter, merge, merge_with, partition, second, sliding_window
+from eth_utils.toolz import (
+    first,
+    keyfilter,
+    merge,
+    merge_with,
+    partition,
+    second,
+    sliding_window,
+)
 import pytest
 
 from eth2._utils import bitfield

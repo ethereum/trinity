@@ -13,7 +13,10 @@ from eth2.beacon.committee_helpers import (
     get_shard_delta,
     get_start_shard,
 )
-from eth2.beacon.helpers import compute_start_slot_of_epoch, get_active_validator_indices
+from eth2.beacon.helpers import (
+    compute_start_slot_of_epoch,
+    get_active_validator_indices,
+)
 from eth2.configs import CommitteeConfig
 
 

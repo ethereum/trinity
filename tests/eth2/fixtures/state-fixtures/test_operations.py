@@ -12,7 +12,11 @@ from eth2.beacon.state_machines.forks.serenity.operation_processing import (
 )
 from eth2.beacon.tools.fixtures.config_name import ONLY_MINIMAL
 from eth2.beacon.tools.fixtures.helpers import validate_state
-from eth2.beacon.tools.fixtures.loading import get_bls_setting, get_operation_or_header, get_states
+from eth2.beacon.tools.fixtures.loading import (
+    get_bls_setting,
+    get_operation_or_header,
+    get_states,
+)
 from eth2.beacon.tools.fixtures.test_case import OperationCase
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestations import Attestation

@@ -29,7 +29,11 @@ from eth2.beacon.epoch_processing_helpers import (
     get_winning_crosslink_and_attesting_indices,
     increase_balance,
 )
-from eth2.beacon.helpers import get_active_validator_indices, get_block_root, get_randao_mix
+from eth2.beacon.helpers import (
+    get_active_validator_indices,
+    get_block_root,
+    get_randao_mix,
+)
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.historical_batch import HistoricalBatch
