@@ -2,6 +2,7 @@ import logging
 import operator
 import struct
 from typing import (
+    Any,
     ClassVar,
     Iterable,
     Sequence,
@@ -163,6 +164,12 @@ class Protocol(ProtocolAPI):
         )
         self.cmd_by_type = {type(cmd): cmd for cmd in self.commands}
         self.cmd_by_id = {cmd.cmd_id: cmd for cmd in self.commands}
+
+    def __eq__(self, other: Any) -> bool:
+        return type(self) is type(other)
+
+    def __hash__(self) -> int:
+        return hash(type(self))
 
     @property
     def logger(self) -> logging.Logger:

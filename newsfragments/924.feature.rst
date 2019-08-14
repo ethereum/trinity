@@ -1,0 +1,1 @@
+``p2p.protocol.Protocol`` now supports equality checking and is hashable.
