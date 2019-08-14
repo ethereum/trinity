@@ -524,5 +524,5 @@ class BeamDownloader(BaseService, PeerSubscriber):
             msg += "reqs=%d  " % (self._total_requests)
             msg += "pred_reqs=%d  " % (self._predictive_only_requests)
             msg += "timeouts=%d" % self._total_timeouts
-            self.logger.info("Beam-Sync: %s", msg)
+            self.logger.debug("Beam-Sync: %s", msg)
             await self.sleep(self._report_interval)

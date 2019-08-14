@@ -465,6 +465,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             self.logger.error('error unpacking message (%s) from %s: %s', message, address, e)
             return
 
+        if cmd_id not in CMD_ID_MAP:
+            self.logger.warning('unexpected cmd id: %s from %s: %s', cmd_id, address, message.hex())
+            return
+
         # As of discovery version 4, expiration is the last element for all packets, so
         # we can validate that here, but if it changes we may have to do so on the
         # handler methods.

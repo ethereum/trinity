@@ -282,7 +282,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         Appart from adding it to our list of connected nodes and adding each of our subscriber's
         to the peer, we also add the given messages to our subscriber's queues.
         """
-        self.logger.info('Adding %s to pool', peer)
+        self.logger.debug('Adding %s to pool', peer)
         self.connected_nodes[peer.remote] = peer
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
@@ -444,7 +444,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         """
         peer = cast(BasePeer, peer)
         if peer.remote in self.connected_nodes:
-            self.logger.info("%s finished[%s], removing from pool", peer, peer.disconnect_reason)
+            self.logger.debug("%s finished[%s], removing from pool", peer, peer.disconnect_reason)
             self.connected_nodes.pop(peer.remote)
         else:
             self.logger.warning(
@@ -468,8 +468,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         while self.is_operational:
             inbound_peers = len(
                 [peer for peer in self.connected_nodes.values() if peer.inbound])
-            self.logger.info("Connected peers: %d inbound, %d outbound",
-                             inbound_peers, (len(self.connected_nodes) - inbound_peers))
+            self.logger.debug("Connected peers: %d inbound, %d outbound",
+                              inbound_peers, (len(self.connected_nodes) - inbound_peers))
             subscribers = len(self._subscribers)
             if subscribers:
                 longest_queue = max(

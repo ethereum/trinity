@@ -74,7 +74,7 @@ class TxPool(BaseService):
 
     async def _handle_tx(self, sender: NodeAPI, txs: List[BaseTransactionFields]) -> None:
 
-        self.logger.debug('Received %d transactions from %s', len(txs), sender)
+        self.logger.debug2('Received %d transactions from %s', len(txs), sender)
 
         self._add_txs_to_bloom(sender, txs)
 

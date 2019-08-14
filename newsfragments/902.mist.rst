@@ -1,0 +1,1 @@
+Cleanup logging output levels to dump less information to terminal during beam sync.
