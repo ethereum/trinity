@@ -6,19 +6,11 @@ import asyncio
 
 from lahja import EndpointAPI
 
-from eth.db.chain import (
-    ChainDB,
-)
-
 from trinity.config import (
     Eth1AppConfig,
 )
-from trinity.chains.light_eventbus import (
-    EventBusLightPeerChain,
-)
-from trinity.db.eth1.manager import (
-    create_db_consumer_manager
-)
+
+from trinity.db.manager import DBClient
 from trinity.extensibility import (
     AsyncioIsolatedPlugin,
 )
@@ -53,12 +45,12 @@ class GraphQLRpcServerPlugin(AsyncioIsolatedPlugin):
     def do_start(self) -> None:
         trinity_config = self.boot_info.trinity_config
 
-        db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
+        # db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
 
         eth1_app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = eth1_app_config.get_chain_config()
 
-        db = db_manager.get_db()  # type: ignore
+        db = DBClient.connect(trinity_config.database_ipc_path)
         chain = chain_config.full_chain_class(db)
         rpc = GraphQlServer(chain)
         ipc_server = IPCServer(rpc, self.boot_info.trinity_config.graphql_ipc_path)
