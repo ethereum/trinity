@@ -23,7 +23,7 @@ class Account(ObjectType):
 
     async def resolve_balance(self, info):
         chain = info.context.get('chain')
-        state = await state_at_block(chain, 'latest')
+        state = await state_at_block(chain, 0)
         return state.get_balance(self)
 
 
