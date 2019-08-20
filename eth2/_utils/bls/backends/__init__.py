@@ -1,6 +1,7 @@
 
 from .noop import NoOpBackend
 from .py_ecc import PyECCBackend
+from .milagro import MilagroBackend
 from .base import BaseBLSBackend  # noqa: F401
 from typing import (  # noqa: F401
     Type,
@@ -11,6 +12,7 @@ from typing import (  # noqa: F401
 AVAILABLE_BACKENDS = (
     NoOpBackend,
     PyECCBackend,
+    MilagroBackend,
 )  # type: Tuple[Type[BaseBLSBackend], ...]
 
 # If blspy not installed, use PyECC as default BLS backend
