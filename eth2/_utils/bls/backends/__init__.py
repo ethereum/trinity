@@ -12,7 +12,6 @@ from typing import (  # noqa: F401
 AVAILABLE_BACKENDS = (
     NoOpBackend,
     PyECCBackend,
-    MilagroBackend,
 )  # type: Tuple[Type[BaseBLSBackend], ...]
 
 # If blspy not installed, use PyECC as default BLS backend
@@ -20,8 +19,14 @@ AVAILABLE_BACKENDS = (
 DEFAULT_BACKEND = None  # type: Type[BaseBLSBackend]
 
 try:
-    from .chia import ChiaBackend
-    DEFAULT_BACKEND = ChiaBackend
-    AVAILABLE_BACKENDS += (ChiaBackend,)
+    from .milagro import MilagroBackend
+    DEFAULT_BACKEND = MilagroBackend
+    AVAILABLE_BACKENDS += (MilagroBackend,)
 except ImportError:
     DEFAULT_BACKEND = PyECCBackend
+
+try:
+    from .chia import ChiaBackend
+    AVAILABLE_BACKENDS += (ChiaBackend,)
+except ImportError:
+    pass
