@@ -112,7 +112,7 @@ deps = {
         PYEVM_DEPENDENCY,
         "ssz==0.1.3",
         "blspy>=0.1.8,<1",  # for `bls_chia`
-        "milagro_bls_binding==0.1.0",
+        "milagro-bls-binding==0.1.1",
     ],
 }
 
