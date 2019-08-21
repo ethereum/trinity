@@ -1,7 +1,6 @@
 
 from .noop import NoOpBackend
 from .py_ecc import PyECCBackend
-from .milagro import MilagroBackend
 from .base import BaseBLSBackend  # noqa: F401
 from typing import (  # noqa: F401
     Type,
