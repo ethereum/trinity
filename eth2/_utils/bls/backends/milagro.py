@@ -1,15 +1,7 @@
-from milagro_bls_binding import (
-    privtopub,
-    sign,
-    verify,
-    aggregate_signatures,
-    aggregate_pubkeys,
-    verify_multiple,
-)
-
-
 from typing import (
+    Iterator,
     Sequence,
+    Tuple,
 )
 
 from eth_typing import (
@@ -17,14 +9,24 @@ from eth_typing import (
     BLSSignature,
     Hash32,
 )
-
+from eth_utils import (
+    to_tuple,
+)
+from milagro_bls_binding import (
+    aggregate_pubkeys,
+    aggregate_signatures,
+    privtopub,
+    sign,
+    verify,
+    verify_multiple,
+)
+from py_ecc.bls.typing import (
+    Domain,
+)
 
 from eth2._utils.bls.backends.base import (
     BaseBLSBackend,
 )
-
-from py_ecc.bls.typing import Domain
-
 from eth2.beacon.constants import (
     EMPTY_PUBKEY,
     EMPTY_SIGNATURE,
@@ -37,6 +39,14 @@ def to_int(domain: Domain) -> int:
     sigp/milagro_bls use big endian int on hash to g2.
     """
     return int.from_bytes(domain, 'big')
+
+
+@to_tuple
+def filter_non_empty_pair(pubkeys: Sequence[BLSPubkey],
+                          message_hashes: Sequence[Hash32]) -> Iterator[Tuple[BLSPubkey, Hash32]]:
+    for i, pubkey in enumerate(pubkeys):
+        if pubkey != EMPTY_PUBKEY:
+            yield pubkey, message_hashes[i]
 
 
 class MilagroBackend(BaseBLSBackend):
@@ -62,16 +72,18 @@ class MilagroBackend(BaseBLSBackend):
     @staticmethod
     def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
         # py_ecc use a different EMPTY_SIGNATURE. Return the Trinity one here:
-        if len(signatures) == 0:
+        non_empty_signatures = tuple(sig for sig in signatures if sig != EMPTY_SIGNATURE)
+        if len(non_empty_signatures) == 0:
             return EMPTY_SIGNATURE
-        return aggregate_signatures(list(signatures))
+        return aggregate_signatures(list(non_empty_signatures))
 
     @staticmethod
     def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
         # py_ecc use a different EMPTY_PUBKEY. Return the Trinity one here:
-        if len(pubkeys) == 0:
+        non_empty_pubkeys = tuple(key for key in pubkeys if key != EMPTY_PUBKEY)
+        if len(non_empty_pubkeys) == 0:
             return EMPTY_PUBKEY
-        return aggregate_pubkeys(list(pubkeys))
+        return aggregate_pubkeys(list(non_empty_pubkeys))
 
     @staticmethod
     def verify_multiple(pubkeys: Sequence[BLSPubkey],
@@ -80,4 +92,14 @@ class MilagroBackend(BaseBLSBackend):
                         domain: Domain) -> bool:
         if signature == EMPTY_SIGNATURE:
             raise ValueError(f"Empty signature breaks Milagro binding  signature={signature}")
-        return verify_multiple(list(pubkeys), list(message_hashes), signature, to_int(domain))
+
+        non_empty_pubkeys, filtered_message_hashes = zip(
+            *filter_non_empty_pair(pubkeys, message_hashes)
+        )
+
+        return verify_multiple(
+            list(non_empty_pubkeys),
+            list(filtered_message_hashes),
+            signature,
+            to_int(domain),
+        )
