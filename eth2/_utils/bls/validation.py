@@ -5,9 +5,6 @@ from eth_typing import (
     BLSSignature,
     BLSPubkey,
 )
-from eth_utils import (
-    ValidationError,
-)
 from eth2.beacon.constants import (
     EMPTY_PUBKEY,
     EMPTY_SIGNATURE,
@@ -16,6 +13,7 @@ from eth2.beacon.exceptions import (
     SignatureError,
     PublicKeyError,
 )
+from typing import Sequence
 
 
 def validate_private_key(privkey: int) -> None:
@@ -34,9 +32,9 @@ def validate_public_key(pubkey: BLSPubkey, allow_empty: bool =False) -> None:
         raise PublicKeyError(f"Empty public key is invalid  pubkey={pubkey}")
 
 
-def validate_many_public_keys(pubkeys: BLSPubkey) -> None:
+def validate_many_public_keys(pubkeys: Sequence[BLSPubkey]) -> None:
     for pubkey in pubkeys:
-        validate_public_key(allow_empty=True)
+        validate_public_key(pubkey, allow_empty=True)
 
 
 def validate_signature(signature: BLSSignature) -> None:

@@ -51,11 +51,13 @@ class BLSValidationError(ValidationError):
     """
     pass
 
+
 class SignatureError(BLSValidationError):
     """
     Signature is ill-formed
     """
     pass
+
 
 class PublicKeyError(BLSValidationError):
     """
