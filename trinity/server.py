@@ -309,6 +309,33 @@ class BCCServer(BaseServer[BCCPeerPool]):
         )
 
 
+class BZZHeaderRequester(BaseService):
+    def __init__(self, headerdb, peer_pool: BZZETHPeerPool):
+        super().__init__(token=peer_pool.cancel_token)
+        self.peer_pool = peer_pool
+        self.headerdb = headerdb
+
+    async def _run(self) -> None:
+        import random
+        from eth_utils import humanize_hash
+        chain_head = self.headerdb.get_canonical_head()
+        while self.is_operational:
+            if len(self.peer_pool) == 0:
+                self.logger.info('no connected peers, sleeping....')
+                await asyncio.sleep(10)
+                continue
+            async for peer in self.peer_pool:
+                header_number_to_request = random.randrange(0, chain_head.block_number + 1)
+                header_hash = self.headerdb.get_canonical_block_hash(header_number_to_request)
+                self.logger.info(
+                    'Requesting Header #%d %s',
+                    header_number_to_request,
+                    humanize_hash(header_hash),
+                )
+                peer.sub_proto.send_get_block_headers((header_hash,))
+                await asyncio.sleep(1)
+
+
 class BZZETHServer(BaseServer[BZZETHPeerPool]):
     def _make_peer_pool(self) -> BZZETHPeerPool:
         from eth.db.header import HeaderDB
@@ -338,6 +365,13 @@ class BZZETHServer(BaseServer[BZZETHPeerPool]):
         header_server = BZZETHHeaderServer(peer_pool.cancel_token, headerdb)
         peer_pool.subscribe(header_server)
         self.run_child_service(header_server)
+        import sys
+        if '--do-bzzeth-header-requests' in sys.argv:
+            self.logger.info('Starting BZZ header request process')
+            header_requester = BZZHeaderRequester(headerdb, peer_pool)
+            self.run_child_service(header_requester)
+        else:
+            self.logger.info('Not starting BZZ header requests: %s', sys.argv)
         return peer_pool
 
 

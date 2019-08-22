@@ -128,6 +128,7 @@ class ValidateAndStoreLogLevel(argparse.Action):
 
 
 parser = argparse.ArgumentParser(description='Trinity')
+parser.add_argument('--do-bzzeth-header-requests', action='store_true')
 
 #
 # subparser for sub commands
