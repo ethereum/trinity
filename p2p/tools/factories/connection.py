@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncIterator, Tuple
+from typing import AsyncIterator, Sequence, Tuple
 
 from async_generator import asynccontextmanager
 
@@ -11,13 +11,18 @@ from p2p.abc import ConnectionAPI, NodeAPI
 from p2p.connection import Connection
 from p2p.constants import DEVP2P_V5
 from p2p.handshake import (
+    DevP2PHandshakeParams,
     DevP2PReceipt,
     Handshaker,
     negotiate_protocol_handshakes,
+    dial_out as _dial_out,
 )
 from p2p.service import run_service
 
+from p2p.tools.paragon import ParagonHandshaker
+
 from .cancel_token import CancelTokenFactory
+from .keys import PrivateKeyFactory
 from .multiplexer import MultiplexerPairFactory
 from .p2p_proto import DevP2PHandshakeParamsFactory
 from .transport import MemoryTransportPairFactory
@@ -129,3 +134,26 @@ async def ConnectionPairFactory(*,
             alice_connection.start_protocol_streams()
             bob_connection.start_protocol_streams()
         yield alice_connection, bob_connection
+
+
+async def dial_out(remote: NodeAPI,
+                   private_key: keys.PrivateKey = None,
+                   p2p_handshake_params: DevP2PHandshakeParams = None,
+                   protocol_handshakers: Sequence[Handshaker] = None,
+                   token: CancelToken = None) -> ConnectionAPI:
+    if private_key is None:
+        private_key = PrivateKeyFactory()
+    if p2p_handshake_params is None:
+        p2p_handshake_params = DevP2PHandshakeParamsFactory()
+    if protocol_handshakers is None:
+        protocol_handshakers = (ParagonHandshaker(),)
+    if token is None:
+        token = CancelTokenFactory()
+    connection = await _dial_out(
+        remote,
+        private_key,
+        p2p_handshake_params,
+        protocol_handshakers,
+        token,
+    )
+    return connection

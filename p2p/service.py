@@ -176,6 +176,8 @@ class BaseService(CancellableMixin, AsyncioServiceAPI):
         async def _run_daemon_task_wrapper() -> None:
             try:
                 await awaitable
+            except asyncio.CancelledError:
+                pass
             finally:
                 if not self.is_cancelled:
                     self.logger.debug(

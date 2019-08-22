@@ -7,6 +7,7 @@ from typing import (
     Awaitable,
     Callable,
     ClassVar,
+    Collection,
     ContextManager,
     Dict,
     Generic,
@@ -18,6 +19,7 @@ from typing import (
     TypeVar,
     Union,
 )
+import uuid
 
 
 from rlp import sedes
@@ -196,6 +198,7 @@ class RequestAPI(ABC, Generic[TRequestPayload]):
 
 
 class TransportAPI(ABC):
+    session_id: uuid.UUID
     remote: NodeAPI
     read_state: TransportState
 
@@ -283,8 +286,13 @@ class MultiplexerAPI(ABC):
         ...
 
     #
-    # Proxy Transport methods
+    # Proxy Transport properties and methods
     #
+    @property
+    @abstractmethod
+    def session_id(self) -> uuid.UUID:
+        ...
+
     @property
     @abstractmethod
     def remote(self) -> NodeAPI:
@@ -419,6 +427,11 @@ class ConnectionAPI(AsyncioServiceAPI):
 
     @property
     @abstractmethod
+    def session_id(self) -> uuid.UUID:
+        ...
+
+    @property
+    @abstractmethod
     def remote(self) -> NodeAPI:
         ...
 
@@ -482,4 +495,37 @@ class ConnectionAPI(AsyncioServiceAPI):
     @property
     @abstractmethod
     def safe_client_version_string(self) -> str:
+        ...
+
+
+class ConnectionPoolAPI(Collection[ConnectionAPI]):
+    @abstractmethod
+    def add(self, connection: ConnectionAPI) -> None:
+        ...
+
+    @abstractmethod
+    def remove(self, connection: ConnectionAPI) -> None:
+        ...
+
+
+class BehaviorAPI(ABC):
+    """
+    A behavior is some unit of logic that applies to a `ConnectionAPI`.
+    Typical behaviors may perform an action when a certain command is received
+    such as responding to a `Ping` with a `Pong` message.
+    """
+    @abstractmethod
+    def applies_to(self, connection: ConnectionAPI) -> bool:
+        """
+        Return `True` if this Behavior should be applied to the `connection``
+        """
+        ...
+
+    @abstractmethod
+    def apply(self, connection: ConnectionAPI) -> ContextManager[None]:
+        """
+        Context manager API used programatically by the `ContextManager` to
+        apply the behavior to the connection during the lifecycle of the
+        connection.
+        """
         ...

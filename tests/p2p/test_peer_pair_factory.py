@@ -14,7 +14,7 @@ async def test_connection_factory_with_ParagonPeer():
 
         async def handle_ping(conn, msg):
             got_ping.set()
-            bob.base_protocol.send_pong()
+            conn.get_base_protocol().send_pong()
 
         async def handle_pong(conn, msg):
             got_pong.set()

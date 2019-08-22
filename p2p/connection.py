@@ -1,7 +1,14 @@
 import asyncio
 import collections
 import functools
-from typing import DefaultDict, Sequence, Set, Type
+from typing import (
+    TYPE_CHECKING,
+    DefaultDict,
+    Sequence,
+    Set,
+    Type,
+)
+import uuid
 
 from eth_keys import keys
 
@@ -21,11 +28,13 @@ from p2p.exceptions import (
     UnknownProtocol,
     UnknownProtocolCommand,
 )
-from p2p.handshake import DevP2PReceipt
 from p2p.handler_subscription import HandlerSubscription
 from p2p.service import BaseService
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p.typing import Capabilities
+
+if TYPE_CHECKING:
+    from p2p.handshake import DevP2PReceipt  # noqa: F401
 
 
 class Connection(ConnectionAPI, BaseService):
@@ -40,7 +49,7 @@ class Connection(ConnectionAPI, BaseService):
 
     def __init__(self,
                  multiplexer: MultiplexerAPI,
-                 devp2p_receipt: DevP2PReceipt,
+                 devp2p_receipt: 'DevP2PReceipt',
                  protocol_receipts: Sequence[HandshakeReceiptAPI],
                  is_dial_out: bool) -> None:
         super().__init__(token=multiplexer.cancel_token, loop=multiplexer.cancel_token.loop)
@@ -71,6 +80,14 @@ class Connection(ConnectionAPI, BaseService):
     @property
     def remote(self) -> NodeAPI:
         return self._multiplexer.remote
+
+    @property
+    def session_id(self) -> uuid.UUID:
+        return self._multiplexer.session_id
+
+    @property
+    def is_closing(self) -> bool:
+        return self._multiplexer.is_closing
 
     async def _run(self) -> None:
         try:
@@ -171,7 +188,7 @@ class Connection(ConnectionAPI, BaseService):
     def get_base_protocol(self) -> BaseP2PProtocol:
         return self._multiplexer.get_base_protocol()
 
-    def get_p2p_receipt(self) -> DevP2PReceipt:
+    def get_p2p_receipt(self) -> 'DevP2PReceipt':
         return self._devp2p_receipt
 
     #
