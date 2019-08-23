@@ -97,6 +97,7 @@ class Eth2BLS:
         if cls.backend != NoOpBackend:
             validate_signature(signature)
             validate_public_key(pubkey)
+
         if not cls.verify(message_hash, pubkey, signature, domain):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
@@ -115,6 +116,7 @@ class Eth2BLS:
         if cls.backend != NoOpBackend:
             validate_signature(signature)
             validate_many_public_keys(pubkeys)
+
         if not cls.verify_multiple(pubkeys, message_hashes, signature, domain):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
