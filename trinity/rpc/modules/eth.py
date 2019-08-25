@@ -91,14 +91,18 @@ async def get_block_at_number(chain: AsyncChainAPI, at_block: Union[str, int]) -
         return await chain.coro_get_block_by_header(at_header)
 
 
+# TODO: move this method to utils
+# and find a better name for normalize_transaction
 def dict_to_spoof_transaction(
         chain: AsyncChainAPI,
         header: BlockHeader,
-        transaction_dict: Dict[str, Any]) -> SignedTransactionAPI:
+        transaction_dict: Dict[str, Any],
+        normalize_transaction=normalize_transaction_dict
+) -> SignedTransactionAPI:
     """
     Convert dicts used in calls & gas estimates into a spoof transaction
     """
-    txn_dict = normalize_transaction_dict(transaction_dict)
+    txn_dict = normalize_transaction(transaction_dict)
     sender = txn_dict.get('from', ZERO_ADDRESS)
 
     if 'nonce' in txn_dict:

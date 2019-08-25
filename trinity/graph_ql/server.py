@@ -1,5 +1,7 @@
 import json
 import logging
+from asyncio.unix_events import _UnixSelectorEventLoop
+from typing import Optional
 
 from graphql.execution.executors.asyncio import AsyncioExecutor
 
@@ -8,15 +10,21 @@ from eth.chains.base import Chain
 from .types import schema
 
 
+def extract_errors(errors):
+    if errors is None:
+        return None
+    return[error.message for error in errors]
+
+
 class GraphQlServer:
     logger = logging.getLogger("GraphQlServer")
 
-    def __init__(self, chain: Chain):
+    def __init__(self, chain: Chain, loop: Optional[_UnixSelectorEventLoop]=None):
         self.chain = chain
-        self.executor = AsyncioExecutor()
+        self.executor = AsyncioExecutor(loop=loop)
 
     async def execute(self, query: dict) -> str:
-        self.logger.info(f'got query {query["query"]}')
+        # self.logger.info(f'got query {query["query"]}')
         result = await schema.execute(
             query['query'],
             executor=self.executor,
@@ -27,5 +35,5 @@ class GraphQlServer:
         self.logger.info(f'generated error {result.errors}')
         return json.dumps({
             'result': result.data,
-            'errors': result.errors,
+            'errors': extract_errors(result.errors),
         })

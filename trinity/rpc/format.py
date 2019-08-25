@@ -80,6 +80,10 @@ def normalize_transaction_dict(transaction_dict: Dict[str, str]) -> Dict[str, An
     return merge(SAFE_TRANSACTION_DEFAULTS, normalized_dict)
 
 
+def merge_transaction_defaults(transaction_dict: Dict[str, str]) -> Dict[str, Any]:
+    return merge(SAFE_TRANSACTION_DEFAULTS, transaction_dict)
+
+
 def header_to_dict(header: BlockHeaderAPI) -> Dict[str, str]:
     logs_bloom = encode_hex(int_to_big_endian(header.bloom))[2:]
     logs_bloom = '0x' + logs_bloom.rjust(512, '0')

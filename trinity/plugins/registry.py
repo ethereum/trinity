@@ -45,7 +45,7 @@ from trinity.plugins.builtin.upnp.plugin import (
     UpnpPlugin,
 )
 from trinity.plugins.eth2.network_generator.plugin import NetworkGeneratorPlugin
-from trinity.plugins.eth2.beacon.plugin import BeaconNodePlugin
+# from trinity.plugins.eth2.beacon.plugin import BeaconNodePlugin
 from trinity.plugins.builtin.tx_pool.plugin import (
     TxPlugin,
 )
@@ -66,7 +66,7 @@ BASE_PLUGINS: Tuple[Type[BasePlugin], ...] = (
 
 BEACON_NODE_PLUGINS: Tuple[Type[BasePlugin], ...] = (
     NetworkGeneratorPlugin,
-    BeaconNodePlugin,
+    # BeaconNodePlugin,
 )
 
 

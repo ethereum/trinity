@@ -1,9 +1,8 @@
 import json
 
 from eth_utils import to_bytes
-from flask import Flask, render_template_string, request
-from web3 import  IPCProvider
-
+from flask import Flask, request
+from web3 import IPCProvider
 
 html = """
 <!DOCTYPE html>
@@ -70,8 +69,8 @@ html = """
 
 
 class IPCClient(IPCProvider):
-
     def encode_rpc_request(self, method, query):
+        # HACK
         params = {"query": query}
         text = json.dumps(params)
         return to_bytes(text=text)

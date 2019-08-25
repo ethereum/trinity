@@ -1,29 +1,89 @@
+import os
+from typing import (
+    Union,
+)
+
 from eth_utils import (
     encode_hex,
     int_to_big_endian,
-    to_bytes
+    to_bytes,
+    is_address,
+    to_wei,
+)
+
+from graphql.language.ast import (
+   StringValue,
 )
 from graphene import (
+    Argument,
+    InputObjectType,
     ObjectType,
     String,
     Field,
     Int,
     Schema,
+    Scalar,
     List,
 )
-from trinity.rpc.modules.eth import state_at_block
+
+from trinity._utils.validation import (
+    validate_transaction_gas_estimation_dict,
+    validate_transaction_call_dict)
+from trinity.rpc.format import merge_transaction_defaults
+from trinity.rpc.modules.eth import (
+    state_at_block,
+    get_header,
+    dict_to_spoof_transaction,
+)
+
+
+class BaseBytes(Scalar):
+    @staticmethod
+    def parse_value(value):
+        return to_bytes(hexstr=value)
+
+    @staticmethod
+    def serialize(value):
+        return encode_hex(value)
+
+
+class Address(BaseBytes):
+
+    @staticmethod
+    def parse_literal(node):
+        if isinstance(node, StringValue) and is_address(node.value):
+            return to_bytes(hexstr=node.value)
+
+
+class Bytes(BaseBytes):
+
+    @staticmethod
+    def parse_literal(node):
+        if isinstance(node, StringValue):
+            return to_bytes(hexstr=node.value)
+
+
+class Bytes32(Scalar):
+
+    @staticmethod
+    def parse_literal(node):
+        if isinstance(node, StringValue):
+            parsed_value = to_bytes(hexstr=node.value)
+            if len(parsed_value) == 32:
+                return parsed_value
 
 
 class Account(ObjectType):
-    address = String()
-    balance = String()
+    address = Address()
+    balance = Int()
 
     async def resolve_address(self, info):
-        return encode_hex(self)
+        return self
 
     async def resolve_balance(self, info):
+        at_block = info.context.get('at_block', 'latest')
         chain = info.context.get('chain')
-        state = await state_at_block(chain, 0)
+        state = await state_at_block(chain, at_block)
         return state.get_balance(self)
 
 
@@ -130,9 +190,49 @@ class Block(ObjectType):
         return self.transactions
 
 
+class CallData(InputObjectType):
+    sender = Address(name='from')
+    to = Address()
+    gas = Int()
+    gasPrice = Int()
+    value = String()
+    data = Bytes()
+
+
+class CallResult(ObjectType):
+    data = Bytes()
+    gas_used = Int(name='gasUsed')
+    status = Int()
+
+    def resolve_data(self, info):
+        return self.output
+
+    def resolve_gas_used(self, info):
+        return self.get_gas_used()
+
+    def resolve_status(self, info):
+        return 0 if self.is_error else 1
+
+
 class Query(ObjectType):
     block = Field(Block, number=Int(), hash=String())
     transaction = Field(Transaction, hash=String())
+    estimate_gas = Int(
+        data=Argument(CallData, required=True),
+        at_block=String(name='blockNumber', required=True),
+        name='estimateGas'
+    )
+    gas_price = Int(name='gasPrice')
+    account = Field(
+        Account,
+        address=Address(required=True),
+        at_block=String(name='blockNumber')
+    )
+    call = Field(
+        CallResult,
+        data=Argument(CallData, required=True),
+        at_block=String(name='blockNumber')
+    )
 
     async def resolve_block(self, info, number=None, hash=None):
         chain = info.context.get('chain')
@@ -151,6 +251,39 @@ class Query(ObjectType):
     async def resolve_transaction(self, info, hash):
         chain = info.context.get('chain')
         return chain.get_canonical_transaction(to_bytes(hexstr=hash))
+
+    async def resolve_estimate_gas(self, info, data, at_block: Union[str, int]):
+        chain = info.context.get('chain')
+        header = await get_header(chain, at_block)
+        validate_transaction_gas_estimation_dict(data, chain.get_vm(header))
+        transaction = dict_to_spoof_transaction(
+            chain,
+            header,
+            data,
+            normalize_transaction=merge_transaction_defaults
+        )
+        gas = chain.estimate_gas(transaction, header)
+        return gas
+
+    async def resolve_gas_price(self, info):
+        return int(os.environ.get('TRINITY_GAS_PRICE', to_wei(1, 'gwei')))
+
+    async def resolve_account(self, info, address, at_block='latest'):
+        info.context['at_block'] = at_block
+        return address
+
+    async def resolve_call(self, info, data, at_block='latest'):
+        chain = info.context.get('chain')
+        header = await get_header(chain, at_block)
+        validate_transaction_call_dict(data, chain.get_vm(header))
+        transaction = dict_to_spoof_transaction(
+            chain,
+            header,
+            data,
+            normalize_transaction=merge_transaction_defaults
+        )
+        computation = chain.get_transaction_computation(transaction, header)
+        return computation
 
 
 schema = Schema(query=Query)

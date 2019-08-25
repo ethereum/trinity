@@ -20,7 +20,7 @@ from eth_keys import keys
 
 from eth import constants as eth_constants
 from eth.chains.base import (
-    Chain,
+    Chain as _Chain,
     MiningChain
 )
 from eth.db.atomic import AtomicDB
@@ -67,6 +67,31 @@ def pytest_addoption(parser):
     parser.addoption("--enode", type=str, required=False)
     parser.addoption("--integration", action="store_true", default=False)
     parser.addoption("--fork", type=str, required=False)
+
+
+# TODO: make a PR in py-evm and remove this
+class Chain(_Chain):
+
+    def get_transaction_result(
+            self,
+            transactionI,
+            at_header) -> bytes:
+        """
+        Return the result of running the given transaction.
+        This is referred to as a `call()` in web3.
+        """
+        computation = self.get_transaction_computation(transaction, at_header)
+        return computation.output
+
+    def get_transaction_computation(
+            self,
+            transaction,
+            at_header):
+        with self.get_vm(at_header).state_in_temp_block() as state:
+            computation = state.costless_execute_transaction(transaction)
+
+        computation.raise_if_error()
+        return computation
 
 
 class TestAsyncChain(Chain, AsyncChainMixin):
@@ -269,23 +294,24 @@ def chain_without_block_validation(
     return chain
 
 
+@pytest.fixture()
+def rpc(chain_with_block_validation, event_bus):
+    return RPCServer(
+        initialize_eth1_modules(chain_with_block_validation, event_bus), event_bus,
+    )
+
+
 @pytest.mark.asyncio
 @pytest.fixture
 async def ipc_server(
         monkeypatch,
-        event_bus,
         jsonrpc_ipc_pipe_path,
         event_loop,
-        chain_with_block_validation):
+        rpc):
     """
     This fixture runs a single RPC server over IPC over
     the course of all tests. It yields the IPC server only for monkeypatching purposes
     """
-    rpc = RPCServer(
-        initialize_eth1_modules(chain_with_block_validation, event_bus),
-        chain_with_block_validation,
-        event_bus,
-    )
     ipc_server = IPCServer(rpc, jsonrpc_ipc_pipe_path, loop=event_loop)
 
     asyncio.ensure_future(ipc_server.run(), loop=event_loop)
