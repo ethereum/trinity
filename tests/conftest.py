@@ -74,7 +74,7 @@ class Chain(_Chain):
 
     def get_transaction_result(
             self,
-            transactionI,
+            transaction,
             at_header) -> bytes:
         """
         Return the result of running the given transaction.
