@@ -1,7 +1,14 @@
 import asyncio
 import collections
 import functools
-from typing import Any, Awaitable, Callable, DefaultDict, Set, Tuple, Type
+from typing import (
+    TYPE_CHECKING,
+    DefaultDict,
+    Sequence,
+    Set,
+    TypeVar,
+    Type,
+)
 
 from eth_keys import keys
 
@@ -17,6 +24,7 @@ from p2p.exceptions import (
     UnknownProtocol,
     UnknownProtocolCommand,
 )
+from p2p.handler_subscription import HandlerSubscription
 from p2p.service import BaseService
 from p2p.p2p_proto import (
     BaseP2PProtocol,
@@ -25,13 +33,6 @@ from p2p.typing import Capabilities, Payload
 
 if TYPE_CHECKING:
     from p2p.handshake import DevP2PReceipt  # noqa: F401
-
-class HandlerSubscription(HandlerSubscriptionAPI):
-    def __init__(self, remove_fn: Callable[[], Any]) -> None:
-        self._remove_fn = remove_fn
-
-    def cancel(self) -> None:
-        self._remove_fn()
 
 
 class Connection(ConnectionAPI, BaseService):
@@ -46,13 +47,13 @@ class Connection(ConnectionAPI, BaseService):
 
     def __init__(self,
                  multiplexer: MultiplexerAPI,
-                 devp2p_receipt: DevP2PReceipt,
-                 protocol_receipts: Tuple[HandshakeReceipt, ...],
+                 devp2p_receipt: 'DevP2PReceipt',
+                 protocol_receipts: Sequence[HandshakeReceiptAPI],
                  is_dial_out: bool) -> None:
         super().__init__(token=multiplexer.cancel_token, loop=multiplexer.cancel_token.loop)
         self._multiplexer = multiplexer
         self._devp2p_receipt = devp2p_receipt
-        self._protocol_receipts = protocol_receipts
+        self.protocol_receipts = tuple(protocol_receipts)
         self.is_dial_out = is_dial_out
 
         self._protocol_handlers = collections.defaultdict(set)

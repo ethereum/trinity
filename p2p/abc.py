@@ -249,8 +249,9 @@ class ProtocolAPI(ABC):
     def send_request(self, request: RequestAPI[Payload]) -> None:
         ...
 
+    @classmethod
     @abstractmethod
-    def supports_command(self, cmd_type: Type[CommandAPI]) -> bool:
+    def supports_command(cls, cmd_type: Type[CommandAPI]) -> bool:
         ...
 
     @classmethod
@@ -398,6 +399,8 @@ class HandlerSubscriptionAPI(ContextManager['HandlerSubscriptionAPI']):
 
 
 class ConnectionAPI(AsyncioServiceAPI):
+    protocol_receipts: Tuple[HandshakeReceiptAPI, ...]
+
     #
     # Primary properties of the connection
     #
