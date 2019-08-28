@@ -28,7 +28,7 @@ from eth_keys import datatypes
 
 from cancel_token import CancelToken
 
-from p2p.abc import CommandAPI, MultiplexerAPI, NodeAPI, ProtocolAPI
+from p2p.abc import CommandAPI, HandshakeReceiptAPI, MultiplexerAPI, NodeAPI, ProtocolAPI
 from p2p.constants import BLACKLIST_SECONDS_BAD_PROTOCOL
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import (
@@ -41,7 +41,6 @@ from p2p.handshake import (
     negotiate_protocol_handshakes,
     DevP2PHandshakeParams,
     DevP2PReceipt,
-    HandshakeReceipt,
     Handshaker,
 )
 from p2p.service import BaseService
@@ -71,7 +70,7 @@ async def handshake(remote: NodeAPI,
                     p2p_handshake_params: DevP2PHandshakeParams,
                     protocol_handshakers: Tuple[Handshaker, ...],
                     token: CancelToken,
-                    ) -> Tuple[MultiplexerAPI, DevP2PReceipt, Tuple[HandshakeReceipt, ...]]:
+                    ) -> Tuple[MultiplexerAPI, DevP2PReceipt, Tuple[HandshakeReceiptAPI, ...]]:
     """
     Perform the auth and P2P handshakes with the given remote.
 
@@ -113,7 +112,7 @@ async def receive_handshake(reader: asyncio.StreamReader,
                             p2p_handshake_params: DevP2PHandshakeParams,
                             protocol_handshakers: Tuple[Handshaker, ...],
                             token: CancelToken,
-                            ) -> Tuple[MultiplexerAPI, DevP2PReceipt, Tuple[HandshakeReceipt, ...]]:
+                            ) -> Tuple[MultiplexerAPI, DevP2PReceipt, Tuple[HandshakeReceiptAPI, ...]]:  # noqa: E501
     transport = await Transport.receive_connection(
         reader=reader,
         writer=writer,
@@ -183,7 +182,7 @@ class BasePeer(BaseService):
     def __init__(self,
                  multiplexer: MultiplexerAPI,
                  devp2p_receipt: DevP2PReceipt,
-                 protocol_receipts: Sequence[HandshakeReceipt],
+                 protocol_receipts: Sequence[HandshakeReceiptAPI],
                  context: BasePeerContext,
                  inbound: bool,
                  event_bus: EndpointAPI = None,
@@ -237,7 +236,7 @@ class BasePeer(BaseService):
 
     def process_handshake_receipts(self,
                                    devp2p_receipt: DevP2PReceipt,
-                                   protocol_receipts: Sequence[HandshakeReceipt]) -> None:
+                                   protocol_receipts: Sequence[HandshakeReceiptAPI]) -> None:
         """
         Hook for subclasses to initialize data based on the protocol handshake.
         """
@@ -609,7 +608,7 @@ class BasePeerFactory(ABC):
     def create_peer(self,
                     multiplexer: MultiplexerAPI,
                     devp2p_receipt: DevP2PReceipt,
-                    protocol_receipts: Sequence[HandshakeReceipt],
+                    protocol_receipts: Sequence[HandshakeReceiptAPI],
                     inbound: bool) -> BasePeer:
         return self.peer_class(
             multiplexer=multiplexer,
