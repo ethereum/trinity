@@ -17,16 +17,14 @@ from p2p.exceptions import (
     UnknownProtocol,
     UnknownProtocolCommand,
 )
-from p2p.handshake import (
-    DevP2PReceipt,
-    HandshakeReceipt,
-)
 from p2p.service import BaseService
 from p2p.p2p_proto import (
     BaseP2PProtocol,
 )
 from p2p.typing import Capabilities, Payload
 
+if TYPE_CHECKING:
+    from p2p.handshake import DevP2PReceipt  # noqa: F401
 
 class HandlerSubscription(HandlerSubscriptionAPI):
     def __init__(self, remove_fn: Callable[[], Any]) -> None:
@@ -173,6 +171,12 @@ class Connection(ConnectionAPI, BaseService):
     def get_base_protocol(self) -> BaseP2PProtocol:
         return self._multiplexer.get_base_protocol()
 
+    def get_p2p_receipt(self) -> 'DevP2PReceipt':
+        return self._devp2p_receipt
+
+    #
+    # Connection Metadata
+    #
     @property
     def remote_capabilities(self) -> Capabilities:
         return self._devp2p_receipt.capabilities

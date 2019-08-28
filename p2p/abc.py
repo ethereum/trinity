@@ -31,6 +31,7 @@ from eth_keys import datatypes
 from p2p.typing import Capability, Capabilities, Payload, Structure
 
 if TYPE_CHECKING:
+    from p2p.handshake import DevP2PReceipt  # noqa: F401
     from p2p.p2p_proto import (  # noqa: F401
         BaseP2PProtocol,
     )
