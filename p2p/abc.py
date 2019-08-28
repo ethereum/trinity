@@ -408,6 +408,8 @@ class ConnectionAPI(AsyncioServiceAPI):
     #
     # Primary properties of the connection
     #
+    is_dial_out: bool
+
     @property
     @abstractmethod
     def is_dial_in(self) -> bool:
@@ -421,6 +423,10 @@ class ConnectionAPI(AsyncioServiceAPI):
     #
     # Subscriptions/Handler API
     #
+    @abstractmethod
+    def start_protocol_streams(self) -> None:
+        ...
+
     @abstractmethod
     def add_protocol_handler(self,
                              protocol_type: Type[ProtocolAPI],
@@ -449,6 +455,13 @@ class ConnectionAPI(AsyncioServiceAPI):
     def get_base_protocol(self) -> 'BaseP2PProtocol':
         ...
 
+    @abstractmethod
+    def get_p2p_receipt(self) -> 'DevP2PReceipt':
+        ...
+
+    #
+    # Connection Metadata
+    #
     @property
     @abstractmethod
     def remote_capabilities(self) -> Capabilities:
