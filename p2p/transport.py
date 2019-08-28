@@ -4,6 +4,7 @@ import logging
 import secrets
 import struct
 from typing import cast
+import uuid
 
 import sha3
 
@@ -61,6 +62,7 @@ class Transport(TransportAPI):
                  mac_secret: bytes,
                  egress_mac: sha3.keccak_256,
                  ingress_mac: sha3.keccak_256) -> None:
+        self.session_id = uuid.uuid4()
         self.remote = remote
 
         self._private_key = private_key

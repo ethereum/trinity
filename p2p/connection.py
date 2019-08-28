@@ -6,9 +6,9 @@ from typing import (
     DefaultDict,
     Sequence,
     Set,
-    TypeVar,
     Type,
 )
+import uuid
 
 from eth_keys import keys
 
@@ -80,6 +80,10 @@ class Connection(ConnectionAPI, BaseService):
     @property
     def remote(self) -> NodeAPI:
         return self._multiplexer.remote
+
+    @property
+    def session_id(self) -> uuid.UUID:
+        return self._multiplexer.session_id
 
     async def _run(self) -> None:
         try:

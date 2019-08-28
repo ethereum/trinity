@@ -11,6 +11,7 @@ from typing import (
     Type,
     Union,
 )
+import uuid
 
 from async_generator import asynccontextmanager
 
@@ -170,6 +171,10 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
     @property
     def remote(self) -> NodeAPI:
         return self._transport.remote
+
+    @property
+    def session_id(self) -> uuid.UUID:
+        return self._transport.session_id
 
     @property
     def is_closing(self) -> bool:

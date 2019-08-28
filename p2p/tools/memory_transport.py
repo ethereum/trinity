@@ -2,6 +2,7 @@ import asyncio
 import logging
 import struct
 from typing import Tuple
+import uuid
 
 from cached_property import cached_property
 
@@ -30,6 +31,7 @@ class MemoryTransport(TransportAPI):
                  private_key: datatypes.PrivateKey,
                  reader: asyncio.StreamReader,
                  writer: asyncio.StreamWriter) -> None:
+        self.session_id = uuid.uuid4()
         self.remote = remote
         self._private_key = private_key
         self._reader = reader

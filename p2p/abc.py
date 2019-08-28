@@ -18,6 +18,7 @@ from typing import (
     TypeVar,
     Union,
 )
+import uuid
 
 
 from rlp import sedes
@@ -195,6 +196,7 @@ class RequestAPI(ABC, Generic[TRequestPayload]):
 
 
 class TransportAPI(ABC):
+    session_id: uuid.UUID
     remote: NodeAPI
 
     @property
@@ -281,8 +283,13 @@ class MultiplexerAPI(ABC):
         ...
 
     #
-    # Proxy Transport methods
+    # Proxy Transport properties and methods
     #
+    @property
+    @abstractmethod
+    def session_id(self) -> uuid.UUID:
+        ...
+
     @property
     @abstractmethod
     def remote(self) -> NodeAPI:
@@ -413,6 +420,11 @@ class ConnectionAPI(AsyncioServiceAPI):
     @property
     @abstractmethod
     def is_dial_in(self) -> bool:
+        ...
+
+    @property
+    @abstractmethod
+    def session_id(self) -> uuid.UUID:
         ...
 
     @property
