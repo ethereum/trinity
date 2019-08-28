@@ -91,7 +91,8 @@ class Connection(ConnectionAPI, BaseService):
         except (PeerConnectionLost, asyncio.CancelledError):
             pass
 
-            await self.cancellation()
+    async def _cleanup(self) -> None:
+        self._multiplexer.close()
 
     #
     # Subscriptions/Handler API
