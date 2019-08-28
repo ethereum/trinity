@@ -15,9 +15,12 @@ from eth_keys import keys
 from p2p.abc import (
     CommandAPI,
     HandlerSubscriptionAPI,
+    HandshakeReceiptAPI,
     MultiplexerAPI,
     NodeAPI,
     ProtocolAPI,
+    ProtocolHandlerFn,
+    CommandHandlerFn,
     ConnectionAPI,
 )
 from p2p.exceptions import (
@@ -26,10 +29,8 @@ from p2p.exceptions import (
 )
 from p2p.handler_subscription import HandlerSubscription
 from p2p.service import BaseService
-from p2p.p2p_proto import (
-    BaseP2PProtocol,
-)
-from p2p.typing import Capabilities, Payload
+from p2p.p2p_proto import BaseP2PProtocol
+from p2p.typing import Capabilities
 
 if TYPE_CHECKING:
     from p2p.handshake import DevP2PReceipt  # noqa: F401
@@ -38,11 +39,11 @@ if TYPE_CHECKING:
 class Connection(ConnectionAPI, BaseService):
     _protocol_handlers: DefaultDict[
         Type[ProtocolAPI],
-        Set[Callable[[CommandAPI, Payload], Awaitable[Any]]]
+        Set[ProtocolHandlerFn]
     ]
     _command_handlers: DefaultDict[
         Type[CommandAPI],
-        Set[Callable[[Payload], Awaitable[Any]]]
+        Set[CommandHandlerFn]
     ]
 
     def __init__(self,
@@ -115,7 +116,7 @@ class Connection(ConnectionAPI, BaseService):
                     protocol,
                     type(cmd),
                 )
-                self.run_task(proto_handler_fn(cmd, msg))
+                self.run_task(proto_handler_fn(self, cmd, msg))
             command_handlers = set(self._command_handlers[type(cmd)])
             for cmd_handler_fn in command_handlers:
                 self.logger.debug2(
@@ -124,12 +125,12 @@ class Connection(ConnectionAPI, BaseService):
                     protocol,
                     type(cmd),
                 )
-                self.run_task(cmd_handler_fn(msg))
+                self.run_task(cmd_handler_fn(self, msg))
 
     def add_protocol_handler(self,
                              protocol_class: Type[ProtocolAPI],
-                             handler_fn: Callable[[CommandAPI, Payload], Awaitable[Any]],
-                             ) -> HandlerSubscription:
+                             handler_fn: ProtocolHandlerFn,
+                             ) -> HandlerSubscriptionAPI:
         if not self._multiplexer.has_protocol(protocol_class):
             raise UnknownProtocol(
                 f"Protocol {protocol_class} was not found int he connected "
@@ -144,8 +145,8 @@ class Connection(ConnectionAPI, BaseService):
 
     def add_command_handler(self,
                             command_type: Type[CommandAPI],
-                            handler_fn: Callable[[Payload], Awaitable[Any]],
-                            ) -> HandlerSubscription:
+                            handler_fn: CommandHandlerFn,
+                            ) -> HandlerSubscriptionAPI:
         for protocol in self._multiplexer.get_protocols():
             if protocol.supports_command(command_type):
                 self._command_handlers[command_type].add(handler_fn)
