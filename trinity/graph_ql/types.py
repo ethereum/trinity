@@ -28,8 +28,9 @@ from graphene import (
 
 from trinity._utils.validation import (
     validate_transaction_gas_estimation_dict,
-    validate_transaction_call_dict)
-from trinity.rpc.format import merge_transaction_defaults
+    validate_transaction_call_dict
+)
+from trinity.rpc.format import merge_transaction_defaults, to_int_if_hex
 from trinity.rpc.modules.eth import (
     state_at_block,
     get_header,
@@ -63,7 +64,7 @@ class Bytes(BaseBytes):
             return to_bytes(hexstr=node.value)
 
 
-class Bytes32(Scalar):
+class Bytes32(BaseBytes):
 
     @staticmethod
     def parse_literal(node):
@@ -76,6 +77,8 @@ class Bytes32(Scalar):
 class Account(ObjectType):
     address = Address()
     balance = Int()
+    code = Bytes()
+    storage = Bytes32(slot=Bytes(required=True))
 
     async def resolve_address(self, info):
         return self
@@ -85,6 +88,19 @@ class Account(ObjectType):
         chain = info.context.get('chain')
         state = await state_at_block(chain, at_block)
         return state.get_balance(self)
+
+    async def resolve_code(self, info):
+        at_block = info.context.get('at_block', 'latest')
+        chain = info.context.get('chain')
+        state = await state_at_block(chain, at_block)
+        return state.get_code(self)
+
+    async def resolve_storage(self, info, slot):
+        at_block = info.context.get('at_block', 'latest')
+        chain = info.context.get('chain')
+        state = await state_at_block(chain, at_block)
+        position = to_int_if_hex(encode_hex(slot))
+        return int_to_big_endian(state.get_storage(self, position))
 
 
 class Transaction(ObjectType):
@@ -132,9 +148,10 @@ class Block(ObjectType):
     difficulty = String()
     totalDifficulty = String()
     transactions = List(Transaction)
+    transactionCount = String()
 
     async def resolve_number(self, info):
-        return hex(self.number)  # type: ignore
+        return hex(self.number)
 
     async def resolve_hash(self, info):
         return encode_hex(self.header.hash)
@@ -188,6 +205,9 @@ class Block(ObjectType):
 
     async def resolve_transactions(self, info):
         return self.transactions
+
+    def resolve_transactionCount(self, info):
+        return hex(len(self.transactions))
 
 
 class CallData(InputObjectType):
