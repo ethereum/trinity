@@ -1,6 +1,8 @@
 import os
 from typing import (
     Union,
+    Dict,
+    Any
 )
 
 from eth_utils import (
@@ -79,6 +81,7 @@ class Account(ObjectType):
     balance = Int()
     code = Bytes()
     storage = Bytes32(slot=Bytes(required=True))
+    transactionCount = String()
 
     async def resolve_address(self, info):
         return self
@@ -102,6 +105,13 @@ class Account(ObjectType):
         position = to_int_if_hex(encode_hex(slot))
         return int_to_big_endian(state.get_storage(self, position))
 
+    async def resolve_transactionCount(self, info):
+        at_block = info.context.get('at_block', 'latest')
+        chain = info.context.get('chain')
+        state = await state_at_block(chain, at_block)
+        nonce = state.get_nonce(self)
+        return hex(nonce)
+
 
 class Transaction(ObjectType):
     hash = String()
@@ -121,7 +131,8 @@ class Transaction(ObjectType):
         return hex(self.value)
 
     async def resolve_index(self, info):
-        return hex(self.value)
+        # FIXME: Figure out a way to get this value
+        return None
 
     async def resolve_sender(self, info):
         return self.sender
@@ -149,11 +160,12 @@ class Block(ObjectType):
     totalDifficulty = String()
     transactions = List(Transaction)
     transactionCount = String()
+    transactionAt = Field(Transaction, index=Int())
 
-    async def resolve_number(self, info):
+    def resolve_number(self, info):
         return hex(self.number)
 
-    async def resolve_hash(self, info):
+    def resolve_hash(self, info):
         return encode_hex(self.header.hash)
 
     async def resolve_parent(self, info):
@@ -161,53 +173,56 @@ class Block(ObjectType):
         parent_hash = self.header.parent_hash
         return await chain.coro_get_block_by_hash(parent_hash)
 
-    async def resolve_nonce(self, info):
+    def resolve_nonce(self, info):
         return hex(self.header.nonce)
 
-    async def resolve_transactionsRoot(self, info):
+    def resolve_transactionsRoot(self, info):
         return encode_hex(self.header.transaction_root)
 
-    async def resolve_stateRoot(self, info):
+    def resolve_stateRoot(self, info):
         return encode_hex(self.header.state_root)
 
-    async def resolve_receiptsRoot(self, info):
+    def resolve_receiptsRoot(self, info):
         return encode_hex(self.header.receipt_root)
 
-    async def resolve_miner(self, info):
+    def resolve_miner(self, info):
         return encode_hex(self.header.coinbase)
 
-    async def resolve_extraData(self, info):
+    def resolve_extraData(self, info):
         return encode_hex(self.header.extra_data)
 
-    async def resolve_gasUsed(self, info):
+    def resolve_gasUsed(self, info):
         return hex(self.header.gas_used)
 
-    async def resolve_gasLimit(self, info):
+    def resolve_gasLimit(self, info):
         return hex(self.header.gas_limit)
 
-    async def resolve_timestamp(self, info):
+    def resolve_timestamp(self, info):
         return hex(self.header.timestamp)
 
-    async def resolve_logsBloom(self, info):
+    def resolve_logsBloom(self, info):
         logs_bloom = encode_hex(int_to_big_endian(self.header.bloom))[2:]
         logs_bloom = '0x' + logs_bloom.rjust(512, '0')
         return logs_bloom
 
-    async def resolve_mixHash(self, info):
+    def resolve_mixHash(self, info):
         return hex(self.header.mix_hash)
 
-    async def resolve_difficulty(self, info):
+    def resolve_difficulty(self, info):
         return hex(self.header.difficulty)
 
-    async def resolve_totalDifficulty(self, info):
+    def resolve_totalDifficulty(self, info):
         chain = info.context.get('chain')
         return hex(chain.get_score(self.hash))
 
-    async def resolve_transactions(self, info):
+    def resolve_transactions(self, info):
         return self.transactions
 
     def resolve_transactionCount(self, info):
         return hex(len(self.transactions))
+
+    def resolve_transactionAt(self, info: Dict[Any, Any], index: int) -> Transaction:
+        return self.transactions[index]
 
 
 class CallData(InputObjectType):
@@ -257,6 +272,7 @@ class Query(ObjectType):
     async def resolve_block(self, info, number=None, hash=None):
         chain = info.context.get('chain')
         if number and hash:
+            # TODO: change this execption type
             raise Exception('either pass number or hash')
         if number:
             result = await chain.coro_get_canonical_block_by_number(number)

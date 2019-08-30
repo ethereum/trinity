@@ -20,8 +20,8 @@ from eth_keys import keys
 
 from eth import constants as eth_constants
 from eth.chains.base import (
-    Chain as _Chain,
-    MiningChain
+    Chain,
+    MiningChain as _MiningChain,
 )
 from eth.db.atomic import AtomicDB
 # TODO: tests should not be locked into one set of VM rules.  Look at expanding
@@ -70,7 +70,7 @@ def pytest_addoption(parser):
 
 
 # TODO: make a PR in py-evm and remove this
-class Chain(_Chain):
+class MiningChain(_MiningChain):
 
     def get_transaction_result(
             self,
@@ -95,6 +95,10 @@ class Chain(_Chain):
 
 
 class TestAsyncChain(Chain, AsyncChainMixin):
+    pass
+
+
+class TestAsyncMiningChain(MiningChain, AsyncChainMixin):
     pass
 
 
@@ -271,7 +275,7 @@ def chain_without_block_validation(
         'validate_block': lambda self, block: None,
     }
     SpuriousDragonVMForTesting = SpuriousDragonVM.configure(validate_seal=lambda block: None)
-    klass = MiningChain.configure(
+    klass = TestAsyncMiningChain.configure(
         __name__='TestChainWithoutBlockValidation',
         vm_configuration=(
             (eth_constants.GENESIS_BLOCK_NUMBER, SpuriousDragonVMForTesting),
