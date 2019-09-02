@@ -15,6 +15,7 @@ from mypy_extensions import (
 )
 
 from p2p.trio_service import (
+    Manager,
     Service,
 )
 
@@ -413,7 +414,8 @@ class RoutingTableManager(Service):
             self.find_node_handler,
             self.ping_sender,
         )
-        for component in components:
-            self.manager.run_daemon_task(component.run)
+        async with trio.open_nursery() as nursery:
+            for component in components:
+                nursery.start_soon(Manager.run_service, component)
 
         await self.manager.wait_cancelled()
