@@ -17,6 +17,9 @@ from trio.abc import (
     ReceiveChannel,
     SendChannel,
 )
+from trio_typing import (
+    Nursery,
+)
 
 from p2p.trio_service import (
     LifecycleError,
@@ -104,17 +107,21 @@ class PeerPacker(Service):
     async def run(self) -> None:
         async with self.incoming_packet_receive_channel, self.incoming_message_send_channel,  \
                 self.outgoing_message_receive_channel, self.outgoing_packet_send_channel:
-            self.manager.run_daemon_task(self.handle_incoming_packets)
-            self.manager.run_daemon_task(self.handle_outgoing_messages)
-            await self.manager.wait_stopped()
 
-    async def handle_incoming_packets(self) -> None:
+            async with trio.open_nursery() as nursery:
+                nursery.start_soon(self.handle_incoming_packets, nursery)
+                nursery.start_soon(self.handle_outgoing_messages, nursery)
+
+    async def handle_incoming_packets(self, nursery: Nursery) -> None:
         async for incoming_packet in self.incoming_packet_receive_channel:
             # Handle packets sequentially, so that the rest of the code doesn't have to deal
             # with multiple packets being processed at the same time.
-            await self.handle_incoming_packet(incoming_packet)
+            await self.handle_incoming_packet(incoming_packet, nursery)
 
-    async def handle_incoming_packet(self, incoming_packet: IncomingPacket) -> None:
+    async def handle_incoming_packet(self,
+                                     incoming_packet: IncomingPacket,
+                                     nursery: Nursery,
+                                     ) -> None:
         if self.is_pre_handshake:
             await self.handle_incoming_packet_pre_handshake(incoming_packet)
         elif self.is_during_handshake:
@@ -124,13 +131,16 @@ class PeerPacker(Service):
         else:
             raise Exception("Invariant: All states handled")
 
-    async def handle_outgoing_messages(self) -> None:
+    async def handle_outgoing_messages(self, nursery: Nursery) -> None:
         async for outgoing_message in self.outgoing_message_receive_channel:
             # Similar to the incoming packets outgoing messages are processed in sequence, even
             # though it's not that critical here
-            await self.handle_outgoing_message(outgoing_message)
+            await self.handle_outgoing_message(outgoing_message, nursery)
 
-    async def handle_outgoing_message(self, outgoing_message: OutgoingMessage) -> None:
+    async def handle_outgoing_message(self,
+                                      outgoing_message: OutgoingMessage,
+                                      nursery: Nursery,
+                                      ) -> None:
         if self.is_pre_handshake:
             await self.handle_outgoing_message_pre_handshake(outgoing_message)
         elif self.is_during_handshake:
@@ -479,11 +489,11 @@ class Packer(Service):
         self.managed_peer_packers: Dict[NodeID, ManagedPeerPacker] = {}
 
     async def run(self) -> None:
-        self.manager.run_daemon_task(self.handle_incoming_packets)
-        self.manager.run_daemon_task(self.handle_outgoing_messages)
-        await self.manager.wait_stopped()
+        async with trio.open_nursery() as nursery:
+            nursery.start_soon(self.handle_incoming_packets, nursery)
+            nursery.start_soon(self.handle_outgoing_messages, nursery)
 
-    async def handle_incoming_packets(self) -> None:
+    async def handle_incoming_packets(self, nursery: Nursery) -> None:
         async for incoming_packet in self.incoming_packet_receive_channel:
             expecting_managed_peer_packers = tuple(
                 managed_peer_packer
@@ -520,7 +530,7 @@ class Packer(Service):
                         incoming_packet,
                     )
                     self.register_peer_packer(remote_node_id)
-                    self.manager.run_task(self.run_peer_packer, remote_node_id)
+                    nursery.start_soon(self.run_peer_packer, remote_node_id)
 
                 managed_peer_packer = self.managed_peer_packers[remote_node_id]
                 self.logger.debug(
@@ -533,7 +543,7 @@ class Packer(Service):
             else:
                 self.logger.warning("Dropping unprompted handshake packet %s", incoming_packet)
 
-    async def handle_outgoing_messages(self) -> None:
+    async def handle_outgoing_messages(self, nursery: Nursery) -> None:
         async for outgoing_message in self.outgoing_message_receive_channel:
             remote_node_id = outgoing_message.receiver_node_id
             if not self.is_peer_packer_registered(remote_node_id):
@@ -543,7 +553,7 @@ class Packer(Service):
                     outgoing_message,
                 )
                 self.register_peer_packer(remote_node_id)
-                self.manager.run_task(self.run_peer_packer, remote_node_id)
+                nursery.start_soon(self.run_peer_packer, remote_node_id)
 
             self.logger.debug(
                 "Passing %s from %s to responsible peer packer",
