@@ -21,7 +21,7 @@ from p2p.discv5.typing import (
 
 class FlatRoutingTable(Collection[NodeID]):
 
-    logger = logging.getLogger("p2p.discv5.routing_table_manager.FlatRoutingTable")
+    logger = logging.getLogger("p2p.discv5.routing_table.FlatRoutingTable")
 
     def __init__(self) -> None:
         self.entries: Deque[NodeID] = deque()

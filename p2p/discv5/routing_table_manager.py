@@ -299,7 +299,7 @@ class FindNodeHandler(BaseRoutingTableManagerComponent):
 class PingSender(BaseRoutingTableManagerComponent):
     """Regularly sends pings to peers to check if they are still alive or not."""
 
-    logger = logging.getLogger("p2p.discv5.routing_table_manager.RoutingTableMaintainer")
+    logger = logging.getLogger("p2p.discv5.routing_table_manager.PingSender")
 
     def __init__(self,
                  local_node_id: NodeID,
@@ -371,6 +371,7 @@ class PingSender(BaseRoutingTableManagerComponent):
 
 class RoutingTableManager(Service):
     """Manages the routing table. The actual work is delegated to a few sub components."""
+    logger = logging.getLogger("p2p.discv5.routing_table_manager.RoutingTableManager")
 
     def __init__(self,
                  local_node_id: NodeID,
