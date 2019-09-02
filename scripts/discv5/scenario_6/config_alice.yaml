@@ -1,0 +1,9 @@
+local_private_key: "0x96ae6a02fe9685dc45e20d4f04390d7fdaba405137bb44b97a2db46330d80dbc"
+enrs:
+  - enr:-HW4QLWyg0ShCkgSaGZJ9eGPVwRoy6rhuytRIQ6O43i9CcfGQaW-NuPMmYen94FpcD1vgul8-tfdX2uHayiIztrsdT4BgmlkgnY0iXNlY3AyNTZrMaED6FAUQIRfUGpD5Y-2Sv-ZahBwv42Sd5BFmeIlCDyINuc  # Alice, current (endpoint missing)
+  - enr:-IW4QI21ZNk9LThfR8suvr4sr05Job0HaAucpp-XpYaA2NNoYRkJi2DdFZ4i5VBW7axPK7MVg63zxw_qm4TClAXogLYBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQOpw6TAKiZq1HaZdL-MBJgGJ6L9V7ntwzk5JbTJ8luwf4N1ZHCDBipJ  # Bob, current
+
+routing_table:
+  - "0xd5ae289621a449e9a1d1611dee733454ffa71340e81da0727e064ad370207ec0"  # Bob
+host: "127.0.0.1"
+port: 404040

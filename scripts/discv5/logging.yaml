@@ -1,0 +1,35 @@
+formatters:
+  default:
+    format: '%(levelname)-8s %(name)-15s %(message)s'
+
+handlers:
+  console:
+    level: DEBUG
+    class: logging.StreamHandler
+    formatter: default
+
+loggers:
+  "":
+    level: INFO
+    handlers: [console]
+
+  "p2p.trio_service.Manager":
+    level: INFO
+
+  "p2p.discv5.channel_services":
+    level: INFO
+
+  "p2p.discv5.packer":
+    level: INFO
+
+  "p2p.discv5.message_dispatcher":
+    level: INFO
+
+  "p2p.discv5.routing_table_manager":
+    level: DEBUG
+
+  "p2p.discv5.routing_table":
+    level: DEBUG
+
+  "p2p.discv5.enr_db":
+    level: DEBUG

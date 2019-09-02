@@ -1,0 +1,8 @@
+local_private_key: "0x85453d23e3fc44a846c9bb0784866191e4b10245d6bd4092dea6f33526fa20cc"
+enrs:
+  - enr:-IW4QG1ZkejagXBzMKiHVb6IRZDwbSTB1LJabXg3haP8_1GANkSECpUF4L6iOYRcQZUDOZcxyethRBY6Y2Id3_boT7sCgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQOpw6TAKiZq1HaZdL-MBJgGJ6L9V7ntwzk5JbTJ8luwf4N1ZHCDBipJ  # Bob, current (seq num 2)  
+  - enr:-IW4QGSCA9OZjOk14p2uDXDABw_GyCcc2ko6Z9PrkS66sJ23E65smTb08GrS_yJ1ipN8OpExDY1zAlHpz9D4ZSnrbAEBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQPoUBRAhF9QakPlj7ZK_5lqEHC_jZJ3kEWZ4iUIPIg254N1ZHCDBipI  # Alice, current
+
+routing_table: []
+host: "127.0.0.1"
+port: 404041
