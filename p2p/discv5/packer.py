@@ -652,5 +652,7 @@ class Packer(Service):
                 exception,
             )
         finally:
+            self.logger.debug("Waiting for peer packer %s to stop", managed_peer_packer.peer_packer)
+            await managed_peer_packer.manager.wait_stopped()
             self.logger.info("Deregistering peer packer %s", managed_peer_packer.peer_packer)
             self.deregister_peer_packer(remote_node_id)
