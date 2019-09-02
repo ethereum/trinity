@@ -1,0 +1,7 @@
+local_private_key: "0x85453d23e3fc44a846c9bb0784866191e4b10245d6bd4092dea6f33526fa20cc"
+enrs:
+  - enr:-IW4QI21ZNk9LThfR8suvr4sr05Job0HaAucpp-XpYaA2NNoYRkJi2DdFZ4i5VBW7axPK7MVg63zxw_qm4TClAXogLYBgmlkgnY0gmlwhH8AAAGJc2VjcDI1NmsxoQOpw6TAKiZq1HaZdL-MBJgGJ6L9V7ntwzk5JbTJ8luwf4N1ZHCDBipJ  # Bob, current
+
+routing_table: []
+host: "127.0.0.1"
+port: 404041
