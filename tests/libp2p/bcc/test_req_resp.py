@@ -200,7 +200,7 @@ async def test_request_beacon_blocks_invalid_request(nodes_with_chain, monkeypat
     # lower than peer's latest finalized slot
     start_slot = head_slot
     state_machine = nodes[1].chain.get_state_machine()
-    old_state = state_machine.state
+    old_state = nodes[1].chain.get_head_state()
     new_checkpoint = old_state.finalized_checkpoint.copy(
         epoch=old_state.finalized_checkpoint.epoch + 1
     )
