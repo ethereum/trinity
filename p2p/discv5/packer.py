@@ -38,6 +38,9 @@ from p2p.discv5.channel_services import (
     OutgoingMessage,
     OutgoingPacket,
 )
+from p2p.discv5.constants import (
+    HANDSHAKE_TIMEOUT,
+)
 from p2p.discv5.enr import (
     ENR,
 )
@@ -104,6 +107,20 @@ class PeerPacker(Service):
     def __str__(self) -> str:
         return f"{self.__class__.__name__}[{encode_hex(self.remote_node_id)[2:10]}]"
 
+    async def check_handshake_timeout(self) -> None:
+        # A simple but hacky way to timeout. A better way is probably to rename `PeerPacker`,
+        # make it only responsible for the handshake, pass the session keys to the `Packer`,
+        # and check for timeouts there.
+        self.logger.debug("Starting handshake timeout")
+        await trio.sleep(HANDSHAKE_TIMEOUT)
+        if not self.is_post_handshake:
+            self.logger.warning("Handshake with %s has timed out", encode_hex(self.remote_node_id))
+            raise trio.TooSlowError()
+        else:
+            self.logger.debug(
+                "Handshake with %s has finished in time", encode_hex(self.remote_node_id),
+            )
+
     async def run(self) -> None:
         async with self.incoming_packet_receive_channel, self.incoming_message_send_channel,  \
                 self.outgoing_message_receive_channel, self.outgoing_packet_send_channel:
@@ -123,6 +140,7 @@ class PeerPacker(Service):
                                      nursery: Nursery,
                                      ) -> None:
         if self.is_pre_handshake:
+            nursery.start_soon(self.check_handshake_timeout)
             await self.handle_incoming_packet_pre_handshake(incoming_packet)
         elif self.is_during_handshake:
             await self.handle_incoming_packet_during_handshake(incoming_packet)
@@ -142,6 +160,7 @@ class PeerPacker(Service):
                                       nursery: Nursery,
                                       ) -> None:
         if self.is_pre_handshake:
+            nursery.start_soon(self.check_handshake_timeout)
             await self.handle_outgoing_message_pre_handshake(outgoing_message)
         elif self.is_during_handshake:
             await self.handle_outgoing_message_during_handshake(outgoing_message)
@@ -625,12 +644,12 @@ class Packer(Service):
             raise ValueError(
                 "Peer packer for {encode_hex(remote_node_id)} has already been started"
             ) from lifecycle_error
-        except HandshakeFailure as handshake_failure:
+        except (HandshakeFailure, trio.TooSlowError) as exception:
             # peer packer has logged a warning already
             self.logger.debug(
-                "Peer packer %s has failed to do handshake with %s",
+                "Peer packer %s has failed to perform handshake: %s",
                 managed_peer_packer.peer_packer,
-                handshake_failure,
+                exception,
             )
         finally:
             self.logger.info("Deregistering peer packer %s", managed_peer_packer.peer_packer)
