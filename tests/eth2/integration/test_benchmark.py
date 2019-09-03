@@ -10,6 +10,9 @@ from eth2.beacon.tools.fixtures.parser import _find_project_root_dir
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 
 
+VALIDATOR_COUNT = 1000
+
+
 def get_hash_tree_root(ssz_obj):
     return ssz_obj.hash_tree_root
 
@@ -45,8 +48,8 @@ def update_and_rehash(state):
 @pytest.mark.parametrize(
     ("validator_count", "config_name"),
     (
-        (100, "minimal.yaml"),
-        (1000, "mainnet.yaml"),
+        (VALIDATOR_COUNT, "minimal.yaml"),
+        (VALIDATOR_COUNT, "mainnet.yaml"),
     )
 )
 def test_benchmark_ssz_init(benchmark, pubkeys, keymap, validator_count, config_name):
@@ -69,8 +72,8 @@ def test_benchmark_ssz_init(benchmark, pubkeys, keymap, validator_count, config_
 @pytest.mark.parametrize(
     ("validator_count", "config_name"),
     (
-        (100, "minimal.yaml"),
-        (1000, "mainnet.yaml"),
+        (VALIDATOR_COUNT, "minimal.yaml"),
+        (VALIDATOR_COUNT, "mainnet.yaml"),
     )
 )
 def test_benchmark_ssz_with_cache(benchmark, pubkeys, keymap, validator_count, config_name):

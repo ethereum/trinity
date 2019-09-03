@@ -110,7 +110,7 @@ def create_mock_genesis_state(
     config: Eth2Config,
     keymap: Dict[BLSPubkey, int],
     genesis_time: Timestamp = ZERO_TIMESTAMP,
-) -> Tuple[BeaconState, BaseBeaconBlock]:
+) -> BeaconState:
     genesis_deposits, deposit_root = create_mock_deposits_and_root(
         pubkeys=pubkeys, keymap=keymap, config=config
     )

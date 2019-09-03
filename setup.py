@@ -56,7 +56,7 @@ deps = {
         # pinned to <3.7 until async fixtures work again
         # https://github.com/pytest-dev/pytest-asyncio/issues/89
         "pytest>=3.6,<3.7",
-        "pytest-benchmark==3.2.2",
+        "pytest-benchmark>=3.1.0,<3.2.0",
         "pytest-cov==2.5.1",
         "pytest-watch>=4.1.0,<5",
         "pytest-xdist==1.18.1",
