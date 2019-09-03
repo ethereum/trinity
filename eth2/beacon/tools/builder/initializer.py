@@ -105,11 +105,10 @@ def create_mock_deposit(
     return state, deposit
 
 
-def create_mock_genesis(
+def create_mock_genesis_state(
     pubkeys: Sequence[BLSPubkey],
     config: Eth2Config,
     keymap: Dict[BLSPubkey, int],
-    genesis_block_class: Type[BaseBeaconBlock],
     genesis_time: Timestamp = ZERO_TIMESTAMP,
 ) -> Tuple[BeaconState, BaseBeaconBlock]:
     genesis_deposits, deposit_root = create_mock_deposits_and_root(
@@ -129,6 +128,17 @@ def create_mock_genesis(
         config=config,
     )
 
+    return state
+
+
+def create_mock_genesis(
+    pubkeys: Sequence[BLSPubkey],
+    config: Eth2Config,
+    keymap: Dict[BLSPubkey, int],
+    genesis_block_class: Type[BaseBeaconBlock],
+    genesis_time: Timestamp = ZERO_TIMESTAMP,
+) -> Tuple[BeaconState, BaseBeaconBlock]:
+    state = create_mock_genesis_state(pubkeys, config, keymap, genesis_time)
     block = get_genesis_block(
         genesis_state_root=state.hash_tree_root, block_class=genesis_block_class
     )

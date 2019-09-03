@@ -20,7 +20,7 @@ def fork_choice_scoring():
 
 
 @pytest.mark.parametrize(("validator_count"), ((40),))
-def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
+def test_demo(benchmark, base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
     bls.use_noop_backend()
     slots_per_epoch = 8
     config = SERENITY_CONFIG._replace(
@@ -33,14 +33,10 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
         MIN_ATTESTATION_INCLUSION_DELAY=2,
     )
     override_lengths(config)
-    fixture_sm_class = SerenityStateMachine.configure(
-        __name__="SerenityStateMachineForTesting", config=config
-    )
 
     genesis_slot = config.GENESIS_SLOT
     genesis_epoch = config.GENESIS_EPOCH
     chaindb = BeaconChainDB(base_db, config)
-    attestation_pool = AttestationPool()
 
     genesis_state, genesis_block = create_mock_genesis(
         pubkeys=pubkeys[:validator_count],
@@ -56,11 +52,43 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
 
     state = genesis_state
     block = genesis_block
-
     chain_length = 3 * config.SLOTS_PER_EPOCH
-    blocks = (block,)
 
+    args = (
+        state,
+        block,
+        fork_choice_scoring,
+        genesis_slot,
+        chain_length,
+        chaindb,
+        keymap,
+        config,
+    )
+    state = benchmark.pedantic(run_state_transitions, args=args, rounds=1, iterations=1)
+
+    assert state.slot == chain_length + genesis_slot
+
+    # Justification assertions
+    assert state.current_justified_checkpoint.epoch == genesis_epoch
+    assert state.finalized_checkpoint.epoch == genesis_epoch
+
+
+def run_state_transitions(
+        state,
+        block,
+        fork_choice_scoring,
+        genesis_slot,
+        chain_length,
+        chaindb,
+        keymap,
+        config):
+    attestation_pool = AttestationPool()
+    blocks = (block,)
     attestations_map = {}  # Dict[Slot, Sequence[Attestation]]
+
+    fixture_sm_class = SerenityStateMachine.configure(
+        __name__="SerenityStateMachineForTesting", config=config
+    )
 
     for current_slot in range(genesis_slot + 1, genesis_slot + chain_length + 1):
         if current_slot > genesis_slot + config.MIN_ATTESTATION_INCLUSION_DELAY:
@@ -103,8 +131,4 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
         )
         attestations_map[attestation_slot] = attestations
 
-    assert state.slot == chain_length + genesis_slot
-
-    # Justification assertions
-    assert state.current_justified_checkpoint.epoch == genesis_epoch
-    assert state.finalized_checkpoint.epoch == genesis_epoch
+    return state
