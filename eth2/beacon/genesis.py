@@ -94,14 +94,20 @@ def initialize_beacon_state_from_eth1(
         balance = state.balances[validator_index]
         effective_balance = calculate_effective_balance(balance, config)
 
-        state = state.update_validator_with_fn(
-            validator_index, lambda v, *_: v.copy(effective_balance=effective_balance)
-        )
+        # state = state.update_validator_with_fn(
+        #     validator_index, lambda v, *_: v.copy(effective_balance=effective_balance)
+        # )
+        balances = list(state.balances)
+        balances[validator_index] = effective_balance
+        state.balances = balances
 
         if effective_balance == config.MAX_EFFECTIVE_BALANCE:
-            state = state.update_validator_with_fn(
-                validator_index, activate_validator, config.GENESIS_EPOCH
-            )
+            # state = state.update_validator_with_fn(
+            #     validator_index, activate_validator, config.GENESIS_EPOCH
+            # )
+            validators = list(state.validators)
+            validators[validator_index] = activate_validator(state.validators[validator_index], config.GENESIS_EPOCH)
+            state.validators = validators
 
     return state_with_validator_digests(state, config)
 

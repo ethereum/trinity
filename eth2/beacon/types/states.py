@@ -341,6 +341,20 @@ class BeaconState:
 
         return copied_state
 
+    def __deepcopy__(self, memodict=None) -> "BeaconState":
+        if memodict is None:
+            memodict = {}
+
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memodict[id(self)] = result
+
+        for k, v in self.__dict__.items():
+            setattr(result, k, v)
+            # setattr(result, k, copy.deepcopy(v, memodict))
+
+        return result
+
     ssz_class = SSZBeaconState
 
     @classmethod
