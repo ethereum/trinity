@@ -26,6 +26,7 @@ from eth.tools.logging import ExtendedDebugLogger
 from p2p._utils import duplicates
 from p2p.abc import (
     ConnectionAPI,
+    HandshakerAPI,
     HandshakeReceiptAPI,
     MultiplexerAPI,
     NodeAPI,
@@ -67,24 +68,13 @@ class HandshakeReceipt(HandshakeReceiptAPI):
         self.protocol = protocol
 
 
-class Handshaker(ABC):
+class Handshaker(HandshakerAPI):
     """
     Base class that handles the handshake for a given protocol.  The primary
     justification for this class's existence is to house parameters that are
     needed for the protocol handshake.
     """
     logger = cast(ExtendedDebugLogger, logging.getLogger('p2p.connection.ProtocolHandler'))
-
-    protocol_class: Type[ProtocolAPI]
-
-    @abstractmethod
-    async def do_handshake(self,
-                           multiplexer: MultiplexerAPI,
-                           protocol: ProtocolAPI) -> HandshakeReceipt:
-        """
-        Perform the actual handshake for the protocol.
-        """
-        ...
 
 
 class DevP2PReceipt(HandshakeReceipt):

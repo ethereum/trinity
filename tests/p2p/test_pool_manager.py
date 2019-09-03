@@ -14,7 +14,7 @@ from p2p.tools.paragon import ParagonHandshaker
 from p2p.tools.factories import (
     get_open_port,
     AddressFactory,
-    ConnectionManagerFactory,
+    PoolManagerFactory,
     PrivateKeyFactory,
     NodeFactory,
     dial_out,
@@ -52,7 +52,7 @@ async def alice_manager(alice_pool, alice_listen_port, alice_private_key):
     async def paragon_handshaker_provider():
         return ParagonHandshaker()
 
-    conn_manager = ConnectionManagerFactory(
+    conn_manager = PoolManagerFactory(
         pool=alice_pool,
         private_key=alice_private_key,
         p2p_handshake_params__listen_port=alice_listen_port,
@@ -70,7 +70,7 @@ async def paragon_handshaker_provider():
 
 @pytest.fixture
 async def bob_manager():
-    conn_manager = ConnectionManagerFactory(
+    conn_manager = PoolManagerFactory(
         p2p_handshake_params__client_version_string='bob',
         handshaker_providers=(paragon_handshaker_provider,),
     )

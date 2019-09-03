@@ -4,12 +4,17 @@ from abc import (
 import asyncio
 import operator
 from typing import (
+    Any,
     AsyncIterator,
     AsyncIterable,
+    Awaitable,
+    BehaviorAPI,
+    Callable,
     cast,
     Dict,
     Iterator,
     List,
+    NamedTuple,
     Tuple,
     Type,
 )
@@ -17,9 +22,6 @@ from typing import (
 from cancel_token import (
     CancelToken,
     OperationCancelled,
-)
-from eth_keys import (
-    datatypes,
 )
 from eth_utils import (
     clamp,
@@ -34,7 +36,15 @@ from lahja import (
     EndpointAPI,
 )
 
-from p2p.abc import AsyncioServiceAPI, NodeAPI
+from p2p.abc import (
+    AsyncioServiceAPI,
+    CandidateFilterFn,
+    OnConnectFn,
+    OnDisconnectFn,
+    PeerProviderFn,
+    PoolManagerAPI,
+    NodeAPI,
+)
 from p2p.constants import (
     DEFAULT_MAX_PEERS,
     DEFAULT_PEER_BOOT_TIMEOUT,
@@ -102,7 +112,33 @@ ALLOWED_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
 )) + COMMON_PEER_CONNECTION_EXCEPTIONS
 
 
-class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
+class ManagerLogic(NamedTuple):
+    behaviors: Tuple[BehaviorAPI, ...]
+
+
+class InboundConfig(NamedTuple):
+    host: str
+    port: int
+
+
+class OutboundConfig(NamedTuple):
+    providers: Tuple[PeerProviderFn, ...]
+    candidate_filters: Tuple[CandidateFilterFn, ...]
+    sleep_fn: Callable[['PoolManager'], Awaitable[Any]]
+
+
+async def _limit_connections_by_ip(pool: ConnectionPoolAPI, connection: ConnectionAPI) -> None:
+    # connect to no more then 2 nodes with the same IP
+    nodes_by_ip = groupby(
+        operator.attrgetter('remote.address.ip'),
+        pool,
+    )
+    matching_ip_nodes = nodes_by_ip.get(connections.remote.address.ip, [])
+    if len(matching_ip_nodes) <= 2:
+        connection.get_base_protocol().send_disconnect(DisconnectReason.too_many_peers)
+
+
+class PeerPool(BaseService, AsyncIterable[BasePeer]):
     """
     PeerPool maintains connections to up-to max_peers on a given network.
     """
@@ -111,25 +147,17 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     _event_bus: EndpointAPI = None
 
     def __init__(self,
-                 privkey: datatypes.PrivateKey,
-                 context: BasePeerContext,
+                 manager: PoolManagerAPI,
+                 behaviors: Sequence[BehaviorAPI] = (),
+                 inbound_config: InboundConfig = None,
+                 outbound_config: OutboundConfig = None,
                  max_peers: int = DEFAULT_MAX_PEERS,
-                 token: CancelToken = None,
                  event_bus: EndpointAPI = None,
                  ) -> None:
-        super().__init__(token)
-
-        self.privkey = privkey
-        self.max_peers = max_peers
-        self.context = context
-
-        self.connected_nodes: Dict[NodeAPI, BasePeer] = {}
+        super().__init__(manager.cancel_token)
 
         self._subscribers: List[PeerSubscriber] = []
         self._event_bus = event_bus
-
-        # Restricts the number of concurrent connection attempts can be made
-        self._connection_attempt_lock = asyncio.BoundedSemaphore(MAX_CONCURRENT_CONNECTION_ATTEMPTS)
 
         # Ensure we can only have a single concurrent handshake in flight per remote
         self._handshake_locks = ResourceLock()
@@ -296,26 +324,39 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                 subscriber.add_msg(msg)
 
     async def _run(self) -> None:
-        # FIXME: PeerPool should probably no longer be a BaseService, but for now we're keeping it
-        # so in order to ensure we cancel all peers when we terminate.
-        if self.has_event_bus:
-            self.run_daemon_task(self.maybe_connect_more_peers())
+        self.run_daemon_task(self._do_listen)
+        self.run_daemon_task(self._do_seek_connections)
 
+        # TODO: Move to behavior....
         self.run_daemon_task(self._periodically_report_stats())
-        await self.cancel_token.wait()
+        try:
+            await self.cancellation()
+        finally:
+            await self.stop_all_connections()
 
-    async def stop_all_peers(self) -> None:
+    async def _do_listen(self) -> None:
+        if self.inbound_config is not None:
+            async with self._manager.listent(self.inbound_config.host, self.inbound_config.port) as me:
+                awaite self.cancellation()
+
+    async def _do_seek_connections(self):
+        if self.outbound_config is not None:
+            await self._manager.seek_connections(
+                providers=outbound_config.providers,
+                candidate_filters=outbound_config.candidate_filters,
+                sleep_fn=outbound_config.sleep_fn,
+            )
+            async with self._manager.listent(self.inbound_config.host, self.inbound_config.port) as me:
+                awaite self.cancellation()
+
+    async def stop_all_connections(self) -> None:
         self.logger.info("Stopping all peers ...")
-        peers = self.connected_nodes.values()
+        peers = self._manager.pool
         disconnections = (
-            peer.disconnect(DisconnectReason.client_quitting)
-            for peer in peers
-            if peer.is_running
+            connection.get_base_protocol().send_disconnect(DisconnectReason.client_quitting)
+            for connection in self._manager.pool
         )
         await asyncio.gather(*disconnections)
-
-    async def _cleanup(self) -> None:
-        await self.stop_all_peers()
 
     async def connect(self, remote: NodeAPI) -> BasePeer:
         """

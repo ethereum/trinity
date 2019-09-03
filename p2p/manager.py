@@ -4,7 +4,6 @@ import functools
 from types import TracebackType
 from typing import (
     Any,
-    AsyncContextManager,
     AsyncIterator,
     Awaitable,
     Callable,
@@ -27,10 +26,13 @@ from p2p.abc import (
     ConnectionPoolAPI,
     HandlerSubscriptionAPI,
     NodeAPI,
+    PoolChangedAPI,
+    PoolManagerAPI,
 )
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import (
     HandshakeFailure,
+    IneligiblePeer,
     NoMatchingPeerCapabilities,
     PeerConnectionLost,
     UnreachablePeer
@@ -44,7 +46,8 @@ from p2p.handshake import (
 )
 from p2p.kademlia import Node, Address
 from p2p.pool import ConnectionPool
-from p2p.service import run_service, BaseService
+from p2p.resource_lock import ResourceLock
+from p2p.service import run_service
 
 
 # A function that is given the pool and a remote which returns `True` if we should connect.
@@ -73,11 +76,11 @@ OnConnectFn = Callable[[ConnectionPoolAPI, ConnectionAPI], Awaitable[Any]]
 OnDisconnectFn = OnConnectFn
 
 
-async def _default_sleep_fn(manager: 'ConnectionManager') -> None:
+async def _default_sleep_fn(manager: 'PoolManager') -> None:
     return
 
 
-class PoolChanged(Awaitable[None], AsyncContextManager[None]):
+class PoolChanged(PoolChangedAPI):
     def __init__(self, condition: asyncio.Condition) -> None:
         self._condition = condition
 
@@ -101,7 +104,7 @@ class PoolChanged(Awaitable[None], AsyncContextManager[None]):
             self._condition.release()
 
 
-class ConnectionManager(BaseService):
+class PoolManager(PoolManagerAPI):
     _on_connect_handlers: Set[OnConnectFn]
     _on_disconnect_handlers: Set[OnDisconnectFn]
     _behaviors: Set[BehaviorAPI]
@@ -123,6 +126,8 @@ class ConnectionManager(BaseService):
         self._on_disconnect_handlers = set()
         self._behaviors = set()
 
+        self._handshake_locks = ResourceLock()
+
     @property
     def public_key(self) -> keys.PublicKey:
         return self._private_key.public_key
@@ -133,7 +138,7 @@ class ConnectionManager(BaseService):
         except asyncio.CancelledError:
             pass
 
-    def wait_pool_changed(self) -> PoolChanged:
+    def wait_pool_changed(self) -> PoolChangedAPI:
         return PoolChanged(self._pool_changed)
 
     def on_connect(self, handler_fn: OnConnectFn) -> HandlerSubscriptionAPI:
@@ -174,7 +179,7 @@ class ConnectionManager(BaseService):
     async def seek_connections(self,
                                providers: Sequence[PeerProviderFn],
                                candidate_filters: Sequence[CandidateFilterFn] = (),
-                               sleep_fn: Callable[['ConnectionManager'], Awaitable[Any]] = _default_sleep_fn,  # noqa: E501
+                               sleep_fn: Callable[['PoolManager'], Awaitable[Any]] = _default_sleep_fn,  # noqa: E501
                                ) -> None:
         while self.is_operational:
             # The `sleep_fn` allows
@@ -193,21 +198,26 @@ class ConnectionManager(BaseService):
                         continue
 
     async def dial(self, remote: NodeAPI) -> ConnectionAPI:
-        handshakers = await asyncio.gather(*(
-            provider() for provider in self.handshaker_providers
-        ))
+        if self._handshake_locks.is_locked(remote):
+            self.logger.debug2("Skipping %s; already shaking hands", remote)
+            raise IneligiblePeer(f"Already shaking hands with {remote}")
 
-        connection = await dial_out(
-            remote,
-            self._private_key,
-            self.p2p_handshake_params,
-            handshakers,
-            token=self.cancel_token,
-        )
-        self.logger.info('Established dial-out connection with: %s', connection.remote)
-        self.run_task(self._run_connection(connection))
-        await connection.events.started.wait()
-        return connection
+        async with self._handshake_locks(remote):
+            handshakers = await asyncio.gather(*(
+                provider() for provider in self.handshaker_providers
+            ))
+
+            connection = await dial_out(
+                remote,
+                self._private_key,
+                self.p2p_handshake_params,
+                handshakers,
+                token=self.cancel_token,
+            )
+            self.logger.info('Established dial-out connection with: %s', connection.remote)
+            self.run_task(self._run_connection(connection))
+            await connection.events.started.wait()
+            return connection
 
     async def _run_connection(self, connection: ConnectionAPI) -> None:
         async with run_service(connection):
@@ -280,11 +290,16 @@ class ConnectionManager(BaseService):
             self.logger.exception("Unexpected error handling handshake")
             _cleanup_reader_and_writer()
         else:
-            self.run_task(self._run_connection(connection))
-            await connection.events.started.wait()
+            if self._handshake_locks.is_locked(connection.remote):
+                self.logger.debug2("Skipping %s; already shaking hands", connection.remote)
+                raise IneligiblePeer(f"Already shaking hands with {connection.remote}")
+
+            async with self._handshake_locks(connection.remote):
+                self.run_task(self._run_connection(connection))
+                await connection.events.started.wait()
 
 
-async def sleep_till_not_full(manager: ConnectionManager,
+async def sleep_till_not_full(manager: PoolManager,
                               *,
                               max_connections: int) -> None:
     if len(manager.pool) < max_connections:

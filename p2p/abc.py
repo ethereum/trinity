@@ -13,6 +13,7 @@ from typing import (
     Generic,
     List,
     Optional,
+    Sequence,
     Tuple,
     Type,
     TYPE_CHECKING,
@@ -28,7 +29,7 @@ from cancel_token import CancelToken
 
 from eth_utils import ExtendedDebugLogger
 
-from eth_keys import datatypes
+from eth_keys import keys
 
 from p2p.typing import Capability, Capabilities, Payload, Structure
 from p2p.transport_state import TransportState
@@ -97,12 +98,12 @@ TNode = TypeVar('TNode', bound='NodeAPI')
 
 
 class NodeAPI(ABC):
-    pubkey: datatypes.PublicKey
+    pubkey: keys.PublicKey
     address: AddressAPI
     id: int
 
     @abstractmethod
-    def __init__(self, pubkey: datatypes.PublicKey, address: AddressAPI) -> None:
+    def __init__(self, pubkey: keys.PublicKey, address: AddressAPI) -> None:
         ...
 
     @classmethod
@@ -209,7 +210,7 @@ class TransportAPI(ABC):
 
     @property
     @abstractmethod
-    def public_key(self) -> datatypes.PublicKey:
+    def public_key(self) -> keys.PublicKey:
         ...
 
     @abstractmethod
@@ -402,6 +403,21 @@ class HandshakeReceiptAPI(ABC):
     protocol: ProtocolAPI
 
 
+class HandshakerAPI(ABC):
+    logger: ExtendedDebugLogger
+
+    protocol_class: Type[ProtocolAPI]
+
+    @abstractmethod
+    async def do_handshake(self,
+                           multiplexer: MultiplexerAPI,
+                           protocol: ProtocolAPI) -> HandshakeReceiptAPI:
+        """
+        Perform the actual handshake for the protocol.
+        """
+        ...
+
+
 class HandlerSubscriptionAPI(ContextManager['HandlerSubscriptionAPI']):
     @abstractmethod
     def cancel(self) -> None:
@@ -528,4 +544,63 @@ class BehaviorAPI(ABC):
         apply the behavior to the connection during the lifecycle of the
         connection.
         """
+        ...
+
+
+class PoolChangedAPI(Awaitable[None], AsyncContextManager[None]):
+    ...
+
+
+# A function that is given the pool and a remote which returns `True` if we should connect.
+CandidateFilterFn = Callable[[ConnectionPoolAPI, NodeAPI], bool]
+ConnectionFilterFn = Callable[[ConnectionPoolAPI, ConnectionAPI], bool]
+
+HandshakerProviderFn = Callable[[], Awaitable[HandshakerAPI]]
+PeerProviderFn = Callable[[ConnectionPoolAPI], Awaitable[Tuple[NodeAPI, ...]]]
+OnConnectFn = Callable[[ConnectionPoolAPI, ConnectionAPI], Awaitable[Any]]
+OnDisconnectFn = OnConnectFn
+
+
+class PoolManagerAPI(AsyncioServiceAPI):
+    @property
+    @abstractmethod
+    def public_key(self) -> keys.PublicKey:
+        ...
+
+    @abstractmethod
+    def wait_pool_changed(self) -> PoolChangedAPI:
+        ...
+
+    @abstractmethod
+    def on_connect(self, handler_fn: OnConnectFn) -> HandlerSubscriptionAPI:
+        ...
+
+    @abstractmethod
+    def on_disconnect(self, handler_fn: OnDisconnectFn) -> HandlerSubscriptionAPI:
+        ...
+
+    @abstractmethod
+    def add_behavior(self, behavior: BehaviorAPI) -> HandlerSubscriptionAPI:
+        ...
+
+    @abstractmethod
+    def listen(self, host: str, port: int) -> AsyncContextManager[NodeAPI]:
+        ...
+
+    @abstractmethod
+    async def seek_connections(self,
+                               providers: Sequence[PeerProviderFn],
+                               candidate_filters: Sequence[CandidateFilterFn] = (),
+                               sleep_fn: Callable[['PoolManagerAPI'], Awaitable[Any]] = None,  # noqa: E501
+                               ) -> None:
+        ...
+
+    @abstractmethod
+    async def dial(self, remote: NodeAPI) -> ConnectionAPI:
+        ...
+
+    @abstractmethod
+    async def receive_handshake(self,
+                                reader: asyncio.StreamReader,
+                                writer: asyncio.StreamWriter) -> None:
         ...
