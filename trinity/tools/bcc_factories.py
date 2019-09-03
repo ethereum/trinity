@@ -102,6 +102,7 @@ class NodeFactory(factory.Factory):
 @asynccontextmanager
 async def ConnectionPairFactory(
     cancel_token: CancelToken = None,
+    say_hello: bool = True,
 ) -> AsyncIterator[Tuple[Node, Node]]:
     if cancel_token is None:
         cancel_token = CancelTokenFactory()
@@ -110,7 +111,11 @@ async def ConnectionPairFactory(
 
     async with run_service(alice), run_service(bob):
         await asyncio.sleep(0.01)
-        await alice.dial_peer(bob.listen_ip, bob.listen_port, bob.peer_id)
+        await alice.dial_peer_maddr(bob.listen_maddr_with_peer_id)
+        await asyncio.sleep(0.01)
+        if say_hello:
+            await alice.say_hello(bob.peer_id)
+            await asyncio.sleep(0.01)
         yield alice, bob
 
 
