@@ -97,6 +97,16 @@ def _find_proposer_in_committee(
     A validator with higher balance would be chosen as the proposer more likely.
     It is expected to end in just 1 or 2 rounds.
     More than `MAX_ROUNDS` rounds is rare and could consider as a bug.
+
+    Detail:
+    The committee passed in here should consist 'active' validators.
+    An active validator has a balance of at least 17 Ether and at most 32 Ether.
+    This function choose a number between 0 and 1, which is represented by
+    `random_byte / MAX_RANDOM_BYTE`. The probability of a validator chosen as
+    a proposer is `effective_balance/max_effective_balance`.
+    The worst/easiest possible scenario for the loop to reach more rounds is when every
+    validator has 17 Ether and has the 17/32 probability of being chosen.
+    This requires 1 out of (17/32)^100 chance to reach 100 rounds.
     """
     base = int(epoch)
     committee_len = len(committee)
