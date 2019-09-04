@@ -9,14 +9,12 @@ from trinity.config import TrinityConfig
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.protocol.common.peer_pool_event_bus import PeerPoolEventServer
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPoolEventServer
-from trinity.server import FullServer
 
 from .base import Node
 
 
 class FullNode(Node[ETHPeer]):
     _chain: FullChain = None
-    _p2p_server: FullServer = None
 
     def __init__(self, event_bus: EndpointAPI, trinity_config: TrinityConfig) -> None:
         super().__init__(event_bus, trinity_config)
@@ -41,24 +39,6 @@ class FullNode(Node[ETHPeer]):
             self._event_server = ETHPeerPoolEventServer(
                 self.event_bus, self.get_peer_pool(), self.cancel_token)
         return self._event_server
-
-    def get_p2p_server(self) -> FullServer:
-        if self._p2p_server is None:
-            self._p2p_server = FullServer(
-                privkey=self._node_key,
-                port=self._node_port,
-                chain=self.get_full_chain(),
-                chaindb=AsyncChainDB(self._base_db),
-                headerdb=self.headerdb,
-                base_db=self._base_db,
-                network_id=self._network_id,
-                max_peers=self._max_peers,
-                bootstrap_nodes=self._bootstrap_nodes,
-                preferred_nodes=self._preferred_nodes,
-                token=self.cancel_token,
-                event_bus=self.event_bus,
-            )
-        return self._p2p_server
 
     def get_peer_pool(self) -> BasePeerPool:
         return self.get_p2p_server().peer_pool

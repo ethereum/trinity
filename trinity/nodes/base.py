@@ -109,14 +109,6 @@ class Node(BaseService, Generic[TPeer]):
         """
         ...
 
-    @abstractmethod
-    def get_p2p_server(self) -> BaseService:
-        """
-        This is the main service that will be run, when calling :meth:`run`.
-        It's typically responsible for syncing the chain, with peer connections.
-        """
-        ...
-
     @property
     def base_db(self) -> AtomicDatabaseAPI:
         return self._base_db
