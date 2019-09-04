@@ -8,7 +8,6 @@ from typing import (
 import yaml
 
 
-
 def configure_logging(path: str) -> None:
     if path is not None:
         with open(path) as file:
@@ -49,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-l", "--logging",
         help="path to a YAML file containing the logging config",
-        required=True,
+        required=False,
     )
     args = parser.parse_args()
 
