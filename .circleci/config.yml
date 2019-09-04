@@ -36,6 +36,10 @@ common: &common
     - run:
         name: run tox
         command: ~/.local/bin/tox
+    - run:
+        name: run tox (2nd try)
+        command: ~/.local/bin/tox
+        when: on_fail
     - save_cache:
         paths:
           - .hypothesis
