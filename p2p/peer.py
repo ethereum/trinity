@@ -3,7 +3,6 @@ import asyncio
 import collections
 import contextlib
 import functools
-import logging
 from typing import (
     Any,
     cast,
@@ -22,11 +21,7 @@ from lahja import EndpointAPI
 
 from cached_property import cached_property
 
-from eth_utils import to_tuple, ValidationError
-
-from eth_keys import datatypes
-
-from cancel_token import CancelToken
+from eth_utils import ValidationError
 
 from p2p.abc import (
     CommandAPI,
@@ -41,12 +36,7 @@ from p2p.exceptions import (
     PeerConnectionLost,
     UnknownProtocol,
 )
-from p2p.handshake import (
-    dial_out,
-    DevP2PHandshakeParams,
-    DevP2PReceipt,
-    Handshaker,
-)
+from p2p.handshake import DevP2PReceipt
 from p2p.service import BaseService
 from p2p.p2p_proto import (
     BaseP2PProtocol,
@@ -457,59 +447,3 @@ class PeerSubscriber(ABC):
             yield
         finally:
             peer.remove_subscriber(self)
-
-
-class MsgBuffer(PeerSubscriber):
-    logger = logging.getLogger('p2p.peer.MsgBuffer')
-    msg_queue_maxsize = 500
-    subscription_msg_types = frozenset({Command})
-
-    @to_tuple
-    def get_messages(self) -> Iterator[PeerMessage]:
-        while not self.msg_queue.empty():
-            yield self.msg_queue.get_nowait()
-
-
-class BasePeerFactory(ABC):
-    @property
-    @abstractmethod
-    def peer_class(self) -> Type[BasePeer]:
-        ...
-
-    def __init__(self,
-                 privkey: datatypes.PrivateKey,
-                 context: BasePeerContext,
-                 token: CancelToken,
-                 event_bus: EndpointAPI = None) -> None:
-        self.privkey = privkey
-        self.context = context
-        self.cancel_token = token
-        self.event_bus = event_bus
-
-    @abstractmethod
-    async def get_handshakers(self) -> Tuple[Handshaker, ...]:
-        ...
-
-    async def handshake(self, remote: NodeAPI) -> BasePeer:
-        p2p_handshake_params = DevP2PHandshakeParams(
-            self.context.client_version_string,
-            self.context.listen_port,
-            self.context.p2p_version,
-        )
-        handshakers = await self.get_handshakers()
-        connection = await dial_out(
-            remote=remote,
-            private_key=self.privkey,
-            p2p_handshake_params=p2p_handshake_params,
-            protocol_handshakers=handshakers,
-            token=self.cancel_token
-        )
-        return self.create_peer(connection)
-
-    def create_peer(self,
-                    connection: ConnectionAPI) -> BasePeer:
-        return self.peer_class(
-            connection=connection,
-            context=self.context,
-            event_bus=self.event_bus,
-        )

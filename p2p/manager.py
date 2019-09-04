@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import functools
+import operator
 from types import TracebackType
 from typing import (
     Any,
@@ -19,6 +20,8 @@ from async_generator import asynccontextmanager
 from cancel_token import CancelToken, OperationCancelled
 
 from eth_keys import keys
+
+from eth_utils.toolz import groupby
 
 from p2p.abc import (
     BehaviorAPI,
@@ -339,4 +342,20 @@ async def enforce_max_connections(pool: ConnectionPool,
                                   *,
                                   max_connections: int) -> None:
     if len(pool) >= max_connections:
+        # TODO: logging
+        connection.get_base_protocol().send_disconnect(DisconnectReason.too_many_peers)
+
+
+async def enforce_ip_address_diversity(pool: ConnectionPool,
+                                       connection: ConnectionAPI,
+                                       *,
+                                       max_connections_per_ip: int) -> None:
+    # connect to no more then 2 nodes with the same IP
+    nodes_by_ip = groupby(
+        operator.attrgetter('remote.address.ip'),
+        pool,
+    )
+    matching_ip_nodes = nodes_by_ip.get(connection.remote.address.ip, [])
+    if len(matching_ip_nodes) > 2:
+        # TODO: logging
         connection.get_base_protocol().send_disconnect(DisconnectReason.too_many_peers)
