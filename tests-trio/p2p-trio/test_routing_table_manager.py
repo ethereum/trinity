@@ -29,6 +29,7 @@ from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
 )
 from p2p.discv5.routing_table import (
+    compute_log_distance,
     FlatRoutingTable,
 )
 from p2p.discv5.routing_table_manager import (
@@ -87,8 +88,8 @@ def remote_endpoint():
 
 
 @pytest.fixture
-def routing_table(remote_enr):
-    routing_table = FlatRoutingTable()
+def routing_table(local_enr, remote_enr):
+    routing_table = FlatRoutingTable(local_enr.node_id)
     routing_table.add(remote_enr.node_id)
     return routing_table
 
@@ -239,10 +240,10 @@ async def test_ping_handler_requests_updated_enr(ping_handler,
 
 
 @pytest.mark.trio
-async def test_find_node_handler_sends_nodes(find_node_handler,
-                                             incoming_message_channels,
-                                             outgoing_message_channels,
-                                             local_enr):
+async def test_find_node_handler_sends_local_enr(find_node_handler,
+                                                 incoming_message_channels,
+                                                 outgoing_message_channels,
+                                                 local_enr):
     find_node = FindNodeMessageFactory(distance=0)
     incoming_message = IncomingMessageFactory(message=find_node)
     await incoming_message_channels[0].send(incoming_message)
@@ -253,6 +254,28 @@ async def test_find_node_handler_sends_nodes(find_node_handler,
     assert outgoing_message.message.request_id == find_node.request_id
     assert outgoing_message.message.total == 1
     assert outgoing_message.message.enrs == (local_enr,)
+
+
+@pytest.mark.trio
+async def test_find_node_handler_sends_remote_enrs(find_node_handler,
+                                                   incoming_message_channels,
+                                                   outgoing_message_channels,
+                                                   local_enr,
+                                                   remote_enr,
+                                                   ):
+    remote_enr_distance = compute_log_distance(local_enr.node_id, remote_enr.node_id)
+    find_node = FindNodeMessageFactory(distance=remote_enr_distance)
+    incoming_message = IncomingMessageFactory(message=find_node)
+    await incoming_message_channels[0].send(incoming_message)
+    await wait_all_tasks_blocked()
+
+    outgoing_message = outgoing_message_channels[1].receive_nowait()
+    assert isinstance(outgoing_message.message, NodesMessage)
+    assert outgoing_message.message.request_id == find_node.request_id
+    assert outgoing_message.message.total == 1
+    assert outgoing_message.message.enrs == (remote_enr,)
+
+    # TODO: add/extend test to handle response consisting of multiple nodes messages
 
 
 @pytest.mark.trio

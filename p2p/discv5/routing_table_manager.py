@@ -1,9 +1,17 @@
 import logging
+import operator
 import time
 
 from eth_utils import (
     encode_hex,
 )
+from eth_utils.toolz import (
+    accumulate,
+    groupby,
+    second,
+)
+
+import rlp
 
 import trio
 from trio.abc import (
@@ -29,6 +37,7 @@ from p2p.discv5.channel_services import (
     OutgoingMessage,
 )
 from p2p.discv5.constants import (
+    NODES_MESSAGE_PAYLOAD_SIZE,
     REQUEST_RESPONSE_TIMEOUT,
     ROUTING_TABLE_PING_INTERVAL,
 )
@@ -274,11 +283,7 @@ class FindNodeHandler(BaseRoutingTableManagerComponent):
                 if incoming_message.message.distance == 0:
                     await self.respond_with_local_enr(incoming_message)
                 else:
-                    self.logger.warning(
-                        "Received FindNode request for non-zero distance from %s which is not "
-                        "implemented yet",
-                        encode_hex(incoming_message.sender_node_id),
-                    )
+                    await self.respond_with_remote_enrs(incoming_message)
 
     async def respond_with_local_enr(self, incoming_message: IncomingMessage) -> None:
         """Send a Nodes message containing the local ENR in response to an incoming message."""
@@ -292,9 +297,57 @@ class FindNodeHandler(BaseRoutingTableManagerComponent):
 
         self.logger.debug(
             "Responding to %s with Nodes message containing local ENR",
-            incoming_message.sender_endpoint,
+            encode_hex(incoming_message.sender_node_id),
         )
         await self.outgoing_message_send_channel.send(outgoing_message)
+
+    async def respond_with_remote_enrs(self, incoming_message: IncomingMessage) -> None:
+        """Send a sequence of Nodes messages containing ENRs from our routing table."""
+        log_distance = incoming_message.message.distance
+        node_ids_including_sender = (self.routing_table.iter_nodes_at_log_distance(log_distance))
+
+        # remove sender as they presumably know about themselves
+        node_ids = tuple(
+            node_id for node_id in node_ids_including_sender
+            if node_id != incoming_message.sender_node_id
+        )
+
+        # TODO: do this nice and in parallel (probably with the help of some utility function
+        # that gathers the result in a list
+        enrs = []
+        for node_id in node_ids:
+            enrs.append(await self.enr_db.get(node_id))
+        encoded_enrs = tuple(rlp.encode(enr) for enr in enrs)
+
+        # split up into messages
+        enr_sizes = (len(encoded_enr) for encoded_enr in encoded_enrs)
+        cumulative_enr_sizes = accumulate(operator.add, enr_sizes)
+        message_indices = tuple(
+            cumulative_size // NODES_MESSAGE_PAYLOAD_SIZE
+            for cumulative_size in cumulative_enr_sizes
+        )
+        enrs_with_message_index = zip(enrs, message_indices)
+        chunks_with_message_index_dict = groupby(second, enrs_with_message_index)
+        chunks_with_message_index = tuple(chunks_with_message_index_dict.values()) or ((),)
+        total = len(chunks_with_message_index)
+
+        nodes_messages = tuple(
+            NodesMessage(
+                request_id=incoming_message.message.request_id,
+                total=total,
+                enrs=tuple(enr for enr, _ in chunk_with_message_index),
+            )
+            for chunk_with_message_index in chunks_with_message_index
+        )
+        self.logger.debug(
+            "Responding to %s with %d Nodes messages containing %d ENRs",
+            encode_hex(incoming_message.sender_node_id),
+            len(nodes_messages),
+            len(enrs),
+        )
+        for nodes_message in nodes_messages:
+            outgoing_message = incoming_message.to_response(nodes_message)
+            await self.outgoing_message_send_channel.send(outgoing_message)
 
 
 class PingSender(BaseRoutingTableManagerComponent):

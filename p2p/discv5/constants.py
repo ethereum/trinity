@@ -11,6 +11,7 @@ ID_NONCE_SIZE = 32  # size of the id nonce in who are you and auth tag packets
 RANDOM_ENCRYPTED_DATA_SIZE = 12  # size of random data we send to initiate a handshake
 
 MAX_PACKET_SIZE = 1280  # maximum allowed size of a packet
+NODES_MESSAGE_PAYLOAD_SIZE = 800  # upper bound of space reserved for ENRs in nodes message
 
 ZERO_NONCE = Nonce(b"\x00" * NONCE_SIZE)  # nonce used for the auth header packet
 AUTH_RESPONSE_VERSION = 5  # version number used in auth response
