@@ -29,7 +29,6 @@ class TestnetChain(BaseTestnetChain, BeaconChain):
 
 
 class SkeletonLakeChain(BeaconChain):
-    sm_configuration = ((
-        SkeletonLakeStateMachine.config.GENESIS_SLOT,
-        SkeletonLakeStateMachine,
-    ),)
+    sm_configuration = (
+        (SkeletonLakeStateMachine.config.GENESIS_SLOT, SkeletonLakeStateMachine),
+    )
