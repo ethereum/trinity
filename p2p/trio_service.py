@@ -212,7 +212,70 @@ def as_service(service_fn: LogicFnType) -> Type[Service]:
     return _Service
 
 
-class Manager(ManagerAPI):
+class BaseManager(ManagerAPI):
+
+    def __init__(self, service: ServiceAPI) -> None:
+        if hasattr(service, 'manager'):
+            raise LifecycleError("Service already has a manager.")
+        else:
+            service.manager = self
+
+        self._service = service
+
+        # events
+        self._started = trio.Event()
+        self._cancelled = trio.Event()
+        self._stopped = trio.Event()
+
+        # locks
+        self._run_lock = trio.Lock()
+
+        # errors
+        self._errors = []
+
+    #
+    # Event API mirror
+    #
+    @property
+    def is_started(self) -> bool:
+        return self._started.is_set()
+
+    @property
+    def is_running(self) -> bool:
+        return self.is_started and not self.is_stopped
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancelled.is_set()
+
+    @property
+    def is_stopped(self) -> bool:
+        return self._stopped.is_set()
+
+    #
+    # Wait API
+    #
+    async def wait_started(self) -> None:
+        await self._started.wait()
+
+    async def wait_cancelled(self) -> None:
+        await self._cancelled.wait()
+
+    async def wait_stopped(self) -> None:
+        await self._stopped.wait()
+
+    #
+    # Tasks
+    #
+    def run_daemon_task(self,
+                        async_fn: Callable[..., Awaitable[Any]],
+                        *args: Any,
+                        name: str = None) -> None:
+
+        self.run_task(async_fn, *args, daemon=True, name=name)
+
+
+class Manager(BaseManager):
     logger = logging.getLogger('p2p.trio_service.Manager')
 
     _service: ServiceAPI
@@ -249,6 +312,13 @@ class Manager(ManagerAPI):
 
         # errors
         self._errors = []
+
+    #
+    # Error Handling
+    #
+    @property
+    def did_error(self) -> bool:
+        return len(self._errors) > 0
 
     #
     # System Tasks
@@ -353,29 +423,6 @@ class Manager(ManagerAPI):
             ))
 
     #
-    # Event API mirror
-    #
-    @property
-    def is_started(self) -> bool:
-        return self._started.is_set()
-
-    @property
-    def is_running(self) -> bool:
-        return self.is_started and not self.is_stopped
-
-    @property
-    def is_cancelled(self) -> bool:
-        return self._cancelled.is_set()
-
-    @property
-    def is_stopped(self) -> bool:
-        return self._stopped.is_set()
-
-    @property
-    def did_error(self) -> bool:
-        return len(self._errors) > 0
-
-    #
     # Control API
     #
     def cancel(self) -> None:
@@ -386,18 +433,6 @@ class Manager(ManagerAPI):
     async def stop(self) -> None:
         self.cancel()
         await self.wait_stopped()
-
-    #
-    # Wait API
-    #
-    async def wait_started(self) -> None:
-        await self._started.wait()
-
-    async def wait_cancelled(self) -> None:
-        await self._cancelled.wait()
-
-    async def wait_stopped(self) -> None:
-        await self._stopped.wait()
 
     async def _run_and_manage_task(self,
                                    async_fn: Callable[..., Awaitable[Any]],
@@ -448,12 +483,34 @@ class Manager(ManagerAPI):
             name=name,
         )
 
-    def run_daemon_task(self,
-                        async_fn: Callable[..., Awaitable[Any]],
-                        *args: Any,
-                        name: str = None) -> None:
 
-        self.run_task(async_fn, *args, daemon=True, name=name)
+class ProcessManager(BaseManager):
+    @property
+    def did_error(self) -> bool:
+        ...
+
+    def cancel(self) -> None:
+        ...
+
+    async def stop(self) -> None:
+        ...
+
+    @classmethod
+    async def run_service(cls, service: ServiceAPI) -> None:
+        ...
+
+    @abstractmethod
+    async def run(self) -> None:
+        ...
+
+    @trio_typing.takes_callable_and_args
+    @abstractmethod
+    async def run_task(self,
+                       async_fn: Callable[..., Awaitable[Any]],
+                       *args: Any,
+                       daemon: bool = False,
+                       name: str = None) -> None:
+        raise NotImplementedError("The ProcessManager cannot be used to run tasks")
 
 
 @asynccontextmanager
