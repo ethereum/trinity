@@ -1,21 +1,19 @@
 from pathlib import Path
-from eth2.beacon.types.states import BeaconState
-from eth2._utils.merkle.common import get_merkle_proof
-from eth2._utils.merkle.sparse import calc_merkle_tree_from_leaves, get_root
-from eth2._utils.hash import hash_eth2
-from eth2.beacon.types.deposits import Deposit
-from eth2.beacon.types.deposit_data import DepositData
-from eth2.beacon.tools.fixtures.config_types import Minimal
-from eth2.beacon.signature_domain import SignatureDomain
-import ssz
-from eth2.beacon.tools.fixtures.loading import load_config_at_path, load_yaml_at
-from eth2.beacon.helpers import compute_domain
-from eth2.beacon.tools.misc.ssz_vector import override_lengths
-from eth2.beacon.genesis import initialize_beacon_state_from_eth1
+
 from eth2._utils.bls import bls
+from eth2._utils.hash import hash_eth2
+from eth2._utils.merkle.common import get_merkle_proof
+from eth2._utils.merkle.sparse import calc_merkle_tree_from_leaves
+from eth2.beacon.genesis import initialize_beacon_state_from_eth1
+from eth2.beacon.helpers import compute_domain
+from eth2.beacon.signature_domain import SignatureDomain
+from eth2.beacon.tools.fixtures.config_types import Minimal
+from eth2.beacon.tools.fixtures.loading import load_config_at_path, load_yaml_at
+from eth2.beacon.tools.misc.ssz_vector import override_lengths
+from eth2.beacon.types.deposit_data import DepositData
+from eth2.beacon.types.deposits import Deposit
 
-
-ROOT_DIR = Path("eth2/scripts")
+ROOT_DIR = Path("eth2/beacon/scripts")
 KEY_SET_FILE = Path("keygen_16_validators.yaml")
 
 
@@ -73,7 +71,7 @@ def _main():
         deposits += (deposit,)
 
     eth1_block_hash = b"\x42" * 32
-    eth1_timestamp = 1567777777
+    eth1_timestamp = 10000
     state = initialize_beacon_state_from_eth1(
         eth1_block_hash=eth1_block_hash,
         eth1_timestamp=eth1_timestamp,
@@ -81,12 +79,8 @@ def _main():
         config=config,
     )
 
-    # print(state.hash_tree_root.hex())
-    # state.genesis_time = 1567777777
-
-    with open("/Users/ras/src/test.ssz", "wb") as f:
-        data = BeaconState.serialize(state.copy(genesis_time=1567777777))
-        f.write(data)
+    # TODO make genesis_time configurable, ideally via some delay from now
+    the_state_we_want = state.copy(genesis_time=1567777777)
 
 
 if __name__ == "__main__":
