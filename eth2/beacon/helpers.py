@@ -84,7 +84,7 @@ def get_block_root(
     epoch: Epoch,
     slots_per_epoch: int,
     slots_per_historical_root: int,
-) -> Hash32:
+) -> SigningRoot:
     return get_block_root_at_slot(
         state,
         compute_start_slot_of_epoch(epoch, slots_per_epoch),
