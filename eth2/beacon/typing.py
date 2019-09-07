@@ -1,6 +1,6 @@
 from typing import NamedTuple, NewType, Tuple
 
-from eth.typing import Hash32
+from eth_typing import Hash32
 
 Slot = NewType("Slot", int)  # uint64
 Epoch = NewType("Epoch", int)  # uint64

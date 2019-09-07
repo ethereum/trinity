@@ -1,4 +1,3 @@
-from eth_typing import Hash32
 from eth_utils import encode_hex
 import ssz
 from ssz.sedes import bytes32, uint64

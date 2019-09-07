@@ -7,10 +7,11 @@ from eth.abc import AtomicDatabaseAPI, DatabaseAPI
 from eth.constants import ZERO_HASH32
 from eth.exceptions import BlockNotFound, CanonicalHeadNotFound, ParentNotFound
 from eth.validation import validate_word
-from eth_typing import Hash32, HashTreeRoot, SigningRoot
+from eth_typing import Hash32
 from eth_utils import ValidationError, encode_hex, to_tuple
 import ssz
 
+from eth2.beacon.constants import ZERO_SIGNING_ROOT
 from eth2.beacon.db.exceptions import (
     AttestationRootNotFound,
     FinalizedHeadNotFound,
@@ -24,7 +25,7 @@ from eth2.beacon.fork_choice.scoring import ScoringFn as ForkChoiceScoringFn
 from eth2.beacon.helpers import compute_epoch_of_slot
 from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
-from eth2.beacon.typing import Epoch, Slot
+from eth2.beacon.typing import Epoch, SigningRoot, Slot
 from eth2.configs import Eth2GenesisConfig
 
 

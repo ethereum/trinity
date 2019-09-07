@@ -13,7 +13,6 @@ from eth2.beacon.typing import (
     Bitfield,
     Epoch,
     Gwei,
-    HashTreeRoot,
     Shard,
     SigningRoot,
     Slot,
