@@ -46,11 +46,11 @@ def get_active_validator_indices(
 
 
 def _get_historical_root(
-    historical_roots: Sequence[Hash32],
+    historical_roots: Sequence[SigningRoot],
     state_slot: Slot,
     slot: Slot,
     slots_per_historical_root: int,
-) -> Hash32:
+) -> SigningRoot:
     """
     Return the historical root at a recent ``slot``.
     """
