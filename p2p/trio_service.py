@@ -485,6 +485,8 @@ class Manager(BaseManager):
 
 
 class ProcessManager(BaseManager):
+    _run_lock: trio.Lock
+
     @property
     def did_error(self) -> bool:
         ...
@@ -499,9 +501,49 @@ class ProcessManager(BaseManager):
     async def run_service(cls, service: ServiceAPI) -> None:
         ...
 
-    @abstractmethod
     async def run(self) -> None:
-        ...
+
+        if self._run_lock.locked():
+            raise LifecycleError(
+                "Cannot run a service with the run lock already engaged.  Already started?"
+            )
+        elif self.is_started:
+            raise LifecycleError("Cannot run a service which is already started.")
+
+        async with self._run_lock:
+            async with trio.open_nursery() as system_nursery:
+                try:
+                    async with trio.open_nursery() as task_nursery:
+                        self._task_nursery = task_nursery
+
+                        system_nursery.start_soon(
+                            self._handle_cancelled,
+                            task_nursery,
+                        )
+                        system_nursery.start_soon(
+                            self._handle_stopped,
+                            system_nursery,
+                        )
+
+                        task_nursery.start_soon(self._handle_run)
+
+                        self._started.set()
+
+                        # ***BLOCKING HERE***
+                        # The code flow will block here until the background tasks have
+                        # completed or cancellation occurs.
+                finally:
+                    # Mark as having stopped
+                    self._stopped.set()
+        self.logger.debug('%s stopped', self)
+
+        # If an error occured, re-raise it here
+        if self.did_error:
+            raise trio.MultiError(tuple(
+                exc_value.with_traceback(exc_tb)
+                for _, exc_value, exc_tb
+                in self._errors
+            ))
 
     @trio_typing.takes_callable_and_args
     @abstractmethod
