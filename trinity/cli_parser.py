@@ -169,7 +169,7 @@ trinity_parser.add_argument(
 )
 trinity_parser.add_argument(
     '--trinity-tmp-root-dir',
-    type=bool,
+    action="store_true",
     required=False,
     default=False,
     help=(
