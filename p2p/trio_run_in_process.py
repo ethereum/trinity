@@ -2,6 +2,7 @@ import argparse
 import io
 import logging
 import os
+import signal
 import struct
 import sys
 
@@ -186,26 +187,35 @@ async def _monitor_sub_proc(proc: Process) -> None:
         parent_pid,
     )
 
-    async with await trio.open_file(parent_w, 'wb', closefd=True) as to_child:
-        async with await trio.open_file(parent_r, 'rb', closefd=True) as from_child:
-            async with await trio.open_file(child_w, 'wb', closefd=False) as to_parent:
-                async with await trio.open_file(child_r, 'rb', closefd=False) as from_parent:
-                    sub_proc = await trio.open_process(command, stdin=from_parent, stdout=to_parent)
-                    async with sub_proc:
-                        # set the process ID
-                        proc.pid = sub_proc.pid
+    async with await trio.open_file(child_w, 'wb', closefd=False) as to_parent:
+        async with await trio.open_file(child_r, 'rb', closefd=False) as from_parent:
+            sub_proc = await trio.open_process(command, stdin=from_parent, stdout=to_parent)
+            async with sub_proc:
+                # set the process ID
+                proc.pid = sub_proc.pid
 
-                        # pass the child process the serialized `async_fn`
-                        # and `args` over stdin.
-                        await to_child.write(pickle_value((proc._async_fn, proc._args)))
-                        await to_child.flush()
+                # pass the child process the serialized `async_fn`
+                # and `args` over stdin.
+                async with await trio.open_file(parent_w, 'wb', closefd=True) as to_child:
+                    await to_child.write(pickle_value((proc._async_fn, proc._args)))
+                    await to_child.flush()
 
-                    proc.returncode = sub_proc.returncode
+    proc.returncode = sub_proc.returncode
 
-                    if proc.returncode == 0:
-                        proc.result = await coro_receive_pickled_value(from_child)
-                    else:
-                        proc.error = await coro_receive_pickled_value(from_child)
+    async with await trio.open_file(parent_r, 'rb', closefd=True) as from_child:
+        if proc.returncode == 0:
+            proc.result = await coro_receive_pickled_value(from_child)
+        else:
+            proc.error = await coro_receive_pickled_value(from_child)
+
+
+async def _monitor_for_sigterm(proc: Process) -> None:
+    await trio.sleep_forever()
+    # with trio.open_signal_receiver(signal.SIGTERM) as signal_aiter:
+    #     async for signum in signal_aiter:
+    #         if signum == signal.SIGTERM:
+    #             logger.info('GOT SIGTERM')
+    #             os.kill(proc.pid, signal.SIGTERM)
 
 
 @asynccontextmanager
@@ -214,6 +224,7 @@ async def open_in_process(async_fn: Callable[..., TReturn], *args: Any) -> Async
     proc = Process(async_fn, args)
 
     async with trio.open_nursery() as nursery:
+        nursery.start_soon(_monitor_for_sigterm, proc)
         nursery.start_soon(_monitor_sub_proc, proc)
 
         await proc.wait_pid()
@@ -221,6 +232,7 @@ async def open_in_process(async_fn: Callable[..., TReturn], *args: Any) -> Async
         yield proc
 
         await proc.wait()
+        nursery.cancel_scope.cancel()
 
 
 @trio_typing.takes_callable_and_args
