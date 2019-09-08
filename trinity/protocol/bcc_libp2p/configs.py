@@ -58,12 +58,12 @@ class GossipsubParams(NamedTuple):
 
 
 # Topics
-PUBSUB_TOPIC_BEACON_BLOCK = "beacon_block"
-PUBSUB_TOPIC_BEACON_ATTESTATION = "beacon_attestation"
+PUBSUB_TOPIC_BEACON_BLOCK = "/eth2/beacon_block/ssz"
+PUBSUB_TOPIC_BEACON_ATTESTATION = "/eth2/beacon_attestation/ssz"
 PUBSUB_TOPIC_SHARD_ATTESTATION_FMT = "shard{}_attestation"
-PUBSUB_TOPIC_VOLUNTARY_EXIT = "voluntary_exit"
-PUBSUB_TOPIC_PROPOSER_SLASHING = "proposer_slashing"
-PUBSUB_TOPIC_ATTESTER_SLASHING = "attester_slashing"
+PUBSUB_TOPIC_VOLUNTARY_EXIT = "/eth2/voluntary_exit/ssz"
+PUBSUB_TOPIC_PROPOSER_SLASHING = "/eth2/proposer_slashing/ssz"
+PUBSUB_TOPIC_ATTESTER_SLASHING = "/eth2/attester_slashing/ssz"
 
 PUBSUB_TOPIC_ENCODE_POSTFIX = "ssz"
 PUBSUB_TOPIC_ENCODE_COMPRESS_POSTFIX = "ssz_snappy"
