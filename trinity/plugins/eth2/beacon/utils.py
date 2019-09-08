@@ -32,7 +32,7 @@ from eth2.beacon.types.states import (
     BeaconState,
 )
 
-override_lengths(XIAO_LONG_BAO_CONFIG)
+# override_lengths(XIAO_LONG_BAO_CONFIG)
 
 
 if TYPE_CHECKING:
@@ -60,10 +60,15 @@ def _read_privkey(stream: Union[Path, "StreamTextType"]) -> int:
 
 def extract_privkeys_from_dir(dir_path: Path) -> Dict[BLSPubkey, int]:
     validator_keymap = {}  # pub -> priv
-    for key_file_name in os.listdir(dir_path):
+    try:
+        key_files = os.listdir(dir_path)
+    except FileNotFoundError:
+        return validator_keymap
+    for key_file_name in key_files:
         key_file_path = dir_path / key_file_name
         privkey = _read_privkey(key_file_path)
         validator_keymap[bls.privtopub(privkey)] = privkey
     if len(validator_keymap) == 0:
-        raise KeyFileNotFound("No validator key file is provided")
+        pass
+        #raise KeyFileNotFound("No validator key file is provided")
     return validator_keymap

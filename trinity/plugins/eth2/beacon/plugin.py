@@ -61,6 +61,8 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
             self.start()
 
     def do_start(self) -> None:
+        logger = self.get_logger()
+
         trinity_config = self.boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         base_db = DBClient.connect(trinity_config.database_ipc_path)
@@ -87,6 +89,8 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
             preferred_nodes=trinity_config.preferred_nodes,
             chain=chain,
         )
+
+        self.logger.warning(f'Node listening: {libp2p_node.listen_maddr_with_peer_id}')
 
         receive_server = BCCReceiveServer(
             chain=chain,
