@@ -125,6 +125,7 @@ from .utils import (
     read_resp,
     write_req,
     write_resp,
+    RESP_TIMEOUT,
 )
 import logging
 
@@ -251,6 +252,7 @@ class Node(BaseService):
         """
         Dial the peer ``peer_id`` through the IPv4 protocol
         """
+        self.logger.debug(f'Attemping to dial peer: {ip} {port} {peer_id}')
         await self.host.connect(
             PeerInfo(
                 peer_id=peer_id,
@@ -332,6 +334,10 @@ class Node(BaseService):
             REQ_RESP_RECENT_BEACON_BLOCKS_SSZ,
             self._handle_recent_beacon_blocks,
         )
+        self.host.set_stream_handler(
+            '/ipfs/ping/1.0.0',
+            self._handle_ping,
+        )
 
     #
     # RPC Handlers
@@ -347,6 +353,22 @@ class Node(BaseService):
     # TODO: Register notifee to the `Network` to
     #   - Record peers' joining time.
     #   - Disconnect peers when they fail to join in a certain amount of time.
+
+    async def _handle_ping(self, stream: INetStream) -> None:
+        peer_id = stream.mplex_conn.peer_id
+
+        self.logger.debug('Waiting for ping from other side')
+
+        PING_LENGTH = 32
+
+        try:
+            payload = await asyncio.wait_for(stream.read(PING_LENGTH), RESP_TIMEOUT)
+        except asyncio.TimeoutError as error:
+            self.logger.debug(f'Timed out waiting for ping packet')
+            return
+
+        self.logger.debug(f'Received ping from {peer_id} with data: {repr(payload)}')
+        await stream.write(payload)
 
     async def _validate_hello_req(self, hello_other_side: HelloRequest) -> None:
         state_machine = self.chain.get_state_machine()
