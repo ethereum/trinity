@@ -96,12 +96,21 @@ class InteropPlugin(BaseMainProcessPlugin):
             'interop',
             help='Run with a hard-coded configuration',
         )
-        interop_parser.add_argument(
+
+        time_group = interop_parser.add_mutually_exclusive_group(
+            required=True,
+        )
+        time_group.add_argument(
             '--start-time',
             help="Unix timestamp to use as genesis start time",
             type=int,
-            required=True,
         )
+        time_group.add_argument(
+            '--start-delay',
+            help="How many seconds until the genesis is active",
+            type=int,
+        )
+
         interop_parser.add_argument(
             '--validators',
             help="Which validators should run",
@@ -129,17 +138,32 @@ class InteropPlugin(BaseMainProcessPlugin):
         state = ssz.decode(encoded, sedes=BeaconState)
 
         now = int(time.time())
-        if args.start_time <= now:
-            logger.info(f"--start-time must be a time in the future. Current time is {now}")
+        if args.start_time:
+            if args.start_time <= now:
+                logger.info(f"--start-time must be a time in the future. Current time is {now}")
+                sys.exit(1)
+
+            delta = args.start_time - now
+            logger.info(f"Time will begin {delta} seconds from now")
+
+            # adapt the state, then print the new root!
+            state = state.copy(
+                genesis_time=args.start_time
+            )
+        elif args.start_delay:
+            if args.start_delay < 0:
+                logger.info(f"--start-time must be positive")
+                sys.exit(1)
+
+            start_time = now + args.start_delay
+            logger.info(f"Genesis time is {start_time}")
+
+            state = state.copy(
+                genesis_time=start_time
+            )
+        else:
+            logger.error("Could not determine when time begins")
             sys.exit(1)
-
-        delta = args.start_time - now
-        logger.info(f"Time will begin {delta} seconds from now")
-
-        # adapt the state, then print the new root!
-        state = state.copy(
-            genesis_time=args.start_time
-        )
 
         logger.info(f"Genesis hash tree root: {state.hash_tree_root.hex()}")
 
@@ -187,24 +211,3 @@ class InteropPlugin(BaseMainProcessPlugin):
         args.disable_discovery = True
         args.disable_upnp = True
         args.network_tracking_backend = TrackingBackend.do_not_track
-
-        # BeaconChainConfig uses trinity_config.trinity_root_dir
-
-        # Now start the peer!
-        # I don't want any validators
-        # I don't want any preferred peers, for now
-        # Dont pass a nodekey, let it create one for itself
-
-        # We should log the connection string so others can connect!
-        # Make sure --port and --nodekey can be configured!
-
-        # Configure the validator_keymap here
-        # BeaconGenesisData
-
-        # Oh, the "right" thing to do is to correctly configure trinity_root_dir, that way
-        # it's later picked up...
-
-        # Now, I need to somehow change the result of get_chain_config
-        # Override from_genesis_files()?
-
-        # sys.exit(0)
