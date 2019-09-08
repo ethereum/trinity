@@ -2,6 +2,7 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
+import os
 import asyncio
 from typing import (
     cast,
@@ -62,26 +63,22 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
 
     def _load_or_create_node_key(self) -> KeyPair:
         if self.boot_info.args.beacon_nodekey:
-            print('hi')
             privkey = Secp256k1PrivateKey.new(
                 bytes.fromhex(self.boot_info.args.beacon_nodekey)
             )
             key_pair = KeyPair(private_key=privkey, public_key=privkey.get_public_key())
             return key_pair
         else:
-            print('there')
             config = self.boot_info.trinity_config
             print(config.nodekey_path)
             beacon_nodekey_path = f"{config.nodekey_path}-beacon"
             if os.path.isfile(beacon_nodekey_path):
-                print('foo')
                 with open(beacon_nodekey_path, "rb") as f:
                     key_data = f.read()
                     private_key = Secp256k1PrivateKey.new(key_data)
                     key_pair = KeyPair(private_key=private_key, public_key=privkey.get_public_key())
                     return key_pair
             else:
-                print('bar')
                 key_pair = create_new_key_pair()
                 private_key_bytes = key_pair.private_key.to_bytes()
                 with open(beacon_nodekey_path, "wb") as f:
