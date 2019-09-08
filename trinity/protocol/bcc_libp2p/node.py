@@ -126,7 +126,9 @@ from .utils import (
     write_req,
     write_resp,
 )
+import logging
 
+logger = logging.getLogger('trinity.protocol.bcc_libp2p')
 
 REQ_RESP_HELLO_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_HELLO)
 REQ_RESP_GOODBYE_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_GOODBYE)
@@ -267,6 +269,7 @@ class Node(BaseService):
                 await self.dial_peer(ip, port, peer_id)
                 return
             except ConnectionRefusedError:
+                logger.debug(f"could not connect to peer {peer_id} at {ip}:{port}; retrying attempt {i} of {DIAL_RETRY_COUNT}...")
                 continue
         raise ConnectionRefusedError
 
@@ -280,11 +283,14 @@ class Node(BaseService):
         await self.dial_peer_with_retries(ip=ip, port=port, peer_id=peer_id)
 
     async def connect_preferred_nodes(self) -> None:
-        if self.preferred_nodes:
-            await asyncio.wait([
-                self.dial_peer_maddr(node_maddr)
-                for node_maddr in self.preferred_nodes
-            ])
+        results = await asyncio.gather(
+            *(self.dial_peer_maddr(node_maddr)
+              for node_maddr in self.preferred_nodes),
+            return_exceptions=True,
+        )
+        for result in results:
+            if isinstance(result, Exception):
+                logger.warning(f"could not connect to {result} ")
 
     async def broadcast_beacon_block(self, block: BaseBeaconBlock) -> None:
         await self._broadcast_data(PUBSUB_TOPIC_BEACON_BLOCK, ssz.encode(block))
