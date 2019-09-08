@@ -70,7 +70,6 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
             return key_pair
         else:
             config = self.boot_info.trinity_config
-            print(config.nodekey_path)
             beacon_nodekey_path = f"{config.nodekey_path}-beacon"
             if os.path.isfile(beacon_nodekey_path):
                 with open(beacon_nodekey_path, "rb") as f:
