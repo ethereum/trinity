@@ -75,9 +75,12 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
             if os.path.isfile(beacon_nodekey_path):
                 with open(beacon_nodekey_path, "rb") as f:
                     key_data = f.read()
-                    private_key = Secp256k1PrivateKey.new(key_data)
-                    key_pair = KeyPair(private_key=private_key, public_key=privkey.get_public_key())
-                    return key_pair
+                private_key = Secp256k1PrivateKey.new(key_data)
+                key_pair = KeyPair(
+                    private_key=private_key,
+                    public_key=private_key.get_public_key()
+                )
+                return key_pair
             else:
                 key_pair = create_new_key_pair()
                 private_key_bytes = key_pair.private_key.to_bytes()
