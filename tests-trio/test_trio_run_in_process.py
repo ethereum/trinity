@@ -24,7 +24,8 @@ async def test_run_in_process_with_result():
     async def return7():
         return 7
 
-    result = await run_in_process(return7)
+    with trio.fail_after(5):
+        result = await run_in_process(return7)
     assert result == 7
 
 
@@ -33,5 +34,16 @@ async def test_run_in_process_with_error():
     async def raise_err():
         raise ValueError("Some err")
 
-    with pytest.raises(ValueError, match="Some err"):
-        await run_in_process(raise_err)
+    with trio.fail_after(5):
+        with pytest.raises(ValueError, match="Some err"):
+            await run_in_process(raise_err)
+
+
+@pytest.mark.trio
+async def test_run_in_process_handles_keyboard_interrupt():
+    async def raise_err():
+        raise ValueError("Some err")
+
+    with trio.fail_after(5):
+        with pytest.raises(ValueError, match="Some err"):
+            await run_in_process(raise_err)

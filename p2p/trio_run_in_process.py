@@ -4,9 +4,15 @@ import logging
 import os
 import struct
 import sys
+
+from async_generator import asynccontextmanager
+import trio_typing
 from typing import (
     Any,
+    AsyncIterator,
+    Awaitable,
     Callable,
+    Optional,
     Sequence,
     TypeVar,
 )
@@ -31,6 +37,11 @@ def get_subprocess_command(child_r, child_w, parent_pid):
     )
 
 
+def pickle_value(value: Any) -> bytes:
+    serialized_value = cloudpickle.dumps(value)
+    return struct.pack('>I', len(serialized_value)) + serialized_value
+
+
 async def coro_read_exactly(stream: trio.abc.ReceiveStream, num_bytes: int) -> bytes:
     buffer = io.BytesIO()
     bytes_remaining = num_bytes
@@ -51,50 +62,171 @@ async def coro_receive_pickled_value(stream: trio.abc.ReceiveStream) -> Any:
     return cloudpickle.loads(serialized_result)
 
 
-def pickle_value(value: Any) -> bytes:
-    serialized_value = cloudpickle.dumps(value)
-    return struct.pack('>I', len(serialized_value)) + serialized_value
+class empty:
+    pass
 
 
-class Process:
-    def __init__(self,
-                 async_fn: Callable[..., Any],
-                 args: Sequence[Any]) -> None:
+class Process(Awaitable[TReturn]):
+    returncode: Optional[int] = None
+
+    _pid: Optional[int] = None
+    _result: Optional[TReturn] = empty
+    _returncode: Optional[int] = None
+    _error: Optional[BaseException] = None
+
+    def __init__(self, async_fn: Callable[..., TReturn], args: Sequence[TReturn]) -> None:
         self._async_fn = async_fn
         self._args = args
 
-    async def run_process(self):
-        parent_r, child_w = os.pipe()
-        child_r, parent_w = os.pipe()
-        parent_pid = os.getpid()
+        self._has_pid = trio.Event()
+        self._has_returncode = trio.Event()
+        self._has_result = trio.Event()
+        self._has_error = trio.Event()
 
-        command = get_subprocess_command(
-            child_r,
-            child_w,
-            parent_pid,
-        )
+    def __await__(self) -> TReturn:
+        return self.run().__await__()
 
-        async with await trio.open_file(parent_w, 'wb', closefd=True) as to_child:
-            async with await trio.open_file(parent_r, 'rb', closefd=True) as from_child:
-                async with await trio.open_file(child_w, 'wb', closefd=False) as to_parent:
-                    async with await trio.open_file(child_r, 'rb', closefd=False) as from_parent:
-                        proc = await trio.open_process(command, stdin=from_parent, stdout=to_parent)
-                        async with proc:
-                            await to_child.write(pickle_value((self._async_fn, self._args)))
-                            await to_child.flush()
+    #
+    # PID
+    #
+    @property
+    def pid(self) -> int:
+        if self._pid is None:
+            raise AttributeError("No PID set for process")
+        return self._pid
 
-                        if proc.returncode == 0:
-                            result = await coro_receive_pickled_value(from_child)
-                            return result
-                        else:
-                            error = await coro_receive_pickled_value(from_child)
-                            raise error
+    @pid.setter
+    def pid(self, value: int) -> None:
+        self._pid = value
+        self._has_pid.set()
+
+    async def wait_pid(self) -> int:
+        await self._has_pid.wait()
+        return self.pid
+
+    #
+    # Result
+    #
+    @property
+    def result(self) -> int:
+        if self._result is empty:
+            raise AttributeError("No result set")
+        return self._result
+
+    @result.setter
+    def result(self, value: int) -> None:
+        self._result = value
+        self._has_result.set()
+
+    async def wait_result(self) -> int:
+        await self._has_result.wait()
+        return self.result
+
+    #
+    # Return Code
+    #
+    @property
+    def returncode(self) -> int:
+        if self._returncode is None:
+            raise AttributeError("No returncode set")
+        return self._returncode
+
+    @returncode.setter
+    def returncode(self, value: int) -> None:
+        self._returncode = value
+        self._has_returncode.set()
+
+    async def wait_returncode(self) -> int:
+        await self._has_returncode.wait()
+        return self.returncode
+
+    #
+    # Error
+    #
+    @property
+    def error(self) -> int:
+        if self._error is None:
+            raise AttributeError("No error set")
+        return self._error
+
+    @error.setter
+    def error(self, value: int) -> None:
+        self._error = value
+        self._has_error.set()
+
+    async def wait_error(self) -> int:
+        await self._has_error.wait()
+        return self.error
+
+    async def wait(self) -> TReturn:
+        """
+        Block until the process has exited.
+        """
+        await self._has_returncode.wait()
+        if self.returncode == 0:
+            return await self.wait_result()
+        else:
+            raise await self.wait_error()
+
+    def poll(self) -> Optional[int]:
+        """
+        Check if the process has finished.  Returns `None` if the re
+        """
+        return self.returncode
 
 
-async def run_in_process(async_fn: Callable[..., TReturn], *args) -> TReturn:
+async def _monitor_sub_proc(proc: Process) -> None:
+    parent_r, child_w = os.pipe()
+    child_r, parent_w = os.pipe()
+    parent_pid = os.getpid()
+
+    command = get_subprocess_command(
+        child_r,
+        child_w,
+        parent_pid,
+    )
+
+    async with await trio.open_file(parent_w, 'wb', closefd=True) as to_child:
+        async with await trio.open_file(parent_r, 'rb', closefd=True) as from_child:
+            async with await trio.open_file(child_w, 'wb', closefd=False) as to_parent:
+                async with await trio.open_file(child_r, 'rb', closefd=False) as from_parent:
+                    sub_proc = await trio.open_process(command, stdin=from_parent, stdout=to_parent)
+                    async with sub_proc:
+                        # set the process ID
+                        proc.pid = sub_proc.pid
+
+                        # pass the child process the serialized `async_fn`
+                        # and `args` over stdin.
+                        await to_child.write(pickle_value((proc._async_fn, proc._args)))
+                        await to_child.flush()
+
+                    proc.returncode = sub_proc.returncode
+
+                    if proc.returncode == 0:
+                        proc.result = await coro_receive_pickled_value(from_child)
+                    else:
+                        proc.error = await coro_receive_pickled_value(from_child)
+
+
+@asynccontextmanager
+@trio_typing.takes_callable_and_args
+async def open_in_process(async_fn: Callable[..., TReturn], *args: Any) -> AsyncIterator[Process]:
     proc = Process(async_fn, args)
-    # TODO: signal handling
-    return await proc.run_process()
+
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(_monitor_sub_proc, proc)
+
+        await proc.wait_pid()
+
+        yield proc
+
+        await proc.wait()
+
+
+@trio_typing.takes_callable_and_args
+async def run_in_process(async_fn: Callable[..., TReturn], *args: Any) -> TReturn:
+    async with open_in_process(async_fn, *args) as proc:
+        return await proc.wait()
 
 
 #
