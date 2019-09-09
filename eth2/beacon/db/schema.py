@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from eth2.beacon.constants import SigningRoot
+from eth2.beacon.constants import HashTreeRoot, SigningRoot
 
 
 class BaseSchema(ABC):
@@ -56,7 +56,7 @@ class BaseSchema(ABC):
     @staticmethod
     @abstractmethod
     def make_attestation_root_to_block_lookup_key(
-        attestaton_root: SigningRoot
+        attestaton_root: HashTreeRoot
     ) -> bytes:
         ...
 
@@ -106,6 +106,6 @@ class SchemaV1(BaseSchema):
     #
     @staticmethod
     def make_attestation_root_to_block_lookup_key(
-        attestaton_root: SigningRoot
+        attestaton_root: HashTreeRoot
     ) -> bytes:
         return b"v1:beacon:attestation-root-to-block:%s" % attestaton_root

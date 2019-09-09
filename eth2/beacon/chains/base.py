@@ -16,7 +16,7 @@ from eth2.beacon.operations.attestation_pool import AttestationPool
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import FromBlockParams, SigningRoot, Slot
+from eth2.beacon.typing import FromBlockParams, HashTreeRoot, SigningRoot, Slot
 from eth2.configs import Eth2Config, Eth2GenesisConfig
 
 if TYPE_CHECKING:
@@ -148,11 +148,11 @@ class BaseBeaconChain(Configurable, ABC):
     # Attestation API
     #
     @abstractmethod
-    def get_attestation_by_root(self, attestation_root: SigningRoot) -> Attestation:
+    def get_attestation_by_root(self, attestation_root: HashTreeRoot) -> Attestation:
         ...
 
     @abstractmethod
-    def attestation_exists(self, attestation_root: SigningRoot) -> bool:
+    def attestation_exists(self, attestation_root: HashTreeRoot) -> bool:
         ...
 
 
@@ -449,10 +449,10 @@ class BeaconChain(BaseBeaconChain):
     #
     # Attestation API
     #
-    def get_attestation_by_root(self, attestation_root: SigningRoot) -> Attestation:
+    def get_attestation_by_root(self, attestation_root: HashTreeRoot) -> Attestation:
         block_root, index = self.chaindb.get_attestation_key_by_root(attestation_root)
         block = self.get_block_by_root(block_root)
         return block.body.attestations[index]
 
-    def attestation_exists(self, attestation_root: SigningRoot) -> bool:
+    def attestation_exists(self, attestation_root: HashTreeRoot) -> bool:
         return self.chaindb.attestation_exists(attestation_root)

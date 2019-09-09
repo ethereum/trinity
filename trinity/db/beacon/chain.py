@@ -17,7 +17,7 @@ from eth2.beacon.types.blocks import (
 )
 
 from trinity._utils.async_dispatch import async_method
-from eth2.beacon.typing import SigningRoot
+from eth2.beacon.typing import SigningRoot, HashTreeRoot
 
 
 class BaseAsyncBeaconChainDB(BeaconChainDB):
@@ -104,11 +104,11 @@ class BaseAsyncBeaconChainDB(BeaconChainDB):
     # Attestation API
     #
     @abstractmethod
-    async def coro_get_attestation_key_by_root(self, attestation_root: SigningRoot)-> Tuple[SigningRoot, int]:
+    async def coro_get_attestation_key_by_root(self, attestation_root: HashTreeRoot)-> Tuple[SigningRoot, int]:
         ...
 
     @abstractmethod
-    async def coro_attestation_exists(self, attestation_root: SigningRoot) -> bool:
+    async def coro_attestation_exists(self, attestation_root: HashTreeRoot) -> bool:
         ...
 
     #

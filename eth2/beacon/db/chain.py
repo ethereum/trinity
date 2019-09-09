@@ -25,7 +25,7 @@ from eth2.beacon.fork_choice.scoring import ScoringFn as ForkChoiceScoringFn
 from eth2.beacon.helpers import compute_epoch_of_slot
 from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
-from eth2.beacon.typing import Epoch, SigningRoot, Slot
+from eth2.beacon.typing import Epoch, HashTreeRoot, SigningRoot, Slot
 from eth2.configs import Eth2GenesisConfig
 
 
@@ -141,12 +141,12 @@ class BaseBeaconChainDB(ABC):
     #
     @abstractmethod
     def get_attestation_key_by_root(
-        self, attestation_root: SigningRoot
+        self, attestation_root: HashTreeRoot
     ) -> Tuple[SigningRoot, int]:
         pass
 
     @abstractmethod
-    def attestation_exists(self, attestation_root: SigningRoot) -> bool:
+    def attestation_exists(self, attestation_root: HashTreeRoot) -> bool:
         pass
 
     #
@@ -807,13 +807,13 @@ class BeaconChainDB(BaseBeaconChainDB):
             )
 
     def get_attestation_key_by_root(
-        self, attestation_root: SigningRoot
+        self, attestation_root: HashTreeRoot
     ) -> Tuple[SigningRoot, int]:
         return self._get_attestation_key_by_root(self.db, attestation_root)
 
     @staticmethod
     def _get_attestation_key_by_root(
-        db: DatabaseAPI, attestation_root: SigningRoot
+        db: DatabaseAPI, attestation_root: HashTreeRoot
     ) -> Tuple[SigningRoot, int]:
         try:
             encoded_key = db[
@@ -826,7 +826,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         attestation_key = ssz.decode(encoded_key, sedes=AttestationKey)
         return attestation_key.block_root, attestation_key.index
 
-    def attestation_exists(self, attestation_root: SigningRoot) -> bool:
+    def attestation_exists(self, attestation_root: HashTreeRoot) -> bool:
         lookup_key = SchemaV1.make_attestation_root_to_block_lookup_key(
             attestation_root
         )
