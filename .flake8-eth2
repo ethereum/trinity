@@ -1,4 +1,4 @@
 [flake8]
-max-line-length= 100
+max-line-length= 120
 exclude=
 ignore=W503,E203
