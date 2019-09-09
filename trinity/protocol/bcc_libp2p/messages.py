@@ -23,6 +23,7 @@ from eth2.beacon.constants import (
     ZERO_SIGNING_ROOT,
 )
 
+
 class HelloRequest(ssz.Serializable):
     fields = [
         ('fork_version', bytes4),

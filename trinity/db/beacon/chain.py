@@ -104,7 +104,9 @@ class BaseAsyncBeaconChainDB(BeaconChainDB):
     # Attestation API
     #
     @abstractmethod
-    async def coro_get_attestation_key_by_root(self, attestation_root: HashTreeRoot)-> Tuple[SigningRoot, int]:
+    async def coro_get_attestation_key_by_root(
+        self, attestation_root: HashTreeRoot
+    )-> Tuple[SigningRoot, int]:
         ...
 
     @abstractmethod
