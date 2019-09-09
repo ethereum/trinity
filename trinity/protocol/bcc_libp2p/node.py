@@ -667,7 +667,7 @@ class Node(BaseService):
         self.logger.debug("Received the beacon blocks request message %s", beacon_blocks_request)
 
         try:
-            peer_head_block = self.chain.get_block_by_root(beacon_blocks_request.head_block_root)
+            peer_head_block = self.chain.get_block_by_hash_tree_root(beacon_blocks_request.head_block_root)
         except (BlockNotFound, ValidationError):
             # We don't have the chain data peer is requesting
             requested_beacon_blocks: Tuple[BaseBeaconBlock, ...] = tuple()
@@ -816,7 +816,7 @@ class Node(BaseService):
         recent_beacon_blocks = []
         for block_root in recent_beacon_blocks_request.block_roots:
             try:
-                block = self.chain.get_block_by_root(block_root)
+                block = self.chain.get_block_by_hash_tree_root(block_root)
             except (BlockNotFound, ValidationError):
                 pass
             else:
