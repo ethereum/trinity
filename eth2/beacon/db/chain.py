@@ -4,7 +4,6 @@ from typing import Iterable, Optional, Tuple, Type, cast
 
 from cytoolz import concat, first, sliding_window
 from eth.abc import AtomicDatabaseAPI, DatabaseAPI
-from eth.constants import ZERO_HASH32
 from eth.exceptions import BlockNotFound, CanonicalHeadNotFound, ParentNotFound
 from eth.validation import validate_word
 from eth_typing import Hash32
@@ -171,11 +170,11 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._finalized_root = self._get_finalized_root_if_present(db)
         self._highest_justified_epoch = self._get_highest_justified_epoch(db)
 
-    def _get_finalized_root_if_present(self, db: DatabaseAPI) -> Hash32:
+    def _get_finalized_root_if_present(self, db: DatabaseAPI) -> SigningRoot:
         try:
             return self._get_finalized_head_root(db)
         except FinalizedHeadNotFound:
-            return ZERO_HASH32
+            return ZERO_SIGNING_ROOT
 
     def _get_highest_justified_epoch(self, db: DatabaseAPI) -> Epoch:
         try:
