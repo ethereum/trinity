@@ -48,7 +48,7 @@ from trinity.events import ShutdownRequest
 from trinity.extensibility import (
     AsyncioIsolatedComponent,
 )
-from trinity.protocol.bcc.proto import (
+from trinity.protocol.bcc_libp2p.proto import (
     BCCProtocol,
 )
 from trinity.protocol.eth.proto import (
