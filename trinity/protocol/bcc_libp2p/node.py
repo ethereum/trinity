@@ -373,13 +373,14 @@ class Node(BaseService):
 
     def _make_hello_packet(self) -> HelloRequest:
         state = self.chain.get_head_state()
+        head = self.chain.get_canonical_head()
         finalized_checkpoint = state.finalized_checkpoint
         return HelloRequest(
             fork_version=state.fork.current_version,
             finalized_root=finalized_checkpoint.root,
             finalized_epoch=finalized_checkpoint.epoch,
-            head_root=state.hash_tree_root,
-            head_slot=state.slot,
+            head_root=head.hash_tree_root,
+            head_slot=head.slot,
         )
 
     def _compare_chain_tip_and_finalized_epoch(self,

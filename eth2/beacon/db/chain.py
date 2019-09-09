@@ -93,6 +93,11 @@ class BaseBeaconChainDB(ABC):
     def get_slot_by_root(self, block_root: SigningRoot) -> Slot:
         pass
 
+    def get_block_signing_root_by_hash_tree_root(
+        self, block_root: HashTreeRoot
+    ) -> SigningRoot:
+        pass
+
     @abstractmethod
     def get_score(self, block_root: SigningRoot) -> int:
         pass
@@ -352,7 +357,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             block_ssz = db[block_root]
         except KeyError:
             raise BlockNotFound(
-                "No block with root {0} found".format(encode_hex(block_root))
+                "No block with signing root {0} found".format(encode_hex(block_root))
             )
         return _decode_block(block_ssz, block_class)
 
@@ -371,9 +376,30 @@ class BeaconChainDB(BaseBeaconChainDB):
             encoded_slot = db[SchemaV1.make_block_root_to_slot_lookup_key(block_root)]
         except KeyError:
             raise BlockNotFound(
-                "No block with root {0} found".format(encode_hex(block_root))
+                "No block with signing root {0} found".format(encode_hex(block_root))
             )
         return Slot(ssz.decode(encoded_slot, sedes=ssz.sedes.uint64))
+
+    def get_block_signing_root_by_hash_tree_root(
+        self, block_root: HashTreeRoot
+    ) -> SigningRoot:
+        return self._get_block_signing_root_by_hash_tree_root(self.db, block_root)
+
+    @staticmethod
+    def _get_block_signing_root_by_hash_tree_root(
+        db: DatabaseAPI, block_root: HashTreeRoot
+    ) -> SigningRoot:
+        validate_word(block_root, title="block hash tree root")
+        hash_tree_root_to_signing_root_key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
+            block_root
+        )
+        try:
+            signing_root = db[hash_tree_root_to_signing_root_key]
+        except KeyError:
+            raise BlockNotFound(
+                "No block with hash tree root {0} found".format(encode_hex(block_root))
+            )
+        return cast(SigningRoot, signing_root)
 
     def get_score(self, block_root: SigningRoot) -> int:
         return self._get_score(self.db, block_root)
@@ -384,7 +410,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             encoded_score = db[SchemaV1.make_block_root_to_score_lookup_key(block_root)]
         except KeyError:
             raise BlockNotFound(
-                "No block with hash {0} found".format(encode_hex(block_root))
+                "No block with signing root {0} found".format(encode_hex(block_root))
             )
         return ssz.decode(encoded_score, sedes=ssz.sedes.uint64)
 
@@ -468,6 +494,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         curr_block_head = first_block
         db.set(curr_block_head.signing_root, ssz.encode(curr_block_head))
         cls._add_block_root_to_slot_lookup(db, curr_block_head)
+        cls._add_block_hash_tree_root_to_signing_root_lookup(db, curr_block_head)
         cls._set_block_score_to_db(db, curr_block_head, score)
         cls._add_attestations_root_to_block_lookup(db, curr_block_head)
 
@@ -486,6 +513,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             curr_block_head = child
             db.set(curr_block_head.signing_root, ssz.encode(curr_block_head))
             cls._add_block_root_to_slot_lookup(db, curr_block_head)
+            cls._add_block_hash_tree_root_to_signing_root_lookup(db, curr_block_head)
             cls._add_attestations_root_to_block_lookup(db, curr_block_head)
 
             # NOTE: len(scorings_iterator) should equal len(blocks_iterator)
@@ -611,6 +639,18 @@ class BeaconChainDB(BaseBeaconChainDB):
             block.signing_root
         )
         db.set(block_root_to_slot_key, ssz.encode(block.slot, sedes=ssz.sedes.uint64))
+
+    @staticmethod
+    def _add_block_hash_tree_root_to_signing_root_lookup(
+        db: DatabaseAPI, block: BaseBeaconBlock
+    ) -> None:
+        hash_tree_root_to_signing_root_key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
+            block.hash_tree_root
+        )
+        db.set(
+            hash_tree_root_to_signing_root_key,
+            ssz.encode(block.signing_root, sedes=ssz.sedes.bytes32),
+        )
 
     #
     # Beacon State API
