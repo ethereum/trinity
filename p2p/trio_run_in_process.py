@@ -159,13 +159,14 @@ class Process(Awaitable[TReturn]):
         await self._has_error.wait()
         return self.error
 
-    async def wait(self) -> TReturn:
+    async def wait(self) -> None:
         """
         Block until the process has exited.
         """
-        await self._has_returncode.wait()
+        await self.wait_returncode()
+
         if self.returncode == 0:
-            return await self.wait_result()
+            await self.wait_result()
         else:
             raise await self.wait_error()
 
@@ -174,6 +175,15 @@ class Process(Awaitable[TReturn]):
         Check if the process has finished.  Returns `None` if the re
         """
         return self.returncode
+
+    def kill(self) -> None:
+        self.send_signal(signal.SIGKILL)
+
+    def terminate(self) -> None:
+        self.send_signal(signal.SIGTERM)
+
+    def send_signal(self, sig: int) -> None:
+        os.kill(self.pid, sig)
 
 
 async def _monitor_sub_proc(proc: Process) -> None:
@@ -190,32 +200,40 @@ async def _monitor_sub_proc(proc: Process) -> None:
     async with await trio.open_file(child_w, 'wb', closefd=False) as to_parent:
         async with await trio.open_file(child_r, 'rb', closefd=False) as from_parent:
             sub_proc = await trio.open_process(command, stdin=from_parent, stdout=to_parent)
+            logger.debug('starting subprocess to run %s', proc)
             async with sub_proc:
                 # set the process ID
                 proc.pid = sub_proc.pid
+                logger.debug('subprocess for %s started.  pid=%d', proc, proc.pid)
 
+                logger.debug('writing execution data for %s over stdin', proc)
                 # pass the child process the serialized `async_fn`
                 # and `args` over stdin.
                 async with await trio.open_file(parent_w, 'wb', closefd=True) as to_child:
                     await to_child.write(pickle_value((proc._async_fn, proc._args)))
                     await to_child.flush()
+                logger.debug('waiting for process %s finish', proc)
 
     proc.returncode = sub_proc.returncode
+    logger.debug('process %s finished: returncode=%d', proc, proc.returncode)
 
     async with await trio.open_file(parent_r, 'rb', closefd=True) as from_child:
         if proc.returncode == 0:
+            logger.debug('setting result for process %s', proc)
             proc.result = await coro_receive_pickled_value(from_child)
         else:
-            proc.error = await coro_receive_pickled_value(from_child)
+            with trio.move_on_after(2) as scope:
+                logger.debug('setting error for process %s', proc)
+                proc.error = await coro_receive_pickled_value(from_child)
+            if scope.cancelled_caught:
+                logger.debug('process %s exited due unknown reason.', proc)
+                proc.error = SystemExit(proc.returncode)
 
 
-async def _monitor_for_sigterm(proc: Process) -> None:
-    await trio.sleep_forever()
-    # with trio.open_signal_receiver(signal.SIGTERM) as signal_aiter:
-    #     async for signum in signal_aiter:
-    #         if signum == signal.SIGTERM:
-    #             logger.info('GOT SIGTERM')
-    #             os.kill(proc.pid, signal.SIGTERM)
+async def _monitory_signals(proc: Process, signal_aiter: AsyncIterator[int]) -> None:
+    async for signum in signal_aiter:
+        logger.info('GOT SIGNAL: %s', signum)
+        proc.send_signal(signum)
 
 
 @asynccontextmanager
@@ -224,21 +242,24 @@ async def open_in_process(async_fn: Callable[..., TReturn], *args: Any) -> Async
     proc = Process(async_fn, args)
 
     async with trio.open_nursery() as nursery:
-        nursery.start_soon(_monitor_for_sigterm, proc)
         nursery.start_soon(_monitor_sub_proc, proc)
 
         await proc.wait_pid()
 
-        yield proc
+        with trio.open_signal_receiver(signal.SIGTERM) as signal_aiter:
+            nursery.start_soon(_monitory_signals, proc, signal_aiter)
 
-        await proc.wait()
+            yield proc
+            await proc.wait()
+
         nursery.cancel_scope.cancel()
 
 
 @trio_typing.takes_callable_and_args
 async def run_in_process(async_fn: Callable[..., TReturn], *args: Any) -> TReturn:
     async with open_in_process(async_fn, *args) as proc:
-        return await proc.wait()
+        await proc.wait()
+    return proc.result
 
 
 #

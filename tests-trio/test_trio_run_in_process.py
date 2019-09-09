@@ -1,5 +1,3 @@
-import os
-import signal
 import tempfile
 
 import pytest
@@ -10,7 +8,7 @@ from p2p.trio_run_in_process import run_in_process, open_in_process
 
 
 @pytest.mark.trio
-async def test_run_in_process():
+async def test_run_in_process_touch_file():
     async def touch_file(path: trio.Path):
         await path.touch()
 
@@ -43,6 +41,19 @@ async def test_run_in_process_with_error():
 
 
 @pytest.mark.trio
+async def test_open_in_proc_can_terminate():
+    async def do_sleep_forever():
+        import trio
+        await trio.sleep_forever()
+
+    with trio.fail_after(2):
+        async with open_in_process(do_sleep_forever) as proc:
+            proc.terminate()
+        assert proc.returncode == 1
+
+
+@pytest.mark.skip
+@pytest.mark.trio
 async def test_run_in_process_handles_keyboard_interrupt():
     async def monitor_for_interrupt(path):
         import trio
@@ -53,24 +64,14 @@ async def test_run_in_process_handles_keyboard_interrupt():
         else:
             assert False
 
-    async def wrap_and_get_interrupted(path):
-        try:
-            await run_in_process(monitor_for_interrupt, path)
-        except KeyboardInterrupt:
-            pass
-        else:
-            assert False
-
     with trio.fail_after(2):
         with tempfile.TemporaryDirectory() as base_dir:
             # TODO
             path = trio.Path(base_dir) / 'test.txt'
             assert not await path.exists()
-            async with open_in_process(wrap_and_get_interrupted, path) as proc:
+            async with open_in_process(monitor_for_interrupt, path) as proc:
                 print('killing')
-                os.kill(proc.pid, signal.SIGTERM)
+                proc.terminate()
                 print('killed')
+            print('finished')
             assert await path.exists()
-            print('exited1')
-        print('exited2')
-    print('exited3')
