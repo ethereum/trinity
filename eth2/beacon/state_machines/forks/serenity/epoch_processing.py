@@ -303,6 +303,7 @@ def process_crosslinks(state: BeaconState, config: Eth2Config) -> BeaconState:
                         new_current_crosslinks, shard, winning_crosslink
                     )
                 )
+                new_current_crosslinks = state.current_crosslinks
 
     return state
 
