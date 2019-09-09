@@ -2,7 +2,6 @@ from pathlib import Path
 
 import ssz
 
-from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.state_machines.forks.serenity.state_transitions import (
     SerenityStateTransition,
 )
@@ -67,8 +66,6 @@ def run_pyspec_state_transition(pre_state, blocks):
 
 
 if __name__ == '__main__':
-    config = SERENITY_CONFIG
-
     config = load_config_at_path(CONFIG_PATH)
     override_lengths(config)
 
