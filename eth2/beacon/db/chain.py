@@ -245,11 +245,11 @@ class BeaconChainDB(BaseBeaconChainDB):
     def _get_canonical_block_root(db: DatabaseAPI, slot: Slot) -> SigningRoot:
         slot_to_root_key = SchemaV1.make_block_slot_to_root_lookup_key(slot)
         try:
-            encoded_key = db[slot_to_root_key]
+            signing_root = db[slot_to_root_key]
         except KeyError:
             raise BlockNotFound("No canonical block for block slot #{0}".format(slot))
         else:
-            return ssz.decode(encoded_key, sedes=ssz.sedes.bytes32)
+            return cast(SigningRoot, signing_root)
 
     def get_canonical_block_by_slot(
         self, slot: Slot, block_class: Type[BaseBeaconBlock]
@@ -624,10 +624,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         block slot.
         """
         block_slot_to_root_key = SchemaV1.make_block_slot_to_root_lookup_key(block.slot)
-        db.set(
-            block_slot_to_root_key,
-            ssz.encode(block.signing_root, sedes=ssz.sedes.bytes32),
-        )
+        db.set(block_slot_to_root_key, block.signing_root)
 
     @staticmethod
     def _add_block_root_to_slot_lookup(db: DatabaseAPI, block: BaseBeaconBlock) -> None:
@@ -647,10 +644,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         hash_tree_root_to_signing_root_key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
             block.hash_tree_root
         )
-        db.set(
-            hash_tree_root_to_signing_root_key,
-            ssz.encode(block.signing_root, sedes=ssz.sedes.bytes32),
-        )
+        db.set(hash_tree_root_to_signing_root_key, block.signing_root)
 
     #
     # Beacon State API
@@ -670,9 +664,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         slot number.
         """
         slot_to_state_root_key = SchemaV1.make_slot_to_state_root_lookup_key(slot)
-        self.db.set(
-            slot_to_state_root_key, ssz.encode(state_root, sedes=ssz.sedes.bytes32)
-        )
+        self.db.set(slot_to_state_root_key, state_root)
 
     def get_head_state_slot(self) -> Slot:
         return self._get_head_state_slot(self.db)
@@ -700,12 +692,11 @@ class BeaconChainDB(BaseBeaconChainDB):
         """
         slot_to_state_root_key = SchemaV1.make_slot_to_state_root_lookup_key(slot)
         try:
-            state_root_ssz = db[slot_to_state_root_key]
+            state_root = db[slot_to_state_root_key]
         except KeyError:
             raise StateNotFound("No state root for slot #{0}".format(slot))
-
-        state_root = ssz.decode(state_root_ssz, sedes=ssz.sedes.bytes32)
-        return state_root
+        else:
+            return Hash32(state_root)
 
     def get_state_by_root(
         self, state_root: Hash32, state_class: Type[BeaconState]
