@@ -7,12 +7,14 @@ from typing import (
     Awaitable,
     Callable,
     ClassVar,
+    Collection,
     ContextManager,
     Dict,
     Generic,
     Hashable,
     List,
     Optional,
+    Sequence,
     Tuple,
     Type,
     TYPE_CHECKING,
@@ -393,7 +395,15 @@ class AsyncioServiceAPI(ABC):
         ...
 
     @abstractmethod
+    async def cancellation(self) -> None:
+        ...
+
+    @abstractmethod
     async def cancel(self) -> None:
+        ...
+
+    @abstractmethod
+    def run_task(self, awaitable: Awaitable[Any]) -> None:
         ...
 
     @abstractmethod
@@ -607,4 +617,88 @@ class ConnectionAPI(AsyncioServiceAPI):
     @property
     @abstractmethod
     def safe_client_version_string(self) -> str:
+        ...
+
+
+class ConnectionPoolAPI(Collection[ConnectionAPI]):
+    @abstractmethod
+    def add(self, connection: ConnectionAPI) -> None:
+        ...
+
+    @abstractmethod
+    def remove(self, connection: ConnectionAPI) -> None:
+        ...
+
+
+class CapacityLimiterAPI(ABC):
+    """
+    Concept borrowed heavily from https://trio.readthedocs.io/en/latest/reference-core.html#trio.CapacityLimiter  # noqa: E501
+    """
+    total_tokens: int
+    borrowed_tokens: int
+
+    @property
+    @abstractmethod
+    def available_tokens(self) -> int:
+        ...
+
+    @abstractmethod
+    async def acquire(self) -> None:
+        ...
+
+    @abstractmethod
+    async def release(self) -> None:
+        ...
+
+
+class PoolChangedAPI(Awaitable[None], AsyncContextManager[None]):
+    ...
+
+
+# A function that is given the pool and a remote which returns `True` if we should connect.
+CandidateFilterFn = Callable[[ConnectionPoolAPI, NodeAPI], bool]
+ConnectionFilterFn = Callable[[ConnectionPoolAPI, ConnectionAPI], bool]
+
+HandshakerProviderFn = Callable[[], Awaitable[HandshakerAPI]]
+PeerProviderFn = Callable[[ConnectionPoolAPI], Awaitable[Tuple[NodeAPI, ...]]]
+OnConnectFn = Callable[[ConnectionPoolAPI, ConnectionAPI], Awaitable[Any]]
+OnDisconnectFn = OnConnectFn
+
+
+class PoolManagerAPI(AsyncioServiceAPI):
+    @property
+    @abstractmethod
+    def public_key(self) -> keys.PublicKey:
+        ...
+
+    @abstractmethod
+    def wait_pool_changed(self) -> PoolChangedAPI:
+        ...
+
+    @abstractmethod
+    def on_connect(self, handler_fn: OnConnectFn) -> HandlerSubscriptionAPI:
+        ...
+
+    @abstractmethod
+    def on_disconnect(self, handler_fn: OnDisconnectFn) -> HandlerSubscriptionAPI:
+        ...
+
+    @abstractmethod
+    async def add_connection(self, connection: ConnectionAPI) -> None:
+        ...
+
+    @abstractmethod
+    def listen(self, host: str, port: int) -> AsyncContextManager[NodeAPI]:
+        ...
+
+    @abstractmethod
+    async def seek_connections(self,
+                               providers: Sequence[PeerProviderFn],
+                               candidate_filters: Sequence[CandidateFilterFn],
+                               capacity_limiter: CapacityLimiterAPI,
+                               ) -> None:
+        ...
+
+    @abstractmethod
+    async def dial(self, remote: NodeAPI) -> ConnectionAPI:
         ...
