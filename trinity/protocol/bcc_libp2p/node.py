@@ -369,6 +369,7 @@ class Node(BaseService):
 
         self.logger.debug(f'Received ping from {peer_id} with data: {repr(payload)}')
         await stream.write(payload)
+        await stream.close()
 
     async def _validate_hello_req(self, hello_other_side: HelloRequest) -> None:
         state_machine = self.chain.get_state_machine()
@@ -767,6 +768,7 @@ class Node(BaseService):
             "Processing beacon blocks request from %s is finished",
             peer_id,
         )
+        await stream.close()
 
     async def request_beacon_blocks(self,
                                     peer_id: ID,
@@ -882,6 +884,7 @@ class Node(BaseService):
             "Processing recent beacon blocks request from %s is finished",
             peer_id,
         )
+        await stream.close()
 
     async def request_recent_beacon_blocks(
             self,
