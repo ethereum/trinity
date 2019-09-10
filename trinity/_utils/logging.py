@@ -37,7 +37,7 @@ LOG_MAX_MB = 5
 
 class TrinityLogFormatter(logging.Formatter):
 
-    def __init__(self, fmt: str, datefmt: str) -> None:
+    def __init__(self, fmt: str) -> None:
         super().__init__(fmt)
 
     def format(self, record: logging.LogRecord) -> str:
