@@ -110,7 +110,7 @@ class Node:
     @property
     def cmd(self) -> str:
         keys_path = (
-            Path().absolute() / 'eth2/beacon/scripts' /
+            Path().absolute() / 'eth2' / 'beacon' / 'scripts' /
             'quickstart_state' / 'keygen_16_validators.yaml'
         )
         _cmds = [
