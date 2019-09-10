@@ -113,7 +113,10 @@ class Node:
             Path().absolute() / 'eth2' / 'beacon' / 'scripts' /
             'quickstart_state' / 'keygen_16_validators.yaml'
         )
+        preferred_nodes_str = '()'
+
         _cmds = [
+            "PYTHONWARNINGS=ignore::DeprecationWarning",
             "trinity-beacon",
             f"--port={self.port}",
             f"--trinity-root-dir={self.root_dir}",
@@ -124,17 +127,21 @@ class Node:
             "--network-tracking-backend=do-not-track",
             "--disable-upnp",
             "-l debug2",
-            "interop",
-            f"--validators {','.join([str(index) for index in self.validators])}",
-            f"--keys={keys_path}",
-            "--wipedb",
-            "--start-delay 10",
         ]
         if len(self.preferred_nodes) != 0:
             preferred_nodes_str = ",".join(
                 [str(node.maddr) for node in self.preferred_nodes]
             )
             _cmds.append(f"--preferred_nodes={preferred_nodes_str}")
+
+        _cmd_interop = [
+            "interop",
+            f"--validators {','.join([str(index) for index in self.validators])}",
+            f"--keys={keys_path}",
+            "--wipedb",
+            "--start-delay=10",
+        ]
+        _cmds += _cmd_interop
         _cmd = " ".join(_cmds)
         return _cmd
 
@@ -156,6 +163,7 @@ class Node:
 
     async def run(self) -> None:
         print(f"Spinning up {self.name}")
+        print(f"{self.cmd}")
         self.proc = await run(self.cmd)
         self.running_nodes.append(self)
         self.tasks.append(
