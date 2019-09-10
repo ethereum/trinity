@@ -61,6 +61,7 @@ from trinity.extensibility import (
 )
 import ssz
 
+from eth2.beacon.tools.fixtures.loading import load_config_at_path
 from eth2.beacon.types.states import BeaconState
 
 from trinity.plugins.eth2.network_generator.constants import (
