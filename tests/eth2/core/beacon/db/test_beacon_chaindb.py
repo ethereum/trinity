@@ -79,10 +79,10 @@ def test_chaindb_persist_block_and_hash_tree_root_to_signing_root(
 ):
     with pytest.raises(BlockNotFound):
         chaindb.get_block_signing_root_by_hash_tree_root(block.hash_tree_root)
-    hash_tree_root_to_signing_root_key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
+    key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
         block.hash_tree_root
     )
-    assert not chaindb.exists(hash_tree_root_to_signing_root_key)
+    assert not chaindb.exists(key)
 
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
 
@@ -90,7 +90,7 @@ def test_chaindb_persist_block_and_hash_tree_root_to_signing_root(
         chaindb.get_block_signing_root_by_hash_tree_root(block.hash_tree_root)
         == block.signing_root
     )
-    assert chaindb.exists(hash_tree_root_to_signing_root_key)
+    assert chaindb.exists(key)
 
 
 @given(seed=st.binary(min_size=32, max_size=32))

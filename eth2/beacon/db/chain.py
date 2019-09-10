@@ -93,6 +93,7 @@ class BaseBeaconChainDB(ABC):
     def get_slot_by_root(self, block_root: SigningRoot) -> Slot:
         pass
 
+    @abstractmethod
     def get_block_signing_root_by_hash_tree_root(
         self, block_root: HashTreeRoot
     ) -> SigningRoot:
@@ -390,11 +391,9 @@ class BeaconChainDB(BaseBeaconChainDB):
         db: DatabaseAPI, block_root: HashTreeRoot
     ) -> SigningRoot:
         validate_word(block_root, title="block hash tree root")
-        hash_tree_root_to_signing_root_key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
-            block_root
-        )
+        key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(block_root)
         try:
-            signing_root = db[hash_tree_root_to_signing_root_key]
+            signing_root = db[key]
         except KeyError:
             raise BlockNotFound(
                 "No block with hash tree root {0} found".format(encode_hex(block_root))
@@ -641,10 +640,10 @@ class BeaconChainDB(BaseBeaconChainDB):
     def _add_block_hash_tree_root_to_signing_root_lookup(
         db: DatabaseAPI, block: BaseBeaconBlock
     ) -> None:
-        hash_tree_root_to_signing_root_key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
+        key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
             block.hash_tree_root
         )
-        db.set(hash_tree_root_to_signing_root_key, block.signing_root)
+        db.set(key, block.signing_root)
 
     #
     # Beacon State API
