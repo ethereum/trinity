@@ -139,8 +139,8 @@ class Validator(BaseService):
                 else:
                     await self.handle_second_tick(event.slot)
             except ValidationError as e:
-                logger.warn("%s", e)
-                logger.warn(
+                self.logger.warn("%s", e)
+                self.logger.warn(
                     "SHOULD NOT GET A VALIDATION ERROR"
                     " HERE AS IT IS INTERNAL TO OUR OWN CODE"
                 )
