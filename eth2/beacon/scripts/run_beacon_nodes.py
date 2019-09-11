@@ -137,7 +137,7 @@ class Node:
         _cmd_interop = [
             "interop",
             f"--validators {','.join([str(index) for index in self.validators])}",
-            f"--keys={keys_path}",
+            # f"--validators-from-yaml-key-file={keys_path}",
             "--wipedb",
             "--start-delay=10",
         ]
