@@ -37,7 +37,10 @@ SYNC_BEAM = 'beam'
 MAIN_EVENTBUS_ENDPOINT = 'main'
 NETWORKDB_EVENTBUS_ENDPOINT = 'network-db'
 NETWORKING_EVENTBUS_ENDPOINT = 'networking'
+BEACON_NETWORKING_EVENTBUS_ENDPOINT = 'beacon-networking'
+
 TO_NETWORKING_BROADCAST_CONFIG = BroadcastConfig(filter_endpoint=NETWORKING_EVENTBUS_ENDPOINT)
+TO_BEACON_NETWORKING_BROADCAST_CONFIG = BroadcastConfig(filter_endpoint=BEACON_NETWORKING_EVENTBUS_ENDPOINT, internal=False)
 
 # Network IDs: https://ethereum.stackexchange.com/questions/17051/how-to-select-a-network-id-or-is-there-a-list-of-network-ids/17101#17101  # noqa: E501
 MAINNET_NETWORK_ID = 1

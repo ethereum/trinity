@@ -25,6 +25,10 @@ from trinity._utils.shutdown import (
     exit_with_services,
 )
 from trinity.config import BeaconAppConfig
+from trinity.constants import (
+    BEACON_NETWORKING_EVENTBUS_ENDPOINT,
+    TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+)
 from trinity.db.manager import DBClient
 from trinity.extensibility import AsyncioIsolatedPlugin
 from trinity.protocol.bcc_libp2p.node import Node
@@ -43,6 +47,10 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
     @property
     def name(self) -> str:
         return "Beacon Node"
+
+    @property
+    def normalized_name(self) -> str:
+        return BEACON_NETWORKING_EVENTBUS_ENDPOINT
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -117,6 +125,8 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
 
         receive_server = BCCReceiveServer(
             chain=chain,
+            event_bus=self.event_bus,
+            broadcast_config=TO_BEACON_NETWORKING_BROADCAST_CONFIG,
             p2p_node=libp2p_node,
             topic_msg_queues=libp2p_node.pubsub.my_topics,
             cancel_token=libp2p_node.cancel_token,

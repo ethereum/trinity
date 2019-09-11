@@ -19,6 +19,7 @@ from eth_utils import (
     encode_hex,
     to_tuple,
 )
+from lahja import BroadcastConfig, EndpointAPI
 
 import ssz
 
@@ -49,6 +50,8 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 )
 
 from trinity.protocol.bcc_libp2p.node import Node
+from trinity.plugins.eth2.metrics.events import HeadSlotRequest, HeadSlotResponse
+from trinity.plugins.eth2.metrics.types import HeadInfo
 
 from .configs import (
     PUBSUB_TOPIC_BEACON_BLOCK,
@@ -163,9 +166,14 @@ class BCCReceiveServer(BaseService):
     attestation_pool: AttestationPool
     orphan_block_pool: OrphanBlockPool
 
+    event_bus = None
+    head_info = None
+
     def __init__(
             self,
             chain: BaseBeaconChain,
+            event_bus: EndpointAPI,
+            broadcast_config: BroadcastConfig,
             p2p_node: Node,
             topic_msg_queues: Dict[str, 'asyncio.Queue[rpc_pb2.Message]'],
             cancel_token: CancelToken = None) -> None:
@@ -176,13 +184,22 @@ class BCCReceiveServer(BaseService):
         self.attestation_pool = AttestationPool()
         self.orphan_block_pool = OrphanBlockPool()
 
+        self.event_bus = event_bus
+        self.broadcast_config = broadcast_config
+        self.head_info = HeadInfo(0)
+
     async def _run(self) -> None:
+        self.run_daemon_task(self._handle_head_info_requests())
+
         while not self.p2p_node.is_started:
             await self.sleep(0.5)
+
         self.logger.info("BCCReceiveServer up")
+
         self.run_daemon_task(self._handle_beacon_attestation_loop())
         self.run_daemon_task(self._handle_beacon_block_loop())
         self.run_daemon_task(self._process_orphan_blocks_loop())
+
         await self.cancellation()
 
     async def _handle_beacon_attestation_loop(self) -> None:
@@ -282,6 +299,8 @@ class BCCReceiveServer(BaseService):
             self._try_import_orphan_blocks(block.signing_root)
             # Remove attestations in block that are also in the attestation pool.
             self.attestation_pool.batch_remove(block.body.attestations)
+            # Update self.head_info
+            self._update_head_info()
 
     def _try_import_orphan_blocks(self, parent_root: SigningRoot) -> None:
         """
@@ -352,3 +371,16 @@ class BCCReceiveServer(BaseService):
                 continue
             else:
                 yield attestation
+
+    async def _handle_head_info_requests(self) -> None:
+        self.logger.debug('[_handle_head_info_requests]')
+        async for req in self.wait_iter(self.event_bus.stream(HeadSlotRequest)):
+            self.logger.debug('[_handle_head_info_requests] Received HeadSlotRequest: %s', req)
+            await self.event_bus.broadcast(
+                HeadSlotResponse(self.head_info.slot),
+                req.broadcast_config(),
+            )
+
+    def _update_head_info(self) -> None:
+        head_slot = self.chain.chaindb.get_head_state_slot()
+        self.head_info = HeadInfo(slot=head_slot)
