@@ -7,9 +7,6 @@ from eth_utils import (
 from lahja import EndpointAPI
 
 from eth2.beacon.types.blocks import BeaconBlock
-from eth2.beacon.typing import (
-    Slot,
-)
 
 from trinity.constants import TO_BEACON_NETWORKING_BROADCAST_CONFIG
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
@@ -17,6 +14,10 @@ from trinity.rpc.modules import BaseRPCModule
 from trinity.plugins.eth2.metrics.events import (
     HeadSlotRequest,
     HeadRootRequest,
+    PreviousJustifiedEpochRequest,
+    PreviousJustifizedRootRequest,
+    CurrentJustifiedEpochRequest,
+    CurrentJustifiedRootRequest,
     FinalizedEpochRequest,
     FinalizedRootRequest,
 )
@@ -28,7 +29,6 @@ class Beacon(BaseRPCModule):
     def __init__(self, chain: BaseAsyncBeaconChainDB, event_bus: EndpointAPI) -> None:
         self.chain = chain
         self.event_bus = event_bus
-
 
     async def currentSlot(self) -> str:
         return hex(666)
@@ -48,17 +48,56 @@ class Beacon(BaseRPCModule):
     # Metrics
     #
     async def headSlot(self) -> str:
-        res = await self.event_bus.request(HeadSlotRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
+        res = await self.event_bus.request(HeadSlotRequest(),
+        TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
         return str(res.slot)
 
     async def headRoot(self) -> str:
-        res = await self.event_bus.request(HeadRootRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
+        res = await self.event_bus.request(
+            HeadRootRequest(),
+            TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
+        return encode_hex(res.root)
+
+    async def previousJustifiedEpoch(self) -> str:
+        res = await self.event_bus.request(
+            PreviousJustifiedEpochRequest(),
+            TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
+        return str(res.epoch)
+
+    async def previousJustifiedRoot(self) -> str:
+        res = await self.event_bus.request(
+            PreviousJustifizedRootRequest(),
+            TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
+        return encode_hex(res.root)
+
+    async def currentJustifiedEpoch(self) -> str:
+        res = await self.event_bus.request(
+            CurrentJustifiedEpochRequest(),
+            TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
+        return str(res.epoch)
+
+    async def currentJustifiedRoot(self) -> str:
+        res = await self.event_bus.request(
+            CurrentJustifiedRootRequest(),
+            TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
         return encode_hex(res.root)
 
     async def finalizedEpoch(self) -> str:
-        res = await self.event_bus.request(FinalizedEpochRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
+        res = await self.event_bus.request(
+            FinalizedEpochRequest(),
+            TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
         return str(res.epoch)
 
     async def finalizedRoot(self) -> str:
-        res = await self.event_bus.request(FinalizedRootRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
+        res = await self.event_bus.request(
+            FinalizedRootRequest(),
+            TO_BEACON_NETWORKING_BROADCAST_CONFIG,
+        )
         return encode_hex(res.root)

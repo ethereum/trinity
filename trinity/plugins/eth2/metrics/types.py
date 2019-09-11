@@ -2,18 +2,11 @@ from typing import (
     NamedTuple,
 )
 
-from eth_typing import (
-    BlockNumber,
-)
-
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.typing import (
-    Epoch,
-    HashTreeRoot,
     Slot,
     SigningRoot,
 )
-
 
 
 class OnSlotInfo(NamedTuple):
@@ -40,12 +33,6 @@ class OnEpochInfo(NamedTuple):
     beacon_finalized_epoch: Current finalized epoch
     beacon_finalized_root: Current finalized root
     """
-    # finalized_epoch: Epoch
-    # finalized_root: HashTreeRoot
-    # current_justified_epoch: Epoch
-    # current_justified_root: HashTreeRoot
-    # previous_justified_epoch: Epoch
-    # previous_justified_root: HashTreeRoot
-    finalized_checkpoint: Checkpoint
-    current_justified_checkpoint: Checkpoint
     previous_justified_checkpoint: Checkpoint
+    current_justified_checkpoint: Checkpoint
+    finalized_checkpoint: Checkpoint

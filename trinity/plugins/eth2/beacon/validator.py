@@ -18,7 +18,6 @@ from cancel_token import (
     CancelToken,
 )
 from eth_utils import (
-    encode_hex,
     humanize_hash,
     to_tuple,
     ValidationError,
@@ -55,6 +54,9 @@ from eth2.beacon.types.attestations import (
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
 )
+from eth2.beacon.types.checkpoints import (
+    Checkpoint,
+)
 from eth2.beacon.types.states import (
     BeaconState,
 )
@@ -76,6 +78,18 @@ from trinity.plugins.eth2.beacon.slot_ticker import (
     SlotTickEvent,
 )
 from trinity.protocol.bcc_libp2p.node import Node
+from trinity.plugins.eth2.metrics.events import (
+    PreviousJustifiedEpochRequest, PreviousJustifiedEpochResponse,
+    PreviousJustifizedRootRequest, PreviousJustifizedRootResponse,
+    CurrentJustifiedEpochRequest, CurrentJustifiedEpochResponse,
+    CurrentJustifiedRootRequest, CurrentJustifiedRootResponse,
+    FinalizedEpochRequest, FinalizedEpochResponse,
+    FinalizedRootRequest, FinalizedRootResponse,
+)
+from trinity.plugins.eth2.metrics.types import (
+    OnEpochInfo,
+    OnSlotInfo,
+)
 
 
 GetReadyAttestationsFn = Callable[[], Sequence[Attestation]]
@@ -90,6 +104,10 @@ class Validator(BaseService):
     latest_proposed_epoch: Dict[ValidatorIndex, Epoch]
     latest_attested_epoch: Dict[ValidatorIndex, Epoch]
     this_epoch_assignment: Dict[ValidatorIndex, Tuple[Epoch, CommitteeAssignment]]
+
+    # TODO: likely to move these info to other service once we split Validator from Node
+    on_epoch_info = None
+    on_slot_info = None
 
     def __init__(
             self,
@@ -120,7 +138,19 @@ class Validator(BaseService):
             )
         self.get_ready_attestations: GetReadyAttestationsFn = get_ready_attestations_fn
 
+        # Metrics
+        self.on_slot_info = OnSlotInfo(Slot(0))
+        self.on_epoch_info = OnEpochInfo(Checkpoint(), Checkpoint(), Checkpoint())
+
     async def _run(self) -> None:
+        # Metrics
+        self.run_daemon_task(self._handle_previous_justified_epoch_requests())
+        self.run_daemon_task(self._handle_previous_justified_root_requests())
+        self.run_daemon_task(self._handle_current_justified_epoch_requests())
+        self.run_daemon_task(self._handle_current_justified_root_requests())
+        self.run_daemon_task(self._handle_finalized_epoch_requests())
+        self.run_daemon_task(self._handle_finalized_root_requests())
+
         self.logger.info(
             bold_green("validating with indices %s"),
             sorted(tuple(self.validator_privkeys.keys()))
@@ -226,6 +256,10 @@ class Validator(BaseService):
                 state=state,
                 state_machine=state_machine,
             )
+
+        # Update self.on_epoch_info
+        self._update_on_slot_info(state)
+        self._update_on_epoch_info(state)
 
         await self.attest(slot)
 
@@ -384,3 +418,64 @@ class Validator(BaseService):
         # TODO: Aggregate attestations
 
         return attestations
+
+    #
+    # On epoch transition
+    #
+    def _update_on_slot_info(self, state: BeaconState) -> None:
+        self.on_epoch_info = OnSlotInfo(state.slot)
+
+    def _update_on_epoch_info(self, state: BeaconState) -> None:
+        self.on_epoch_info = OnEpochInfo(
+            previous_justified_checkpoint=state.previous_justified_checkpoint,
+            current_justified_checkpoint=state.current_justified_checkpoint,
+            finalized_checkpoint=state.finalized_checkpoint,
+        )
+
+    async def _handle_previous_justified_epoch_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(PreviousJustifiedEpochRequest)):
+            await self.event_bus.broadcast(
+                PreviousJustifiedEpochResponse(
+                    self.on_epoch_info.previous_justified_checkpoint.epoch
+                ),
+                req.broadcast_config(),
+            )
+
+    async def _handle_previous_justified_root_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(PreviousJustifizedRootRequest)):
+            await self.event_bus.broadcast(
+                PreviousJustifizedRootResponse(
+                    self.on_epoch_info.previous_justified_checkpoint.root,
+                ),
+                req.broadcast_config(),
+            )
+
+    async def _handle_current_justified_epoch_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(CurrentJustifiedEpochRequest)):
+            await self.event_bus.broadcast(
+                CurrentJustifiedEpochResponse(
+                    self.on_epoch_info.current_justified_checkpoint.epoch,
+                ),
+                req.broadcast_config(),
+            )
+
+    async def _handle_current_justified_root_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(CurrentJustifiedRootRequest)):
+            await self.event_bus.broadcast(
+                CurrentJustifiedRootResponse(self.on_epoch_info.current_justified_checkpoint.root),
+                req.broadcast_config(),
+            )
+
+    async def _handle_finalized_epoch_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(FinalizedEpochRequest)):
+            await self.event_bus.broadcast(
+                FinalizedEpochResponse(self.on_epoch_info.finalized_checkpoint.epoch),
+                req.broadcast_config(),
+            )
+
+    async def _handle_finalized_root_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(FinalizedRootRequest)):
+            await self.event_bus.broadcast(
+                FinalizedRootResponse(self.on_epoch_info.finalized_checkpoint.root),
+                req.broadcast_config(),
+            )

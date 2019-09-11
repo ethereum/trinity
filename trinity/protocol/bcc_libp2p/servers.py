@@ -60,8 +60,6 @@ from trinity.protocol.bcc_libp2p.node import Node
 from trinity.plugins.eth2.metrics.events import (
     HeadSlotRequest, HeadSlotResponse,
     HeadRootRequest, HeadRootResponse,
-    FinalizedEpochRequest, FinalizedEpochResponse,
-    FinalizedRootRequest, FinalizedRootResponse,
 )
 from trinity.plugins.eth2.metrics.types import (
     OnEpochInfo,
@@ -402,7 +400,7 @@ class BCCReceiveServer(BaseService):
     #
     # Metrics
     #
-    def _update_on_block_info(self, block) -> None:
+    def _update_on_block_info(self, block: BaseBeaconBlock) -> None:
         self.on_block_info = OnBlockInfo(block.slot, block.hash_tree_root)
 
     async def _handle_head_slot_requests(self) -> None:

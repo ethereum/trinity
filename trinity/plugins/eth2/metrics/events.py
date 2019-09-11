@@ -10,7 +10,9 @@ from lahja import (
     BaseRequestResponseEvent,
 )
 
-from eth2.beacon.typing import Epoch, Slot, SigningRoot
+from eth2.beacon.typing import Epoch, HashTreeRoot, Slot, SigningRoot
+
+
 #
 # Fork choice rule
 #
@@ -45,6 +47,66 @@ class HeadRootRequest(BaseRequestResponseEvent[HeadRootResponse]):
 #
 # Epoch transition
 #
+
+# PreviousJustified
+@dataclass
+class PreviousJustifiedEpochResponse(BaseEvent):
+    """
+    beacon_finalized_epoch: Current finalized epoch
+    """
+    epoch: Epoch
+
+
+class PreviousJustifiedEpochRequest(BaseRequestResponseEvent[PreviousJustifiedEpochResponse]):
+    @staticmethod
+    def expected_response_type() -> Type[PreviousJustifiedEpochResponse]:
+        return PreviousJustifiedEpochResponse
+
+
+@dataclass
+class PreviousJustifizedRootResponse(BaseEvent):
+    """
+    beacon_current_justified_root: Current justified root
+    """
+    root: HashTreeRoot
+
+
+class PreviousJustifizedRootRequest(BaseRequestResponseEvent[PreviousJustifizedRootResponse]):
+    @staticmethod
+    def expected_response_type() -> Type[PreviousJustifizedRootResponse]:
+        return PreviousJustifizedRootResponse
+
+
+# CurrentJustified
+@dataclass
+class CurrentJustifiedEpochResponse(BaseEvent):
+    """
+    beacon_finalized_epoch: Current finalized epoch
+    """
+    epoch: Epoch
+
+
+class CurrentJustifiedEpochRequest(BaseRequestResponseEvent[CurrentJustifiedEpochResponse]):
+    @staticmethod
+    def expected_response_type() -> Type[CurrentJustifiedEpochResponse]:
+        return CurrentJustifiedEpochResponse
+
+
+@dataclass
+class CurrentJustifiedRootResponse(BaseEvent):
+    """
+    beacon_current_justified_root: Current justified root
+    """
+    root: HashTreeRoot
+
+
+class CurrentJustifiedRootRequest(BaseRequestResponseEvent[CurrentJustifiedRootResponse]):
+    @staticmethod
+    def expected_response_type() -> Type[CurrentJustifiedRootResponse]:
+        return CurrentJustifiedRootResponse
+
+
+# Finalized
 @dataclass
 class FinalizedEpochResponse(BaseEvent):
     """
@@ -64,7 +126,7 @@ class FinalizedRootResponse(BaseEvent):
     """
     beacon_current_justified_root: Current justified root
     """
-    root: SigningRoot
+    root: HashTreeRoot
 
 
 class FinalizedRootRequest(BaseRequestResponseEvent[FinalizedRootResponse]):
