@@ -14,7 +14,12 @@ from eth2.beacon.typing import (
 from trinity.constants import TO_BEACON_NETWORKING_BROADCAST_CONFIG
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
 from trinity.rpc.modules import BaseRPCModule
-from trinity.plugins.eth2.metrics.events import HeadSlotRequest
+from trinity.plugins.eth2.metrics.events import (
+    HeadSlotRequest,
+    HeadRootRequest,
+    FinalizedEpochRequest,
+    FinalizedRootRequest,
+)
 
 
 class Beacon(BaseRPCModule):
@@ -43,6 +48,17 @@ class Beacon(BaseRPCModule):
     # Metrics
     #
     async def headSlot(self) -> str:
-        self.logger.debug('Building HeadSlotRequest')
         res = await self.event_bus.request(HeadSlotRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
         return str(res.slot)
+
+    async def headRoot(self) -> str:
+        res = await self.event_bus.request(HeadRootRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
+        return encode_hex(res.root)
+
+    async def finalizedEpoch(self) -> str:
+        res = await self.event_bus.request(FinalizedEpochRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
+        return str(res.epoch)
+
+    async def finalizedRoot(self) -> str:
+        res = await self.event_bus.request(FinalizedRootRequest(), TO_BEACON_NETWORKING_BROADCAST_CONFIG)
+        return encode_hex(res.root)

@@ -33,6 +33,9 @@ from eth2.beacon.attestation_helpers import (
 from eth2.beacon.chains.base import (
     BaseBeaconChain,
 )
+from eth2.beacon.constants import (
+    ZERO_SIGNING_ROOT,
+)
 from eth2.beacon.operations.pool import OperationPool
 from eth2.beacon.types.attestations import (
     Attestation,
@@ -41,8 +44,12 @@ from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
     BeaconBlock,
 )
+from eth2.beacon.types.checkpoints import (
+    Checkpoint,
+)
 from eth2.beacon.typing import (
     SigningRoot,
+    Slot,
     HashTreeRoot,
 )
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
@@ -50,8 +57,17 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 )
 
 from trinity.protocol.bcc_libp2p.node import Node
-from trinity.plugins.eth2.metrics.events import HeadSlotRequest, HeadSlotResponse
-from trinity.plugins.eth2.metrics.types import HeadInfo
+from trinity.plugins.eth2.metrics.events import (
+    HeadSlotRequest, HeadSlotResponse,
+    HeadRootRequest, HeadRootResponse,
+    FinalizedEpochRequest, FinalizedEpochResponse,
+    FinalizedRootRequest, FinalizedRootResponse,
+)
+from trinity.plugins.eth2.metrics.types import (
+    OnEpochInfo,
+    OnBlockInfo,
+    OnSlotInfo,
+)
 
 from .configs import (
     PUBSUB_TOPIC_BEACON_BLOCK,
@@ -167,7 +183,9 @@ class BCCReceiveServer(BaseService):
     orphan_block_pool: OrphanBlockPool
 
     event_bus = None
-    head_info = None
+    on_slot_info = None
+    on_block_info = None
+    on_epoch_info = None
 
     def __init__(
             self,
@@ -186,10 +204,15 @@ class BCCReceiveServer(BaseService):
 
         self.event_bus = event_bus
         self.broadcast_config = broadcast_config
-        self.head_info = HeadInfo(0)
+
+        self.on_slot_info = OnSlotInfo(Slot(0))
+        self.on_block_info = OnBlockInfo(Slot(0), ZERO_SIGNING_ROOT)
+        self.on_epoch_info = OnEpochInfo(Checkpoint(), Checkpoint(), Checkpoint())
 
     async def _run(self) -> None:
-        self.run_daemon_task(self._handle_head_info_requests())
+        # Metrics
+        self.run_daemon_task(self._handle_head_slot_requests())
+        self.run_daemon_task(self._handle_head_root_requests())
 
         while not self.p2p_node.is_started:
             await self.sleep(0.5)
@@ -276,14 +299,17 @@ class BCCReceiveServer(BaseService):
 
     def _process_received_block(self, block: BaseBeaconBlock) -> None:
         # If the block is an orphan, put it to the orphan pool
-        self.logger.debug(f'Received block over gossip. slot={block.slot} signing_root={block.signing_root.hex()}')
+        self.logger.debug(
+            f'Received block over gossip. slot={block.slot}'
+            f'signing_root={block.signing_root.hex()}'
+        )
         if not self._is_block_root_in_db(block.parent_root):
             if block not in self.orphan_block_pool:
                 self.logger.debug("Found orphan_block=%s", block)
                 self.orphan_block_pool.add(block)
             return
         try:
-            self.chain.import_block(block)
+            _, new_canonical_blocks, _ = self.chain.import_block(block)
             self.logger.info(
                 "Successfully imported block=%s",
                 encode_hex(block.signing_root),
@@ -299,8 +325,9 @@ class BCCReceiveServer(BaseService):
             self._try_import_orphan_blocks(block.signing_root)
             # Remove attestations in block that are also in the attestation pool.
             self.attestation_pool.batch_remove(block.body.attestations)
-            # Update self.head_info
-            self._update_head_info()
+            # Update self.on_block_info
+            if len(new_canonical_blocks) > 0:
+                self._update_on_block_info(new_canonical_blocks[-1])
 
     def _try_import_orphan_blocks(self, parent_root: SigningRoot) -> None:
         """
@@ -372,15 +399,22 @@ class BCCReceiveServer(BaseService):
             else:
                 yield attestation
 
-    async def _handle_head_info_requests(self) -> None:
-        self.logger.debug('[_handle_head_info_requests]')
+    #
+    # Metrics
+    #
+    def _update_on_block_info(self, block) -> None:
+        self.on_block_info = OnBlockInfo(block.slot, block.hash_tree_root)
+
+    async def _handle_head_slot_requests(self) -> None:
         async for req in self.wait_iter(self.event_bus.stream(HeadSlotRequest)):
-            self.logger.debug('[_handle_head_info_requests] Received HeadSlotRequest: %s', req)
             await self.event_bus.broadcast(
-                HeadSlotResponse(self.head_info.slot),
+                HeadSlotResponse(self.on_block_info.slot),
                 req.broadcast_config(),
             )
 
-    def _update_head_info(self) -> None:
-        head_slot = self.chain.chaindb.get_head_state_slot()
-        self.head_info = HeadInfo(slot=head_slot)
+    async def _handle_head_root_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(HeadRootRequest)):
+            await self.event_bus.broadcast(
+                HeadRootResponse(self.on_block_info.root),
+                req.broadcast_config(),
+            )
