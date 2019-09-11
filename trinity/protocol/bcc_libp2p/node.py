@@ -1,11 +1,12 @@
 import asyncio
+from dataclasses import dataclass
+import operator
 import traceback
 import random
 from typing import (
     Dict,
     Iterable,
     Optional,
-    Set,
     Sequence,
     Tuple,
     cast,
@@ -16,6 +17,7 @@ from cancel_token import (
 )
 
 from eth_utils import ValidationError, to_tuple
+from eth_utils.toolz import first
 
 from eth.exceptions import (
     BlockNotFound,
@@ -37,6 +39,8 @@ from eth2.beacon.typing import (
     Epoch,
     Slot,
     HashTreeRoot,
+    Version,
+    SigningRoot,
 )
 from eth2.beacon.constants import (
     ZERO_SIGNING_ROOT,
@@ -78,6 +82,7 @@ from libp2p.pubsub.gossipsub import (
 )
 from libp2p.security.base_transport import BaseSecureTransport
 from libp2p.stream_muxer.abc import IMuxedConn
+from libp2p.stream_muxer.mplex.exceptions import MplexStreamEOF, MplexStreamReset
 from libp2p.stream_muxer.mplex.mplex import MPLEX_PROTOCOL_ID, Mplex
 
 from multiaddr import (
@@ -93,6 +98,7 @@ from p2p.service import (
 
 from .configs import (
     GOSSIPSUB_PROTOCOL_ID,
+    GoodbyeReasonCode,
     GossipsubParams,
     PUBSUB_TOPIC_BEACON_BLOCK,
     PUBSUB_TOPIC_BEACON_ATTESTATION,
@@ -109,6 +115,7 @@ from .exceptions import (
     WriteMessageFailure,
 )
 from .messages import (
+    Goodbye,
     HelloRequest,
     BeaconBlocksRequest,
     BeaconBlocksResponse,
@@ -135,7 +142,79 @@ logger = logging.getLogger('trinity.protocol.bcc_libp2p')
 REQ_RESP_HELLO_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_HELLO)
 REQ_RESP_GOODBYE_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_GOODBYE)
 REQ_RESP_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_BEACON_BLOCKS)
-REQ_RESP_RECENT_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_RECENT_BEACON_BLOCKS)
+REQ_RESP_RECENT_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(
+    REQ_RESP_RECENT_BEACON_BLOCKS
+)
+
+
+@dataclass
+class Peer:
+
+    node: "Node"
+    _id: ID
+    fork_version: Version  # noqa: E701
+    finalized_root: SigningRoot
+    finalized_epoch: Epoch
+    head_root: HashTreeRoot
+    head_slot: Slot
+
+    @classmethod
+    def from_hello_request(
+        cls, node: "Node", peer_id: ID, request: HelloRequest
+    ) -> "Peer":
+        return cls(
+            node=node,
+            _id=peer_id,
+            fork_version=request.fork_version,
+            finalized_root=request.finalized_root,
+            finalized_epoch=request.finalized_epoch,
+            head_root=request.head_root,
+            head_slot=request.head_slot,
+        )
+
+    async def request_beacon_blocks(
+        self, start_slot: Slot, count: int, step: int = 1
+    ) -> Tuple[BaseBeaconBlock, ...]:
+        return await self.node.request_beacon_blocks(
+            self._id,
+            head_block_root=self.head_root,
+            start_slot=start_slot,
+            count=count,
+            step=step,
+        )
+
+    async def request_recent_beacon_blocks(
+        self, block_roots: Sequence[HashTreeRoot]
+    ) -> Tuple[BaseBeaconBlock, ...]:
+        return await self.node.request_recent_beacon_blocks(self._id, block_roots)
+
+
+class PeerPool:
+    peers: Dict[ID, Peer]
+
+    def __init__(self) -> None:
+        self.peers = {}
+
+    def add(self, peer: Peer) -> None:
+        self.peers[peer._id] = peer
+
+    def remove(self, peer_id: ID) -> None:
+        del self.peers[peer_id]
+
+    def __contains__(self, peer_id: ID) -> bool:
+        return peer_id in self.peers.keys()
+
+    def __len__(self) -> int:
+        return len(self.peers)
+
+    def get_best(self, field: str) -> Peer:
+        sorted_peers = sorted(
+            self.peers.values(), key=operator.attrgetter(field), reverse=True
+        )
+        return first(sorted_peers)
+
+    def get_best_head_slot_peer(self) -> Peer:
+        return self.get_best("head_slot")
 
 DIAL_RETRY_COUNT = 5
 
@@ -153,7 +232,7 @@ class Node(BaseService):
     preferred_nodes: Tuple[Multiaddr, ...]
     chain: BaseBeaconChain
 
-    handshaked_peers: Set[ID]
+    handshaked_peers: PeerPool = None
 
     def __init__(
             self,
@@ -210,7 +289,7 @@ class Node(BaseService):
 
         self.chain = chain
 
-        self.handshaked_peers = set()
+        self.handshaked_peers = PeerPool()
 
         self.run_task(self.start())
 
@@ -299,6 +378,14 @@ class Node(BaseService):
             if isinstance(result, Exception):
                 logger.warning(f"could not connect to {result}: {type(result)} {repr(result)}")
 
+    async def disconnect_peer(self, peer_id: ID) -> None:
+        if peer_id in self.handshaked_peers:
+            self.logger.debug("Disconnect from %s", peer_id)
+            self.handshaked_peers.remove(peer_id)
+            await self.host.disconnect(peer_id)
+        else:
+            self.logger.debug("Already disconnected from %s", peer_id)
+
     async def broadcast_beacon_block(self, block: BaseBeaconBlock) -> None:
         await self._broadcast_data(PUBSUB_TOPIC_BEACON_BLOCK, ssz.encode(block))
 
@@ -334,6 +421,7 @@ class Node(BaseService):
 
     def _register_rpc_handlers(self) -> None:
         self.host.set_stream_handler(REQ_RESP_HELLO_SSZ, self._handle_hello)
+        self.host.set_stream_handler(REQ_RESP_GOODBYE_SSZ, self._handle_goodbye)
         self.host.set_stream_handler(REQ_RESP_BEACON_BLOCKS_SSZ, self._handle_beacon_blocks)
         self.host.set_stream_handler(
             REQ_RESP_RECENT_BEACON_BLOCKS_SSZ,
@@ -414,23 +502,16 @@ class Node(BaseService):
                 f"our `finalized_root` at the same `finalized_epoch`={finalized_root}"
             )
 
-    async def _request_beacon_blocks(self) -> None:
-        """
-        TODO:
-        Once the handshake completes, the client with the lower `finalized_epoch` or
-        `head_slot` (if the clients have equal `finalized_epochs`) SHOULD request beacon blocks
-        from its counterparty via the BeaconBlocks request.
-        """
-
     def _make_hello_packet(self) -> HelloRequest:
         state = self.chain.get_head_state()
+        head = self.chain.get_canonical_head()
         finalized_checkpoint = state.finalized_checkpoint
         return HelloRequest(
             fork_version=state.fork.current_version,
             finalized_root=finalized_checkpoint.root,
             finalized_epoch=finalized_checkpoint.epoch,
-            head_root=state.hash_tree_root,
-            head_slot=state.slot,
+            head_root=head.hash_tree_root,
+            head_slot=head.slot,
         )
 
     def _compare_chain_tip_and_finalized_epoch(self,
@@ -453,18 +534,22 @@ class Node(BaseService):
         # TODO: Find out when we should respond the `ResponseCode`
         #   other than `ResponseCode.SUCCESS`.
 
-        # TODO: Handle `stream.close` and `stream.reset`
-
         peer_id = stream.mplex_conn.peer_id
 
         self.logger.debug("Waiting for hello from the other side")
         try:
             hello_other_side = await read_req(stream, HelloRequest)
-        except ReadMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            # TODO: send `Goodbye` req then disconnect
-            return
+            has_error = False
+        except (ReadMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, ReadMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                await self.disconnect_peer(peer_id)
+                return
         self.logger.debug("Received the hello message %s", hello_other_side)
 
         try:
@@ -475,9 +560,9 @@ class Node(BaseService):
                 hello_other_side,
                 str(error)
             )
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            # TODO: send `Goodbye` req then disconnect
+            await stream.reset()
+            await self.say_goodbye(peer_id, GoodbyeReasonCode.IRRELEVANT_NETWORK)
+            await self.disconnect_peer(peer_id)
             return
 
         hello_mine = self._make_hello_packet()
@@ -485,17 +570,25 @@ class Node(BaseService):
         self.logger.debug("Sending our hello message %s", hello_mine)
         try:
             await write_resp(stream, hello_mine, ResponseCode.SUCCESS)
-        except WriteMessageFailure as error:
-            self.logger.info(
-                "Handshake failed: failed to write message %s",
-                hello_mine,
-            )
-            # await stream.reset()
-            # TODO: Disconnect
-            return
+            has_error = False
+        except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, WriteMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                self.logger.info(
+                    "Handshake failed: failed to write message %s",
+                    hello_mine,
+                )
+                await self.disconnect_peer(peer_id)
+                return
 
         if peer_id not in self.handshaked_peers:
-            self.handshaked_peers.add(peer_id)
+            peer = Peer.from_hello_request(self, peer_id, hello_other_side)
+            self.handshaked_peers.add(peer)
             self.logger.debug(
                 "Handshake from %s is finished. Added to the `handshake_peers`",
                 peer_id,
@@ -510,8 +603,6 @@ class Node(BaseService):
         await stream.close()
 
     async def say_hello(self, peer_id: ID) -> None:
-        # TODO: Handle `stream.close` and `stream.reset`
-
         hello_mine = self._make_hello_packet()
 
         self.logger.debug(
@@ -523,23 +614,35 @@ class Node(BaseService):
         self.logger.debug("Sending our hello message %s", hello_mine)
         try:
             await write_req(stream, hello_mine)
-        except WriteMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            # TODO: Disconnect
-            error_msg = f"fail to write request={hello_mine}"
-            self.logger.info("Handshake failed: %s", error_msg)
-            raise HandshakeFailure(error_msg) from error
+            has_error = False
+        except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, WriteMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                await self.disconnect_peer(peer_id)
+                error_msg = f"fail to write request={hello_mine}"
+                self.logger.info("Handshake failed: %s", error_msg)
+                raise HandshakeFailure(error_msg)
 
         self.logger.debug("Waiting for hello from the other side")
         try:
             resp_code, hello_other_side = await read_resp(stream, HelloRequest)
-        except ReadMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            # TODO: Disconnect
-            self.logger.info("Handshake failed: fail to read the response")
-            raise HandshakeFailure("fail to read the response") from error
+            has_error = False
+        except (ReadMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, ReadMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                await self.disconnect_peer(peer_id)
+                self.logger.info("Handshake failed: fail to read the response")
+                raise HandshakeFailure("fail to read the response")
 
         self.logger.debug(
             "Received the hello message %s, resp_code=%s",
@@ -550,15 +653,13 @@ class Node(BaseService):
         # TODO: Handle the case when `resp_code` is not success.
         if resp_code != ResponseCode.SUCCESS:
             # TODO: Do something according to the `ResponseCode`
-            # TODO: Disconnect
             error_msg = (
                 "resp_code != ResponseCode.SUCCESS, "
                 f"resp_code={resp_code}, error_msg={hello_other_side}"
             )
             self.logger.info("Handshake failed: %s", error_msg)
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            # TODO: Disconnect
+            await stream.reset()
+            await self.disconnect_peer(peer_id)
             raise HandshakeFailure(error_msg)
 
         hello_other_side = cast(HelloRequest, hello_other_side)
@@ -571,13 +672,14 @@ class Node(BaseService):
                 error_msg,
                 peer_id,
             )
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            # TODO: Disconnect
+            await stream.reset()
+            await self.say_goodbye(peer_id, GoodbyeReasonCode.IRRELEVANT_NETWORK)
+            await self.disconnect_peer(peer_id)
             raise HandshakeFailure(error_msg) from error
 
         if peer_id not in self.handshaked_peers:
-            self.handshaked_peers.add(peer_id)
+            peer = Peer.from_hello_request(self, peer_id, hello_other_side)
+            self.handshaked_peers.add(peer)
             self.logger.debug(
                 "Handshake to peer=%s is finished. Added to the `handshake_peers`",
                 peer_id,
@@ -590,6 +692,48 @@ class Node(BaseService):
         )
 
         await stream.close()
+
+    async def _handle_goodbye(self, stream: INetStream) -> None:
+        peer_id = stream.mplex_conn.peer_id
+        self.logger.debug("Waiting for goodbye from %s", peer_id)
+        try:
+            goodbye = await read_req(stream, Goodbye)
+            has_error = False
+        except (ReadMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, ReadMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+
+        self.logger.debug("Received the goodbye message %s", goodbye)
+
+        if not has_error:
+            await stream.close()
+        await self.disconnect_peer(peer_id)
+
+    async def say_goodbye(self, peer_id: ID, reason: GoodbyeReasonCode) -> None:
+        goodbye = Goodbye(reason)
+        self.logger.debug(
+            "Opening new stream to peer=%s with protocols=%s",
+            peer_id,
+            [REQ_RESP_GOODBYE_SSZ],
+        )
+        stream = await self.host.new_stream(peer_id, [REQ_RESP_GOODBYE_SSZ])
+        self.logger.debug("Sending our goodbye message %s", goodbye)
+        try:
+            await write_req(stream, goodbye)
+            has_error = False
+        except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, WriteMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+
+        if not has_error:
+            await stream.close()
+        await self.disconnect_peer(peer_id)
 
     @to_tuple
     def _get_blocks_from_canonical_chain_by_slot(
@@ -657,16 +801,16 @@ class Node(BaseService):
     def _get_requested_beacon_blocks(
         self,
         beacon_blocks_request: BeaconBlocksRequest,
-        peer_head_block: BaseBeaconBlock,
+        requested_head_block: BaseBeaconBlock,
     ) -> Tuple[BaseBeaconBlock, ...]:
         slot_of_requested_blocks = tuple(
             beacon_blocks_request.start_slot + i * beacon_blocks_request.step
             for i in range(beacon_blocks_request.count)
         )
-        slot_of_requested_blocks = tuple(filter(
-            lambda slot: slot <= peer_head_block.slot,
-            slot_of_requested_blocks,
-        ))
+        self.logger.info("slot_of_requested_blocks: %s", slot_of_requested_blocks)
+        slot_of_requested_blocks = tuple(
+            filter(lambda slot: slot <= requested_head_block.slot, slot_of_requested_blocks)
+        )
 
         if len(slot_of_requested_blocks) == 0:
             return tuple()
@@ -675,99 +819,139 @@ class Node(BaseService):
         # next check if the head block is on our canonical chain.
         try:
             canonical_block_at_slot = self.chain.get_canonical_block_by_slot(
-                peer_head_block.slot
+                requested_head_block.slot
             )
-            block_match = canonical_block_at_slot == peer_head_block
+            block_match = canonical_block_at_slot == requested_head_block
         except BlockNotFound:
-            # Peer's head block is not on our canonical chain
+            self.logger.debug(
+                (
+                    "The requested head block is not on our canonical chain  "
+                    "requested_head_block: %s  canonical_block_at_slot: %s"
+                ),
+                requested_head_block,
+                canonical_block_at_slot,
+            )
             block_match = False
         finally:
             if block_match:
                 # Peer's head block is on our canonical chain
-                return self._get_blocks_from_canonical_chain_by_slot(slot_of_requested_blocks)
+                return self._get_blocks_from_canonical_chain_by_slot(
+                    slot_of_requested_blocks
+                )
             else:
                 # Peer's head block is not on our canonical chain
                 # Validate `start_slot` is greater than our latest finalized slot
                 self._validate_start_slot(beacon_blocks_request.start_slot)
                 return self._get_blocks_from_fork_chain_by_root(
                     beacon_blocks_request.start_slot,
-                    peer_head_block,
+                    requested_head_block,
                     slot_of_requested_blocks,
                 )
 
     async def _handle_beacon_blocks(self, stream: INetStream) -> None:
-        # TODO: Handle `stream.close` and `stream.reset`
         peer_id = stream.mplex_conn.peer_id
         if peer_id not in self.handshaked_peers:
             self.logger.info(
                 "Processing beacon blocks request failed: not handshaked with peer=%s yet",
                 peer_id,
             )
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
+            await stream.reset()
             return
 
         self.logger.debug("Waiting for beacon blocks request from the other side")
         try:
             beacon_blocks_request = await read_req(stream, BeaconBlocksRequest)
-        except ReadMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            return
+            has_error = False
+        except (ReadMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, ReadMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                return
         self.logger.debug("Received the beacon blocks request message %s", beacon_blocks_request)
 
         try:
-            peer_head_block = self.chain.get_block_by_root(beacon_blocks_request.head_block_root)
-        except (BlockNotFound, ValidationError):
+            requested_head_block = self.chain.get_block_by_hash_tree_root(
+                beacon_blocks_request.head_block_root
+            )
+        except (BlockNotFound, ValidationError) as error:
+            self.logger.info("Sending empty blocks, reason: %s", error)
             # We don't have the chain data peer is requesting
             requested_beacon_blocks: Tuple[BaseBeaconBlock, ...] = tuple()
         else:
             # Check if slot of specified head block is greater than specified start slot
-            if peer_head_block.slot < beacon_blocks_request.start_slot:
+            if requested_head_block.slot < beacon_blocks_request.start_slot:
                 reason = (
-                    f"Invalid request: head block slot({peer_head_block.slot})"
+                    f"Invalid request: head block slot({requested_head_block.slot})"
                     f" lower than `start_slot`({beacon_blocks_request.start_slot})"
                 )
                 try:
                     await write_resp(stream, reason, ResponseCode.INVALID_REQUEST)
-                except WriteMessageFailure as error:
-                    self.logger.info(
-                        "Processing beacon blocks request failed: failed to write message %s",
-                        reason,
-                    )
-                # await stream.reset()
+                    has_error = False
+                except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+                    has_error = True
+                    if isinstance(error, WriteMessageFailure):
+                        await stream.reset()
+                    elif isinstance(error, MplexStreamEOF):
+                        await stream.close()
+                finally:
+                    if has_error:
+                        self.logger.info(
+                            "Processing beacon blocks request failed: failed to write message %s",
+                            reason,
+                        )
+                        return
+                await stream.close()
                 return
             else:
                 try:
                     requested_beacon_blocks = self._get_requested_beacon_blocks(
-                        beacon_blocks_request,
-                        peer_head_block,
+                        beacon_blocks_request, requested_head_block
                     )
                 except ValidationError as val_error:
                     reason = "Invalid request: " + str(val_error)
                     try:
                         await write_resp(stream, reason, ResponseCode.INVALID_REQUEST)
-                    except WriteMessageFailure as error:
-                        self.logger.info(
-                            "Processing beacon blocks request failed: failed to write message %s",
-                            reason,
-                        )
-                    # await stream.reset()
+                        has_error = False
+                    except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+                        has_error = True
+                        if isinstance(error, WriteMessageFailure):
+                            await stream.reset()
+                        elif isinstance(error, MplexStreamEOF):
+                            await stream.close()
+                    finally:
+                        if has_error:
+                            self.logger.info(
+                                "Processing beacon blocks request failed: "
+                                "failed to write message %s",
+                                reason,
+                            )
+                            return
+                    await stream.close()
                     return
-
         # TODO: Should it be a successful response if peer is requesting
         # blocks on a fork we don't have data for?
         beacon_blocks_response = BeaconBlocksResponse(blocks=requested_beacon_blocks)
-        self.logger.debug("Sending beacon blocks response %s", )
+        self.logger.debug("Sending beacon blocks response %s", beacon_blocks_response)
         try:
             await write_resp(stream, beacon_blocks_response, ResponseCode.SUCCESS)
-        except WriteMessageFailure as error:
-            self.logger.info(
-                "Processing beacon blocks request failed: failed to write message %s",
-                beacon_blocks_response,
-            )
-            # await stream.reset()
-            return
+            has_error = False
+        except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, WriteMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                self.logger.info(
+                    "Processing beacon blocks request failed: failed to write message %s",
+                    beacon_blocks_response,
+                )
+                return
 
         self.logger.debug(
             "Processing beacon blocks request from %s is finished",
@@ -781,7 +965,6 @@ class Node(BaseService):
                                     start_slot: Slot,
                                     count: int,
                                     step: int) -> Tuple[BaseBeaconBlock, ...]:
-        # TODO: Handle `stream.close` and `stream.reset`
         if peer_id not in self.handshaked_peers:
             error_msg = f"not handshaked with peer={peer_id} yet"
             self.logger.info("Request beacon block failed: %s", error_msg)
@@ -803,21 +986,33 @@ class Node(BaseService):
         self.logger.debug("Sending beacon blocks request %s", beacon_blocks_request)
         try:
             await write_req(stream, beacon_blocks_request)
-        except WriteMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            error_msg = f"fail to write request={beacon_blocks_request}"
-            self.logger.info("Request beacon blocks failed: %s", error_msg)
-            raise RequestFailure(error_msg) from error
+            has_error = False
+        except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, WriteMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                error_msg = f"fail to write request={beacon_blocks_request}"
+                self.logger.info("Request beacon blocks failed: %s", error_msg)
+                raise RequestFailure(error_msg)
 
         self.logger.debug("Waiting for beacon blocks response")
         try:
             resp_code, beacon_blocks_response = await read_resp(stream, BeaconBlocksResponse)
-        except ReadMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            self.logger.info("Request beacon blocks failed: fail to read the response")
-            raise RequestFailure("fail to read the response") from error
+            has_error = False
+        except (ReadMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, ReadMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                self.logger.info("Request beacon blocks failed: fail to read the response")
+                raise RequestFailure("fail to read the response")
 
         self.logger.debug(
             "Received beacon blocks response %s, resp_code=%s",
@@ -831,8 +1026,7 @@ class Node(BaseService):
                 f"resp_code={resp_code}, error_msg={beacon_blocks_response}"
             )
             self.logger.info("Request beacon blocks failed: %s", error_msg)
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
+            await stream.reset()
             raise RequestFailure(error_msg)
 
         await stream.close()
@@ -841,24 +1035,28 @@ class Node(BaseService):
         return beacon_blocks_response.blocks
 
     async def _handle_recent_beacon_blocks(self, stream: INetStream) -> None:
-        # TODO: Handle `stream.close` and `stream.reset`
         peer_id = stream.mplex_conn.peer_id
         if peer_id not in self.handshaked_peers:
             self.logger.info(
                 "Processing recent beacon blocks request failed: not handshaked with peer=%s yet",
                 peer_id,
             )
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
+            await stream.reset()
             return
 
         self.logger.debug("Waiting for recent beacon blocks request from the other side")
         try:
             recent_beacon_blocks_request = await read_req(stream, RecentBeaconBlocksRequest)
-        except ReadMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            return
+            has_error = False
+        except (ReadMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, ReadMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                return
         self.logger.debug(
             "Received the recent beacon blocks request message %s",
             recent_beacon_blocks_request,
@@ -867,7 +1065,7 @@ class Node(BaseService):
         recent_beacon_blocks = []
         for block_root in recent_beacon_blocks_request.block_roots:
             try:
-                block = self.chain.get_block_by_root(block_root)
+                block = self.chain.get_block_by_hash_tree_root(block_root)
             except (BlockNotFound, ValidationError):
                 pass
             else:
@@ -877,13 +1075,20 @@ class Node(BaseService):
         self.logger.debug("Sending recent beacon blocks response %s", recent_beacon_blocks_response)
         try:
             await write_resp(stream, recent_beacon_blocks_response, ResponseCode.SUCCESS)
-        except WriteMessageFailure as error:
-            self.logger.info(
-                "Processing recent beacon blocks request failed: failed to write message %s",
-                recent_beacon_blocks_response,
-            )
-            # await stream.reset()
-            return
+            has_error = False
+        except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, WriteMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                self.logger.info(
+                    "Processing recent beacon blocks request failed: failed to write message %s",
+                    recent_beacon_blocks_response,
+                )
+                return
 
         self.logger.debug(
             "Processing recent beacon blocks request from %s is finished",
@@ -895,7 +1100,6 @@ class Node(BaseService):
             self,
             peer_id: ID,
             block_roots: Sequence[HashTreeRoot]) -> Tuple[BaseBeaconBlock, ...]:
-        # TODO: Handle `stream.close` and `stream.reset`
         if peer_id not in self.handshaked_peers:
             error_msg = f"not handshaked with peer={peer_id} yet"
             self.logger.info("Request recent beacon block failed: %s", error_msg)
@@ -912,12 +1116,18 @@ class Node(BaseService):
         self.logger.debug("Sending recent beacon blocks request %s", recent_beacon_blocks_request)
         try:
             await write_req(stream, recent_beacon_blocks_request)
-        except WriteMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            error_msg = f"fail to write request={recent_beacon_blocks_request}"
-            self.logger.info("Request recent beacon blocks failed: %s", error_msg)
-            raise RequestFailure(error_msg) from error
+            has_error = False
+        except (WriteMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, WriteMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                error_msg = f"fail to write request={recent_beacon_blocks_request}"
+                self.logger.info("Request recent beacon blocks failed: %s", error_msg)
+                raise RequestFailure(error_msg)
 
         self.logger.debug("Waiting for recent beacon blocks response")
         try:
@@ -925,11 +1135,17 @@ class Node(BaseService):
                 stream,
                 RecentBeaconBlocksResponse,
             )
-        except ReadMessageFailure as error:
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
-            self.logger.info("Request recent beacon blocks failed: fail to read the response")
-            raise RequestFailure("fail to read the response") from error
+            has_error = False
+        except (ReadMessageFailure, MplexStreamEOF, MplexStreamReset) as error:
+            has_error = True
+            if isinstance(error, ReadMessageFailure):
+                await stream.reset()
+            elif isinstance(error, MplexStreamEOF):
+                await stream.close()
+        finally:
+            if has_error:
+                self.logger.info("Request recent beacon blocks failed: fail to read the response")
+                raise RequestFailure("fail to read the response")
 
         self.logger.debug(
             "Received recent beacon blocks response %s, resp_code=%s",
@@ -943,8 +1159,7 @@ class Node(BaseService):
                 f"resp_code={resp_code}, error_msg={recent_beacon_blocks_response}"
             )
             self.logger.info("Request recent beacon blocks failed: %s", error_msg)
-            # FIXME: Use `Stream.reset()` when `NetStream` has this API.
-            # await stream.reset()
+            await stream.reset()
             raise RequestFailure(error_msg)
 
         await stream.close()

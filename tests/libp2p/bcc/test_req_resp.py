@@ -7,7 +7,7 @@ import pytest
 
 from eth2.beacon.constants import EMPTY_SIGNATURE
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
-from trinity.protocol.bcc_libp2p.configs import ResponseCode
+from trinity.protocol.bcc_libp2p.configs import GoodbyeReasonCode, ResponseCode
 from trinity.protocol.bcc_libp2p.exceptions import HandshakeFailure, RequestFailure
 from trinity.protocol.bcc_libp2p.messages import HelloRequest
 from trinity.protocol.bcc_libp2p.node import REQ_RESP_HELLO_SSZ
@@ -75,6 +75,15 @@ async def test_hello_failure_failure_response():
         with pytest.raises(HandshakeFailure):
             await alice.say_hello(bob.peer_id)
         await asyncio.sleep(0.01)
+        assert alice.peer_id not in bob.handshaked_peers
+
+
+@pytest.mark.asyncio
+async def test_goodbye():
+    async with ConnectionPairFactory() as (alice, bob):
+        await alice.say_goodbye(bob.peer_id, GoodbyeReasonCode.FAULT_OR_ERROR)
+        await asyncio.sleep(0.01)
+        assert bob.peer_id not in alice.handshaked_peers
         assert alice.peer_id not in bob.handshaked_peers
 
 
@@ -160,10 +169,12 @@ async def test_request_beacon_blocks_invalid_request(monkeypatch):
         # TEST: Can not request blocks with `start_slot` greater than head block slot
         start_slot = 2
 
-        def get_block_by_root(root):
+        def get_block_by_hash_tree_root(root):
             return head_block
 
-        monkeypatch.setattr(bob.chain, "get_block_by_root", get_block_by_root)
+        monkeypatch.setattr(
+            bob.chain, "get_block_by_hash_tree_root", get_block_by_hash_tree_root
+        )
 
         count = 1
         step = 1
@@ -278,10 +289,12 @@ async def test_request_beacon_blocks_on_nonexist_chain(monkeypatch):
 
         request_head_block_root = b"\x56" * 32
 
-        def get_block_by_root(root):
+        def get_block_by_hash_tree_root(root):
             raise BlockNotFound
 
-        monkeypatch.setattr(bob.chain, "get_block_by_root", get_block_by_root)
+        monkeypatch.setattr(
+            bob.chain, "get_block_by_hash_tree_root", get_block_by_hash_tree_root
+        )
 
         start_slot = 0
         count = 5
@@ -310,23 +323,25 @@ async def test_request_recent_beacon_blocks(monkeypatch):
             body=BeaconBlockBody(),
         )
         blocks = [head_block.copy(slot=slot) for slot in range(5)]
-        mock_root_to_block_db = {block.signing_root: block for block in blocks}
+        mock_root_to_block_db = {block.hash_tree_root: block for block in blocks}
 
-        def get_block_by_root(root):
+        def get_block_by_hash_tree_root(root):
             validate_word(root)
             if root in mock_root_to_block_db:
                 return mock_root_to_block_db[root]
             else:
                 raise BlockNotFound
 
-        monkeypatch.setattr(bob.chain, "get_block_by_root", get_block_by_root)
+        monkeypatch.setattr(
+            bob.chain, "get_block_by_hash_tree_root", get_block_by_hash_tree_root
+        )
 
         requesting_block_roots = [
-            blocks[0].signing_root,
+            blocks[0].hash_tree_root,
             b"\x12" * 32,  # Unknown block root
-            blocks[1].signing_root,
+            blocks[1].hash_tree_root,
             b"\x23" * 32,  # Unknown block root
-            blocks[3].signing_root,
+            blocks[3].hash_tree_root,
         ]
         requested_blocks = await alice.request_recent_beacon_blocks(
             peer_id=bob.peer_id, block_roots=requesting_block_roots
