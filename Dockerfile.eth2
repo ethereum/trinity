@@ -15,4 +15,9 @@ RUN pip install -U trinity --no-cache-dir
 RUN echo "Type \`trinity-beacon\` to boot or \`trinity-beacon --help\` for an overview of commands"
 
 EXPOSE 30303 30303/udp
-ENTRYPOINT ["trinity-beacon"]
+
+RUN mkdir /launch
+
+RUN cp eth2/beacon/scripts/whiteblock_start.sh /launch/start.sh
+
+ENTRYPOINT ["/bin/bash"]
