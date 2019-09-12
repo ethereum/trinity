@@ -24,6 +24,7 @@ from trinity.rpc.main import (
 )
 
 MAXIMUM_REQUEST_BYTES = 10000
+NEW_LINE = "\n"
 
 
 @curry
@@ -103,6 +104,9 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
                 write_error(writer, "unknown failure: " + str(e)),
             )
         else:
+            if not result.endswith(NEW_LINE):
+                result += NEW_LINE
+
             writer.write(result.encode())
 
         await cancel_token.cancellable_wait(writer.drain())
