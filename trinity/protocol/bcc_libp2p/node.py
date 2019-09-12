@@ -339,6 +339,7 @@ class Node(BaseService):
                 addrs=[make_tcp_ip_maddr(ip, port)],
             )
         )
+        await self.say_hello(peer_id)
 
     async def dial_peer_with_retries(self, ip: str, port: int, peer_id: ID) -> None:
         """
@@ -603,6 +604,7 @@ class Node(BaseService):
         await stream.close()
 
     async def say_hello(self, peer_id: ID) -> None:
+        self.logger.info("Say hello")
         hello_mine = self._make_hello_packet()
 
         self.logger.debug(
