@@ -5,7 +5,7 @@ from argparse import (
 import asyncio
 import logging
 import os
-from typing import Set, cast
+from typing import Set, Tuple, cast
 
 from async_exit_stack import AsyncExitStack
 from lahja import EndpointAPI
@@ -20,12 +20,16 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 
-from p2p.service import run_service
+from p2p.service import BaseService, run_service
 
 from trinity.boot_info import BootInfo
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
 from trinity.extensibility import AsyncioIsolatedComponent
+from trinity.http.handlers.metrics_handler import MetricsHandler
+from trinity.http.main import (
+    HTTPServer,
+)
 from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.servers import BCCReceiveServer
@@ -62,6 +66,17 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
         arg_parser.add_argument(
             "--beacon-nodekey",
             help="0xabcd",
+        )
+        arg_parser.add_argument(
+            "--enable-metrics",
+            action="store_true",
+            help="Enables the HTTP Server",
+        )
+        arg_parser.add_argument(
+            "--metrics-port",
+            type=int,
+            help="Metrics server port",
+            default=8008,
         )
 
     @property
@@ -172,8 +187,16 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 genesis_config=chain_config.genesis_config,
                 token=libp2p_node.cancel_token,
             )
+            http_server = HTTPServer(
+                handler=MetricsHandler.handle(chain)(event_bus),
+                port=boot_info.args.metrics_port,
+            )
 
-            services = (libp2p_node, receive_server, slot_ticker, validator, syncer)
+            services: Tuple[BaseService, ...] = (
+                libp2p_node, receive_server, slot_ticker, validator, syncer
+            )
+            if boot_info.args.enable_metrics:
+                services += (http_server,)
 
             async with AsyncExitStack() as stack:
                 for service in services:

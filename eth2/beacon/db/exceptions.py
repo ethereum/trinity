@@ -62,3 +62,11 @@ class MissingForkChoiceContext(BeaconDBException):
     """
 
     pass
+
+
+class EpochInfoNotFound(BeaconDBException):
+    """
+    Exception raised if no EpochInfo is set in this database.
+    """
+
+    ...

@@ -13,6 +13,7 @@ import ssz
 from eth2.beacon.constants import ZERO_SIGNING_ROOT
 from eth2.beacon.db.exceptions import (
     AttestationRootNotFound,
+    EpochInfoNotFound,
     FinalizedHeadNotFound,
     HeadStateSlotNotFound,
     JustifiedHeadNotFound,
@@ -24,6 +25,7 @@ from eth2.beacon.db.schema import SchemaV1
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
 from eth2.beacon.helpers import compute_epoch_at_slot
 from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock  # noqa: F401
+from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, HashTreeRoot, SigningRoot, Slot
 from eth2.configs import Eth2GenesisConfig
@@ -174,6 +176,10 @@ class BaseBeaconChainDB(ABC):
 
     @abstractmethod
     def persist_fork_choice_context(self, serialized_context: bytes, fork: str) -> None:
+        ...
+
+    @abstractmethod
+    def get_canonical_epoch_info(self) -> EpochInfo:
         ...
 
     #
@@ -789,6 +795,9 @@ class BeaconChainDB(BaseBeaconChainDB):
             if state.slot > head_state_slot:
                 self._add_head_state_slot_lookup(state.slot)
 
+        # TODO: only persist per epoch transition
+        self._persist_canonical_epoch_info(self.db, state)
+
     def _update_finalized_head(self, finalized_root: SigningRoot) -> None:
         """
         Unconditionally write the ``finalized_root`` as the root of the currently
@@ -862,6 +871,28 @@ class BeaconChainDB(BaseBeaconChainDB):
         genesis_root = genesis_block.signing_root
         self._update_finalized_head(genesis_root)
         self._update_justified_head(genesis_root, self.genesis_config.GENESIS_EPOCH)
+
+    @staticmethod
+    def _persist_canonical_epoch_info(db: DatabaseAPI, state: BeaconState) -> None:
+        epoch_info = EpochInfo(
+            previous_justified_checkpoint=state.previous_justified_checkpoint,
+            current_justified_checkpoint=state.current_justified_checkpoint,
+            finalized_checkpoint=state.finalized_checkpoint,
+        )
+        db.set(SchemaV1.make_canonical_epoch_info_lookup_key(), ssz.encode(epoch_info))
+
+    def get_canonical_epoch_info(self) -> EpochInfo:
+        return self._get_canonical_epoch_info(self.db)
+
+    @staticmethod
+    def _get_canonical_epoch_info(db: DatabaseAPI) -> EpochInfo:
+        key = SchemaV1.make_canonical_epoch_info_lookup_key()
+        try:
+            epoch_info = db[key]
+        except KeyError:
+            raise EpochInfoNotFound("Canonical EpochInfo not found")
+        else:
+            return ssz.decode(epoch_info, EpochInfo)
 
     #
     # Attestation API

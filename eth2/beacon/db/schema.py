@@ -88,6 +88,10 @@ class SchemaV1(BaseSchema):
     def make_slot_to_state_root_lookup_key(slot: int) -> bytes:
         return b"v1:beacon:slot-to-state-root%d" % slot
 
+    @staticmethod
+    def make_canonical_epoch_info_lookup_key() -> bytes:
+        return b"v1:beacon:canonical-epoch-info"
+
     #
     # Block
     #

@@ -15,6 +15,7 @@ from eth2.beacon.fork_choice.constant import ConstantScoring
 from eth2.beacon.fork_choice.scoring import BaseScore
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     FromBlockParams,
@@ -112,6 +113,10 @@ class BaseBeaconChain(Configurable, ABC):
     #
     @abstractmethod
     def get_state_by_slot(self, slot: Slot) -> BeaconState:
+        ...
+
+    @abstractmethod
+    def get_canonical_epoch_info(self) -> EpochInfo:
         ...
 
     #
@@ -319,6 +324,9 @@ class BeaconChain(BaseBeaconChain):
         state_class = sm_class.get_state_class()
         state_root = self.chaindb.get_state_root_by_slot(slot)
         return self.chaindb.get_state_by_root(state_root, state_class)
+
+    def get_canonical_epoch_info(self) -> EpochInfo:
+        return self.chaindb.get_canonical_epoch_info()
 
     #
     # Block API

@@ -81,6 +81,11 @@ from trinity._utils.shellart import (
 from trinity.components.eth2.beacon.slot_ticker import (
     SlotTickEvent,
 )
+from trinity.components.eth2.metrics.events import (
+    Libp2pPeersRequest,
+    Libp2pPeersResponse,
+)
+from trinity.components.eth2.metrics.registry import metrics
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 
@@ -143,6 +148,10 @@ class Validator(BaseService):
             sorted(tuple(self.validator_privkeys.keys()))
         )
         self.run_daemon_task(self.handle_slot_tick())
+
+        # Metrics
+        self.run_daemon_task(self.handle_libp2p_peers_requests())
+
         await self.cancellation()
 
     async def handle_slot_tick(self) -> None:
@@ -288,6 +297,7 @@ class Validator(BaseService):
         self.chain.import_block(block)
         self.logger.debug("broadcasting block %s", block)
         await self.p2p_node.broadcast_beacon_block(block)
+        metrics.validator_proposed_blocks.inc()
         return block
 
     def skip_block(self,
@@ -449,6 +459,8 @@ class Validator(BaseService):
             for index in attesting_validators_indices:
                 self.latest_attested_epoch[index] = epoch
 
+            metrics.validator_sent_attestation.inc()
+
             attestations = attestations + (attestation,)
         # TODO: Aggregate attestations
 
@@ -535,3 +547,11 @@ class Validator(BaseService):
                     aggregate_and_proofs += (aggregate_and_proof,)
 
         return aggregate_and_proofs
+
+    async def handle_libp2p_peers_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(Libp2pPeersRequest)):
+            peer_count = len(self.p2p_node.handshaked_peers.peers)
+            await self.event_bus.broadcast(
+                Libp2pPeersResponse(peer_count),
+                req.broadcast_config(),
+            )

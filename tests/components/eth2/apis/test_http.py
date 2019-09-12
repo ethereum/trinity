@@ -15,7 +15,7 @@ from eth2.beacon.tools.builder.initializer import create_mock_genesis
 
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient, DBManager
-from trinity.rpc.http import handler
+from trinity.http.handlers.rpc_handler import RPCHandler
 from trinity.rpc.main import RPCServer
 from trinity.rpc.modules import (
     initialize_beacon_modules,
@@ -28,7 +28,12 @@ def ipc_path():
         yield pathlib.Path(dir) / "db_manager.ipc"
 
 
-async def test_http_server(aiohttp_raw_server, aiohttp_client, event_bus, base_db, ipc_path):
+async def test_json_rpc_http_server(
+    aiohttp_raw_server,
+    aiohttp_client,
+    event_bus, base_db,
+    ipc_path
+):
     manager = DBManager(base_db)
     with manager.run(ipc_path):
         # Set chaindb
@@ -50,7 +55,7 @@ async def test_http_server(aiohttp_raw_server, aiohttp_client, event_bus, base_d
         chaindb.persist_block(genesis_block, genesis_block.__class__, fork_choice_scoring)
         try:
             rpc = RPCServer(initialize_beacon_modules(chaindb, event_bus), chaindb, event_bus)
-            raw_server = await aiohttp_raw_server(handler(rpc.execute))
+            raw_server = await aiohttp_raw_server(RPCHandler.handle(rpc.execute))
             client = await aiohttp_client(raw_server)
 
             request_id = 1

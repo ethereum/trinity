@@ -25,6 +25,10 @@ from p2p.service import (
 from trinity._utils.shellart import (
     bold_white,
 )
+
+from trinity.components.eth2.metrics.events import (
+    BeaconSlotRequest, BeaconSlotResponse,
+)
 from trinity.components.eth2.misc.tick_type import TickType
 
 
@@ -64,6 +68,7 @@ class SlotTicker(BaseService):
 
     async def _run(self) -> None:
         self.run_daemon_task(self._keep_ticking())
+        self.run_daemon_task(self._handle_beacon_slot_requests())
         await self.cancellation()
 
     async def _keep_ticking(self) -> None:
@@ -127,3 +132,10 @@ class SlotTicker(BaseService):
         else:
             tick_type = TickType.SLOT_START
         return tick_type
+
+    async def _handle_beacon_slot_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(BeaconSlotRequest)):
+            await self.event_bus.broadcast(
+                BeaconSlotResponse(self.latest_slot),
+                req.broadcast_config(),
+            )
