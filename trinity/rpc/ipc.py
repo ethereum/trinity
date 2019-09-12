@@ -103,6 +103,9 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
                 write_error(writer, "unknown failure: " + str(e)),
             )
         else:
+            if not result.endswith("\n"):
+                result += "\n"
+
             writer.write(result.encode())
 
         await cancel_token.cancellable_wait(writer.drain())
