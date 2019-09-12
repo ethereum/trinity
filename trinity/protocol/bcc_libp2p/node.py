@@ -589,6 +589,7 @@ class Node(BaseService):
         await stream.close()
 
     async def say_hello(self, peer_id: ID) -> None:
+        self.logger.info("Say hello to %s", str(peer_id))
         hello_mine = self._make_hello_packet()
 
         self.logger.debug(
