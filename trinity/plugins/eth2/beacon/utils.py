@@ -31,9 +31,13 @@ from eth2.beacon.tools.misc.ssz_vector import (
 from eth2.beacon.types.states import (
     BeaconState,
 )
+from eth_utils import humanize_hash
+
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 override_lengths(MINIMAL_SERENITY_CONFIG)
-
 
 if TYPE_CHECKING:
     from ruamel.yaml.compat import StreamTextType  # noqa: F401
@@ -63,11 +67,14 @@ def extract_privkeys_from_dir(dir_path: Path) -> Dict[BLSPubkey, int]:
     try:
         key_files = os.listdir(dir_path)
     except FileNotFoundError:
+        logger.debug(f'Could not find key directory: {dir_path}')
         return validator_keymap
     for key_file_name in key_files:
         key_file_path = dir_path / key_file_name
         privkey = _read_privkey(key_file_path)
-        validator_keymap[bls.privtopub(privkey)] = privkey
+        pubkey = bls.privtopub(privkey)
+        validator_keymap[pubkey] = privkey
+        logger.debug(f'imported public key: {humanize_hash(pubkey)}')
     if len(validator_keymap) == 0:
         pass
         #raise KeyFileNotFound("No validator key file is provided")

@@ -128,7 +128,11 @@ class BeaconNodePlugin(AsyncioIsolatedPlugin):
         validator_privkeys = {}
         validator_keymap = chain_config.genesis_data.validator_keymap
         for pubkey in validator_keymap:
-            validator_index = cast(ValidatorIndex, registry_pubkeys.index(pubkey))
+            try:
+                validator_index = cast(ValidatorIndex, registry_pubkeys.index(pubkey))
+            except ValueError:
+                self.logger.error(f'Could not find key {pubkey.hex()} in genesis state')
+                raise
             validator_privkeys[validator_index] = validator_keymap[pubkey]
 
         validator = Validator(
