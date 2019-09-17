@@ -199,17 +199,16 @@ class BeaconChainSyncer(BaseService):
             slot = batch[-1].slot + 1
 
     async def validate_first_batch(self, batch: Tuple[BaseBeaconBlock, ...]) -> None:
-        parent_root = batch[0].parent_root
-        parent_slot = batch[0].slot - 1
+        first_block = batch[0]
 
-        if parent_slot < 0:
+        if first_block.slot <= 0:
             raise Exception(
                 "Invariant: Syncing starts with the child of a finalized block, so never with the "
                 "genesis block"
             )
 
         parent = await self.chain_db.coro_get_block_by_root(
-            parent_root,
+            first_block.parent_root,
             BeaconBlock,
         )
         finalized_head = await self.chain_db.coro_get_finalized_head(BeaconBlock)
