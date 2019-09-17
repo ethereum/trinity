@@ -197,6 +197,8 @@ class BeaconChainSyncer(BaseService):
             yield batch
 
             slot = batch[-1].slot + 1
+            if slot > self.sync_peer.head_slot:
+                break
 
     async def validate_first_batch(self, batch: Tuple[BaseBeaconBlock, ...]) -> None:
         first_block = batch[0]
