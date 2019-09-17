@@ -6,6 +6,7 @@ from typing import (
     Iterable,
     Tuple,
     Type,
+    Sequence,
 )
 
 from async_generator import asynccontextmanager
@@ -34,6 +35,7 @@ from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
 )
 from eth2.beacon.state_machines.forks.serenity import SERENITY_CONFIG
+from eth2.beacon.typing import Slot
 from eth2.configs import (
     Eth2GenesisConfig,
 )
@@ -147,6 +149,22 @@ class BeaconBlockFactory(factory.Factory):
 
         for _ in range(length - 1):
             child = cls(parent=parent)
+            yield child
+            parent = child
+
+    @classmethod
+    @to_tuple
+    def create_branch_by_slots(cls,
+                               slots: Sequence[Slot],
+                               root: BeaconBlock=None,
+                               **kwargs: Any) -> Iterable[BeaconBlock]:
+        if root is None:
+            root = cls()
+
+        parent = cls(parent_root=root.signing_root, slot=slots[0], **kwargs)
+        yield parent
+        for slot in slots[1:]:
+            child = cls(parent_root=parent.signing_root, slot=slot)
             yield child
             parent = child
 
