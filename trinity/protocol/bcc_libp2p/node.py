@@ -338,6 +338,12 @@ class Node(BaseService):
                 addrs=[make_tcp_ip_maddr(ip, port)],
             )
         )
+        try:
+            # TODO: set a time limit on completing saying hello
+            await self.say_hello(peer_id)
+        except HandshakeFailure as e:
+            self.logger.info("HandshakeFailure: %s", str(e))
+            # TODO: handle it
 
     async def dial_peer_with_retries(self, ip: str, port: int, peer_id: ID) -> None:
         """
