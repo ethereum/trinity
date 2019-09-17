@@ -1,0 +1,28 @@
+name: trinity-client
+base: core18 # the base snap is the execution environment for this snap
+version: '0.1.0-alpha.28'
+summary: An extensible client for the Ethereum network
+description: |
+  Trinity is a client for the Ethereum network with support for beam syncing, which allows
+  interacting with the chain within minutes of starting Trinity.
+
+grade: devel # must be 'stable' to release into candidate/stable channels
+confinement: devmode # use 'strict' once you have the right plugs and slots
+
+parts:
+  trinity:
+    plugin: python
+    python-version: python3
+    source: .
+    stage-packages:
+      - libsnappy-dev
+      - libgmp3-dev
+    build-packages:
+      - git
+
+apps:
+  trinity:
+    command: trinity
+    environment:
+      PYTHONWARNINGS: ignore::DeprecationWarning
+    plugs: [network, network-bind]
