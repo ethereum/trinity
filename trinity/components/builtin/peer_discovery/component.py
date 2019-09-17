@@ -48,9 +48,6 @@ from trinity.events import ShutdownRequest
 from trinity.extensibility import (
     AsyncioIsolatedComponent,
 )
-from trinity.protocol.bcc_libp2p.proto import (
-    BCCProtocol,
-)
 from trinity.protocol.eth.proto import (
     ETHProtocol,
 )
@@ -65,17 +62,11 @@ from trinity._utils.shutdown import (
 def get_protocol(trinity_config: TrinityConfig) -> Type[Protocol]:
     # For now DiscoveryByTopicProtocol supports a single topic, so we use the latest
     # version of our supported protocols. Maybe this could be more generic?
-    # TODO: This needs to support the beacon protocol when we have a way to
-    # check the config, if trinity is being run as a beacon node.
-
-    if trinity_config.has_app_config(BeaconAppConfig):
-        return BCCProtocol
+    eth1_config = trinity_config.get_app_config(Eth1AppConfig)
+    if eth1_config.database_mode is Eth1DbMode.LIGHT:
+        return LESProtocolV2
     else:
-        eth1_config = trinity_config.get_app_config(Eth1AppConfig)
-        if eth1_config.database_mode is Eth1DbMode.LIGHT:
-            return LESProtocolV2
-        else:
-            return ETHProtocol
+        return ETHProtocol
 
 
 def get_discv5_topic(trinity_config: TrinityConfig, protocol: Type[Protocol]) -> bytes:
