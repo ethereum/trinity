@@ -1,16 +1,12 @@
 import pytest
 
 from eth2.beacon.tools.factories import BeaconChainFactory
-
-from trinity.protocol.bcc_libp2p.topic_validators import (
-    get_ancestor_state,
-)
+from tests.libp2p.bcc.test_receive_server import get_blocks
 from trinity.protocol.bcc_libp2p.configs import (
     PUBSUB_TOPIC_BEACON_ATTESTATION,
     PUBSUB_TOPIC_BEACON_BLOCK,
 )
-
-from tests.libp2p.bcc.test_receive_server import get_blocks
+from trinity.protocol.bcc_libp2p.topic_validators import get_ancestor_state
 
 
 @pytest.mark.parametrize("num_nodes", (1,))

@@ -19,9 +19,13 @@ from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.helpers import compute_start_slot_of_epoch
 from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.state_machines.forks.serenity.block_processing import process_block_header
-from eth2.beacon.state_machines.forks.serenity.block_validation import validate_attestation
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_attestation,
+    validate_proposer_signature,
+    validate_proposer_is_not_slashed,
+)
 from eth2.beacon.typing import Slot
+from eth2.configs import CommitteeConfig
 
 from libp2p.peer.id import ID
 from libp2p.pubsub.pb import rpc_pb2
@@ -76,7 +80,12 @@ def validate_block_signature(chain: BaseBeaconChain, block: BeaconBlock) -> None
         future_slot=block.slot,
     )
 
-    process_block_header(state, block, state_machine.config, True)
+    validate_proposer_is_not_slashed(
+        state, block.signing_root, CommitteeConfig(state_machine.config)
+    )
+    validate_proposer_signature(
+        state, block, CommitteeConfig(state_machine.config)
+    )
 
 
 def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
