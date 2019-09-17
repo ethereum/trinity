@@ -208,11 +208,18 @@ class BeaconChainSyncer(BaseService):
                 "genesis block"
             )
 
-        canonical_parent = await self.chain_db.coro_get_canonical_block_by_slot(
-            parent_slot,
+        canonical_parent = await self.chain_db.coro_get_block_by_root(
+            parent_root,
             BeaconBlock,
         )
-        if canonical_parent.signing_root != parent_root:
-            message = f"Peer has different block finalized at slot #{parent_slot}"
+        finalized_head = await self.chain_db.coro_get_finalized_head(BeaconBlock)
+
+        if canonical_parent.signing_root != finalized_head.signing_root:
+            message = f"Peer has different block finalized at slot #{canonical_parent.slot}"
             self.logger.info(message)
+            self.logger.info(
+                "canonical_parent %s, finalized_head %s",
+                canonical_parent,
+                finalized_head,
+            )
             raise ValidationError(message)

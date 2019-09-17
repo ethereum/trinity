@@ -167,6 +167,7 @@ class AsyncBeaconChainDBFactory(factory.Factory):
         if blocks is None:
             blocks = (BeaconBlockFactory(),)
         chain_db = super()._create(model_class, *args, **kwargs)
+        chain_db._handle_exceptional_justification_and_finality(blocks[0])
         chain_db.persist_block_chain(
             blocks,
             BeaconBlock,
