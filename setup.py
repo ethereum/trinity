@@ -113,7 +113,6 @@ deps = {
         PYEVM_DEPENDENCY,
         "ssz==0.1.5",
         "milagro-bls-binding==0.1.3",
-        "blspy>=0.1.8,<1",  # for `bls_chia`
     ],
     'eth2-lint': [
         "black==19.3b0",
