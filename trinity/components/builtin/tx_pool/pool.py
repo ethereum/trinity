@@ -5,8 +5,12 @@ from typing import (
     Iterable,
     List,
     Sequence,
+    Tuple,
 )
 import uuid
+import weakref
+
+from eth_utils import to_tuple
 
 from lahja import EndpointAPI
 
@@ -16,16 +20,13 @@ from eth_utils.toolz import partition_all
 from eth.abc import SignedTransactionAPI
 
 from p2p.abc import SessionAPI
+from p2p.disconnect import DisconnectReason
 from p2p.service import BaseService
+from p2p.token_bucket import TokenBucket, NotEnoughTokens
 
 from trinity._utils.bloom import RollingBloom
-from trinity.protocol.eth.peer import (
-    ETHProxyPeer,
-    ETHProxyPeerPool,
-)
-from trinity.protocol.eth.events import (
-    TransactionsEvent,
-)
+from trinity.protocol.eth.peer import ETHProxyPeerPool
+from trinity.protocol.eth.events import TransactionsEvent
 
 
 # The 'LOW_WATER` mark determines the minimum size at which we'll choose to
@@ -41,6 +42,10 @@ BATCH_LOW_WATER = 100
 BATCH_HIGH_WATER = 200
 
 
+# Rate that the duplicate transactions token bucket fills
+TWO_PER_MINUTE = 1 / 30
+
+
 class TxPool(BaseService):
     """
     The :class:`~trinity.tx_pool.pool.TxPool` class is responsible for holding and relaying
@@ -52,6 +57,7 @@ class TxPool(BaseService):
         This is a minimal viable implementation that only relays transactions but doesn't actually
         hold on to them yet. It's still missing many features of a grown up transaction pool.
     """
+    _buckets: 'weakref.WeakKeyDictionary[SessionAPI, TokenBucket]'
 
     def __init__(self,
                  event_bus: EndpointAPI,
@@ -85,9 +91,17 @@ class TxPool(BaseService):
         # kbytes_total = max_generations * kbytes_per_bloom -> 8424
         #
         # We can expect the maximum memory footprint to be about 8.5mb for the bloom filters.
-        self._bloom = RollingBloom(generation_size=100000, max_generations=144)
+        self._inbound_bloom = RollingBloom(generation_size=100000, max_generations=144)
+        self._outbound_bloom = RollingBloom(generation_size=100000, max_generations=144)
         self._bloom_salt = uuid.uuid4()
+
+        # This internal queue is used to pipeline the incoming transactions so
+        # that we can batch them before sending them back out.
         self._internal_queue: 'asyncio.Queue[Sequence[SignedTransactionAPI]]' = asyncio.Queue(2000)
+
+        # A set of `TokenBucket` for each peer which are used to determine
+        # whether the peer is sending us "too many" duplicate transactions.
+        self._buckets = weakref.WeakKeyDictionary()
 
     # This is a rather arbitrary value, but when the sync is operating normally we never see
     # the msg queue grow past a few hundred items, so this should be a reasonable limit for
@@ -104,9 +118,34 @@ class TxPool(BaseService):
 
     async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SignedTransactionAPI]) -> None:
 
-        self.logger.debug('Received %d transactions from %s', len(txs), sender)
+        self.logger.debug2('Received %d transactions from %s', len(txs), sender)
 
-        self._add_txs_to_bloom(sender, txs)
+        duplicates = self._record_inbound_to_bloom(sender, txs)
+        if duplicates:
+            self.logger.debug(
+                "Received %s duplicate transactions from peer %s",
+                len(duplicates),
+                sender,
+            )
+            # We need to use `peer.session` rather than `sender` because we
+            # need an object that lives beyond the lifecycle of this function
+            # call.
+            peer = await self._peer_pool.ensure_proxy_peer(sender)
+            if peer.session not in self._buckets:
+                # Bucket refils 1 token-per-30-seconds with a maximum of 10
+                # tokens.  Receiving more than 10 duplicate transactions in a
+                # 10 second period will result in a client being disconnected.
+                self._buckets[peer.session] = TokenBucket(rate=TWO_PER_MINUTE, capacity=10)
+            bucket = self._buckets[peer.session]
+            try:
+                bucket.take_nowait(len(duplicates))
+            except NotEnoughTokens:
+                self.logger.debug(
+                    "Received too many duplicate transactions from peer %s, disconnecting",
+                    sender,
+                )
+                await peer.disconnect(DisconnectReason.subprotocol_error)
+
         await self._internal_queue.put(txs)
 
     async def _process_transactions(self) -> None:
@@ -128,7 +167,7 @@ class TxPool(BaseService):
             # to send to our peers, broadcast them to the appropriate peers.
             for batch in partition_all(BATCH_HIGH_WATER, buffer):
                 for receiving_peer in await self._peer_pool.get_peers():
-                    filtered_tx = self._filter_tx_for_peer(receiving_peer, batch)
+                    filtered_tx = self._filter_tx_for_peer(receiving_peer.session, batch)
                     if len(filtered_tx) == 0:
                         continue
 
@@ -138,19 +177,21 @@ class TxPool(BaseService):
                         receiving_peer,
                     )
                     receiving_peer.sub_proto.send_transactions(filtered_tx)
-                    self._add_txs_to_bloom(receiving_peer.session, filtered_tx)
+                    self._record_outbound_to_bloom(receiving_peer.session, filtered_tx)
 
     def _filter_tx_for_peer(
             self,
-            peer: ETHProxyPeer,
-            txs: Sequence[SignedTransactionAPI]) -> List[SignedTransactionAPI]:
+            session: SessionAPI,
+            txs: Sequence[SignedTransactionAPI]) -> Tuple[SignedTransactionAPI, ...]:
 
-        return [
-            val for val in txs
-            if self._construct_bloom_entry(peer.session, val) not in self._bloom
-            # TODO: we need to keep track of invalid txs and eventually blacklist nodes
+        return tuple(
+            val
+            for key, val
+            in ((self._construct_bloom_entry(session, val), val) for val in txs)
+            if key not in self._inbound_bloom
+            if key not in self._outbound_bloom
             if self.tx_validation_fn(val)
-        ]
+        )
 
     def _construct_bloom_entry(self, session: SessionAPI, tx: SignedTransactionAPI) -> bytes:
         return b':'.join((
@@ -159,12 +200,23 @@ class TxPool(BaseService):
             self._bloom_salt.bytes,
         ))
 
-    def _add_txs_to_bloom(self,
-                          session: SessionAPI,
-                          txs: Iterable[SignedTransactionAPI]) -> None:
+    @to_tuple
+    def _record_inbound_to_bloom(self,
+                                 session: SessionAPI,
+                                 txs: Iterable[SignedTransactionAPI],
+                                 ) -> Iterable[SignedTransactionAPI]:
         for val in txs:
             key = self._construct_bloom_entry(session, val)
-            self._bloom.add(key)
+            if key in self._inbound_bloom:
+                yield val
+            self._inbound_bloom.add(key)
+
+    def _record_outbound_to_bloom(self,
+                                  session: SessionAPI,
+                                  txs: Iterable[SignedTransactionAPI],
+                                  ) -> None:
+        for val in txs:
+            self._outbound_bloom.add(self._construct_bloom_entry(session, val))
 
     async def do_cleanup(self) -> None:
         self.logger.info("Stopping Tx Pool...")

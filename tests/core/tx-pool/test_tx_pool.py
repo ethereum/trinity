@@ -16,6 +16,7 @@ from trinity.components.builtin.tx_pool.validators import (
     DefaultTransactionValidator
 )
 from trinity.protocol.common.events import (
+    DisconnectPeerEvent,
     GetConnectedPeersRequest,
     GetConnectedPeersResponse,
 )
@@ -83,7 +84,7 @@ async def test_tx_propagation(event_bus,
 
             await asyncio.sleep(0.01)
             assert outgoing_tx == [
-                (node_two, txs_broadcasted_by_peer1),
+                (node_two, tuple(txs_broadcasted_by_peer1)),
             ]
             # Clear the recording, we asserted all we want and would like to have a fresh start
             outgoing_tx.clear()
@@ -118,7 +119,7 @@ async def test_tx_propagation(event_bus,
 
             # Check that Peer1 receives only the one tx that it didn't know about
             assert outgoing_tx == [
-                (node_one, [txs_broadcasted_by_peer2[0]]),
+                (node_one, (txs_broadcasted_by_peer2[0],)),
             ]
 
 
@@ -154,8 +155,44 @@ async def test_does_not_propagate_invalid_tx(event_bus,
 
         # Check that Peer2 received only the second tx which is valid
         assert outgoing_tx == [
-            (node_two, [txs_broadcasted_by_peer1[1]]),
+            (node_two, (txs_broadcasted_by_peer1[1],)),
         ]
+
+
+@pytest.mark.asyncio
+async def test_tx_pool_disconnects_after_too_many_duplicates(event_bus,
+                                                             chain_with_block_validation,
+                                                             tx_validator):
+
+    initial_two_peers = TEST_NODES[:2]
+    node_one = initial_two_peers[0]
+
+    async with run_proxy_peer_pool(event_bus) as peer_pool:
+        got_disconnect = asyncio.Event()
+        event_bus.subscribe(DisconnectPeerEvent, lambda ev: got_disconnect.set())
+
+        tx_pool = TxPool(event_bus, peer_pool, tx_validator)
+        asyncio.ensure_future(tx_pool.run())
+
+        run_mock_request_response(
+            GetConnectedPeersRequest, GetConnectedPeersResponse(initial_two_peers), event_bus)
+
+        await asyncio.sleep(0.01)
+
+        txs_broadcasted_by_peer1 = [
+            create_random_tx(chain_with_block_validation, is_valid=False),
+            create_random_tx(chain_with_block_validation)
+        ]
+
+        # Peer1 sends the same transaction 20 times which should exceed the
+        # threshold and result in a disconnection.
+        for _ in range(20):
+            await event_bus.broadcast(
+                TransactionsEvent(session=node_one, msg=txs_broadcasted_by_peer1, cmd=Transactions)
+            )
+            await asyncio.sleep(0)
+
+        await asyncio.wait_for(got_disconnect.wait(), timeout=2)
 
 
 def create_random_tx(chain, is_valid=True):
