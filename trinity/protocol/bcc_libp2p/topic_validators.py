@@ -22,7 +22,6 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.state_machines.forks.serenity.block_processing import process_block_header
 from eth2.beacon.state_machines.forks.serenity.block_validation import validate_attestation
 from eth2.beacon.typing import Slot
-from eth2.configs import CommitteeConfig
 
 from libp2p.peer.id import ID
 from libp2p.pubsub.pb import rpc_pb2
@@ -81,7 +80,7 @@ def validate_block_signature(chain: BaseBeaconChain,
     )
 
     process_block_header(
-        state, block, CommitteeConfig(state_machine.config), True
+        state, block, state_machine.config, True
     )
 
 
