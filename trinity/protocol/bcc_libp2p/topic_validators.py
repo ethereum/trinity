@@ -45,11 +45,13 @@ def get_ancestor_state(chain: BaseBeaconChain,
     return chain.get_state_by_slot(block.slot)
 
 
-def validate_block_signature(chain: BaseBeaconChain, block: BeaconBlock) -> None:
+def validate_block_signature(chain: BaseBeaconChain,
+                             head_block: BeaconBlock,
+                             head_state: BeaconState,
+                             block: BeaconBlock) -> None:
     state_machine = chain.get_state_machine(max(block.slot - 1, 0))
-    state = chain.get_head_state()
     latest_finalized_slot = compute_start_slot_of_epoch(
-        state.finalized_checkpoint.epoch,
+        head_state.finalized_checkpoint.epoch,
         state_machine.config.SLOTS_PER_EPOCH,
     )
     if block.slot < latest_finalized_slot:
@@ -57,8 +59,7 @@ def validate_block_signature(chain: BaseBeaconChain, block: BeaconBlock) -> None
 
     # Find the proper state to verify the proposer's signature of the block
     # head state slot >= target block slot, try head block
-    if state.slot >= block.slot:
-        head_block = chain.get_canonical_head()
+    if head_state.slot >= block.slot:
         # head block slot >= target block slot, try ancestor blocks
         if head_block.slot >= block.slot:
             try:
@@ -70,6 +71,8 @@ def validate_block_signature(chain: BaseBeaconChain, block: BeaconBlock) -> None
                 )
         else:
             state = chain.get_state_by_slot(head_block.slot)
+    else:
+        state = head_state
 
     state_transition = state_machine.state_transition
     state = state_transition.apply_state_transition(
@@ -94,8 +97,15 @@ def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
             )
             return False
 
+        head_block = chain.get_canonical_head()
+        head_state = chain.get_head_state()
         try:
-            validate_block_signature(chain, block)
+            validate_block_signature(
+                chain,
+                head_block,
+                head_state,
+                block,
+            )
         except (ValidationError, SignatureError) as error:
             logger.debug(
                 bold_red("Failed to validate block=%s, error=%s"),
