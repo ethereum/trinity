@@ -22,18 +22,8 @@ from .typing import TResult
 
 
 class BaseExchange(ExchangeAPI[TRequestPayload, TResponsePayload, TResult]):
-    #
-    # Behavior API
-    #
-    def applies_to(self, connection: ConnectionAPI) -> bool:
-        """
-        Return `True` if this Behavior should be applied to the `connection``
-        """
-        protocol = connection.get_protocol_for_command_type(self.get_request_cmd_type())
-        return protocol.supports_command(self.get_response_cmd_type())
-
     @asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
+    async def run_exchange(self, connection: ConnectionAPI) -> AsyncIterator[None]:
         protocol = connection.get_protocol_for_command_type(self.get_request_cmd_type())
 
         response_stream = ResponseCandidateStream(

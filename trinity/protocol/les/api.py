@@ -5,6 +5,7 @@ from cached_property import cached_property
 from eth_typing import BlockNumber, Hash32
 
 from p2p.abc import ConnectionAPI
+from p2p.exchange import ExchangeLogic
 from p2p.logic import Application, CommandHandler
 from p2p.qualifiers import HasProtocol
 from p2p.typing import Payload
@@ -14,6 +15,7 @@ from trinity.protocol.common.abc import HeadInfoAPI
 from .commands import Announce
 from .handshaker import LESHandshakeReceipt
 from .proto import LESProtocol, LESProtocolV2
+from .exchanges import GetBlockHeadersExchange
 
 
 class HeadInfoTracker(CommandHandler, HeadInfoAPI):
@@ -66,9 +68,14 @@ class LESAPI(Application):
 
     head_info: HeadInfoTracker
 
+    get_block_headers: GetBlockHeadersExchange
+
     def __init__(self) -> None:
         self.head_info = HeadInfoTracker()
         self.add_child_behavior(self.head_info.as_behavior())
+
+        self.get_block_headers = GetBlockHeadersExchange()
+        self.add_child_behavior(ExchangeLogic(self.get_block_headers).as_behavior())
 
     @property
     def receipt(self) -> LESHandshakeReceipt:

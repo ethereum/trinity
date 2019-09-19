@@ -15,7 +15,6 @@ from typing import (
 
 from p2p.abc import (
     AsyncioServiceAPI,
-    BehaviorAPI,
     CommandAPI,
     ConnectionAPI,
     RequestAPI,
@@ -192,7 +191,7 @@ class ExchangeManagerAPI(ABC, Generic[TRequestPayload, TResponsePayload, TResult
         ...
 
 
-class ExchangeAPI(BehaviorAPI, Generic[TRequestPayload, TResponsePayload, TResult]):
+class ExchangeAPI(Generic[TRequestPayload, TResponsePayload, TResult]):
     """
     The exchange object handles a few things, in rough order:
 
@@ -212,9 +211,6 @@ class ExchangeAPI(BehaviorAPI, Generic[TRequestPayload, TResponsePayload, TResul
     request_class: Type[RequestAPI[TRequestPayload]]
     tracker_class: Type[PerformanceTrackerAPI[Any, TResult]]
     tracker: PerformanceTrackerAPI[RequestAPI[TRequestPayload], TResult]
-
-    def __init__(self, mgr: ExchangeManagerAPI[TRequestPayload, TResponsePayload, TResult]) -> None:
-        ...
 
     @abstractmethod
     async def get_result(

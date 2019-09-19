@@ -94,12 +94,6 @@ class ETHPeer(BaseChainPeer):
             f"{cmd_name}: {stats}" for cmd_name, stats in stats_pairs
         )
 
-    @property
-    def requests(self) -> ETHExchangeHandler:
-        if self._requests is None:
-            self._requests = ETHExchangeHandler(self.connection)
-        return self._requests
-
 
 class ETHProxyPeer(BaseProxyPeer):
     """
