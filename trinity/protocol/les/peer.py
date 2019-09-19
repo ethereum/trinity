@@ -149,7 +149,7 @@ class LESPeerFactory(BaseChainPeerFactory):
             network_id=self.context.network_id,
             head_td=total_difficulty,
             head_hash=head.hash,
-            head_num=head.block_number,
+            head_number=head.block_number,
             genesis_hash=genesis_hash,
             serve_headers=True,
             # TODO: these should be configurable to allow us to serve this data.
