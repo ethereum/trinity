@@ -189,7 +189,7 @@ class Node:
             line = line_bytes.decode("utf-8").replace("\n", "")
             # TODO: Preprocessing
             self._record_happenning_logs(from_stream, line)
-            print(f"{self.logging_name}.{from_stream}\t: {line}")
+            print(f"{self.logging_name}\t{line}")
 
     def _record_happenning_logs(self, from_stream: str, line: str) -> None:
         for log in self.logs_expected[from_stream]:
@@ -233,6 +233,7 @@ async def main():
     )
 
     asyncio.ensure_future(node_alice.run())
+    await asyncio.sleep(30)
     asyncio.ensure_future(node_bob.run())
 
     await asyncio.sleep(1000000)

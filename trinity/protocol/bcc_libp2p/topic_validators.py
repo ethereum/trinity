@@ -12,6 +12,8 @@ from eth_utils import (
 
 from eth.exceptions import BlockNotFound
 
+from eth2.beacon.db.exceptions import BeaconDBException
+
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.attestation_helpers import get_attestation_data_slot
 from eth2.beacon.exceptions import SignatureError
@@ -42,7 +44,16 @@ def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
             return False
 
         state_machine = chain.get_state_machine(block.slot - 1)
-        state = chain.get_state_by_slot(block.slot - 1)
+        try:
+            state = chain.get_state_by_slot(block.slot - 1)
+        except (KeyError, BeaconDBException) as err:
+            logger.debug(
+                bold_red("Failed to get state slot=%s, error=%s"),
+                block.slot,
+                str(err),
+            )
+            return False
+
         state_transition = state_machine.state_transition
         # Fast forward to state in future slot in order to pass
         # block.slot validity check
