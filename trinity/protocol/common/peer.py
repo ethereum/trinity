@@ -1,6 +1,6 @@
 from abc import abstractmethod
 import operator
-import random
+import secrets
 from typing import (
     Dict,
     List,
@@ -133,7 +133,7 @@ class BaseChainPeerPool(BasePeerPool):
             raise NoConnectedPeers("No connected peers")
         peers_by_td = groupby(operator.attrgetter('head_td'), peers)
         max_td = max(peers_by_td.keys())
-        return random.choice(peers_by_td[max_td])
+        return secrets.choice(peers_by_td[max_td])
 
     def get_peers(self, min_td: int) -> List[BaseChainPeer]:
         # TODO: Consider turning this into a method that returns an AsyncIterator, to make it
