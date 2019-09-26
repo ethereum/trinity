@@ -124,17 +124,16 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
 
         # Run IPC Server
         ipc_server = IPCServer(rpc, self.boot_info.trinity_config.jsonrpc_ipc_path)
-        asyncio.ensure_future(exit_with_services(
+        asyncio.ensure_future(ipc_server.run())
+        services_to_exit = (
             ipc_server,
             self._event_bus_service,
-        ))
-        asyncio.ensure_future(ipc_server.run())
+        )
 
         # Run HTTP Server
         if self.boot_info.args.enable_http:
             http_server = HTTPServer(rpc, port=self.boot_info.args.rpcport)
-            asyncio.ensure_future(exit_with_services(
-                http_server,
-                self._event_bus_service,
-            ))
             asyncio.ensure_future(http_server.run())
+            services_to_exit += (http_server,)
+
+        asyncio.ensure_future(exit_with_services(*services_to_exit))
