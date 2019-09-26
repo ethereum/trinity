@@ -14,8 +14,8 @@ from typing import (
     MutableSet,
     NamedTuple,
     Optional,
-    Tuple,
     Sequence,
+    Tuple,
 )
 
 from eth_utils import encode_hex, remove_0x_prefix
@@ -120,21 +120,15 @@ class Node:
     def cmd(self) -> str:
         _cmds = [
             "trinity-beacon",
+            f"--port={self.port}",
             f"--trinity-root-dir={self.root_dir}",
             f"--beacon-nodekey={remove_0x_prefix(encode_hex(self.node_privkey.to_bytes()))}",
-            f"--port={self.port}",
+            f"--preferred_nodes={','.join(str(node.maddr) for node in self.preferred_nodes)}",
             f"--rpcport={self.rpcport}",
             "--enable-http",
             "-l debug2",
-        ]
-        if len(self.preferred_nodes) != 0:
-            preferred_nodes_str = ",".join(
-                [str(node.maddr) for node in self.preferred_nodes]
-            )
-            _cmds.append(f"--preferred_nodes={preferred_nodes_str}")
-        _cmds += [
             "interop",
-            f"--validators={','.join([str(v) for v in self.validators])}",
+            f"--validators={','.join(str(v) for v in self.validators)}",
             f"--start-time={self.start_time}",
             "--wipedb",
         ]
@@ -205,7 +199,6 @@ class Node:
 
 
 async def main():
-    num_validators = 9
     start_delay = 20
     start_time = int(time.time()) + start_delay
 
@@ -238,8 +231,6 @@ async def main():
         rpcport=8666,
         start_time=start_time,
     )
-    print(node_alice.cmd)
-    print(node_bob.cmd)
 
     asyncio.ensure_future(node_alice.run())
     asyncio.ensure_future(node_bob.run())

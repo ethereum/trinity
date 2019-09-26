@@ -3,7 +3,7 @@ from argparse import (
     _SubParsersAction,
 )
 import asyncio
-from typing import Union
+from typing import Union, Tuple
 
 from lahja import EndpointAPI
 
@@ -42,6 +42,7 @@ from trinity.rpc.http import (
 from trinity._utils.shutdown import (
     exit_with_services,
 )
+from p2p.service import BaseService
 
 
 class JsonRpcServerComponent(AsyncioIsolatedComponent):
@@ -125,7 +126,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
         # Run IPC Server
         ipc_server = IPCServer(rpc, self.boot_info.trinity_config.jsonrpc_ipc_path)
         asyncio.ensure_future(ipc_server.run())
-        services_to_exit = (
+        services_to_exit: Tuple[BaseService, ...] = (
             ipc_server,
             self._event_bus_service,
         )
