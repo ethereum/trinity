@@ -85,7 +85,7 @@ class NodeFactory(factory.Factory):
     gossipsub_params = None
     cancel_token = None
     bootstrap_nodes = None
-    preferred_nodes = None
+    preferred_nodes = tuple()
     chain = factory.SubFactory(BeaconChainFactory)
 
     @classmethod
