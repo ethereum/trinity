@@ -15,7 +15,9 @@ jobs:
           ROOT=$(dirname $(pwd))
           PIP_REQUIREMENTS="$ROOT" ./linuxdeploy-x86_64.AppImage --plugin python --appdir AppDir -i triceratops.png -d trinity.desktop --custom-apprun=AppRun
           ./appimagetool-x86_64.AppImage AppDir Trinity-x86_64.AppImage
+          mkdir $GITHUB_WORKSPACE/artifacts
+          mv Trinity-x86_64.AppImage $GITHUB_WORKSPACE/artifacts/
       - uses: actions/upload-artifact@master
         with: 
           name: Trinity-x86_64.AppImage
-          path: appimage/Trinity-x86_64.AppImage
+          path: artifacts
