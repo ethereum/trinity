@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Trinity
+Exec=env PYTHONWARNINGS=ignore::DeprecationWarning usr/bin/python usr/bin/trinity
+Categories=Application;
+Icon=triceratops
