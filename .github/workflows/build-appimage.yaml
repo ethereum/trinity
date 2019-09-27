@@ -18,4 +18,4 @@ jobs:
       - uses: actions/upload-artifact@master
         with: 
           name: Trinity-x86_64.AppImage
-          path: Trinity-x86_64.AppImage
+          path: $GITHUB_WORKSPACE/appimage/Trinity-x86_64.AppImage
