@@ -2,6 +2,7 @@ import collections
 import functools
 import itertools
 import logging
+import random
 import secrets
 from typing import (
     Any,
@@ -260,3 +261,15 @@ class KademliaRoutingTable:
         sorted_node_ids = sorted(all_node_ids, key=distance_to_reference)
         for node_id in sorted_node_ids:
             yield node_id
+
+    def get_random_node(self) -> NodeID:
+        if self.is_empty:
+            raise ValueError("The routing table is empty")
+
+        bucket = random.choices(
+            self.buckets,
+            weights=tuple(len(bucket) for bucket in self.buckets),
+        )[0]
+        node_id = random.choice(bucket)
+
+        return node_id

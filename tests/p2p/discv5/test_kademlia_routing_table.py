@@ -171,3 +171,17 @@ def test_get_nodes_at_log_distance(routing_table, center_node_id, bucket_size):
         routing_table.update(node_id)
 
     assert set(routing_table.get_nodes_at_log_distance(200)) == set(nodes)
+
+
+def test_get_random_node(routing_table):
+    with pytest.raises(ValueError):
+        routing_table.get_random_node()
+
+    node_id_1 = NodeIDFactory()
+    routing_table.update(node_id_1)
+    assert routing_table.get_random_node() == node_id_1
+
+    node_id_2 = NodeIDFactory()
+    routing_table.update(node_id_2)
+    random_node_ids = set(routing_table.get_random_node() for _ in range(100))
+    assert random_node_ids == {node_id_1, node_id_2}
