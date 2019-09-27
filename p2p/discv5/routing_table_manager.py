@@ -44,7 +44,7 @@ from p2p.discv5.messages import (
     PongMessage,
 )
 from p2p.discv5.routing_table import (
-    FlatRoutingTable,
+    KademliaRoutingTable,
 )
 from p2p.discv5.typing import (
     NodeID,
@@ -58,7 +58,7 @@ class BaseRoutingTableManagerComponent(Service):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  ) -> None:
@@ -73,7 +73,7 @@ class BaseRoutingTableManagerComponent(Service):
         This method should be called, whenever we receive a message from them.
         """
         self.logger.debug("Updating %s in routing table", encode_hex(node_id))
-        self.routing_table.add_or_update(node_id)
+        self.routing_table.update(node_id)
 
     async def get_local_enr(self) -> ENR:
         """Get the local enr from the ENR DB."""
@@ -199,7 +199,7 @@ class PingHandlerService(BaseRoutingTableManagerComponent):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  outgoing_message_send_channel: SendChannel[OutgoingMessage]
@@ -250,7 +250,7 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  outgoing_message_send_channel: SendChannel[OutgoingMessage]
@@ -303,7 +303,7 @@ class PingSenderService(BaseRoutingTableManagerComponent):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  endpoint_vote_send_channel: SendChannel[EndpointVote]
@@ -315,8 +315,8 @@ class PingSenderService(BaseRoutingTableManagerComponent):
         while True:
             deadline = trio.current_time() + ROUTING_TABLE_PING_INTERVAL
 
-            if len(self.routing_table) > 0:
-                node_id = self.routing_table.get_oldest_entry()
+            if self.routing_table.is_not_empty:
+                node_id = self.routing_table.get_random_node()
                 self.logger.debug("Pinging %s", encode_hex(node_id))
                 await self.ping(node_id)
             else:
@@ -374,7 +374,7 @@ class RoutingTableManager(Service):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  outgoing_message_send_channel: SendChannel[OutgoingMessage],
@@ -382,7 +382,7 @@ class RoutingTableManager(Service):
                  ) -> None:
         SharedComponentKwargType = TypedDict("SharedComponentKwargType", {
             "local_node_id": NodeID,
-            "routing_table": FlatRoutingTable,
+            "routing_table": KademliaRoutingTable,
             "message_dispatcher": MessageDispatcherAPI,
             "enr_db": EnrDbApi,
         })

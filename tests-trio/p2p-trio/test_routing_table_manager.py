@@ -11,6 +11,7 @@ from p2p.discv5.channel_services import (
     IncomingMessage,
 )
 from p2p.discv5.constants import (
+    ROUTING_TABLE_BUCKET_SIZE,
     ROUTING_TABLE_PING_INTERVAL,
 )
 from p2p.discv5.enr_db import (
@@ -29,7 +30,7 @@ from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
 )
 from p2p.discv5.routing_table import (
-    FlatRoutingTable,
+    KademliaRoutingTable,
 )
 from p2p.discv5.routing_table_manager import (
     FindNodeHandlerService,
@@ -41,7 +42,6 @@ from p2p.tools.factories.discovery import (
     EndpointFactory,
     ENRFactory,
     FindNodeMessageFactory,
-    NodeIDFactory,
     IncomingMessageFactory,
     PingMessageFactory,
 )
@@ -87,9 +87,9 @@ def remote_endpoint():
 
 
 @pytest.fixture
-def routing_table(remote_enr):
-    routing_table = FlatRoutingTable()
-    routing_table.add(remote_enr.node_id)
+def routing_table(local_enr, remote_enr):
+    routing_table = KademliaRoutingTable(local_enr.node_id, ROUTING_TABLE_BUCKET_SIZE)
+    routing_table.update(remote_enr.node_id)
     return routing_table
 
 
@@ -183,28 +183,6 @@ async def test_ping_handler_sends_pong(ping_handler_service,
     assert outgoing_message.message.enr_seq == local_enr.sequence_number
     assert outgoing_message.receiver_endpoint == incoming_message.sender_endpoint
     assert outgoing_message.receiver_node_id == incoming_message.sender_node_id
-
-
-@pytest.mark.trio
-async def test_ping_handler_updates_routing_table(ping_handler_service,
-                                                  incoming_message_channels,
-                                                  outgoing_message_channels,
-                                                  local_enr,
-                                                  remote_enr,
-                                                  routing_table):
-    other_node_id = NodeIDFactory()
-    routing_table.add(other_node_id)
-    assert routing_table.get_oldest_entry() == remote_enr.node_id
-
-    ping = PingMessageFactory()
-    incoming_message = IncomingMessageFactory(
-        message=ping,
-        sender_node_id=remote_enr.node_id,
-    )
-    await incoming_message_channels[0].send(incoming_message)
-    await wait_all_tasks_blocked()
-
-    assert routing_table.get_oldest_entry() == other_node_id
 
 
 @pytest.mark.trio

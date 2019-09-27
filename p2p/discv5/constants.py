@@ -39,3 +39,4 @@ HANDSHAKE_TIMEOUT = 1  # timeout for performing a handshake
 ROUTING_TABLE_PING_INTERVAL = 5  # interval of outgoing pings sent to maintain the routing table
 
 NUM_ROUTING_TABLE_BUCKETS = 256  # number of buckets in the routing table
+ROUTING_TABLE_BUCKET_SIZE = 16  # size of each bucket in the routing table
