@@ -1,7 +1,6 @@
 from abc import abstractmethod
 import asyncio
 from typing import (
-    cast,
     Generic,
     Sequence,
     Tuple,
@@ -15,8 +14,6 @@ from cancel_token import CancelToken, OperationCancelled
 from eth_typing import BlockNumber
 
 from eth.abc import AtomicDatabaseAPI, VirtualMachineAPI
-
-from eth2.beacon.chains.base import BeaconChain
 
 from p2p.abc import NodeAPI
 from p2p.constants import DEFAULT_MAX_PEERS, DEVP2P_V5
@@ -34,7 +31,6 @@ from trinity.chains.base import AsyncChainAPI
 from trinity.constants import DEFAULT_PREFERRED_NODES
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
 from trinity.protocol.common.context import ChainContext
 from trinity.protocol.common.peer import BasePeerPool
 from trinity.protocol.eth.peer import ETHPeerPool

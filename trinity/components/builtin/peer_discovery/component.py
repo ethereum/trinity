@@ -38,7 +38,6 @@ from p2p.service import (
 )
 
 from trinity.config import (
-    BeaconAppConfig,
     Eth1AppConfig,
     Eth1DbMode,
     TrinityConfig,

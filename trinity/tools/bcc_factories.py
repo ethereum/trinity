@@ -1,9 +1,7 @@
 from eth2.beacon.tools.factories import BeaconChainFactory
 import asyncio
 from typing import (
-    cast,
     Any,
-    AsyncContextManager,
     AsyncIterator,
     Iterable,
     Tuple,
@@ -12,13 +10,9 @@ from typing import (
 
 from async_generator import asynccontextmanager
 
-from lahja import EndpointAPI
-
 from cancel_token import CancelToken
 
 from libp2p.crypto.secp256k1 import create_new_key_pair
-
-from eth_keys import keys
 
 from eth_utils import to_tuple
 
@@ -26,14 +20,10 @@ from eth.constants import (
     ZERO_HASH32,
 )
 
-from p2p import kademlia
-from p2p.constants import DEFAULT_MAX_PEERS
 from p2p.service import run_service
 from p2p.tools.factories import (
     get_open_port,
     CancelTokenFactory,
-    PeerPairFactory,
-    PrivateKeyFactory,
 )
 
 from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_SIGNING_ROOT
@@ -47,6 +37,7 @@ from eth2.beacon.state_machines.forks.serenity import SERENITY_CONFIG
 from eth2.configs import (
     Eth2GenesisConfig,
 )
+from multiaddr import Multiaddr
 
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 
@@ -85,7 +76,7 @@ class NodeFactory(factory.Factory):
     gossipsub_params = None
     cancel_token = None
     bootstrap_nodes = None
-    preferred_nodes = tuple()
+    preferred_nodes: Tuple[Multiaddr, ...] = tuple()
     chain = factory.SubFactory(BeaconChainFactory)
 
     @classmethod

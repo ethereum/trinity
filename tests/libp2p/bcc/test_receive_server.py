@@ -1,5 +1,4 @@
 import asyncio
-import importlib
 from typing import Tuple
 
 from eth.exceptions import BlockNotFound
@@ -25,7 +24,11 @@ from trinity.protocol.bcc_libp2p.configs import (
     PUBSUB_TOPIC_BEACON_BLOCK,
 )
 from trinity.protocol.bcc_libp2p.servers import AttestationPool, OrphanBlockPool
-from trinity.tools.bcc_factories import ReceiveServerFactory, AsyncBeaconChainDBFactory, BeaconBlockFactory
+from trinity.tools.bcc_factories import (
+    AsyncBeaconChainDBFactory,
+    BeaconBlockFactory,
+    ReceiveServerFactory,
+)
 
 
 class FakeChain(_TestnetChain):
