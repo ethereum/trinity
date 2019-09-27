@@ -9,3 +9,5 @@ jobs:
       - uses: actions/checkout@v1
         with:
           fetch-depth: 1
+      - run: echo $GITHUB_WORKSPACE
+      - run: ls $GITHUB_WORKSPACE
