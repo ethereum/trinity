@@ -1,0 +1,18 @@
+#!/bin/sh
+"export" "PYTHONWARNINGS=ignore::DeprecationWarning"
+"exec" "$(dirname $(readlink -f ${0}))/usr/bin/python3.7" "$0" "$@"
+# -*- coding: utf-8 -*-
+import re
+import sys
+import multiprocessing
+import os.path
+
+from trinity import main_beacon
+
+if __name__ == '__main__':
+    dir = os.path.dirname(sys.argv[0])
+    sys.argv[0] = os.path.join(dir, 'usr/bin/python3.7')
+    sys.executable = sys.argv[0]
+    multiprocessing.set_executable(sys.argv[0])
+
+    sys.exit(main_beacon())

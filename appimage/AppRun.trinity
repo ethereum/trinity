@@ -1,11 +1,4 @@
 #!/bin/sh
-#export PYTHONWARNINGS=ignore::DeprecationWarning
-#ROOT="$(dirname $(readlink -f ${0}))"
-#$ROOT/usr/bin/python3.7 $ROOT/usr/python/bin/trinity
-
-# $PYTHON "$0" "$@"
-
-# "export" "PYTHONEXECUTABLE=$(dirname $(readlink -f ${0})))/usr/bin/python3.7"
 "export" "PYTHONWARNINGS=ignore::DeprecationWarning"
 "exec" "$(dirname $(readlink -f ${0}))/usr/bin/python3.7" "$0" "$@"
 # -*- coding: utf-8 -*-
@@ -18,14 +11,8 @@ from trinity import main
 
 if __name__ == '__main__':
     dir = os.path.dirname(sys.argv[0])
-
-    print(os.path.join(dir, 'usr/bin/python3.7'))
     sys.argv[0] = os.path.join(dir, 'usr/bin/python3.7')
     sys.executable = sys.argv[0]
     multiprocessing.set_executable(sys.argv[0])
 
-#    print(sys.executable)
-#    print(sys.argv)
-#    sys.exit(0)
-#    sys.argv[0] = re.sub(r'(-script\.pyw?|\.exe)?$', '', sys.argv[0])
     sys.exit(main())

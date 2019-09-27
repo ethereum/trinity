@@ -13,11 +13,20 @@ jobs:
       - run: |
           cd $GITHUB_WORKSPACE/appimage
           ROOT=$(dirname $(pwd))
-          PIP_REQUIREMENTS="$ROOT" ./linuxdeploy-x86_64.AppImage --plugin python --appdir AppDir -i triceratops.png -d trinity.desktop --custom-apprun=AppRun
+          PIP_REQUIREMENTS="$ROOT" ./linuxdeploy-x86_64.AppImage --plugin python --appdir AppDir -i triceratops.png -d trinity.desktop --custom-apprun=AppRun.trinity
           ./appimagetool-x86_64.AppImage AppDir Trinity-x86_64.AppImage
-          mkdir $GITHUB_WORKSPACE/artifacts
-          mv Trinity-x86_64.AppImage $GITHUB_WORKSPACE/artifacts/
+          mkdir $GITHUB_WORKSPACE/trinity-appimage
+          mv Trinity-x86_64.AppImage $GITHUB_WORKSPACE/trinity-appimage
+
+          cp AppRun.trinity-beacon AppDir/AppRun
+          ./appimagetool-x86_64.AppImage AppDir Trinity-Beacon-x86_64.AppImage
+          mkdir $GITHUB_WORKSPACE/beacon-appimage
+          mv Trinity-Beacon-x86_64.AppImage $GITHUB_WORKSPACE/beacon-appimage
       - uses: actions/upload-artifact@master
         with: 
           name: Trinity-x86_64.AppImage
-          path: artifacts
+          path: trinity-appimage
+      - uses: actions/upload-artifact@master
+        with: 
+          name: Trinity-Beacon-x86_64.AppImage
+          path: beacon-appimage
