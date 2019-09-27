@@ -6,7 +6,7 @@ jobs:
     name: AppImage
     runs-on: ubuntu-latest
     steps:
-      - run: sudo apt install libsnappy-dev
+      - run: sudo apt install libsnappy-dev libsqlite3-dev
       - uses: actions/checkout@v1
         with:
           fetch-depth: 1
