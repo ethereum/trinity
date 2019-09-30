@@ -2,6 +2,8 @@ import pytest
 
 import pytest_trio
 
+import rlp
+
 import trio
 from trio.testing import (
     wait_all_tasks_blocked,
@@ -30,6 +32,7 @@ from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
 )
 from p2p.discv5.routing_table import (
+    compute_log_distance,
     KademliaRoutingTable,
 )
 from p2p.discv5.routing_table_manager import (
@@ -48,6 +51,10 @@ from p2p.tools.factories.discovery import (
 
 from p2p.trio_service import (
     background_service,
+)
+
+from p2p.trio_utils import (
+    gather,
 )
 
 
@@ -217,10 +224,10 @@ async def test_ping_handler_requests_updated_enr(ping_handler_service,
 
 
 @pytest.mark.trio
-async def test_find_node_handler_sends_nodes(find_node_handler_service,
-                                             incoming_message_channels,
-                                             outgoing_message_channels,
-                                             local_enr):
+async def test_find_node_handler_sends_local_enr(find_node_handler_service,
+                                                 incoming_message_channels,
+                                                 outgoing_message_channels,
+                                                 local_enr):
     find_node = FindNodeMessageFactory(distance=0)
     incoming_message = IncomingMessageFactory(message=find_node)
     await incoming_message_channels[0].send(incoming_message)
@@ -231,6 +238,53 @@ async def test_find_node_handler_sends_nodes(find_node_handler_service,
     assert outgoing_message.message.request_id == find_node.request_id
     assert outgoing_message.message.total == 1
     assert outgoing_message.message.enrs == (local_enr,)
+
+
+@pytest.mark.trio
+async def test_find_node_handler_sends_remote_enrs(find_node_handler_service,
+                                                   routing_table,
+                                                   enr_db,
+                                                   incoming_message_channels,
+                                                   outgoing_message_channels,
+                                                   local_enr,
+                                                   remote_enr):
+    # fill the routing table and ENR db with some nodes at distance 255
+    enrs_at_255 = []
+    for _ in range(100):
+        enr = ENRFactory()
+        log_distance = compute_log_distance(enr.node_id, local_enr.node_id)
+        if log_distance == 255:
+            # 50% of all generated ENRs
+            enrs_at_255.append(enr)
+
+        await enr_db.insert(enr)
+        routing_table.update(enr.node_id)
+
+        if len(enrs_at_255) >= 3:
+            break
+
+    # query for node ids at distance 255
+    find_node = FindNodeMessageFactory(distance=255)
+    incoming_message = IncomingMessageFactory(message=find_node, sender_node_id=remote_enr.node_id)
+    await incoming_message_channels[0].send(incoming_message)
+
+    with trio.fail_after(1):
+        outgoing_messages = await gather(
+            *(outgoing_message_channels[1].receive,) * len(enrs_at_255),
+        )
+
+    for outgoing_message in outgoing_messages:
+        assert isinstance(outgoing_message.message, NodesMessage)
+        assert outgoing_message.message.request_id == find_node.request_id
+        assert outgoing_message.message.total == len(enrs_at_255)
+
+    sent_enrs = sorted(
+        rlp.encode(enr)
+        for outgoing_message in outgoing_messages
+        for enr in outgoing_message.message.enrs
+    )
+    expected_sent_enrs = sorted(rlp.encode(enr) for enr in enrs_at_255)
+    assert sent_enrs == expected_sent_enrs
 
 
 @pytest.mark.trio

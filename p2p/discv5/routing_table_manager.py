@@ -1,5 +1,8 @@
 import logging
 import time
+from typing import (
+    Optional,
+)
 
 from eth_utils import (
     encode_hex,
@@ -16,6 +19,9 @@ from mypy_extensions import (
 
 from p2p.trio_service import (
     Service,
+)
+from p2p.trio_utils import (
+    gather,
 )
 
 from p2p.discv5.abc import (
@@ -273,11 +279,7 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
                 if incoming_message.message.distance == 0:
                     await self.respond_with_local_enr(incoming_message)
                 else:
-                    self.logger.warning(
-                        "Received FindNode request for non-zero distance from %s which is not "
-                        "implemented yet",
-                        encode_hex(incoming_message.sender_node_id),
-                    )
+                    await self.respond_with_remote_enrs(incoming_message)
 
     async def respond_with_local_enr(self, incoming_message: IncomingMessage) -> None:
         """Send a Nodes message containing the local ENR in response to an incoming message."""
@@ -294,6 +296,43 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
             incoming_message.sender_endpoint,
         )
         await self.outgoing_message_send_channel.send(outgoing_message)
+
+    async def get_enr_if_known(self, node_id: NodeID) -> Optional[ENR]:
+        try:
+            return await self.enr_db.get(node_id)
+        except KeyError:
+            return None
+
+    async def respond_with_remote_enrs(self, incoming_message: IncomingMessage) -> None:
+        """Send one or more Nodes messages containing the requested remote ENRs."""
+        log_distance = incoming_message.message.distance
+        node_ids_in_bucket = self.routing_table.get_nodes_at_log_distance(log_distance)
+        node_ids = set(node_ids_in_bucket) - {incoming_message.sender_node_id}
+
+        enrs = await gather(*((self.get_enr_if_known, node_id) for node_id in node_ids))
+        known_enrs = tuple(enr for enr in enrs if enr is not None)
+
+        # TODO: don't send one packet per ENR but group them (without exceeding the maximum
+        # packet size)
+
+        total = len(known_enrs)
+        request_id = incoming_message.message.request_id
+        nodes_messages = tuple(NodesMessage(
+            request_id=request_id,
+            total=total,
+            enrs=(enr,),
+        ) for enr in known_enrs)
+
+        self.logger.debug(
+            "Responding to %s with %d nodes messages containing %d ENRs at log distance %d",
+            encode_hex(incoming_message.sender_node_id),
+            len(nodes_messages),
+            len(known_enrs),
+            incoming_message.message.distance,
+        )
+        for nodes_message in nodes_messages:
+            outgoing_message = incoming_message.to_response(nodes_message)
+            await self.outgoing_message_send_channel.send(outgoing_message)
 
 
 class PingSenderService(BaseRoutingTableManagerComponent):
