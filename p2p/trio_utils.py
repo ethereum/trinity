@@ -1,4 +1,3 @@
-import asyncio
 import operator
 from typing import (
     Any,
@@ -29,14 +28,9 @@ async def gather(*async_fns_and_args: AsyncFnsAndArgsType) -> Tuple[Any, ...]:
         async_fn_and_args = async_fns_and_args[index]
         if isinstance(async_fn_and_args, Iterable):
             async_fn, *args = async_fn_and_args
-        elif asyncio.iscoroutinefunction(async_fn_and_args):
+        else:
             async_fn = async_fn_and_args
             args = []
-        else:
-            raise TypeError(
-                "Each argument must be either an async function or a tuple consisting of an "
-                "async function followed by its arguments"
-            )
 
         result = await async_fn(*args)
         indices_and_results.append((index, result))
