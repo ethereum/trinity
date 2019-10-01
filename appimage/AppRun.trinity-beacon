@@ -1,6 +1,21 @@
 #!/bin/sh
+
+# This file is both a shell script and a python file. All the crazy quotes ensure that
+# python skips the top of this file, it sees these commands as just a bunch of strings.
+
+"echo" "-e" "\e[0;31m================================================\e[0m"
+"echo" "-e" "\e[0;31m                    CAREFUL                     \e[0m"
+"echo" "-e" "\e[0;31m     This is alpha software, there are bugs.    \e[0m"
+"echo" "-e" "\e[0;31m    Do not use for any production use cases.    \e[0m"
+"echo" "-e" "\e[0;31m================================================\e[0m"
 "export" "PYTHONWARNINGS=ignore::DeprecationWarning"
+
+# Executes this file, but with the python interpreter bundled with this AppImage
 "exec" "$(dirname $(readlink -f ${0}))/usr/bin/python3.7" "$0" "$@"
+
+# "exec" turns the bash process into a python process, so bash never sees anything below
+# this line.
+
 # -*- coding: utf-8 -*-
 import re
 import sys
@@ -10,6 +25,11 @@ import os.path
 from trinity import main_beacon
 
 if __name__ == '__main__':
+    # When the AppImage is invoked the process's cmd is just the AppImage binary. That
+    # doesn't work well with multiprocessing.spawn, which tries to invoke the process's
+    # cmd when spawning a new process. We do a little dance here to trick multiprocessing
+    # into using the appimage's python interpreter when spawning new processes.
+
     dir = os.path.dirname(sys.argv[0])
     sys.argv[0] = os.path.join(dir, 'usr/bin/python3.7')
     sys.executable = sys.argv[0]
