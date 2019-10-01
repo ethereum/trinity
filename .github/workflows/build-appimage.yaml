@@ -21,18 +21,21 @@ jobs:
           APPIMAGETOOL=$(openssl sha256 bin/appimagetool-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
           if [ "$APPIMAGETOOL" != "d918b4df547b388ef253f3c9e7f6529ca81a885395c31f619d9aaf7030499b13" ]
           then
+            echo "unexpected appimagetool hash: $APPIMAGETOOL"
             false
           fi
 
           LINUXDEPLOY=$(openssl sha256 bin/linuxdeploy-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
           if [ "$LINUXDEPLOY" != "7d3b0cf1bf9beda759ef84bad3ecc74e7af7ac46cd4bd581b8f18604e0b54bab" ]
           then
+            echo "unexpected linuxdeploy hash: $LINUXDEPLOY"
             false
           fi
 
           PYTHONPLUGIN=$(openssl sha256 bin/linuxdeploy-plugin-python-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
           if [ "$PYTHONPLUGIN" != "eb9c4bfa4ae12c71e6fe4f400926bd87759ef762d1a48c242ab31f9db15a7863" ]
           then
+            echo "unexpected pythonplugin hash: $PYTHONPLUGIN"
             false
           fi
 
