@@ -19,7 +19,7 @@ jobs:
           chmod -R +x bin
 
           APPIMAGETOOL=$(openssl sha256 bin/appimagetool-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
-          if [ "$APPIMAGETOOL" != "d918b4df547b388ef253f3c9e7f6529ca81a885395c31f619d9aaf7030499a13" ]
+          if [ "$APPIMAGETOOL" != "d918b4df547b388ef253f3c9e7f6529ca81a885395c31f619d9aaf7030499b13" ]
           then
             false
           fi
