@@ -16,10 +16,9 @@ jobs:
           # First, we need ipget
           wget https://dist.ipfs.io/ipget/v0.5.0/ipget_v0.5.0_linux-amd64.tar.gz
           tar -xvf ipget_v0.5.0_linux-amd64.tar.gz
-          cp ipget/ipget .
 
           # Next, we need the appimage binaries
-          ./ipget QmbtWWU6P1JY9RR2osvXnkAGrU1pRDVwH7duR4Utq2VAHX -o bin
+          ./ipget/ipget QmbtWWU6P1JY9RR2osvXnkAGrU1pRDVwH7duR4Utq2VAHX -o bin
 
           # Build the AppDir
           ROOT=$(dirname $(pwd))
