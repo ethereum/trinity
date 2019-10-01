@@ -28,12 +28,14 @@ jobs:
           ./bin/appimagetool-x86_64.AppImage AppDir Trinity-x86_64.AppImage
           mkdir $GITHUB_WORKSPACE/trinity-appimage
           mv Trinity-x86_64.AppImage $GITHUB_WORKSPACE/trinity-appimage
+          cp README $GITHUB_WORKSPACE/trinity-appimage
 
           # Copy over trinity-beacon's launcher, and build the second appimage
           cp AppRun.trinity-beacon AppDir/AppRun
           ./bin/appimagetool-x86_64.AppImage AppDir Trinity-Beacon-x86_64.AppImage
           mkdir $GITHUB_WORKSPACE/beacon-appimage
           mv Trinity-Beacon-x86_64.AppImage $GITHUB_WORKSPACE/beacon-appimage
+          cp README $GITHUB_WORKSPACE/beacon-appimage
       - uses: actions/upload-artifact@master
         with: 
           name: Trinity-x86_64.AppImage
