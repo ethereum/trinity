@@ -41,7 +41,7 @@ jobs:
 
           chmod -R +x bin
 
-          # Build the AppDir
+          # Build the AppDir, this directory bundles everything Trinity needs to run
           ROOT=$(dirname $(pwd))
           PIP_REQUIREMENTS="$ROOT" ./bin/linuxdeploy-x86_64.AppImage --plugin python --appdir AppDir -i triceratops.png -d trinity.desktop --custom-apprun=AppRun.trinity
 
@@ -51,7 +51,9 @@ jobs:
           mv Trinity-x86_64.AppImage $GITHUB_WORKSPACE/trinity-appimage
           cp README $GITHUB_WORKSPACE/trinity-appimage
 
-          # Copy over trinity-beacon's launcher, and build the second appimage
+          # The trinity-beacon AppImage is almost exactly the same, the only difference is
+          # that is uses a different launcher (AppRun.trinity-beacon), copy that into the
+          # AppDir and build a second image from it.
           cp AppRun.trinity-beacon AppDir/AppRun
           ./bin/appimagetool-x86_64.AppImage AppDir Trinity-Beacon-x86_64.AppImage
           mkdir $GITHUB_WORKSPACE/beacon-appimage
