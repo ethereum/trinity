@@ -14,7 +14,7 @@ jobs:
           cd $GITHUB_WORKSPACE/appimage
 
           # First, download all the binaries we'll need
-          wget -r https://cloudflare-ipfs.com/ipfs/QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc
+          wget -r https://cloudflare-ipfs.com/ipfs/QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc -X fonts
           mv cloudflare-ipfs.com/ipfs/QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc bin
 
           APPIMAGETOOL=$(openssl sha256 bin/appimagetool-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
