@@ -1,0 +1,13 @@
+This is a bundled trinity AppImage.
+
+For more on Trinity: https://trinity-client.readthedocs.io/en/latest/index.html
+For more on AppImage: https://appimage.org/
+
+AppImages are self-contained binaries, there's no need to install them, simply mark them
+executable and run them!
+
+$ chmod +x ./Trinity-x86_64.Appimage
+$ ./Trinity-x86_64.Appimage
+
+If you would like to be able to run Trinity from anywhere, add it to your $PATH.
+/usr/local/bin and $HOME/bin are popular destinations.
