@@ -18,7 +18,7 @@ jobs:
           tar -xvf ipget_v0.5.0_linux-amd64.tar.gz
 
           # Next, we need the appimage binaries
-          timeout 120 ./ipget/ipget QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc -o bin
+          timeout 3m ./ipget/ipget QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc -o bin
 
           # Build the AppDir
           ROOT=$(dirname $(pwd))
