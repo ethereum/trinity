@@ -13,12 +13,27 @@ jobs:
       - run: |
           cd $GITHUB_WORKSPACE/appimage
 
-          # First, we need ipget
-          wget https://dist.ipfs.io/ipget/v0.5.0/ipget_v0.5.0_linux-amd64.tar.gz
-          tar -xvf ipget_v0.5.0_linux-amd64.tar.gz
+          # First, download all the binaries we'll need
+          wget -r https://cloudflare-ipfs.com/ipfs/QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc
+          mv cloudflare-ipfs.com/ipfs/QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc bin
 
-          # Next, we need the appimage binaries
-          timeout 3m ./ipget/ipget QmPALFn9oeEwpzYkyUMC7zUEZFFVEE9ug6uSREet7WY9Uc -o bin
+          APPIMAGETOOL=$(openssl sha256 bin/appimagetool-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
+          if [ "$APPIMAGETOOL" != "d918b4df547b388ef253f3c9e7f6529ca81a885395c31f619d9aaf7030499a13" ]
+          then
+            false
+          fi
+
+          LINUXDEPLOY=$(openssl sha256 bin/linuxdeploy-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
+          if [ "$LINUXDEPLOY" != "7d3b0cf1bf9beda759ef84bad3ecc74e7af7ac46cd4bd581b8f18604e0b54bab" ]
+          then
+            false
+          fi
+
+          PYTHONPLUGIN=$(openssl sha256 bin/linuxdeploy-plugin-python-x86_64.AppImage | cut -d'=' -f2 | sed 's/ //')
+          if [ "$PYTHONPLUGIN" != "eb9c4bfa4ae12c71e6fe4f400926bd87759ef762d1a48c242ab31f9db15a7863" ]
+          then
+            false
+          fi
 
           # Build the AppDir
           ROOT=$(dirname $(pwd))
