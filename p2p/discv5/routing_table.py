@@ -242,6 +242,10 @@ class KademliaRoutingTable:
     def is_empty(self) -> bool:
         return all(len(bucket) == 0 for bucket in self.buckets)
 
+    @property
+    def is_not_empty(self) -> bool:
+        return not self.is_empty
+
     def get_least_recently_updated_log_distance(self) -> int:
         """Get the log distance whose corresponding bucket was updated least recently.
 

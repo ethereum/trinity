@@ -130,11 +130,14 @@ def test_least_recently_updated_distance(routing_table, center_node_id):
 
 def test_is_empty(routing_table):
     assert routing_table.is_empty
+    assert not routing_table.is_not_empty
     node_id = NodeIDFactory()
     routing_table.update(node_id)
     assert not routing_table.is_empty
+    assert routing_table.is_not_empty
     routing_table.remove(node_id)
     assert routing_table.is_empty
+    assert not routing_table.is_not_empty
 
 
 def test_iter_around(routing_table, center_node_id):
