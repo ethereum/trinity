@@ -1,9 +1,11 @@
+import contextlib
 import logging
 import random
 from types import (
     TracebackType,
 )
 from typing import (
+    AsyncGenerator,
     AsyncIterator,
     Callable,
     Dict,
@@ -281,11 +283,13 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
 
         return Endpoint(ip_address, udp_port)
 
-    async def request(self,
-                      receiver_node_id: NodeID,
-                      message: BaseMessage,
-                      endpoint: Optional[Endpoint] = None,
-                      ) -> IncomingMessage:
+    @contextlib.asynccontextmanager
+    async def send_request(self,
+                           receiver_node_id: NodeID,
+                           message: BaseMessage,
+                           endpoint: Optional[Endpoint] = None,
+                           ) -> AsyncGenerator[ChannelHandlerSubscription[IncomingMessage], None]:
+        """Send a request and return the corresponding response subscription context manager."""
         if endpoint is None:
             endpoint = await self.get_endpoint_from_enr_db(receiver_node_id)
 
@@ -311,12 +315,21 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
                 message.request_id,
             )
             await self.outgoing_message_send_channel.send(outgoing_message)
+
+            yield response_subscription
+
+    async def request(self,
+                      receiver_node_id: NodeID,
+                      message: BaseMessage,
+                      endpoint: Optional[Endpoint] = None,
+                      ) -> IncomingMessage:
+        """Send a request and return the first response."""
+        async with self.send_request(receiver_node_id, message, endpoint) as response_subscription:
             response = await response_subscription.receive()
             self.logger.debug(
-                "Received %s from %s with request id %d as response to %s",
+                "Received %s from %s as response to request with id %d",
                 response,
                 encode_hex(receiver_node_id),
                 message.request_id,
-                outgoing_message,
             )
             return response
