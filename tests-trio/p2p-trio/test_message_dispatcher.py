@@ -4,6 +4,10 @@ import pytest_trio
 
 import trio
 
+from eth_utils.toolz import (
+    take,
+)
+
 from p2p.trio_service import (
     background_service,
 )
@@ -11,6 +15,7 @@ from p2p.trio_service import (
 from p2p.tools.factories.discovery import (
     EndpointFactory,
     ENRFactory,
+    FindNodeMessageFactory,
     PingMessageFactory,
 )
 from p2p.tools.factories.keys import (
@@ -21,10 +26,14 @@ from p2p.discv5.enr_db import MemoryEnrDb
 from p2p.discv5.channel_services import (
     IncomingMessage,
 )
+from p2p.discv5.exceptions import (
+    InvalidResponse,
+)
 from p2p.discv5.identity_schemes import (
     default_identity_scheme_registry,
 )
 from p2p.discv5.messages import (
+    NodesMessage,
     PingMessage,
 )
 from p2p.discv5.message_dispatcher import (
@@ -184,3 +193,101 @@ async def test_request(message_dispatcher,
         endpoint=remote_endpoint,
     )
     assert received_response_with_explicit_endpoint == received_response
+
+
+@pytest.mark.trio
+async def test_request_enrs(message_dispatcher,
+                            remote_enr,
+                            remote_endpoint,
+                            incoming_message_channels,
+                            outgoing_message_channels,
+                            nursery,
+                            ):
+    request_id = message_dispatcher.get_free_request_id(remote_enr.node_id)
+    request = FindNodeMessageFactory(request_id=request_id)
+
+    enrs = tuple(ENRFactory() for _ in range(3))
+
+    async def handle_request_on_remote():
+        async for outgoing_message in outgoing_message_channels[1]:
+            assert outgoing_message.message == request
+            assert outgoing_message.receiver_endpoint == remote_endpoint
+            assert outgoing_message.receiver_node_id == remote_enr.node_id
+
+            sets = [2, 1, 0]
+            assert sum(sets) == len(enrs)
+            enr_iter = iter(enrs)
+
+            for num_enrs in sets:
+                response = NodesMessage(
+                    request_id=request_id,
+                    total=len(sets),
+                    enrs=tuple(take(num_enrs, enr_iter)),
+                )
+                await incoming_message_channels[0].send(IncomingMessage(
+                    message=response,
+                    sender_endpoint=remote_endpoint,
+                    sender_node_id=remote_enr.node_id,
+                ))
+
+    nursery.start_soon(handle_request_on_remote)
+
+    received_enrs = await message_dispatcher.request_enrs(remote_enr.node_id, request)
+    assert received_enrs == enrs
+
+
+@pytest.mark.trio
+async def test_request_enrs_bad_total(message_dispatcher,
+                                      remote_enr,
+                                      remote_endpoint,
+                                      incoming_message_channels,
+                                      outgoing_message_channels,
+                                      nursery,
+                                      ):
+    request_id = message_dispatcher.get_free_request_id(remote_enr.node_id)
+    request = FindNodeMessageFactory(request_id=request_id)
+
+    async def handle_request_on_remote():
+        async for _ in outgoing_message_channels[1]:
+            for total in [2, 3]:
+                await incoming_message_channels[0].send(IncomingMessage(
+                    message=NodesMessage(
+                        request_id=request_id,
+                        total=total,
+                        enrs=(),
+                    ),
+                    sender_endpoint=remote_endpoint,
+                    sender_node_id=remote_enr.node_id,
+                ))
+
+    nursery.start_soon(handle_request_on_remote)
+
+    with pytest.raises(InvalidResponse):
+        await message_dispatcher.request_enrs(remote_enr.node_id, request)
+
+
+@pytest.mark.trio
+async def test_request_enrs_wrong_type(message_dispatcher,
+                                       remote_enr,
+                                       remote_endpoint,
+                                       incoming_message_channels,
+                                       outgoing_message_channels,
+                                       nursery,
+                                       ):
+    request_id = message_dispatcher.get_free_request_id(remote_enr.node_id)
+    request = FindNodeMessageFactory(request_id=request_id)
+
+    async def handle_request_on_remote():
+        async for _ in outgoing_message_channels[1]:
+            await incoming_message_channels[0].send(IncomingMessage(
+                message=PingMessageFactory(
+                    request_id=request_id,
+                ),
+                sender_endpoint=remote_endpoint,
+                sender_node_id=remote_enr.node_id,
+            ))
+
+    nursery.start_soon(handle_request_on_remote)
+
+    with pytest.raises(InvalidResponse):
+        await message_dispatcher.request_enrs(remote_enr.node_id, request)

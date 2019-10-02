@@ -24,6 +24,11 @@ from trio.hazmat import (
     checkpoint,
 )
 
+from aiostream import (
+    pipe,
+    stream,
+)
+
 from eth_utils import (
     encode_hex,
 )
@@ -46,8 +51,15 @@ from p2p.discv5.constants import (
     MAX_REQUEST_ID_ATTEMPTS,
     UDP_PORT_ENR_KEY,
 )
+from p2p.discv5.enr import (
+    ENR,
+)
+from p2p.discv5.exceptions import (
+    InvalidResponse,
+)
 from p2p.discv5.messages import (
     BaseMessage,
+    NodesMessage,
 )
 from p2p.discv5.typing import (
     NodeID,
@@ -333,3 +345,60 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
                 message.request_id,
             )
             return response
+
+    async def request_enrs(self,
+                           receiver_node_id: NodeID,
+                           message: BaseMessage,
+                           endpoint: Optional[Endpoint] = None,
+                           ) -> Tuple[ENR, ...]:
+        """Send a request which is expected to be responded to with one or more Nodes messages.
+
+        Return the aggregate of all ENRs contained in the individual responses.
+        """
+        async with self.send_request(receiver_node_id, message, endpoint) as response_subscription:
+            first_response = await response_subscription.receive()
+            if not isinstance(first_response.message, NodesMessage):
+                raise InvalidResponse(
+                    "Expected Nodes message as response to {message.__class__.__name__}, but "
+                    "received {first_response.__class__.__name__}"
+                )
+
+            total = first_response.message.total
+            self.logger.debug(
+                "Received part 1 of %d of Nodes response to request %d with %d ENRs",
+                total,
+                message.request_id,
+                len(first_response.message.enrs),
+            )
+
+            if total == 0:
+                raise InvalidResponse("Total of Nodes message must not be zero")
+            elif total == 1:
+                enrs = first_response.message.enrs
+            else:
+                enrs = list(first_response.message.enrs)
+                async for response_index, response in (
+                    stream.iterate(response_subscription)
+                    | pipe.enumerate(start=1)
+                    | pipe.take(total - 1)
+                ):
+                    if not isinstance(response.message, NodesMessage):
+                        raise InvalidResponse(
+                            "Expected Nodes message as response to {message.__class__.__name__}, "
+                            "but received {response.__class__.__name__}"
+                        )
+                    if response.message.total != total:
+                        raise InvalidResponse(
+                            "Peer responded with Nodes messages with inconsistent total attributes "
+                            "(first {total}, later {response.message.total})"
+                        )
+                    self.logger.debug(
+                        "Received part %d of %d of Nodes response to request %d with %d ENRs",
+                        response_index,
+                        total,
+                        message.request_id,
+                        len(response.message.enrs),
+                    )
+                    enrs.extend(response.message.enrs)
+
+            return tuple(enrs)
