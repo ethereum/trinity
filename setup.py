@@ -25,6 +25,7 @@ deps = {
         'trio==0.11.0,<0.12',
         'trio-typing>=0.2.0,<0.3',
         "upnpclient>=0.0.8,<1",
+        'aiostream>=0.3.3,<0.4',
     ],
     'trinity': [
         "aiohttp==3.6.0",
