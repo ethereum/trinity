@@ -1,4 +1,3 @@
-import contextlib
 import logging
 import random
 from types import (
@@ -27,6 +26,9 @@ from trio.hazmat import (
 from aiostream import (
     pipe,
     stream,
+)
+from async_generator import (
+    asynccontextmanager,
 )
 
 from eth_utils import (
@@ -295,7 +297,7 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
 
         return Endpoint(ip_address, udp_port)
 
-    @contextlib.asynccontextmanager
+    @asynccontextmanager
     async def send_request(self,
                            receiver_node_id: NodeID,
                            message: BaseMessage,
