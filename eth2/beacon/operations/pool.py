@@ -1,15 +1,8 @@
 from typing import Callable, Dict, Generic, Iterable, Iterator, Tuple, TypeVar, Union
 
-from typing_extensions import Protocol
+from eth2.beacon.typing import Operation, Root
 
-from eth2.beacon.typing import Root
-
-
-class Operation(Protocol):
-    hash_tree_root: Root
-
-
-T = TypeVar("T", bound="Operation")
+T = TypeVar("T", bound=Operation)
 
 
 class OperationPool(Generic[T]):

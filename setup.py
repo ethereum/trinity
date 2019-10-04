@@ -120,6 +120,8 @@ deps = {
         "rlp>=1.1.0,<2.0.0",
         PYEVM_DEPENDENCY,
         "ssz==0.2.3",
+        "asks>=2.3.6,<3",  # validator client
+        "eth-keyfile",  # validator client
     ],
     'eth2-extra': [
         "milagro-bls-binding==0.1.3",
@@ -206,7 +208,8 @@ setup(
     entry_points={
         'console_scripts': [
             'trinity=trinity:main',
-            'trinity-beacon=trinity:main_beacon'
+            'trinity-beacon=trinity:main_beacon',
+            'trinity-validator=trinity:main_validator'
         ],
     },
 )

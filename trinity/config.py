@@ -71,6 +71,7 @@ from eth2.beacon.typing import (
 from eth2.configs import (
     Eth2GenesisConfig,
 )
+from eth2.validator_client.config import Config as ValidatorClientConfig
 from p2p.kademlia import (
     Node as KademliaNode,
 )
@@ -808,3 +809,8 @@ class BeaconAppConfig(BaseAppConfig):
             root_dir=self.trinity_config.trinity_root_dir,
             chain_name="SkeletonLakeChain",
         )
+
+
+class ValidatorClientAppConfig(BaseAppConfig):
+    def get_client_config(self) -> ValidatorClientConfig:
+        return ValidatorClientConfig()
