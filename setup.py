@@ -56,6 +56,10 @@ deps = {
         # The direct dependency resolves a version conflict between multiaddr and libp2p
         "base58>=1.0.3,<2.0.0",
     ],
+    'trinity-validator': [
+        "asks>=2.3.6,<3",
+        "eth-keyfile",
+    ],
     'test': [
         "async-timeout>=3.0.1,<4",
         "hypothesis>=4.45.1,<5",
@@ -162,6 +166,7 @@ deps['dev'] = (
 
 deps['eth2-dev'] = (
     deps['dev'] +
+    deps['trinity-validator'] +
     deps['eth2'] +
     deps['eth2-extra'] +
     deps['eth2-lint']
@@ -205,7 +210,8 @@ setup(
     entry_points={
         'console_scripts': [
             'trinity=trinity:main',
-            'trinity-beacon=trinity:main_beacon'
+            'trinity-beacon=trinity:main_beacon',
+            'trinity-validator=validator_client:main'
         ],
     },
 )
