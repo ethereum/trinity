@@ -12,16 +12,17 @@ from eth_utils import (
 
 from eth.exceptions import BlockNotFound
 
-from eth2.beacon.db.exceptions import BeaconDBException
-
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.attestation_helpers import get_attestation_data_slot
 from eth2.beacon.exceptions import SignatureError
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.types.blocks import BeaconBlock
-from eth2.beacon.state_machines.forks.serenity.block_processing import process_block_header
-from eth2.beacon.state_machines.forks.serenity.block_validation import validate_attestation, validate_proposer_signature
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_attestation,
+    validate_proposer_signature,
+)
 from eth2.beacon.typing import Slot
+from eth2.configs import CommitteeConfig
 
 from libp2p.peer.id import ID
 from libp2p.pubsub.pb import rpc_pb2
@@ -44,15 +45,7 @@ def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
             return False
 
         state_machine = chain.get_state_machine(block.slot - 1)
-        try:
-            state = chain.get_state_by_slot(block.slot - 1)
-        except (KeyError, BeaconDBException) as err:
-            logger.debug(
-                bold_red("Failed to get state slot=%s, error=%s"),
-                block.slot,
-                str(err),
-            )
-            return False
+        state = chain.get_state_by_slot(block.slot - 1)
 
         state_transition = state_machine.state_transition
         # Fast forward to state in future slot in order to pass
@@ -62,7 +55,7 @@ def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
             future_slot=block.slot,
         )
         try:
-            validate_proposer_signature(state, block, state_machine.config)
+            validate_proposer_signature(state, block, CommitteeConfig(state_machine.config))
         except SignatureError as error:
             logger.debug(
                 bold_red("Failed to validate block=%s, error=%s"),
