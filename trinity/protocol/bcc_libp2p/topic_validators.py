@@ -20,7 +20,7 @@ from eth2.beacon.exceptions import SignatureError
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.state_machines.forks.serenity.block_processing import process_block_header
-from eth2.beacon.state_machines.forks.serenity.block_validation import validate_attestation
+from eth2.beacon.state_machines.forks.serenity.block_validation import validate_attestation, validate_proposer_signature
 from eth2.beacon.typing import Slot
 
 from libp2p.peer.id import ID
@@ -62,8 +62,8 @@ def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
             future_slot=block.slot,
         )
         try:
-            process_block_header(state, block, state_machine.config, True)
-        except (ValidationError, SignatureError) as error:
+            validate_proposer_signature(state, block, state_machine.config)
+        except SignatureError as error:
             logger.debug(
                 bold_red("Failed to validate block=%s, error=%s"),
                 encode_hex(block.signing_root),
