@@ -45,9 +45,8 @@ def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
             return False
 
         state_machine = chain.get_state_machine(block.slot - 1)
-        state = chain.get_state_by_slot(block.slot - 1)
-
         state_transition = state_machine.state_transition
+        state = chain.get_head_state()
         # Fast forward to state in future slot in order to pass
         # block.slot validity check
         state = state_transition.apply_state_transition(
