@@ -28,6 +28,8 @@ from trinity._utils.shellart import (
     bold_yellow,
 )
 
+from datetime import datetime
+
 if TYPE_CHECKING:
     from multiprocessing import Queue  # noqa: F401
 
@@ -105,8 +107,19 @@ def setup_trinity_file_and_queue_logging(
 
     log_queue = ctx.Queue()
 
+    formatted_logfile = str(logfile_path)
+    str_timestamp = datetime.now().strftime('_%Y%m%d_%H%M%S')
+    idx = formatted_logfile.rfind(
+        ".", 
+        len(formatted_logfile) - len(os.path.basename(formatted_logfile))
+    )
+    if idx != -1: 
+        formatted_logfile = formatted_logfile[0:idx] + str_timestamp + formatted_logfile[idx:]
+    else:
+        formatted_logfile = formatted_logfile + str_timestamp + ".log"
+
     handler_file = RotatingFileHandler(
-        str(logfile_path),
+        formatted_logfile,
         maxBytes=(10000000 * LOG_MAX_MB),
         backupCount=LOG_BACKUP_COUNT
     )
