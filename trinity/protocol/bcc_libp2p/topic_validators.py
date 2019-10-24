@@ -14,7 +14,6 @@ from eth.exceptions import BlockNotFound
 
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.attestation_helpers import get_attestation_data_slot
-from eth2.beacon.exceptions import SignatureError
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
@@ -55,7 +54,7 @@ def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
         )
         try:
             validate_proposer_signature(state, block, CommitteeConfig(state_machine.config))
-        except SignatureError as error:
+        except ValidationError as error:
             logger.debug(
                 bold_red("Failed to validate block=%s, error=%s"),
                 encode_hex(block.signing_root),
