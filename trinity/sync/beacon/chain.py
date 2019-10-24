@@ -142,7 +142,8 @@ class BeaconChainSyncer(BaseService):
             if last_block is None:
                 try:
                     await self.validate_first_batch(batch)
-                except ValidationError:
+                except ValidationError as error:
+                    self.logger.debug("Invalid first batch: %s", error)
                     return
             else:
                 if batch[0].parent_root != last_block.signing_root:
@@ -201,10 +202,13 @@ class BeaconChainSyncer(BaseService):
                 break
 
     async def validate_first_batch(self, batch: Tuple[BaseBeaconBlock, ...]) -> None:
-        first_block = batch[0]
+        try:
+            first_block = batch[0]
+        except IndexError:
+            raise ValidationError("Batch is empty")
 
-        if first_block.slot <= 0:
-            raise Exception(
+        if first_block.slot == 0:
+            raise ValidationError(
                 "Invariant: Syncing starts with the child of a finalized block, so never with the "
                 "genesis block"
             )
