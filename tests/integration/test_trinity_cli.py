@@ -1,6 +1,7 @@
 import signal
 import sys
 import time
+import os
 
 import pexpect
 import pytest
