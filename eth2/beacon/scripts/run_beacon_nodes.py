@@ -188,10 +188,10 @@ class Node:
         async for line_bytes in stream_reader:
             line = line_bytes.decode("utf-8").replace("\n", "")
             # TODO: Preprocessing
-            self._record_happenning_logs(from_stream, line)
+            self._record_happening_logs(from_stream, line)
             print(f"{self.logging_name}\t{line}")
 
-    def _record_happenning_logs(self, from_stream: str, line: str) -> None:
+    def _record_happening_logs(self, from_stream: str, line: str) -> None:
         for log in self.logs_expected[from_stream]:
             if log.pattern in line:
                 self.logger.debug('log "log.name" occurred in %s', from_stream)
