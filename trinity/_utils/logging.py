@@ -119,7 +119,7 @@ def setup_trinity_file_and_queue_logging(
         formatted_logfile = formatted_logfile + str_timestamp + ".log"
 
     handler_file = RotatingFileHandler(
-        str(logfile_path),
+         str(logfile_path)[:-len(logfile_path.suffix)] + str_timestamp + logfile_path.suffix,
         maxBytes=(10000000 * LOG_MAX_MB),
         backupCount=LOG_BACKUP_COUNT
     )
