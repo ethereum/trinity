@@ -97,8 +97,16 @@ async def ConnectionPairFactory(
 ) -> AsyncIterator[Tuple[Node, Node]]:
     if cancel_token is None:
         cancel_token = CancelTokenFactory()
-    alice = NodeFactory(chain__db=alice_chaindb.db, cancel_token=cancel_token)
-    bob = NodeFactory(chain__db=bob_chaindb.db, cancel_token=cancel_token)
+    alice_kwargs = {}
+    bob_kwargs = {}
+
+    if alice_chaindb is not None:
+        alice_kwargs["chain__db"] = alice_chaindb.db
+    if bob_chaindb is not None:
+        bob_kwargs["chain__db"] = bob_chaindb.db
+
+    alice = NodeFactory(cancel_token=cancel_token, **alice_kwargs)
+    bob = NodeFactory(cancel_token=cancel_token, **bob_kwargs)
     async with run_service(alice), run_service(bob):
         await asyncio.sleep(0.01)
         await alice.dial_peer_maddr(bob.listen_maddr_with_peer_id)
