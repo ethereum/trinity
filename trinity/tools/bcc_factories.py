@@ -15,6 +15,9 @@ from cancel_token import CancelToken
 
 from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.id import ID
+from libp2p.peer.peerinfo import (
+    PeerInfo,
+)
 
 
 from eth_utils import to_tuple
@@ -121,7 +124,12 @@ async def ConnectionPairFactory(
     bob = NodeFactory(cancel_token=cancel_token, **bob_kwargs)
     async with run_service(alice), run_service(bob):
         await asyncio.sleep(0.01)
-        await alice.dial_peer_maddr(bob.listen_maddr_with_peer_id)
+        await alice.host.connect(
+            PeerInfo(
+                peer_id=bob.peer_id,
+                addrs=[bob.listen_maddr_with_peer_id],
+            )
+        )
         await asyncio.sleep(0.01)
         if say_hello:
             await alice.say_hello(bob.peer_id)
