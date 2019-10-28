@@ -23,11 +23,16 @@ from trinity.protocol.bcc_libp2p.configs import (
     PUBSUB_TOPIC_BEACON_ATTESTATION,
     PUBSUB_TOPIC_BEACON_BLOCK,
 )
+
+from trinity.protocol.bcc_libp2p.node import (
+    Peer,
+)
 from trinity.protocol.bcc_libp2p.servers import AttestationPool, OrphanBlockPool
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
     BeaconBlockFactory,
     ReceiveServerFactory,
+    PeerFactory,
 )
 
 
@@ -88,6 +93,7 @@ async def receive_server():
     server = ReceiveServerFactory(chain=chain, topic_msg_queues=topic_msg_queues)
     asyncio.ensure_future(server.run())
     await server.events.started.wait()
+    await asyncio.sleep(0.5)
     try:
         yield server
     finally:
@@ -106,6 +112,7 @@ async def receive_server_with_mock_process_orphan_blocks_period(
     server = ReceiveServerFactory(chain=chain, topic_msg_queues=topic_msg_queues)
     asyncio.ensure_future(server.run())
     await server.events.started.wait()
+    await asyncio.sleep(0.5)
     try:
         yield server
     finally:
@@ -343,17 +350,18 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
 
     receive_server.chain.import_block(blocks[0])
 
-    fake_peers = [b"peer_1", b"peer_2"]
+    peer1 = PeerFactory(node=receive_server.p2p_node)
+    peer2 = PeerFactory(node=receive_server.p2p_node)
     peer_1_called_event = asyncio.Event()
     peer_2_called_event = asyncio.Event()
 
     async def request_recent_beacon_blocks(peer_id, block_roots):
         requested_blocks = []
         db = {}
-        if peer_id == fake_peers[0]:
+        if peer_id == peer1._id:
             db = mock_peer_1_db
             peer_1_called_event.set()
-        elif peer_id == fake_peers[1]:
+        elif peer_id == peer2._id:
             db = mock_peer_2_db
             peer_2_called_event.set()
 
@@ -363,7 +371,8 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
         return requested_blocks
 
     with monkeypatch.context() as m:
-        m.setattr(receive_server.p2p_node, "handshaked_peers", set(fake_peers))
+        for peer in (peer1, peer2):
+            receive_server.p2p_node.handshaked_peers.add(peer)
         m.setattr(
             receive_server.p2p_node,
             "request_recent_beacon_blocks",
@@ -373,7 +382,7 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
         for orphan_block in (blocks[4],) + fork_blocks:
             receive_server.orphan_block_pool.add(orphan_block)
         # Wait for receive server to process the orphan blocks
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(1)
         # Check that both peers were requested for blocks
         assert peer_1_called_event.is_set()
         assert peer_2_called_event.is_set()

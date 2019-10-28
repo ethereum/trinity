@@ -14,6 +14,8 @@ from async_generator import asynccontextmanager
 from cancel_token import CancelToken
 
 from libp2p.crypto.secp256k1 import create_new_key_pair
+from libp2p.peer.id import ID
+
 
 from eth_utils import to_tuple
 
@@ -43,7 +45,7 @@ from multiaddr import Multiaddr
 
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 
-from trinity.protocol.bcc_libp2p.node import Node, PeerPool
+from trinity.protocol.bcc_libp2p.node import Node, PeerPool, Peer
 from trinity.protocol.bcc_libp2p.servers import BCCReceiveServer
 from trinity.sync.beacon.chain import BeaconChainSyncer
 
@@ -87,6 +89,16 @@ class NodeFactory(factory.Factory):
             cls() for _ in range(number)
         )
 
+class PeerFactory(factory.Factory):
+    class Meta:
+        model = Peer
+    _id = factory.Sequence(lambda n: ID(f'peer{n}'))
+    node = factory.SubFactory(NodeFactory)
+    fork_version = None
+    finalized_root = ZERO_HASH32
+    finalized_epoch = 0
+    head_root = ZERO_HASH32
+    head_slot = 0
 
 @asynccontextmanager
 async def ConnectionPairFactory(
