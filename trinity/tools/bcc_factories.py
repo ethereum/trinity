@@ -92,6 +92,7 @@ class NodeFactory(factory.Factory):
             cls() for _ in range(number)
         )
 
+
 class PeerFactory(factory.Factory):
     class Meta:
         model = Peer
@@ -102,6 +103,7 @@ class PeerFactory(factory.Factory):
     finalized_epoch = 0
     head_root = ZERO_HASH32
     head_slot = 0
+
 
 @asynccontextmanager
 async def ConnectionPairFactory(

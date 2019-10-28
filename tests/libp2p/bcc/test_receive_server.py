@@ -23,16 +23,12 @@ from trinity.protocol.bcc_libp2p.configs import (
     PUBSUB_TOPIC_BEACON_ATTESTATION,
     PUBSUB_TOPIC_BEACON_BLOCK,
 )
-
-from trinity.protocol.bcc_libp2p.node import (
-    Peer,
-)
 from trinity.protocol.bcc_libp2p.servers import AttestationPool, OrphanBlockPool
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
     BeaconBlockFactory,
-    ReceiveServerFactory,
     PeerFactory,
+    ReceiveServerFactory,
 )
 
 
