@@ -129,7 +129,7 @@ async def ConnectionPairFactory(
         await alice.host.connect(
             PeerInfo(
                 peer_id=bob.peer_id,
-                addrs=[bob.listen_maddr_with_peer_id],
+                addrs=[bob.listen_maddr],
             )
         )
         await asyncio.sleep(0.01)
