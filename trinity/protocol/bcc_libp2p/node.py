@@ -83,7 +83,6 @@ from libp2p.pubsub.gossipsub import (
 )
 from libp2p.security.base_transport import BaseSecureTransport
 from libp2p.stream_muxer.abc import IMuxedConn
-from libp2p.network.stream.exceptions import StreamEOF, StreamReset
 from libp2p.stream_muxer.mplex.mplex import MPLEX_PROTOCOL_ID, Mplex
 
 from multiaddr import (
@@ -544,17 +543,10 @@ class Node(BaseService):
         self.logger.debug("Waiting for hello from the other side")
         try:
             hello_other_side = await read_req(stream, HelloRequest)
-            has_error = False
-        except (ReadMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, ReadMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                await self.disconnect_peer(peer_id)
-                return
+        except ReadMessageFailure as error:
+            await self.disconnect_peer(peer_id)
+            return
+        self.logger.info("hello message is %s", hello_other_side)
         self.logger.debug("Received the hello message %s", to_formatted_dict(hello_other_side))
 
         try:
@@ -575,21 +567,13 @@ class Node(BaseService):
         self.logger.debug("Sending our hello message %s", to_formatted_dict(hello_mine))
         try:
             await write_resp(stream, hello_mine, ResponseCode.SUCCESS)
-            has_error = False
-        except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, WriteMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                self.logger.info(
-                    "Handshake failed: failed to write message %s",
-                    hello_mine,
-                )
-                await self.disconnect_peer(peer_id)
-                return
+        except WriteMessageFailure as error:
+            self.logger.info(
+                "Handshake failed: failed to write message %s",
+                hello_mine,
+            )
+            await self.disconnect_peer(peer_id)
+            return
 
         if peer_id not in self.handshaked_peers:
             peer = Peer.from_hello_request(self, peer_id, hello_other_side)
@@ -620,35 +604,19 @@ class Node(BaseService):
         self.logger.debug("Sending our hello message %s", to_formatted_dict(hello_mine))
         try:
             await write_req(stream, hello_mine)
-            has_error = False
-        except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, WriteMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                await self.disconnect_peer(peer_id)
-                error_msg = f"fail to write request={hello_mine}"
-                self.logger.info("Handshake failed: %s", error_msg)
-                raise HandshakeFailure(error_msg)
+        except WriteMessageFailure as error:
+            await self.disconnect_peer(peer_id)
+            error_msg = f"fail to write request={hello_mine}"
+            self.logger.info("Handshake failed: %s", error_msg)
+            raise HandshakeFailure(error_msg)
 
         self.logger.debug("Waiting for hello from the other side")
         try:
             resp_code, response = await read_resp(stream, HelloRequest)
-            has_error = False
-        except (ReadMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, ReadMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                await self.disconnect_peer(peer_id)
-                self.logger.info("Handshake failed: fail to read the response")
-                raise HandshakeFailure("fail to read the response")
+        except ReadMessageFailure as error:
+            await self.disconnect_peer(peer_id)
+            self.logger.info("Handshake failed: fail to read the response")
+            raise HandshakeFailure("fail to read the response")
 
         self.logger.debug(
             "Received the hello message %s, resp_code=%s",
@@ -706,18 +674,11 @@ class Node(BaseService):
         self.logger.debug("Waiting for goodbye from %s", peer_id)
         try:
             goodbye = await read_req(stream, Goodbye)
-            has_error = False
-        except (ReadMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, ReadMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-
-        self.logger.debug("Received the goodbye message %s", to_formatted_dict(goodbye))
-
-        if not has_error:
+        except ReadMessageFailure as error:
+            pass
+        else:
             await stream.close()
+        self.logger.debug("Received the goodbye message %s", to_formatted_dict(goodbye))
         await self.disconnect_peer(peer_id)
 
     async def say_goodbye(self, peer_id: ID, reason: GoodbyeReasonCode) -> None:
@@ -731,15 +692,9 @@ class Node(BaseService):
         self.logger.debug("Sending our goodbye message %s", goodbye)
         try:
             await write_req(stream, goodbye)
-            has_error = False
-        except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, WriteMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-
-        if not has_error:
+        except WriteMessageFailure as error:
+            pass
+        else:
             await stream.close()
         await self.disconnect_peer(peer_id)
 
@@ -868,16 +823,9 @@ class Node(BaseService):
         self.logger.debug("Waiting for beacon blocks request from the other side")
         try:
             beacon_blocks_request = await read_req(stream, BeaconBlocksRequest)
-            has_error = False
-        except (ReadMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, ReadMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                return
+        except ReadMessageFailure as error:
+            return
+
         self.logger.debug(
             "Received the beacon blocks request message %s",
             to_formatted_dict(beacon_blocks_request)
@@ -900,21 +848,13 @@ class Node(BaseService):
                 )
                 try:
                     await write_resp(stream, reason, ResponseCode.INVALID_REQUEST)
-                    has_error = False
-                except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-                    has_error = True
-                    if isinstance(error, WriteMessageFailure):
-                        await stream.reset()
-                    elif isinstance(error, StreamEOF):
-                        await stream.close()
-                finally:
-                    if has_error:
-                        self.logger.info(
+                except WriteMessageFailure:
+                    self.logger.info(
                             "Processing beacon blocks request failed: failed to write message %s",
                             reason,
                         )
-                        return
-                await stream.close()
+                else:
+                    await stream.close()
                 return
             else:
                 try:
@@ -925,22 +865,14 @@ class Node(BaseService):
                     reason = "Invalid request: " + str(val_error)
                     try:
                         await write_resp(stream, reason, ResponseCode.INVALID_REQUEST)
-                        has_error = False
-                    except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-                        has_error = True
-                        if isinstance(error, WriteMessageFailure):
-                            await stream.reset()
-                        elif isinstance(error, StreamEOF):
-                            await stream.close()
-                    finally:
-                        if has_error:
-                            self.logger.info(
-                                "Processing beacon blocks request failed: "
-                                "failed to write message %s",
-                                reason,
-                            )
-                            return
-                    await stream.close()
+                    except WriteMessageFailure:
+                        self.logger.info(
+                            "Processing beacon blocks request failed: "
+                            "failed to write message %s",
+                            reason,
+                        )
+                    else:
+                        await stream.close()
                     return
         # TODO: Should it be a successful response if peer is requesting
         # blocks on a fork we don't have data for?
@@ -948,20 +880,12 @@ class Node(BaseService):
         self.logger.debug("Sending beacon blocks response %s", beacon_blocks_response)
         try:
             await write_resp(stream, beacon_blocks_response, ResponseCode.SUCCESS)
-            has_error = False
-        except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, WriteMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                self.logger.info(
-                    "Processing beacon blocks request failed: failed to write message %s",
-                    beacon_blocks_response,
-                )
-                return
+        except WriteMessageFailure:
+            self.logger.info(
+                "Processing beacon blocks request failed: failed to write message %s",
+                beacon_blocks_response,
+            )
+            return
 
         self.logger.debug(
             "Processing beacon blocks request from %s is finished",
@@ -996,33 +920,17 @@ class Node(BaseService):
         self.logger.debug("Sending beacon blocks request %s", beacon_blocks_request)
         try:
             await write_req(stream, beacon_blocks_request)
-            has_error = False
-        except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, WriteMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                error_msg = f"fail to write request={beacon_blocks_request}"
-                self.logger.info("Request beacon blocks failed: %s", error_msg)
-                raise RequestFailure(error_msg)
+        except WriteMessageFailure:
+            error_msg = f"fail to write request={beacon_blocks_request}"
+            self.logger.info("Request beacon blocks failed: %s", error_msg)
+            raise RequestFailure(error_msg)
 
         self.logger.debug("Waiting for beacon blocks response")
         try:
             resp_code, beacon_blocks_response = await read_resp(stream, BeaconBlocksResponse)
-            has_error = False
-        except (ReadMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, ReadMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                self.logger.info("Request beacon blocks failed: fail to read the response")
-                raise RequestFailure("fail to read the response")
+        except ReadMessageFailure:
+            self.logger.info("Request beacon blocks failed: fail to read the response")
+            raise RequestFailure("fail to read the response")
 
         self.logger.debug(
             "Received beacon blocks response %s, resp_code=%s",
@@ -1057,16 +965,9 @@ class Node(BaseService):
         self.logger.debug("Waiting for recent beacon blocks request from the other side")
         try:
             recent_beacon_blocks_request = await read_req(stream, RecentBeaconBlocksRequest)
-            has_error = False
-        except (ReadMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, ReadMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                return
+
+        except ReadMessageFailure:
+            return
         self.logger.debug(
             "Received the recent beacon blocks request message %s",
             recent_beacon_blocks_request,
@@ -1085,20 +986,12 @@ class Node(BaseService):
         self.logger.debug("Sending recent beacon blocks response %s", recent_beacon_blocks_response)
         try:
             await write_resp(stream, recent_beacon_blocks_response, ResponseCode.SUCCESS)
-            has_error = False
-        except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, WriteMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                self.logger.info(
-                    "Processing recent beacon blocks request failed: failed to write message %s",
-                    recent_beacon_blocks_response,
-                )
-                return
+        except WriteMessageFailure:
+            self.logger.info(
+                "Processing recent beacon blocks request failed: failed to write message %s",
+                recent_beacon_blocks_response,
+            )
+            return
 
         self.logger.debug(
             "Processing recent beacon blocks request from %s is finished",
@@ -1126,18 +1019,10 @@ class Node(BaseService):
         self.logger.debug("Sending recent beacon blocks request %s", recent_beacon_blocks_request)
         try:
             await write_req(stream, recent_beacon_blocks_request)
-            has_error = False
-        except (WriteMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, WriteMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                error_msg = f"fail to write request={recent_beacon_blocks_request}"
-                self.logger.info("Request recent beacon blocks failed: %s", error_msg)
-                raise RequestFailure(error_msg)
+        except WriteMessageFailure:
+            error_msg = f"fail to write request={recent_beacon_blocks_request}"
+            self.logger.info("Request recent beacon blocks failed: %s", error_msg)
+            raise RequestFailure(error_msg)
 
         self.logger.debug("Waiting for recent beacon blocks response")
         try:
@@ -1145,17 +1030,9 @@ class Node(BaseService):
                 stream,
                 RecentBeaconBlocksResponse,
             )
-            has_error = False
-        except (ReadMessageFailure, StreamEOF, StreamReset) as error:
-            has_error = True
-            if isinstance(error, ReadMessageFailure):
-                await stream.reset()
-            elif isinstance(error, StreamEOF):
-                await stream.close()
-        finally:
-            if has_error:
-                self.logger.info("Request recent beacon blocks failed: fail to read the response")
-                raise RequestFailure("fail to read the response")
+        except ReadMessageFailure:
+            self.logger.info("Request recent beacon blocks failed: fail to read the response")
+            raise RequestFailure("fail to read the response")
 
         self.logger.debug(
             "Received recent beacon blocks response %s, resp_code=%s",
