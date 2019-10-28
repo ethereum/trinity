@@ -636,7 +636,7 @@ class Node(BaseService):
 
         self.logger.debug("Waiting for hello from the other side")
         try:
-            resp_code, hello_other_side = await read_resp(stream, HelloRequest)
+            resp_code, response = await read_resp(stream, HelloRequest)
             has_error = False
         except (ReadMessageFailure, StreamEOF, StreamReset) as error:
             has_error = True
@@ -652,7 +652,7 @@ class Node(BaseService):
 
         self.logger.debug(
             "Received the hello message %s, resp_code=%s",
-            to_formatted_dict(hello_other_side),
+            response,
             resp_code,
         )
 
@@ -661,14 +661,14 @@ class Node(BaseService):
             # TODO: Do something according to the `ResponseCode`
             error_msg = (
                 "resp_code != ResponseCode.SUCCESS, "
-                f"resp_code={resp_code}, error_msg={to_formatted_dict(hello_other_side)}"
+                f"resp_code={resp_code}, error_msg={response}"
             )
             self.logger.info("Handshake failed: %s", error_msg)
             await stream.reset()
             await self.disconnect_peer(peer_id)
             raise HandshakeFailure(error_msg)
 
-        hello_other_side = cast(HelloRequest, hello_other_side)
+        hello_other_side = cast(HelloRequest, response)
         try:
             await self._validate_hello_req(hello_other_side)
         except ValidationError as error:
