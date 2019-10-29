@@ -88,7 +88,7 @@ async def receive_server():
     chain = await get_fake_chain()
     server = ReceiveServerFactory(chain=chain, topic_msg_queues=topic_msg_queues)
     asyncio.ensure_future(server.run())
-    await server.events.ready.wait()
+    await server.ready.wait()
     try:
         yield server
     finally:
@@ -106,11 +106,25 @@ async def receive_server_with_mock_process_orphan_blocks_period(
     chain = await get_fake_chain()
     server = ReceiveServerFactory(chain=chain, topic_msg_queues=topic_msg_queues)
     asyncio.ensure_future(server.run())
-    await server.events.ready.wait()
+    await server.ready.wait()
     try:
         yield server
     finally:
         await server.cancel()
+
+
+async def wait_gather(awaitable_a, awaitable_b):
+    await asyncio.wait_for(asyncio.gather(awaitable_a, awaitable_b), timeout=1)
+
+
+async def wait_full_iteration(event):
+    """
+    We might start from the middle of the function.
+    Wait twice to ensure a full function body is run
+    """
+    await asyncio.wait_for(event.wait(), timeout=1)
+    await asyncio.sleep(0.01)
+    await asyncio.wait_for(event.wait(), timeout=1)
 
 
 def test_attestation_pool():
@@ -272,9 +286,11 @@ async def test_bcc_receive_server_handle_beacon_blocks(receive_server):
     assert receive_server.chain.get_canonical_head() != block
 
     beacon_block_queue = receive_server.topic_msg_queues[PUBSUB_TOPIC_BEACON_BLOCK]
-    await beacon_block_queue.put(msg)
+
     # Wait for receive server to process the new block
-    await asyncio.sleep(0.5)
+    await wait_gather(
+        receive_server.handle_message_done.wait(), beacon_block_queue.put(msg)
+    )
     assert receive_server.chain.get_canonical_head() == block
 
 
@@ -294,9 +310,10 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
     beacon_attestation_queue = receive_server.topic_msg_queues[
         PUBSUB_TOPIC_BEACON_ATTESTATION
     ]
-    await beacon_attestation_queue.put(msg)
     # Wait for receive server to process the new attestation
-    await asyncio.sleep(0.5)
+    await wait_gather(
+        receive_server.handle_message_done.wait(), beacon_attestation_queue.put(msg)
+    )
     # Check that attestation is put to attestation pool
     assert attestation in receive_server.attestation_pool
 
@@ -312,9 +329,10 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
     )
 
     beacon_block_queue = receive_server.topic_msg_queues[PUBSUB_TOPIC_BEACON_BLOCK]
-    await beacon_block_queue.put(msg)
     # Wait for receive server to process the new block
-    await asyncio.sleep(0.5)
+    await wait_gather(
+        receive_server.handle_message_done.wait(), beacon_block_queue.put(msg)
+    )
     # Check that attestation is removed from attestation pool
     assert attestation not in receive_server.attestation_pool
 
@@ -376,7 +394,7 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
         for orphan_block in (blocks[4],) + fork_blocks:
             receive_server.orphan_block_pool.add(orphan_block)
         # Wait for receive server to process the orphan blocks
-        await asyncio.sleep(1)
+        await wait_full_iteration(receive_server.process_orphan_blocks_done)
         # Check that both peers were requested for blocks
         assert peer_1_called_event.is_set()
         assert peer_2_called_event.is_set()
