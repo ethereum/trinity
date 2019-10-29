@@ -1,3 +1,4 @@
+import asyncio
 from typing import (
     Awaitable,
     Callable,
@@ -177,6 +178,7 @@ class BCCReceiveServer(BaseService):
         self.p2p_node = p2p_node
         self.attestation_pool = AttestationPool()
         self.orphan_block_pool = OrphanBlockPool()
+        self.events.ready = asyncio.Event()
 
     async def _run(self) -> None:
         while not self.p2p_node.is_started:
@@ -185,6 +187,7 @@ class BCCReceiveServer(BaseService):
         self.run_daemon_task(self._handle_beacon_attestation_loop())
         self.run_daemon_task(self._handle_beacon_block_loop())
         self.run_daemon_task(self._process_orphan_blocks_loop())
+        self.events.ready.set()
         await self.cancellation()
 
     async def _handle_message(

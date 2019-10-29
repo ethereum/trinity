@@ -88,8 +88,7 @@ async def receive_server():
     chain = await get_fake_chain()
     server = ReceiveServerFactory(chain=chain, topic_msg_queues=topic_msg_queues)
     asyncio.ensure_future(server.run())
-    await server.events.started.wait()
-    await asyncio.sleep(0.5)
+    await server.events.ready.wait()
     try:
         yield server
     finally:
@@ -107,8 +106,7 @@ async def receive_server_with_mock_process_orphan_blocks_period(
     chain = await get_fake_chain()
     server = ReceiveServerFactory(chain=chain, topic_msg_queues=topic_msg_queues)
     asyncio.ensure_future(server.run())
-    await server.events.started.wait()
-    await asyncio.sleep(0.5)
+    await server.events.ready.wait()
     try:
         yield server
     finally:
