@@ -24,14 +24,13 @@ from trinity.protocol.bcc_libp2p.configs import (
     PUBSUB_TOPIC_BEACON_BLOCK,
 )
 from trinity.protocol.bcc_libp2p.servers import AttestationPool, OrphanBlockPool
+from trinity.tools.async_method import wait_until_true
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
     BeaconBlockFactory,
     PeerFactory,
     ReceiveServerFactory,
 )
-
-from .helpers import wait_until_true
 
 
 class FakeChain(_TestnetChain):

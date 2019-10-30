@@ -10,9 +10,8 @@ from trinity.protocol.bcc_libp2p.exceptions import HandshakeFailure, RequestFail
 from trinity.protocol.bcc_libp2p.messages import HelloRequest
 from trinity.protocol.bcc_libp2p.node import REQ_RESP_HELLO_SSZ
 from trinity.protocol.bcc_libp2p.utils import read_req, write_resp
+from trinity.tools.async_method import wait_until_true
 from trinity.tools.bcc_factories import ConnectionPairFactory, NodeFactory
-
-from .helpers import wait_until_true
 
 
 @pytest.mark.asyncio
