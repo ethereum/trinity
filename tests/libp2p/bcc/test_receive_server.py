@@ -122,10 +122,9 @@ async def wait_full_iteration(event):
     We might start from the middle of the function.
     Wait twice to ensure a full function body is run
     """
-    await asyncio.wait_for(event.wait(), timeout=1)
-    await asyncio.sleep(0.01)
-    await asyncio.wait_for(event.wait(), timeout=1)
-
+    for _ in range(2):
+        event.clear()
+        await asyncio.wait_for(event.wait(), timeout=1)
 
 def test_attestation_pool():
     pool = AttestationPool()

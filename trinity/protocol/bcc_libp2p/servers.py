@@ -252,7 +252,6 @@ class BCCReceiveServer(BaseService):
                     else:
                         self._process_received_block(block)
             self.process_orphan_blocks_done.set()
-            self.process_orphan_blocks_done.clear()
 
     async def _handle_beacon_attestations(self, msg: rpc_pb2.Message) -> None:
         attestation = ssz.decode(msg.data, sedes=Attestation)
