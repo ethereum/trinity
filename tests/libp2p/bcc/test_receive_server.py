@@ -126,6 +126,7 @@ async def wait_full_iteration(event):
         event.clear()
         await asyncio.wait_for(event.wait(), timeout=1)
 
+
 def test_attestation_pool():
     pool = AttestationPool()
     a1 = Attestation()

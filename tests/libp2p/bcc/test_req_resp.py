@@ -20,10 +20,8 @@ async def wait_until_true(predicate, timeout=1.0, retry=5):
         if predicate():
             return True
         else:
-            await asyncio.sleep(timeout/retry)
-    raise asyncio.TimeoutError(
-        f"Predicate has been False for {timeout} seconds"
-    )
+            await asyncio.sleep(timeout / retry)
+    raise asyncio.TimeoutError(f"Predicate has been False for {timeout} seconds")
 
 
 @pytest.mark.asyncio
@@ -90,7 +88,7 @@ async def test_goodbye():
     async with ConnectionPairFactory() as (alice, bob):
         await alice.say_goodbye(bob.peer_id, GoodbyeReasonCode.FAULT_OR_ERROR)
         assert bob.peer_id not in alice.handshaked_peers
-        assert await wait_until_true(lambda : alice.peer_id not in bob.handshaked_peers)
+        assert await wait_until_true(lambda: alice.peer_id not in bob.handshaked_peers)
 
 
 @pytest.mark.asyncio
