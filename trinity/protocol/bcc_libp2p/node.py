@@ -834,10 +834,9 @@ class Node(BaseService):
             self.logger.debug(
                 (
                     "The requested head block is not on our canonical chain  "
-                    "requested_head_block: %s  canonical_block_at_slot: %s"
+                    "requested_head_block: %s"
                 ),
                 requested_head_block,
-                canonical_block_at_slot,
             )
             block_match = False
         finally:
