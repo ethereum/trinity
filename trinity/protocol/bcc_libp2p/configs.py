@@ -12,10 +12,10 @@ from typing import (
 #
 
 # TODO: TBD
-# The max size of uncompressed req/resp messages that clients will allow.
-REQ_RESP_MAX_SIZE = 2 ** 32 - 1  # 4 GiB
 # The max size of uncompressed gossip messages.
 GOSSIP_MAX_SIZE = 2 ** 20  # 1 MiB
+# The maximum allowed size of uncompressed req/resp chunked responses.
+MAX_CHUNK_SIZE = 2**20 # 1 MiB
 # TODO: TBD
 # The number of shard subnets used in the gossipsub protocol.
 SHARD_SUBNET_COUNT = None

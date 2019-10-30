@@ -29,7 +29,7 @@ from .configs import (
     REQ_RESP_ENCODE_POSTFIX,
     REQ_RESP_PROTOCOL_PREFIX,
     REQ_RESP_VERSION,
-    REQ_RESP_MAX_SIZE,
+    MAX_CHUNK_SIZE,
     RESP_TIMEOUT,
     ResponseCode,
     TTFB_TIMEOUT,
@@ -193,9 +193,9 @@ async def _read_varint_prefixed_bytes(
     timeout: float = None,
 ) -> bytes:
     len_payload = await _decode_uvarint_from_stream(stream, timeout)
-    if len_payload > REQ_RESP_MAX_SIZE:
+    if len_payload > MAX_CHUNK_SIZE:
         raise ReadMessageFailure(
-            f"size_of_payload={len_payload} is larger than maximum={REQ_RESP_MAX_SIZE}"
+            f"size_of_payload={len_payload} is larger than maximum={MAX_CHUNK_SIZE}"
         )
     payload = await _read_stream(stream, len_payload, timeout)
     if len(payload) != len_payload:
