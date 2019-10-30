@@ -176,7 +176,6 @@ class BCCReceiveServer(BaseService):
 
         # These events are used in testing
         self.ready = asyncio.Event()
-        self.handle_message_done = asyncio.Event()
         self.process_orphan_blocks_done = asyncio.Event()
 
     async def _run(self) -> None:
@@ -198,10 +197,11 @@ class BCCReceiveServer(BaseService):
             message = await queue.get()
             # Libp2p let the sender receive their own message, which we need to ignore here.
             if message.from_id == self.p2p_node.peer_id:
+                queue.task_done()
                 continue
-            await handler(message)
-            self.handle_message_done.set()
-            self.handle_message_done.clear()
+            else:
+                await handler(message)
+                queue.task_done()
 
     async def _handle_beacon_attestation_loop(self) -> None:
         await self._handle_message(

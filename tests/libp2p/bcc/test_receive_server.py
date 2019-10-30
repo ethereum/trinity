@@ -113,8 +113,8 @@ async def receive_server_with_mock_process_orphan_blocks_period(
         await server.cancel()
 
 
-async def wait_gather(awaitable_a, awaitable_b):
-    await asyncio.wait_for(asyncio.gather(awaitable_a, awaitable_b), timeout=1)
+async def wait_all_messages_processed(queue):
+    await asyncio.wait_for(queue.join(), timeout=1)
 
 
 async def wait_full_iteration(event):
@@ -287,10 +287,8 @@ async def test_bcc_receive_server_handle_beacon_blocks(receive_server):
 
     beacon_block_queue = receive_server.topic_msg_queues[PUBSUB_TOPIC_BEACON_BLOCK]
 
-    # Wait for receive server to process the new block
-    await wait_gather(
-        receive_server.handle_message_done.wait(), beacon_block_queue.put(msg)
-    )
+    await beacon_block_queue.put(msg)
+    await wait_all_messages_processed(beacon_block_queue)
     assert receive_server.chain.get_canonical_head() == block
 
 
@@ -311,9 +309,8 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
         PUBSUB_TOPIC_BEACON_ATTESTATION
     ]
     # Wait for receive server to process the new attestation
-    await wait_gather(
-        receive_server.handle_message_done.wait(), beacon_attestation_queue.put(msg)
-    )
+    await beacon_attestation_queue.put(msg)
+    await wait_all_messages_processed(beacon_attestation_queue)
     # Check that attestation is put to attestation pool
     assert attestation in receive_server.attestation_pool
 
@@ -330,9 +327,8 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
 
     beacon_block_queue = receive_server.topic_msg_queues[PUBSUB_TOPIC_BEACON_BLOCK]
     # Wait for receive server to process the new block
-    await wait_gather(
-        receive_server.handle_message_done.wait(), beacon_block_queue.put(msg)
-    )
+    await beacon_block_queue.put(msg)
+    await wait_all_messages_processed(beacon_block_queue)
     # Check that attestation is removed from attestation pool
     assert attestation not in receive_server.attestation_pool
 
