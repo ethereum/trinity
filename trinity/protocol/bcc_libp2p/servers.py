@@ -173,10 +173,7 @@ class BCCReceiveServer(BaseService):
         self.p2p_node = p2p_node
         self.attestation_pool = AttestationPool()
         self.orphan_block_pool = OrphanBlockPool()
-
-        # These events are used in testing
         self.ready = asyncio.Event()
-        self.process_orphan_blocks_done = asyncio.Event()
 
     async def _run(self) -> None:
         while not self.p2p_node.is_started:
@@ -251,7 +248,6 @@ class BCCReceiveServer(BaseService):
                         continue
                     else:
                         self._process_received_block(block)
-            self.process_orphan_blocks_done.set()
 
     async def _handle_beacon_attestations(self, msg: rpc_pb2.Message) -> None:
         attestation = ssz.decode(msg.data, sedes=Attestation)

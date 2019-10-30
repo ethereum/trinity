@@ -31,6 +31,8 @@ from trinity.tools.bcc_factories import (
     ReceiveServerFactory,
 )
 
+from .helpers import wait_until_true
+
 
 class FakeChain(_TestnetChain):
     chaindb_class = AsyncBeaconChainDB
@@ -115,16 +117,6 @@ async def receive_server_with_mock_process_orphan_blocks_period(
 
 async def wait_all_messages_processed(queue):
     await asyncio.wait_for(queue.join(), timeout=1)
-
-
-async def wait_full_iteration(event):
-    """
-    We might start from the middle of the function.
-    Wait twice to ensure a full function body is run
-    """
-    for _ in range(2):
-        event.clear()
-        await asyncio.wait_for(event.wait(), timeout=1)
 
 
 def test_attestation_pool():
@@ -390,14 +382,15 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
         for orphan_block in (blocks[4],) + fork_blocks:
             receive_server.orphan_block_pool.add(orphan_block)
         # Wait for receive server to process the orphan blocks
-        await wait_full_iteration(receive_server.process_orphan_blocks_done)
+        await wait_until_true(
+            lambda: len(receive_server.orphan_block_pool) == 0, timeout=2
+        )
         # Check that both peers were requested for blocks
         assert peer_1_called_event.is_set()
         assert peer_2_called_event.is_set()
         # Check that all blocks are processed and no more orphan blocks
         for block in blocks + fork_blocks:
             assert receive_server._is_block_root_in_db(block.signing_root)
-        assert len(receive_server.orphan_block_pool) == 0
 
 
 @pytest.mark.asyncio

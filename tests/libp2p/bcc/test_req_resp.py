@@ -1,5 +1,3 @@
-import asyncio
-
 from eth.constants import ZERO_HASH32
 from eth.exceptions import BlockNotFound
 from eth.validation import validate_word
@@ -14,14 +12,7 @@ from trinity.protocol.bcc_libp2p.node import REQ_RESP_HELLO_SSZ
 from trinity.protocol.bcc_libp2p.utils import read_req, write_resp
 from trinity.tools.bcc_factories import ConnectionPairFactory, NodeFactory
 
-
-async def wait_until_true(predicate, timeout=1.0, retry=5):
-    for _ in range(retry):
-        if predicate():
-            return True
-        else:
-            await asyncio.sleep(timeout / retry)
-    raise asyncio.TimeoutError(f"Predicate has been False for {timeout} seconds")
+from .helpers import wait_until_true
 
 
 @pytest.mark.asyncio
