@@ -12,6 +12,7 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    Optional,
 )
 
 from async_generator import (
@@ -76,6 +77,7 @@ from trinity._utils.humanize import (
     humanize_integer_sequence,
 )
 
+from .types import SyncProgress
 
 class SkeletonSyncer(BaseService, Generic[TChainPeer]):
     # header skip: long enough that the pairs leave a gap of 192, the max header request length
@@ -98,11 +100,16 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
             launch_strategy = FromGenesisLaunchStrategy(db, chain)
 
         self._launch_strategy = launch_strategy
+        self._sync_progress: SyncProgress = None
         self.peer = peer
         max_pending_headers = peer.max_headers_fetch * 8
         self._fetched_headers = asyncio.Queue(max_pending_headers)
 
     async def next_skeleton_segment(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+        head = await self.wait(self.db.coro_get_canonical_head())
+        self._sync_progress = SyncProgress(head.block_number, head.block_number, peer.head_number)
+        self.logger.info("Starting sync with %s", self.peer)
+
         while self.is_operational or self._fetched_headers.qsize() > 0:
             if self._fetched_headers.qsize() == 0:
                 try:
@@ -232,6 +239,10 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
             ))
             await self.wait(self._fetched_headers.put(final_headers))
             previous_tail_header = final_headers[-1]
+
+            self._sync_progress = self._sync_progress.update_current_block(
+                previous_tail_header.block_number,
+            )
 
     async def _find_newest_matching_skeleton_header(self, peer: TChainPeer) -> BlockHeader:
         start_num = await self.wait(self._launch_strategy.get_starting_block_number())
@@ -495,6 +506,11 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
             block_num,
             local_header,
         )
+
+    def get_sync_status(self) -> Tuple[bool, Optional[SyncProgress]]:
+        if not self._sync_progress:
+            return False, None
+        return True, self._sync_progress
 
 
 class HeaderSyncerAPI(ABC):
@@ -874,6 +890,8 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
     async def _run(self) -> None:
         self.run_daemon(self._tip_monitor)
         self.run_daemon(self._meat)
+        if self._peer_pool.event_bus is not None:
+            self.run_daemon_task(self.handle_sync_status_requests())
         await self.wait(self._build_skeleton())
 
     async def _build_skeleton(self) -> None:
@@ -989,3 +1007,9 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
                 "%s announced Head TD %d, which is higher than ours (%d), starting sync",
                 peer, peer.head_info.head_td, head_td)
             pass
+    
+    async def handle_sync_status_requests(self) -> None:
+        async for req in self._peer_pool.event_bus.stream(SyncingRequest):
+            self._peer_pool.event_bus.broadcast(SyncingResponse(*self._skeleton.get_sync_status()),
+                                               req.broadcast_config())
+
