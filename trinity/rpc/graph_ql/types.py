@@ -33,7 +33,7 @@ from trinity._utils.validation import (
     validate_transaction_call_dict
 )
 from trinity.rpc.format import merge_transaction_defaults, to_int_if_hex
-from trinity.rpc.modules.eth import (
+from trinity.rpc.utils import (
     state_at_block,
     get_header,
     dict_to_spoof_transaction,

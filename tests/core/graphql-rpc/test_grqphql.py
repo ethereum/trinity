@@ -13,7 +13,7 @@ from eth_utils.toolz import (
     assoc,
 )
 
-from trinity.graph_ql.server import (
+from trinity.rpc.graph_ql.server import (
     GraphQlServer,
 )
 

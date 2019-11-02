@@ -22,7 +22,7 @@ from eth.tools.fixtures import (
 from trinity.rpc.format import (
     format_params,
 )
-from trinity.rpc.modules import (
+from trinity.rpc.json_rpc.modules import (
     ChainReplacementEvent,
     Eth1ChainRPCModule,
 )

@@ -30,7 +30,7 @@ from trinity.extensibility import (
 from trinity.rpc.main import (
     RPCServer,
 )
-from trinity.rpc.modules import (
+from trinity.rpc.json_rpc.modules import (
     BaseRPCModule,
     initialize_beacon_modules,
     initialize_eth1_modules,

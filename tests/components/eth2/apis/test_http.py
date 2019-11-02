@@ -17,7 +17,7 @@ from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient, DBManager
 from trinity.rpc.http import handler
 from trinity.rpc.main import RPCServer
-from trinity.rpc.modules import (
+from trinity.rpc.json_rpc.modules import (
     initialize_beacon_modules,
 )
 

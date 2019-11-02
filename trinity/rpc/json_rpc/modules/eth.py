@@ -5,7 +5,6 @@ from eth_utils.toolz import (
 )
 from typing import (
     Any,
-    cast,
     Dict,
     List,
     Union,
@@ -27,24 +26,9 @@ from eth_utils import (
     to_wei,
 )
 
-from eth.abc import (
-    SignedTransactionAPI,
-    StateAPI,
-)
 from eth.constants import (
     ZERO_ADDRESS,
 )
-from eth.rlp.blocks import (
-    BaseBlock,
-)
-from eth.rlp.headers import (
-    BlockHeader,
-)
-from eth.vm.spoof import (
-    SpoofTransaction,
-)
-
-from trinity.chains.base import AsyncChainAPI
 from trinity.constants import (
     TO_NETWORKING_BROADCAST_CONFIG,
 )
@@ -52,11 +36,16 @@ from trinity.rpc.format import (
     block_to_dict,
     header_to_dict,
     format_params,
-    normalize_transaction_dict,
     to_int_if_hex,
     transaction_to_dict,
 )
-from trinity.rpc.modules import (
+from trinity.rpc.utils import (
+    get_header,
+    get_block_at_number,
+    state_at_block,
+    dict_to_spoof_transaction,
+)
+from trinity.rpc.json_rpc.modules import (
     Eth1ChainRPCModule,
 )
 from trinity.rpc.retry import retryable
@@ -67,62 +56,6 @@ from trinity._utils.validation import (
     validate_transaction_call_dict,
     validate_transaction_gas_estimation_dict,
 )
-
-from ._util import get_header
-
-
-async def state_at_block(
-        chain: AsyncChainAPI,
-        at_block: Union[str, int],
-        read_only: bool=True) -> StateAPI:
-    at_header = await get_header(chain, at_block)
-    vm = chain.get_vm(at_header)
-    return vm.state
-
-
-async def get_block_at_number(chain: AsyncChainAPI, at_block: Union[str, int]) -> BaseBlock:
-    # mypy doesn't have user defined type guards yet
-    # https://github.com/python/mypy/issues/5206
-    if is_integer(at_block) and at_block >= 0:  # type: ignore
-        # optimization to avoid requesting block, then header, then block again
-        return await chain.coro_get_canonical_block_by_number(cast(BlockNumber, at_block))
-    else:
-        at_header = await get_header(chain, at_block)
-        return await chain.coro_get_block_by_header(at_header)
-
-
-# TODO: move this method to utils
-# and find a better name for normalize_transaction
-def dict_to_spoof_transaction(
-        chain: AsyncChainAPI,
-        header: BlockHeader,
-        transaction_dict: Dict[str, Any],
-        normalize_transaction=normalize_transaction_dict
-) -> SignedTransactionAPI:
-    """
-    Convert dicts used in calls & gas estimates into a spoof transaction
-    """
-    txn_dict = normalize_transaction(transaction_dict)
-    sender = txn_dict.get('from', ZERO_ADDRESS)
-
-    if 'nonce' in txn_dict:
-        nonce = txn_dict['nonce']
-    else:
-        vm = chain.get_vm(header)
-        nonce = vm.state.get_nonce(sender)
-
-    gas_price = txn_dict.get('gasPrice', 0)
-    gas = txn_dict.get('gas', header.gas_limit)
-
-    unsigned = chain.get_vm_class(header).create_unsigned_transaction(
-        nonce=nonce,
-        gas_price=gas_price,
-        gas=gas,
-        to=txn_dict['to'],
-        value=txn_dict['value'],
-        data=txn_dict['data'],
-    )
-    return cast(SignedTransactionAPI, SpoofTransaction(unsigned, from_=sender))
 
 
 class Eth(Eth1ChainRPCModule):

@@ -21,7 +21,7 @@ from trinity._utils.shutdown import (
     exit_with_services,
 )
 
-from trinity.graph_ql.server import GraphQlServer
+from trinity.rpc.graph_ql.server import GraphQlServer
 
 
 class GraphQLRpcServerPlugin(AsyncioIsolatedPlugin):

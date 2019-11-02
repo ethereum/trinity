@@ -47,7 +47,7 @@ from trinity.rpc.format import (
     empty_to_0x,
     remove_leading_zeros,
 )
-from trinity.rpc.modules import (
+from trinity.rpc.json_rpc.modules import (
     initialize_eth1_modules,
 )
 

@@ -49,7 +49,7 @@ from trinity.initialization import (
 from trinity.rpc.main import (
     RPCServer,
 )
-from trinity.rpc.modules import (
+from trinity.rpc.json_rpc.modules import (
     initialize_eth1_modules,
 )
 from trinity.rpc.ipc import (

@@ -26,8 +26,7 @@ from trinity.sync.common.events import (
     CollectMissingBytecode,
     CollectMissingStorage,
 )
-
-from trinity.rpc.modules._util import get_header
+from trinity.rpc.utils import get_header
 
 
 Func = Callable[..., Any]

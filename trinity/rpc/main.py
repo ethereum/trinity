@@ -16,7 +16,7 @@ from eth_utils import (
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
-from trinity.rpc.modules import (
+from trinity.rpc.json_rpc.modules import (
     BaseRPCModule,
 )
 from trinity.rpc.retry import (

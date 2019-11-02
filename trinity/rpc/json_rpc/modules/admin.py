@@ -5,7 +5,7 @@ from p2p.validation import validate_enode_uri
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.common.events import ConnectToNodeCommand
-from trinity.rpc.modules import BaseRPCModule
+from trinity.rpc.json_rpc.modules import BaseRPCModule
 
 
 class Admin(BaseRPCModule):

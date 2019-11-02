@@ -14,7 +14,7 @@ from trinity.rpc.format import (
     format_params,
     to_int_if_hex,
 )
-from trinity.rpc.modules import BeaconChainRPCModule
+from trinity.rpc.json_rpc.modules import BeaconChainRPCModule
 
 
 class Beacon(BeaconChainRPCModule):

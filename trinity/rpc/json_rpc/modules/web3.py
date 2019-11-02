@@ -3,7 +3,7 @@ from eth_utils import decode_hex, encode_hex
 
 from trinity._utils.version import construct_trinity_client_identifier
 
-from trinity.rpc.modules import (
+from trinity.rpc.json_rpc.modules import (
     BaseRPCModule
 )
 
