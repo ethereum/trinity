@@ -301,7 +301,9 @@ def chain_without_block_validation(
 @pytest.fixture()
 def rpc(chain_with_block_validation, event_bus):
     return RPCServer(
-        initialize_eth1_modules(chain_with_block_validation, event_bus), event_bus,
+        initialize_eth1_modules(chain_with_block_validation, event_bus),
+        chain_with_block_validation,
+        event_bus,
     )
 
 
