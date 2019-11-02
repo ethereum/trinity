@@ -9,7 +9,6 @@ from typing import (
     FrozenSet,
     Generic,
     Iterable,
-    Optional,
     Sequence,
     Tuple,
     Type,
@@ -81,8 +80,6 @@ from trinity._utils.headers import (
 from trinity._utils.humanize import (
     humanize_integer_sequence,
 )
-
-from .types import SyncProgress
 
 
 class SkeletonSyncer(BaseService, Generic[TChainPeer]):
