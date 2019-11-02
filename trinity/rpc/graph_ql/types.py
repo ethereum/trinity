@@ -14,7 +14,7 @@ from eth_utils import (
 )
 
 from graphql.language.ast import (
-   StringValue,
+    StringValue,
 )
 from graphene import (
     Argument,

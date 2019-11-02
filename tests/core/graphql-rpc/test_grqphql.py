@@ -146,13 +146,13 @@ def genesis_state(base_genesis_state):
 @pytest.mark.parametrize(
     'request_msg, expected',
     (
-            pytest.param(
-                build_request("{ block {number} }"),
-                {'result': {'block': {'number': '0x0'}}, 'errors': None},
-                id='eth_blockNumber'
-            ),
-            pytest.param(
-                build_request("""
+        pytest.param(
+            build_request("{ block {number} }"),
+            {'result': {'block': {'number': '0x0'}}, 'errors': None},
+            id='eth_blockNumber'
+        ),
+        pytest.param(
+            build_request("""
             {
                 estimateGas(
                     data: { to: "0x0000000000000000000000000000000000000000"},
@@ -160,16 +160,16 @@ def genesis_state(base_genesis_state):
                 )
             }
             """),
-                {'errors': None, 'result': {'estimateGas': 21000}},
-                id='eth_estimateGas'
-            ),
-            pytest.param(
-                build_request("{gasPrice}"),
-                {'errors': None, 'result': {'gasPrice': 1000000000}},
-                id='eth_gasPrice'
-            ),
-            pytest.param(
-                build_request("""
+            {'errors': None, 'result': {'estimateGas': 21000}},
+            id='eth_estimateGas'
+        ),
+        pytest.param(
+            build_request("{gasPrice}"),
+            {'errors': None, 'result': {'gasPrice': 1000000000}},
+            id='eth_gasPrice'
+        ),
+        pytest.param(
+            build_request("""
                 {
                     account(
                         address: "0x0000000000000000000000000000000000000000",
@@ -179,11 +179,11 @@ def genesis_state(base_genesis_state):
                     }
                 }
             """),
-                {'errors': None, 'result': {'account': {'balance': 0}}},
-                id='eth_getBalance'
-            ),
-            pytest.param(
-                build_request("""{
+            {'errors': None, 'result': {'account': {'balance': 0}}},
+            id='eth_getBalance'
+        ),
+        pytest.param(
+            build_request("""{
                 call(data: {
                         to: "0x0000000000000000000000000000000000000004",
                         data: "0x123456"
@@ -193,67 +193,67 @@ def genesis_state(base_genesis_state):
                     gasUsed, 
                     status
                 }
-            }"""),
-                {'errors': None, 'result': {'call': {'data': '0x123456', 'gasUsed': 18, 'status': 1}}}
-            ),
-            pytest.param(
-                build_request("""{
+            }"""),  # noqa: W291
+            {'errors': None, 'result': {'call': {'data': '0x123456', 'gasUsed': 18, 'status': 1}}}
+        ),
+        pytest.param(
+            build_request("""{
                 block(hash: "0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3"){
                      hash,
                      number
                 }
             }"""),
-                {
-                    'errors': None,
-                    'result': {
-                        'block':
-                            {
-                                'hash': '0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3',
-                                'number': '0x0'
-                            }
-                    }
-                },
-                id='eth_getBlockByHash'
-            ),
-            pytest.param(
-                build_request("""{
+            {
+                'errors': None,
+                'result': {
+                    'block':
+                        {
+                            'hash': '0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3',  # noqa E501
+                            'number': '0x0'
+                        }
+                }
+            },
+            id='eth_getBlockByHash'
+        ),
+        pytest.param(
+            build_request("""{
                 block(number: 0){
-                    hash, 
+                    hash,
                     number
                 }
             }"""),
-                {
-                    'errors': None,
-                    'result': {
-                        'block':
-                            {
-                                'hash': '0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3',
-                                'number': '0x0'
-                            }
-                    }
-                },
-                id='eth_getBlockByNumber'
-            ),
-            pytest.param(
-                build_request("""{
+            {
+                'errors': None,
+                'result': {
+                    'block':
+                        {
+                            'hash': '0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3',  # noqa: E501
+                            'number': '0x0'
+                        }
+                }
+            },
+            id='eth_getBlockByNumber'
+        ),
+        pytest.param(
+            build_request("""{
                 block(hash: "0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3"){
                     transactionCount
                 }
             }"""),
-                {'errors': None, 'result': {'block': {'transactionCount': '0x0'}}},
-                id='eth_getBlockTransactionCountByHash'
-            ),
-            pytest.param(
-                build_request("""{
+            {'errors': None, 'result': {'block': {'transactionCount': '0x0'}}},
+            id='eth_getBlockTransactionCountByHash'
+        ),
+        pytest.param(
+            build_request("""{
                 block(number: 0){
                     transactionCount
                 }
             }"""),
-                {'errors': None, 'result': {'block': {'transactionCount': '0x0'}}},
-                id='eth_getBlockTransactionCountByNumber'
-            ),
-            pytest.param(
-                build_request("""
+            {'errors': None, 'result': {'block': {'transactionCount': '0x0'}}},
+            id='eth_getBlockTransactionCountByNumber'
+        ),
+        pytest.param(
+            build_request("""
                 {
                     account(
                         address: "%s",
@@ -263,11 +263,11 @@ def genesis_state(base_genesis_state):
                     }
                 }
             """ % encode_hex(SIMPLE_CONTRACT_ADDRESS)),
-                {'errors': None, 'result': {'account': {'code': encode_hex(SIMPLE_CONTRACT_CODE)}}},
-                id='eth_getCode'
-            ),
-            pytest.param(
-                build_request("""
+            {'errors': None, 'result': {'account': {'code': encode_hex(SIMPLE_CONTRACT_CODE)}}},
+            id='eth_getCode'
+        ),
+        pytest.param(
+            build_request("""
                 {
                     account(
                         address: "%s",
@@ -277,9 +277,9 @@ def genesis_state(base_genesis_state):
                     }
                 }
             """ % encode_hex(SIMPLE_CONTRACT_ADDRESS)),
-                {'errors': None, 'result': {'account': {'storage': '0x01'}}},
-                id='eth_getStorageAt'
-            ),
+            {'errors': None, 'result': {'account': {'storage': '0x01'}}},
+            id='eth_getStorageAt'
+        ),
 
     ),
 )
@@ -301,9 +301,9 @@ async def test_rpc_methods(
     (
         pytest.param(
             build_request("""
-            { 
-                block(hash: "0x9b3d1befbac9f406ac2853a37dedb026b48785f34950ae63360876f86062c5fb") { 
-                    transactionAt(index: 0) { 
+            {
+                block(hash: "0x9b3d1befbac9f406ac2853a37dedb026b48785f34950ae63360876f86062c5fb") {
+                    transactionAt(index: 0) {
                         from {
                             address
                         },
@@ -311,8 +311,8 @@ async def test_rpc_methods(
                             address
                         },
                         value
-                    } 
-                } 
+                    }
+                }
             }
             """),
             {
@@ -335,9 +335,9 @@ async def test_rpc_methods(
         ),
         pytest.param(
             build_request("""
-            { 
-                block(number: 1) { 
-                    transactionAt(index: 0) { 
+            {
+                block(number: 1) {
+                    transactionAt(index: 0) {
                         from {
                             address
                         },
@@ -345,8 +345,8 @@ async def test_rpc_methods(
                             address
                         },
                         value
-                    } 
-                } 
+                    }
+                }
             }
             """),
             {
@@ -369,8 +369,8 @@ async def test_rpc_methods(
         ),
         pytest.param(
             build_request("""
-            { 
-                transaction(hash: "0x747acd83b82d5fc65743568331c1f1dc0d540a59576838d7ac9adb893c84cc94") { 
+            {
+                transaction(hash: "0x747acd83b82d5fc65743568331c1f1dc0d540a59576838d7ac9adb893c84cc94") {
                     from {
                         address
                     },
@@ -378,9 +378,9 @@ async def test_rpc_methods(
                         address
                     },
                     value
-                } 
+                }
             }
-            """),
+            """),  # noqa: E501
             {
                 'errors': None,
                 'result': {
@@ -399,10 +399,10 @@ async def test_rpc_methods(
         ),
         pytest.param(
             build_request("""
-            { 
-                account(address: "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b") { 
-                    transactionCount 
-                } 
+            {
+                account(address: "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b") {
+                    transactionCount
+                }
             }
             """),
             {
@@ -417,18 +417,18 @@ async def test_rpc_methods(
         ),
         pytest.param(
             build_request("""
-            { 
-                transaction(hash: "0x747acd83b82d5fc65743568331c1f1dc0d540a59576838d7ac9adb893c84cc94") {
-                    from {
-                        address
-                    },
-                    to {
-                        address
-                    },
-                    value
-                } 
-            }
-            """),
+                {
+                    transaction(hash: "0x747acd83b82d5fc65743568331c1f1dc0d540a59576838d7ac9adb893c84cc94") {
+                        from {
+                            address
+                        },
+                        to {
+                            address
+                        },
+                        value
+                    }
+                }
+            """),  # noqa: E501
             {
                 'errors': None,
                 'result': {
