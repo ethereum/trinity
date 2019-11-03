@@ -99,7 +99,7 @@ class Account(ObjectType):
     address = Address()
     balance = Int()
     code = Bytes()
-    storage = Bytes32(slot=Int(required=True))
+    storage = Bytes32(slot=Bytes(required=True))
     transactionCount = String()
 
     @staticmethod
@@ -121,11 +121,11 @@ class Account(ObjectType):
         return state.get_code(address)
 
     @staticmethod
-    async def resolve_storage(address: TAddress, info: ResolveInfo, slot: int) -> int:
+    async def resolve_storage(address: TAddress, info: ResolveInfo, slot: HexStr) -> int:
         at_block = info.context.get('at_block', 'latest')
         chain = info.context.get('chain')
         state = await state_at_block(chain, at_block)
-        position = to_int_if_hex(slot)
+        position = to_int_if_hex(encode_hex(slot))
         return int_to_big_endian(state.get_storage(address, position))  # type: ignore
 
     @staticmethod
