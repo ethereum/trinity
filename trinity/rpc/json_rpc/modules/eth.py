@@ -48,7 +48,7 @@ from trinity.rpc.utils import (
 from trinity.rpc.json_rpc.modules import (
     Eth1ChainRPCModule,
 )
-from trinity.rpc.retry import retryable
+from trinity.rpc.json_rpc.retry import retryable
 from trinity.sync.common.events import (
     SyncingRequest,
 )

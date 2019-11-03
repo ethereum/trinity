@@ -18,10 +18,8 @@ from cancel_token import (
 from p2p.service import (
     BaseService,
 )
+from trinity.rpc.abc import BaseRPCServer
 
-from trinity.rpc.main import (
-    RPCServer,
-)
 
 MAXIMUM_REQUEST_BYTES = 10000
 
@@ -132,7 +130,7 @@ class IPCServer(BaseService):
 
     def __init__(
             self,
-            rpc: RPCServer,
+            rpc: BaseRPCServer,
             ipc_path: pathlib.Path,
             token: CancelToken = None,
             loop: asyncio.AbstractEventLoop = None) -> None:

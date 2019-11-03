@@ -26,8 +26,8 @@ from trinity.db.manager import DBClient
 from trinity.extensibility import (
     AsyncioIsolatedComponent,
 )
-from trinity.rpc.main import (
-    RPCServer,
+from trinity.rpc.json_rpc.server import (
+    JsonRPCServer,
 )
 from trinity.rpc.json_rpc.modules import (
     initialize_beacon_modules,
@@ -121,7 +121,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
         else:
             raise Exception("Unsupported Node Type")
 
-        rpc = RPCServer(modules, chain, self.event_bus)
+        rpc = JsonRPCServer(modules, chain, self.event_bus)
 
         # Run IPC Server
         ipc_server = IPCServer(rpc, self.boot_info.trinity_config.jsonrpc_ipc_path)

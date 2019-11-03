@@ -16,10 +16,11 @@ from eth_utils import (
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
+from trinity.rpc.abc import BaseRPCServer
 from trinity.rpc.json_rpc.modules import (
     BaseRPCModule,
 )
-from trinity.rpc.retry import (
+from trinity.rpc.json_rpc.retry import (
     execute_with_retries,
 )
 
@@ -53,14 +54,14 @@ def generate_response(request: Dict[str, Any], result: Any, error: Union[Excepti
     return json.dumps(response)
 
 
-class RPCServer:
+class JsonRPCServer(BaseRPCServer):
     """
     This "server" accepts json strings requests and returns the appropriate json string response,
     meeting the protocol for JSON-RPC defined here: https://github.com/ethereum/wiki/wiki/JSON-RPC
 
-    The key entry point for all requests is :meth:`RPCServer.execute`, which
+    The key entry point for all requests is :meth:`JsonRPCServer.execute`, which
     then proxies to the appropriate method. For example, see
-    :meth:`RPCServer.eth_getBlockByHash`.
+    :meth:`JsonRPCServer.eth_getBlockByHash`.
     """
     chain = None
 

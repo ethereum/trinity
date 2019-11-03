@@ -1,6 +1,7 @@
 from typing import (
     Any,
     cast,
+    Callable,
     Dict,
 )
 
@@ -85,7 +86,9 @@ def dict_to_spoof_transaction(
         chain: AsyncChainAPI,
         header: BlockHeader,
         transaction_dict: Dict[str, Any],
-        normalize_transaction=normalize_transaction_dict
+        normalize_transaction: Callable[
+            [Dict[str, str]], Dict[str, Any]
+        ]=normalize_transaction_dict
 ) -> SignedTransactionAPI:
     """
     Convert dicts used in calls & gas estimates into a spoof transaction

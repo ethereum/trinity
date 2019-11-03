@@ -16,8 +16,8 @@ from p2p.service import (
     BaseService,
 )
 
-from trinity.rpc.main import (
-    RPCServer,
+from trinity.rpc.abc import (
+    BaseRPCServer,
 )
 
 
@@ -62,7 +62,7 @@ class HTTPServer(BaseService):
 
     def __init__(
             self,
-            rpc: RPCServer,
+            rpc: BaseRPCServer,
             host: str = '127.0.0.1',
             port: int = 8545,
             token: CancelToken = None,

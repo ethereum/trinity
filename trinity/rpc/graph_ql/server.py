@@ -1,29 +1,36 @@
 import json
 import logging
 from asyncio.unix_events import _UnixSelectorEventLoop
-from typing import Optional
+from typing import (
+    AnyStr,
+    List,
+    Dict,
+    Optional,
+)
 
+from graphql import GraphQLError
 from graphql.execution.executors.asyncio import AsyncioExecutor
 
 from eth.chains.base import Chain
 
+from trinity.rpc.abc import BaseRPCServer
 from .types import schema
 
 
-def extract_errors(errors):
+def extract_errors(errors: GraphQLError) -> Optional[List[str]]:
     if errors is None:
         return None
     return[error.message for error in errors]
 
 
-class GraphQlServer:
+class GraphQlServer(BaseRPCServer):
     logger = logging.getLogger("GraphQlServer")
 
     def __init__(self, chain: Chain, loop: Optional[_UnixSelectorEventLoop]=None):
         self.chain = chain
         self.executor = AsyncioExecutor(loop=loop)
 
-    async def execute(self, query: dict) -> str:
+    async def execute(self, query: Dict[str, AnyStr]) -> str:
         result = await schema.execute(
             query['query'],
             executor=self.executor,

@@ -46,8 +46,8 @@ from trinity.initialization import (
     ensure_eth1_dirs,
     initialize_data_dir,
 )
-from trinity.rpc.main import (
-    RPCServer,
+from trinity.rpc.json_rpc.server import (
+    JsonRPCServer,
 )
 from trinity.rpc.json_rpc.modules import (
     initialize_eth1_modules,
@@ -300,7 +300,7 @@ def chain_without_block_validation(
 
 @pytest.fixture()
 def rpc(chain_with_block_validation, event_bus):
-    return RPCServer(
+    return JsonRPCServer(
         initialize_eth1_modules(chain_with_block_validation, event_bus),
         chain_with_block_validation,
         event_bus,

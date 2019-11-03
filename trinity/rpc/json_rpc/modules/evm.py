@@ -34,7 +34,7 @@ class EVM(Eth1ChainRPCModule):
     async def resetToGenesisFixture(self, chain_info: Any) -> ChainAPI:
         """
         This method is a special case. It returns a new chain object
-        which is then replaced inside :class:`~trinity.rpc.main.RPCServer`
+        which is then replaced inside :class:`~trinity.rpc.json_rpc.server.JsonRPCServer`
         for all future calls.
         """
         chain = new_chain_from_fixture(chain_info, type(self.chain))
@@ -50,7 +50,7 @@ class EVM(Eth1ChainRPCModule):
     async def applyBlockFixture(self, block_info: Any) -> str:
         """
         This method is a special case. It returns a new chain object
-        which is then replaced inside :class:`~trinity.rpc.main.RPCServer`
+        which is then replaced inside :class:`~trinity.rpc.json_rpc.server.JsonRPCServer`
         for all future calls.
         """
         _, _, rlp_encoded = apply_fixture_block_to_chain(block_info, self.chain)

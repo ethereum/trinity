@@ -42,7 +42,7 @@ from eth.tools.fixtures import (
 from trinity.chains.full import (
     FullChain,
 )
-from trinity.rpc import RPCServer
+from trinity.rpc.json_rpc.server import JsonRPCServer
 from trinity.rpc.format import (
     empty_to_0x,
     remove_leading_zeros,
@@ -450,7 +450,7 @@ class MainnetFullChain(FullChain):
 @pytest.mark.asyncio
 async def test_rpc_against_fixtures(event_bus, chain_fixture, fixture_data):
     chain = MainnetFullChain(None)
-    rpc = RPCServer(initialize_eth1_modules(chain, event_bus), chain, event_bus)
+    rpc = JsonRPCServer(initialize_eth1_modules(chain, event_bus), chain, event_bus)
 
     setup_result, setup_error = await call_rpc(rpc, 'evm_resetToGenesisFixture', [chain_fixture])
     # We need to advance the event loop for modules to be able to pickup the new chain
