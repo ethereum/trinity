@@ -26,6 +26,7 @@ from trinity.components.builtin.ethstats.component import (
 from trinity.components.builtin.fix_unclean_shutdown.component import (
     FixUncleanShutdownComponent
 )
+from trinity.components.builtin.graphql_rpc.plugin import GraphQLRpcServerPlugin
 from trinity.components.builtin.json_rpc.component import (
     JsonRpcServerComponent,
 )
@@ -55,6 +56,7 @@ BASE_COMPONENTS: Tuple[Type[BaseComponent], ...] = (
     AttachComponent,
     DbShellComponent,
     FixUncleanShutdownComponent,
+    GraphQLRpcServerPlugin,
     JsonRpcServerComponent,
     NetworkDBComponent,
     PeerDiscoveryComponent,

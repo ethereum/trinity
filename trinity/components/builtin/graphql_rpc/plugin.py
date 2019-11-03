@@ -12,7 +12,7 @@ from trinity.config import (
 
 from trinity.db.manager import DBClient
 from trinity.extensibility import (
-    AsyncioIsolatedPlugin,
+    AsyncioIsolatedComponent,
 )
 from trinity.rpc.ipc import (
     IPCServer,
@@ -24,7 +24,7 @@ from trinity._utils.shutdown import (
 from trinity.rpc.graph_ql.server import GraphQlServer
 
 
-class GraphQLRpcServerPlugin(AsyncioIsolatedPlugin):
+class GraphQLRpcServerPlugin(AsyncioIsolatedComponent):
 
     @property
     def name(self) -> str:
@@ -44,9 +44,6 @@ class GraphQLRpcServerPlugin(AsyncioIsolatedPlugin):
 
     def do_start(self) -> None:
         trinity_config = self.boot_info.trinity_config
-
-        # db_manager = create_db_consumer_manager(trinity_config.database_ipc_path)
-
         eth1_app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = eth1_app_config.get_chain_config()
 

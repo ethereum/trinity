@@ -24,7 +24,6 @@ class GraphQlServer:
         self.executor = AsyncioExecutor(loop=loop)
 
     async def execute(self, query: dict) -> str:
-        # self.logger.info(f'got query {query["query"]}')
         result = await schema.execute(
             query['query'],
             executor=self.executor,

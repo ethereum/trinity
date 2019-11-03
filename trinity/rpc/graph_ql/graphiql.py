@@ -86,7 +86,7 @@ def home():
 
 @app.route('/graphql', methods=['POST'])
 def graphql():
-    cl = IPCClient('/Users/voith/.local/share/trinity/ropsten/ipcs-eth1/graphql.ipc')
+    cl = IPCClient('/Users/voith/.local/share/trinity/mainnet/ipcs-eth1/graphql.ipc')
     query = request.get_json(force=True)['query']
     return cl.make_request('', query)
 

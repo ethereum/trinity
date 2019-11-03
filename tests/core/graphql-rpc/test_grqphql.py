@@ -465,7 +465,3 @@ async def test_rpc_transaction_methods(
     )
     result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
     assert result == expected
-
-
-# eth_getUncleByBlockHashAndIndex	IMPLEMENTED	{ block(hash: "0x...") { ommerAt(index: x) { ... } } }
-# eth_getUncleByBlockNumberAndIndex	IMPLEMENTED	{ block(number: n) { ommerAt(index: x) { ... } } }
