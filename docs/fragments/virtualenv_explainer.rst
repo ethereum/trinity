@@ -1,6 +1,6 @@
 **Optional:** Often, the best way to guarantee a clean Python 3 environment is with
-`virtualenv <https://virtualenv.pypa.io/en/stable/>`_. If we don't have ``virtualenv`` installed
-already, we first need to install it via pip.
+`virtualenv <https://virtualenv.pypa.io/en/stable/>`_. If ``virtualenv`` isn't installed
+yet, we first need to install it via ``pip``.
 
 .. code:: sh
 
@@ -20,3 +20,6 @@ To activate the virtual directory we have to *source* it
 .. code:: sh
 
   . venv/bin/activate
+
+**Protip:** Consider using `pipx <https://pipxproject.github.io/pipx/>`_ instead. It's like ``pip`` but
+handles virtual environments behind the scenes so we don't have to deal with them directly anymore.

@@ -1,0 +1,2 @@
+Mention `pipx <https://pipxproject.github.io/pipx/>`_ in the docs as an alternative to manually dealing
+with virtual environments.
