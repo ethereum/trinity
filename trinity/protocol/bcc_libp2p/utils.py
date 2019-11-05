@@ -81,7 +81,7 @@ from .exceptions import (
 )
 from .messages import (
     BeaconBlocksRequest,
-    HelloRequest,
+    Status,
     RecentBeaconBlocksRequest,
 )
 
@@ -108,55 +108,67 @@ def make_rpc_v1_ssz_protocol_id(message_name: str) -> str:
     return make_rpc_protocol_id(message_name, REQ_RESP_VERSION, REQ_RESP_ENCODE_POSTFIX)
 
 
-async def validate_hello(chain: BaseBeaconChain, hello_other_side: HelloRequest) -> None:
+def get_my_status(chain: BaseBeaconChain) -> Status:
+    state = chain.get_head_state()
+    head = chain.get_canonical_head()
+    finalized_checkpoint = state.finalized_checkpoint
+    return Status(
+        head_fork_version=state.fork.current_version,
+        finalized_root=finalized_checkpoint.root,
+        finalized_epoch=finalized_checkpoint.epoch,
+        head_root=head.hash_tree_root,
+        head_slot=head.slot,
+    )
+
+
+async def validate_peer_status(chain: BaseBeaconChain, peer_status: Status) -> None:
     state_machine = chain.get_state_machine()
     state = chain.get_head_state()
     config = state_machine.config
-    if hello_other_side.fork_version != state.fork.current_version:
+    if peer_status.head_fork_version != state.fork.current_version:
         raise IrrelevantNetwork(
             "`fork_version` mismatches: "
-            f"hello_other_side.fork_version={hello_other_side.fork_version}, "
+            f"peer_status.head_fork_version={peer_status.head_fork_version}, "
             f"state.fork.current_version={state.fork.current_version}"
         )
 
     # Can not validate the checkpoint with `finalized_epoch` higher than ours
-    if hello_other_side.finalized_epoch > state.finalized_checkpoint.epoch:
+    if peer_status.finalized_epoch > state.finalized_checkpoint.epoch:
         return
 
-    # Get the finalized root at `hello_other_side.finalized_epoch`
     # Edge case where nothing is finalized yet
     if (
-        hello_other_side.finalized_epoch == 0 and
-        hello_other_side.finalized_root == ZERO_SIGNING_ROOT
+        peer_status.finalized_epoch == 0 and
+        peer_status.finalized_root == ZERO_SIGNING_ROOT
     ):
         return
 
     finalized_epoch_start_slot = compute_start_slot_of_epoch(
-        hello_other_side.finalized_epoch,
+        peer_status.finalized_epoch,
         config.SLOTS_PER_EPOCH,
     )
     finalized_root = chain.get_canonical_block_root(
         finalized_epoch_start_slot)
 
-    if hello_other_side.finalized_root != finalized_root:
+    if peer_status.finalized_root != finalized_root:
         raise IrrelevantNetwork(
             "`finalized_root` mismatches: "
-            f"hello_other_side.finalized_root={hello_other_side.finalized_root}, "
-            f"hello_other_side.finalized_epoch={hello_other_side.finalized_epoch}, "
+            f"peer_status.finalized_root={peer_status.finalized_root}, "
+            f"peer_status.finalized_epoch={peer_status.finalized_epoch}, "
             f"our `finalized_root` at the same `finalized_epoch`={finalized_root}"
         )
 
 
 def compare_chain_tip_and_finalized_epoch(
     chain: BaseBeaconChain,
-    hello_other_side: HelloRequest,
+    peer_status: Status,
 )-> None:
     checkpoint = chain.get_head_state().finalized_checkpoint
     head_block = chain.get_canonical_head()
 
-    peer_has_higher_finalized_epoch = hello_other_side.finalized_epoch > checkpoint.epoch
-    peer_has_equal_finalized_epoch = hello_other_side.finalized_epoch == checkpoint.epoch
-    peer_has_higher_head_slot = hello_other_side.head_slot > head_block.slot
+    peer_has_higher_finalized_epoch = peer_status.finalized_epoch > checkpoint.epoch
+    peer_has_equal_finalized_epoch = peer_status.finalized_epoch == checkpoint.epoch
+    peer_has_higher_head_slot = peer_status.head_slot > head_block.slot
     if (
         peer_has_higher_finalized_epoch or
         (peer_has_equal_finalized_epoch and peer_has_higher_head_slot)

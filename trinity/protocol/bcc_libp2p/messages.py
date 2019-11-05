@@ -22,9 +22,9 @@ from eth2.beacon.constants import ZERO_SIGNING_ROOT
 from .configs import GoodbyeReasonCode
 
 
-class HelloRequest(ssz.Serializable):
+class Status(ssz.Serializable):
     fields = [
-        ('fork_version', bytes4),
+        ('head_fork_version', bytes4),
         ('finalized_root', bytes32),
         ('finalized_epoch', uint64),
         ('head_root', bytes32),
@@ -33,14 +33,14 @@ class HelloRequest(ssz.Serializable):
 
     def __init__(
         self,
-        fork_version: Version = default_version,
+        head_fork_version: Version = default_version,
         finalized_root: SigningRoot = ZERO_SIGNING_ROOT,
         finalized_epoch: Epoch = default_epoch,
         head_root: SigningRoot = ZERO_SIGNING_ROOT,
         head_slot: Slot = default_slot,
     ) -> None:
         super().__init__(
-            fork_version,
+            head_fork_version,
             finalized_root,
             finalized_epoch,
             head_root,

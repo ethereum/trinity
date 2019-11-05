@@ -92,7 +92,7 @@ from .configs import (
     PUBSUB_TOPIC_BEACON_ATTESTATION,
     REQ_RESP_BEACON_BLOCKS,
     REQ_RESP_GOODBYE,
-    REQ_RESP_HELLO,
+    REQ_RESP_STATUS,
     REQ_RESP_RECENT_BEACON_BLOCKS,
     ResponseCode,
 )
@@ -109,7 +109,7 @@ from .exceptions import (
 )
 from .messages import (
     Goodbye,
-    HelloRequest,
+    Status,
     BeaconBlocksRequest,
     BeaconBlocksResponse,
     RecentBeaconBlocksRequest,
@@ -124,7 +124,8 @@ from .utils import (
     make_tcp_ip_maddr,
     Interaction,
     compare_chain_tip_and_finalized_epoch,
-    validate_hello,
+    validate_peer_status,
+    get_my_status,
     get_requested_beacon_blocks,
     get_recent_beacon_blocks,
 )
@@ -134,7 +135,7 @@ from async_generator import asynccontextmanager
 logger = logging.getLogger('trinity.protocol.bcc_libp2p')
 
 
-REQ_RESP_HELLO_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_HELLO)
+REQ_RESP_STATUS_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_STATUS)
 REQ_RESP_GOODBYE_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_GOODBYE)
 REQ_RESP_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_BEACON_BLOCKS)
 REQ_RESP_RECENT_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(
@@ -147,24 +148,24 @@ class Peer:
 
     node: "Node"
     _id: ID
-    fork_version: Version  # noqa: E701
+    head_fork_version: Version  # noqa: E701
     finalized_root: SigningRoot
     finalized_epoch: Epoch
     head_root: SigningRoot
     head_slot: Slot
 
     @classmethod
-    def from_hello_request(
-        cls, node: "Node", peer_id: ID, request: HelloRequest
+    def from_status(
+        cls, node: "Node", peer_id: ID, status: Status
     ) -> "Peer":
         return cls(
             node=node,
             _id=peer_id,
-            fork_version=request.fork_version,
-            finalized_root=request.finalized_root,
-            finalized_epoch=request.finalized_epoch,
-            head_root=request.head_root,
-            head_slot=request.head_slot,
+            head_fork_version=status.head_fork_version,
+            finalized_root=status.finalized_root,
+            finalized_epoch=status.finalized_epoch,
+            head_root=status.head_root,
+            head_slot=status.head_slot,
         )
 
     async def request_beacon_blocks(
@@ -186,7 +187,7 @@ class Peer:
     def __repr__(self) -> str:
         return (
             f"Peer {self._id} "
-            f"fork_version={encode_hex(self.fork_version)} "
+            f"head_fork_version={encode_hex(self.head_fork_version)} "
             f"finalized_root={encode_hex(self.finalized_root)} "
             f"finalized_epoch={self.finalized_epoch} "
             f"head_root={encode_hex(self.head_root)} "
@@ -345,8 +346,8 @@ class Node(BaseService):
             )
         )
         try:
-            # TODO: set a time limit on completing saying hello
-            await self.say_hello(peer_id)
+            # TODO: set a time limit on completing handshake
+            await self.request_status(peer_id)
         except HandshakeFailure as e:
             self.logger.info("HandshakeFailure: %s", str(e))
             # TODO: handle it
@@ -439,7 +440,7 @@ class Node(BaseService):
         # TODO: Add `close` in `Pubsub`
 
     def _register_rpc_handlers(self) -> None:
-        self.host.set_stream_handler(REQ_RESP_HELLO_SSZ, self._handle_hello)
+        self.host.set_stream_handler(REQ_RESP_STATUS_SSZ, self._handle_status)
         self.host.set_stream_handler(REQ_RESP_GOODBYE_SSZ, self._handle_goodbye)
         self.host.set_stream_handler(REQ_RESP_BEACON_BLOCKS_SSZ, self._handle_beacon_blocks)
         self.host.set_stream_handler(
@@ -507,59 +508,47 @@ class Node(BaseService):
     #   - Record peers' joining time.
     #   - Disconnect peers when they fail to join in a certain amount of time.
 
-    def _make_hello_packet(self) -> HelloRequest:
-        state = self.chain.get_head_state()
-        head = self.chain.get_canonical_head()
-        finalized_checkpoint = state.finalized_checkpoint
-        return HelloRequest(
-            fork_version=state.fork.current_version,
-            finalized_root=finalized_checkpoint.root,
-            finalized_epoch=finalized_checkpoint.epoch,
-            head_root=head.signing_root,
-            head_slot=head.slot,
-        )
-
-    def _add_peer_from_hello(self, peer_id: ID, hello_other_side: HelloRequest) -> None:
-        peer = Peer.from_hello_request(self, peer_id, hello_other_side)
+    def _add_peer_from_status(self, peer_id: ID, status: Status) -> None:
+        peer = Peer.from_status(self, peer_id, status)
         self.handshaked_peers.add(peer)
         self.logger.debug(
             "Handshake from %s is finished. Added to the `handshake_peers`",
             peer_id,
         )
 
-    async def _handle_hello(self, stream: INetStream) -> None:
+    async def _handle_status(self, stream: INetStream) -> None:
         # TODO: Find out when we should respond the `ResponseCode`
         #   other than `ResponseCode.SUCCESS`.
 
         async with self.new_handshake_interaction(stream) as interaction:
             peer_id = interaction.peer_id
-            hello_other_side = await interaction.read_request(HelloRequest)
-            self.logger.info("Received HELLO from %s  %s", str(peer_id), hello_other_side)
-            await validate_hello(self.chain, hello_other_side)
+            peer_status = await interaction.read_request(Status)
+            self.logger.info("Received Status from %s  %s", str(peer_id), peer_status)
+            await validate_peer_status(self.chain, peer_status)
 
-            hello_mine = self._make_hello_packet()
-            await interaction.write_response(hello_mine)
+            my_status = get_my_status(self.chain)
+            await interaction.write_response(my_status)
 
-            self._add_peer_from_hello(peer_id, hello_other_side)
+            self._add_peer_from_status(peer_id, peer_status)
 
             # Check if we are behind the peer
-            compare_chain_tip_and_finalized_epoch(self.chain, hello_other_side)
+            compare_chain_tip_and_finalized_epoch(self.chain, peer_status)
 
-    async def say_hello(self, peer_id: ID) -> None:
-        self.logger.info("Say hello to %s", str(peer_id))
+    async def request_status(self, peer_id: ID) -> None:
+        self.logger.info("Initiate handshake with %s", str(peer_id))
 
-        stream = await self.new_stream(peer_id, REQ_RESP_HELLO_SSZ)
+        stream = await self.new_stream(peer_id, REQ_RESP_STATUS_SSZ)
         async with self.new_handshake_interaction(stream) as interaction:
-            hello_mine = self._make_hello_packet()
-            await interaction.write_request(hello_mine)
-            hello_other_side = await interaction.read_response(HelloRequest)
+            my_status = get_my_status(self.chain)
+            await interaction.write_request(my_status)
+            peer_status = await interaction.read_response(Status)
 
-            await validate_hello(self.chain, hello_other_side)
+            await validate_peer_status(self.chain, peer_status)
 
-            self._add_peer_from_hello(peer_id, hello_other_side)
+            self._add_peer_from_status(peer_id, peer_status)
 
             # Check if we are behind the peer
-            compare_chain_tip_and_finalized_epoch(self.chain, hello_other_side)
+            compare_chain_tip_and_finalized_epoch(self.chain, peer_status)
 
     async def _handle_goodbye(self, stream: INetStream) -> None:
         async with Interaction(stream) as interaction:

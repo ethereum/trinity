@@ -93,7 +93,7 @@ class GoodbyeReasonCode(enum.IntEnum):
 REQ_RESP_VERSION = "1"
 REQ_RESP_ENCODE_POSTFIX = "ssz"
 REQ_RESP_ENCODE_COMPRESS_POSTFIX = "ssz_snappy"
-REQ_RESP_HELLO = "hello"
+REQ_RESP_STATUS = "status"
 REQ_RESP_GOODBYE = "goodbye"
 REQ_RESP_BEACON_BLOCKS = "beacon_blocks"
 REQ_RESP_RECENT_BEACON_BLOCKS = "recent_beacon_blocks"
