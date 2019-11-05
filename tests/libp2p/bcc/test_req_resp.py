@@ -166,9 +166,7 @@ async def test_request_beacon_blocks_invalid_request(monkeypatch):
         def get_block_by_root(root):
             return head_block
 
-        monkeypatch.setattr(
-            bob.chain, "get_block_by_root", get_block_by_root
-        )
+        monkeypatch.setattr(bob.chain, "get_block_by_root", get_block_by_root)
 
         count = 1
         step = 1
@@ -286,9 +284,7 @@ async def test_request_beacon_blocks_on_nonexist_chain(monkeypatch):
         def get_block_by_root(root):
             raise BlockNotFound
 
-        monkeypatch.setattr(
-            bob.chain, "get_block_by_root", get_block_by_root
-        )
+        monkeypatch.setattr(bob.chain, "get_block_by_root", get_block_by_root)
 
         start_slot = 0
         count = 5
@@ -326,9 +322,7 @@ async def test_request_recent_beacon_blocks(monkeypatch):
             else:
                 raise BlockNotFound
 
-        monkeypatch.setattr(
-            bob.chain, "get_block_by_root", get_block_by_root
-        )
+        monkeypatch.setattr(bob.chain, "get_block_by_root", get_block_by_root)
 
         requesting_block_roots = [
             blocks[0].signing_root,
