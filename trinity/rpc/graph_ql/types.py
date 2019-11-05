@@ -159,7 +159,7 @@ class Transaction(ObjectType):
 
     @staticmethod
     async def resolve_index(transaction: BaseTransaction, info: ResolveInfo) -> None:
-        # FIXME: Figure out a way to get this value
+        # TODO: Figure out a way to get this value
         return None
 
     @staticmethod
