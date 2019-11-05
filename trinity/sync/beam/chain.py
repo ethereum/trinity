@@ -184,6 +184,8 @@ class BeamSyncer(BaseService):
             self.cancel_token,
         )
 
+        self._witness_broadcaster = WitnessBroadcaster(db, peer_pool, event_bus, self.cancel_token)
+
         self._chain = chain
 
     async def _run(self) -> None:
@@ -234,6 +236,9 @@ class BeamSyncer(BaseService):
 
         # Start state background service
         self.run_daemon(self._backfiller)
+
+        # Start witness broadcaster service
+        self.run_daemon(self._witness_broadcaster)
 
         # run sync until cancelled
         await self.cancellation()
