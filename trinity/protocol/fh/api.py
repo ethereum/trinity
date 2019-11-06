@@ -71,6 +71,15 @@ class FirehoseAPI(Application):
         return self.connection.get_protocol_by_type(FirehoseProtocol)
 
     def send_new_block_witness_hashes(self, header_hash: Hash32, node_hashes: Sequence[Hash32]) -> None:
-        # Trying the new API that might not exist yet
-        payload = NewBlockWitnessHashesPayload(header_hash, node_hashes)
-        self.protocol.send(NewBlockWitnessHashes(payload))
+        """
+        This will skip sending if the peer already sent the witness hashes to us.
+        """
+        if self.witnesses.has_witness(header_hash):
+            # TODO this is a neat place to check if a peer is giving us bad witness data
+            self.logger.warning("SKIP Sending %d hashes of witness to: %s", len(witness_hashes), self.connection)
+            # remove witness from history, as cleanup
+            self.witnesses.pop_node_hashes(header_hash)
+        else:
+            # Trying the new API that might not exist yet
+            payload = NewBlockWitnessHashesPayload(header_hash, node_hashes)
+            self.protocol.send(NewBlockWitnessHashes(payload))
