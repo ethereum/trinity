@@ -59,7 +59,6 @@ if TYPE_CHECKING:
 
 
 class FirehoseHandshakeParams(NamedTuple):
-    head_hash: Hash32
     # TODO: replace genesis_hash with fork_id
     genesis_hash: Hash32
     network_id: int
@@ -86,10 +85,9 @@ class FirehoseProtocol(Protocol):
                 f"params:{handshake_params.version} != proto:{self.version}"
             )
         resp = {
-            'protocol_version': handshake_params.version,
-            'network_id': handshake_params.network_id,
-            'best_hash': handshake_params.head_hash,
             'genesis_hash': handshake_params.genesis_hash,
+            'network_id': handshake_params.network_id,
+            'protocol_version': handshake_params.version,
         }
         cmd = Status(self.cmd_id_offset)
         self.logger.debug2("Sending Firehose/Status msg: %s", resp)
@@ -102,27 +100,3 @@ class FirehoseProtocol(Protocol):
         cmd = NewBlockWitnessHashes(self.cmd_id_offset)
         header, body = cmd.encode(node_hashes)
         self.transport.send(header, body)
-
-
-class ProxyFirehoseProtocol:
-    """
-    An ``FirehoseProtocol`` that can be used outside of the process that runs the peer pool. Any
-    action performed on this class is delegated to the process that runs the peer pool.
-    """
-
-    def __init__(self,
-                 session: SessionAPI,
-                 event_bus: EndpointAPI,
-                 broadcast_config: BroadcastConfig):
-        self.session = session
-        self._event_bus = event_bus
-        self._broadcast_config = broadcast_config
-
-    def send_handshake(self, handshake_params: FirehoseHandshakeParams) -> None:
-        raise NotImplementedError("`ProxyFirehoseProtocol.send_handshake` Not yet implemented")
-
-    #
-    # Node Data
-    #
-    def send_new_block_witness_hashes(self, node_hashes: Sequence[Hash32]) -> None:
-        raise NotImplementedError("Not yet implemented")
