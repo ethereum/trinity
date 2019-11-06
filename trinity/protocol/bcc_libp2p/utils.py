@@ -84,7 +84,7 @@ from .exceptions import (
     WriteMessageFailure,
 )
 from .messages import (
-    BeaconBlocksRequest,
+    BeaconBlocksByRangeRequest,
     Status,
     RecentBeaconBlocksRequest,
 )
@@ -250,7 +250,7 @@ def get_blocks_from_fork_chain_by_root(
 
 def _get_requested_beacon_blocks(
     chain: BaseBeaconChain,
-    beacon_blocks_request: BeaconBlocksRequest,
+    beacon_blocks_request: BeaconBlocksByRangeRequest,
     requested_head_block: BaseBeaconBlock,
 ) -> Tuple[BaseBeaconBlock, ...]:
     slot_of_requested_blocks = tuple(
@@ -302,7 +302,7 @@ def _get_requested_beacon_blocks(
 
 def get_requested_beacon_blocks(
     chain: BaseBeaconChain,
-    request: BeaconBlocksRequest
+    request: BeaconBlocksByRangeRequest
 ) -> Tuple[BaseBeaconBlock, ...]:
     try:
         requested_head = chain.get_block_by_root(
@@ -393,7 +393,11 @@ class Interaction:
         )
         return response
 
-    async def read_chunk_response(self, message_type: Type[MsgType], count: int) -> AsyncIterator[MsgType]:
+    async def read_chunk_response(
+        self,
+        message_type: Type[MsgType],
+        count: int,
+    ) -> AsyncIterator[MsgType]:
         for i in range(count):
             try:
                 yield await read_resp(self.stream, message_type)

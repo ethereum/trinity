@@ -91,7 +91,7 @@ from .configs import (
     GossipsubParams,
     PUBSUB_TOPIC_BEACON_BLOCK,
     PUBSUB_TOPIC_BEACON_ATTESTATION,
-    REQ_RESP_BEACON_BLOCKS,
+    REQ_RESP_BEACON_BLOCKS_BY_RANGE,
     REQ_RESP_GOODBYE,
     REQ_RESP_STATUS,
     REQ_RESP_RECENT_BEACON_BLOCKS,
@@ -111,7 +111,7 @@ from .exceptions import (
 from .messages import (
     Goodbye,
     Status,
-    BeaconBlocksRequest,
+    BeaconBlocksByRangeRequest,
     RecentBeaconBlocksRequest,
 )
 from .topic_validators import (
@@ -136,7 +136,9 @@ logger = logging.getLogger('trinity.protocol.bcc_libp2p')
 
 REQ_RESP_STATUS_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_STATUS)
 REQ_RESP_GOODBYE_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_GOODBYE)
-REQ_RESP_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_BEACON_BLOCKS)
+REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ = make_rpc_v1_ssz_protocol_id(
+    REQ_RESP_BEACON_BLOCKS_BY_RANGE
+)
 REQ_RESP_RECENT_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(
     REQ_RESP_RECENT_BEACON_BLOCKS
 )
@@ -167,10 +169,10 @@ class Peer:
             head_slot=status.head_slot,
         )
 
-    async def request_beacon_blocks(
+    async def request_beacon_blocks_by_range(
         self, start_slot: Slot, count: int, step: int = 1
     ) -> Tuple[BaseBeaconBlock, ...]:
-        return await self.node.request_beacon_blocks(
+        return await self.node.request_beacon_blocks_by_range(
             self._id,
             head_block_root=self.head_root,
             start_slot=start_slot,
@@ -441,7 +443,10 @@ class Node(BaseService):
     def _register_rpc_handlers(self) -> None:
         self.host.set_stream_handler(REQ_RESP_STATUS_SSZ, self._handle_status)
         self.host.set_stream_handler(REQ_RESP_GOODBYE_SSZ, self._handle_goodbye)
-        self.host.set_stream_handler(REQ_RESP_BEACON_BLOCKS_SSZ, self._handle_beacon_blocks)
+        self.host.set_stream_handler(
+            REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ,
+            self._handle_beacon_blocks_by_range,
+        )
         self.host.set_stream_handler(
             REQ_RESP_RECENT_BEACON_BLOCKS_SSZ,
             self._handle_recent_beacon_blocks,
@@ -572,7 +577,7 @@ class Node(BaseService):
         if peer_id not in self.handshaked_peers:
             raise UnhandshakedPeer(peer_id)
 
-    async def _handle_beacon_blocks(self, stream: INetStream) -> None:
+    async def _handle_beacon_blocks_by_range(self, stream: INetStream) -> None:
         # TODO: Should it be a successful response if peer is requesting
         # blocks on a fork we don't have data for?
 
@@ -580,28 +585,27 @@ class Node(BaseService):
             peer_id = interaction.peer_id
             self._check_peer_handshaked(peer_id)
 
-            beacon_blocks_request = await interaction.read_request(BeaconBlocksRequest)
+            request = await interaction.read_request(BeaconBlocksByRangeRequest)
             try:
-                requested_beacon_blocks = get_requested_beacon_blocks(
-                    self.chain,
-                    beacon_blocks_request,
-                )
+                blocks = get_requested_beacon_blocks(self.chain, request)
             except InvalidRequest as error:
                 error_message = str(error)[:128]
                 await interaction.write_error_response(error_message, ResponseCode.INVALID_REQUEST)
             else:
-                await interaction.write_chunk_response(requested_beacon_blocks)
+                await interaction.write_chunk_response(blocks)
 
-    async def request_beacon_blocks(self,
-                                    peer_id: ID,
-                                    head_block_root: SigningRoot,
-                                    start_slot: Slot,
-                                    count: int,
-                                    step: int) -> Tuple[BaseBeaconBlock, ...]:
-        stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_SSZ)
+    async def request_beacon_blocks_by_range(
+        self,
+        peer_id: ID,
+        head_block_root: SigningRoot,
+        start_slot: Slot,
+        count: int,
+        step: int,
+    ) -> Tuple[BaseBeaconBlock, ...]:
+        stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ)
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
-            request = BeaconBlocksRequest(
+            request = BeaconBlocksByRangeRequest(
                 head_block_root=head_block_root,
                 start_slot=start_slot,
                 count=count,

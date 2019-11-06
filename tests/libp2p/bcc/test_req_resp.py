@@ -12,7 +12,7 @@ from trinity.protocol.bcc_libp2p.messages import Status
 from trinity.protocol.bcc_libp2p.node import REQ_RESP_STATUS_SSZ
 from trinity.protocol.bcc_libp2p.utils import read_req, write_resp
 from trinity.tools.async_method import wait_until_true
-from trinity.tools.bcc_factories import ConnectionPairFactory, BeaconBlockFactory
+from trinity.tools.bcc_factories import ConnectionPairFactory
 
 
 @pytest.mark.asyncio
@@ -77,11 +77,11 @@ async def test_goodbye():
 
 
 @pytest.mark.asyncio
-async def test_request_beacon_blocks_fail():
+async def test_request_beacon_blocks_by_range_fail():
     async with ConnectionPairFactory(handshake=False) as (alice, bob):
         # Test: Can not request beacon block before handshake
         with pytest.raises(RequestFailure):
-            await alice.request_beacon_blocks(
+            await alice.request_beacon_blocks_by_range(
                 peer_id=bob.peer_id,
                 head_block_root=ZERO_HASH32,
                 start_slot=0,
@@ -97,7 +97,7 @@ async def test_request_beacon_blocks_fail():
 
 
 @pytest.mark.asyncio
-async def test_request_beacon_blocks_invalid_request(monkeypatch):
+async def test_request_beacon_blocks_by_range_invalid_request(monkeypatch):
     async with ConnectionPairFactory() as (alice, bob):
 
         head_slot = 1
@@ -121,7 +121,7 @@ async def test_request_beacon_blocks_invalid_request(monkeypatch):
         count = 1
         step = 1
         with pytest.raises(RequestFailure):
-            await alice.request_beacon_blocks(
+            await alice.request_beacon_blocks_by_range(
                 peer_id=bob.peer_id,
                 head_block_root=request_head_block_root,
                 start_slot=start_slot,
@@ -159,7 +159,7 @@ async def test_request_beacon_blocks_invalid_request(monkeypatch):
         monkeypatch.setattr(bob.chain, "get_head_state", get_head_state)
 
         with pytest.raises(RequestFailure):
-            await alice.request_beacon_blocks(
+            await alice.request_beacon_blocks_by_range(
                 peer_id=bob.peer_id,
                 head_block_root=request_head_block_root,
                 start_slot=start_slot,
@@ -169,7 +169,7 @@ async def test_request_beacon_blocks_invalid_request(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_request_beacon_blocks_on_nonexist_chain(monkeypatch):
+async def test_request_beacon_blocks_by_range_on_nonexist_chain(monkeypatch):
     async with ConnectionPairFactory() as (alice, bob):
 
         request_head_block_root = b"\x56" * 32
@@ -182,7 +182,7 @@ async def test_request_beacon_blocks_on_nonexist_chain(monkeypatch):
         start_slot = 0
         count = 5
         step = 1
-        requested_blocks = await alice.request_beacon_blocks(
+        requested_blocks = await alice.request_beacon_blocks_by_range(
             peer_id=bob.peer_id,
             head_block_root=request_head_block_root,
             start_slot=start_slot,

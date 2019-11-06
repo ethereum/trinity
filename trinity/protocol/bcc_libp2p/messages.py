@@ -57,7 +57,7 @@ class Goodbye(ssz.Serializable):
         super().__init__(GoodbyeReasonCode(reason))
 
 
-class BeaconBlocksRequest(ssz.Serializable):
+class BeaconBlocksByRangeRequest(ssz.Serializable):
     fields = [
         ('head_block_root', bytes32),
         ('start_slot', uint64),
@@ -78,15 +78,6 @@ class BeaconBlocksRequest(ssz.Serializable):
             count,
             step,
         )
-
-
-class BeaconBlocksResponse(ssz.Serializable):
-    fields = [
-        ('blocks', List(BeaconBlock, 1)),
-    ]
-
-    def __init__(self, blocks: Sequence[BeaconBlock]) -> None:
-        super().__init__(blocks)
 
 
 class RecentBeaconBlocksRequest(ssz.Serializable):
