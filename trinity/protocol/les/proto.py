@@ -236,6 +236,14 @@ class LESProtocolV1(Protocol):
             'request_id': request_id,
             'proof_requests': [ProofRequest(block_hash, account_key, key, from_level)],
         }
+        from eth_utils import encode_hex
+        self.logger.info(
+            'ProofV1 request is: (%s, %s, %s, %s)',
+            encode_hex(block_hash),
+            encode_hex(account_key),
+            encode_hex(key),
+            from_level,
+        )
         header, body = GetProofs(self.cmd_id_offset, self.snappy_support).encode(data)
         self.transport.send(header, body)
 
@@ -290,6 +298,14 @@ class LESProtocolV2(LESProtocolV1):
             'request_id': request_id,
             'proof_requests': [ProofRequest(block_hash, account_key, key, from_level)],
         }
+        from eth_utils import encode_hex
+        self.logger.info(
+            'ProofV2 request is: (%s, %s, %s, %s)',
+            encode_hex(block_hash),
+            encode_hex(account_key),
+            encode_hex(key),
+            from_level,
+        )
         header, body = GetProofsV2(self.cmd_id_offset, self.snappy_support).encode(data)
         self.transport.send(header, body)
 

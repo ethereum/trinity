@@ -204,6 +204,7 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
         header = await self._get_block_header_by_hash(block_hash, peer)
         try:
             rlp_account = HexaryTrie.get_from_proof(header.state_root, key, proof)
+            self.logger.info('Proof for %s was %r', encode_hex(address), proof)
         except BadTrieProof as exc:
             raise BadLESResponse(
                 f"Peer {peer} returned an invalid proof for account {encode_hex(address)} "
