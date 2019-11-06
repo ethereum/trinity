@@ -94,7 +94,7 @@ from .configs import (
     REQ_RESP_BEACON_BLOCKS_BY_RANGE,
     REQ_RESP_GOODBYE,
     REQ_RESP_STATUS,
-    REQ_RESP_RECENT_BEACON_BLOCKS,
+    REQ_RESP_BEACON_BLOCKS_BY_ROOT,
     ResponseCode,
 )
 from .exceptions import (
@@ -112,7 +112,7 @@ from .messages import (
     Goodbye,
     Status,
     BeaconBlocksByRangeRequest,
-    RecentBeaconBlocksRequest,
+    BeaconBlocksByRootRequest,
 )
 from .topic_validators import (
     get_beacon_attestation_validator,
@@ -126,7 +126,7 @@ from .utils import (
     validate_peer_status,
     get_my_status,
     get_requested_beacon_blocks,
-    get_recent_beacon_blocks,
+    get_beacon_blocks_by_root,
 )
 from async_generator import asynccontextmanager
 
@@ -139,8 +139,8 @@ REQ_RESP_GOODBYE_SSZ = make_rpc_v1_ssz_protocol_id(REQ_RESP_GOODBYE)
 REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ = make_rpc_v1_ssz_protocol_id(
     REQ_RESP_BEACON_BLOCKS_BY_RANGE
 )
-REQ_RESP_RECENT_BEACON_BLOCKS_SSZ = make_rpc_v1_ssz_protocol_id(
-    REQ_RESP_RECENT_BEACON_BLOCKS
+REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ = make_rpc_v1_ssz_protocol_id(
+    REQ_RESP_BEACON_BLOCKS_BY_ROOT
 )
 
 
@@ -180,10 +180,10 @@ class Peer:
             step=step,
         )
 
-    async def request_recent_beacon_blocks(
+    async def request_beacon_blocks_by_root(
         self, block_roots: Sequence[SigningRoot]
     ) -> Tuple[BaseBeaconBlock, ...]:
-        return await self.node.request_recent_beacon_blocks(self._id, block_roots)
+        return await self.node.request_beacon_blocks_by_root(self._id, block_roots)
 
     def __repr__(self) -> str:
         return (
@@ -448,8 +448,8 @@ class Node(BaseService):
             self._handle_beacon_blocks_by_range,
         )
         self.host.set_stream_handler(
-            REQ_RESP_RECENT_BEACON_BLOCKS_SSZ,
-            self._handle_recent_beacon_blocks,
+            REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ,
+            self._handle_beacon_blocks_by_root,
         )
 
     #
@@ -619,23 +619,23 @@ class Node(BaseService):
 
             return blocks
 
-    async def _handle_recent_beacon_blocks(self, stream: INetStream) -> None:
+    async def _handle_beacon_blocks_by_root(self, stream: INetStream) -> None:
         async with self.post_handshake_handler_interaction(stream) as interaction:
             peer_id = interaction.peer_id
             self._check_peer_handshaked(peer_id)
-            request = await interaction.read_request(RecentBeaconBlocksRequest)
-            recent_beacon_blocks = get_recent_beacon_blocks(self.chain, request)
+            request = await interaction.read_request(BeaconBlocksByRootRequest)
+            blocks = get_beacon_blocks_by_root(self.chain, request)
 
-            await interaction.write_chunk_response(recent_beacon_blocks)
+            await interaction.write_chunk_response(blocks)
 
-    async def request_recent_beacon_blocks(
+    async def request_beacon_blocks_by_root(
             self,
             peer_id: ID,
             block_roots: Sequence[SigningRoot]) -> Tuple[BaseBeaconBlock, ...]:
-        stream = await self.new_stream(peer_id, REQ_RESP_RECENT_BEACON_BLOCKS_SSZ)
+        stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
-            request = RecentBeaconBlocksRequest(block_roots=block_roots)
+            request = BeaconBlocksByRootRequest(block_roots=block_roots)
             await interaction.write_request(request)
             blocks = tuple([
                 block async for block in

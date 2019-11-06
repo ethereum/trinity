@@ -16,7 +16,6 @@ from eth2.beacon.typing import (
     default_slot,
     default_version,
 )
-from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.typing import SigningRoot, Slot, Epoch
 from eth2.beacon.constants import ZERO_SIGNING_ROOT
 from .configs import GoodbyeReasonCode
@@ -80,19 +79,10 @@ class BeaconBlocksByRangeRequest(ssz.Serializable):
         )
 
 
-class RecentBeaconBlocksRequest(ssz.Serializable):
+class BeaconBlocksByRootRequest(ssz.Serializable):
     fields = [
         ('block_roots', List(bytes32, 1)),
     ]
 
     def __init__(self, block_roots: Sequence[SigningRoot]) -> None:
         super().__init__(block_roots)
-
-
-class RecentBeaconBlocksResponse(ssz.Serializable):
-    fields = [
-        ('blocks', List(BeaconBlock, 1)),
-    ]
-
-    def __init__(self, blocks: Sequence[BeaconBlock]) -> None:
-        super().__init__(blocks)

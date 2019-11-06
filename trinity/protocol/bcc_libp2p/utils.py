@@ -86,7 +86,7 @@ from .exceptions import (
 from .messages import (
     BeaconBlocksByRangeRequest,
     Status,
-    RecentBeaconBlocksRequest,
+    BeaconBlocksByRootRequest,
 )
 
 MsgType = TypeVar("MsgType", bound=BaseSerializable)
@@ -328,9 +328,9 @@ def get_requested_beacon_blocks(
 
 
 @to_tuple
-def get_recent_beacon_blocks(
+def get_beacon_blocks_by_root(
     chain: BaseBeaconChain,
-    request: RecentBeaconBlocksRequest,
+    request: BeaconBlocksByRootRequest,
 ) -> Iterable[BaseBeaconBlock]:
     for block_root in request.block_roots:
         try:

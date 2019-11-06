@@ -89,9 +89,9 @@ async def test_request_beacon_blocks_by_range_fail():
                 step=1,
             )
 
-        # Test: Can not request recent beacon block before handshake
+        # Test: Can not request beacon block by root before handshake
         with pytest.raises(RequestFailure):
-            await alice.request_recent_beacon_blocks(
+            await alice.request_beacon_blocks_by_root(
                 peer_id=bob.peer_id, block_roots=[b"\x12" * 32]
             )
 
@@ -194,7 +194,7 @@ async def test_request_beacon_blocks_by_range_on_nonexist_chain(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_request_recent_beacon_blocks(monkeypatch):
+async def test_request_beacon_blocks_by_root(monkeypatch):
     async with ConnectionPairFactory() as (alice, bob):
 
         # Mock up block database
@@ -224,7 +224,7 @@ async def test_request_recent_beacon_blocks(monkeypatch):
             b"\x23" * 32,  # Unknown block root
             blocks[3].signing_root,
         ]
-        requested_blocks = await alice.request_recent_beacon_blocks(
+        requested_blocks = await alice.request_beacon_blocks_by_root(
             peer_id=bob.peer_id, block_roots=requesting_block_roots
         )
 
