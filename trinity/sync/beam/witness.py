@@ -155,11 +155,18 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
         buffer_size = 10000 * 200  # 10k hashes is high-end for typical block, 200 blocks would be very far behind
         self._witness_node_tasks = TaskQueue[Hash32](buffer_size, NodeDownloadTask.block_number.fget)
 
-    async def block_import_activity(block_hash: Hash32, block_number: int, urgent: bool) -> None:
+    async def trigger_download(block_hash: Hash32, block_number: int, urgent: bool) -> None:
+        """
+        Identify witness for the related block, and add it to the download queue
+        """
         # There is an opportunity to do neat stuff here preferring nodes that
         #   more peers are announcing. For now, do the simple thing and get all nodes.
         node_hashes = self._aggregated_witness_metadata[block_hash].keys()
         node_tasks = NodeDownloadTask.nodes_at_block(node_hashes, block_number)
+
+        if not len(node_tasks):
+            # there aren't any available nodes to trigger a download for, so end early
+            return
 
         new_node_tasks = tuple(
             task for task in node_tasks
@@ -283,7 +290,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
             self._num_requests_by_peer.clear()
 
 
-class WitnessTracker(BaseService, PeerSubscriber):
+class WitnessBroadcaster(BaseService, PeerSubscriber):
     """
     Broadcast block witness node hashes to all Firehose-compatible peers.
     """
@@ -334,14 +341,8 @@ class WitnessTracker(BaseService, PeerSubscriber):
 
     def _broadcast_witness_metadata(self, header_hash: Hash32, witness_hashes: Tuple[Hash32, ...]) -> None:
         for peer in self._firehose_peers:
-            if peer.fh_api.witnesses.has_witness(header_hash):
-                self.logger.warning("SKIP Sending %d hashes of witness to: %s", len(witness_hashes), peer)
-                # TODO this is a neat place to check if a peer is giving us bad witness data
-                # remove witness from history, as cleanup
-                peer.fh_api.witnesses.pop_node_hashes(header_hash)
-            else:
-                self.logger.warning("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
-                peer.fh_api.send_new_block_witness_hashes(header_hash, witness_hashes)
+            self.logger.warning("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
+            peer.fh_api.send_new_block_witness_hashes(header_hash, witness_hashes)
 
     async def _run(self) -> None:
         """
