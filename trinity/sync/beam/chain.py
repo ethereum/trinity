@@ -79,7 +79,10 @@ from trinity.sync.beam.state import (
 )
 from trinity._utils.timer import Timer
 
-from .backfill import BeamStateBackfill
+from .witness import (
+    BeamStateWitnessCollector,
+    WitnessBroadcaster,
+)
 
 STATS_DISPLAY_PERIOD = 10
 
@@ -142,12 +145,13 @@ class BeamSyncer(BaseService):
             self.cancel_token,
         )
 
-        self._backfiller = BeamStateBackfill(db, peer_pool, token=self.cancel_token)
+        self._witness_collector = BeamStateWitnessCollector(db, peer_pool, token)
 
         self._state_downloader = BeamDownloader(
             db,
             peer_pool,
-            self._backfiller,
+            # the witness collector fulfills QueenTrackerAPI so the downloader can pick a peer
+            self._witness_collector,
             event_bus,
             self.cancel_token,
         )
@@ -161,7 +165,7 @@ class BeamSyncer(BaseService):
             chain,
             db,
             self._state_downloader,
-            self._backfiller,
+            self._witness_collector,
             event_bus,
             self.cancel_token,
         )
@@ -184,7 +188,7 @@ class BeamSyncer(BaseService):
             self.cancel_token,
         )
 
-        self._witness_broadcaster = WitnessBroadcaster(db, peer_pool, event_bus, self.cancel_token)
+        self._witness_broadcaster = WitnessBroadcaster(peer_pool, event_bus, self.cancel_token)
 
         self._chain = chain
 
@@ -235,7 +239,7 @@ class BeamSyncer(BaseService):
         self.run_daemon(self._state_downloader)
 
         # Start state background service
-        self.run_daemon(self._backfiller)
+        self.run_daemon(self._witness_collector)
 
         # Start witness broadcaster service
         self.run_daemon(self._witness_broadcaster)
@@ -570,7 +574,7 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
             chain: AsyncChainAPI,
             db: DatabaseAPI,
             state_getter: BeamDownloader,
-            backfiller: BeamStateBackfill,
+            witness_collector: BeamStateWitnessCollector,
             event_bus: EndpointAPI,
             token: CancelToken = None) -> None:
         super().__init__(token=token)
@@ -578,7 +582,7 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
         self._chain = chain
         self._db = db
         self._state_downloader = state_getter
-        self._backfiller = backfiller
+        self._witness_collector = witness_collector
 
         self._blocks_imported = 0
         self._preloaded_account_state = 0
@@ -593,6 +597,8 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
             self,
             block: BaseBlock) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
         self.logger.info("Beam importing %s (%d txns) ...", block.header, len(block.transactions))
+
+        self.run_task(self._load_witness_hashes(header, urgent=True))
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)
         new_account_nodes, collection_time = await self._load_address_state(
@@ -635,7 +641,7 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
             DoStatelessBlockPreview(old_state_header, transactions)
         )
 
-        self._backfiller.set_root_hash(parent_state_root)
+        self.run_task(self._load_witness_hashes(header, urgent=False))
 
     async def _preview_address_load(
             self,
@@ -653,6 +659,9 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
         )
         self._preloaded_previewed_account_state += new_account_nodes
         self._preloaded_previewed_account_time += collection_time
+
+    async def _load_witness_hashes(self, header: BlockHeader, urgent: bool) -> None:
+        await self._witness_collector.trigger_download(header.hash, header.block_number, urgent)
 
     async def _load_address_state(
             self,
