@@ -90,7 +90,7 @@ class FirehoseProtocol(Protocol):
             'protocol_version': handshake_params.version,
         }
         cmd = Status(self.cmd_id_offset)
-        self.logger.debug2("Sending Firehose/Status msg: %s", resp)
+        self.logger.warning("Sending Firehose/Status msg: %s", resp)
         self.transport.send(*cmd.encode(resp))
 
     #
