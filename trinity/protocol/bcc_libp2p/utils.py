@@ -352,7 +352,7 @@ class Interaction:
         self.stream = stream
 
     async def __aenter__(self) -> "Interaction":
-        self.logger.debug("New %s interaction with %s", self.stream.get_protocol(), self.peer_id)
+        self.debug("Started")
         return self
 
     async def __aexit__(self,
@@ -361,57 +361,35 @@ class Interaction:
                         traceback: Optional[TracebackType],
                         ) -> None:
         await self.stream.close()
-        self.logger.debug("End %s interaction with %s", self.stream.get_protocol(), self.peer_id)
+        self.debug("Ended")
 
     async def write_request(self, message: MsgType) -> None:
-        self.logger.debug(
-            "Request %s to %s  %s",
-            type(message).__name__,
-            self.peer_id,
-            to_formatted_dict(message),
-        )
+        self.debug(f"Request {type(message).__name__}  {to_formatted_dict(message)}")
         await write_req(self.stream, message)
 
     async def write_response(self, message: MsgType) -> None:
-        self.logger.debug(
-            "Respond %s to %s  %s",
-            type(message).__name__,
-            self.peer_id,
-            to_formatted_dict(message),
-        )
+        self.debug(f"Respond {type(message).__name__}  {to_formatted_dict(message)}")
         await write_resp(self.stream, message, ResponseCode.SUCCESS)
 
     async def write_chunk_response(self, messages: Sequence[MsgType]) -> None:
-        self.logger.debug(
-            "Respond %s chunks to %s",
-            len(messages),
-            self.peer_id,
-        )
+        self.debug(f"Respond {len(messages)} chunks")
         for message in messages:
             await write_resp(self.stream, message, ResponseCode.SUCCESS)
 
     async def write_error_response(self, error_message: str, code: ResponseCode) -> None:
-        self.logger.debug("Respond %s to %s  %s", str(code), self.peer_id, error_message)
+        self.debug(f"Respond {str(code)}  {error_message}")
         await write_resp(self.stream, error_message, code)
 
     async def read_request(self, message_type: Type[MsgType]) -> MsgType:
-        self.logger.debug("Waiting %s from %s", message_type.__name__, self.peer_id)
+        self.debug(f"Waiting {message_type.__name__}")
         request = await read_req(self.stream, message_type)
-        self.logger.debug(
-            "Received request %s from %s  %s",
-            message_type.__name__,
-            self.peer_id,
-            to_formatted_dict(request),
-        )
+        self.debug(f"Received request {message_type.__name__}  {to_formatted_dict(request)}")
         return request
 
     async def read_response(self, message_type: Type[MsgType]) -> MsgType:
         response = await read_resp(self.stream, message_type)
-        self.logger.debug(
-            "Received response %s from %s  %s",
-            message_type.__name__,
-            self.peer_id,
-            to_formatted_dict(response),
+        self.debug(
+            f"Received response {message_type.__name__}  {to_formatted_dict(response)}"
         )
         return response
 
@@ -420,17 +398,20 @@ class Interaction:
             try:
                 yield await read_resp(self.stream, message_type)
             except ReadMessageFailure:
-                self.logger.debug(
-                    "Response ended  Received %s %s chunks from %s",
-                    str(i),
-                    message_type.__name__,
-                    self.peer_id,
-                )
+                self.debug(f"Received {str(i)} {message_type.__name__} chunks")
                 break
 
     @property
     def peer_id(self) -> ID:
         return self.stream.mplex_conn.peer_id
+
+    def debug(self, message: str) -> None:
+        self.logger.debug(
+            "Interaction %s    with %s    %s",
+            self.stream.get_protocol().split("/")[4],
+            str(self.peer_id)[:15],
+            message,
+        )
 
 
 async def read_req(
