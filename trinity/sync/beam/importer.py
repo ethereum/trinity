@@ -50,6 +50,9 @@ from lahja.common import BroadcastConfig
 from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
 from trinity.exceptions import StateUnretrievable
+from trinity.protocol.fh.events import (
+    CreatedNewBlockWitnessHashes,
+)
 from trinity.sync.beam.constants import (
     MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS,
     NUM_PREVIEW_SHARDS,
@@ -410,6 +413,17 @@ def _broadcast_import_complete(
     )
 
 
+def slice_hashes(hash_list: bytes) -> Iterable[Hash32]:
+    """Split a concatenaded stream of hashes into an iterable list of hashes"""
+    for index in range(0, len(hash_list), 32):
+        next_hash = hash_list[index:index + 32]
+        if len(next_hash) != 32:
+            raise TypeError(
+                f"Value is not a hash, because it's only {len(next_hash)} long: {next_hash}"
+            )
+        yield next_hash
+
+
 def partial_import_block(beam_chain: BeamChain,
                          block: BlockAPI,
                          ) -> Callable[[], Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]]:  # noqa: E501
@@ -420,7 +434,10 @@ def partial_import_block(beam_chain: BeamChain,
         t = Timer()
         beam_chain.clear_first_vm()
         try:
+            # TODO: merge py-evm changes that save witness hashes
             reorg_info = beam_chain.import_block(block, perform_validation=True)
+
+            # TODO maybe modify py-evm to return the witness metadata, to avoid saving it to DB
         except StateUnretrievable as exc:
             import_time = t.elapsed
 
@@ -437,8 +454,16 @@ def partial_import_block(beam_chain: BeamChain,
             )
             raise
         else:
-            import_time = t.elapsed
+            # Collect witness trie node hashes needed to import block
+            witness_key = b'witnesshashes:' + block.hash
+            if witness_key not in self._db:
+                self.logger.warning("Witness data for block %s not found", humanize_hash(block.hash))
+                witness_hashes = ()
+            else:
+                witness_hashes_concat = beam_chain.chaindb.db[witness_key]
+                witness_hashes = tuple(slice_hashes(witness_hashes_concat))
 
+            import_time = t.elapsed
             vm = beam_chain.get_first_vm()
             beam_stats = vm.get_beam_stats()
             beam_chain.logger.debug(
@@ -449,7 +474,7 @@ def partial_import_block(beam_chain: BeamChain,
                 100 * (import_time - beam_stats.data_pause_time) / import_time,
                 beam_stats,
             )
-            return reorg_info
+            return reorg_info, witness_hashes
 
     return _import_block
 
@@ -492,12 +517,16 @@ class BlockImportServer(Service):
             #   that the in-progress block is complete. Then below, we do not send back
             #   the import completion (so the import server won't get triggered again).
             try:
-                await asyncio.shield(import_completion)
+                _reorg, witness_hashes = await asyncio.shield(import_completion)
             except StateUnretrievable as exc:
                 self.logger.debug(
                     "Not broadcasting about %s Beam import. Listening for next request, because %r",
                     event.block,
                     exc
+                )
+
+                await event_bus.broadcast(
+                    CreatedNewBlockWitnessHashes(event.block.hash, witness_hashes)
                 )
             else:
                 if self.manager.is_running:
