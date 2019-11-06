@@ -4,6 +4,7 @@ from types import (
     TracebackType,
 )
 from typing import (
+    AsyncIterator,
     Iterable,
     Optional,
     Sequence,
@@ -58,6 +59,9 @@ from multiaddr import (
 )
 import multihash
 import ssz
+from ssz.sedes.serializable import (
+    BaseSerializable,
+)
 from ssz.tools import (
     to_formatted_dict,
 )
@@ -85,7 +89,7 @@ from .messages import (
     RecentBeaconBlocksRequest,
 )
 
-MsgType = TypeVar("MsgType", bound=ssz.Serializable)
+MsgType = TypeVar("MsgType", bound=BaseSerializable)
 
 logger = logging.getLogger('trinity.protocol.bcc_libp2p')
 
@@ -377,6 +381,15 @@ class Interaction:
         )
         await write_resp(self.stream, message, ResponseCode.SUCCESS)
 
+    async def write_chunk_response(self, messages: Sequence[MsgType]) -> None:
+        self.logger.debug(
+            "Respond %s chunks to %s",
+            len(messages),
+            self.peer_id,
+        )
+        for message in messages:
+            await write_resp(self.stream, message, ResponseCode.SUCCESS)
+
     async def write_error_response(self, error_message: str, code: ResponseCode) -> None:
         self.logger.debug("Respond %s to %s  %s", str(code), self.peer_id, error_message)
         await write_resp(self.stream, error_message, code)
@@ -401,6 +414,19 @@ class Interaction:
             to_formatted_dict(response),
         )
         return response
+
+    async def read_chunk_response(self, message_type: Type[MsgType], count: int) -> AsyncIterator[MsgType]:
+        for i in range(count):
+            try:
+                yield await read_resp(self.stream, message_type)
+            except ReadMessageFailure:
+                self.logger.debug(
+                    "Response ended  Received %s %s chunks from %s",
+                    str(i),
+                    message_type.__name__,
+                    self.peer_id,
+                )
+                break
 
     @property
     def peer_id(self) -> ID:
@@ -478,13 +504,13 @@ async def write_resp(
     except OverflowError as error:
         raise WriteMessageFailure(f"resp_code={resp_code} is not valid") from error
     msg_bytes: bytes
-    # MsgType: `msg` is of type `ssz.Serializable` if response code is success.
+    # MsgType: `msg` is of type `BaseSerializable` if response code is success.
     if resp_code == ResponseCode.SUCCESS:
-        if isinstance(msg, ssz.Serializable):
+        if isinstance(msg, BaseSerializable):
             msg_bytes = _serialize_ssz_msg(msg)
         else:
             raise WriteMessageFailure(
-                "type of `msg` should be `ssz.Serializable` if response code is SUCCESS, "
+                "type of `msg` should be `BaseSerializable` if response code is SUCCESS, "
                 f"type(msg)={type(msg)}"
             )
     # error msg is of type `str` if response code is not SUCCESS.

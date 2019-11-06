@@ -27,6 +27,7 @@ from eth2.beacon.types.attestations import (
 )
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
+    BeaconBlock,
 )
 from eth2.beacon.typing import (
     Epoch,
@@ -111,9 +112,7 @@ from .messages import (
     Goodbye,
     Status,
     BeaconBlocksRequest,
-    BeaconBlocksResponse,
     RecentBeaconBlocksRequest,
-    RecentBeaconBlocksResponse,
 )
 from .topic_validators import (
     get_beacon_attestation_validator,
@@ -591,8 +590,7 @@ class Node(BaseService):
                 error_message = str(error)[:128]
                 await interaction.write_error_response(error_message, ResponseCode.INVALID_REQUEST)
             else:
-                beacon_blocks_response = BeaconBlocksResponse(blocks=requested_beacon_blocks)
-                await interaction.write_response(beacon_blocks_response)
+                await interaction.write_chunk_response(requested_beacon_blocks)
 
     async def request_beacon_blocks(self,
                                     peer_id: ID,
@@ -610,8 +608,12 @@ class Node(BaseService):
                 step=step,
             )
             await interaction.write_request(request)
-            beacon_blocks_response = await interaction.read_response(BeaconBlocksResponse)
-            return beacon_blocks_response.blocks
+            blocks = tuple([
+                block async for block in
+                interaction.read_chunk_response(BeaconBlock, count)
+            ])
+
+            return blocks
 
     async def _handle_recent_beacon_blocks(self, stream: INetStream) -> None:
         async with self.post_handshake_handler_interaction(stream) as interaction:
@@ -619,9 +621,8 @@ class Node(BaseService):
             self._check_peer_handshaked(peer_id)
             request = await interaction.read_request(RecentBeaconBlocksRequest)
             recent_beacon_blocks = get_recent_beacon_blocks(self.chain, request)
-            response = RecentBeaconBlocksResponse(blocks=recent_beacon_blocks)
 
-            await interaction.write_response(response)
+            await interaction.write_chunk_response(recent_beacon_blocks)
 
     async def request_recent_beacon_blocks(
             self,
@@ -632,5 +633,9 @@ class Node(BaseService):
             self._check_peer_handshaked(peer_id)
             request = RecentBeaconBlocksRequest(block_roots=block_roots)
             await interaction.write_request(request)
-            response = await interaction.read_response(RecentBeaconBlocksResponse)
-            return response.blocks
+            blocks = tuple([
+                block async for block in
+                interaction.read_chunk_response(BeaconBlock, len(block_roots))
+            ])
+
+            return blocks

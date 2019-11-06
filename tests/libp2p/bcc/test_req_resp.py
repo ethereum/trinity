@@ -12,7 +12,7 @@ from trinity.protocol.bcc_libp2p.messages import Status
 from trinity.protocol.bcc_libp2p.node import REQ_RESP_STATUS_SSZ
 from trinity.protocol.bcc_libp2p.utils import read_req, write_resp
 from trinity.tools.async_method import wait_until_true
-from trinity.tools.bcc_factories import ConnectionPairFactory
+from trinity.tools.bcc_factories import ConnectionPairFactory, BeaconBlockFactory
 
 
 @pytest.mark.asyncio

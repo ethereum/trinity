@@ -15,7 +15,7 @@ from typing import (
 # The max size of uncompressed gossip messages.
 GOSSIP_MAX_SIZE = 2 ** 20  # 1 MiB
 # The maximum allowed size of uncompressed req/resp chunked responses.
-MAX_CHUNK_SIZE = 2**20 # 1 MiB
+MAX_CHUNK_SIZE = 2**20  # 1 MiB
 # TODO: TBD
 # The number of shard subnets used in the gossipsub protocol.
 SHARD_SUBNET_COUNT = None
@@ -23,9 +23,6 @@ SHARD_SUBNET_COUNT = None
 TTFB_TIMEOUT = 5  # seconds
 # Maximum time for complete response transfer.
 RESP_TIMEOUT = 10  # seconds
-# Maximum number of items in a SSZ List type
-# FIXME: Update this value onec settled in the spec
-SSZ_MAX_LIST_SIZE = 10
 
 #
 # Gossip domain
