@@ -77,7 +77,7 @@ async def test_goodbye():
 
 
 @pytest.mark.asyncio
-async def test_request_beacon_blocks_by_range_fail():
+async def test_request_beacon_blocks_before_handshake():
     async with ConnectionPairFactory(handshake=False) as (alice, bob):
         # Test: Can not request beacon block before handshake
         with pytest.raises(RequestFailure):
