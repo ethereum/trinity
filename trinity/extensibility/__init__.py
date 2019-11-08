@@ -8,3 +8,6 @@ from trinity.extensibility.component import (  # noqa: F401
     BaseComponent,
     TrinityBootInfo,
 )
+from trinity.extensibility.service import (  # noqa: F401
+    ComponentService,
+)

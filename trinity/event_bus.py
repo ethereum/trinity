@@ -1,8 +1,10 @@
+from argparse import ArgumentParser
 import asyncio
 import inspect
 from typing import (
     Any,
     Callable,
+    Collection,
     Sequence,
     Type,
     Tuple,
@@ -12,6 +14,9 @@ from lahja import AsyncioEndpoint, ConnectionConfig, BroadcastConfig, EndpointAP
 
 from p2p.trio_service import Service, ManagerAPI
 
+from trinity._utils.ipc import (
+    remove_dangling_ipc_files,
+)
 from trinity.config import TrinityConfig
 from trinity.constants import (
     MAIN_EVENTBUS_ENDPOINT,
@@ -75,7 +80,6 @@ class ComponentManager(Service):
             # start the background process that tracks and propagates available
             # endpoints to the other connected endpoints
             manager.run_daemon_task(self._track_and_propagate_available_endpoints)
-            manager.run_daemon_task(self._handle_shutdown_request)
 
             # start the component manager
             components = tuple(
@@ -91,18 +95,17 @@ class ComponentManager(Service):
             )
 
             for component in active_components:
-                manager.run_task(self._run_component, component)
+                manager.run_task(component.run)
 
+            manager.run_task(self._handle_shutdown_request, active_components)
             await self._stop_components.wait()
 
-            await asyncio.gather(*(
-                self._stop_component(component)
-                for component in active_components
-            ))
+            for component in active_components:
+                manager.run_task(component.stop)
 
             self._components_stopped.set()
 
-    async def _handle_shutdown_request(self) -> None:
+    async def _handle_shutdown_request(self, components: Collection[ComponentAPI]) -> None:
         req = await self._endpoint.wait_for(ShutdownRequest)
         self._stop_components.set()
 
@@ -111,8 +114,8 @@ class ComponentManager(Service):
         except asyncio.TimeoutError:
             self.cancel()
 
-        hint = f"({reason})" if reason else f""
-        logger.info('Shutting down Trinity %s', hint)
+        hint = f"({req.reason})" if req.reason else f""
+        self.logger.info('Shutting down Trinity %s', hint)
 
         remove_dangling_ipc_files(self.logger, self.trinity_config.ipc_dir)
 

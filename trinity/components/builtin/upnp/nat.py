@@ -52,7 +52,7 @@ def find_internal_ip_on_device_network(upnp_dev: upnpclient.upnp.Device) -> str:
     raise NoInternalAddressMatchesDevice(device_hostname=parsed_url.hostname)
 
 
-class UPnPService(BaseService):
+class UPnPService(ComponentService):
     """
     Generate a mapping of external network IP address/port to internal IP address/port,
     using the Universal Plug 'n' Play standard.
@@ -60,13 +60,8 @@ class UPnPService(BaseService):
 
     _nat_portmap_lifetime = 30 * 60
 
-    def __init__(self, port: int, token: CancelToken = None) -> None:
-        """
-        :param port: The port that a server wants to bind to on this machine, and
-        make publicly accessible.
-        """
-        super().__init__(token)
-        self.port = port
+    async def run_component_service(self, boot_info: TrinityBootInfo, endpoint: EndpointAPI) -> None:
+        port = boot_info.trinity_config.port
         self._mapping: PortMapping = None  # when called externally, this never returns None
 
     async def _run(self) -> None:
@@ -79,9 +74,7 @@ class UPnPService(BaseService):
             try:
                 await self.add_nat_portmap()
                 # Wait for the port mapping lifetime, and then try registering it again
-                await self.wait(asyncio.sleep(self._nat_portmap_lifetime))
-            except OperationCancelled:
-                break
+                await asyncio.sleep(self._nat_portmap_lifetime)
             except Exception:
                 self.logger.exception("Failed to setup NAT portmap")
 

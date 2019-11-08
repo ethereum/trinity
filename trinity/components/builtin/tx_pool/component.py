@@ -2,7 +2,10 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
+import logging
+
 from asyncio_run_in_process import open_in_process
+from lahja import EndpointAPI
 
 from eth.chains.mainnet import (
     PETERSBURG_MAINNET_BLOCK,
@@ -10,6 +13,8 @@ from eth.chains.mainnet import (
 from eth.chains.ropsten import (
     PETERSBURG_ROPSTEN_BLOCK,
 )
+
+from p2p.asyncio_service import Manager
 
 from trinity.config import (
     Eth1AppConfig,
@@ -23,6 +28,7 @@ from trinity.constants import (
 from trinity.db.manager import DBClient
 from trinity.extensibility import (
     BaseComponent,
+    ComponentService,
 )
 from trinity.components.builtin.tx_pool.pool import (
     TxPool,
@@ -81,36 +87,8 @@ class TxComponent(BaseComponent):
             self._proc = proc
             await proc.wait()
 
-
     async def stop(self) -> None:
         self._proc.terminate()
-
-
-class ComponentService(Service):
-    def __init__(self, boot_info: TrinityBootInfo, endpoint_name: str) -> None:
-        self._boot_info = boot_info
-        self._endpoint_name = endpoint_name
-
-    async def run(self, manager: ManagerAPI) -> None:
-        # setup cross process logging
-        log_queue = self._boot_info.boot_kwargs['log_queue']
-        level = self._boot_info.boot_kwargs.get('log_level', logging.INFO)
-        setup_queue_logging(log_queue, level)
-        if self.boot_info.args.log_levels:
-            setup_log_levels(self.boot_info.args.log_levels)
-
-        # setup the lahja endpoint
-        self._connection_config = ConnectionConfig.from_name(
-            self._endpoint_name,
-            boot_info.trinity_config.ipc_dir
-        )
-
-        async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
-            await self.run_component_service(endpoint)
-
-    @abstractmethod
-    async def run_component_service(self, endpoint: EndpointAPI) -> None:
-        ...
 
 
 class TxPoolService(ComponentService):
