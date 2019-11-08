@@ -2,9 +2,7 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-import asyncio
-
-from lahja import EndpointAPI
+from asyncio_run_in_process import open_in_process
 
 from eth.chains.mainnet import (
     PETERSBURG_MAINNET_BLOCK,
@@ -13,7 +11,6 @@ from eth.chains.ropsten import (
     PETERSBURG_ROPSTEN_BLOCK,
 )
 
-from trinity._utils.shutdown import exit_with_services
 from trinity.config import (
     Eth1AppConfig,
 )
@@ -25,7 +22,7 @@ from trinity.constants import (
 )
 from trinity.db.manager import DBClient
 from trinity.extensibility import (
-    AsyncioIsolatedComponent,
+    BaseComponent,
 )
 from trinity.components.builtin.tx_pool.pool import (
     TxPool,
@@ -36,12 +33,11 @@ from trinity.components.builtin.tx_pool.validators import (
 from trinity.protocol.eth.peer import ETHProxyPeerPool
 
 
-class TxComponent(AsyncioIsolatedComponent):
+class TxComponent(BaseComponent):
     tx_pool: TxPool = None
+    name: "TxComponent"
 
-    @property
-    def name(self) -> str:
-        return "TxComponent"
+    logger = logging.getLogger('trinity.components.TxComponent')
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -51,24 +47,17 @@ class TxComponent(AsyncioIsolatedComponent):
             help="Disables the Transaction Pool",
         )
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-
+    @property
+    def is_enabled(self) -> bool:
         light_mode = self.boot_info.args.sync_mode == SYNC_LIGHT
         is_disable = self.boot_info.args.disable_tx_pool
         is_supported = not light_mode
         is_enabled = not is_disable and is_supported
-
-        if is_disable:
-            self.logger.debug("Transaction pool disabled")
-        elif not is_supported:
+        if not is_supported:
             self.logger.warning("Transaction pool disabled.  Not supported in light mode.")
-        elif is_enabled:
-            self.start()
-        else:
-            raise Exception("This code path should be unreachable")
+        return is_enabled
 
-    def do_start(self) -> None:
-
+    async def run(self) -> None:
         trinity_config = self.boot_info.trinity_config
         db = DBClient.connect(trinity_config.database_ipc_path)
 
@@ -86,14 +75,62 @@ class TxComponent(AsyncioIsolatedComponent):
 
         proxy_peer_pool = ETHProxyPeerPool(self.event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 
-        self.tx_pool = TxPool(self.event_bus, proxy_peer_pool, validator)
-        asyncio.ensure_future(exit_with_services(self.tx_pool, self._event_bus_service))
-        asyncio.ensure_future(self.tx_pool.run())
+        tx_pool = TxPool(self.event_bus, proxy_peer_pool, validator)
 
-    async def do_stop(self) -> None:
-        # This isn't really needed for the standard shutdown case as the TxPool will automatically
-        # shutdown whenever the `CancelToken` it was chained with is triggered. It may still be
-        # useful to stop the TxPool component individually though.
-        if self.tx_pool.is_operational:
-            await self.tx_pool.cancel()
-            self.logger.info("Successfully stopped TxPool")
+        async with open_in_process(tx_pool.run) as proc:
+            self._proc = proc
+            await proc.wait()
+
+
+    async def stop(self) -> None:
+        self._proc.terminate()
+
+
+class ComponentService(Service):
+    def __init__(self, boot_info: TrinityBootInfo, endpoint_name: str) -> None:
+        self._boot_info = boot_info
+        self._endpoint_name = endpoint_name
+
+    async def run(self, manager: ManagerAPI) -> None:
+        # setup cross process logging
+        log_queue = self._boot_info.boot_kwargs['log_queue']
+        level = self._boot_info.boot_kwargs.get('log_level', logging.INFO)
+        setup_queue_logging(log_queue, level)
+        if self.boot_info.args.log_levels:
+            setup_log_levels(self.boot_info.args.log_levels)
+
+        # setup the lahja endpoint
+        self._connection_config = ConnectionConfig.from_name(
+            self._endpoint_name,
+            boot_info.trinity_config.ipc_dir
+        )
+
+        async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
+            await self.run_component_service(endpoint)
+
+    @abstractmethod
+    async def run_component_service(self, endpoint: EndpointAPI) -> None:
+        ...
+
+
+class TxPoolService(ComponentService):
+    async def run_component_service(self, endpoint: EndpointAPI) -> None:
+        trinity_config = self._boot_info.trinity_config
+        db = DBClient.connect(trinity_config.database_ipc_path)
+
+        app_config = trinity_config.get_app_config(Eth1AppConfig)
+        chain_config = app_config.get_chain_config()
+
+        chain = chain_config.full_chain_class(db)
+
+        if self._boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
+            validator = DefaultTransactionValidator(chain, PETERSBURG_MAINNET_BLOCK)
+        elif self._boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
+            validator = DefaultTransactionValidator(chain, PETERSBURG_ROPSTEN_BLOCK)
+        else:
+            raise ValueError("The TxPool component only supports MainnetChain or RopstenChain")
+
+        proxy_peer_pool = ETHProxyPeerPool(endpoint, TO_NETWORKING_BROADCAST_CONFIG)
+
+        tx_pool = TxPool(endpoint, proxy_peer_pool, validator)
+        await Manager(tx_pool).run()
