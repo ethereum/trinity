@@ -6,19 +6,20 @@ import ipaddress
 from typing import (
     AsyncGenerator,
     NamedTuple,
+    Optional,
 )
 from urllib.parse import urlparse
 
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
 from p2p.exceptions import (
     NoInternalAddressMatchesDevice,
 )
 import netifaces
-from p2p.service import BaseService
 
+from trinity.extensibility import (
+    ComponentService,
+)
+
+# TODO: we shouldn't be importing from a private namespace.
 from eth._warnings import catch_and_ignore_import_warning
 with catch_and_ignore_import_warning():
     import upnpclient
@@ -58,19 +59,20 @@ class UPnPService(ComponentService):
     using the Universal Plug 'n' Play standard.
     """
 
+    # 30 minutes
     _nat_portmap_lifetime = 30 * 60
 
-    async def run_component_service(self, boot_info: TrinityBootInfo, endpoint: EndpointAPI) -> None:
-        port = boot_info.trinity_config.port
-        self._mapping: PortMapping = None  # when called externally, this never returns None
-
-    async def _run(self) -> None:
-        """Run an infinite loop refreshing our NAT port mapping.
+    async def run_component_service(self) -> None:
+        """
+        Run an infinite loop refreshing our NAT port mapping.
 
         On every iteration we configure the port mapping with a lifetime of 30 minutes and then
         sleep for that long as well.
         """
-        while self.is_operational:
+        self.port = self.boot_info.trinity_config.port
+        self._mapping: PortMapping = None  # when called externally, this never returns None
+
+        while self.manager.is_running:
             try:
                 await self.add_nat_portmap()
                 # Wait for the port mapping lifetime, and then try registering it again
@@ -81,7 +83,7 @@ class UPnPService(ComponentService):
     async def _cleanup(self) -> None:
         pass
 
-    async def add_nat_portmap(self) -> str:
+    async def add_nat_portmap(self) -> Optional[str]:
         """
         Set up the port mapping
 
@@ -149,7 +151,7 @@ class UPnPService(ComponentService):
         # while to complete. We must use a ThreadPoolExecutor() because the
         # response from upnpclient.discover() can't be pickled.
         try:
-            devices = await self.wait(
+            devices = await asyncio.wait_for(
                 loop.run_in_executor(ThreadPoolExecutor(max_workers=1), upnpclient.discover),
                 timeout=UPNP_DISCOVER_TIMEOUT_SECONDS,
             )

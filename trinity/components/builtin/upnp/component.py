@@ -2,17 +2,15 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-import asyncio
 
-from lahja import EndpointAPI
+from asyncio_run_in_process import asyncio_run_in_process
+
+from p2p.asycnio_service import Manager
 
 from trinity.extensibility import (
     BaseComponent,
-    ComponentService,
 )
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
+
 from .nat import (
     UPnPService
 )
@@ -40,9 +38,11 @@ class UpnpComponent(BaseComponent):
         )
 
     async def run(self) -> None:
-        port = self.boot_info.trinity_config.port
-        upnp_service = UPnPService(port)
+        upnp_service = UPnPService(self.boot_info, self.name)
 
-        async with background_service(upnp_service) as manager:
-            await manager.wait_stopped()
+        async with asyncio_run_in_process(Manager.run_service, upnp_service) as proc:
+            self._proc = proc
+            await proc.wait()
 
+    async def stop(self) -> None:
+        self._proc.terminate()
