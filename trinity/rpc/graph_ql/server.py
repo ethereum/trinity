@@ -2,6 +2,7 @@ import json
 import logging
 from asyncio.unix_events import _UnixSelectorEventLoop
 from typing import (
+    Any,
     AnyStr,
     List,
     Dict,
@@ -11,9 +12,10 @@ from typing import (
 from graphql import GraphQLError
 from graphql.execution.executors.asyncio import AsyncioExecutor
 
-from eth.chains.base import Chain
-
 from trinity.rpc.abc import BaseRPCServer
+from trinity.rpc.graph_ql.graphiql import graphiql_html
+from trinity.rpc.json_rpc.modules import Eth1ChainRPCModule
+from trinity.rpc.typing import Response
 from .types import schema
 
 
@@ -25,21 +27,26 @@ def extract_errors(errors: GraphQLError) -> Optional[List[str]]:
 
 class GraphQlServer(BaseRPCServer):
     logger = logging.getLogger("GraphQlServer")
+    supported_methods = ['GET', 'POST']
 
-    def __init__(self, chain: Chain, loop: Optional[_UnixSelectorEventLoop]=None):
-        self.chain = chain
+    def __init__(self, chainrpc: Eth1ChainRPCModule, loop: Optional[_UnixSelectorEventLoop]=None):
+        self.chainrpc = chainrpc
         self.executor = AsyncioExecutor(loop=loop)
 
-    async def execute(self, query: Dict[str, AnyStr]) -> str:
+    async def execute_post(self, query: Dict[str, AnyStr]) -> str:
         result = await schema.execute(
             query['query'],
             executor=self.executor,
-            context={'chain': self.chain},
+            context=dict(
+                chain=self.chainrpc.chain,
+                event_bus=self.chainrpc.event_bus
+            ),
             return_promise=True
         )
-        self.logger.info(f'generated result {result.data}')
-        self.logger.info(f'generated error {result.errors}')
         return json.dumps({
-            'result': result.data,
+            'data': result.data,
             'errors': extract_errors(result.errors),
         })
+
+    async def execute_get(self, request: Dict[str, Any]) -> Response:
+        return Response(content_type='html/text', body=graphiql_html)

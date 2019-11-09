@@ -263,7 +263,7 @@ def result_from_response(response_str):
 
 async def call_rpc(rpc, method, params):
     request = build_request(method, params)
-    response = await rpc.execute(request)
+    response = await rpc.execute_post(request)
     return result_from_response(response)
 
 

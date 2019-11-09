@@ -9,13 +9,9 @@ from typing import (
     List,
     Union,
 )
-from mypy_extensions import (
-    TypedDict,
-)
 
 from eth_typing import (
     Address,
-    BlockNumber,
     Hash32,
 )
 from eth_utils import (
@@ -39,6 +35,7 @@ from trinity.rpc.format import (
     to_int_if_hex,
     transaction_to_dict,
 )
+from trinity.rpc.typing import SyncProgress
 from trinity.rpc.utils import (
     get_header,
     get_block_at_number,
@@ -204,11 +201,6 @@ class Eth(Eth1ChainRPCModule):
 
     async def protocolVersion(self) -> str:
         return "63"
-
-    class SyncProgress(TypedDict):
-        startingBlock: BlockNumber
-        currentBlock: BlockNumber
-        highestBlock: BlockNumber
 
     async def syncing(self) -> Union[bool, SyncProgress]:
         res = await self.event_bus.request(SyncingRequest(), TO_NETWORKING_BROADCAST_CONFIG)

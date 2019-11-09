@@ -50,7 +50,7 @@ async def test_http_server(aiohttp_raw_server, aiohttp_client, event_bus, base_d
         chaindb.persist_block(genesis_block, genesis_block.__class__, fork_choice_scoring)
         try:
             rpc = JsonRPCServer(initialize_beacon_modules(chaindb, event_bus), chaindb, event_bus)
-            raw_server = await aiohttp_raw_server(handler(rpc.execute))
+            raw_server = await aiohttp_raw_server(handler(rpc))
             client = await aiohttp_client(raw_server)
 
             request_id = 1

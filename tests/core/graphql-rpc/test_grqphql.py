@@ -16,6 +16,7 @@ from eth_utils.toolz import (
 from trinity.rpc.graph_ql.server import (
     GraphQlServer,
 )
+from trinity.rpc.json_rpc.modules import Eth1ChainRPCModule
 
 SIMPLE_CONTRACT_ADDRESS = b'\x88' * 20
 
@@ -95,9 +96,9 @@ def chain(chain_without_block_validation):
 
 
 @pytest.fixture()
-def rpc(chain, event_loop):
+def rpc(chain, event_bus, event_loop):
     # overrides fixture from conftest
-    return GraphQlServer(chain, event_loop)
+    return GraphQlServer(Eth1ChainRPCModule(chain, event_bus), event_loop)
 
 
 @pytest.fixture
@@ -148,7 +149,7 @@ def genesis_state(base_genesis_state):
     (
         pytest.param(
             build_request("{ block {number} }"),
-            {'result': {'block': {'number': '0x0'}}, 'errors': None},
+            {'data': {'block': {'number': '0x0'}}, 'errors': None},
             id='eth_blockNumber'
         ),
         pytest.param(
@@ -160,12 +161,12 @@ def genesis_state(base_genesis_state):
                 )
             }
             """),
-            {'errors': None, 'result': {'estimateGas': 21000}},
+            {'errors': None, 'data': {'estimateGas': 21000}},
             id='eth_estimateGas'
         ),
         pytest.param(
             build_request("{gasPrice}"),
-            {'errors': None, 'result': {'gasPrice': 1000000000}},
+            {'errors': None, 'data': {'gasPrice': 1000000000}},
             id='eth_gasPrice'
         ),
         pytest.param(
@@ -179,7 +180,7 @@ def genesis_state(base_genesis_state):
                     }
                 }
             """),
-            {'errors': None, 'result': {'account': {'balance': 0}}},
+            {'errors': None, 'data': {'account': {'balance': 0}}},
             id='eth_getBalance'
         ),
         pytest.param(
@@ -194,7 +195,7 @@ def genesis_state(base_genesis_state):
                     status
                 }
             }"""),  # noqa: W291
-            {'errors': None, 'result': {'call': {'data': '0x123456', 'gasUsed': 18, 'status': 1}}}
+            {'errors': None, 'data': {'call': {'data': '0x123456', 'gasUsed': 18, 'status': 1}}}
         ),
         pytest.param(
             build_request("""{
@@ -205,7 +206,7 @@ def genesis_state(base_genesis_state):
             }"""),
             {
                 'errors': None,
-                'result': {
+                'data': {
                     'block':
                         {
                             'hash': '0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3',  # noqa E501
@@ -224,7 +225,7 @@ def genesis_state(base_genesis_state):
             }"""),
             {
                 'errors': None,
-                'result': {
+                'data': {
                     'block':
                         {
                             'hash': '0xdde15d36d345d0e70426a0ba36b3c449bf21fc461362c50271536f1614d9eaf3',  # noqa: E501
@@ -240,7 +241,7 @@ def genesis_state(base_genesis_state):
                     transactionCount
                 }
             }"""),
-            {'errors': None, 'result': {'block': {'transactionCount': '0x0'}}},
+            {'errors': None, 'data': {'block': {'transactionCount': '0x0'}}},
             id='eth_getBlockTransactionCountByHash'
         ),
         pytest.param(
@@ -249,7 +250,7 @@ def genesis_state(base_genesis_state):
                     transactionCount
                 }
             }"""),
-            {'errors': None, 'result': {'block': {'transactionCount': '0x0'}}},
+            {'errors': None, 'data': {'block': {'transactionCount': '0x0'}}},
             id='eth_getBlockTransactionCountByNumber'
         ),
         pytest.param(
@@ -263,7 +264,7 @@ def genesis_state(base_genesis_state):
                     }
                 }
             """ % encode_hex(SIMPLE_CONTRACT_ADDRESS)),
-            {'errors': None, 'result': {'account': {'code': encode_hex(SIMPLE_CONTRACT_CODE)}}},
+            {'errors': None, 'data': {'account': {'code': encode_hex(SIMPLE_CONTRACT_CODE)}}},
             id='eth_getCode'
         ),
         pytest.param(
@@ -277,7 +278,7 @@ def genesis_state(base_genesis_state):
                     }
                 }
             """ % encode_hex(SIMPLE_CONTRACT_ADDRESS)),
-            {'errors': None, 'result': {'account': {'storage': '0x01'}}},
+            {'errors': None, 'data': {'account': {'storage': '0x01'}}},
             id='eth_getStorageAt'
         ),
 
@@ -317,7 +318,7 @@ async def test_rpc_methods(
             """),
             {
                 'errors': None,
-                'result': {
+                'data': {
                     'block': {
                         'transactionAt': {
                             'from': {
@@ -351,7 +352,7 @@ async def test_rpc_methods(
             """),
             {
                 'errors': None,
-                'result': {
+                'data': {
                     'block': {
                         'transactionAt': {
                             'from': {
@@ -383,7 +384,7 @@ async def test_rpc_methods(
             """),  # noqa: E501
             {
                 'errors': None,
-                'result': {
+                'data': {
                     'transaction': {
                         'from': {
                             'address': '0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b'
@@ -407,7 +408,7 @@ async def test_rpc_methods(
             """),
             {
                 'errors': None,
-                'result': {
+                'data': {
                     'account': {
                         'transactionCount': '0x1'
                     }
@@ -431,7 +432,7 @@ async def test_rpc_methods(
             """),  # noqa: E501
             {
                 'errors': None,
-                'result': {
+                'data': {
                     'transaction': {
                         'from': {
                             'address': '0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b'

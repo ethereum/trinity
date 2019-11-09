@@ -2,7 +2,6 @@ import asyncio
 import logging
 from typing import (
     Any,
-    Callable,
 )
 
 from aiohttp import web
@@ -22,10 +21,12 @@ from trinity.rpc.abc import (
 
 
 @curry
-async def handler(execute_rpc: Callable[[Any], Any], request: web.Request) -> web.Response:
+async def handler(rpc: BaseRPCServer, request: web.Request) -> web.Response:
     logger = logging.getLogger('trinity.rpc.http')
 
-    if request.method == 'POST':
+    if request.method not in rpc.supported_methods:
+        return response_error("Request method not supported")
+    elif request.method == 'POST':
         logger.debug(f'Receiving request: {request}')
         try:
             body_json = await request.json()
@@ -37,7 +38,7 @@ async def handler(execute_rpc: Callable[[Any], Any], request: web.Request) -> we
             return response_error(msg)
 
         try:
-            result = await execute_rpc(body_json)
+            result = await rpc.execute_post(body_json)
         except Exception as e:
             msg = "Unrecognized exception while executing RPC"
             logger.exception(msg)
@@ -45,8 +46,11 @@ async def handler(execute_rpc: Callable[[Any], Any], request: web.Request) -> we
         else:
             logger.debug(f'writing: {result.encode()}')
             return web.Response(content_type='application/json', text=result)
+    elif request.method == 'GET':
+        response = await rpc.execute_get({})
+        return web.Response(content_type=response.content_type, body=response.body)
     else:
-        return response_error("Request method should be POST")
+        raise Exception('Invariant')
 
 
 def response_error(message: Any) -> web.Response:
@@ -71,7 +75,7 @@ class HTTPServer(BaseService):
         self.rpc = rpc
         self.host = host
         self.port = port
-        self.server = web.Server(handler(self.rpc.execute))
+        self.server = web.Server(handler(self.rpc))
 
     async def _run(self) -> None:
         runner = web.ServerRunner(self.server)

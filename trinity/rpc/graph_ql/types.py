@@ -45,15 +45,18 @@ from trinity._utils.validation import (
     validate_transaction_gas_estimation_dict,
     validate_transaction_call_dict
 )
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.rpc.format import (
     merge_transaction_defaults,
     to_int_if_hex,
 )
+from trinity.rpc.typing import SyncProgress
 from trinity.rpc.utils import (
     state_at_block,
     get_header,
     dict_to_spoof_transaction,
 )
+from trinity.sync.common.events import SyncingRequest
 
 
 class BaseBytes(Scalar):
@@ -303,6 +306,24 @@ class CallResult(ObjectType):
         return 0 if computation.is_error else 1
 
 
+class SyncState(ObjectType):
+    startingBlock = Int()
+    currentBlock = Int()
+    highestBlock = Int()
+
+    @staticmethod
+    def resolve_startingBlock(sync_progress: SyncProgress, info: ResolveInfo) -> BlockNumber:
+        return sync_progress['startingBlock']
+
+    @staticmethod
+    def resolve_currentBlock(sync_progress: SyncProgress, info: ResolveInfo) -> BlockNumber:
+        return sync_progress['currentBlock']
+
+    @staticmethod
+    def resolve_highestBlock(sync_progress: SyncProgress, info: ResolveInfo) -> BlockNumber:
+        return sync_progress['highestBlock']
+
+
 class Query(ObjectType):
     block = Field(Block, number=Int(), hash=String())
     transaction = Field(Transaction, hash=String())
@@ -322,6 +343,7 @@ class Query(ObjectType):
         data=Argument(CallData, required=True),
         at_block=String(name='blockNumber')
     )
+    syncing = Field(SyncState)
 
     @staticmethod
     async def resolve_block(
@@ -390,6 +412,18 @@ class Query(ObjectType):
         )
         computation = chain.get_transaction_computation(transaction, header)
         return computation
+
+    @staticmethod
+    async def resolve_syncing(_: Any, info: ResolveInfo) -> Optional[SyncProgress]:
+        event_bus = info.context.get('event_bus')
+        res = await event_bus.request(SyncingRequest(), TO_NETWORKING_BROADCAST_CONFIG)
+        if res.is_syncing:
+            return {
+                "startingBlock": res.progress.starting_block,
+                "currentBlock": res.progress.current_block,
+                "highestBlock": res.progress.highest_block
+            }
+        return None
 
 
 schema = Schema(query=Query)

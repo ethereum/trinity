@@ -140,7 +140,7 @@ class IPCServer(BaseService):
 
     async def _run(self) -> None:
         self.server = await asyncio.start_unix_server(
-            connection_handler(self.rpc.execute, self.cancel_token),
+            connection_handler(self.rpc.execute_post, self.cancel_token),
             str(self.ipc_path),
             loop=self.get_event_loop(),
             limit=MAXIMUM_REQUEST_BYTES,

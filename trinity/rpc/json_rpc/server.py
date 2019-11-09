@@ -23,6 +23,7 @@ from trinity.rpc.json_rpc.modules import (
 from trinity.rpc.json_rpc.retry import (
     execute_with_retries,
 )
+from trinity.rpc.typing import Response
 
 REQUIRED_REQUEST_KEYS = {
     'id',
@@ -64,6 +65,7 @@ class JsonRPCServer(BaseRPCServer):
     :meth:`JsonRPCServer.eth_getBlockByHash`.
     """
     chain = None
+    supported_methods = ['POST']
 
     def __init__(self,
                  modules: Sequence[BaseRPCModule],
@@ -139,9 +141,13 @@ class JsonRPCServer(BaseRPCServer):
         else:
             return result, None
 
-    async def execute(self, request: Dict[str, Any]) -> str:
+    async def execute_post(self, request: Dict[str, Any]) -> str:
         """
         The key entry point for all incoming requests
         """
         result, error = await self._get_result(request)
         return generate_response(request, result, error)
+
+    async def execute_get(self, request: Dict[str, Any]) -> Response:
+        # TODO: change this Exception
+        raise Exception('Get method is not supported by JSON-RPC')
