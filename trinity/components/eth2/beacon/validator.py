@@ -14,13 +14,11 @@ from typing import (
 
 from lahja import EndpointAPI
 
-from cancel_token import (
-    CancelToken,
-)
 from eth_utils import (
     humanize_hash,
     to_tuple,
     ValidationError,
+    get_extended_debug_logger,
 )
 
 from eth2.beacon.chains.base import (
@@ -64,9 +62,7 @@ from eth2.beacon.typing import (
     Slot,
     ValidatorIndex,
 )
-from p2p.service import (
-    BaseService,
-)
+from p2p.trio_service import Service
 from trinity._utils.shellart import (
     bold_green,
 )
@@ -79,7 +75,7 @@ from trinity.protocol.bcc_libp2p.node import Node
 GetReadyAttestationsFn = Callable[[], Sequence[Attestation]]
 
 
-class Validator(BaseService):
+class Validator(Service):
     chain: BaseBeaconChain
     p2p_node: Node
     validator_privkeys: Dict[ValidatorIndex, int]
@@ -89,15 +85,15 @@ class Validator(BaseService):
     latest_attested_epoch: Dict[ValidatorIndex, Epoch]
     this_epoch_assignment: Dict[ValidatorIndex, Tuple[Epoch, CommitteeAssignment]]
 
+    logger = get_extended_debug_logger('trinity.beacon.Validator')
+
     def __init__(
             self,
             chain: BaseBeaconChain,
             p2p_node: Node,
             validator_privkeys: Dict[ValidatorIndex, int],
             event_bus: EndpointAPI,
-            get_ready_attestations_fn: GetReadyAttestationsFn,
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            get_ready_attestations_fn: GetReadyAttestationsFn) -> None:
         self.chain = chain
         self.p2p_node = p2p_node
         self.validator_privkeys = validator_privkeys
@@ -118,13 +114,13 @@ class Validator(BaseService):
             )
         self.get_ready_attestations: GetReadyAttestationsFn = get_ready_attestations_fn
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.info(
             bold_green("validating with indices %s"),
             sorted(tuple(self.validator_privkeys.keys()))
         )
-        self.run_daemon_task(self.handle_slot_tick())
-        await self.cancellation()
+        self.manager.run_daemon_task(self.handle_slot_tick)
+        await self.manager.wait_stopped()
 
     async def handle_slot_tick(self) -> None:
         """

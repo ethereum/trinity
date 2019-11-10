@@ -7,15 +7,10 @@ from typing import (
 
 from eth_utils import (
     ValidationError,
+    get_extended_debug_logger,
 )
 
-from cancel_token import (
-    CancelToken,
-)
-
-from p2p.service import (
-    BaseService,
-)
+from p2p.trio_service import Service
 
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
@@ -42,7 +37,7 @@ from eth2.configs import (
 from trinity.protocol.bcc_libp2p.exceptions import RequestFailure
 
 
-class BeaconChainSyncer(BaseService):
+class BeaconChainSyncer(Service):
     """Sync from our finalized head until their preliminary head."""
 
     chain_db: BaseAsyncBeaconChainDB
@@ -51,14 +46,13 @@ class BeaconChainSyncer(BaseService):
     genesis_config: Eth2GenesisConfig
     sync_peer: Peer
 
+    logger = get_extended_debug_logger('trinity.beacon.BeaconChainSyncer')
+
     def __init__(self,
                  chain_db: BaseAsyncBeaconChainDB,
                  peer_pool: PeerPool,
                  block_importer: SyncBlockImporter,
-                 genesis_config: Eth2GenesisConfig,
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
-
+                 genesis_config: Eth2GenesisConfig) -> None:
         self.chain_db = chain_db
         self.peer_pool = peer_pool
         self.block_importer = block_importer
@@ -70,14 +64,14 @@ class BeaconChainSyncer(BaseService):
     def is_sync_peer_selected(self) -> bool:
         return self.sync_peer is not None
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         for retry in itertools.count():
             is_last_retry = retry == PEER_SELECTION_MAX_RETRIES - 1
             if retry >= PEER_SELECTION_MAX_RETRIES:
                 raise Exception("Invariant: Cannot exceed max retries")
 
             try:
-                self.sync_peer = await self.wait(self.select_sync_peer())
+                self.sync_peer = await self.select_sync_peer()
             except ValidationError as exception:
                 self.logger.info(f"No suitable peers to sync with: {exception}")
                 if is_last_retry:
@@ -97,7 +91,7 @@ class BeaconChainSyncer(BaseService):
             self.logger.info("Failed to find suitable sync peer in time")
             return
 
-        await self.wait(self.sync())
+        await self.sync()
 
         new_head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
         self.logger.info(f"Sync with {self.sync_peer} finished, new head: {new_head}")

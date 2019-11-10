@@ -49,10 +49,10 @@ class PeerDBServer(Service):
                 req.broadcast_config(),
             )
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.debug("Running PeerDBServer")
 
         self.manager.run_daemon_task(self.handle_track_peer_event)
         self.manager.run_daemon_task(self.handle_get_peer_candidates_request)
 
-        await self.manager.wait_stopped()
+        await self.manager.wait_forever()

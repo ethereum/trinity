@@ -143,6 +143,16 @@ class ManagerAPI(ABC):
         """
         ...
 
+    @abstractmethod
+    async def wait_forever(self) -> None:
+        """
+        Blocks indefinitly.
+
+        Typically used at the end of a `Service.run()` method to wait until the
+        service is cancelled by an external mechanism.
+        """
+        ...
+
     @classmethod
     @abstractmethod
     async def run_service(cls, service: ServiceAPI) -> None:
@@ -423,6 +433,9 @@ class Manager(ManagerAPI):
 
     async def wait_stopped(self) -> None:
         await self._stopped.wait()
+
+    async def wait_forever(self) -> None:
+        await trio.sleep_forever()
 
     async def _run_and_manage_task(self,
                                    async_fn: Callable[..., Awaitable[Any]],

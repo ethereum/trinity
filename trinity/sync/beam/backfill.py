@@ -11,7 +11,6 @@ from typing import (
     Type,
 )
 
-from cancel_token import CancelToken, OperationCancelled
 from eth.abc import AtomicDatabaseAPI
 from eth_typing import Hash32
 import rlp
@@ -20,7 +19,7 @@ from p2p.abc import CommandAPI
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.service import BaseService
+from p2p.trio_service import Service
 
 from trinity.protocol.eth.commands import (
     NodeData,
@@ -56,7 +55,7 @@ class QueenTrackerAPI(ABC):
         ...
 
 
-class BeamStateBackfill(BaseService, PeerSubscriber, QueenTrackerAPI):
+class BeamStateBackfill(Service, PeerSubscriber, QueenTrackerAPI):
     """
     Use a very simple strategy to fill in state in the background.
 
@@ -84,14 +83,8 @@ class BeamStateBackfill(BaseService, PeerSubscriber, QueenTrackerAPI):
     def __init__(
             self,
             db: AtomicDatabaseAPI,
-            peer_pool: ETHPeerPool,
-            token: CancelToken = None) -> None:
+            peer_pool: ETHPeerPool) -> None:
 
-        # in case there is no token set, make sure this gets cancelled when the peer pool does
-        if token is None:
-            token = peer_pool.cancel_token
-
-        super().__init__(token=token)
         self._db = db
 
         # Pending nodes to download
@@ -141,11 +134,11 @@ class BeamStateBackfill(BaseService, PeerSubscriber, QueenTrackerAPI):
             )
             self.call_later(delay, self._waiting_peers.put_nowait, peer)
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self._periodically_report_progress())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self._periodically_report_progress)
 
         with self.subscribe(self._peer_pool):
-            await self.wait(self._run_backfill())
+            await self._run_backfill()
 
     async def _run_backfill(self) -> None:
         while self.is_operational:
@@ -185,7 +178,7 @@ class BeamStateBackfill(BaseService, PeerSubscriber, QueenTrackerAPI):
                 await self.sleep(2)
                 continue
 
-            self.run_task(self._make_request(peer, on_deck))
+            self.manager.run_task(self._make_request, peer, on_deck)
 
     async def _make_request(self, peer: ETHPeer, request_hashes: Tuple[Hash32, ...]) -> None:
         self._num_requests_by_peer[peer] += 1
@@ -194,7 +187,7 @@ class BeamStateBackfill(BaseService, PeerSubscriber, QueenTrackerAPI):
         except asyncio.TimeoutError:
             self._node_hashes.extend(request_hashes)
             self.call_later(GAP_BETWEEN_TESTS * 2, self._waiting_peers.put_nowait, peer)
-        except (PeerConnectionLost, OperationCancelled):
+        except PeerConnectionLost:
             # Something unhappy, but we don't really care, peer will be gone by next loop
             self._node_hashes.extend(request_hashes)
         except (BaseP2PError, Exception) as exc:

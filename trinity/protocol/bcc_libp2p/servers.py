@@ -170,9 +170,9 @@ class BCCReceiveServer(Service):
         self.orphan_block_pool = OrphanBlockPool()
         self.ready = asyncio.Event()
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         while not self.p2p_node.is_started:
-            await self.sleep(0.5)
+            await asyncio.sleep(0.5)
         self.logger.info("BCCReceiveServer up")
         self.manager.run_daemon_task(self._handle_beacon_attestation_loop)
         self.manager.run_daemon_task(self._handle_beacon_block_loop)
@@ -213,7 +213,7 @@ class BCCReceiveServer(Service):
         orphan blocks in the orphan block pool.
         """
         while True:
-            await self.sleep(PROCESS_ORPHAN_BLOCKS_PERIOD)
+            await asyncio.sleep(PROCESS_ORPHAN_BLOCKS_PERIOD)
             if len(self.orphan_block_pool) == 0:
                 continue
             # TODO: Prune Bruce Wayne type of orphan block

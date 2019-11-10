@@ -247,6 +247,9 @@ class Manager(ManagerAPI):
     async def wait_stopped(self) -> None:
         await self._stopped.wait()
 
+    async def wait_forever(self) -> None:
+        await asyncio.Event().wait()
+
     async def _run_and_manage_task(self,
                                    async_fn: Callable[..., Awaitable[Any]],
                                    *args: Any,

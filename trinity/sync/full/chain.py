@@ -21,7 +21,6 @@ from typing import (
     cast,
 )
 
-from cancel_token import CancelToken, OperationCancelled
 from eth_typing import BlockNumber, Hash32
 from eth_utils import (
     humanize_hash,
@@ -52,7 +51,7 @@ from p2p.abc import CommandAPI
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.service import BaseService
+from p2p.trio_service import Service
 from p2p.stats.ema import EMA
 from p2p.token_bucket import TokenBucket
 
@@ -108,7 +107,7 @@ BlockBodyBundle = Tuple[
 REQUEST_BUFFER_MULTIPLIER = 16
 
 
-class BaseBodyChainSyncer(BaseService, PeerSubscriber):
+class BaseBodyChainSyncer(Service, PeerSubscriber):
 
     NO_PEER_RETRY_PAUSE = 5.0
     "If no peers are available for downloading the chain data, retry after this many seconds"
@@ -129,9 +128,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
                  chain: AsyncChainAPI,
                  db: BaseAsyncChainDB,
                  peer_pool: ETHPeerPool,
-                 header_syncer: HeaderSyncerAPI,
-                 token: CancelToken = None) -> None:
-        super().__init__(token=token)
+                 header_syncer: HeaderSyncerAPI) -> None:
         self.chain = chain
         self.db = db
         self._peer_pool = peer_pool
@@ -160,7 +157,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         # header isn't in the database yet, so must be looked up here.
         self._block_hash_to_state_root: Dict[Hash32, Hash32] = {}
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         with self.subscribe(self._peer_pool):
             await self.cancellation()
 
@@ -178,7 +175,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         # Track the highest registered block header by number, purely for stats/logging
         highest_block_num = -1
 
-        async for headers in self.wait_iter(get_headers_coro):
+        async for headers in get_headers_coro:
             self._got_first_header.set()
             for h in headers:
                 self._block_hash_to_state_root[h.hash] = h.state_root
@@ -195,8 +192,8 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
                 #   - a bug: old headers were pruned out of the tracker, but not in DB yet
 
                 # Skip over all headers found in db, (could happen with a long backtrack)
-                completed_headers, new_headers = await self.wait(
-                    skip_complete_headers(headers, completion_check)
+                completed_headers, new_headers = await skip_complete_headers(
+                    headers, completion_check,
                 )
                 if completed_headers:
                     self.logger.debug(
@@ -213,8 +210,8 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
                 # If the parent header doesn't exist yet, this is a legit bug instead of a fork,
                 # let the HeaderNotFound exception bubble up
                 try:
-                    parent_header = await self.wait(
-                        self.db.coro_get_block_header_by_hash(new_headers[0].parent_hash)
+                    parent_header = await self.db.coro_get_block_header_by_hash(
+                        new_headers[0].parent_hash,
                     )
                     self._block_hash_to_state_root[parent_header.hash] = parent_header.state_root
                 except HeaderNotFound:
@@ -257,13 +254,13 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         """
         while self.is_operational:
             # from all the peers that are not currently downloading block bodies, get the fastest
-            peer = await self.wait(self._body_peers.get_fastest())
+            peer = await self._body_peers.get_fastest()
 
             # get headers for bodies that we need to download, preferring lowest block number
-            batch_id, headers = await self.wait(self._block_body_tasks.get(MAX_BODIES_FETCH))
+            batch_id, headers = await self._block_body_tasks.get(MAX_BODIES_FETCH)
 
             # schedule the body download and move on
-            peer.run_task(self._run_body_download_batch(peer, batch_id, headers))
+            self.manager.run_task(self._run_body_download_batch, peer, batch_id, headers)
 
     async def _block_body_bundle_processing(self, bundles: Tuple[BlockBodyBundle, ...]) -> None:
         """
@@ -343,7 +340,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         and doesn't pair the results with the associated block headers that were successfully
         delivered.
         """
-        block_body_bundles = await self.wait(self._request_block_bodies(peer, headers))
+        block_body_bundles = await self._request_block_bodies(peer, headers)
 
         if len(block_body_bundles) == 0:
             self.logger.debug(
@@ -404,9 +401,6 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         except CancelledError:
             self.logger.debug("Pending block bodies call to %r future cancelled", peer)
             return tuple()
-        except OperationCancelled:
-            self.logger.debug2("Pending block bodies call to %r operation cancelled", peer)
-            return tuple()
         except PeerConnectionLost:
             self.logger.debug("Peer went away, cancelling the block body request and moving on...")
             return tuple()
@@ -459,28 +453,25 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         )
 
 
-class FastChainSyncer(BaseService):
+class FastChainSyncer(Service):
     def __init__(self,
                  chain: AsyncChainAPI,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
-                 token: CancelToken = None) -> None:
-        super().__init__(token=token)
-        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool, token=self.cancel_token)
+                 peer_pool: ETHPeerPool) -> None:
+        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool)
         self._body_syncer = FastChainBodySyncer(
             chain,
             db,
             peer_pool,
             self._header_syncer,
-            self.cancel_token,
         )
 
     @property
     def is_complete(self) -> bool:
         return self._body_syncer.is_complete
 
-    async def _run(self) -> None:
-        self.run_daemon(self._header_syncer)
+    async def run(self) -> None:
+        self.manager.run_daemon_child_service(self._header_syncer)
         await self._body_syncer.run()
         # The body syncer will exit when the body for the target header hash has been persisted
         self._header_syncer.cancel_nowait()
@@ -568,9 +559,8 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
                  chain: AsyncChainAPI,
                  db: BaseAsyncChainDB,
                  peer_pool: ETHPeerPool,
-                 header_syncer: HeaderSyncerAPI,
-                 token: CancelToken = None) -> None:
-        super().__init__(chain, db, peer_pool, header_syncer, token)
+                 header_syncer: HeaderSyncerAPI) -> None:
+        super().__init__(chain, db, peer_pool, header_syncer)
 
         # queue up any idle peers, in order of how fast they return receipts
         self._receipt_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.Receipts)
@@ -598,16 +588,16 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         """
         return await self.db.coro_get_canonical_head()
 
-    async def _run(self) -> None:
-        head = await self.wait(self._sync_from())
+    async def run(self) -> None:
+        head = await self._sync_from()
         self.tracker = ChainSyncPerformanceTracker(head)
 
         self._block_persist_tracker.set_finished_dependency(head)
-        self.run_daemon_task(self._launch_prerequisite_tasks())
-        self.run_daemon_task(self._assign_receipt_download_to_peers())
-        self.run_daemon_task(self._assign_body_download_to_peers())
-        self.run_daemon_task(self._persist_ready_blocks())
-        self.run_daemon_task(self._display_stats())
+        self.manager.run_daemon_task(self._launch_prerequisite_tasks)
+        self.manager.run_daemon_task(self._assign_receipt_download_to_peers)
+        self.manager.run_daemon_task(self._assign_body_download_to_peers)
+        self.manager.run_daemon_task(self._persist_ready_blocks)
+        self.manager.run_daemon_task(self._display_stats)
         await super()._run()
 
     def register_peer(self, peer: BasePeer) -> None:
@@ -640,10 +630,10 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             new_receipt_tasks = tuple(h for h in headers if h not in self._receipt_tasks)
 
             # if any one of the output queues gets full, hang until there is room
-            await self.wait(asyncio.gather(
+            await asyncio.gather(
                 self._block_body_tasks.add(new_body_tasks),
                 self._receipt_tasks.add(new_receipt_tasks),
-            ))
+            )
 
     async def _display_stats(self) -> None:
         while self.is_operational:
@@ -691,8 +681,9 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         while self.is_operational:
             # This tracker waits for all prerequisites to be complete, and returns headers in
             # order, so that each header's parent is already persisted.
-            get_completed_coro = self._block_persist_tracker.ready_tasks(BLOCK_QUEUE_SIZE_TARGET)
-            completed_headers = await self.wait(get_completed_coro)
+            completed_headers = await self._block_persist_tracker.ready_tasks(
+                BLOCK_QUEUE_SIZE_TARGET,
+            )
 
             if self._block_persist_tracker.has_ready_tasks():
                 # Even after clearing out a big batch, there is no available capacity, so
@@ -702,7 +693,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
                 # There is available capacity, let any waiting coroutines continue
                 self._db_buffer_capacity.set()
 
-            await self.wait(self._persist_blocks(completed_headers))
+            await self._persist_blocks(completed_headers)
 
             target_hash = self._header_syncer.get_target_header_hash()
 
@@ -741,7 +732,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
                 self.tracker.record_transactions(len(transactions))
 
             block = block_class(header, transactions, uncles)
-            await self.wait(self.db.coro_persist_block(block))
+            await self.db.coro_persist_block(block)
             self.tracker.set_latest_head(header)
 
     async def _assign_receipt_download_to_peers(self) -> None:
@@ -750,10 +741,10 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         """
         while self.is_operational:
             # from all the peers that are not currently downloading receipts, get the fastest
-            peer = await self.wait(self._receipt_peers.get_fastest())
+            peer = await self._receipt_peers.get_fastest()
 
             # get headers for receipts that we need to download, preferring lowest block number
-            batch_id, headers = await self.wait(self._receipt_tasks.get(MAX_RECEIPTS_FETCH))
+            batch_id, headers = await self._receipt_tasks.get(MAX_RECEIPTS_FETCH)
 
             # schedule the receipt download and move on
             peer.run_task(self._run_receipt_download_batch(peer, batch_id, headers))
@@ -809,7 +800,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         in order to make it... fast.
         """
         for (_, (_, trie_data_dict), _) in bundles:
-            await self.wait(self.db.coro_persist_trie_data_dict(trie_data_dict))
+            await self.db.coro_persist_trie_data_dict(trie_data_dict)
 
     async def _process_receipts(
             self,
@@ -863,7 +854,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         receipts, trie_roots_and_data_dicts = zip(*receipt_bundles)
         receipt_roots, trie_data_dicts = zip(*trie_roots_and_data_dicts)
         for trie_data in trie_data_dicts:
-            await self.wait(self.db.coro_persist_trie_data_dict(trie_data))
+            await self.db.coro_persist_trie_data_dict(trie_data)
 
         # Identify which headers have the receipt roots that are now complete.
         completed_header_groups = tuple(
@@ -926,9 +917,6 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         except CancelledError:
             self.logger.debug("Pending receipts call to %r future cancelled", peer)
             return tuple()
-        except OperationCancelled:
-            self.logger.debug2("Pending receipts call to %r operation cancelled", peer)
-            return tuple()
         except PeerConnectionLost:
             self.logger.debug("Peer went away, cancelling the receipts request and moving on...")
             return tuple()
@@ -942,26 +930,23 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         return receipt_bundles
 
 
-class RegularChainSyncer(BaseService):
+class RegularChainSyncer(Service):
     def __init__(self,
                  chain: AsyncChainAPI,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
-                 token: CancelToken = None) -> None:
-        super().__init__(token=token)
-        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool, token=self.cancel_token)
+                 peer_pool: ETHPeerPool) -> None:
+        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool)
         self._body_syncer = RegularChainBodySyncer(
             chain,
             db,
             peer_pool,
             self._header_syncer,
             SimpleBlockImporter(chain),
-            self.cancel_token,
         )
 
-    async def _run(self) -> None:
-        self.run_daemon(self._header_syncer)
-        self.run_daemon(self._body_syncer)
+    async def run(self) -> None:
+        self.manager.run_daemon_child_service(self._header_syncer)
+        self.manager.run_daemon_child_service(self._body_syncer)
         # run regular sync until cancelled
         await self.events.cancelled.wait()
 
@@ -982,9 +967,8 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
                  db: BaseAsyncChainDB,
                  peer_pool: ETHPeerPool,
                  header_syncer: HeaderSyncerAPI,
-                 block_importer: BaseBlockImporter,
-                 token: CancelToken = None) -> None:
-        super().__init__(chain, db, peer_pool, header_syncer, token)
+                 block_importer: BaseBlockImporter) -> None:
+        super().__init__(chain, db, peer_pool, header_syncer)
 
         # track when block bodies are downloaded, so that blocks can be imported
         self._block_import_tracker = OrderedTaskPreparation(
@@ -1011,15 +995,15 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
 
         self._import_active = asyncio.Lock()
 
-    async def _run(self) -> None:
-        head = await self.wait(self.db.coro_get_canonical_head())
+    async def run(self) -> None:
+        head = await self.db.coro_get_canonical_head()
         self._block_import_tracker.set_finished_dependency(head)
-        self.run_daemon_task(self._launch_prerequisite_tasks())
-        self.run_daemon_task(self._assign_body_download_to_peers())
-        self.run_daemon_task(self._import_ready_blocks())
-        self.run_daemon_task(self._preview_ready_blocks())
-        self.run_daemon_task(self._display_stats())
-        await super()._run()
+        self.manager.run_daemon_task(self._launch_prerequisite_tasks)
+        self.manager.run_daemon_task(self._assign_body_download_to_peers)
+        self.manager.run_daemon_task(self._import_ready_blocks)
+        self.manager.run_daemon_task(self._preview_ready_blocks)
+        self.manager.run_daemon_task(self._display_stats)
+        await super().run()
 
     def register_peer(self, peer: BasePeer) -> None:
         # when a new peer is added to the pool, add it to the idle peer list
@@ -1048,7 +1032,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
             new_headers = tuple(h for h in headers if h not in self._block_body_tasks)
 
             # if the output queue gets full, hang until there is room
-            await self.wait(self._block_body_tasks.add(new_headers))
+            await self._block_body_tasks.add(new_headers)
 
     def _mark_body_download_complete(
             self,
@@ -1068,12 +1052,11 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         It's important to do this in a separate step from importing so that
         previewing can get ahead of import by a few blocks.
         """
-        await self.wait(self._got_first_header.wait())
+        await self._got_first_header.wait()
         while self.is_operational:
             # This tracker waits for all prerequisites to be complete, and returns headers in
             # order, so that each header's parent is already persisted.
-            get_ready_coro = self._block_import_tracker.ready_tasks(1)
-            completed_headers = await self.wait(get_ready_coro)
+            completed_headers = await self._block_import_tracker.ready_tasks(1)
 
             if self._block_import_tracker.has_ready_tasks():
                 # Even after clearing out a big batch, there is no available capacity, so
@@ -1087,7 +1070,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
             block = self._header_to_block(header)
 
             # Put block in short queue for import, wait here if queue is full
-            await self.wait(self._import_queue.put(block))
+            await self._import_queue.put(block)
 
             # Load the state root of the parent header
             try:
@@ -1113,14 +1096,14 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         Wait for block bodies to be downloaded, then compile the blocks and
         preview them to the importer.
         """
-        await self.wait(self._got_first_header.wait())
+        await self._got_first_header.wait()
         while self.is_operational:
             if self._import_queue.empty():
                 if self._import_active.locked():
                     self._import_active.release()
                 waiting_for_next_block = Timer()
 
-            block = await self.wait(self._import_queue.get())
+            block = await self._import_queue.get()
             if not self._import_active.locked():
                 self.logger.info(
                     "Waited %.1fs for %s body",
@@ -1133,8 +1116,8 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
 
     async def _import_block(self, block: BlockAPI) -> None:
         timer = Timer()
-        _, new_canonical_blocks, old_canonical_blocks = await self.wait(
-            self._block_importer.import_block(block)
+        _, new_canonical_blocks, old_canonical_blocks = await self._block_importer.import_block(
+            block
         )
         # how much is the imported block's header behind the current time?
         lag = time.time() - block.header.timestamp
@@ -1202,7 +1185,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
 
     async def _display_stats(self) -> None:
         self.logger.debug("Regular sync waiting for first header to arrive")
-        await self.wait(self._got_first_header.wait())
+        await self._got_first_header.wait()
         self.logger.debug("Regular sync first header arrived")
 
         while self.is_operational:
