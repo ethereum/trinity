@@ -13,8 +13,7 @@ from cached_property import cached_property
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
-
+from eth_utils import get_extended_debug_logger
 from eth_utils.toolz import (
     excepts,
     groupby,
@@ -36,7 +35,7 @@ from p2p.peer_backend import (
 from p2p.peer_pool import (
     BasePeerPool,
 )
-from p2p.service import BaseService
+from p2p.service import Service
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
@@ -105,26 +104,25 @@ class BaseChainPeer(BasePeer):
             return NoopConnectionTracker()
 
 
-class BaseProxyPeer(BaseService):
+class BaseProxyPeer(Service):
     """
     Base class for peers that can be used from any process where the actual peer is not available.
     """
+    logger = get_extended_debug_logger('trinity.protocol.peer.ProxyPeer')
 
     def __init__(self,
                  session: SessionAPI,
-                 event_bus: EndpointAPI,
-                 token: CancelToken = None):
+                 event_bus: EndpointAPI) -> None:
 
         self.event_bus = event_bus
         self.session = session
-        super().__init__(token)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} {self.session}"
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.debug("Starting Proxy Peer %s", self)
-        await self.cancellation()
+        await self.manager.wait_forever()
 
     async def disconnect(self, reason: DisconnectReason) -> None:
         self.logger.debug("Forwarding `disconnect()` call from proxy to actual peer: %s", self)

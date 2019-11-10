@@ -1,6 +1,7 @@
 from abc import (
     abstractmethod,
 )
+import asyncio
 from typing import (
     Any,
     AsyncIterator,
@@ -13,8 +14,6 @@ from typing import (
     Type,
     TypeVar,
 )
-
-from cancel_token import CancelToken
 
 from lahja import (
     BaseEvent,
@@ -30,7 +29,7 @@ from p2p.peer import (
     PeerSubscriber,
 )
 from p2p.peer_pool import BasePeerPool
-from p2p.service import BaseService
+from p2p.service import Service
 from p2p.typing import Payload
 
 from .events import (
@@ -51,7 +50,7 @@ TEvent = TypeVar('TEvent', bound=BaseEvent)
 TRequest = TypeVar('TRequest', bound=BaseRequestResponseEvent[Any])
 
 
-class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
+class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
     """
     Base class to create a bridge between the ``PeerPool`` and the event bus so that peer
     messages become available to external processes (e.g. isolated components). In the opposite
@@ -68,9 +67,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
 
     def __init__(self,
                  event_bus: EndpointAPI,
-                 peer_pool: BasePeerPool,
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
+                 peer_pool: BasePeerPool) -> None:
         self.peer_pool = peer_pool
         self.event_bus = event_bus
 
@@ -142,19 +139,19 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
                 return cast(TPeer, peer)
 
     async def handle_connect_to_node_requests(self) -> None:
-        async for command in self.wait_iter(self.event_bus.stream(ConnectToNodeCommand)):
+        async for command in self.event_bus.stream(ConnectToNodeCommand):
             self.logger.debug('Received request to connect to %s', command.remote)
             self.run_task(self.peer_pool.connect_to_node(command.remote))
 
     async def handle_peer_count_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(PeerCountRequest)):
+        async for req in self.event_bus.stream(PeerCountRequest):
             await self.event_bus.broadcast(
                 PeerCountResponse(len(self.peer_pool)),
                 req.broadcast_config()
             )
 
     async def handle_get_connected_peers_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(GetConnectedPeersRequest)):
+        async for req in self.event_bus.stream(GetConnectedPeersRequest):
             await self.event_bus.broadcast(
                 GetConnectedPeersResponse(tuple(self.peer_pool.connected_nodes.keys())),
                 req.broadcast_config()
@@ -168,7 +165,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         because there is no obvious place to forward the exception.
         """
 
-        async for event in self.wait_iter(self.event_bus.stream(event_type)):
+        async for event in self.event_bus.stream(event_type):
             try:
                 await event_handler_fn(event)
             except Exception as exc:
@@ -185,7 +182,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         Handlers may raise exceptions, which will be wrapped and sent in response.
         """
 
-        async for event in self.wait_iter(self.event_bus.stream(event_type)):
+        async for event in self.event_bus.stream(event_type):
             try:
                 self.logger.debug2("Replaying %s request on actual peer", event_type)
                 val = await event_handler_fn(event)
@@ -217,12 +214,12 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
                                     timeout: float,
                                     fn: Callable[[TPeer], Any]) -> Any:
         peer = self.get_peer(session)
-        return await self.wait(fn(peer), timeout=timeout)
+        return await asyncio.wait_for(fn(peer), timeout=timeout)
 
     async def handle_native_peer_messages(self) -> None:
         with self.subscribe(self.peer_pool):
             while self.is_operational:
-                peer, cmd, msg = await self.wait(self.msg_queue.get())
+                peer, cmd, msg = await self.msg_queue.get()
                 await self.handle_native_peer_message(peer.session, cmd, msg)
 
     def register_peer(self, peer: BasePeer) -> None:
@@ -246,7 +243,7 @@ class DefaultPeerPoolEventServer(PeerPoolEventServer[BasePeer]):
 TProxyPeer = TypeVar('TProxyPeer', bound=BaseProxyPeer)
 
 
-class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
+class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
     """
     Base class for peer pools that can be used from any process instead of the actual peer pool
     that runs in another process. Eventually, every process that needs to interact with the peer
@@ -255,9 +252,7 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
 
     def __init__(self,
                  event_bus: EndpointAPI,
-                 broadcast_config: BroadcastConfig,
-                 token: CancelToken=None):
-        super().__init__(token)
+                 broadcast_config: BroadcastConfig) -> None:
         self.event_bus = event_bus
         self.broadcast_config = broadcast_config
         self.connected_peers: Dict[SessionAPI, TProxyPeer] = dict()
@@ -266,21 +261,21 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
         for proxy_peer in await self.get_peers():
             yield proxy_peer
 
-        async for new_proxy_peer in self.wait_iter(self.stream_peers_joining()):
+        async for new_proxy_peer in self.stream_peers_joining():
             yield new_proxy_peer
 
     # TODO: PeerJoinedEvent/PeerLeftEvent should probably include a session id
     async def stream_peers_joining(self) -> AsyncIterator[TProxyPeer]:
-        async for ev in self.wait_iter(self.event_bus.stream(PeerJoinedEvent)):
+        async for ev in self.event_bus.stream(PeerJoinedEvent):
             yield await self.ensure_proxy_peer(ev.session)
 
     async def handle_joining_peers(self) -> None:
-        async for peer in self.wait_iter(self.stream_peers_joining()):
+        async for peer in self.stream_peers_joining():
             # We just want to consume the AsyncIterator
             self.logger.info("New Proxy Peer joined %s", peer)
 
     async def handle_leaving_peers(self) -> None:
-        async for ev in self.wait_iter(self.event_bus.stream(PeerLeftEvent)):
+        async for ev in self.event_bus.stream(PeerLeftEvent):
             if ev.session not in self.connected_peers:
                 self.logger.warning("Wanted to remove peer but it is missing %s", ev.session)
             else:
@@ -291,8 +286,9 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
                 self.logger.warning("Removed proxy peer from proxy pool %s", ev.session)
 
     async def fetch_initial_peers(self) -> Tuple[TProxyPeer, ...]:
-        response = await self.wait(
-            self.event_bus.request(GetConnectedPeersRequest(), self.broadcast_config)
+        response = await self.event_bus.request(
+            GetConnectedPeersRequest(),
+            self.broadcast_config,
         )
 
         return tuple([

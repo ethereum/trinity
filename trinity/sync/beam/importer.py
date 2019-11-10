@@ -434,6 +434,10 @@ class BlockImportServer(Service):
             # In the tests, for example, we await cancel() this service, so that we know
             #   that the in-progress block is complete. Then below, we do not send back
             #   the import completion (so the import server won't get triggered again).
+            # TODO: comment above is outdated.
+            # TODO: this logic needs to be updated with an `asyncio.shield` and
+            # probably worth exploring something native in the `ManagerAPI` to
+            # do this in a generic way...
             await import_completion
 
             if self.manager.is_running:
@@ -441,7 +445,7 @@ class BlockImportServer(Service):
                     event_bus,
                     event.block,
                     event.broadcast_config(),
-                    import_completion,
+                    import_completion,  # type: ignore
                 )
             else:
                 break
@@ -521,6 +525,8 @@ def partial_speculative_execute(
 
 
 class BlockPreviewServer(Service):
+    logger = get_extended_debug_logger('trinity.sync.beam.BlockPreviewServer')
+
     def __init__(
             self,
             event_bus: EndpointAPI,

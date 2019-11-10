@@ -19,7 +19,7 @@ from p2p.exceptions import (
     ConnectionBusy,
     PeerConnectionLost,
 )
-from p2p.service import BaseService
+from p2p.service import Service
 from p2p.typing import TRequestPayload, TResponsePayload
 
 from .abc import (
@@ -33,8 +33,8 @@ from .constants import (
 
 
 class ResponseCandidateStream(
-        ResponseCandidateStreamAPI[TRequestPayload, TResponsePayload],
-        BaseService):
+        Service,
+        ResponseCandidateStreamAPI[TRequestPayload, TResponsePayload]):
     logger = get_extended_debug_logger('p2p.exchange.ResponseCandidateStreamAPI')
 
     response_timeout: float = ROUND_TRIP_TIMEOUT
@@ -46,9 +46,6 @@ class ResponseCandidateStream(
             connection: ConnectionAPI,
             request_protocol: ProtocolAPI,
             response_cmd_type: Type[CommandAPI]) -> None:
-        # This style of initialization keeps `mypy` happy.
-        BaseService.__init__(self, token=connection.cancel_token)
-
         self._connection = connection
         self.request_protocol = request_protocol
         self.response_cmd_type = response_cmd_type
@@ -74,7 +71,10 @@ class ResponseCandidateStream(
         # The _lock ensures that we never have two concurrent requests to a
         # single peer for a single command pair in flight.
         try:
-            await self.wait(self._lock.acquire(), timeout=total_timeout * NUM_QUEUED_REQUESTS)
+            await asyncio.wait_for(
+                self._lock.acquire(),
+                timeout=total_timeout * NUM_QUEUED_REQUESTS,
+            )
         except asyncio.TimeoutError:
             raise ConnectionBusy(
                 f"Timed out waiting for {self.response_cmd_name} request lock "
@@ -108,13 +108,13 @@ class ResponseCandidateStream(
     #
     # Service API
     #
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.debug("Launching %r", self)
 
         # mypy doesn't recognizet the `TResponsePayload` as being an allowed
         # variant of the expected `Payload` type.
         with self._connection.add_command_handler(self.response_cmd_type, self._handle_msg):  # type: ignore  # noqa: E501
-            await self.cancellation()
+            await self.manager.wait_forever()
 
     async def _handle_msg(self, connection: ConnectionAPI, msg: TResponsePayload) -> None:
         if self.pending_request is None:
@@ -136,7 +136,7 @@ class ResponseCandidateStream(
     async def _get_payload(self, timeout: float) -> TResponsePayload:
         send_time, future = self.pending_request
         try:
-            payload = await self.wait(future, timeout=timeout)
+            payload = await asyncio.wait_for(future, timeout=timeout)
         finally:
             self.pending_request = None
 

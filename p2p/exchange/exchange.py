@@ -12,7 +12,7 @@ from p2p.abc import (
     ConnectionAPI,
     RequestAPI,
 )
-from p2p.service import run_service
+from p2p.service import background_asyncio_service
 from p2p.typing import TRequestPayload, TResponsePayload
 
 from .abc import ExchangeAPI, NormalizerAPI, ValidatorAPI
@@ -41,7 +41,7 @@ class BaseExchange(ExchangeAPI[TRequestPayload, TResponsePayload, TResult]):
             connection,
             response_stream,
         )
-        async with run_service(response_stream):
+        async with background_asyncio_service(response_stream):
             yield
 
     async def get_result(

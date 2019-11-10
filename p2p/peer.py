@@ -3,6 +3,7 @@ import asyncio
 import collections
 import contextlib
 import functools
+import time
 from typing import (
     Dict,
     Iterator,
@@ -68,6 +69,8 @@ class BasePeerBootManager(Service):
     The default boot manager does nothing, simply serving as a hook for other
     protocols which need to perform more complex boot check.
     """
+    logger = get_extended_debug_logger('p2p.peer.BootManager')
+
     def __init__(self, peer: 'BasePeer') -> None:
         self.peer = peer
 
@@ -104,6 +107,8 @@ class BasePeer(Service):
 
     base_protocol: BaseP2PProtocol
     p2p_api: P2PAPI
+
+    _started_at: float
 
     def __init__(self,
                  connection: ConnectionAPI,
@@ -183,6 +188,10 @@ class BasePeer(Service):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__} {self.session!r}"
 
+    @property
+    def uptime(self) -> float:
+        return time.monotonic() - self._started_at
+
     #
     # Proxy Transport attributes
     #
@@ -217,9 +226,6 @@ class BasePeer(Service):
         if subscriber in self._subscribers:
             self._subscribers.remove(subscriber)
 
-    async def _cleanup(self) -> None:
-        self.connection.cancel_nowait()
-
     def setup_protocol_handlers(self) -> None:
         """
         Hook for subclasses to setup handlers for protocols specific messages.
@@ -227,6 +233,8 @@ class BasePeer(Service):
         pass
 
     async def run(self) -> None:
+        self._started_at = time.monotonic()
+
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
             self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
@@ -253,7 +261,10 @@ class BasePeer(Service):
             self.connection.start_protocol_streams()
             self.ready.set()
 
-            await self.manager.wait_forever()
+            try:
+                await self.manager.wait_forever()
+            finally:
+                self.connection.manager.cancel()
 
     async def _handle_subscriber_message(self,
                                          connection: ConnectionAPI,
@@ -276,7 +287,7 @@ class BasePeer(Service):
             )
         if hasattr(self, "p2p_api"):
             try:
-                await self.p2p_api.disconnect(reason)
+                self.p2p_api.disconnect(reason)
             except PeerConnectionLost:
                 self.logger.debug("Tried to disconnect from %s, but already disconnected", self)
 
