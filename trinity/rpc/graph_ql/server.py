@@ -49,4 +49,4 @@ class GraphQlServer(BaseRPCServer):
         })
 
     async def execute_get(self, request: Dict[str, Any]) -> Response:
-        return Response(content_type='html/text', body=graphiql_html)
+        return Response(content_type='html', body=graphiql_html)
