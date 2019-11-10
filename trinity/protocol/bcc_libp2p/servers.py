@@ -10,9 +10,6 @@ from typing import (
     Union,
 )
 
-from cancel_token import (
-    CancelToken,
-)
 from eth.exceptions import (
     BlockNotFound,
 )
@@ -20,13 +17,14 @@ from eth_utils import (
     ValidationError,
     encode_hex,
     to_tuple,
+    get_extended_debug_logger,
 )
 
 import ssz
 
 from libp2p.pubsub.pb import rpc_pb2
 
-from p2p.service import BaseService
+from p2p.trio_service import Service
 
 from eth2.beacon.chains.base import (
     BaseBeaconChain,
@@ -150,7 +148,7 @@ class OrphanBlockPool:
         return children
 
 
-class BCCReceiveServer(BaseService):
+class BCCReceiveServer(Service):
 
     chain: BaseBeaconChain
     p2p_node: Node
@@ -158,13 +156,13 @@ class BCCReceiveServer(BaseService):
     attestation_pool: AttestationPool
     orphan_block_pool: OrphanBlockPool
 
+    logger = get_extended_debug_logger('trinity.bcc.BCCReceiveServer')
+
     def __init__(
             self,
             chain: BaseBeaconChain,
             p2p_node: Node,
-            topic_msg_queues: Dict[str, 'asyncio.Queue[rpc_pb2.Message]'],
-            cancel_token: CancelToken = None) -> None:
-        super().__init__(cancel_token)
+            topic_msg_queues: Dict[str, 'asyncio.Queue[rpc_pb2.Message]']) -> None:
         self.chain = chain
         self.topic_msg_queues = topic_msg_queues
         self.p2p_node = p2p_node
@@ -176,11 +174,11 @@ class BCCReceiveServer(BaseService):
         while not self.p2p_node.is_started:
             await self.sleep(0.5)
         self.logger.info("BCCReceiveServer up")
-        self.run_daemon_task(self._handle_beacon_attestation_loop())
-        self.run_daemon_task(self._handle_beacon_block_loop())
-        self.run_daemon_task(self._process_orphan_blocks_loop())
+        self.manager.run_daemon_task(self._handle_beacon_attestation_loop)
+        self.manager.run_daemon_task(self._handle_beacon_block_loop)
+        self.manager.run_daemon_task(self._process_orphan_blocks_loop)
         self.ready.set()
-        await self.cancellation()
+        await self.manager.wait_stopped()
 
     async def _handle_message(
             self,

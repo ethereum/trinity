@@ -10,7 +10,7 @@ from typing import (
 from libp2p.crypto.keys import KeyPair
 from libp2p.crypto.secp256k1 import create_new_key_pair, Secp256k1PrivateKey
 
-from eth_utils import decode_hex
+from eth_utils import decode_hex, get_extended_debug_logger
 
 from eth2.beacon.operations.attestation_pool import AttestationPool
 from eth2.beacon.typing import (
@@ -57,10 +57,12 @@ class BeaconNodeComponent(BaseApplicationComponent):
 
     @property
     def is_enabled(self) -> bool:
-        return self.boot_info.trinity_config.has_app_config(BeaconAppConfig)
+        return self._boot_info.trinity_config.has_app_config(BeaconAppConfig)
 
 
 class BeaconNodeService(ComponentService):
+    logger = get_extended_debug_logger('trinity.components.eth2.BeaconNodeService')
+
     def run_component_service(self) -> None:
         trinity_config = self.boot_info.trinity_config
         key_pair = self._load_or_create_node_key()
@@ -89,7 +91,6 @@ class BeaconNodeService(ComponentService):
             chain=chain,
             p2p_node=libp2p_node,
             topic_msg_queues=libp2p_node.pubsub.my_topics,
-            cancel_token=libp2p_node.cancel_token,
         )
 
         state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
@@ -110,7 +111,6 @@ class BeaconNodeService(ComponentService):
             p2p_node=libp2p_node,
             validator_privkeys=validator_privkeys,
             event_bus=self.event_bus,
-            token=libp2p_node.cancel_token,
             get_ready_attestations_fn=receive_server.get_ready_attestations,
         )
 
@@ -119,7 +119,6 @@ class BeaconNodeService(ComponentService):
             genesis_time=chain_config.genesis_data.genesis_time,
             seconds_per_slot=chain_config.genesis_config.SECONDS_PER_SLOT,
             event_bus=self.event_bus,
-            token=libp2p_node.cancel_token,
         )
 
         syncer = BeaconChainSyncer(
@@ -130,8 +129,6 @@ class BeaconNodeService(ComponentService):
             peer_pool=libp2p_node.handshaked_peers,
             block_importer=SyncBlockImporter(chain),
             genesis_config=chain_config.genesis_config,
-            token=libp2p_node.cancel_token,
-
         )
 
         self.manager.run_daemon_child_service(libp2p_node)

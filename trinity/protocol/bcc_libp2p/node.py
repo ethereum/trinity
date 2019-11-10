@@ -2,7 +2,6 @@ import asyncio
 from dataclasses import dataclass
 import logging
 import operator
-import traceback
 import random
 from typing import (
     AsyncIterator,
@@ -12,11 +11,7 @@ from typing import (
     Tuple,
 )
 
-from cancel_token import (
-    CancelToken,
-)
-
-from eth_utils import encode_hex
+from eth_utils import encode_hex, get_extended_debug_logger
 from eth_utils.toolz import first
 
 from eth2.beacon.chains.base import (
@@ -81,9 +76,7 @@ from multiaddr import (
 
 import ssz
 
-from p2p.service import (
-    BaseService,
-)
+from p2p.trio_service import Service
 
 from .configs import (
     GOSSIPSUB_PROTOCOL_ID,
@@ -227,7 +220,8 @@ class PeerPool:
 DIAL_RETRY_COUNT = 10
 
 
-class Node(BaseService):
+class Node(Service):
+    logger = get_extended_debug_logger('trinity.bcc.Node')
 
     _is_started: bool = False
 
@@ -251,10 +245,8 @@ class Node(BaseService):
             security_protocol_ops: Dict[TProtocol, BaseSecureTransport] = None,
             muxer_protocol_ops: Dict[TProtocol, IMuxedConn] = None,
             gossipsub_params: Optional[GossipsubParams] = None,
-            cancel_token: CancelToken = None,
             bootstrap_nodes: Tuple[Multiaddr, ...] = (),
             preferred_nodes: Tuple[Multiaddr, ...] = ()) -> None:
-        super().__init__(cancel_token)
         self.listen_ip = listen_ip
         self.listen_port = listen_port
         self.key_pair = key_pair
@@ -299,17 +291,13 @@ class Node(BaseService):
 
         self.handshaked_peers = PeerPool()
 
-        self.run_task(self.start())
-
     @property
     def is_started(self) -> bool:
         return self._is_started
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.info("libp2p node %s is up", self.listen_maddr)
-        await self.cancellation()
 
-    async def start(self) -> None:
         # host
         self._register_rpc_handlers()
         # TODO: Register notifees
@@ -323,6 +311,7 @@ class Node(BaseService):
         self._setup_topic_validators()
 
         self._is_started = True
+        await self.manager.wait_stopped()
 
     def _setup_topic_validators(self) -> None:
         self.pubsub.set_topic_validator(
@@ -386,7 +375,7 @@ class Node(BaseService):
             peer_id = ID.from_base58(maddr.value_for_protocol(protocols.P_P2P))
             await self.dial_peer_with_retries(ip=ip, port=port, peer_id=peer_id)
         except Exception:
-            traceback.print_exc()
+            self.logger.exception("Unexpected exception while dialing peer")
             raise
 
     async def connect_preferred_nodes(self) -> None:

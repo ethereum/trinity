@@ -1,26 +1,22 @@
 import asyncio
 import time
-
-from cancel_token import (
-    CancelToken,
-)
 from dataclasses import (
     dataclass,
 )
+
+from eth_utils import get_extended_debug_logger
+
 from lahja import (
     BaseEvent,
     BroadcastConfig,
+    EndpointAPI,
 )
-
-from lahja import EndpointAPI
 
 from eth2.beacon.typing import (
     Second,
     Slot,
 )
-from p2p.service import (
-    BaseService,
-)
+from p2p.trio_service import Service
 from trinity._utils.shellart import (
     bold_white,
 )
@@ -36,21 +32,21 @@ class SlotTickEvent(BaseEvent):
     is_second_tick: bool
 
 
-class SlotTicker(BaseService):
+class SlotTicker(Service):
     genesis_slot: Slot
     genesis_time: int
     seconds_per_slot: Second
     latest_slot: Slot
     event_bus: EndpointAPI
 
+    logger = get_extended_debug_logger('trinity.bcc.SlotTicker')
+
     def __init__(
             self,
             genesis_slot: Slot,
             genesis_time: int,
             seconds_per_slot: Second,
-            event_bus: EndpointAPI,
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            event_bus: EndpointAPI) -> None:
         self.genesis_slot = genesis_slot
         self.genesis_time = genesis_time
         # FIXME: seconds_per_slot is assumed to be constant here.
@@ -59,9 +55,9 @@ class SlotTicker(BaseService):
         self.latest_slot = genesis_slot
         self.event_bus = event_bus
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self._keep_ticking())
-        await self.cancellation()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self._keep_ticking)
+        await self.manager.wait_stopped()
 
     async def _keep_ticking(self) -> None:
         """
@@ -73,7 +69,7 @@ class SlotTicker(BaseService):
         # `has_sent_second_half_slot_tick` is used to prevent another tick
         # for the second half of a ticked slot.
         has_sent_second_half_slot_tick = False
-        while self.is_operational:
+        while self.manager.is_running:
             elapsed_time = Second(int(time.time()) - self.genesis_time)
             if elapsed_time >= self.seconds_per_slot:
                 slot = Slot(elapsed_time // self.seconds_per_slot + self.genesis_slot)
