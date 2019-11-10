@@ -1,10 +1,8 @@
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
-
 from eth_utils import humanize_seconds
 
-from p2p.service import BaseService
+from p2p.trio_service import Service
 from p2p.tracking.connection import BaseConnectionTracker
 
 from .events import (
@@ -14,7 +12,7 @@ from .events import (
 )
 
 
-class ConnectionTrackerServer(BaseService):
+class ConnectionTrackerServer(Service):
     """
     Server to handle the event bus communication for BlacklistEvent and
     ShouldConnectToPeerRequest/Response events
@@ -22,14 +20,12 @@ class ConnectionTrackerServer(BaseService):
 
     def __init__(self,
                  event_bus: EndpointAPI,
-                 tracker: BaseConnectionTracker,
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
+                 tracker: BaseConnectionTracker) -> None:
         self.tracker = tracker
         self.event_bus = event_bus
 
     async def handle_should_connect_to_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(ShouldConnectToPeerRequest)):
+        async for req in self.event_bus.stream(ShouldConnectToPeerRequest):
             self.logger.debug2('Received should connect to request: %s', req.remote)
             should_connect = await self.tracker.should_connect_to(req.remote)
             await self.event_bus.broadcast(
@@ -38,7 +34,7 @@ class ConnectionTrackerServer(BaseService):
             )
 
     async def handle_blacklist_command(self) -> None:
-        async for command in self.wait_iter(self.event_bus.stream(BlacklistEvent)):
+        async for command in self.event_bus.stream(BlacklistEvent):
             self.logger.debug2(
                 'Received blacklist commmand: remote: %s | timeout: %s | reason: %s',
                 command.remote,
@@ -51,10 +47,10 @@ class ConnectionTrackerServer(BaseService):
                 command.reason
             )
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.debug("Running ConnectionTrackerServer")
 
-        self.run_daemon_task(self.handle_should_connect_to_requests())
-        self.run_daemon_task(self.handle_blacklist_command())
+        self.run_daemon_task(self.handle_should_connect_to_requests)
+        self.run_daemon_task(self.handle_blacklist_command)
 
-        await self.cancellation()
+        await self.manager.wait_stopped()

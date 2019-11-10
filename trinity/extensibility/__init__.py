@@ -5,8 +5,11 @@ from trinity.extensibility.exceptions import (  # noqa: F401
     InvalidComponentStatus,
 )
 from trinity.extensibility.component import (  # noqa: F401
-    BaseComponent,
+    ApplicationComponentAPI,
+    BaseCommandComponent,
+    BaseApplicationComponent,
     TrinityBootInfo,
+    run_component,
 )
 from trinity.extensibility.service import (  # noqa: F401
     ComponentService,

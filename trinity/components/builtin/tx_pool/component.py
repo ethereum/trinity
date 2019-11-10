@@ -5,7 +5,6 @@ from argparse import (
 import logging
 
 from asyncio_run_in_process import open_in_process
-from lahja import EndpointAPI
 
 from eth.chains.mainnet import (
     PETERSBURG_MAINNET_BLOCK,
@@ -13,8 +12,6 @@ from eth.chains.mainnet import (
 from eth.chains.ropsten import (
     PETERSBURG_ROPSTEN_BLOCK,
 )
-
-from p2p.asyncio_service import Manager
 
 from trinity.config import (
     Eth1AppConfig,
@@ -27,7 +24,7 @@ from trinity.constants import (
 )
 from trinity.db.manager import DBClient
 from trinity.extensibility import (
-    BaseComponent,
+    BaseApplicationComponent,
     ComponentService,
 )
 from trinity.components.builtin.tx_pool.pool import (
@@ -39,7 +36,7 @@ from trinity.components.builtin.tx_pool.validators import (
 from trinity.protocol.eth.peer import ETHProxyPeerPool
 
 
-class TxComponent(BaseComponent):
+class TxComponent(BaseApplicationComponent):
     tx_pool: TxPool = None
     name: "TxComponent"
 
@@ -84,11 +81,7 @@ class TxComponent(BaseComponent):
         tx_pool = TxPool(self.event_bus, proxy_peer_pool, validator)
 
         async with open_in_process(tx_pool.run) as proc:
-            self._proc = proc
             await proc.wait()
-
-    async def stop(self) -> None:
-        self._proc.terminate()
 
 
 class TxPoolService(ComponentService):
@@ -111,4 +104,4 @@ class TxPoolService(ComponentService):
         proxy_peer_pool = ETHProxyPeerPool(self.event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 
         tx_pool = TxPool(self.event_bus, proxy_peer_pool, validator)
-        await Manager(tx_pool).run()
+        self.run_child_service(tx_pool)

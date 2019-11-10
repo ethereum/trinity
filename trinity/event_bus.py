@@ -29,6 +29,7 @@ from trinity.events import (
 from trinity.extensibility import (
     ComponentAPI,
     TrinityBootInfo,
+    run_component,
 )
 
 
@@ -42,32 +43,11 @@ class ComponentManager(Service):
         self._boot_info = trinity_boot_info
         self._component_types = component_types
         self._kill_trinity_fn = kill_trinity_fn
+        self._trigger_component_stop = asyncio.Event()
 
     async def _run_component(self, component: ComponentAPI) -> None:
-        # We account for the ability for components to define either an async
-        # or sync `run` method by inspecting the return to see if it is
-        # awaitable and then awaiting it.
-        maybe_awaitable = component.run()
-
-        if maybe_awaitable is None:
-            pass
-        elif inspect.isawaitable(maybe_awaitable):
-            await maybe_awaitable
-        else:
-            raise Exception("Should be unreachable")
-
-    async def _stop_component(self, component: ComponentAPI) -> None:
-        # We account for the ability for components to define either an async
-        # or sync `stop` method by inspecting the return to see if it is
-        # awaitable and then awaiting it.
-        maybe_awaitable = component.stop()
-
-        if maybe_awaitable is None:
-            pass
-        elif inspect.isawaitable(maybe_awaitable):
-            await maybe_awaitable
-        else:
-            raise Exception("Should be unreachable")
+        async with run_component(component):
+            await self._trigger_component_stop.wait()
 
     async def run(self, manager: ManagerAPI) -> None:
         self._connection_config = ConnectionConfig.from_name(
@@ -97,22 +77,16 @@ class ComponentManager(Service):
             for component in active_components:
                 manager.run_task(component.run)
 
-            manager.run_task(self._handle_shutdown_request, active_components)
-            await self._stop_components.wait()
-
-            for component in active_components:
-                manager.run_task(component.stop)
-
-            self._components_stopped.set()
+            try:
+                await self._trigger_component_stop.wait()
+            finally:
+                self._trigger_component_stop.set()
 
     async def _handle_shutdown_request(self, components: Collection[ComponentAPI]) -> None:
         req = await self._endpoint.wait_for(ShutdownRequest)
-        self._stop_components.set()
+        self._trigger_component_stop.set()
 
-        try:
-            await asyncio.wait_for(self._components_stopped.wait(), timeout=10)
-        except asyncio.TimeoutError:
-            self.cancel()
+        self.cancel()
 
         hint = f"({req.reason})" if req.reason else f""
         self.logger.info('Shutting down Trinity %s', hint)

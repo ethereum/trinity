@@ -15,10 +15,7 @@ from cancel_token import (
     OperationCancelled,
 )
 
-from p2p.service import (
-    BaseService,
-)
-
+from p2p.trio_service import Service
 from trinity.rpc.main import (
     RPCServer,
 )
@@ -122,7 +119,7 @@ async def write_error(writer: asyncio.StreamWriter, message: str) -> None:
     await writer.drain()
 
 
-class IPCServer(BaseService):
+class IPCServer(Service):
     ipc_path = None
     rpc = None
     server = None
@@ -130,14 +127,11 @@ class IPCServer(BaseService):
     def __init__(
             self,
             rpc: RPCServer,
-            ipc_path: pathlib.Path,
-            token: CancelToken = None,
-            loop: asyncio.AbstractEventLoop = None) -> None:
-        super().__init__(token=token, loop=loop)
+            ipc_path: pathlib.Path) -> None:
         self.rpc = rpc
         self.ipc_path = ipc_path
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.server = await asyncio.start_unix_server(
             connection_handler(self.rpc.execute, self.cancel_token),
             str(self.ipc_path),
@@ -145,9 +139,9 @@ class IPCServer(BaseService):
             limit=MAXIMUM_REQUEST_BYTES,
         )
         self.logger.info('IPC started at: %s', self.ipc_path.resolve())
-        await self.cancel_token.wait()
-
-    async def _cleanup(self) -> None:
-        self.server.close()
-        await self.server.wait_closed()
-        self.ipc_path.unlink()
+        try:
+            await self.manager.wait_stopped()
+        finally:
+            self.server.close()
+            await self.server.wait_closed()
+            self.ipc_path.unlink()

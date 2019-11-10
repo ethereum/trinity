@@ -5,8 +5,6 @@ from argparse import (
 import asyncio
 from typing import Union, Tuple
 
-from lahja import EndpointAPI
-
 from eth.db.header import (
     HeaderDB,
 )
@@ -24,7 +22,8 @@ from trinity.chains.light_eventbus import (
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient
 from trinity.extensibility import (
-    AsyncioIsolatedComponent,
+    BaseApplicationComponent,
+    ComponentService,
 )
 from trinity.rpc.main import (
     RPCServer,
@@ -45,15 +44,12 @@ from trinity._utils.shutdown import (
 from p2p.service import BaseService
 
 
-class JsonRpcServerComponent(AsyncioIsolatedComponent):
+class JsonRpcServerComponent(BaseApplicationComponent):
+    name = "JSON-RPC API"
 
     @property
-    def name(self) -> str:
-        return "JSON-RPC API"
-
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if not self.boot_info.args.disable_rpc:
-            self.start()
+    def is_enabled(self) -> None:
+        return not self.boot_info.args.disable_rpc
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -110,7 +106,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
         else:
             raise Exception("Unsupported Node Type")
 
-    def do_start(self) -> None:
+    async def run(self) -> None:
         trinity_config = self.boot_info.trinity_config
         chain = self.chain_for_config(trinity_config)
 
@@ -138,3 +134,28 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
             services_to_exit += (http_server,)
 
         asyncio.ensure_future(exit_with_services(*services_to_exit))
+
+
+class JSONRPCService(ComponentService):
+    async def run_component_service(self) -> None:
+        trinity_config = self.boot_info.trinity_config
+        chain = self.chain_for_config(trinity_config)
+
+        if trinity_config.has_app_config(Eth1AppConfig):
+            modules = initialize_eth1_modules(chain, self.event_bus)
+        elif trinity_config.has_app_config(BeaconAppConfig):
+            modules = initialize_beacon_modules(chain, self.event_bus)
+        else:
+            raise Exception("Unsupported Node Type")
+
+        rpc = RPCServer(modules, chain, self.event_bus)
+
+        # Run IPC Server
+        ipc_server = IPCServer(rpc, self.boot_info.trinity_config.jsonrpc_ipc_path)
+
+        self.run_child_service(ipc_server)
+
+        # Run HTTP Server
+        if self.boot_info.args.enable_http:
+            http_server = HTTPServer(rpc, port=self.boot_info.args.rpcport)
+            self.run_child_service(http_server)

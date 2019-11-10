@@ -1,4 +1,3 @@
-import asyncio
 from argparse import (
     Namespace,
     ArgumentParser,
@@ -6,28 +5,27 @@ from argparse import (
 )
 from typing import Iterable
 
-from lahja import EndpointAPI
-
+from asyncio_run_in_process import open_in_process
 from sqlalchemy.orm import Session
 
 from eth_utils import to_tuple
 
+from p2p.asyncio_service import Manager
 from p2p.service import BaseService
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
 )
 
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
 from trinity.config import (
     TrinityConfig,
 )
 from trinity.db.orm import get_tracking_database
 from trinity.events import ShutdownRequest
 from trinity.extensibility import (
-    AsyncioIsolatedComponent,
+    BaseApplicationComponent,
+    BaseCommandComponent,
+    ComponentService,
 )
 from trinity.db.network import (
     get_networkdb_path,
@@ -52,14 +50,34 @@ from .eth1_peer_db.tracker import (
 )
 
 
-class NetworkDBComponent(AsyncioIsolatedComponent):
-    @property
-    def name(self) -> str:
-        return "Network Database"
+class ClearNetworkDBComponent(BaseCommandComponent):
+    name = "Clear Network Database"
 
-    @property
-    def normalized_name(self) -> str:
-        return "network-db"
+    @classmethod
+    def configure_parser(cls,
+                         arg_parser: ArgumentParser,
+                         subparser: _SubParsersAction) -> None:
+        # Command to wipe the on-disk database
+        remove_db_parser = subparser.add_parser(
+            'remove-network-db',
+            help='Remove the on-disk sqlite database that tracks data about the p2p network',
+        )
+        remove_db_parser.set_defaults(func=cls.clear_node_db)
+
+    @classmethod
+    def clear_node_db(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
+        logger = cls.get_logger()
+        db_path = get_networkdb_path(trinity_config)
+
+        if db_path.exists():
+            logger.info("Removing network database at: %s", db_path.resolve())
+            db_path.unlink()
+        else:
+            logger.info("No network database found at: %s", db_path.resolve())
+
+
+class NetworkDBComponent(BaseApplicationComponent):
+    name = "Network Database"
 
     @classmethod
     def configure_parser(cls,
@@ -114,46 +132,38 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
             action='store_true',
         )
 
-        # Command to wipe the on-disk database
-        remove_db_parser = subparser.add_parser(
-            'remove-network-db',
-            help='Remove the on-disk sqlite database that tracks data about the p2p network',
-        )
-        remove_db_parser.set_defaults(func=cls.clear_node_db)
+    @property
+    def is_enabled(self) -> bool:
+        return not self.boot_info.args.disable_networkdb_component
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if self.boot_info.args.disable_networkdb_component:
-            self.logger.warning("Network Database disabled via CLI flag")
-            # Allow this component to be disabled for extreme cases such as the
-            # user swapping in an equivalent experimental version.
-            return
+    async def run(self) -> None:
+        network_db_service = NetworkDBService(self.boot_info, self.name)
+
+        async with open_in_process(Manager.run_service, network_db_service) as proc:
+            await proc.wait()
+
+
+class NetworkDBService(ComponentService):
+    async def run_component_service(self) -> None:
+        try:
+            tracker_services = self._get_services()
+        except BadDatabaseError as err:
+            self.logger.exception(f"Unrecoverable error in Network Component: {err}")
         else:
-            try:
-                get_tracking_database(get_networkdb_path(self.boot_info.trinity_config))
-            except BadDatabaseError as err:
-                manager_eventbus.broadcast_nowait(ShutdownRequest(
-                    "Error loading network database.  Trying removing database "
-                    f"with `remove-network-db` command:\n{err}"
-                ))
-            else:
-                self.start()
-
-    @classmethod
-    def clear_node_db(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        logger = cls.get_logger()
-        db_path = get_networkdb_path(trinity_config)
-
-        if db_path.exists():
-            logger.info("Removing network database at: %s", db_path.resolve())
-            db_path.unlink()
-        else:
-            logger.info("No network database found at: %s", db_path.resolve())
+            for service in tracker_services:
+                self.run_daemon_child_service(service)
 
     _session: Session = None
 
     def _get_database_session(self) -> Session:
         if self._session is None:
-            self._session = get_tracking_database(get_networkdb_path(self.boot_info.trinity_config))
+            try:
+                get_tracking_database(get_networkdb_path(self.boot_info.trinity_config))
+            except BadDatabaseError as err:
+                self.event_bus.broadcast_nowait(ShutdownRequest(
+                    "Error loading network database.  Trying removing database "
+                    f"with `remove-network-db` command:\n{err}"
+                ))
         return self._session
 
     #
@@ -233,16 +243,3 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
             self.logger.warning("ETH1 Peer Database disabled via CLI flag")
         else:
             yield self._get_eth1_peer_server()
-
-    def do_start(self) -> None:
-        try:
-            tracker_services = self._get_services()
-        except BadDatabaseError as err:
-            self.logger.exception(f"Unrecoverable error in Network Component: {err}")
-        else:
-            asyncio.ensure_future(exit_with_services(
-                self._event_bus_service,
-                *tracker_services,
-            ))
-            for service in tracker_services:
-                asyncio.ensure_future(service.run())

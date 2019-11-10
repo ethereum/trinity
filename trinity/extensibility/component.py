@@ -7,11 +7,14 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
+import asyncio
 from typing import (
     Any,
     Dict,
     NamedTuple,
 )
+
+from async_generator import asynccontextmanager
 
 from lahja.base import EndpointAPI
 
@@ -26,10 +29,32 @@ class TrinityBootInfo(NamedTuple):
     boot_kwargs: Dict[str, Any] = None
 
 
-class ComponentAPI(ABC):
+class BaseComponentAPI(ABC):
     name: str
-    endpoint: EndpointAPI
 
+    @classmethod
+    @abstractmethod
+    def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+        """
+        Give the component a chance to amend the Trinity CLI argument parser. This hook is called
+        before :meth:`~trinity.extensibility.component.BaseComponent.on_ready`
+        """
+        ...
+
+
+class BaseCommandComponent(BaseComponentAPI):
+    """
+    Component base class for implement a new CLI command that is intended to
+    take over the main process.
+    """
+    pass
+
+
+class ApplicationComponentAPI(BaseComponentAPI):
+    """
+    Component API for components which augment or add functionality to the
+    application.
+    """
     @abstractmethod
     def __init__(self, trinity_boot_info: TrinityBootInfo, endpoint: EndpointAPI) -> None:
         ...
@@ -43,21 +68,11 @@ class ComponentAPI(ABC):
     async def run(self) -> None:
         ...
 
-    @abstractmethod
-    async def stop(self) -> None:
-        ...
 
-    @classmethod
-    @abstractmethod
-    def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
-        """
-        Give the component a chance to amend the Trinity CLI argument parser. This hook is called
-        before :meth:`~trinity.extensibility.component.BaseComponent.on_ready`
-        """
-        ...
-
-
-class BaseComponent(ComponentAPI):
+class BaseApplicationComponent(BaseComponentAPI):
+    """
+    Base class for ApplicationComponentAPI implementations.
+    """
     def __init__(self, trinity_boot_info: TrinityBootInfo, endpoint: EndpointAPI) -> None:
         self._boot_info = trinity_boot_info
         self._endpoint = endpoint
@@ -65,3 +80,20 @@ class BaseComponent(ComponentAPI):
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
         pass
+
+
+@asynccontextmanager
+async def run_component(component: ApplicationComponentAPI,
+                        loop: asyncio.AbstractEventLoop = None) -> ApplicationComponentAPI:
+    task = asyncio.ensure_future(component.run(), loop=loop)
+
+    try:
+        yield
+    finally:
+        if not task.done():
+            task.cancel()
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass

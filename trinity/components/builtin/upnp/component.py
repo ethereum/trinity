@@ -8,7 +8,7 @@ from asyncio_run_in_process import asyncio_run_in_process
 from p2p.asycnio_service import Manager
 
 from trinity.extensibility import (
-    BaseComponent,
+    BaseApplicationComponent,
 )
 
 from .nat import (
@@ -16,7 +16,7 @@ from .nat import (
 )
 
 
-class UpnpComponent(BaseComponent):
+class UpnpComponent(BaseApplicationComponent):
     """
     Continously try to map external to internal ip address/port using the
     Universal Plug 'n' Play (upnp) standard.
@@ -41,8 +41,4 @@ class UpnpComponent(BaseComponent):
         upnp_service = UPnPService(self.boot_info, self.name)
 
         async with asyncio_run_in_process(Manager.run_service, upnp_service) as proc:
-            self._proc = proc
             await proc.wait()
-
-    async def stop(self) -> None:
-        self._proc.terminate()

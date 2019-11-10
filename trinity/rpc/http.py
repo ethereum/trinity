@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import (
     Any,
@@ -8,12 +7,11 @@ from typing import (
 from aiohttp import web
 from eth_utils.toolz import curry
 
-from cancel_token import (
-    CancelToken,
+from p2p.trio_service import (
+    ManagerAPI,
 )
-
-from p2p.service import (
-    BaseService,
+from p2p.asyncio_service import (
+    Service,
 )
 
 from trinity.rpc.main import (
@@ -54,7 +52,7 @@ def response_error(message: Any) -> web.Response:
     return web.json_response(data)
 
 
-class HTTPServer(BaseService):
+class HTTPServer(Service):
     rpc = None
     server = None
     host = None
@@ -64,22 +62,19 @@ class HTTPServer(BaseService):
             self,
             rpc: RPCServer,
             host: str = '127.0.0.1',
-            port: int = 8545,
-            token: CancelToken = None,
-            loop: asyncio.AbstractEventLoop = None) -> None:
-        super().__init__(token=token, loop=loop)
+            port: int = 8545) -> None:
         self.rpc = rpc
         self.host = host
         self.port = port
         self.server = web.Server(handler(self.rpc.execute))
 
-    async def _run(self) -> None:
+    async def run(self, manager: ManagerAPI) -> None:
         runner = web.ServerRunner(self.server)
         await runner.setup()
         site = web.TCPSite(runner, self.host, self.port)
         await site.start()
         self.logger.info('HTTP started at: %s', site.name)
-        await self.cancellation()
-
-    async def _cleanup(self) -> None:
-        await self.server.shutdown()
+        try:
+            await manager.wait_stopped()
+        finally:
+            await self.server.shutdown()

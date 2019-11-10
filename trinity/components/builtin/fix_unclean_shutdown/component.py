@@ -9,7 +9,7 @@ from trinity.config import (
     TrinityConfig,
 )
 from trinity.extensibility import (
-    BaseMainProcessComponent,
+    BaseCommandComponent,
 )
 from trinity._utils.ipc import (
     kill_process_id_gracefully,
@@ -17,10 +17,8 @@ from trinity._utils.ipc import (
 )
 
 
-class FixUncleanShutdownComponent(BaseMainProcessComponent):
-    @property
-    def name(self) -> str:
-        return "Fix Unclean Shutdown"
+class FixUncleanShutdownComponent(BaseCommandComponent):
+    name = "Fix Unclean Shutdown"
 
     @classmethod
     def configure_parser(cls,

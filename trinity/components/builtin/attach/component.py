@@ -14,7 +14,7 @@ from trinity.config import (
     TrinityConfig,
 )
 from trinity.extensibility import (
-    BaseMainProcessComponent,
+    BaseCommandComponent,
 )
 
 from trinity.components.builtin.attach.console import (
@@ -34,10 +34,8 @@ def is_ipython_available() -> bool:
         return True
 
 
-class AttachComponent(BaseMainProcessComponent):
-    @property
-    def name(self) -> str:
-        return "Attach"
+class AttachComponent(BaseCommandComponent):
+    name = "Attach"
 
     @classmethod
     def configure_parser(cls,
@@ -67,7 +65,7 @@ class AttachComponent(BaseMainProcessComponent):
             sys.exit(1)
 
 
-class DbShellComponent(BaseMainProcessComponent):
+class DbShellComponent(BaseCommandComponent):
     @property
     def name(self) -> str:
         return "DB Shell"
