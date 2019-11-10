@@ -360,3 +360,22 @@ async def test_asyncio_service_lifecycle_run_and_clean_exit_with_child_service()
         trigger_exit_condition_fn=trigger_exit.set,
         should_be_cancelled=False,
     )
+
+
+@pytest.mark.asyncio
+async def test_asyncio_service_with_async_generator():
+    is_within_agen = asyncio.Event()
+
+    async def do_agen():
+        while True:
+            yield
+
+    @as_service
+    async def ServiceTest(manager):
+        async for _ in do_agen():  # noqa: F841
+            await asyncio.sleep(0)
+            is_within_agen.set()
+
+    async with background_service(ServiceTest()) as manager:
+        await is_within_agen.wait()
+        manager.cancel()
