@@ -10,6 +10,7 @@ from argparse import (
 import asyncio
 from typing import (
     Any,
+    AsyncIterator,
     Dict,
     NamedTuple,
 )
@@ -75,7 +76,7 @@ class BaseApplicationComponent(BaseComponentAPI):
     """
     def __init__(self, trinity_boot_info: TrinityBootInfo, endpoint: EndpointAPI) -> None:
         self._boot_info = trinity_boot_info
-        self._endpoint = endpoint
+        self._event_bus = endpoint
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -84,7 +85,8 @@ class BaseApplicationComponent(BaseComponentAPI):
 
 @asynccontextmanager
 async def run_component(component: ApplicationComponentAPI,
-                        loop: asyncio.AbstractEventLoop = None) -> ApplicationComponentAPI:
+                        loop: asyncio.AbstractEventLoop = None,
+                        ) -> AsyncIterator[None]:
     task = asyncio.ensure_future(component.run(), loop=loop)
 
     try:

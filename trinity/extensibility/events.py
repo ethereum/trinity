@@ -13,7 +13,7 @@ from lahja import (
 
 if TYPE_CHECKING:
     from trinity.extensibility import (  # noqa: F401
-        BaseComponent,
+        ApplicationComponentAPI,
     )
 
 
@@ -23,4 +23,4 @@ class ComponentStartedEvent(BaseEvent):
     Broadcasted when a component was started
     """
 
-    component_type: Type['BaseComponent']
+    component_type: Type['ApplicationComponentAPI']

@@ -52,8 +52,8 @@ class TxComponent(BaseApplicationComponent):
 
     @property
     def is_enabled(self) -> bool:
-        light_mode = self.boot_info.args.sync_mode == SYNC_LIGHT
-        is_disable = self.boot_info.args.disable_tx_pool
+        light_mode = self._boot_info.args.sync_mode == SYNC_LIGHT
+        is_disable = self._boot_info.args.disable_tx_pool
         is_supported = not light_mode
         is_enabled = not is_disable and is_supported
         if not is_supported:
@@ -61,7 +61,7 @@ class TxComponent(BaseApplicationComponent):
         return is_enabled
 
     async def run(self) -> None:
-        trinity_config = self.boot_info.trinity_config
+        trinity_config = self._boot_info.trinity_config
         db = DBClient.connect(trinity_config.database_ipc_path)
 
         app_config = trinity_config.get_app_config(Eth1AppConfig)
@@ -69,16 +69,16 @@ class TxComponent(BaseApplicationComponent):
 
         chain = chain_config.full_chain_class(db)
 
-        if self.boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
+        if self._boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
             validator = DefaultTransactionValidator(chain, PETERSBURG_MAINNET_BLOCK)
-        elif self.boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
+        elif self._boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
             validator = DefaultTransactionValidator(chain, PETERSBURG_ROPSTEN_BLOCK)
         else:
             raise ValueError("The TxPool component only supports MainnetChain or RopstenChain")
 
-        proxy_peer_pool = ETHProxyPeerPool(self.event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        proxy_peer_pool = ETHProxyPeerPool(self._event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 
-        tx_pool = TxPool(self.event_bus, proxy_peer_pool, validator)
+        tx_pool = TxPool(self._event_bus, proxy_peer_pool, validator)
 
         async with open_in_process(tx_pool.run) as proc:
             await proc.wait()
@@ -86,7 +86,7 @@ class TxComponent(BaseApplicationComponent):
 
 class TxPoolService(ComponentService):
     async def run_component_service(self) -> None:
-        trinity_config = self.boot_info.trinity_config
+        trinity_config = self._boot_info.trinity_config
         db = DBClient.connect(trinity_config.database_ipc_path)
 
         app_config = trinity_config.get_app_config(Eth1AppConfig)
@@ -94,14 +94,14 @@ class TxPoolService(ComponentService):
 
         chain = chain_config.full_chain_class(db)
 
-        if self.boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
+        if self._boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
             validator = DefaultTransactionValidator(chain, PETERSBURG_MAINNET_BLOCK)
-        elif self.boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
+        elif self._boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
             validator = DefaultTransactionValidator(chain, PETERSBURG_ROPSTEN_BLOCK)
         else:
             raise ValueError("The TxPool component only supports MainnetChain or RopstenChain")
 
-        proxy_peer_pool = ETHProxyPeerPool(self.event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        proxy_peer_pool = ETHProxyPeerPool(self._event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 
-        tx_pool = TxPool(self.event_bus, proxy_peer_pool, validator)
-        self.run_child_service(tx_pool)
+        tx_pool = TxPool(self._event_bus, proxy_peer_pool, validator)
+        self.manager.run_daemon_child_service(tx_pool)

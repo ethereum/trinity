@@ -3,7 +3,7 @@ import logging
 
 from lahja import AsyncioEndpoint, ConnectionConfig
 
-from p2p.trio_service import Service, ManagerAPI
+from p2p.trio_service import Service
 
 from trinity._utils.logging import (
     setup_log_levels,
@@ -18,7 +18,7 @@ class ComponentService(Service):
         self.boot_info = boot_info
         self._endpoint_name = endpoint_name
 
-    async def run(self, manager: ManagerAPI) -> None:
+    async def run(self) -> None:
         # setup cross process logging
         log_queue = self.boot_info.boot_kwargs['log_queue']
         level = self.boot_info.boot_kwargs.get('log_level', logging.INFO)

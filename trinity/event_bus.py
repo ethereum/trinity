@@ -1,9 +1,6 @@
 from argparse import ArgumentParser
 import asyncio
-import inspect
 from typing import (
-    Any,
-    Callable,
     Collection,
     Sequence,
     Type,
@@ -12,7 +9,9 @@ from typing import (
 
 from lahja import AsyncioEndpoint, ConnectionConfig, BroadcastConfig, EndpointAPI
 
-from p2p.trio_service import Service, ManagerAPI
+from eth_utils import get_extended_debug_logger
+
+from p2p.trio_service import Service
 
 from trinity._utils.ipc import (
     remove_dangling_ipc_files,
@@ -27,7 +26,7 @@ from trinity.events import (
     EventBusConnected,
 )
 from trinity.extensibility import (
-    ComponentAPI,
+    ApplicationComponentAPI,
     TrinityBootInfo,
     run_component,
 )
@@ -35,21 +34,20 @@ from trinity.extensibility import (
 
 class ComponentManager(Service):
     _endpoint: EndpointAPI
+    logger = get_extended_debug_logger('trinity.event_bus.ComponentManager')
 
     def __init__(self,
                  trinity_boot_info: TrinityBootInfo,
-                 component_types: Sequence[Type[ComponentAPI]],
-                 kill_trinity_fn: Callable[[str], Any]) -> None:
+                 component_types: Sequence[Type[ApplicationComponentAPI]]) -> None:
         self._boot_info = trinity_boot_info
         self._component_types = component_types
-        self._kill_trinity_fn = kill_trinity_fn
         self._trigger_component_stop = asyncio.Event()
 
-    async def _run_component(self, component: ComponentAPI) -> None:
+    async def _run_component(self, component: ApplicationComponentAPI) -> None:
         async with run_component(component):
             await self._trigger_component_stop.wait()
 
-    async def run(self, manager: ManagerAPI) -> None:
+    async def run(self) -> None:
         self._connection_config = ConnectionConfig.from_name(
             MAIN_EVENTBUS_ENDPOINT,
             self._boot_info.trinity_config.ipc_dir
@@ -59,7 +57,7 @@ class ComponentManager(Service):
 
             # start the background process that tracks and propagates available
             # endpoints to the other connected endpoints
-            manager.run_daemon_task(self._track_and_propagate_available_endpoints)
+            self.manager.run_daemon_task(self._track_and_propagate_available_endpoints)
 
             # start the component manager
             components = tuple(
@@ -75,23 +73,25 @@ class ComponentManager(Service):
             )
 
             for component in active_components:
-                manager.run_task(component.run)
+                self.manager.run_task(component.run, name=f"Component[{component.name}]")
 
             try:
                 await self._trigger_component_stop.wait()
             finally:
                 self._trigger_component_stop.set()
 
-    async def _handle_shutdown_request(self, components: Collection[ComponentAPI]) -> None:
+    async def _handle_shutdown_request(self,
+                                       components: Collection[ApplicationComponentAPI],
+                                       ) -> None:
         req = await self._endpoint.wait_for(ShutdownRequest)
         self._trigger_component_stop.set()
 
-        self.cancel()
+        self.manager.cancel()
 
         hint = f"({req.reason})" if req.reason else f""
         self.logger.info('Shutting down Trinity %s', hint)
 
-        remove_dangling_ipc_files(self.logger, self.trinity_config.ipc_dir)
+        remove_dangling_ipc_files(self.logger, self._boot_info.trinity_config.ipc_dir)
 
         ArgumentParser().exit(message=f"Trinity shutdown complete {hint}\n")
 
@@ -129,14 +129,14 @@ class AsyncioEventBusService(Service):
     def get_event_bus(self) -> AsyncioEndpoint:
         return self._endpoint
 
-    async def run(self, manager: ManagerAPI) -> None:
+    async def run(self) -> None:
         async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
             self._endpoint = endpoint
             # signal that the endpoint is now available
             self._endpoint_available.set()
 
             # run background task that automatically connects to newly announced endpoints
-            manager.run_daemon_task(self._auto_connect_new_announced_endpoints)
+            self.manager.run_daemon_task(self._auto_connect_new_announced_endpoints)
 
             # connect to the *main* endpoint which communicates information
             # about other endpoints that come online.
@@ -157,13 +157,13 @@ class AsyncioEventBusService(Service):
             )
 
             # run until the endpoint exits
-            await manager.wait_stopped()
+            await self.manager.wait_stopped()
 
     async def _auto_connect_new_announced_endpoints(self) -> None:
         """
         Connect this endpoint to all new endpoints that are announced
         """
-        async for ev in self.wait_iter(self._endpoint.stream(AvailableEndpointsUpdated)):
+        async for ev in self._endpoint.stream(AvailableEndpointsUpdated):
             # We only connect to Endpoints that appear after our own Endpoint in the set.
             # This ensures that we don't try to connect to an Endpoint while that remote
             # Endpoint also wants to connect to us.

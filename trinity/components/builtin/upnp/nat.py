@@ -10,6 +10,8 @@ from typing import (
 )
 from urllib.parse import urlparse
 
+from eth_utils import get_extended_debug_logger
+
 from p2p.exceptions import (
     NoInternalAddressMatchesDevice,
 )
@@ -58,6 +60,7 @@ class UPnPService(ComponentService):
     Generate a mapping of external network IP address/port to internal IP address/port,
     using the Universal Plug 'n' Play standard.
     """
+    logger = get_extended_debug_logger('trinity.components.upnp.UPnPService')
 
     # 30 minutes
     _nat_portmap_lifetime = 30 * 60

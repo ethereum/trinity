@@ -1,3 +1,5 @@
+from eth_utils import get_extended_debug_logger
+
 from lahja import EndpointAPI
 
 from p2p.trio_service import Service
@@ -16,6 +18,7 @@ class PeerDBServer(Service):
     """
     Server to handle the event bus communication for PeerDB
     """
+    logger = get_extended_debug_logger('trinity.components.network-db.PeerDBServer')
 
     def __init__(self,
                  event_bus: EndpointAPI,
@@ -49,7 +52,7 @@ class PeerDBServer(Service):
     async def _run(self) -> None:
         self.logger.debug("Running PeerDBServer")
 
-        self.run_daemon_task(self.handle_track_peer_event())
-        self.run_daemon_task(self.handle_get_peer_candidates_request())
+        self.manager.run_daemon_task(self.handle_track_peer_event)
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_request)
 
-        await self.cancel_token.wait()
+        await self.manager.wait_stopped()

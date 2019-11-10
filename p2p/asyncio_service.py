@@ -38,10 +38,10 @@ class Manager(ManagerAPI):
     ]]
 
     # Tracking of the system level background tasks.
-    _system_tasks: Set[asyncio.Task]
+    _system_tasks: Set[asyncio.Future[None]]
 
     # Tracking of the background tasks that the service has initiated.
-    _service_tasks: Set[asyncio.Task]
+    _service_tasks: Set[asyncio.Future[Any]]
 
     def __init__(self,
                  service: ServiceAPI,

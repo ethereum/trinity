@@ -3,13 +3,9 @@ from argparse import (
     _SubParsersAction,
 )
 import os
-import asyncio
 from typing import (
     cast,
 )
-
-from lahja import EndpointAPI
-
 
 from libp2p.crypto.keys import KeyPair
 from libp2p.crypto.secp256k1 import create_new_key_pair, Secp256k1PrivateKey
@@ -21,12 +17,9 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
-from trinity.extensibility import AsyncioIsolatedComponent
+from trinity.extensibility import BaseApplicationComponent, ComponentService
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.servers import BCCReceiveServer
 
@@ -44,11 +37,8 @@ from trinity.sync.common.chain import (
 )
 
 
-class BeaconNodeComponent(AsyncioIsolatedComponent):
-
-    @property
-    def name(self) -> str:
-        return "Beacon Node"
+class BeaconNodeComponent(BaseApplicationComponent):
+    name = "Beacon Node"
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -65,37 +55,13 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             help="0xabcd",
         )
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if self.boot_info.trinity_config.has_app_config(BeaconAppConfig):
-            self.start()
+    @property
+    def is_enabled(self) -> bool:
+        return self.boot_info.trinity_config.has_app_config(BeaconAppConfig)
 
-    def _load_or_create_node_key(self) -> KeyPair:
-        if self.boot_info.args.beacon_nodekey:
-            privkey = Secp256k1PrivateKey.new(
-                decode_hex(self.boot_info.args.beacon_nodekey)
-            )
-            key_pair = KeyPair(private_key=privkey, public_key=privkey.get_public_key())
-            return key_pair
-        else:
-            config = self.boot_info.trinity_config
-            beacon_nodekey_path = f"{config.nodekey_path}-beacon"
-            if os.path.isfile(beacon_nodekey_path):
-                with open(beacon_nodekey_path, "rb") as f:
-                    key_data = f.read()
-                private_key = Secp256k1PrivateKey.new(key_data)
-                key_pair = KeyPair(
-                    private_key=private_key,
-                    public_key=private_key.get_public_key()
-                )
-                return key_pair
-            else:
-                key_pair = create_new_key_pair()
-                private_key_bytes = key_pair.private_key.to_bytes()
-                with open(beacon_nodekey_path, "wb") as f:
-                    f.write(private_key_bytes)
-                return key_pair
 
-    def do_start(self) -> None:
+class BeaconNodeService(ComponentService):
+    def run_component_service(self) -> None:
         trinity_config = self.boot_info.trinity_config
         key_pair = self._load_or_create_node_key()
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
@@ -168,16 +134,34 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
 
         )
 
-        asyncio.ensure_future(exit_with_services(
-            self._event_bus_service,
-            libp2p_node,
-            receive_server,
-            slot_ticker,
-            validator,
-            syncer,
-        ))
-        asyncio.ensure_future(libp2p_node.run())
-        asyncio.ensure_future(receive_server.run())
-        asyncio.ensure_future(slot_ticker.run())
-        asyncio.ensure_future(validator.run())
-        asyncio.ensure_future(syncer.run())
+        self.manager.run_daemon_child_service(libp2p_node)
+        self.manager.run_daemon_child_service(receive_server)
+        self.manager.run_daemon_child_service(slot_ticker)
+        self.manager.run_daemon_child_service(validator)
+        self.manager.run_daemon_child_service(syncer)
+
+    def _load_or_create_node_key(self) -> KeyPair:
+        if self.boot_info.args.beacon_nodekey:
+            privkey = Secp256k1PrivateKey.new(
+                decode_hex(self.boot_info.args.beacon_nodekey)
+            )
+            key_pair = KeyPair(private_key=privkey, public_key=privkey.get_public_key())
+            return key_pair
+        else:
+            config = self.boot_info.trinity_config
+            beacon_nodekey_path = f"{config.nodekey_path}-beacon"
+            if os.path.isfile(beacon_nodekey_path):
+                with open(beacon_nodekey_path, "rb") as f:
+                    key_data = f.read()
+                private_key = Secp256k1PrivateKey.new(key_data)
+                key_pair = KeyPair(
+                    private_key=private_key,
+                    public_key=private_key.get_public_key()
+                )
+                return key_pair
+            else:
+                key_pair = create_new_key_pair()
+                private_key_bytes = key_pair.private_key.to_bytes()
+                with open(beacon_nodekey_path, "wb") as f:
+                    f.write(private_key_bytes)
+                return key_pair

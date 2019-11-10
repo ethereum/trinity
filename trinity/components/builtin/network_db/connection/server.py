@@ -1,6 +1,6 @@
 from lahja import EndpointAPI
 
-from eth_utils import humanize_seconds
+from eth_utils import humanize_seconds, get_extended_debug_logger
 
 from p2p.trio_service import Service
 from p2p.tracking.connection import BaseConnectionTracker
@@ -13,6 +13,7 @@ from .events import (
 
 
 class ConnectionTrackerServer(Service):
+    logger = get_extended_debug_logger('trinity.components.network_db.ConnectionTrackerServer')
     """
     Server to handle the event bus communication for BlacklistEvent and
     ShouldConnectToPeerRequest/Response events
@@ -50,7 +51,7 @@ class ConnectionTrackerServer(Service):
     async def run(self) -> None:
         self.logger.debug("Running ConnectionTrackerServer")
 
-        self.run_daemon_task(self.handle_should_connect_to_requests)
-        self.run_daemon_task(self.handle_blacklist_command)
+        self.manager.run_daemon_task(self.handle_should_connect_to_requests)
+        self.manager.run_daemon_task(self.handle_blacklist_command)
 
         await self.manager.wait_stopped()
