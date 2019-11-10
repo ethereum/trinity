@@ -19,7 +19,7 @@ from eth_utils import (
     ValidationError,
 )
 
-from p2p.trio_service import (
+from p2p.service import (
     as_service,
     ManagerAPI,
 )

@@ -13,14 +13,15 @@ from typing import (
     TYPE_CHECKING,
 )
 
+from eth_utils import ExtendedDebugLogger
 
 from p2p.abc import (
-    AsyncioServiceAPI,
     CommandAPI,
     ConnectionAPI,
     RequestAPI,
     ProtocolAPI,
 )
+from p2p.service import ServiceAPI
 from p2p.stats.ema import EMA
 from p2p.stats.percentile import Percentile
 from p2p.stats.stddev import StandardDeviation
@@ -93,7 +94,9 @@ class PerformanceTrackerAPI(PerformanceAPI, Generic[TRequest, TResult]):
         ...
 
 
-class ResponseCandidateStreamAPI(AsyncioServiceAPI, Generic[TRequestPayload, TResponsePayload]):
+class ResponseCandidateStreamAPI(ServiceAPI, Generic[TRequestPayload, TResponsePayload]):
+    logger: ExtendedDebugLogger
+
     response_timeout: float
 
     pending_request: Optional[Tuple[float, 'asyncio.Future[TResponsePayload]']]

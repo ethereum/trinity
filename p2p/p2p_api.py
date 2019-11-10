@@ -41,8 +41,7 @@ class CancelOnDisconnect(CommandHandler):
         else:
             self.disconnect_reason = reason
 
-        if connection.is_operational:
-            connection.cancel_nowait()
+        connection.manager.cancel()
 
 
 class P2PAPI(Application):
@@ -79,7 +78,7 @@ class P2PAPI(Application):
         """
         return self._disconnect_handler.disconnect_reason
 
-    def _disconnect(self, reason: DisconnectReason) -> None:
+    def disconnect(self, reason: DisconnectReason) -> None:
         self.logger.debug(
             "Sending Disconnect to remote peer %s; reason: %s",
             self.connection,
@@ -88,16 +87,7 @@ class P2PAPI(Application):
         base_protocol = self.connection.get_base_protocol()
         base_protocol.send_disconnect(reason)
         self.local_disconnect_reason = reason
-
-    async def disconnect(self, reason: DisconnectReason) -> None:
-        self._disconnect(reason)
-        if self.connection.is_operational:
-            await self.connection.cancel()
-
-    def disconnect_nowait(self, reason: DisconnectReason) -> None:
-        self._disconnect(reason)
-        if self.connection.is_operational:
-            self.connection.cancel_nowait()
+        self.connection.manager.cancel()
 
     #
     # Sending Pings

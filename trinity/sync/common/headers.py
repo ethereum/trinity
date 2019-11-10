@@ -26,6 +26,7 @@ from eth_typing import (
 from eth_utils import (
     humanize_hash,
     ValidationError,
+    get_extended_debug_logger,
 )
 from eth_utils.toolz import (
     compose,
@@ -45,7 +46,7 @@ from p2p.abc import CommandAPI
 from p2p.constants import SEAL_CHECK_RANDOM_SAMPLE_RATE
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.trio_service import Service
+from p2p.service import Service
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.header import BaseAsyncHeaderDB
@@ -82,6 +83,8 @@ from trinity._utils.humanize import (
 
 
 class SkeletonSyncer(Service, Generic[TChainPeer]):
+    logger = get_extended_debug_logger('trinity.sync.headers.SkeletonSyncer')
+
     # header skip: long enough that the pairs leave a gap of 192, the max header request length
     _skip_length = MAX_HEADERS_FETCH + 1
 
@@ -105,7 +108,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         self._fetched_headers = asyncio.Queue(max_pending_headers)
 
     async def next_skeleton_segment(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
-        while self.is_running or self._fetched_headers.qsize() > 0:
+        while self.manager.is_running or self._fetched_headers.qsize() > 0:
             if self._fetched_headers.qsize() == 0:
                 yield await self._fetched_headers.get()
                 self._fetched_headers.task_done()
@@ -123,8 +126,8 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
 
     async def _display_stats(self) -> None:
         queue = self._fetched_headers
-        while self.is_running:
-            await self.sleep(5)
+        while self.manager.is_running:
+            await asyncio.sleep(5)
             self.logger.debug("Skeleton header queue is %d/%d full", queue.qsize(), queue.maxsize)
 
     async def _quietly_fetch_full_skeleton(self) -> None:
@@ -154,7 +157,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         previous_tail_header = launch_headers[-1]
         start_num = BlockNumber(previous_tail_header.block_number + self._skip_length)
 
-        while self.is_running:
+        while self.manager.is_running:
             # get parents
             parents = await self._fetch_headers_from(peer, start_num)
             if not parents:
@@ -172,7 +175,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
                     self._chain.coro_validate_chain(parent, (child, ))
                     for parent, child in pairs
                 )
-                await asyncio.gather(*validate_pair_coros, loop=self.get_event_loop())
+                await asyncio.gather(*validate_pair_coros)
             except ValidationError as e:
                 self.logger.warning(
                     "Received an invalid header pair from %s: %s",
@@ -214,7 +217,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         await self._get_final_headers(peer, previous_tail_header)
 
     async def _get_final_headers(self, peer: TChainPeer, previous_tail_header: BlockHeader) -> None:
-        while self.is_running:
+        while self.manager.is_running:
             final_headers = await self._fetch_headers_from(
                 peer,
                 BlockNumber(previous_tail_header.block_number + 1),
@@ -545,6 +548,8 @@ HeaderStitcher = OrderedTaskPreparation[BlockHeader, Hash32, NoPrerequisites]
 
 
 class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
+    logger = get_extended_debug_logger('trinity.sync.headers.HeaderMeatSyncer')
+
     # We are only interested in peers entering or leaving the pool
     subscription_msg_types: FrozenSet[Type[CommandAPI]] = frozenset()
     msg_queue_maxsize = 2000
@@ -605,26 +610,23 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
     async def run(self) -> None:
         self.manager.run_daemon_task(self._display_stats)
         with self.subscribe(self._peer_pool):
-            await self._match_header_dls_to_peers()
+            while self.manager.is_running:
+                batch_id, (
+                    (parent_header, gap, skeleton_peer),
+                ) = await self._filler_header_tasks.get(1)
+
+                await self._match_dl_to_peer(batch_id, parent_header, gap, skeleton_peer)
 
     async def _display_stats(self) -> None:
         q = self._filler_header_tasks
-        while self.is_running:
-            await self.sleep(5)
+        while self.manager.is_running:
+            await asyncio.sleep(5)
             self.logger.debug(
                 "Header Skeleton Gaps: active=%d queued=%d max=%d",
                 q.num_in_progress(),
                 len(q),
                 q._maxsize,
             )
-
-    async def _match_header_dls_to_peers(self) -> None:
-        while self.is_running:
-            batch_id, (
-                (parent_header, gap, skeleton_peer),
-            ) = await self._filler_header_tasks.get(1)
-
-            await self._match_dl_to_peer(batch_id, parent_header, gap, skeleton_peer)
 
     async def _match_dl_to_peer(
             self,
@@ -691,7 +693,8 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
                     delay,
                     len(completed_headers),
                 )
-                self.call_later(delay, self._waiting_peers.put_nowait, peer)
+                loop = asyncio.get_event_loop()
+                loop.call_later(delay, self._waiting_peers.put_nowait, peer)
                 fail_task_fn()
 
     async def _fetch_segment(
@@ -810,6 +813,8 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
     Generate a skeleton header, then use all peers to fill in the headers
     returned by the skeleton syncer.
     """
+    logger = get_extended_debug_logger('trinity.sync.headers.ChainSyncer')
+
     _meat: HeaderMeatSyncer[TChainPeer]
 
     def __init__(self,
@@ -860,7 +865,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
             self,
             max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
 
-        while self.is_running:
+        while self.manager.is_running:
             headers = await self._stitcher.ready_tasks(max_batch_size)
             if self._stitcher.has_ready_tasks():
                 # Even after clearing out a big batch, there is no available capacity, so
@@ -925,7 +930,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
             self._launch_strategy,
         )
         manager = self.manager.run_child_service(self._skeleton)
-        await self._skeleton.events.started.wait()
+        await self._skeleton.manager.wait_started()
         try:
             yield self._skeleton
         finally:

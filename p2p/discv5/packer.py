@@ -18,10 +18,10 @@ from trio.abc import (
     SendChannel,
 )
 
-from p2p.trio_service import (
+from p2p.service import (
     LifecycleError,
     Service,
-    Manager,
+    TrioManager,
 )
 
 from p2p.discv5.abc import (
@@ -451,7 +451,7 @@ class PeerPacker(Service):
 
 class ManagedPeerPacker(NamedTuple):
     peer_packer: PeerPacker
-    manager: Manager
+    manager: TrioManager
     incoming_packet_send_channel: SendChannel[IncomingPacket]
     outgoing_message_send_channel: SendChannel[OutgoingMessage]
 
@@ -588,7 +588,7 @@ class Packer(Service):
             outgoing_packet_send_channel=self.outgoing_packet_send_channel.clone(),
         )
 
-        manager = Manager(peer_packer)
+        manager = TrioManager(peer_packer)
 
         self.managed_peer_packers[remote_node_id] = ManagedPeerPacker(
             peer_packer=peer_packer,

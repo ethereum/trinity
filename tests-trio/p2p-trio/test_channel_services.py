@@ -6,8 +6,8 @@ from socket import (
 import pytest
 import pytest_trio
 
-from p2p.trio_service import (
-    background_service,
+from p2p.service import (
+    background_trio_service,
 )
 
 from p2p.discv5.channel_services import (
@@ -50,7 +50,7 @@ async def test_datagram_receiver(socket_pair):
     sender_address = sending_socket.getsockname()
 
     send_channel, receive_channel = trio.open_memory_channel(1)
-    async with background_service(DatagramReceiver(receiving_socket, send_channel)):
+    async with background_trio_service(DatagramReceiver(receiving_socket, send_channel)):
         data = b"some packet"
 
         await sending_socket.sendto(data, receiver_address)
@@ -69,7 +69,7 @@ async def test_datagram_sender(socket_pair):
     sender_endpoint = sending_socket.getsockname()
 
     send_channel, receive_channel = trio.open_memory_channel(1)
-    async with background_service(DatagramSender(receive_channel, sending_socket)):
+    async with background_trio_service(DatagramSender(receive_channel, sending_socket)):
         outgoing_datagram = OutgoingDatagram(
             b"some packet",
             Endpoint(inet_aton(receiver_endpoint[0]), receiver_endpoint[1]),
@@ -87,7 +87,8 @@ async def test_packet_decoder():
     datagram_send_channel, datagram_receive_channel = trio.open_memory_channel(1)
     packet_send_channel, packet_receive_channel = trio.open_memory_channel(1)
 
-    async with background_service(PacketDecoder(datagram_receive_channel, packet_send_channel)):
+    packet_decoder = PacketDecoder(datagram_receive_channel, packet_send_channel)
+    async with background_trio_service(packet_decoder):
         packet = AuthTagPacketFactory()
         sender_endpoint = EndpointFactory()
         await datagram_send_channel.send(IncomingDatagram(
@@ -108,7 +109,8 @@ async def test_packet_decoder_error():
     datagram_send_channel, datagram_receive_channel = trio.open_memory_channel(1)
     packet_send_channel, packet_receive_channel = trio.open_memory_channel(1)
 
-    async with background_service(PacketDecoder(datagram_receive_channel, packet_send_channel)):
+    packet_decoder = PacketDecoder(datagram_receive_channel, packet_send_channel)
+    async with background_trio_service(packet_decoder):
         # send invalid packet
         await datagram_send_channel.send(IncomingDatagram(
             datagram=b"not a valid packet",
@@ -137,7 +139,8 @@ async def test_packet_encoder():
     packet_send_channel, packet_receive_channel = trio.open_memory_channel(1)
     datagram_send_channel, datagram_receive_channel = trio.open_memory_channel(1)
 
-    async with background_service(PacketEncoder(packet_receive_channel, datagram_send_channel)):
+    packet_encoder = PacketEncoder(packet_receive_channel, datagram_send_channel)
+    async with background_trio_service(packet_encoder):
         receiver_endpoint = EndpointFactory()
         outgoing_packet = OutgoingPacket(
             packet=AuthTagPacketFactory(),

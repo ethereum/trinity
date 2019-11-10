@@ -24,7 +24,7 @@ import ssz
 
 from libp2p.pubsub.pb import rpc_pb2
 
-from p2p.trio_service import Service
+from p2p.service import Service
 
 from eth2.beacon.chains.base import (
     BaseBeaconChain,

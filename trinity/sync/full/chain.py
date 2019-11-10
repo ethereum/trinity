@@ -51,7 +51,7 @@ from p2p.abc import CommandAPI
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.trio_service import Service
+from p2p.service import Service
 from p2p.stats.ema import EMA
 from p2p.token_bucket import TokenBucket
 

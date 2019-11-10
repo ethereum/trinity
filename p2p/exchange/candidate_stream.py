@@ -7,6 +7,8 @@ from typing import (
     Type,
 )
 
+from eth_utils import get_extended_debug_logger
+
 from p2p.abc import (
     CommandAPI,
     ConnectionAPI,
@@ -33,6 +35,8 @@ from .constants import (
 class ResponseCandidateStream(
         ResponseCandidateStreamAPI[TRequestPayload, TResponsePayload],
         BaseService):
+    logger = get_extended_debug_logger('p2p.exchange.ResponseCandidateStreamAPI')
+
     response_timeout: float = ROUND_TRIP_TIMEOUT
 
     pending_request: Tuple[float, 'asyncio.Future[TResponsePayload]'] = None

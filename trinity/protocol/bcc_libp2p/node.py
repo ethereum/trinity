@@ -76,7 +76,7 @@ from multiaddr import (
 
 import ssz
 
-from p2p.trio_service import Service
+from p2p.service import Service
 
 from .configs import (
     GOSSIPSUB_PROTOCOL_ID,

@@ -61,8 +61,6 @@ from eth_keys import datatypes
 
 from eth_hash.auto import keccak
 
-from cancel_token import CancelToken, OperationCancelled
-
 from p2p.events import (
     PeerCandidatesRequest,
     RandomBootnodeRequest,
@@ -74,7 +72,7 @@ from p2p import constants
 from p2p.abc import AddressAPI, NodeAPI
 from p2p.exceptions import AlreadyWaitingDiscoveryResponse, NoEligibleNodes, UnableToGetDiscV5Ticket
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
-from p2p.service import BaseService
+from p2p.service import Service
 
 if TYPE_CHECKING:
     # Promoted workaround for inheriting from generic stdlib class
@@ -159,8 +157,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
-                 bootstrap_nodes: Sequence[NodeAPI],
-                 cancel_token: CancelToken) -> None:
+                 bootstrap_nodes: Sequence[NodeAPI]) -> None:
         self.privkey = privkey
         self.address = address
         self.bootstrap_nodes = bootstrap_nodes
@@ -172,7 +169,8 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         self.neighbours_callbacks = CallbackManager()
         self.topic_nodes_callbacks = CallbackManager()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
-        self.cancel_token = CancelToken('DiscoveryProtocol').chain(cancel_token)
+
+        self._is_closing = False
 
     def update_routing_table(self, node: NodeAPI) -> None:
         """Update the routing table entry for the given node."""
@@ -182,6 +180,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             # with the least recently seen node on that bucket. If the bonding fails the node will
             # be removed from the bucket and a new one will be picked from the bucket's
             # replacement cache.
+            # TODO: this will cause unclean shutdowns,  need to manager these tasks.
             asyncio.ensure_future(self.bond(eviction_candidate))
 
     async def bond(self, node: NodeAPI) -> bool:
@@ -242,8 +241,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         with self.ping_callbacks.acquire(remote, event.set):
             got_ping = False
             try:
-                got_ping = await self.cancel_token.cancellable_wait(
-                    event.wait(), timeout=constants.KADEMLIA_REQUEST_TIMEOUT)
+                got_ping = await asyncio.wait_for(
+                    event.wait(),
+                    timeout=constants.KADEMLIA_REQUEST_TIMEOUT,
+                )
                 self.logger.debug2('got expected ping from %s', remote)
             except asyncio.TimeoutError:
                 self.logger.debug2('timed out waiting for ping from %s', remote)
@@ -269,8 +270,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         with self.pong_callbacks.acquire(pingid, callback):
             got_pong = False
             try:
-                got_pong = await self.cancel_token.cancellable_wait(
-                    event.wait(), timeout=constants.KADEMLIA_REQUEST_TIMEOUT)
+                got_pong = await asyncio.wait_for(
+                    event.wait(),
+                    timeout=constants.KADEMLIA_REQUEST_TIMEOUT,
+                )
                 self.logger.debug2('got expected pong with token %s', encode_hex(token))
             except asyncio.TimeoutError:
                 self.logger.debug2(
@@ -299,8 +302,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
 
         with self.neighbours_callbacks.acquire(remote, process):
             try:
-                await self.cancel_token.cancellable_wait(
-                    event.wait(), timeout=constants.KADEMLIA_REQUEST_TIMEOUT)
+                await asyncio.wait_for(
+                    event.wait(),
+                    timeout=constants.KADEMLIA_REQUEST_TIMEOUT,
+                )
                 self.logger.debug2('got expected neighbours response from %s', remote)
             except asyncio.TimeoutError:
                 self.logger.debug2(
@@ -330,9 +335,6 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         nodes_seen: Set[NodeAPI] = set()
 
         async def _find_node(node_id: int, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
-            # Short-circuit in case our token has been triggered to avoid trying to send requests
-            # over a transport that is probably closed already.
-            self.cancel_token.raise_if_triggered()
             self._send_find_node(remote, node_id)
             candidates = await self.wait_neighbours(remote)
             if not candidates:
@@ -426,20 +428,17 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             self.logger.debug("full-bootnode: %s", uri)
             self.logger.debug("bootnode: %s...%s@%s", pubkey_head, pubkey_tail, uri_tail)
 
-        try:
-            bonding_queries = (
-                self.bond(n)
-                for n
-                in self.bootstrap_nodes
-                if (not self.ping_callbacks.locked(n) and not self.pong_callbacks.locked(n))
-            )
-            bonded = await asyncio.gather(*bonding_queries)
-            if not any(bonded):
-                self.logger.info("Failed to bond with bootstrap nodes %s", self.bootstrap_nodes)
-                return
-            await self.lookup_random()
-        except OperationCancelled as e:
-            self.logger.info("Bootstrapping cancelled: %s", e)
+        bonding_queries = (
+            self.bond(n)
+            for n
+            in self.bootstrap_nodes
+            if (not self.ping_callbacks.locked(n) and not self.pong_callbacks.locked(n))
+        )
+        bonded = await asyncio.gather(*bonding_queries)
+        if not any(bonded):
+            self.logger.info("Failed to bond with bootstrap nodes %s", self.bootstrap_nodes)
+            return
+        await self.lookup_random()
 
     def datagram_received(self, data: Union[bytes, Text], addr: Tuple[str, int]) -> None:
         ip_address, udp_port = addr
@@ -456,7 +455,6 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
 
     async def stop(self) -> None:
         self.logger.info('stopping discovery')
-        self.cancel_token.trigger()
         self.transport.close()
         # We run lots of asyncio tasks so this is to make sure they all get a chance to execute
         # and exit cleanly when they notice the cancel token has been triggered.
@@ -813,8 +811,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
 
         with self.topic_nodes_callbacks.acquire(remote, process):
             try:
-                await self.cancel_token.cancellable_wait(
-                    event.wait(), timeout=constants.KADEMLIA_REQUEST_TIMEOUT)
+                await asyncio.wait_for(
+                    event.wait(),
+                    timeout=constants.KADEMLIA_REQUEST_TIMEOUT,
+                )
             except asyncio.TimeoutError:
                 # A timeout here just means we didn't get at least MAX_ENTRIES_PER_TOPIC nodes,
                 # but we'll still process the ones we get.
@@ -878,9 +878,8 @@ class PreferredNodeDiscoveryProtocol(DiscoveryProtocol):
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
                  bootstrap_nodes: Sequence[NodeAPI],
-                 preferred_nodes: Sequence[NodeAPI],
-                 cancel_token: CancelToken) -> None:
-        super().__init__(privkey, address, bootstrap_nodes, cancel_token)
+                 preferred_nodes: Sequence[NodeAPI]) -> None:
+        super().__init__(privkey, address, bootstrap_nodes)
 
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
@@ -940,9 +939,8 @@ class DiscoveryByTopicProtocol(DiscoveryProtocol):
                  topic: bytes,
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
-                 bootstrap_nodes: Sequence[NodeAPI],
-                 cancel_token: CancelToken) -> None:
-        super().__init__(privkey, address, bootstrap_nodes, cancel_token)
+                 bootstrap_nodes: Sequence[NodeAPI]) -> None:
+        super().__init__(privkey, address, bootstrap_nodes)
         self.topic = topic
 
     def get_nodes_to_connect(self, count: int) -> Iterator[NodeAPI]:
@@ -975,17 +973,17 @@ class DiscoveryByTopicProtocol(DiscoveryProtocol):
         return tuple(seen_nodes)
 
 
-class StaticDiscoveryService(BaseService):
+class StaticDiscoveryService(Service):
     """A 'discovery' service that only connects to the given nodes"""
     _static_peers: Tuple[NodeAPI, ...]
     _event_bus: EndpointAPI
 
+    logger = get_extended_debug_logger('p2p.discovery.StaticDiscoveryService')
+
     def __init__(
             self,
             event_bus: EndpointAPI,
-            static_peers: Sequence[NodeAPI],
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            static_peers: Sequence[NodeAPI]) -> None:
         self._event_bus = event_bus
         self._static_peers = tuple(static_peers)
 
@@ -1017,18 +1015,18 @@ class StaticDiscoveryService(BaseService):
             event.broadcast_config()
         )
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_get_peer_candidates_requests())
-        self.run_daemon_task(self.handle_get_random_bootnode_requests())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
-        await self.cancel_token.wait()
+        await self.manager.wait_forever()
 
 
-class NoopDiscoveryService(BaseService):
+class NoopDiscoveryService(Service):
     'A stub "discovery service" which does nothing'
+    logger = get_extended_debug_logger('p2p.discovery.NoopDiscoveryService')
 
-    def __init__(self, event_bus: EndpointAPI, token: CancelToken = None) -> None:
-        super().__init__(token)
+    def __init__(self, event_bus: EndpointAPI) -> None:
         self._event_bus = event_bus
 
     async def handle_get_peer_candidates_requests(self) -> None:
@@ -1049,32 +1047,32 @@ class NoopDiscoveryService(BaseService):
                 event.broadcast_config()
             )
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_get_peer_candidates_requests())
-        self.run_daemon_task(self.handle_get_random_bootnode_requests())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
-        await self.cancel_token.wait()
+        await self.manager.wait_forever()
 
 
-class DiscoveryService(BaseService):
+class DiscoveryService(Service):
     _last_lookup: float = 0
     _lookup_interval: int = 30
+
+    logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
 
     def __init__(self,
                  proto: DiscoveryProtocol,
                  port: int,
-                 event_bus: EndpointAPI,
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
+                 event_bus: EndpointAPI) -> None:
         self.proto = proto
         self.port = port
         self._event_bus = event_bus
         self._lookup_running = asyncio.Lock()
 
     async def handle_get_peer_candidates_requests(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(PeerCandidatesRequest)):
+        async for event in self._event_bus.stream(PeerCandidatesRequest):
 
-            self.run_task(self.maybe_lookup_random_node())
+            self.manager.run_task(self.maybe_lookup_random_node)
 
             nodes = tuple(self.proto.get_nodes_to_connect(event.max_candidates))
 
@@ -1085,7 +1083,7 @@ class DiscoveryService(BaseService):
             )
 
     async def handle_get_random_bootnode_requests(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(RandomBootnodeRequest)):
+        async for event in self._event_bus.stream(RandomBootnodeRequest):
 
             nodes = tuple(self.proto.get_random_bootnode())
 
@@ -1095,13 +1093,13 @@ class DiscoveryService(BaseService):
                 event.broadcast_config()
             )
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_get_peer_candidates_requests())
-        self.run_daemon_task(self.handle_get_random_bootnode_requests())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
         await self._start_udp_listener()
-        self.run_task(self.proto.bootstrap())
-        await self.cancel_token.wait()
+        self.manager.run_task(self.proto.bootstrap)
+        await self.manager.wait_forever()
 
     async def _start_udp_listener(self) -> None:
         loop = asyncio.get_event_loop()
@@ -1118,12 +1116,8 @@ class DiscoveryService(BaseService):
             self.logger.debug("Node discovery lookup already in progress, not running another")
             return
         async with self._lookup_running:
-            # This method runs in the background, so we must catch OperationCancelled here
-            # otherwise asyncio will warn that its exception was never retrieved.
             try:
                 await self.proto.lookup_random()
-            except OperationCancelled:
-                pass
             finally:
                 self._last_lookup = time.time()
 

@@ -28,8 +28,6 @@ from eth_utils import (
 
 from eth_keys import datatypes
 
-from cancel_token import CancelToken
-
 from p2p.abc import (
     BehaviorAPI,
     CommandAPI,
@@ -49,7 +47,7 @@ from p2p.handshake import (
     dial_out,
     DevP2PHandshakeParams,
 )
-from p2p.service import BaseService
+from p2p.service import Service
 from p2p.p2p_api import P2PAPI
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p.protocol import (
@@ -65,16 +63,15 @@ if TYPE_CHECKING:
     from p2p.peer_pool import BasePeerPool  # noqa: F401
 
 
-class BasePeerBootManager(BaseService):
+class BasePeerBootManager(Service):
     """
     The default boot manager does nothing, simply serving as a hook for other
     protocols which need to perform more complex boot check.
     """
     def __init__(self, peer: 'BasePeer') -> None:
-        super().__init__(token=peer.cancel_token, loop=peer.cancel_token.loop)
         self.peer = peer
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         pass
 
 
@@ -92,7 +89,9 @@ class BasePeerContext:
         self.p2p_version = p2p_version
 
 
-class BasePeer(BaseService):
+class BasePeer(Service):
+    logger = get_extended_debug_logger('p2p.peer.Peer')
+
     # Must be defined in subclasses. All items here must be Protocol classes representing
     # different versions of the same P2P sub-protocol (e.g. ETH, LES, etc).
     supported_sub_protocols: Tuple[Type[ProtocolAPI], ...] = ()
@@ -111,8 +110,6 @@ class BasePeer(BaseService):
                  context: BasePeerContext,
                  event_bus: EndpointAPI = None,
                  ) -> None:
-        super().__init__(token=connection.cancel_token, loop=connection.cancel_token.loop)
-
         # Peer context object
         self.context = context
 
@@ -229,7 +226,7 @@ class BasePeer(BaseService):
         """
         pass
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
             self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
@@ -250,13 +247,13 @@ class BasePeer(BaseService):
             # The `boot` process is run in the background to allow the `run` loop
             # to continue so that all of the Peer APIs can be used within the
             # `boot` task.
-            self.run_child_service(self.boot_manager)
+            self.manager.run_child_service(self.boot_manager)
 
             # Trigger the connection to start feeding messages though the handlers
             self.connection.start_protocol_streams()
             self.ready.set()
 
-            await self.cancellation()
+            await self.manager.wait_forever()
 
     async def _handle_subscriber_message(self,
                                          connection: ConnectionAPI,
@@ -283,22 +280,7 @@ class BasePeer(BaseService):
             except PeerConnectionLost:
                 self.logger.debug("Tried to disconnect from %s, but already disconnected", self)
 
-        if self.is_operational:
-            await self.cancel()
-
-        await self.events.finished.wait()
-
-    def disconnect_nowait(self, reason: DisconnectReason) -> None:
-        if reason is DisconnectReason.BAD_PROTOCOL:
-            self.connection_tracker.record_blacklist(
-                self.remote,
-                timeout_seconds=BLACKLIST_SECONDS_BAD_PROTOCOL,
-                reason="Bad protocol",
-            )
-        try:
-            self.p2p_api.disconnect_nowait(reason)
-        except PeerConnectionLost:
-            self.logger.debug("Tried to nowait disconnect from %s, but already disconnected", self)
+        self.manager.cancel()
 
 
 class PeerMessage(NamedTuple):
@@ -417,9 +399,9 @@ class PeerSubscriber(ABC):
         Implementors need to call this API to start receiving messages from the pool.
 
         ::
-            async def _run(self) -> None:
+            async def run(self) -> None:
                 with self.subscribe(self._peer_pool):
-                    await self.cancellation()
+                    await self.manager.wait_forever()
 
         Once subscribed, messages can be consumed from the :meth:`msg_queue`.
         """
@@ -468,11 +450,9 @@ class BasePeerFactory(ABC):
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  context: BasePeerContext,
-                 token: CancelToken,
                  event_bus: EndpointAPI = None) -> None:
         self.privkey = privkey
         self.context = context
-        self.cancel_token = token
         self.event_bus = event_bus
 
     @abstractmethod
@@ -491,7 +471,6 @@ class BasePeerFactory(ABC):
             private_key=self.privkey,
             p2p_handshake_params=p2p_handshake_params,
             protocol_handshakers=handshakers,
-            token=self.cancel_token
         )
         return self.create_peer(connection)
 

@@ -1,51 +1,28 @@
-import asyncio
-import logging
+import functools
 import sys
-from types import TracebackType
-from typing import (
-    Any,
-    AsyncIterator,
-    Awaitable,
-    Callable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Type,
-)
+from typing import Any, Callable, Awaitable, AsyncIterator
 
 from async_generator import asynccontextmanager
 
-from trio import MultiError
+import trio
 
-from p2p.trio_service import (
-    DaemonTaskExit,
-    LifecycleError,
-    ServiceAPI,
-    ManagerAPI,
-)
+import trio_typing
+
+from .abc import ManagerAPI, ServiceAPI
+from .base import BaseManager
+from .exceptions import DaemonTaskExit, LifecycleError
 
 
-class Manager(ManagerAPI):
-    logger = logging.getLogger('p2p.service.Manager')
+class TrioManager(BaseManager):
+    # A nursery for system tasks.  This nursery is cancelled in the event that
+    # the service is cancelled or exits.
+    _system_nursery: trio_typing.Nursery
 
-    _service: ServiceAPI
+    # A nursery for sub tasks and services.  This nursery is cancelled if the
+    # service is cancelled but allowed to exit normally if the service exits.
+    _task_nursery: trio_typing.Nursery
 
-    _errors: List[Tuple[
-        Optional[Type[BaseException]],
-        Optional[BaseException],
-        Optional[TracebackType],
-    ]]
-
-    # Tracking of the system level background tasks.
-    _system_tasks: Set[asyncio.Future[None]]
-
-    # Tracking of the background tasks that the service has initiated.
-    _service_tasks: Set[asyncio.Future[Any]]
-
-    def __init__(self,
-                 service: ServiceAPI,
-                 loop: asyncio.AbstractEventLoop = None) -> None:
+    def __init__(self, service: ServiceAPI) -> None:
         if hasattr(service, 'manager'):
             raise LifecycleError("Service already has a manager.")
         else:
@@ -53,61 +30,40 @@ class Manager(ManagerAPI):
 
         self._service = service
 
-        self._loop = loop
-
         # events
-        self._started = asyncio.Event()
-        self._cancelled = asyncio.Event()
-        self._stopped = asyncio.Event()
+        self._started = trio.Event()
+        self._cancelled = trio.Event()
+        self._stopped = trio.Event()
 
         # locks
-        self._run_lock = asyncio.Lock()
+        self._run_lock = trio.Lock()
 
         # errors
         self._errors = []
 
-        # task tracking
-        self._service_tasks = set()
-        self._system_tasks = set()
-
     #
     # System Tasks
     #
-    async def _handle_cancelled(self) -> None:
+    async def _handle_cancelled(self,
+                                task_nursery: trio_typing.Nursery,
+                                ) -> None:
         """
         Handles the cancellation triggering cancellation of the task nursery.
         """
         self.logger.debug('%s: _handle_cancelled waiting for cancellation', self)
         await self.wait_cancelled()
         self.logger.debug('%s: _handle_cancelled triggering task nursery cancellation', self)
+        task_nursery.cancel_scope.cancel()
 
-        # trigger cancellation of all of the service tasks
-        for task in self._service_tasks:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                self._errors.append(sys.exc_info())
-
-    async def _handle_stopped(self) -> None:
+    async def _handle_stopped(self,
+                              system_nursery: trio_typing.Nursery) -> None:
         """
         Once the `_stopped` event is set this triggers cancellation of the system nursery.
         """
         self.logger.debug('%s: _handle_stopped waiting for stopped', self)
         await self.wait_stopped()
         self.logger.debug('%s: _handle_stopped triggering system nursery cancellation', self)
-
-        # trigger cancellation of all of the system tasks
-        for task in self._system_tasks:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-            except Exception:
-                self._errors.append(sys.exc_info())
+        system_nursery.cancel_scope.cancel()
 
     async def _handle_run(self) -> None:
         """
@@ -121,8 +77,6 @@ class Manager(ManagerAPI):
         """
         try:
             await self._service.run()
-        except asyncio.CancelledError:
-            raise
         except Exception as err:
             self.logger.debug(
                 '%s: _handle_run got error, storing exception and setting cancelled',
@@ -142,8 +96,8 @@ class Manager(ManagerAPI):
             )
 
     @classmethod
-    async def run_service(cls, service: ServiceAPI, loop: asyncio.AbstractEventLoop = None) -> None:
-        manager = cls(service, loop=loop)
+    async def run_service(cls, service: ServiceAPI) -> None:
+        manager = cls(service)
         await manager.run()
 
     async def run(self) -> None:
@@ -155,50 +109,39 @@ class Manager(ManagerAPI):
             raise LifecycleError("Cannot run a service which is already started.")
 
         async with self._run_lock:
-            try:
-                handle_cancelled_task = asyncio.ensure_future(
-                    self._handle_cancelled(),
-                    loop=self._loop,
-                )
-                handle_stopped_task = asyncio.ensure_future(self._handle_stopped(), loop=self._loop)
+            async with trio.open_nursery() as system_nursery:
+                try:
+                    async with trio.open_nursery() as task_nursery:
+                        self._task_nursery = task_nursery
 
-                self._system_tasks.add(handle_cancelled_task)
-                self._system_tasks.add(handle_stopped_task)
+                        system_nursery.start_soon(
+                            self._handle_cancelled,
+                            task_nursery,
+                        )
+                        system_nursery.start_soon(
+                            self._handle_stopped,
+                            system_nursery,
+                        )
 
-                handle_run_task = asyncio.ensure_future(self._handle_run(), loop=self._loop)
-                self._service_tasks.add(handle_run_task)
+                        task_nursery.start_soon(self._handle_run)
 
-                self._started.set()
+                        self._started.set()
 
-                # block here until all service tasks have finished
-                await self._wait_service_tasks()
-            finally:
-                # Mark as having stopped
-                self._stopped.set()
-
-            # block here until all system tasks have finished.
-            await asyncio.wait(
-                (handle_cancelled_task, handle_stopped_task),
-                return_when=asyncio.ALL_COMPLETED,
-            )
+                        # ***BLOCKING HERE***
+                        # The code flow will block here until the background tasks have
+                        # completed or cancellation occurs.
+                finally:
+                    # Mark as having stopped
+                    self._stopped.set()
         self.logger.debug('%s stopped', self)
 
         # If an error occured, re-raise it here
         if self.did_error:
-            raise MultiError(tuple(
+            raise trio.MultiError(tuple(
                 exc_value.with_traceback(exc_tb)
                 for _, exc_value, exc_tb
                 in self._errors
             ))
-
-    async def _wait_service_tasks(self) -> None:
-        while True:
-            done, pending = await asyncio.wait(
-                self._service_tasks,
-                return_when=asyncio.ALL_COMPLETED,
-            )
-            if all(task.done() for task in self._service_tasks):
-                break
 
     #
     # Event API mirror
@@ -208,20 +151,12 @@ class Manager(ManagerAPI):
         return self._started.is_set()
 
     @property
-    def is_running(self) -> bool:
-        return self.is_started and not self.is_stopped
-
-    @property
     def is_cancelled(self) -> bool:
         return self._cancelled.is_set()
 
     @property
     def is_stopped(self) -> bool:
         return self._stopped.is_set()
-
-    @property
-    def did_error(self) -> bool:
-        return len(self._errors) > 0
 
     #
     # Control API
@@ -230,10 +165,6 @@ class Manager(ManagerAPI):
         if not self.is_started:
             raise LifecycleError("Cannot cancel as service which was never started.")
         self._cancelled.set()
-
-    async def stop(self) -> None:
-        self.cancel()
-        await self.wait_stopped()
 
     #
     # Wait API
@@ -248,7 +179,7 @@ class Manager(ManagerAPI):
         await self._stopped.wait()
 
     async def wait_forever(self) -> None:
-        await asyncio.Event().wait()
+        await trio.sleep_forever()
 
     async def _run_and_manage_task(self,
                                    async_fn: Callable[..., Awaitable[Any]],
@@ -257,8 +188,6 @@ class Manager(ManagerAPI):
                                    name: str) -> None:
         try:
             await async_fn(*args)
-        except asyncio.CancelledError:
-            raise
         except Exception as err:
             self.logger.debug(
                 "task '%s[daemon=%s]' exited with error: %s",
@@ -290,29 +219,22 @@ class Manager(ManagerAPI):
                  daemon: bool = False,
                  name: str = None) -> None:
 
-        task = asyncio.ensure_future(self._run_and_manage_task(
+        self._task_nursery.start_soon(
+            functools.partial(
+                self._run_and_manage_task,
+                daemon=daemon,
+                name=name or repr(async_fn),
+            ),
             async_fn,
             *args,
-            daemon=daemon,
-            name=name or repr(async_fn),
-        ), loop=self._loop)
-        self._service_tasks.add(task)
-
-    def run_daemon_task(self,
-                        async_fn: Callable[..., Awaitable[Any]],
-                        *args: Any,
-                        name: str = None) -> None:
-
-        self.run_task(async_fn, *args, daemon=True, name=name)
+            name=name,
+        )
 
     def run_child_service(self,
                           service: ServiceAPI,
                           daemon: bool = False,
-                          name: str = None) -> "Manager":
-        child_manager = Manager(
-            service,
-            loop=self._loop,
-        )
+                          name: str = None) -> ManagerAPI:
+        child_manager = type(self)(service)
         self.run_task(
             child_manager.run,
             daemon=daemon,
@@ -320,46 +242,19 @@ class Manager(ManagerAPI):
         )
         return child_manager
 
-    def run_daemon_child_service(self,
-                                 service: ServiceAPI,
-                                 name: str = None) -> "Manager":
-        return self.run_child_service(service, daemon=True, name=name)
-
 
 @asynccontextmanager
-async def background_service(service: ServiceAPI,
-                             loop: asyncio.AbstractEventLoop = None,
-                             ) -> AsyncIterator[ManagerAPI]:
+async def background_trio_service(service: ServiceAPI) -> AsyncIterator[ManagerAPI]:
     """
     This is the primary API for running a service without explicitely managing
     its lifecycle with a nursery.  The service is running within the context
     block and will be properly cleaned up upon exiting the context block.
     """
-    manager = Manager(service, loop=loop)
-    task = asyncio.ensure_future(manager.run(), loop=loop)
-
-    try:
+    async with trio.open_nursery() as nursery:
+        manager = TrioManager(service)
+        nursery.start_soon(manager.run)
         await manager.wait_started()
-
         try:
             yield manager
         finally:
             await manager.stop()
-
-        assert not manager.did_error, 'ARST ARST ARST'
-
-    finally:
-        task.cancel()
-
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
-        if manager.did_error:
-            # TODO: better place for this.
-            raise MultiError(tuple(
-                exc_value.with_traceback(exc_tb)
-                for _, exc_value, exc_tb
-                in manager._errors
-            ))

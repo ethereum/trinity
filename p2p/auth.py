@@ -17,8 +17,6 @@ from eth_keys import (
 
 from eth_hash.auto import keccak
 
-from cancel_token import CancelToken
-
 from p2p import ecies
 from p2p.abc import NodeAPI
 from p2p.constants import REPLY_TIMEOUT
@@ -47,7 +45,7 @@ from .constants import (
 async def handshake(
         remote: NodeAPI,
         privkey: datatypes.PrivateKey,
-        token: CancelToken) -> Tuple[bytes, bytes, sha3.keccak_256, sha3.keccak_256, asyncio.StreamReader, asyncio.StreamWriter]:  # noqa: E501
+        ) -> Tuple[bytes, bytes, sha3.keccak_256, sha3.keccak_256, asyncio.StreamReader, asyncio.StreamWriter]:  # noqa: E501
     """
     Perform the auth handshake with given remote.
 
@@ -55,11 +53,11 @@ async def handshake(
     the remote.
     """
     use_eip8 = False
-    initiator = HandshakeInitiator(remote, privkey, use_eip8, token)
+    initiator = HandshakeInitiator(remote, privkey, use_eip8)
     reader, writer = await initiator.connect()
     try:
         aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
-            initiator, reader, writer, token)
+            initiator, reader, writer)
     except Exception:
         # Note: This is one of two places where we manually handle closing the
         # reader/writer connection pair in the event of an error during the
@@ -74,8 +72,9 @@ async def handshake(
     return aes_secret, mac_secret, egress_mac, ingress_mac, reader, writer
 
 
-async def _handshake(initiator: 'HandshakeInitiator', reader: asyncio.StreamReader,
-                     writer: asyncio.StreamWriter, token: CancelToken,
+async def _handshake(initiator: 'HandshakeInitiator',
+                     reader: asyncio.StreamReader,
+                     writer: asyncio.StreamWriter,
                      ) -> Tuple[bytes, bytes, sha3.keccak_256, sha3.keccak_256]:
     """See the handshake() function above.
 
@@ -91,7 +90,7 @@ async def _handshake(initiator: 'HandshakeInitiator', reader: asyncio.StreamRead
 
     writer.write(auth_init)
 
-    auth_ack = await token.cancellable_wait(
+    auth_ack = await asyncio.wait_for(
         reader.read(ENCRYPTED_AUTH_ACK_LEN),
         timeout=REPLY_TIMEOUT)
 
@@ -118,12 +117,11 @@ class HandshakeBase:
 
     def __init__(
             self, remote: NodeAPI, privkey: datatypes.PrivateKey,
-            use_eip8: bool, token: CancelToken) -> None:
+            use_eip8: bool) -> None:
         self.remote = remote
         self.privkey = privkey
         self.ephemeral_privkey = ecies.generate_privkey()
         self.use_eip8 = use_eip8
-        self.cancel_token = token
 
     @property
     def ephemeral_pubkey(self) -> datatypes.PublicKey:
@@ -134,9 +132,10 @@ class HandshakeBase:
         return self.privkey.public_key
 
     async def connect(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        return await self.cancel_token.cancellable_wait(
+        return await asyncio.wait_for(
             asyncio.open_connection(host=self.remote.address.ip, port=self.remote.address.tcp_port),
-            timeout=REPLY_TIMEOUT)
+            timeout=REPLY_TIMEOUT,
+        )
 
     def derive_secrets(self,
                        initiator_nonce: bytes,

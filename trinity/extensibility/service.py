@@ -3,7 +3,7 @@ import logging
 
 from lahja import AsyncioEndpoint, ConnectionConfig
 
-from p2p.trio_service import Service
+from p2p.service import Service
 
 from trinity._utils.logging import (
     setup_log_levels,

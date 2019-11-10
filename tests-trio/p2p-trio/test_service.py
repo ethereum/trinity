@@ -2,12 +2,12 @@ import pytest
 
 import trio
 
-from p2p.trio_service import (
+from p2p.service import (
     DaemonTaskExit,
-    Manager,
+    TrioManager,
     Service,
     as_service,
-    background_service,
+    background_trio_service,
 )
 
 
@@ -65,7 +65,7 @@ async def do_service_lifecycle_check(manager,
 
 def test_service_manager_initial_state():
     service = WaitCancelledService()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     assert manager.is_started is False
     assert manager.is_running is False
@@ -82,7 +82,7 @@ async def test_trio_service_lifecycle_run_and_clean_exit():
         await trigger_exit.wait()
 
     service = ServiceTest()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     await do_service_lifecycle_check(
         manager=manager,
@@ -100,7 +100,7 @@ async def test_trio_service_lifecycle_run_and_external_cancellation():
         await trio.sleep_forever()
 
     service = ServiceTest()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     await do_service_lifecycle_check(
         manager=manager,
@@ -120,7 +120,7 @@ async def test_trio_service_lifecycle_run_and_exception():
         raise RuntimeError("Service throwing error")
 
     service = ServiceTest()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     async def do_service_run():
         with pytest.raises(RuntimeError, match="Service throwing error"):
@@ -146,7 +146,7 @@ async def test_trio_service_lifecycle_run_and_task_exception():
         manager.run_task(task_fn)
 
     service = ServiceTest()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     async def do_service_run():
         with pytest.raises(RuntimeError, match="Service throwing error"):
@@ -171,7 +171,7 @@ async def test_trio_service_lifecycle_run_and_daemon_task_exit():
         manager.run_daemon_task(daemon_task_fn)
 
     service = ServiceTest()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     async def do_service_run():
         with pytest.raises(DaemonTaskExit, match="Daemon task"):
@@ -189,7 +189,7 @@ async def test_trio_service_lifecycle_run_and_daemon_task_exit():
 async def test_trio_service_background_service_context_manager():
     service = WaitCancelledService()
 
-    async with background_service(service) as manager:
+    async with background_trio_service(service) as manager:
         # ensure the manager property is set.
         assert hasattr(service, 'manager')
         assert service.manager is manager
@@ -209,7 +209,7 @@ async def test_trio_service_background_service_context_manager():
 async def test_trio_service_manager_stop():
     service = WaitCancelledService()
 
-    async with background_service(service) as manager:
+    async with background_trio_service(service) as manager:
         assert manager.is_started is True
         assert manager.is_running is True
         assert manager.is_cancelled is False
@@ -234,7 +234,7 @@ async def test_trio_service_manager_run_task():
         manager.run_task(task_fn)
         await manager.wait_cancelled()
 
-    async with background_service(RunTaskService()):
+    async with background_trio_service(RunTaskService()):
         with trio.fail_after(0.1):
             await task_event.wait()
 
@@ -253,7 +253,7 @@ async def test_trio_service_manager_run_task_waits_for_task_completion():
         # We want to be sure that the task is allowed to continue till
         # completion unless explicitely cancelled.
 
-    async with background_service(RunTaskService()):
+    async with background_trio_service(RunTaskService()):
         with trio.fail_after(0.1):
             await task_event.wait()
 
@@ -275,7 +275,7 @@ async def test_trio_service_manager_run_task_can_still_cancel_after_run_finishes
         # completion unless explicitely cancelled.
         service_finished.set()
 
-    async with background_service(RunTaskService()) as manager:
+    async with background_trio_service(RunTaskService()) as manager:
         with trio.fail_after(0.01):
             await service_finished.wait()
 
@@ -304,7 +304,7 @@ async def test_trio_service_manager_run_task_reraises_exceptions():
             await trio.sleep_forever()
 
     with pytest.raises(Exception, match="task exception in run_task"):
-        async with background_service(RunTaskService()):
+        async with background_trio_service(RunTaskService()):
             task_event.set()
             with trio.fail_after(1):
                 await trio.sleep_forever()
@@ -324,7 +324,7 @@ async def test_trio_service_manager_run_daemon_task_cancels_if_exits():
             await trio.sleep_forever()
 
     with pytest.raises(DaemonTaskExit, match="Daemon task daemon_task_fn exited"):
-        async with background_service(RunTaskService()):
+        async with background_trio_service(RunTaskService()):
             task_event.set()
             with trio.fail_after(1):
                 await trio.sleep_forever()
@@ -337,7 +337,7 @@ async def test_trio_service_manager_propogates_and_records_exceptions():
         raise RuntimeError('this is the error')
 
     service = ThrowErrorService()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     assert manager.did_error is False
 
@@ -361,7 +361,7 @@ async def test_trio_service_lifecycle_run_and_clean_exit_with_child_service():
         await child_manager.wait_started()
 
     service = ServiceTest()
-    manager = Manager(service)
+    manager = TrioManager(service)
 
     await do_service_lifecycle_check(
         manager=manager,

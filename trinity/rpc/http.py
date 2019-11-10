@@ -7,12 +7,7 @@ from typing import (
 from aiohttp import web
 from eth_utils.toolz import curry
 
-from p2p.trio_service import (
-    ManagerAPI,
-)
-from p2p.asyncio_service import (
-    Service,
-)
+from p2p.service import Service
 
 from trinity.rpc.main import (
     RPCServer,
@@ -68,13 +63,13 @@ class HTTPServer(Service):
         self.port = port
         self.server = web.Server(handler(self.rpc.execute))
 
-    async def run(self, manager: ManagerAPI) -> None:
+    async def run(self) -> None:
         runner = web.ServerRunner(self.server)
         await runner.setup()
         site = web.TCPSite(runner, self.host, self.port)
         await site.start()
         self.logger.info('HTTP started at: %s', site.name)
         try:
-            await manager.wait_stopped()
+            await self.manager.wait_forever()
         finally:
             await self.server.shutdown()

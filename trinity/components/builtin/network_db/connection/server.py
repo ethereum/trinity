@@ -2,7 +2,7 @@ from lahja import EndpointAPI
 
 from eth_utils import humanize_seconds, get_extended_debug_logger
 
-from p2p.trio_service import Service
+from p2p.service import Service
 from p2p.tracking.connection import BaseConnectionTracker
 
 from .events import (

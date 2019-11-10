@@ -17,6 +17,7 @@ from eth_hash.auto import keccak
 from eth_utils import (
     to_checksum_address,
     ValidationError,
+    get_extended_debug_logger,
 )
 from eth_typing import (
     Address,
@@ -28,7 +29,7 @@ from eth.abc import AtomicDatabaseAPI
 from p2p.abc import CommandAPI
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.trio_service import Service
+from p2p.service import Service
 
 from trie import HexaryTrie
 from trie.exceptions import MissingTrieNode
@@ -64,6 +65,8 @@ class BeamDownloader(Service, PeerSubscriber):
     Coordinate the request of needed state data: accounts, storage, bytecodes, and
     other arbitrary intermediate nodes in the trie.
     """
+    logger = get_extended_debug_logger('trinity.sync.beam.Downloader')
+
     do_predictive_downloads = False
     _total_processed_nodes = 0
     _urgent_processed_nodes = 0
@@ -279,7 +282,7 @@ class BeamDownloader(Service, PeerSubscriber):
         Monitor TaskQueue for needed trie nodes, and request them from peers. Repeat as necessary.
         Prefer urgent nodes over predictive ones.
         """
-        while self.is_operational:
+        while self.manager.is_running:
             urgent_batch_id, urgent_hashes = await self._get_waiting_urgent_hashes()
 
             predictive_batch_id, predictive_hashes = self._maybe_add_predictive_nodes(urgent_hashes)
@@ -504,7 +507,7 @@ class BeamDownloader(Service, PeerSubscriber):
             await self._match_node_requests_to_peers()
 
     async def _periodically_report_progress(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             msg = "all=%d  " % self._total_processed_nodes
             msg += "urgent=%d  " % self._urgent_processed_nodes
             msg += "pred=%d  " % self._predictive_processed_nodes

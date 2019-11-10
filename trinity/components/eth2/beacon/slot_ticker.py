@@ -16,7 +16,7 @@ from eth2.beacon.typing import (
     Second,
     Slot,
 )
-from p2p.trio_service import Service
+from p2p.service import Service
 from trinity._utils.shellart import (
     bold_white,
 )

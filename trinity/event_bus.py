@@ -11,7 +11,7 @@ from lahja import AsyncioEndpoint, ConnectionConfig, BroadcastConfig, EndpointAP
 
 from eth_utils import get_extended_debug_logger
 
-from p2p.trio_service import Service
+from p2p.service import Service
 
 from trinity._utils.ipc import (
     remove_dangling_ipc_files,

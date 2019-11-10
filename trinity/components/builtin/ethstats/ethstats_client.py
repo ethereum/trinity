@@ -5,13 +5,9 @@ import typing
 
 import websockets
 
-from cancel_token import (
-    CancelToken,
-)
+from eth_utils import get_extended_debug_logger
 
-from p2p.service import (
-    BaseService,
-)
+from p2p.service import Service
 
 
 # Returns UTC timestamp in ms, used for latency calculation
@@ -31,15 +27,14 @@ class EthstatsException(Exception):
     pass
 
 
-class EthstatsClient(BaseService):
+class EthstatsClient(Service):
+    logger = get_extended_debug_logger('trinity.components.ethstats.EthstatsClient')
+
     def __init__(
         self,
         websocket: websockets.client.WebSocketClientProtocol,
         node_id: str,
-        token: CancelToken = None,
     ) -> None:
-        super().__init__(token)
-
         self.websocket = websocket
         self.node_id = node_id
 
@@ -47,19 +42,20 @@ class EthstatsClient(BaseService):
         self.recv_queue: asyncio.Queue[EthstatsMessage] = asyncio.Queue()
 
     async def _run(self) -> None:
-        await self.wait_first(
+        await asyncio.wait((
             self.send_handler(),
             self.recv_handler(),
-        )
+        ), return_when=asyncio.FIRST_COMPLETED)
+        self.manager.cancel()
 
     # Get messages from websocket, deserialize them and put into queue
     async def recv_handler(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             try:
                 json_string: str = await self.websocket.recv()
             except websockets.ConnectionClosed as e:
                 self.logger.debug2("Connection closed: %s", e)
-                await self.cancel()
+                self.manager.cancel()
             try:
                 message: EthstatsMessage = self.deserialize_message(json_string)
             except EthstatsException as e:
@@ -70,7 +66,7 @@ class EthstatsClient(BaseService):
 
     # Get messages from queue, serialize them and send over websocket
     async def send_handler(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             message: EthstatsMessage = await self.send_queue.get()
             json_string: str = self.serialize_message(message)
 

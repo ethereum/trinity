@@ -25,8 +25,7 @@ from eth_utils import (
 )
 import rlp
 
-from p2p.trio_service import Service
-from p2p.asyncio_service import Manager
+from p2p.service import Service
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.chain import BaseAsyncChainDB
@@ -195,7 +194,8 @@ class BeamSyncer(Service):
         self.manager.run_daemon_child_service(self._data_hunter)
 
         # Only persist headers at start
-        await Manager.run_service(self._header_persister)
+        manager = self.run_child_service(self._header_persister)
+        await manager.wait_stopped()
         # When header store exits, we have caught up
 
         # We want to trigger beam sync on the last block received,

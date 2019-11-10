@@ -10,8 +10,6 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from cached_property import cached_property
 
-from cancel_token import CancelToken
-
 from eth_keys import datatypes
 
 from eth_utils import (
@@ -96,7 +94,7 @@ class Transport(TransportAPI):
     async def connect(cls,
                       remote: NodeAPI,
                       private_key: datatypes.PrivateKey,
-                      token: CancelToken) -> TransportAPI:
+                      ) -> TransportAPI:
         """Perform the auth and P2P handshakes with the given remote.
 
         Return an instance of the given peer_class (must be a subclass of
@@ -116,7 +114,7 @@ class Transport(TransportAPI):
              ingress_mac,
              reader,
              writer
-             ) = await auth.handshake(remote, private_key, token)
+             ) = await auth.handshake(remote, private_key)
         except (ConnectionRefusedError, OSError) as e:
             raise UnreachablePeer(f"Can't reach {remote!r}") from e
 
@@ -136,9 +134,9 @@ class Transport(TransportAPI):
                                  reader: asyncio.StreamReader,
                                  writer: asyncio.StreamWriter,
                                  private_key: datatypes.PrivateKey,
-                                 token: CancelToken) -> TransportAPI:
+                                 ) -> TransportAPI:
         try:
-            msg = await token.cancellable_wait(
+            msg = await asyncio.wait_for(
                 reader.readexactly(ENCRYPTED_AUTH_MSG_LEN),
                 timeout=REPLY_TIMEOUT,
             )
@@ -156,7 +154,7 @@ class Transport(TransportAPI):
             remaining_bytes = msg_size - ENCRYPTED_AUTH_MSG_LEN + 2
 
             try:
-                msg += await token.cancellable_wait(
+                msg += await asyncio.wait_for(
                     reader.readexactly(remaining_bytes),
                     timeout=REPLY_TIMEOUT,
                 )
@@ -194,7 +192,7 @@ class Transport(TransportAPI):
 
         initiator_remote = Node(initiator_pubkey, remote_address)
 
-        responder = HandshakeResponder(initiator_remote, private_key, got_eip8, token)
+        responder = HandshakeResponder(initiator_remote, private_key, got_eip8)
 
         responder_nonce = secrets.token_bytes(HASH_LEN)
 
@@ -206,7 +204,7 @@ class Transport(TransportAPI):
 
         # Use the `writer` to send the reply to the remote
         writer.write(auth_ack_ciphertext)
-        await token.cancellable_wait(writer.drain())
+        await writer.drain()
 
         # Call `HandshakeResponder.derive_shared_secrets()` and use return values to create `Peer`
         aes_secret, mac_secret, egress_mac, ingress_mac = responder.derive_secrets(
@@ -233,10 +231,10 @@ class Transport(TransportAPI):
     def public_key(self) -> datatypes.PublicKey:
         return self._private_key.public_key
 
-    async def read(self, n: int, token: CancelToken) -> bytes:
+    async def read(self, n: int) -> bytes:
         self.logger.debug2("Waiting for %s bytes from %s", n, self.remote)
         try:
-            return await token.cancellable_wait(
+            return await asyncio.wait_for(
                 self._reader.readexactly(n),
                 timeout=CONN_IDLE_TIMEOUT,
             )
@@ -246,7 +244,7 @@ class Transport(TransportAPI):
     def write(self, data: bytes) -> None:
         self._writer.write(data)
 
-    async def recv(self, token: CancelToken) -> bytes:
+    async def recv(self) -> bytes:
         # Check that Transport read state is IDLE.
         if self.read_state is not TransportState.IDLE:
             # This is logged at INFO level because it indicates we are not
@@ -263,7 +261,7 @@ class Transport(TransportAPI):
         self.read_state = TransportState.HEADER
 
         try:
-            header_data = await self.read(HEADER_LEN + MAC_LEN, token)
+            header_data = await self.read(HEADER_LEN + MAC_LEN)
         except asyncio.CancelledError:
             self.logger.debug('Transport cancelled during header read. resetting to IDLE state')
             self.read_state = TransportState.IDLE
@@ -283,7 +281,7 @@ class Transport(TransportAPI):
         # The frame_size specified in the header does not include the padding to 16-byte boundary,
         # so need to do this here to ensure we read all the frame's data.
         read_size = roundup_16(frame_size)
-        frame_data = await self.read(read_size + MAC_LEN, token)
+        frame_data = await self.read(read_size + MAC_LEN)
         try:
             msg = self._decrypt_body(frame_data, frame_size)
         except DecryptionError as err:

@@ -14,6 +14,7 @@ from typing import (
 from cached_property import cached_property
 
 from eth_keys import keys
+from eth_utils import get_extended_debug_logger
 
 from p2p.abc import (
     CommandAPI,
@@ -42,12 +43,14 @@ from p2p.exceptions import (
     UnknownProtocolCommand,
 )
 from p2p.subscription import Subscription
-from p2p.service import BaseService
+from p2p.service import Service
 from p2p.p2p_proto import BaseP2PProtocol, DevP2PReceipt
 from p2p.typing import Capabilities
 
 
-class Connection(ConnectionAPI, BaseService):
+class Connection(ConnectionAPI, Service):
+    logger = get_extended_debug_logger('p2p.connection.Connection')
+
     _protocol_handlers: DefaultDict[
         Type[ProtocolAPI],
         Set[ProtocolHandlerFn]
@@ -63,7 +66,6 @@ class Connection(ConnectionAPI, BaseService):
                  devp2p_receipt: DevP2PReceipt,
                  protocol_receipts: Sequence[HandshakeReceiptAPI],
                  is_dial_out: bool) -> None:
-        super().__init__(token=multiplexer.cancel_token, loop=multiplexer.cancel_token.loop)
         self._multiplexer = multiplexer
         self._devp2p_receipt = devp2p_receipt
         self.protocol_receipts = tuple(protocol_receipts)
@@ -102,13 +104,13 @@ class Connection(ConnectionAPI, BaseService):
     def is_closing(self) -> bool:
         return self._multiplexer.is_closing
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         try:
             async with self._multiplexer.multiplex():
                 for protocol in self._multiplexer.get_protocols():
-                    self.run_daemon_task(self._feed_protocol_handlers(protocol))
+                    self.manager.run_daemon_task(self._feed_protocol_handlers, protocol)
 
-                await self.cancellation()
+                await self.manager.wait_forever()
         except (PeerConnectionLost, asyncio.CancelledError):
             pass
         except (MalformedMessage,) as err:
@@ -152,7 +154,7 @@ class Connection(ConnectionAPI, BaseService):
                     protocol,
                     type(cmd),
                 )
-                self.run_task(proto_handler_fn(self, cmd, msg))
+                self.manager.run_task(proto_handler_fn, self, cmd, msg)
             command_handlers = set(self._command_handlers[type(cmd)])
             for cmd_handler_fn in command_handlers:
                 self.logger.debug2(
@@ -161,7 +163,7 @@ class Connection(ConnectionAPI, BaseService):
                     protocol,
                     type(cmd),
                 )
-                self.run_task(cmd_handler_fn(self, msg))
+                self.manager.run_task(cmd_handler_fn, self, msg)
 
     def add_protocol_handler(self,
                              protocol_class: Type[ProtocolAPI],
