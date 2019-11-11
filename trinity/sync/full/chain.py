@@ -704,7 +704,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
     def _mark_complete(self) -> None:
         self.is_complete = True
-        self.cancel_nowait()
+        self.cancel()
 
     async def _persist_blocks(self, headers: Sequence[BlockHeaderAPI]) -> None:
         """
