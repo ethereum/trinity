@@ -15,6 +15,8 @@ from typing import (
     TypeVar,
 )
 
+from eth_utils import get_extended_debug_logger
+
 from lahja import (
     BaseEvent,
     BaseRequestResponseEvent,
@@ -60,6 +62,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
     This class bridges all common APIs but protocol specific communication can be enabled through
     subclasses that add more handlers.
     """
+    logger = get_extended_debug_logger('trinity.protocol.PeerPoolEventServer')
 
     msg_queue_maxsize: int = 2000
 
@@ -78,16 +81,16 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
             DisconnectPeerEvent,
             lambda event: self.try_with_session(
                 event.session,
-                lambda peer: peer.disconnect_nowait(event.reason)
+                lambda peer: peer.disconnect(event.reason)
             )
         )
 
-        self.run_daemon_task(self.handle_peer_count_requests())
-        self.run_daemon_task(self.handle_connect_to_node_requests())
-        self.run_daemon_task(self.handle_native_peer_messages())
-        self.run_daemon_task(self.handle_get_connected_peers_requests())
+        self.manager.run_daemon_task(self.handle_peer_count_requests)
+        self.manager.run_daemon_task(self.handle_connect_to_node_requests)
+        self.manager.run_daemon_task(self.handle_native_peer_messages)
+        self.manager.run_daemon_task(self.handle_get_connected_peers_requests)
 
-        await self.cancellation()
+        await self.manager.wait_forever()
 
     def run_daemon_event(self,
                          event_type: Type[TEvent],
@@ -95,7 +98,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
         """
         Register a handler to be run every time that an event of type ``event_type`` appears.
         """
-        self.run_daemon_task(self.handle_stream(event_type, event_handler_fn))
+        self.manager.run_daemon_task(self.handle_stream, event_type, event_handler_fn)
 
     def run_daemon_request(
             self,
@@ -104,7 +107,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
         """
         Register a handler to be run every time that an request of type ``event_type`` appears.
         """
-        self.run_daemon_task(self.handle_request_stream(event_type, event_handler_fn))
+        self.manager.run_daemon_task(self.handle_request_stream, event_type, event_handler_fn)
 
     @abstractmethod
     async def handle_native_peer_message(self,
@@ -132,7 +135,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
             )
             raise PeerConnectionLost()
         else:
-            if not peer.is_operational:
+            if not peer.manager.is_running:
                 self.logger.debug("Peer %s is not operational when selecting from pool", peer)
                 raise PeerConnectionLost()
             else:
@@ -141,7 +144,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
     async def handle_connect_to_node_requests(self) -> None:
         async for command in self.event_bus.stream(ConnectToNodeCommand):
             self.logger.debug('Received request to connect to %s', command.remote)
-            self.run_task(self.peer_pool.connect_to_node(command.remote))
+            self.manager.run_task(self.peer_pool.connect_to_node, command.remote)
 
     async def handle_peer_count_requests(self) -> None:
         async for req in self.event_bus.stream(PeerCountRequest):
@@ -218,7 +221,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
 
     async def handle_native_peer_messages(self) -> None:
         with self.subscribe(self.peer_pool):
-            while self.is_operational:
+            while self.manager.is_running:
                 peer, cmd, msg = await self.msg_queue.get()
                 await self.handle_native_peer_message(peer.session, cmd, msg)
 
@@ -249,6 +252,7 @@ class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
     that runs in another process. Eventually, every process that needs to interact with the peer
     pool should be able to use a proxy peer pool for all peer pool interactions.
     """
+    logger = get_extended_debug_logger('trinity.protocol.ProxyPeerPool')
 
     def __init__(self,
                  event_bus: EndpointAPI,
@@ -282,7 +286,7 @@ class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
                 proxy_peer = self.connected_peers.pop(ev.session)
                 # TODO: Double check based on some session id if we are indeed
                 # removing the right peer
-                await proxy_peer.cancel()
+                proxy_peer.cancel()
                 self.logger.warning("Removed proxy peer from proxy pool %s", ev.session)
 
     async def fetch_initial_peers(self) -> Tuple[TProxyPeer, ...]:
@@ -326,12 +330,12 @@ class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
                 self.broadcast_config
             )
             self.connected_peers[session] = proxy_peer
-            self.run_child_service(proxy_peer)
-            await proxy_peer.events.started.wait()
+            self.manager.run_child_service(proxy_peer)
+            await proxy_peer.manager.wait_started()
 
         return self.connected_peers[session]
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_joining_peers())
-        self.run_daemon_task(self.handle_leaving_peers())
-        await self.cancellation()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_joining_peers)
+        self.manager.run_daemon_task(self.handle_leaving_peers)
+        await self.manager.wait_forever()

@@ -130,7 +130,7 @@ class BaseProxyPeer(Service):
             DisconnectPeerEvent(self.session, reason),
             TO_NETWORKING_BROADCAST_CONFIG,
         )
-        await self.cancel()
+        self.manager.cancel()
 
 
 class BaseChainPeerFactory(BasePeerFactory):

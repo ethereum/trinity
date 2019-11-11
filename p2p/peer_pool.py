@@ -405,7 +405,6 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             # Try to connect to the peers concurrently.
             await asyncio.gather(
                 *(self.connect_to_node(node) for node in batch),
-                loop=self.get_event_loop(),
             )
 
     async def connect_to_node(self, node: NodeAPI) -> None:

@@ -9,7 +9,7 @@ from eth_keys import keys
 
 from p2p.abc import NodeAPI
 from p2p.peer import BasePeer, BasePeerContext, BasePeerFactory
-from p2p.service import run_service
+from p2p.service import background_asyncio_service
 
 from p2p.tools.paragon import ParagonPeer, ParagonContext, ParagonPeerFactory
 
@@ -63,7 +63,7 @@ async def PeerPairFactory(*,
         alice = alice_factory.create_peer(connection=alice_connection)
         bob = bob_factory.create_peer(connection=bob_connection)
 
-        async with run_service(alice), run_service(bob):
+        async with background_asyncio_service(alice), background_asyncio_service(bob):
             await asyncio.wait_for(alice.ready.wait(), timeout=1)
             await asyncio.wait_for(bob.ready.wait(), timeout=1)
             yield alice, bob
