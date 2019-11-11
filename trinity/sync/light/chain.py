@@ -1,3 +1,4 @@
+from eth_utils import get_extended_debug_logger
 from p2p.service import Service
 
 from trinity.chains.base import AsyncChainAPI
@@ -8,6 +9,8 @@ from trinity._utils.timer import Timer
 
 
 class LightChainSyncer(Service):
+    logger = get_extended_debug_logger('trinity.sync.light.ChainSyncer')
+
     def __init__(self,
                  chain: AsyncChainAPI,
                  db: BaseAsyncHeaderDB,
@@ -19,7 +22,7 @@ class LightChainSyncer(Service):
         self.manager.run_daemon_child_service(self._header_syncer)
         self.manager.run_daemon_task(self._persist_headers)
         # run sync until cancelled
-        await self.events.cancelled.wait()
+        await self.manager.wait_forever()
 
     async def _persist_headers(self) -> None:
         async for headers in self._header_syncer.new_sync_headers():

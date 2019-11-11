@@ -532,4 +532,4 @@ class BeamDownloader(Service, PeerSubscriber):
             )
             self._num_urgent_requests_by_peer.clear()
             self._num_predictive_requests_by_peer.clear()
-            await self.sleep(self._report_interval)
+            await asyncio.sleep(self._report_interval)

@@ -254,7 +254,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
         """
         Loop indefinitely, assigning idle peers to download any block bodies needed for syncing.
         """
-        while self.is_operational:
+        while self.manager.is_running:
             # from all the peers that are not currently downloading block bodies, get the fastest
             peer = await self._body_peers.get_fastest()
 
@@ -298,9 +298,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
 
         try:
             if non_trivial_headers:
-                bundles, received_headers = await peer.wait(
-                    self._get_block_bodies(peer, non_trivial_headers)
-                )
+                bundles, received_headers = await self._get_block_bodies(peer, non_trivial_headers)
                 await self._block_body_bundle_processing(bundles)
                 completed_headers = trivial_headers + received_headers
 
@@ -473,10 +471,10 @@ class FastChainSyncer(Service):
         return self._body_syncer.is_complete
 
     async def run(self) -> None:
-        self.manager.run_daemon_child_service(self._header_syncer)
+        manager = self.manager.run_daemon_child_service(self._header_syncer)
         await self._body_syncer.run()
         # The body syncer will exit when the body for the target header hash has been persisted
-        self._header_syncer.cancel_nowait()
+        manager.cancel()
 
 
 class BlockPersistPrereqs(enum.Enum):
@@ -600,7 +598,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         self.manager.run_daemon_task(self._assign_body_download_to_peers)
         self.manager.run_daemon_task(self._persist_ready_blocks)
         self.manager.run_daemon_task(self._display_stats)
-        await super()._run()
+        await super().run()
 
     def register_peer(self, peer: BasePeer) -> None:
         # when a new peer is added to the pool, add it to the idle peer lists
@@ -639,7 +637,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
     async def _display_stats(self) -> None:
         while self.manager.is_running:
-            await self.sleep(5)
+            await asyncio.sleep(5)
             self.logger.debug(
                 "(in progress, queued, max size) of bodies, receipts: %r. Write capacity? %s",
                 [(q.num_in_progress(), len(q), q._maxsize) for q in (
@@ -680,7 +678,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         Also, determine if fast sync with this peer should end, having reached (or surpassed)
         its target hash. If so, shut down this service.
         """
-        while self.is_operational:
+        while self.manager.is_running:
             # This tracker waits for all prerequisites to be complete, and returns headers in
             # order, so that each header's parent is already persisted.
             completed_headers = await self._block_persist_tracker.ready_tasks(
@@ -741,7 +739,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         """
         Loop indefinitely, assigning idle peers to download receipts needed for syncing.
         """
-        while self.is_operational:
+        while self.manager.is_running:
             # from all the peers that are not currently downloading receipts, get the fastest
             peer = await self._receipt_peers.get_fastest()
 
@@ -749,7 +747,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             batch_id, headers = await self._receipt_tasks.get(MAX_RECEIPTS_FETCH)
 
             # schedule the receipt download and move on
-            peer.run_task(self._run_receipt_download_batch(peer, batch_id, headers))
+            self.manager.run_task(self._run_receipt_download_batch(peer, batch_id, headers))
 
     def _mark_body_download_complete(
             self,
@@ -950,7 +948,7 @@ class RegularChainSyncer(Service):
         self.manager.run_daemon_child_service(self._header_syncer)
         self.manager.run_daemon_child_service(self._body_syncer)
         # run regular sync until cancelled
-        await self.events.cancelled.wait()
+        await self.manager.wait_forever()
 
 
 class BlockImportPrereqs(enum.Enum):
@@ -1055,7 +1053,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         previewing can get ahead of import by a few blocks.
         """
         await self._got_first_header.wait()
-        while self.is_operational:
+        while self.manager.is_running:
             # This tracker waits for all prerequisites to be complete, and returns headers in
             # order, so that each header's parent is already persisted.
             completed_headers = await self._block_import_tracker.ready_tasks(1)
@@ -1099,7 +1097,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         preview them to the importer.
         """
         await self._got_first_header.wait()
-        while self.is_operational:
+        while self.manager.is_running:
             if self._import_queue.empty():
                 if self._import_active.locked():
                     self._import_active.release()
@@ -1190,8 +1188,8 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         await self._got_first_header.wait()
         self.logger.debug("Regular sync first header arrived")
 
-        while self.is_operational:
-            await self.sleep(5)
+        while self.manager.is_running:
+            await asyncio.sleep(5)
             self.logger.debug(
                 "(progress, queued, max) of bodies, receipts: %r. Write capacity? %s Importing? %s",
                 [(q.num_in_progress(), len(q), q._maxsize) for q in (

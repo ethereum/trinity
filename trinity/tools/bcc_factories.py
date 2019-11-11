@@ -26,7 +26,7 @@ from eth.constants import (
     ZERO_HASH32,
 )
 
-from p2p.service import run_service
+from p2p.service import background_asyncio_service
 from p2p.tools.factories import (
     get_open_port,
     CancelTokenFactory,
@@ -124,7 +124,7 @@ async def ConnectionPairFactory(
 
     alice = NodeFactory(cancel_token=cancel_token, **alice_kwargs)
     bob = NodeFactory(cancel_token=cancel_token, **bob_kwargs)
-    async with run_service(alice), run_service(bob):
+    async with background_asyncio_service(alice), background_asyncio_service(bob):
         await asyncio.sleep(0.01)
         await alice.host.connect(
             PeerInfo(

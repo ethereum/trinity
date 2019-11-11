@@ -6,9 +6,6 @@ from typing import (
     cast,
 )
 
-from cancel_token import (
-    CancelToken,
-)
 from eth.exceptions import (
     HeaderNotFound,
 )
@@ -176,15 +173,13 @@ class ETHRequestServer(BaseIsolatedRequestServer):
             self,
             event_bus: EndpointAPI,
             broadcast_config: BroadcastConfig,
-            db: BaseAsyncChainDB,
-            token: CancelToken = None) -> None:
+            db: BaseAsyncChainDB) -> None:
         super().__init__(
             event_bus,
             broadcast_config,
             (GetBlockHeadersEvent, GetBlockBodiesEvent, GetNodeDataEvent, GetReceiptsEvent),
-            token,
         )
-        self._handler = ETHPeerRequestHandler(db, self.cancel_token)
+        self._handler = ETHPeerRequestHandler(db)
 
     async def _handle_msg(self,
                           session: SessionAPI,
