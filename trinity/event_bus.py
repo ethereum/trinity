@@ -7,6 +7,8 @@ from typing import (
     Tuple,
 )
 
+from async_exit_stack import AsyncExitStack
+
 from lahja import AsyncioEndpoint, ConnectionConfig, BroadcastConfig, EndpointAPI
 
 from eth_utils import get_extended_debug_logger
@@ -53,6 +55,7 @@ class ComponentManager(Service):
             self._boot_info.trinity_config.ipc_dir
         )
         async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
+            self.logger.debug('endpoint running')
             self._endpoint = endpoint
 
             # start the background process that tracks and propagates available
@@ -72,13 +75,12 @@ class ComponentManager(Service):
                 if component.is_enabled
             )
 
-            for component in active_components:
-                self.manager.run_task(component.run, name=f"Component[{component.name}]")
+            self.logger.debug('running components')
+            async with AsyncExitStack() as stack:
+                for component in active_components:
+                    await stack.enter_async_context(run_component(component))
 
-            try:
-                await self._trigger_component_stop.wait()
-            finally:
-                self._trigger_component_stop.set()
+                await self.manager.wait_forever()
 
     async def _handle_shutdown_request(self,
                                        components: Collection[ApplicationComponentAPI],

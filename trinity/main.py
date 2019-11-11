@@ -5,6 +5,8 @@ from typing import (
     Type,
 )
 
+from eth_utils import get_extended_debug_logger
+
 from asyncio_run_in_process import open_in_process
 
 from eth.db.backends.level import LevelDB
@@ -81,6 +83,8 @@ async def run_database_process(boot_info: TrinityBootInfo, db_class: Type[LevelD
 
 
 class TrinityMain(Service):
+    logger = get_extended_debug_logger('trinity.TrinityMain')
+
     def __init__(self,
                  boot_info: TrinityBootInfo,
                  component_types: Tuple[Type[ApplicationComponentAPI], ...],
@@ -99,6 +103,7 @@ class TrinityMain(Service):
 
         loop = asyncio.get_event_loop()
 
+        self.logger.debug("Starting logging listener")
         # start the listener thread which handles logs produced in other
         # processes in the local logger.
         self.listener.start()
@@ -106,12 +111,15 @@ class TrinityMain(Service):
         self.ensure_dirs()
 
         async with open_in_process(self.run_database_process, trinity_config, LevelDB) as db_proc:
+            self.logger.debug("started database process")
             await loop.run_in_executor(None, wait_for_ipc, trinity_config.database_ipc_path)
+            self.logger.debug("database process IPC path available")
 
             component_manager_service = ComponentManager(
                 self.boot_info,
                 self.component_types,
             )
+            self.logger.debug("running component manager")
             manager = self.manager.run_child_service(component_manager_service)
             try:
                 await manager.wait_forever()

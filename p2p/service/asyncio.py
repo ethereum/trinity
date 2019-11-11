@@ -25,10 +25,10 @@ from .exceptions import (
 
 class AsyncioManager(BaseManager):
     # Tracking of the system level background tasks.
-    _system_tasks: Set[asyncio.Future[None]]
+    _system_tasks: Set['asyncio.Future[None]']
 
     # Tracking of the background tasks that the service has initiated.
-    _service_tasks: Set[asyncio.Future[Any]]
+    _service_tasks: Set['asyncio.Future[Any]']
 
     def __init__(self,
                  service: ServiceAPI,

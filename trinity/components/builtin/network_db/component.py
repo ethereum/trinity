@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from eth_utils import to_tuple, get_extended_debug_logger
 
-from p2p.asyncio_service import Manager
+from p2p.service import AsyncioManager
 from p2p.service import ServiceAPI
 from p2p.tracking.connection import (
     BaseConnectionTracker,
@@ -139,7 +139,7 @@ class NetworkDBComponent(BaseApplicationComponent):
     async def run(self) -> None:
         network_db_service = NetworkDBService(self._boot_info, self.name)
 
-        async with open_in_process(Manager.run_service, network_db_service) as proc:
+        async with open_in_process(AsyncioManager.run_service, network_db_service) as proc:
             await proc.wait()
 
 

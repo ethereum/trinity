@@ -29,7 +29,7 @@ from trinity.main import TrinityMain
 from trinity.components.registry import (
     get_components_for_beacon_client,
 )
-from trinit.boot_info import TrinityBootInfo
+from trinity.boot_info import TrinityBootInfo
 from trinity._utils.logging import (
     setup_log_levels,
     setup_queue_logging,
