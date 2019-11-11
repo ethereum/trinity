@@ -85,7 +85,7 @@ class WaitingPeers(Generic[TChainPeer]):
         peer = wrapped_peer.original
 
         # make sure the peer has not gone offline while waiting in the queue
-        while not peer.is_operational:
+        while not peer.manager.is_running:
             # if so, look for the next best peer
             wrapped_peer = await self._waiting_peers.get()
             peer = wrapped_peer.original

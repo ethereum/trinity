@@ -286,7 +286,7 @@ class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
                 proxy_peer = self.connected_peers.pop(ev.session)
                 # TODO: Double check based on some session id if we are indeed
                 # removing the right peer
-                proxy_peer.cancel()
+                proxy_peer.manager.cancel()
                 self.logger.warning("Removed proxy peer from proxy pool %s", ev.session)
 
     async def fetch_initial_peers(self) -> Tuple[TProxyPeer, ...]:

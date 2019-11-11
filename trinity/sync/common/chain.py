@@ -5,11 +5,6 @@ from typing import (
     Tuple,
 )
 
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
-
 from eth.constants import GENESIS_BLOCK_NUMBER
 from eth.exceptions import (
     HeaderNotFound,
@@ -36,7 +31,7 @@ from p2p.constants import (
     SEAL_CHECK_RANDOM_SAMPLE_RATE,
 )
 from p2p.disconnect import DisconnectReason
-from p2p.service import BaseService
+from p2p.service import Service
 
 from trinity._utils.headers import (
     skip_complete_headers,
@@ -57,7 +52,7 @@ from eth2.beacon.chains.base import (
 from .types import SyncProgress
 
 
-class PeerHeaderSyncer(BaseService):
+class PeerHeaderSyncer(Service):
     """
     Sync as many headers as possible with a given peer.
 
@@ -69,9 +64,7 @@ class PeerHeaderSyncer(BaseService):
     def __init__(self,
                  chain: AsyncChainAPI,
                  db: BaseAsyncHeaderDB,
-                 peer: BaseChainPeer,
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
+                 peer: BaseChainPeer) -> None:
         self.chain = chain
         self.db = db
         self.sync_progress: SyncProgress = None
@@ -95,8 +88,8 @@ class PeerHeaderSyncer(BaseService):
         """
         peer = self._peer
 
-        head = await self.wait(self.db.coro_get_canonical_head())
-        head_td = await self.wait(self.db.coro_get_score(head.hash))
+        head = await self.db.coro_get_canonical_head()
+        head_td = await self.db.coro_get_score(head.hash)
         if peer.head_info.head_td <= head_td:
             self.logger.info(
                 "Head TD (%d) announced by %s not higher than ours (%d), not syncing",
@@ -119,20 +112,21 @@ class PeerHeaderSyncer(BaseService):
         # will be discarded by skip_complete_headers() so we don't unnecessarily process them
         # again.
         start_at = BlockNumber(max(GENESIS_BLOCK_NUMBER + 1, head.block_number - MAX_REORG_DEPTH))
-        while self.is_operational:
-            if not peer.is_operational:
+        while self.manager.is_running:
+            if not peer.manager.is_running:
                 self.logger.info("%s disconnected, aborting sync", peer)
                 break
 
             try:
-                all_headers = await self.wait(self._request_headers(peer, start_at))
+                all_headers = await self._request_headers(peer, start_at)
                 if last_received_header is None:
                     # Skip over existing headers on the first run-through
-                    completed_headers, new_headers = await self.wait(
-                        skip_complete_headers(all_headers, self.db.coro_header_exists)
+                    completed_headers, new_headers = await skip_complete_headers(
+                        all_headers,
+                        self.db.coro_header_exists,
                     )
                     if len(new_headers) == 0 and len(completed_headers) > 0:
-                        head = await self.wait(self.db.coro_get_canonical_head())
+                        head = await self.db.coro_get_canonical_head()
                         start_at = BlockNumber(max(
                             all_headers[-1].block_number + 1,
                             head.block_number - MAX_REORG_DEPTH
@@ -155,9 +149,6 @@ class PeerHeaderSyncer(BaseService):
                 else:
                     new_headers = all_headers
                 self.logger.debug2('sync received new headers: %s', new_headers)
-            except OperationCancelled:
-                self.logger.info("Sync with %s completed", peer)
-                break
             except asyncio.TimeoutError:
                 self.logger.warning("Timeout waiting for header batch from %s, aborting sync", peer)
                 await peer.disconnect(DisconnectReason.TIMEOUT)
@@ -195,9 +186,7 @@ class PeerHeaderSyncer(BaseService):
             if last_received_header is None:
                 # on the first request, make sure that the earliest ancestor has a parent in our db
                 try:
-                    first_parent = await self.wait(
-                        self.db.coro_get_block_header_by_hash(first.parent_hash)
-                    )
+                    first_parent = await self.db.coro_get_block_header_by_hash(first.parent_hash)
                 except HeaderNotFound:
                     self.logger.warning(
                         "Unable to find common ancestor betwen our chain and %s",
