@@ -6,8 +6,6 @@ from typing import (
     Type,
 )
 
-from cancel_token import CancelToken, OperationCancelled
-
 from lahja import EndpointAPI
 
 from eth_utils import get_extended_debug_logger
@@ -24,7 +22,6 @@ from lahja import (
 )
 
 from p2p.abc import CommandAPI, SessionAPI
-from p2p.cancellable import CancellableMixin
 from p2p.peer import (
     BasePeer,
     PeerSubscriber,
@@ -43,6 +40,8 @@ class BaseRequestServer(Service, PeerSubscriber):
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
     """
+    logger = get_extended_debug_logger('trinity.protocol.common.servers.RequestServer')
+
     # This is a rather arbitrary value, but when the sync is operating normally we never see
     # the msg queue grow past a few hundred items, so this should be a reasonable limit for
     # now.
@@ -70,10 +69,6 @@ class BaseRequestServer(Service, PeerSubscriber):
             msg: Payload) -> None:
         try:
             await self._handle_msg(peer, cmd, msg)
-        except OperationCancelled:
-            # Silently swallow OperationCancelled exceptions because otherwise they'll be caught
-            # by the except below and treated as unexpected.
-            pass
         except Exception:
             self.logger.exception("Unexpected error when processing msg from %s", peer)
 
@@ -90,6 +85,7 @@ class BaseIsolatedRequestServer(Service):
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
     """
+    logger = get_extended_debug_logger('trinity.protocol.common.servers.IsolatedRequestServer')
 
     def __init__(
             self,
@@ -119,10 +115,6 @@ class BaseIsolatedRequestServer(Service):
             msg: Payload) -> None:
         try:
             await self._handle_msg(session, cmd, msg)
-        except OperationCancelled:
-            # Silently swallow OperationCancelled exceptions because otherwise they'll be caught
-            # by the except below and treated as unexpected.
-            pass
         except Exception:
             self.logger.exception("Unexpected error when processing msg from %s", session)
 
@@ -134,12 +126,11 @@ class BaseIsolatedRequestServer(Service):
         ...
 
 
-class BasePeerRequestHandler(CancellableMixin):
+class BasePeerRequestHandler:
     logger = get_extended_debug_logger('trinity.protocol.common.servers.PeerRequestHandler')
 
-    def __init__(self, db: BaseAsyncHeaderDB, token: CancelToken) -> None:
+    def __init__(self, db: BaseAsyncHeaderDB) -> None:
         self.db = db
-        self.cancel_token = token
 
     async def lookup_headers(self,
                              request: BaseHeaderRequest) -> Tuple[BlockHeader, ...]:
@@ -169,8 +160,9 @@ class BasePeerRequestHandler(CancellableMixin):
         Generate the block numbers for a given `HeaderRequest`.
         """
         if isinstance(request.block_number_or_hash, bytes):
-            header = await self.wait(
-                self.db.coro_get_block_header_by_hash(request.block_number_or_hash))
+            header = await self.db.coro_get_block_header_by_hash(
+                request.block_number_or_hash,
+            )
             return request.generate_block_numbers(header.block_number)
         elif isinstance(request.block_number_or_hash, int):
             # We don't need to pass in the block number to
@@ -188,8 +180,7 @@ class BasePeerRequestHandler(CancellableMixin):
         """
         for block_num in block_numbers:
             try:
-                yield await self.wait(
-                    self.db.coro_get_canonical_block_header_by_number(block_num))
+                yield await self.db.coro_get_canonical_block_header_by_number(block_num)
             except HeaderNotFound:
                 self.logger.debug(
                     "Peer requested header number %s that is unavailable, stopping search.",

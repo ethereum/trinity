@@ -113,7 +113,7 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
 
     async def _run(self) -> None:
         with self.subscribe(self.peer_pool):
-            while self.manger.is_running:
+            while self.manager.is_running:
                 peer, cmd, msg = await self.msg_queue.get()
                 if isinstance(msg, dict):
                     request_id = msg.get('request_id')

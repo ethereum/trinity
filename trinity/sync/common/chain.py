@@ -81,7 +81,7 @@ class PeerHeaderSyncer(Service):
             return self._target_header_hash
 
     async def _run(self) -> None:
-        await self.events.cancelled.wait()
+        await self.manager.wait_forever()
 
     async def next_header_batch(self) -> AsyncIterator[Tuple[BlockHeaderAPI, ...]]:
         """Try to fetch headers until the given peer's head_hash.

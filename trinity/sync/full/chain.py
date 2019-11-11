@@ -26,6 +26,7 @@ from eth_utils import (
     humanize_hash,
     humanize_seconds,
     ValidationError,
+    get_extended_debug_logger,
 )
 from eth_utils.toolz import (
     concat,
@@ -108,6 +109,7 @@ REQUEST_BUFFER_MULTIPLIER = 16
 
 
 class BaseBodyChainSyncer(Service, PeerSubscriber):
+    logger = get_extended_debug_logger('trinity.sync.full.BodyChainSyncer')
 
     NO_PEER_RETRY_PAUSE = 5.0
     "If no peers are available for downloading the chain data, retry after this many seconds"
@@ -159,7 +161,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
 
     async def run(self) -> None:
         with self.subscribe(self._peer_pool):
-            await self.cancellation()
+            await self.manager.wait_forever()
 
     async def _sync_from_headers(
             self,
@@ -316,7 +318,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                 # peer returned no results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
                 self.logger.debug("Pausing %s for %.1fs, for sending 0 block bodies", peer, delay)
-                loop = self.get_event_loop()
+                loop = asyncio.get_event_loop()
                 loop.call_later(delay, partial(self._body_peers.put_nowait, peer))
         finally:
             self._mark_body_download_complete(batch_id, completed_headers)
@@ -636,7 +638,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             )
 
     async def _display_stats(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             await self.sleep(5)
             self.logger.debug(
                 "(in progress, queued, max size) of bodies, receipts: %r. Write capacity? %s",
