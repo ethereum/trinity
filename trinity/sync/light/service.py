@@ -29,6 +29,7 @@ from eth_hash.auto import keccak
 
 from eth_utils import (
     encode_hex,
+    get_extended_debug_logger,
 )
 
 from trie import HexaryTrie
@@ -89,6 +90,8 @@ class BaseLightPeerChain(ABC):
 
 
 class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
+    logger = get_extended_debug_logger('trinity.sync.light.PeerChain')
+
     reply_timeout = REPLY_TIMEOUT
     headerdb: BaseAsyncHeaderDB = None
 

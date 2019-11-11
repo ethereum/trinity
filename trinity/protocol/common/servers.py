@@ -30,7 +30,7 @@ from p2p.peer import (
     PeerSubscriber,
 )
 from p2p.typing import Payload
-from p2p.service import BaseService
+from p2p.service import Service
 
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.common.events import PeerPoolMessageEvent
@@ -38,7 +38,7 @@ from trinity.protocol.common.peer import BasePeerPool
 from trinity.protocol.common.requests import BaseHeaderRequest
 
 
-class BaseRequestServer(BaseService, PeerSubscriber):
+class BaseRequestServer(Service, PeerSubscriber):
     """
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
@@ -50,20 +50,18 @@ class BaseRequestServer(BaseService, PeerSubscriber):
 
     def __init__(
             self,
-            peer_pool: BasePeerPool,
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            peer_pool: BasePeerPool) -> None:
         self._peer_pool = peer_pool
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self._handle_msg_loop())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self._handle_msg_loop)
         with self.subscribe(self._peer_pool):
-            await self.cancellation()
+            await self.manager.wait_forever()
 
     async def _handle_msg_loop(self) -> None:
-        while self.is_operational:
-            peer, cmd, msg = await self.wait(self.msg_queue.get())
-            self.run_task(self._quiet_handle_msg(peer, cmd, msg))
+        while self.manager.is_running:
+            peer, cmd, msg = await self.msg_queue.get()
+            self.manager.run_task(self._quiet_handle_msg, peer, cmd, msg)
 
     async def _quiet_handle_msg(
             self,
@@ -87,7 +85,7 @@ class BaseRequestServer(BaseService, PeerSubscriber):
         ...
 
 
-class BaseIsolatedRequestServer(BaseService):
+class BaseIsolatedRequestServer(Service):
     """
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
@@ -97,24 +95,22 @@ class BaseIsolatedRequestServer(BaseService):
             self,
             event_bus: EndpointAPI,
             broadcast_config: BroadcastConfig,
-            subscribed_events: Iterable[Type[PeerPoolMessageEvent]],
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            subscribed_events: Iterable[Type[PeerPoolMessageEvent]]) -> None:
         self.event_bus = event_bus
         self.broadcast_config = broadcast_config
         self._subscribed_events = subscribed_events
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
 
         for event_type in self._subscribed_events:
-            self.run_daemon_task(self.handle_stream(event_type))
+            self.manager.run_daemon_task(self.handle_stream, event_type)
 
-        await self.cancellation()
+        await self.manager.wait_forever()
 
     async def handle_stream(self, event_type: Type[PeerPoolMessageEvent]) -> None:
-        while self.is_operational:
-            async for event in self.wait_iter(self.event_bus.stream(event_type)):
-                self.run_task(self._quiet_handle_msg(event.session, event.cmd, event.msg))
+        while self.manager.is_running:
+            async for event in self.event_bus.stream(event_type):
+                self.manager.run_task(self._quiet_handle_msg, event.session, event.cmd, event.msg)
 
     async def _quiet_handle_msg(
             self,

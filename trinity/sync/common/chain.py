@@ -16,6 +16,7 @@ from eth_typing import (
 from eth_utils import (
     encode_hex,
     ValidationError,
+    get_extended_debug_logger,
 )
 
 from eth.abc import (
@@ -59,6 +60,8 @@ class PeerHeaderSyncer(Service):
     Here, the run() method will execute the sync loop until our local head is the same as the one
     with the highest TD announced by any of our peers.
     """
+    logger = get_extended_debug_logger('trinity.sync.chain.PeerHeaderSyncer')
+
     _seal_check_random_sample_rate = SEAL_CHECK_RANDOM_SAMPLE_RATE
 
     def __init__(self,
