@@ -142,10 +142,10 @@ async def test_expected_logs_for_light_mode(command):
                 # We don't have a way to refer to the tmp xdg_trinity_root here so we
                 # make up this replacement marker
                 '--data-dir={trinity_root_path}/devnet',
-                '--network-id=5',
+                '--network-id=4711',
                 '--disable-tx-pool',
                 '--log-level=DEBUG',
-            ), 5, '0x065fd78e53dcef113bf9d7732dac7c5132dcf85c9588a454d832722ceb097422'),
+            ), 4711, '0x065fd78e53dcef113bf9d7732dac7c5132dcf85c9588a454d832722ceb097422'),
     )
 )
 @pytest.mark.asyncio
