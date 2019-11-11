@@ -141,14 +141,13 @@ def make_pausing_beam_chain(
         chain_id: int,
         db: AtomicDatabaseAPI,
         event_bus: EndpointAPI,
-        loop: asyncio.AbstractEventLoop,
         urgent: bool = True) -> BeamChain:
     """
     Patch the py-evm chain with a VMState that pauses when state data
     is missing, and emits an event which requests the missing data.
     """
     pausing_vm_config = tuple(
-        (starting_block, pausing_vm_decorator(vm, event_bus, loop, urgent=urgent))
+        (starting_block, pausing_vm_decorator(vm, event_bus, urgent=urgent))
         for starting_block, vm in vm_config
     )
     PausingBeamChain = BeamChain.configure(
@@ -164,7 +163,6 @@ TVMFuncReturn = TypeVar('TVMFuncReturn')
 def pausing_vm_decorator(
         original_vm_class: Type[VirtualMachineAPI],
         event_bus: EndpointAPI,
-        loop: asyncio.AbstractEventLoop,
         urgent: bool = True) -> Type[VirtualMachineAPI]:
     """
     Decorate a py-evm VM so that it will pause when data is missing
@@ -243,6 +241,8 @@ def pausing_vm_decorator(
             Catch exceptions about missing state data and pause while waiting for
             the event bus to reply with the needed data.
             """
+            loop = asyncio.get_event_loop()
+
             while True:
                 try:
                     return vm_method(*args, **kwargs)  # type: ignore

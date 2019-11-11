@@ -2,12 +2,11 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-import asyncio
 from typing import (
     Type,
 )
 
-from lahja import EndpointAPI
+from asyncio_run_in_process import run_in_process
 
 from eth_typing import (
     BlockNumber,
@@ -33,9 +32,7 @@ from p2p.kademlia import (
 from p2p.protocol import (
     Protocol,
 )
-from p2p.service import (
-    BaseService,
-)
+from p2p.service import AsyncioManager, ServiceAPI
 
 from trinity.config import (
     Eth1AppConfig,
@@ -44,17 +41,12 @@ from trinity.config import (
 )
 from trinity.db.manager import DBClient
 from trinity.events import ShutdownRequest
-from trinity.extensibility import (
-    AsyncioIsolatedComponent,
-)
+from trinity.extensibility import BaseApplicationComponent, ComponentService
 from trinity.protocol.eth.proto import (
     ETHProtocol,
 )
 from trinity.protocol.les.proto import (
     LESProtocolV2,
-)
-from trinity._utils.shutdown import (
-    exit_with_services,
 )
 
 
@@ -77,79 +69,62 @@ def get_discv5_topic(trinity_config: TrinityConfig, protocol: Type[Protocol]) ->
     return get_v5_topic(protocol, genesis_hash)
 
 
-class DiscoveryBootstrapService(BaseService):
+class DiscoveryBootstrapService(ComponentService):
     """
     Bootstrap discovery to provide a parent ``CancellationToken``
     """
+    _explicit_ipc_filename = DISCOVERY_EVENTBUS_ENDPOINT
 
-    def __init__(self,
-                 disable_discovery: bool,
-                 event_bus: EndpointAPI,
-                 trinity_config: TrinityConfig) -> None:
-        super().__init__()
-        self.is_discovery_disabled = disable_discovery
-        self.event_bus = event_bus
-        self.trinity_config = trinity_config
-
-    async def _run(self) -> None:
+    async def run_component_service(self) -> None:
         external_ip = "0.0.0.0"
-        address = Address(external_ip, self.trinity_config.port, self.trinity_config.port)
+        trinity_config = self.boot_info.trinity_config
+        address = Address(external_ip, trinity_config.port, trinity_config.port)
+        is_discovery_disabled = self.boot_info.args.disable_discovery
 
-        if self.trinity_config.use_discv5:
-            protocol = get_protocol(self.trinity_config)
-            topic = get_discv5_topic(self.trinity_config, protocol)
+        if trinity_config.use_discv5:
+            protocol = get_protocol(trinity_config)
+            topic = get_discv5_topic(trinity_config, protocol)
 
             discovery_protocol: DiscoveryProtocol = DiscoveryByTopicProtocol(
                 topic,
-                self.trinity_config.nodekey,
+                trinity_config.nodekey,
                 address,
-                self.trinity_config.bootstrap_nodes,
-                self.cancel_token,
+                trinity_config.bootstrap_nodes,
             )
         else:
             discovery_protocol = PreferredNodeDiscoveryProtocol(
-                self.trinity_config.nodekey,
+                trinity_config.nodekey,
                 address,
-                self.trinity_config.bootstrap_nodes,
-                self.trinity_config.preferred_nodes,
-                self.cancel_token,
+                trinity_config.bootstrap_nodes,
+                trinity_config.preferred_nodes,
             )
 
-        if self.is_discovery_disabled:
-            discovery_service: BaseService = StaticDiscoveryService(
+        if is_discovery_disabled:
+            discovery_service: ServiceAPI = StaticDiscoveryService(
                 self.event_bus,
-                self.trinity_config.preferred_nodes,
-                self.cancel_token,
+                trinity_config.preferred_nodes,
             )
         else:
             discovery_service = DiscoveryService(
                 discovery_protocol,
-                self.trinity_config.port,
+                trinity_config.port,
                 self.event_bus,
-                self.cancel_token,
             )
 
+        manager = self.manager.run_child_service(discovery_service)
+
         try:
-            await discovery_service.run()
-        except Exception:
-            await self.event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
+            await manager.wait_stopped()
+        finally:
+            if manager.did_error:
+                await self.event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
 
 
-class PeerDiscoveryComponent(AsyncioIsolatedComponent):
+class PeerDiscoveryComponent(BaseApplicationComponent):
     """
     Continously discover other Ethereum nodes.
     """
-
-    @property
-    def name(self) -> str:
-        return "Discovery"
-
-    @property
-    def normalized_name(self) -> str:
-        return DISCOVERY_EVENTBUS_ENDPOINT
-
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        self.start()
+    name = "Discovery"
 
     @classmethod
     def configure_parser(cls,
@@ -161,14 +136,7 @@ class PeerDiscoveryComponent(AsyncioIsolatedComponent):
             help="Disable peer discovery",
         )
 
-    def do_start(self) -> None:
-        discovery_bootstrap = DiscoveryBootstrapService(
-            self.boot_info.args.disable_discovery,
-            self.event_bus,
-            self.boot_info.trinity_config
-        )
-        asyncio.ensure_future(exit_with_services(
-            discovery_bootstrap,
-            self._event_bus_service,
-        ))
-        asyncio.ensure_future(discovery_bootstrap.run())
+    async def run(self) -> None:
+        service = DiscoveryBootstrapService(self._boot_info, self.name)
+
+        await run_in_process(AsyncioManager.run_service, service)

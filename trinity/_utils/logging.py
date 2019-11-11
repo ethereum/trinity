@@ -1,4 +1,3 @@
-import functools
 import logging
 from logging import (
     Logger,
@@ -13,15 +12,12 @@ import os
 from pathlib import Path
 import sys
 from typing import (
-    Any,
     Dict,
     Tuple,
     TYPE_CHECKING,
-    Callable,
 )
 
 from eth_utils import get_extended_debug_logger
-from eth_utils.toolz import dissoc
 
 from trinity._utils.shellart import (
     bold_red,
@@ -136,24 +132,6 @@ def setup_queue_logging(log_queue: 'Queue[str]', level: int) -> None:
     logger.setLevel(level)
 
     logger.debug('Logging initialized: PID=%s', os.getpid())
-
-
-def with_queued_logging(fn: Callable[..., Any]) -> Callable[..., Any]:
-    @functools.wraps(fn)
-    def inner(*args: Any, **kwargs: Any) -> Any:
-        try:
-            log_queue = kwargs['log_queue']
-        except KeyError:
-            raise KeyError(f"The `log_queue` argument is required when calling `{fn.__name__}`")
-        else:
-            level = kwargs.get('log_level', logging.INFO)
-            levels = kwargs.get('log_levels', {})
-            setup_queue_logging(log_queue, level)
-            setup_log_levels(levels)
-            inner_kwargs = dissoc(kwargs, 'log_queue', 'log_level', 'log_levels')
-
-            return fn(*args, **inner_kwargs)
-    return inner
 
 
 def _set_environ_if_missing(name: str, val: str) -> None:

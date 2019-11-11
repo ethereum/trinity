@@ -7,9 +7,9 @@ from lahja import EndpointAPI
 
 from eth.abc import ChainAPI
 
-from p2p.service import (
-    BaseService,
-)
+from eth_utils import get_extended_debug_logger
+
+from p2p.service import Service
 
 from trinity.config import (
     Eth1AppConfig,
@@ -41,7 +41,9 @@ from trinity.protocol.common.events import (
 )
 
 
-class EthstatsService(BaseService):
+class EthstatsService(Service):
+    logger = get_extended_debug_logger('trinity.components.ethstats.EthstatsService')
+
     def __init__(
         self,
         boot_info: TrinityBootInfo,
@@ -65,28 +67,27 @@ class EthstatsService(BaseService):
 
         self.chain = self.get_chain()
 
-    async def _run(self) -> None:
-        while self.is_operational:
+    async def run(self) -> None:
+        while self.manager.is_running:
             self.logger.info('Connecting to %s...', self.server_url)
             async with websockets.connect(self.server_url) as websocket:
                 client: EthstatsClient = EthstatsClient(
                     websocket,
                     self.node_id,
-                    token=self.cancel_token,
                 )
 
-                self.run_daemon_task(self.server_handler(client))
-                self.run_daemon_task(self.statistics_handler(client))
+                self.manager.run_daemon_task(self.server_handler, client)
+                self.manager.run_daemon_task(self.statistics_handler, client)
 
                 await client.run()
-                if self.is_operational and not client.is_operational:
+                if self.manager.is_running and not client.manager.is_running:
                     self.logger.info('Connection to %s closed', self.server_url)
                     self.logger.info('Reconnecting in 5s...')
-                    await self.sleep(5)
+                    await asyncio.sleep(5)
 
     # Wait for messages from server, respond when they arrive
     async def server_handler(self, client: EthstatsClient) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             message: EthstatsMessage = await client.recv()
 
             if message.command == 'node-pong':
@@ -101,12 +102,12 @@ class EthstatsService(BaseService):
     async def statistics_handler(self, client: EthstatsClient) -> None:
         await client.send_hello(self.server_secret, self.get_node_info())
 
-        while self.is_operational:
+        while self.manager.is_running:
             await client.send_node_ping()
             await client.send_stats(await self.get_node_stats())
             await client.send_block(self.get_node_block())
 
-            await self.sleep(self.stats_interval)
+            await asyncio.sleep(self.stats_interval)
 
     def get_node_info(self) -> EthstatsData:
         """Getter for data that should be sent once, on start-up."""
@@ -138,7 +139,7 @@ class EthstatsService(BaseService):
     async def get_node_stats(self) -> EthstatsData:
         """Getter for data that should be sent periodically."""
         try:
-            peer_count = (await self.wait(
+            peer_count = (await asyncio.wait_for(
                 self.event_bus.request(
                     PeerCountRequest(),
                     TO_NETWORKING_BROADCAST_CONFIG,

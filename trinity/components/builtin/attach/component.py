@@ -7,6 +7,8 @@ import pkg_resources
 import sys
 import pathlib
 
+from eth_utils import get_extended_debug_logger
+
 from trinity.config import (
     BaseAppConfig,
     Eth1AppConfig,
@@ -36,6 +38,7 @@ def is_ipython_available() -> bool:
 
 class AttachComponent(BaseCommandComponent):
     name = "Attach"
+    logger = get_extended_debug_logger('trinity.components.Attach')
 
     @classmethod
     def configure_parser(cls,
@@ -61,14 +64,13 @@ class AttachComponent(BaseCommandComponent):
             ipc_path = args.ipc_path or trinity_config.jsonrpc_ipc_path
             console(ipc_path, use_ipython=is_ipython_available())
         except FileNotFoundError as err:
-            cls.get_logger().error(str(err))
+            cls.logger.error(str(err))
             sys.exit(1)
 
 
 class DbShellComponent(BaseCommandComponent):
-    @property
-    def name(self) -> str:
-        return "DB Shell"
+    name = "DB Shell"
+    logger = get_extended_debug_logger('trinity.components.DbShell')
 
     @classmethod
     def configure_parser(cls,
@@ -94,6 +96,6 @@ class DbShellComponent(BaseCommandComponent):
             context = get_beacon_shell_context(config.database_dir, trinity_config)
             db_shell(is_ipython_available(), context)
         else:
-            cls.get_logger().error(
+            cls.logger.error(
                 "DB Shell only supports the Ethereum 1 and Beacon nodes at this time"
             )

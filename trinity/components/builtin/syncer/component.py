@@ -7,7 +7,6 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
-import asyncio
 from logging import (
     Logger,
 )
@@ -16,18 +15,20 @@ from multiprocessing.managers import (
 )
 from typing import (
     cast,
-    Iterable,
-    Type,
+    Dict,
+    Tuple,
 )
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
 from eth.abc import AtomicDatabaseAPI
 from eth_utils import (
-    to_tuple,
     ValidationError,
 )
+
+from asyncio_run_in_process import run_in_process
+
+from p2p.service import background_asyncio_service, AsyncioManager
 
 from trinity.config import (
     Eth1AppConfig,
@@ -41,15 +42,9 @@ from trinity.constants import (
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.db.eth1.header import AsyncHeaderDB
-from trinity.extensibility.asyncio import (
-    AsyncioIsolatedComponent
-)
-from trinity.nodes.base import (
-    Node,
-)
+from trinity.extensibility import BaseApplicationComponent, ComponentService
 from trinity.events import ShutdownRequest
 from trinity.protocol.common.peer import (
-    BasePeer,
     BasePeerPool,
 )
 from trinity.protocol.eth.peer import (
@@ -67,9 +62,6 @@ from trinity.sync.beam.service import (
 )
 from trinity.sync.light.chain import (
     LightChainSyncer,
-)
-from trinity._utils.shutdown import (
-    exit_with_services,
 )
 from .cli import NormalizeCheckpointURI
 
@@ -103,8 +95,7 @@ class BaseSyncStrategy(ABC):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
         ...
 
 
@@ -124,8 +115,7 @@ class NoopSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         logger.info("Node running without sync (--sync-mode=%s)", self.get_sync_mode())
 
@@ -142,15 +132,13 @@ class FullSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         syncer = FullChainSyncer(
             chain,
             AsyncChainDB(base_db),
             base_db,
             cast(ETHPeerPool, peer_pool),
-            cancel_token,
         )
 
         await syncer.run()
@@ -188,8 +176,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         syncer = BeamSyncService(
             chain,
@@ -199,7 +186,6 @@ class BeamSyncStrategy(BaseSyncStrategy):
             event_bus,
             args.beam_from_checkpoint,
             args.force_beam_block_number,
-            cancel_token,
         )
 
         await syncer.run()
@@ -217,116 +203,87 @@ class LightSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         syncer = LightChainSyncer(
             chain,
             AsyncHeaderDB(base_db),
             cast(LESPeerPool, peer_pool),
-            cancel_token,
         )
 
         await syncer.run()
 
 
-class SyncerComponent(AsyncioIsolatedComponent):
+DEFAULT_SYNC_STRATEGY = BeamSyncStrategy()
+DEFAULT_SYNC_MODE = DEFAULT_SYNC_STRATEGY.get_sync_mode().lower()
+
+SYNC_STRATEGIES: Tuple[BaseSyncStrategy, ...] = (
+    FullSyncStrategy(),
+    DEFAULT_SYNC_STRATEGY,
+    LightSyncStrategy(),
+    NoopSyncStrategy(),
+)
+SYNC_MODES: Dict[str, BaseSyncStrategy] = {
+    strategy.get_sync_mode().lower(): strategy
+    for strategy
+    in SYNC_STRATEGIES
+}
+
+if len(SYNC_STRATEGIES) != len(SYNC_MODES):
+    raise ValidationError("Maybe duplicate sync mode?")
+elif DEFAULT_SYNC_MODE not in SYNC_MODES:
+    raise ValidationError("Defauult sync mode not found in sync mode options")
+
+
+class SyncerComponent(BaseApplicationComponent):
+    name = "Sync / PeerPool"
+
     peer_pool: BaseChainPeerPool = None
-    cancel_token: CancelToken = None
     chain: AsyncChainAPI = None
     db_manager: BaseManager = None
 
-    active_strategy: BaseSyncStrategy = None
-    strategies: Iterable[BaseSyncStrategy] = (
-        FullSyncStrategy(),
-        BeamSyncStrategy(),
-        LightSyncStrategy(),
-        NoopSyncStrategy(),
-    )
-
-    default_strategy = BeamSyncStrategy
-
-    @property
-    def name(self) -> str:
-        return "Sync / PeerPool"
-
-    @property
-    def normalized_name(self) -> str:
-        return NETWORKING_EVENTBUS_ENDPOINT
-
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
-
-        if cls.default_strategy not in cls.extract_strategy_types():
-            raise ValidationError(f"Default strategy {cls.default_strategy} not in strategies")
-
-        for sync_strategy in cls.strategies:
+        for sync_strategy in SYNC_STRATEGIES:
             sync_strategy.configure_parser(arg_parser)
 
         syncing_parser = arg_parser.add_argument_group('sync mode')
-        mode_parser = syncing_parser.add_mutually_exclusive_group()
-        mode_parser.add_argument(
+        syncing_parser.add_argument(
             '--sync-mode',
-            choices=cls.extract_modes(),
-            default=cls.default_strategy.get_sync_mode(),
+            choices=tuple(sorted(SYNC_MODES.keys())),
+            default=DEFAULT_SYNC_MODE,
         )
 
-    @classmethod
-    @to_tuple
-    def extract_modes(cls) -> Iterable[str]:
-        for strategy in cls.strategies:
-            yield strategy.get_sync_mode()
+    @property
+    def is_enabled(self) -> bool:
+        return self._boot_info.args.sync_mode.lower() in SYNC_MODES
 
-    @classmethod
-    @to_tuple
-    def extract_strategy_types(cls) -> Iterable[Type[BaseSyncStrategy]]:
-        for strategy in cls.strategies:
-            yield type(strategy)
+    async def run(self) -> None:
+        service = SyncComponentService(self._boot_info, self.name)
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        for strategy in self.strategies:
-            if strategy.get_sync_mode().lower() == self.boot_info.args.sync_mode.lower():
-                if self.active_strategy is not None:
-                    raise ValidationError(
-                        f"Ambiguous sync strategy. Both {self.active_strategy} and {strategy} apply"
-                    )
-                self.active_strategy = strategy
+        await run_in_process(AsyncioManager.run_service, service)
 
-        if not self.active_strategy:
-            self.logger.warn(
-                "No sync strategy matches --sync-mode=%s",
-                self.boot_info.args.sync_mode
-            )
-            return
 
-        self.start()
+class SyncComponentService(ComponentService):
+    _explicit_ipc_filename = NETWORKING_EVENTBUS_ENDPOINT
 
-    def do_start(self) -> None:
+    async def run_component_service(self) -> None:
+        active_strategy = SYNC_MODES[self.boot_info.args.sync_mode.lower()]
 
         trinity_config = self.boot_info.trinity_config
         NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
         node = NodeClass(self.event_bus, trinity_config)
 
-        asyncio.ensure_future(self.launch_sync(node))
+        async with background_asyncio_service(node):
+            await active_strategy.sync(
+                self.boot_info.args,
+                self.logger,
+                node.get_chain(),
+                node.base_db,
+                node.get_peer_pool(),
+                self.event_bus,
+            )
 
-        asyncio.ensure_future(exit_with_services(
-            node,
-            self._event_bus_service,
-        ))
-        asyncio.ensure_future(node.run())
-
-    async def launch_sync(self, node: Node[BasePeer]) -> None:
-        await node.events.started.wait()
-        await self.active_strategy.sync(
-            self.boot_info.args,
-            self.logger,
-            node.get_chain(),
-            node.base_db,
-            node.get_peer_pool(),
-            self.event_bus,
-            node.cancel_token
-        )
-
-        if self.active_strategy.shutdown_node_on_halt:
-            self.logger.error("Sync ended unexpectedly. Shutting down trinity")
-            await self.event_bus.broadcast(ShutdownRequest("Sync ended unexpectedly"))
+            if active_strategy.shutdown_node_on_halt:
+                self.logger.error("Sync ended unexpectedly. Shutting down trinity")
+                await self.event_bus.broadcast(ShutdownRequest("Sync ended unexpectedly"))

@@ -160,7 +160,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         NewBlock,
     })
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
 
         self.run_daemon_event(SendBlockHeadersEvent, self.handle_block_headers_event)
         self.run_daemon_event(SendBlockBodiesEvent, self.handle_block_bodies_event)
@@ -172,7 +172,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         self.run_daemon_request(GetBlockBodiesRequest, self.handle_get_block_bodies_request)
         self.run_daemon_request(GetNodeDataRequest, self.handle_get_node_data_request)
 
-        await super()._run()
+        await super().run()
 
     @async_fire_and_forget
     async def handle_block_headers_event(self, event: SendBlockHeadersEvent) -> None:

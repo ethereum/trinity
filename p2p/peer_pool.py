@@ -289,12 +289,18 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         """
         self.logger.info('Adding %s to pool', peer)
         self.connected_nodes[peer.session] = peer
-        peer.add_finished_callback(self._peer_finished)
+        self.manager.run_task(self._run_peer, peer)
         for subscriber in self._subscribers:
             subscriber.register_peer(peer)
             peer.add_subscriber(subscriber)
             for msg in msgs:
                 subscriber.add_msg(msg)
+
+    async def _run_peer(self, peer: BasePeer) -> None:
+        try:
+            await peer.manager.wait_stopped()
+        finally:
+            self._peer_finished(peer)
 
     async def run(self) -> None:
         if self.has_event_bus:

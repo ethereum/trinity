@@ -13,6 +13,7 @@ from typing import Union, TYPE_CHECKING
 
 from eth_utils import (
     to_int,
+    get_extended_debug_logger,
 )
 from ruamel.yaml import (
     YAML,
@@ -29,9 +30,7 @@ from trinity.config import (
     TrinityConfig,
     BeaconAppConfig,
 )
-from trinity.extensibility import (
-    BaseMainProcessComponent,
-)
+from trinity.extensibility import BaseCommandComponent
 import ssz
 
 from eth2.beacon.types.states import BeaconState
@@ -47,10 +46,8 @@ if TYPE_CHECKING:
     from typing import Any, IO  # noqa: F401
 
 
-class InteropComponent(BaseMainProcessComponent):
-    @property
-    def name(self) -> str:
-        return "Interop"
+class InteropComponent(BaseCommandComponent):
+    logger = get_extended_debug_logger('trinity.components.eth2.InteropComponent')
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -106,14 +103,13 @@ class InteropComponent(BaseMainProcessComponent):
 
     @classmethod
     def munge_all_args(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        logger = cls.get_logger()
-        logger.info("Configuring testnet")
+        cls.logger.info("Configuring testnet")
 
         override_lengths(MINIMAL_SERENITY_CONFIG)
 
         if args.wipedb:
             beacon_config = trinity_config.get_app_config(BeaconAppConfig)
-            logger.info(f'Blowing away the database: {beacon_config.database_dir}')
+            cls.logger.info(f'Blowing away the database: {beacon_config.database_dir}')
             try:
                 shutil.rmtree(beacon_config.database_dir)
             except FileNotFoundError:
@@ -123,7 +119,7 @@ class InteropComponent(BaseMainProcessComponent):
                 beacon_config.database_dir.mkdir()
 
         genesis_path = args.genesis_state_ssz_path or Path('resources/genesis.ssz')
-        logger.info(f"Using genesis from {genesis_path}")
+        cls.logger.info(f"Using genesis from {genesis_path}")
 
         # read the genesis!
         try:
@@ -132,7 +128,7 @@ class InteropComponent(BaseMainProcessComponent):
             state = ssz.decode(encoded, sedes=BeaconState)
         except FileNotFoundError:
             import os
-            logger.critical(
+            cls.logger.critical(
                 "Required: the genesis state at %s/genesis.ssz,"
                 " or the path to this state with command line"
                 " argument `--genesis-state-ssz-path $PATH`",
@@ -143,10 +139,13 @@ class InteropComponent(BaseMainProcessComponent):
         now = int(time.time())
         if args.start_time:
             if args.start_time <= now:
-                logger.warning(f"--start-time must be a time in the future. Current time is {now}")
+                cls.logger.warning(
+                    "--start-time must be a time in the future. Current time is %s",
+                    now,
+                )
 
             delta = args.start_time - now
-            logger.info("Time will begin %d seconds from now", delta)
+            cls.logger.info("Time will begin %d seconds from now", delta)
 
             # adapt the state, then print the new root!
             state = state.copy(
@@ -154,21 +153,21 @@ class InteropComponent(BaseMainProcessComponent):
             )
         elif args.start_delay:
             if args.start_delay < 0:
-                logger.info(f"--start-time must be positive")
+                cls.logger.info(f"--start-time must be positive")
                 sys.exit(1)
 
             start_time = now + args.start_delay
-            logger.info("Genesis time is %d", start_time)
+            cls.logger.info("Genesis time is %d", start_time)
 
             state = state.copy(
                 genesis_time=start_time
             )
         else:
-            logger.info("Using genesis_time from genesis state to determine start time")
+            cls.logger.info("Using genesis_time from genesis state to determine start time")
 
-        logger.info(f"Genesis hash tree root: {state.hash_tree_root.hex()}")
+        cls.logger.info(f"Genesis hash tree root: {state.hash_tree_root.hex()}")
 
-        logger.info(f"Configuring {trinity_config.trinity_root_dir}")
+        cls.logger.info(f"Configuring {trinity_config.trinity_root_dir}")
 
         # Save the genesis state to the data dir!
         yaml = YAML(typ='unsafe')
@@ -204,9 +203,9 @@ class InteropComponent(BaseMainProcessComponent):
                 validators = [int(token) for token in validators.split(',')]
                 for validator in validators:
                     if validator < 0 or validator > 15:
-                        logger.error(f"{validator} is not a valid validator")
+                        cls.logger.error(f"{validator} is not a valid validator")
                         sys.exit(1)
-                logger.info(f"Validating: {validators}")
+                cls.logger.info(f"Validating: {validators}")
                 yaml = YAML(typ="unsafe")
                 keys = yaml.load(
                     Path(
@@ -221,7 +220,7 @@ class InteropComponent(BaseMainProcessComponent):
                     with open(key_path, "w") as f:
                         f.write(str(parse_key(key['privkey'])))
         else:
-            logger.info("not running any validators")
+            cls.logger.info("not running any validators")
 
         # disable some components which shouldn't be running
         args.disable_discovery = True

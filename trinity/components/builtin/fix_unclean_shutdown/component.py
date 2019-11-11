@@ -5,6 +5,8 @@ from argparse import (
 )
 import time
 
+from eth_utils import get_extended_debug_logger
+
 from trinity.config import (
     TrinityConfig,
 )
@@ -19,6 +21,7 @@ from trinity._utils.ipc import (
 
 class FixUncleanShutdownComponent(BaseCommandComponent):
     name = "Fix Unclean Shutdown"
+    logger = get_extended_debug_logger('trinity.components.FixUncleanShutdown')
 
     @classmethod
     def configure_parser(cls,
@@ -34,29 +37,28 @@ class FixUncleanShutdownComponent(BaseCommandComponent):
 
     @classmethod
     def fix_unclean_shutdown(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        logger = cls.get_logger()
-        logger.info("Cleaning up unclean shutdown...")
+        cls.logger.info("Cleaning up unclean shutdown...")
 
-        logger.info("Searching for process id files in %s...", trinity_config.data_dir)
+        cls.logger.info("Searching for process id files in %s...", trinity_config.data_dir)
         pidfiles = tuple(trinity_config.pid_dir.glob('*.pid'))
         if len(pidfiles) > 1:
-            logger.info('Found %d processes from a previous run. Closing...', len(pidfiles))
+            cls.logger.info('Found %d processes from a previous run. Closing...', len(pidfiles))
         elif len(pidfiles) == 1:
-            logger.info('Found 1 process from a previous run. Closing...')
+            cls.logger.info('Found 1 process from a previous run. Closing...')
         else:
-            logger.info('Found 0 processes from a previous run. No processes to kill.')
+            cls.logger.info('Found 0 processes from a previous run. No processes to kill.')
 
         for pidfile in pidfiles:
             process_id = int(pidfile.read_text())
-            kill_process_id_gracefully(process_id, time.sleep, logger)
+            kill_process_id_gracefully(process_id, time.sleep, cls.logger)
             try:
                 pidfile.unlink()
-                logger.info(
+                cls.logger.info(
                     'Manually removed %s after killing process id %d', pidfile, process_id
                 )
             except FileNotFoundError:
-                logger.debug(
+                cls.logger.debug(
                     'pidfile %s was gone after killing process id %d', pidfile, process_id
                 )
 
-        remove_dangling_ipc_files(logger, trinity_config.ipc_dir)
+        remove_dangling_ipc_files(cls.logger, trinity_config.ipc_dir)

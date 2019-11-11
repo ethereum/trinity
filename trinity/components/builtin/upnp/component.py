@@ -3,9 +3,9 @@ from argparse import (
     _SubParsersAction,
 )
 
-from asyncio_run_in_process import asyncio_run_in_process
+from asyncio_run_in_process import run_in_process
 
-from p2p.asycnio_service import Manager
+from p2p.service import AsyncioManager
 
 from trinity.extensibility import (
     BaseApplicationComponent,
@@ -25,7 +25,7 @@ class UpnpComponent(BaseApplicationComponent):
 
     @property
     def is_enabled(self) -> bool:
-        return not self.boot_info.args.disable_upnp
+        return not self._boot_info.args.disable_upnp
 
     @classmethod
     def configure_parser(cls,
@@ -38,7 +38,6 @@ class UpnpComponent(BaseApplicationComponent):
         )
 
     async def run(self) -> None:
-        upnp_service = UPnPService(self.boot_info, self.name)
+        service = UPnPService(self._boot_info, self.name)
 
-        async with asyncio_run_in_process(Manager.run_service, upnp_service) as proc:
-            await proc.wait()
+        await run_in_process(AsyncioManager.run_service, service)

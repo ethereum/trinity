@@ -704,7 +704,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
     def _mark_complete(self) -> None:
         self.is_complete = True
-        self.cancel()
+        self.manager.cancel()
 
     async def _persist_blocks(self, headers: Sequence[BlockHeaderAPI]) -> None:
         """
@@ -747,7 +747,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             batch_id, headers = await self._receipt_tasks.get(MAX_RECEIPTS_FETCH)
 
             # schedule the receipt download and move on
-            self.manager.run_task(self._run_receipt_download_batch(peer, batch_id, headers))
+            self.manager.run_task(self._run_receipt_download_batch, peer, batch_id, headers)
 
     def _mark_body_download_complete(
             self,
@@ -772,7 +772,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         # with no headers collected:
         completed_headers: Tuple[BlockHeaderAPI, ...] = tuple()
         try:
-            completed_headers = await peer.wait(self._process_receipts(peer, headers))
+            completed_headers = await self._process_receipts(peer, headers)
 
             self._block_persist_tracker.finish_prereq(
                 BlockPersistPrereqs.STORE_RECEIPTS,
@@ -790,7 +790,8 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
                 # peer returned no results, wait a while before trying again
                 delay = EMPTY_PEER_RESPONSE_PENALTY
                 self.logger.debug("Pausing %s for %.1fs, for sending 0 receipts", peer, delay)
-                self.call_later(delay, self._receipt_peers.put_nowait, peer)
+                loop = asyncio.get_event_loop()
+                loop.call_later(delay, self._receipt_peers.put_nowait, peer)
         finally:
             self._receipt_tasks.complete(batch_id, completed_headers)
 

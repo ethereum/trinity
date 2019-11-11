@@ -5,6 +5,7 @@ from typing import (
 )
 
 from aiohttp import web
+from eth_utils import get_extended_debug_logger
 from eth_utils.toolz import curry
 
 from p2p.service import Service
@@ -52,6 +53,8 @@ class HTTPServer(Service):
     server = None
     host = None
     port = None
+
+    logger = get_extended_debug_logger('trinity.rpc.HTTPServer')
 
     def __init__(
             self,

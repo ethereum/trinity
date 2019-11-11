@@ -4,41 +4,35 @@ from abc import (
 )
 from argparse import (
     ArgumentParser,
-    Namespace,
     _SubParsersAction,
 )
 import asyncio
 from typing import (
-    Any,
     AsyncIterator,
-    Dict,
-    NamedTuple,
 )
 
 from async_generator import asynccontextmanager
 
 from lahja.base import EndpointAPI
 
-from trinity.config import (
-    TrinityConfig
-)
-
-
-class TrinityBootInfo(NamedTuple):
-    args: Namespace
-    trinity_config: TrinityConfig
-    boot_kwargs: Dict[str, Any] = None
+from trinity.boot_info import TrinityBootInfo
 
 
 class BaseComponentAPI(ABC):
-    name: str
-
     @classmethod
     @abstractmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
         """
-        Give the component a chance to amend the Trinity CLI argument parser. This hook is called
-        before :meth:`~trinity.extensibility.component.BaseComponent.on_ready`
+        Give the component a chance to amend the Trinity CLI argument parser.
+        """
+        ...
+
+    @classmethod
+    @abstractmethod
+    def validate_cli(cls, boot_info: TrinityBootInfo) -> None:
+        """
+        Give the component a chance to perform any validation that should be
+        run prior to being run or checking if it should be enabled.
         """
         ...
 
@@ -48,7 +42,9 @@ class BaseCommandComponent(BaseComponentAPI):
     Component base class for implement a new CLI command that is intended to
     take over the main process.
     """
-    pass
+    @classmethod
+    def validate_cli(cls, boot_info: TrinityBootInfo) -> None:
+        pass
 
 
 class ApplicationComponentAPI(BaseComponentAPI):
@@ -56,6 +52,8 @@ class ApplicationComponentAPI(BaseComponentAPI):
     Component API for components which augment or add functionality to the
     application.
     """
+    name: str
+
     @abstractmethod
     def __init__(self, trinity_boot_info: TrinityBootInfo, endpoint: EndpointAPI) -> None:
         ...
@@ -80,6 +78,10 @@ class BaseApplicationComponent(BaseComponentAPI):
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+        pass
+
+    @classmethod
+    def validate_cli(cls, boot_info: TrinityBootInfo) -> None:
         pass
 
 

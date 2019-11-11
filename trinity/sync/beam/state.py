@@ -496,7 +496,7 @@ class BeamDownloader(Service, PeerSubscriber):
             self._total_timeouts += 1
             return tuple()
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         """
         Request all nodes in the queue, running indefinitely
         """

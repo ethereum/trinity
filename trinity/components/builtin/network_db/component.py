@@ -8,10 +8,10 @@ from typing import Iterable
 from asyncio_run_in_process import open_in_process
 from sqlalchemy.orm import Session
 
-from eth_utils import to_tuple
+from eth_utils import to_tuple, get_extended_debug_logger
 
 from p2p.asyncio_service import Manager
-from p2p.service import BaseService
+from p2p.service import ServiceAPI
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
@@ -52,6 +52,7 @@ from .eth1_peer_db.tracker import (
 
 class ClearNetworkDBComponent(BaseCommandComponent):
     name = "Clear Network Database"
+    logger = get_extended_debug_logger('trinity.components.network_db.ClearNetworkDBComponent')
 
     @classmethod
     def configure_parser(cls,
@@ -66,14 +67,13 @@ class ClearNetworkDBComponent(BaseCommandComponent):
 
     @classmethod
     def clear_node_db(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        logger = cls.get_logger()
         db_path = get_networkdb_path(trinity_config)
 
         if db_path.exists():
-            logger.info("Removing network database at: %s", db_path.resolve())
+            cls.logger.info("Removing network database at: %s", db_path.resolve())
             db_path.unlink()
         else:
-            logger.info("No network database found at: %s", db_path.resolve())
+            cls.logger.info("No network database found at: %s", db_path.resolve())
 
 
 class NetworkDBComponent(BaseApplicationComponent):
@@ -134,10 +134,10 @@ class NetworkDBComponent(BaseApplicationComponent):
 
     @property
     def is_enabled(self) -> bool:
-        return not self.boot_info.args.disable_networkdb_component
+        return not self._boot_info.args.disable_networkdb_component
 
     async def run(self) -> None:
-        network_db_service = NetworkDBService(self.boot_info, self.name)
+        network_db_service = NetworkDBService(self._boot_info, self.name)
 
         async with open_in_process(Manager.run_service, network_db_service) as proc:
             await proc.wait()
@@ -151,7 +151,7 @@ class NetworkDBService(ComponentService):
             self.logger.exception(f"Unrecoverable error in Network Component: {err}")
         else:
             for service in tracker_services:
-                self.run_daemon_child_service(service)
+                self.manager.run_daemon_child_service(service)
 
     _session: Session = None
 
@@ -228,7 +228,7 @@ class NetworkDBService(ComponentService):
         )
 
     @to_tuple
-    def _get_services(self) -> Iterable[BaseService]:
+    def _get_services(self) -> Iterable[ServiceAPI]:
         if self.boot_info.args.disable_blacklistdb:
             # Allow this component to be disabled for extreme cases such as the
             # user swapping in an equivalent experimental version.

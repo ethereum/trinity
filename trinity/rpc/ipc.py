@@ -8,12 +8,8 @@ from typing import (
     Tuple,
 )
 
+from eth_utils import get_extended_debug_logger
 from eth_utils.toolz import curry
-
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
 
 from p2p.service import Service
 from trinity.rpc.main import (
@@ -25,7 +21,6 @@ MAXIMUM_REQUEST_BYTES = 10000
 
 @curry
 async def connection_handler(execute_rpc: Callable[[Any], Any],
-                             cancel_token: CancelToken,
                              reader: asyncio.StreamReader,
                              writer: asyncio.StreamWriter) -> None:
     """
@@ -34,11 +29,9 @@ async def connection_handler(execute_rpc: Callable[[Any], Any],
     logger = logging.getLogger('trinity.rpc.ipc')
 
     try:
-        await connection_loop(execute_rpc, reader, writer, logger, cancel_token),
+        await connection_loop(execute_rpc, reader, writer, logger),
     except (ConnectionResetError, asyncio.IncompleteReadError):
         logger.debug("Client closed connection")
-    except OperationCancelled:
-        logger.debug("CancelToken triggered")
     except Exception:
         logger.exception("Unrecognized exception while handling requests")
     finally:
@@ -48,22 +41,21 @@ async def connection_handler(execute_rpc: Callable[[Any], Any],
 async def connection_loop(execute_rpc: Callable[[Any], Any],
                           reader: asyncio.StreamReader,
                           writer: asyncio.StreamWriter,
-                          logger: logging.Logger,
-                          cancel_token: CancelToken) -> None:
+                          logger: logging.Logger) -> None:
     # TODO: we should look into using an io.StrinIO here for more efficient
     # writing to the end of the string.
     raw_request = ''
     while True:
         request_bytes = b''
         try:
-            request_bytes = await cancel_token.cancellable_wait(reader.readuntil(b'}'))
+            request_bytes = await reader.readuntil(b'}')
         except asyncio.LimitOverrunError as e:
             logger.info("Client request was too long. Erasing buffer and restarting...")
-            request_bytes = await cancel_token.cancellable_wait(reader.read(e.consumed))
-            await cancel_token.cancellable_wait(write_error(
+            request_bytes = await reader.read(e.consumed)
+            await write_error(
                 writer,
                 f"reached limit: {e.consumed} bytes, starting with '{request_bytes[:20]}'",
-            ))
+            )
             continue
 
         raw_request += request_bytes.decode()
@@ -71,9 +63,7 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
         bad_prefix, raw_request = strip_non_json_prefix(raw_request)
         if bad_prefix:
             logger.info("Client started request with non json data: %r", bad_prefix)
-            await cancel_token.cancellable_wait(
-                write_error(writer, 'Cannot parse json: ' + bad_prefix),
-            )
+            await write_error(writer, f'Cannot parse json: {bad_prefix}')
 
         try:
             request = json.loads(raw_request)
@@ -87,22 +77,18 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
 
         if not request:
             logger.debug("Client sent empty request")
-            await cancel_token.cancellable_wait(
-                write_error(writer, 'Invalid Request: empty'),
-            )
+            await write_error(writer, 'Invalid Request: empty')
             continue
 
         try:
             result = await execute_rpc(request)
         except Exception as e:
             logger.exception("Unrecognized exception while executing RPC")
-            await cancel_token.cancellable_wait(
-                write_error(writer, "unknown failure: " + str(e)),
-            )
+            await write_error(writer, f"unknown failure: {e}")
         else:
             writer.write(result.encode())
 
-        await cancel_token.cancellable_wait(writer.drain())
+        await writer.drain()
 
 
 def strip_non_json_prefix(raw_request: str) -> Tuple[str, str]:
@@ -124,6 +110,8 @@ class IPCServer(Service):
     rpc = None
     server = None
 
+    logger = get_extended_debug_logger('trinity.rpc.IPCServer')
+
     def __init__(
             self,
             rpc: RPCServer,
@@ -133,9 +121,8 @@ class IPCServer(Service):
 
     async def run(self) -> None:
         self.server = await asyncio.start_unix_server(
-            connection_handler(self.rpc.execute, self.cancel_token),
+            connection_handler(self.rpc.execute),
             str(self.ipc_path),
-            loop=self.get_event_loop(),
             limit=MAXIMUM_REQUEST_BYTES,
         )
         self.logger.info('IPC started at: %s', self.ipc_path.resolve())

@@ -1,19 +1,16 @@
 import asyncio
-from argparse import ArgumentParser, Namespace
 import argcomplete
 import logging
-import multiprocessing
 import os
 import signal
 from typing import (
-    Any,
-    Callable,
-    Dict,
-    Iterable,
     Sequence,
     Tuple,
     Type,
+    TYPE_CHECKING,
 )
+
+from p2p.service import AsyncioManager
 
 from trinity.exceptions import (
     AmbigiousFileSystem,
@@ -31,17 +28,13 @@ from trinity.config import (
     BaseAppConfig,
     TrinityConfig,
 )
-from trinity.event_bus import ComponentManagerService
 from trinity.extensibility import (
-    BaseComponent,
+    ApplicationComponentAPI,
+    BaseComponentAPI,
     TrinityBootInfo,
 )
 from trinity.network_configurations import (
     PRECONFIGURED_NETWORKS,
-)
-from trinity._utils.ipc import (
-    kill_process_gracefully,
-    remove_dangling_ipc_files,
 )
 from trinity._utils.logging import (
     enable_warnings_by_default,
@@ -49,13 +42,13 @@ from trinity._utils.logging import (
     setup_trinity_stderr_logging,
     setup_trinity_file_and_queue_logging,
 )
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
 from trinity._utils.version import (
     construct_trinity_client_identifier,
     is_prerelease,
 )
+
+if TYPE_CHECKING:
+    from .main import TrinityMain  # noqa: F401
 
 
 TRINITY_HEADER = "\n".join((
@@ -82,21 +75,12 @@ TRINITY_AMBIGIOUS_FILESYSTEM_INFO = (
 )
 
 
-BootFn = Callable[[
-    Namespace,
-    TrinityConfig,
-    Dict[str, Any],
-    logging.handlers.QueueListener,
-    logging.Logger
-], Tuple[multiprocessing.Process, ...]]
-
-
-def main_entry(trinity_boot: BootFn,
+def main_entry(trinity_service_class: Type['TrinityMain'],
                app_identifier: str,
-               components: Tuple[Type[BaseComponent], ...],
+               component_types: Tuple[Type[BaseComponentAPI], ...],
                sub_configs: Sequence[Type[BaseAppConfig]]) -> None:
-    for component_type in components:
-        component_type.configure_parser(parser, subparser)
+    for component_cls in component_types:
+        component_cls.configure_parser(parser, subparser)
 
     argcomplete.autocomplete(parser)
 
@@ -183,12 +167,13 @@ def main_entry(trinity_boot: BootFn,
         *(args.log_levels or {}).values()
     )
 
-    extra_kwargs = {
-        'log_queue': log_queue,
-        'log_level': min_configured_log_level,
-        'log_levels': args.log_levels if args.log_levels else {},
-        'profile': args.profile,
-    }
+    boot_info = TrinityBootInfo(
+        args=args,
+        trinity_config=trinity_config,
+        log_queue=log_queue,
+        log_level=min_configured_log_level,
+        logger_levels=(args.log_levels if args.log_levels else {}),
+    )
 
     # Components can provide a subcommand with a `func` which does then control
     # the entire process from here.
@@ -196,42 +181,30 @@ def main_entry(trinity_boot: BootFn,
         args.func(args, trinity_config)
         return
 
+    # This is a hack for the eth2.0 interop component
     if hasattr(args, 'munge_func'):
         args.munge_func(args, trinity_config)
 
-    processes = trinity_boot(
-        args,
-        trinity_config,
-        extra_kwargs,
-        listener,
-        stderr_logger,
+    application_component_types = tuple(
+        component_cls
+        for component_cls
+        in component_types
+        if issubclass(component_cls, ApplicationComponentAPI)
     )
 
-    def kill_trinity_with_reason(reason: str) -> None:
-        kill_trinity_gracefully(
-            trinity_config,
-            stderr_logger,
-            processes,
-            component_manager_service,
-            reason=reason
-        )
-
-    boot_info = TrinityBootInfo(args, trinity_config, extra_kwargs)
-    component_manager_service = ComponentManagerService(
-        boot_info,
-        components,
-        kill_trinity_with_reason
+    trinity_service = trinity_service_class(
+        boot_info=boot_info,
+        component_types=application_component_types,
+        listener=listener,
     )
+
+    manager = AsyncioManager(trinity_service)
+
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGTERM, manager.cancel)
 
     try:
-        loop = asyncio.get_event_loop()
-        asyncio.ensure_future(exit_with_services(component_manager_service))
-        asyncio.ensure_future(component_manager_service.run())
-        loop.add_signal_handler(signal.SIGTERM, lambda: kill_trinity_with_reason("SIGTERM"))
-        loop.run_forever()
-        loop.close()
-    except KeyboardInterrupt:
-        kill_trinity_with_reason("CTRL+C / Keyboard Interrupt")
+        loop.run_until_complete(manager.run())
     finally:
         if trinity_config.trinity_tmp_root_dir:
             import shutil
@@ -244,35 +217,3 @@ def display_launch_logs(trinity_config: TrinityConfig) -> None:
     logger.info("Started main process (pid=%d)", os.getpid())
     logger.info(construct_trinity_client_identifier())
     logger.info("Trinity DEBUG log file is created at %s", str(trinity_config.logfile_path))
-
-
-def kill_trinity_gracefully(trinity_config: TrinityConfig,
-                            logger: logging.Logger,
-                            processes: Iterable[multiprocessing.Process],
-                            component_manager_service: ComponentManagerService,
-                            reason: str=None) -> None:
-    # When a user hits Ctrl+C in the terminal, the SIGINT is sent to all processes in the
-    # foreground *process group*, so both our networking and database processes will terminate
-    # at the same time and not sequentially as we'd like. That shouldn't be a problem but if
-    # we keep getting unhandled BrokenPipeErrors/ConnectionResetErrors like reported in
-    # https://github.com/ethereum/py-evm/issues/827, we might want to change the networking
-    # process' signal handler to wait until the DB process has terminated before doing its
-    # thing.
-    # Notice that we still need the kill_process_gracefully() calls here, for when the user
-    # simply uses 'kill' to send a signal to the main process, but also because they will
-    # perform a non-gracefull shutdown if the process takes too long to terminate.
-
-    hint = f"({reason})" if reason else f""
-    logger.info('Shutting down Trinity %s', hint)
-    component_manager_service.cancel_nowait()
-    for process in processes:
-        # Our sub-processes will have received a SIGINT already (see comment above), so here we
-        # wait 2s for them to finish cleanly, and if they fail we kill them for real.
-        process.join(2)
-        if process.is_alive():
-            kill_process_gracefully(process, logger)
-        logger.info('%s process (pid=%d) terminated', process.name, process.pid)
-
-    remove_dangling_ipc_files(logger, trinity_config.ipc_dir)
-
-    ArgumentParser().exit(message=f"Trinity shutdown complete {hint}\n")

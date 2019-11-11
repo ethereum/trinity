@@ -194,7 +194,7 @@ class BeamSyncer(Service):
         self.manager.run_daemon_child_service(self._data_hunter)
 
         # Only persist headers at start
-        manager = self.run_child_service(self._header_persister)
+        manager = self.manager.run_child_service(self._header_persister)
         await manager.wait_stopped()
         # When header store exits, we have caught up
 
@@ -378,6 +378,8 @@ class HeaderOnlyPersist(Service):
     """
     Store all headers returned by the header syncer, until the target is reached, then exit.
     """
+    logger = get_extended_debug_logger('trinity.sync.beam.HeaderOnlyPersist')
+
     def __init__(self,
                  header_syncer: ETHHeaderChainSyncer,
                  db: BaseAsyncHeaderDB,
@@ -402,11 +404,9 @@ class HeaderOnlyPersist(Service):
             if exited:
                 break
 
-            new_canon_headers, old_canon_headers = await self.wait(
-                self._db.coro_persist_header_chain(headers)
-            )
+            new_canon_headers, old_canon_headers = await self._db.coro_persist_header_chain(headers)
 
-            head = await self.wait(self._db.coro_get_canonical_head())
+            head = await self._db.coro_get_canonical_head()
 
             self.logger.info(
                 "Imported %d headers in %0.2f seconds, new head: %s",
@@ -471,8 +471,8 @@ class HeaderOnlyPersist(Service):
                 # We have not reached the header syncer's target, continue normally
                 return False
 
-        new_canon_headers, old_canon_headers = await self.wait(
-            self._db.coro_persist_header_chain(persist_headers)
+        new_canon_headers, old_canon_headers = await self._db.coro_persist_header_chain(
+            persist_headers,
         )
 
         if persist_headers:
@@ -490,7 +490,7 @@ class HeaderOnlyPersist(Service):
             self.logger.debug("Final header import before checkpoint: None")
 
         self._final_headers = final_headers
-        self.cancel_nowait()
+        self.manager.cancel()
 
         return True
 
@@ -514,6 +514,8 @@ class BeamBlockImporter(BaseBlockImporter, Service):
     It independently runs other state preloads, like the accounts for the
     block transactions.
     """
+    logger = get_extended_debug_logger('trinity.sync.beam.BlockImporter')
+
     def __init__(
             self,
             chain: AsyncChainAPI,
@@ -570,7 +572,7 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             parent_state_root: Hash32,
             lagging: bool = True) -> None:
 
-        self.run_task(self._preview_address_load(header, parent_state_root, transactions))
+        self.manager.run_task(self._preview_address_load, header, parent_state_root, transactions)
 
         # This is a hack, so that preview executions can load ancestor block-hashes
         self._db[header.hash] = rlp.encode(header)

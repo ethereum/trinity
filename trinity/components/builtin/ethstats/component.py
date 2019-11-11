@@ -1,5 +1,4 @@
 import os
-import asyncio
 import platform
 
 from argparse import (
@@ -7,20 +6,23 @@ from argparse import (
     _SubParsersAction,
 )
 
-from lahja.base import EndpointAPI
+from asyncio_run_in_process import run_in_process
+
+from eth_utils import (
+    ValidationError,
+)
+
+from p2p.service import AsyncioManager
 
 from trinity.constants import (
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID,
 )
-from trinity.events import ShutdownRequest
 from trinity.extensibility import (
-    AsyncioIsolatedComponent,
+    BaseApplicationComponent,
+    TrinityBootInfo,
+    ComponentService,
 )
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
-
 from trinity.components.builtin.ethstats.ethstats_service import (
     EthstatsService,
 )
@@ -31,19 +33,18 @@ DEFAULT_SERVERS_URLS = {
 }
 
 
-class EthstatsComponent(AsyncioIsolatedComponent):
+def _get_default_server_url(network_id: int) -> str:
+    return DEFAULT_SERVERS_URLS.get(network_id, '')
+
+
+class EthstatsComponent(BaseApplicationComponent):
     server_url: str
     server_secret: str
     stats_interval: int
     node_id: str
     node_contact: str
 
-    @property
-    def name(self) -> str:
-        return 'Ethstats'
-
-    def get_default_server_url(self) -> str:
-        return DEFAULT_SERVERS_URLS.get(self.boot_info.trinity_config.network_id, '')
+    name = 'Ethstats'
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -81,52 +82,59 @@ class EthstatsComponent(AsyncioIsolatedComponent):
             default=10,
         )
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        args = self.boot_info.args
+    @property
+    def is_enabled(self) -> bool:
+        return bool(self._boot_info.args.ethstats)
 
-        if not args.ethstats:
-            return
+    @classmethod
+    def validate_cli(self, boot_info: TrinityBootInfo) -> None:
+        args = self._boot_info.args
+        has_server_url = (
+            args.ethstats_server_url or
+            _get_default_server_url(self._boot_info.trinity_config.network_id)
+        )
 
-        if not (args.ethstats_server_url or self.get_default_server_url()):
-            self.logger.error(
+        if not has_server_url:
+            raise ValidationError(
                 'You must provide ethstats server url using the `--ethstats-server-url`'
             )
-            manager_eventbus.broadcast_nowait(ShutdownRequest("Missing EthStats Server URL"))
-            return
-
-        if not args.ethstats_server_secret:
-            self.logger.error(
+        elif not args.ethstats_server_secret:
+            raise ValidationError(
                 'You must provide ethstats server secret using `--ethstats-server-secret`'
             )
-            manager_eventbus.broadcast_nowait(ShutdownRequest("Missing EthStats Server Secret"))
-            return
+
+    async def run(self) -> None:
+        service = EthstatsComponentService(self._boot_info, self.name)
+
+        await run_in_process(AsyncioManager.run_service, service)
+
+
+class EthstatsComponentService(ComponentService):
+
+    async def run_component_service(self) -> None:
+        args = self.boot_info.args
+
+        server_url: str
 
         if (args.ethstats_server_url):
-            self.server_url = args.ethstats_server_url
+            server_url = args.ethstats_server_url
         else:
-            self.server_url = self.get_default_server_url()
+            server_url = _get_default_server_url(self.boot_info.trinity_config.network_id)
 
-        self.server_secret = args.ethstats_server_secret
+        server_secret = args.ethstats_server_secret
 
-        self.node_id = args.ethstats_node_id
-        self.node_contact = args.ethstats_node_contact
-        self.stats_interval = args.ethstats_interval
+        node_id = args.ethstats_node_id
+        node_contact = args.ethstats_node_contact
+        stats_interval = args.ethstats_interval
 
-        self.start()
-
-    def do_start(self) -> None:
         service = EthstatsService(
             self.boot_info,
             self.event_bus,
-            self.server_url,
-            self.server_secret,
-            self.node_id,
-            self.node_contact,
-            self.stats_interval,
+            server_url,
+            server_secret,
+            node_id,
+            node_contact,
+            stats_interval,
         )
 
-        asyncio.ensure_future(exit_with_services(
-            service,
-            self._event_bus_service,
-        ))
-        asyncio.ensure_future(service.run())
+        self.manager.run_daemon_child_service(service)
