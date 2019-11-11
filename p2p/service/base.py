@@ -2,7 +2,7 @@ import logging
 
 from .abc import ManagerAPI, ServiceAPI
 from types import TracebackType
-from typing import Any, Awaitable, Callable, List, Optional, Type, Tuple
+from typing import Any, Awaitable, Callable, List, Optional, Type, TypeVar, Tuple
 
 
 class Service(ServiceAPI):
@@ -27,6 +27,16 @@ def as_service(service_fn: LogicFnType) -> Type[ServiceAPI]:
     _Service.__name__ = service_fn.__name__
     _Service.__doc__ = service_fn.__doc__
     return _Service
+
+TReturn TypeVar("TReturn")
+TFunc = TypeVar("TFunc", bound=Callable[..., TReturn])
+
+
+def external_api(func: TFunc) -> TFunc:
+    @functools.wraps(func)
+    def inner(self, *args: Any) -> TReturn:
+        ...
+    return inner
 
 
 class BaseManager(ManagerAPI):

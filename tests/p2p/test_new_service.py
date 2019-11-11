@@ -8,6 +8,8 @@ from p2p.service import (
     as_service,
     AsyncioManager,
     background_asyncio_service,
+    external_api,
+    ServiceCancelled,
 )
 
 
@@ -377,3 +379,17 @@ async def test_asyncio_service_with_async_generator():
     async with background_asyncio_service(ServiceTest()) as manager:
         await is_within_agen.wait()
         manager.cancel()
+
+
+@pytest.mark.asyncio
+async def test_asyncio_service_external_api_raises_ServiceCancelled():
+    class ServiceTest(Service):
+        @external_api
+        async def get_7(self):
+            return 7
+
+    service = ServiceTest()
+    async with background_asyncio_service(service) as manager:
+        manager.cancel()
+        with pytest.raises(ServiceCancelled):
+            await service.get_7()
