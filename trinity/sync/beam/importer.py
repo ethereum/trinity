@@ -39,6 +39,7 @@ from eth_utils import (
     ExtendedDebugLogger,
     ValidationError,
     get_extended_debug_logger,
+    humanize_hash,
     humanize_seconds,
 )
 from eth_utils.toolz import (
@@ -457,14 +458,16 @@ def partial_import_block(beam_chain: BeamChain,
         else:
             # Collect witness trie node hashes needed to import block
             witness_key = b'witnesshashes:' + block.hash
-            if witness_key not in self._db:
-                self.logger.warning("Witness data for block %s not found", humanize_hash(block.hash))
+            db = beam_chain.chaindb.db
+            if witness_key not in db:
+                beam_chain.logger.warning("Witness data for block %s not found", humanize_hash(block.hash))
                 witness_hashes = ()
             else:
-                witness_hashes_concat = beam_chain.chaindb.db[witness_key]
+                witness_hashes_concat = db[witness_key]
                 witness_hashes = tuple(slice_hashes(witness_hashes_concat))
 
             import_time = t.elapsed
+
             vm = beam_chain.get_first_vm()
             beam_stats = vm.get_beam_stats()
             beam_chain.logger.debug(

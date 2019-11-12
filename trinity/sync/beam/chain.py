@@ -598,7 +598,7 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
             block: BaseBlock) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
         self.logger.info("Beam importing %s (%d txns) ...", block.header, len(block.transactions))
 
-        self.run_task(self._load_witness_hashes(header, urgent=True))
+        self.run_task(self._load_witness_hashes(block.header, urgent=True))
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)
         new_account_nodes, collection_time = await self._load_address_state(
@@ -621,7 +621,9 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
             raise ValidationError(f"Requsted {block} to be imported, but ran {import_done.block}")
         self._blocks_imported += 1
         self._log_stats()
-        return import_done.result
+
+        reorg_info, _witness_metadata = import_done.result
+        return reorg_info
 
     async def preview_transactions(
             self,

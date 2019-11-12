@@ -30,6 +30,7 @@ from trinity.protocol.eth.commands import (
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.fh.commands import NewBlockWitnessHashes
 from trinity.protocol.fh.peer import FirehosePeer
+from trinity.protocol.fh.proto import FirehoseProtocol
 from trinity.sync.beam.constants import (
     GAP_BETWEEN_TESTS,
     NON_IDEAL_RESPONSE_PENALTY,
@@ -145,7 +146,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
         self._db = db
         self._peer_pool = peer_pool
 
-        self._waiting_peers = WaitingPeers[ETHPeer](NodeData, sort_key=_get_items_per_second)
+        self._waiting_peers = WaitingPeers[ETHPeer](NodeData)
 
         self._num_requests_by_peer = Counter()
 
@@ -158,7 +159,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
         buffer_size = 10000 * 200  # 10k hashes is high-end for typical block, 200 blocks would be very far behind
         self._witness_node_tasks = TaskQueue[Hash32](buffer_size, NodeDownloadTask.block_number.fget)
 
-    async def trigger_download(block_hash: Hash32, block_number: int, urgent: bool) -> None:
+    async def trigger_download(self, block_hash: Hash32, block_number: int, urgent: bool) -> None:
         """
         Identify witness for the related block, and add it to the download queue
         """
