@@ -43,9 +43,9 @@ if TYPE_CHECKING:
 
 class FirehoseHandshakeParams(NamedTuple):
     # TODO: replace genesis_hash with fork_id
-    genesis_hash: Hash32
-    network_id: int
     version: int
+    network_id: int
+    genesis_hash: Hash32
 
 
 class FirehoseProtocol(Protocol):

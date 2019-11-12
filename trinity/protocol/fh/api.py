@@ -14,6 +14,7 @@ from p2p.typing import Payload
 
 from .commands import (
     NewBlockWitnessHashes,
+    NewBlockWitnessHashesPayload,
 )
 from .constants import MAX_WITNESS_HISTORY_PER_PEER
 from .handshaker import FirehoseHandshakeReceipt
@@ -72,7 +73,7 @@ class FirehoseAPI(Application):
         """
         if self.witnesses.has_witness(header_hash):
             # TODO this is a neat place to check if a peer is giving us bad witness data
-            self.logger.warning("SKIP Sending %d hashes of witness to: %s", len(witness_hashes), self.connection)
+            self.logger.warning("SKIP Sending %d hashes of witness to: %s", len(node_hashes), self.connection)
             # remove witness from history, as cleanup
             self.witnesses.pop_node_hashes(header_hash)
         else:

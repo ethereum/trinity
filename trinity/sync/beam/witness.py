@@ -39,19 +39,8 @@ from trinity.sync.common.peers import WaitingPeers
 
 from .queen import QueenTrackerMixin
 
-### dups? unnecessary?
-import asyncio
-from collections import Counter
 from concurrent.futures import CancelledError
 import itertools
-import typing
-from typing import (
-    FrozenSet,
-    Iterable,
-    Set,
-    Tuple,
-    Type,
-)
 
 from lahja import EndpointAPI
 
@@ -62,17 +51,7 @@ from eth_utils import (
 )
 from eth_typing import (
     Address,
-    Hash32,
 )
-
-from eth.abc import AtomicDatabaseAPI
-
-from cancel_token import CancelToken, OperationCancelled
-
-from p2p.abc import CommandAPI
-from p2p.exceptions import BaseP2PError, PeerConnectionLost
-from p2p.peer import BasePeer, PeerSubscriber
-from p2p.service import BaseService
 
 from trie import HexaryTrie
 from trie.exceptions import MissingTrieNode
@@ -82,13 +61,9 @@ from trinity._utils.timer import Timer
 from trinity.protocol.common.typing import (
     NodeDataBundles,
 )
-from trinity.protocol.eth.commands import (
-    NodeData,
-)
 from trinity.protocol.eth.constants import (
     MAX_STATE_FETCH,
 )
-from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.eth import (
     constants as eth_constants,
 )
@@ -97,8 +72,6 @@ from trinity.protocol.fh.events import (
 )
 
 from trinity.sync.common.events import StatelessBlockImportDone
-from trinity.sync.common.peers import WaitingPeers
-
 
 
 class NodeDownloadTask(NamedTuple):
@@ -219,12 +192,12 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
                 self._witness_node_tasks.get(eth_constants.MAX_STATE_FETCH),
             )
 
-            self.run_task(self._make_request(peer, urgent_hash_tasks, block_number, batch_id))
+            self.run_task(self._make_request(peer, urgent_hash_tasks, batch_id))
 
-    async def _make_request(self, peer: ETHPeer, request_hashes: Tuple[Hash32, ...], batch_id: int) -> None:
+    async def _make_request(self, peer: ETHPeer, request_tasks: Tuple[NodeDownloadTask, ...], batch_id: int) -> None:
         self._num_requests_by_peer[peer] += 1
         try:
-            nodes = await peer.eth_api.get_node_data(request_hashes)
+            nodes = await peer.eth_api.get_node_data(tuple(set(task.node_hash for task in request_tasks)))
         except asyncio.TimeoutError:
             self._witness_node_tasks.complete(batch_id, ())
             self.call_later(NON_IDEAL_RESPONSE_PENALTY, self._waiting_peers.put_nowait, peer)
@@ -241,7 +214,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
 
             node_lookup = dict(nodes)
             completed_tasks = tuple(
-                task for task in request_hashes if task.node_hash in node_lookup
+                task for task in request_tasks if task.node_hash in node_lookup
             )
             self._witness_node_tasks.complete(batch_id, completed_tasks)
             self._insert_results(tuple(node_lookup.keys()), node_lookup)

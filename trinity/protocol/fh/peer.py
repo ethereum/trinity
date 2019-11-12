@@ -51,7 +51,7 @@ from trinity.protocol.eth.proto import (
 
 from .api import FirehoseAPI
 from .handshaker import FirehoseHandshaker
-from .proto import FirehoseProtocol
+from .proto import FirehoseProtocol, FirehoseHandshakeParams
 
 
 class FirehosePeer(ETHPeer):
@@ -85,10 +85,9 @@ class FirehosePeerFactory(ETHPeerFactory):
             )
 
         handshake_params = FirehoseHandshakeParams(
-            head_hash=eth_params.head_hash,
-            genesis_hash=eth_params.genesis_hash,
-            network_id=eth_params.network_id,
             version=FirehoseProtocol.version,
+            network_id=eth_params.network_id,
+            genesis_hash=eth_params.genesis_hash,
         )
         return handshakers + (
             FirehoseHandshaker(handshake_params),

@@ -1,30 +1,50 @@
 from rlp import sedes
+from typing import (
+    NamedTuple,
+    Tuple,
+)
 
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransactionFields
 
+from eth_typing import Hash32
+
+from p2p.commands import BaseCommand, RLPCodec
+
 from trinity.protocol.common.commands import SnappyCommand
 from trinity.rlp.block_body import BlockBody
-from trinity.rlp.sedes import HashOrNumber
+from trinity.rlp.sedes import HashOrNumber, hash_sedes
+
+STATUS_STRUCTURE = sedes.List((
+    sedes.big_endian_int,
+    sedes.big_endian_int,
+    hash_sedes,
+))
 
 
-hash_sedes = sedes.Binary(min_length=32, max_length=32)
+class StatusPayload(NamedTuple):
+    version: int
+    network_id: int
+    genesis_hash: Hash32
 
 
-class Status(SnappyCommand):
-    _cmd_id = 0
-    structure = (
-        ('protocol_version', sedes.big_endian_int),
-        ('network_id', sedes.big_endian_int),
-        ('best_hash', hash_sedes),
-        ('genesis_hash', hash_sedes),
+class Status(BaseCommand[StatusPayload]):
+    protocol_command_id = 0
+    serialization_codec = RLPCodec(
+        sedes=STATUS_STRUCTURE,
+        process_inbound_payload_fn=lambda args: StatusPayload(*args),
     )
 
 
-class NewBlockWitnessHashes(SnappyCommand):
-    _cmd_id = 1
-    structure = (
-        ('block_hash', hash_sedes),
-        ('node_hashes', sedes.CountableList(hash_sedes)),
+class NewBlockWitnessHashesPayload(NamedTuple):
+    block_hash: Hash32
+    node_hashes: Tuple[Hash32, ...]
+
+
+class NewBlockWitnessHashes(BaseCommand[NewBlockWitnessHashesPayload]):
+    protocol_command_id = 1
+    serialization_codec = RLPCodec(
+        sedes=sedes.List((hash_sedes, sedes.CountableList(hash_sedes))),
+        process_inbound_payload_fn=lambda args: NewBlockWitnessHashesPayload(*args),
     )
