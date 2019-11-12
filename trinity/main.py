@@ -110,7 +110,10 @@ class TrinityMain(Service):
 
         self.ensure_dirs()
 
-        async with open_in_process(self.run_database_process, trinity_config, LevelDB) as db_proc:
+        import multiprocessing
+        multiprocessing.set_start_method('spawn')
+
+        async with open_in_process(self.run_database_process, self.boot_info, LevelDB) as db_proc:
             self.logger.debug("started database process")
             await loop.run_in_executor(None, wait_for_ipc, trinity_config.database_ipc_path)
             self.logger.debug("database process IPC path available")
