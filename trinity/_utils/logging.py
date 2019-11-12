@@ -3,7 +3,6 @@ import copy
 import errno
 import logging
 from logging import (
-    Logger,
     StreamHandler
 )
 from logging.handlers import (
@@ -17,12 +16,9 @@ import threading
 from typing import (
     Dict,
     Iterator,
-    Tuple,
 )
 
 import cloudpickle
-
-from eth_utils import get_extended_debug_logger
 
 from trinity._utils.shellart import (
     bold_red,
@@ -236,30 +232,30 @@ LOG_FORMATTER = TrinityLogFormatter(
 )
 
 
-def setup_log_levels(log_levels: Dict[str, int]) -> None:
+def set_logger_levels(log_levels: Dict[str, int],
+                      *handlers: logging.Handler) -> None:
     for name, level in log_levels.items():
 
         # The root logger is configured separately
         if name is None:
             continue
 
-        handler_stream = logging.StreamHandler(sys.stderr)
-        handler_stream.setLevel(level)
-        handler_stream.setFormatter(LOG_FORMATTER)
-
         logger = logging.getLogger(name)
         logger.propagate = False
         logger.setLevel(level)
-        logger.addHandler(handler_stream)
+
+        for handler in handlers:
+            handler.setLevel(level)
+            handler.setFormatter(LOG_FORMATTER)
+
+            logger.addHandler(handler)
 
 
-def setup_trinity_stderr_logging(level: int=None,
-                                 ) -> Tuple[Logger, StreamHandler]:
+def setup_stderr_logging(level: int=None) -> StreamHandler:
 
     if level is None:
         level = logging.INFO
     logger = logging.getLogger()
-    logger.setLevel(level)
 
     handler_stream = logging.StreamHandler(sys.stderr)
     handler_stream.setLevel(level)
@@ -268,22 +264,17 @@ def setup_trinity_stderr_logging(level: int=None,
 
     logger.addHandler(handler_stream)
 
-    logger.debug('Logging initialized: PID=%s', os.getpid())
+    logger.debug('Logging initialized for stderr: PID=%s', os.getpid())
 
     return logger, handler_stream
 
 
-def setup_trinity_file_and_queue_logging(
-        logger: Logger,
-        handler_stream: StreamHandler,
+def setup_file_logging(
         logfile_path: Path,
-        level: int=None) -> Tuple[Logger, 'Queue[str]', QueueListener]:
-    from .mp import ctx
-
+        level: int=None) -> RotatingFileHandler:
     if level is None:
         level = logging.DEBUG
-
-    log_queue = ctx.Queue()
+    logger = logging.getLogger()
 
     handler_file = RotatingFileHandler(
         str(logfile_path),
@@ -295,27 +286,22 @@ def setup_trinity_file_and_queue_logging(
     handler_file.setFormatter(LOG_FORMATTER)
 
     logger.addHandler(handler_file)
-    logger.setLevel(level)
 
-    listener = QueueListener(
-        log_queue,
-        handler_stream,
-        handler_file,
-        respect_handler_level=True,
-    )
-
-    return logger, log_queue, listener
+    return handler_file
 
 
-def setup_queue_logging(log_queue: 'Queue[str]', level: int) -> None:
-    queue_handler = QueueHandler(log_queue)
+def setup_queue_logging(ipc_path: Path, level: int) -> None:
+    queue_handler = QueueHandler.connect(ipc_path)
     queue_handler.setLevel(level)
 
-    logger = get_extended_debug_logger('')
+    logger = logging.getLogger()
     logger.addHandler(queue_handler)
-    logger.setLevel(level)
 
-    logger.debug('Logging initialized: PID=%s', os.getpid())
+    logger.debug(
+        'Logging initialized for file %s: PID=%s',
+        ipc_path.resolve(),
+        os.getpid(),
+    )
 
 
 def _set_environ_if_missing(name: str, val: str) -> None:

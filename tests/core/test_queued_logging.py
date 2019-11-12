@@ -1,7 +1,6 @@
 import tempfile
 import logging
 from pathlib import Path
-import sys
 
 from asyncio_run_in_process import run_in_process
 
