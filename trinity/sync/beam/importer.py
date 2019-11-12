@@ -5,6 +5,7 @@ from operator import attrgetter
 from typing import (
     Any,
     Callable,
+    Iterable,
     Optional,
     Tuple,
     Type,

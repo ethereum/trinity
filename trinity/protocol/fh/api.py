@@ -1,4 +1,4 @@
-from typing import cast, Any, Dict, Tuple
+from typing import cast, Any, Dict, Sequence, Tuple
 
 from cached_property import cached_property
 
@@ -12,14 +12,10 @@ from p2p.logic import Application, CommandHandler
 from p2p.qualifiers import HasProtocol
 from p2p.typing import Payload
 
-from .commands import NewBlock
-from .constants import MAX_WITNESS_HISTORY_PER_PEER
-from .exchanges import (
-    GetBlockBodiesExchange,
-    GetBlockHeadersExchange,
-    GetNodeDataExchange,
-    GetReceiptsExchange,
+from .commands import (
+    NewBlockWitnessHashes,
 )
+from .constants import MAX_WITNESS_HISTORY_PER_PEER
 from .handshaker import FirehoseHandshakeReceipt
 from .proto import FirehoseProtocol
 

@@ -3,9 +3,11 @@ import asyncio
 from collections import Counter, defaultdict
 import typing
 from typing import (
+    Dict,
     FrozenSet,
     Iterable,
     List,
+    NamedTuple,
     Set,
     Tuple,
     Type,
@@ -27,6 +29,7 @@ from trinity.protocol.eth.commands import (
 )
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.fh.commands import NewBlockWitnessHashes
+from trinity.protocol.fh.peer import FirehosePeer
 from trinity.sync.beam.constants import (
     GAP_BETWEEN_TESTS,
     NON_IDEAL_RESPONSE_PENALTY,
@@ -88,11 +91,11 @@ from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.eth import (
     constants as eth_constants,
 )
-from trinity.protocol.fh import (
+from trinity.protocol.fh.events import (
     CreatedNewBlockWitnessHashes,
 )
 
-from trinity.sync.common.event import StatelessBlockImportDone
+from trinity.sync.common.events import StatelessBlockImportDone
 from trinity.sync.common.peers import WaitingPeers
 
 
@@ -103,7 +106,7 @@ class NodeDownloadTask(NamedTuple):
     block_number: int
 
     @classmethod
-    def nodes_at_block(cls, node_hashes: Iterable[Hash32], block_number: int) -> Tuple[NodeDownloadTask, ...]:
+    def nodes_at_block(cls, node_hashes: Iterable[Hash32], block_number: int) -> Tuple['NodeDownloadTask', ...]:
         return tuple(cls(node_hash, block_number) for node_hash in node_hashes)
 
 

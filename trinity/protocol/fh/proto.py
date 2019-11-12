@@ -33,25 +33,8 @@ from p2p.protocol import Protocol
 from trinity.rlp.block_body import BlockBody
 
 from .commands import (
-    BlockBodies,
-    BlockHeaders,
-    GetBlockBodies,
-    GetBlockHeaders,
-    GetNodeData,
-    GetReceipts,
-    NewBlock,
-    NewBlockHashes,
-    NodeData,
-    Receipts,
+    NewBlockWitnessHashes,
     Status,
-    Transactions,
-)
-from .events import (
-    SendBlockBodiesEvent,
-    SendBlockHeadersEvent,
-    SendNodeDataEvent,
-    SendReceiptsEvent,
-    SendTransactionsEvent,
 )
 
 if TYPE_CHECKING:

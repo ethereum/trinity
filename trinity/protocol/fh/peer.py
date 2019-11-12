@@ -45,23 +45,13 @@ from trinity.protocol.eth.peer import (
     ETHPeerPool,
 )
 from trinity.protocol.eth.proto import (
-    ETHProtocol,
     ETHHandshakeParams,
+    ETHProtocol,
 )
 
-from .api import ETHAPI
-from .commands import (
-    GetBlockHeaders,
-    GetBlockBodies,
-    GetReceipts,
-    GetNodeData,
-    NewBlock,
-    NewBlockHashes,
-    Transactions,
-)
-from .constants import MAX_HEADERS_FETCH
-from .proxy import ProxyETHAPI
-from .handshaker import ETHHandshaker
+from .api import FirehoseAPI
+from .handshaker import FirehoseHandshaker
+from .proto import FirehoseProtocol
 
 
 class FirehosePeer(ETHPeer):
