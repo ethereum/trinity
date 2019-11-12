@@ -8,8 +8,8 @@ from lahja import AsyncioEndpoint, ConnectionConfig
 from p2p.service import Service
 
 from trinity._utils.logging import (
-    setup_log_levels,
-    setup_queue_logging,
+    set_logger_levels,
+    setup_child_process_logging,
 )
 from trinity._utils.os import friendly_filename_or_url
 
@@ -34,11 +34,10 @@ class ComponentService(Service):
 
     async def run(self) -> None:
         # setup cross process logging
-        log_queue = self.boot_info.log_queue
         level = self.boot_info.log_level or logging.INFO
-        setup_queue_logging(log_queue, level)
+        setup_child_process_logging(self.boot_info.trinity_config.logging_ipc_path, level)
         if self.boot_info.args.log_levels:
-            setup_log_levels(self.boot_info.args.log_levels)
+            set_logger_levels(self.boot_info.args.log_levels)
 
         # setup the lahja endpoint
         self._connection_config = ConnectionConfig.from_name(

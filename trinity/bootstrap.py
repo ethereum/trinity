@@ -38,9 +38,10 @@ from trinity.network_configurations import (
 )
 from trinity._utils.logging import (
     enable_warnings_by_default,
-    setup_log_levels,
-    setup_trinity_stderr_logging,
-    setup_trinity_file_and_queue_logging,
+    set_logger_levels,
+    setup_file_logging,
+    setup_stderr_logging,
+    IPCListener,
 )
 from trinity._utils.version import (
     construct_trinity_client_identifier,
@@ -122,12 +123,11 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
         # this modifies the asyncio logger, but will be overridden by any custom settings below
         enable_warnings_by_default()
 
-    stderr_logger, handler_stream = setup_trinity_stderr_logging(
-        args.stderr_log_level or common_log_level
-    )
+    log_level_to_stderr = args.stderr_log_level or common_log_level
+    handler_stderr = setup_stderr_logging(level=log_level_to_stderr)
 
     if args.log_levels:
-        setup_log_levels(args.log_levels)
+        set_logger_levels(args.log_levels)
 
     try:
         trinity_config = TrinityConfig.from_parser_args(args, app_identifier, sub_configs)
@@ -151,26 +151,26 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
                 "inside the XDG_TRINITY_ROOT path"
             )
 
-    file_logger, log_queue, listener = setup_trinity_file_and_queue_logging(
-        stderr_logger,
-        handler_stream,
-        trinity_config.logfile_path,
-        args.file_log_level or common_log_level,
+    log_level_to_file = args.file_log_level or common_log_level
+    handler_file = setup_file_logging(
+        logfile_path=trinity_config.logfile_path,
+        level=log_level_to_file,
     )
 
     display_launch_logs(trinity_config)
 
     # compute the minimum configured log level across all configured loggers.
     min_configured_log_level = min(
-        stderr_logger.level,
-        file_logger.level,
+        handler_stderr.level,
+        handler_file.level,
         *(args.log_levels or {}).values()
     )
+
+    log_listener = IPCListener(handler_stderr, handler_file)
 
     boot_info = TrinityBootInfo(
         args=args,
         trinity_config=trinity_config,
-        log_queue=log_queue,
         log_level=min_configured_log_level,
         logger_levels=(args.log_levels if args.log_levels else {}),
     )
@@ -195,7 +195,7 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
     trinity_service = trinity_service_class(
         boot_info=boot_info,
         component_types=application_component_types,
-        listener=listener,
+        log_listener=log_listener,
     )
 
     manager = AsyncioManager(trinity_service)

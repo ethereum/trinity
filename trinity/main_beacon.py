@@ -31,8 +31,8 @@ from trinity.components.registry import (
 )
 from trinity.boot_info import TrinityBootInfo
 from trinity._utils.logging import (
-    setup_log_levels,
-    setup_queue_logging,
+    set_logger_levels,
+    setup_child_process_logging,
 )
 
 
@@ -46,14 +46,13 @@ def main_beacon() -> None:
 
 
 def run_database_process(boot_info: TrinityBootInfo, db_class: Type[LevelDB]) -> None:
-    # setup cross process logging
-    log_queue = boot_info.log_queue
-    level = boot_info.log_level or logging.INFO
-    setup_queue_logging(log_queue, level)
-    if boot_info.args.log_levels:
-        setup_log_levels(boot_info.args.log_levels)
-
     trinity_config = boot_info.trinity_config
+
+    # setup cross process logging
+    level = boot_info.log_level or logging.INFO
+    setup_child_process_logging(boot_info.trinity_config.logging_ipc_path, level)
+    if boot_info.args.log_levels:
+        set_logger_levels(boot_info.args.log_levels)
 
     with trinity_config.process_id_file('database'):
         app_config = trinity_config.get_app_config(BeaconAppConfig)

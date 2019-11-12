@@ -38,8 +38,9 @@ from trinity._utils.ipc import (
     wait_for_ipc,
 )
 from trinity._utils.logging import (
-    setup_log_levels,
-    setup_queue_logging,
+    set_logger_levels,
+    setup_child_process_logging,
+    IPCListener,
 )
 
 
@@ -53,14 +54,14 @@ def main() -> None:
 
 
 async def run_database_process(boot_info: TrinityBootInfo, db_class: Type[LevelDB]) -> None:
-    # setup cross process logging
-    log_queue = boot_info.log_queue
-    level = boot_info.log_level or logging.INFO
-    setup_queue_logging(log_queue, level)
-    if boot_info.args.log_levels:
-        setup_log_levels(boot_info.args.log_levels)
-
     trinity_config = boot_info.trinity_config
+
+    # setup cross process logging
+    level = boot_info.log_level if boot_info.log_level is None else logging.INFO
+
+    setup_child_process_logging(trinity_config.logging_ipc_path, level)
+    if boot_info.args.log_levels:
+        set_logger_levels(boot_info.args.log_levels)
 
     loop = asyncio.get_event_loop()
 
@@ -88,10 +89,10 @@ class TrinityMain(Service):
     def __init__(self,
                  boot_info: TrinityBootInfo,
                  component_types: Tuple[Type[ApplicationComponentAPI], ...],
-                 listener: logging.handlers.QueueListener) -> None:
+                 log_listener: IPCListener) -> None:
         self.boot_info = boot_info
         self.component_types = component_types
-        self.listener = listener
+        self.log_listener = log_listener
 
     def ensure_dirs(self) -> None:
         ensure_eth1_dirs(self.boot_info.trinity_config.get_app_config(Eth1AppConfig))
@@ -106,26 +107,23 @@ class TrinityMain(Service):
         self.logger.debug("Starting logging listener")
         # start the listener thread which handles logs produced in other
         # processes in the local logger.
-        self.listener.start()
+        with self.log_listener.run(trinity_config.logging_ipc_path):
 
-        self.ensure_dirs()
+            self.ensure_dirs()
 
-        import multiprocessing
-        multiprocessing.set_start_method('spawn')
+            async with open_in_process(self.run_database_process, self.boot_info, LevelDB) as db_proc:  # noqa: E501
+                self.logger.debug("started database process")
+                await loop.run_in_executor(None, wait_for_ipc, trinity_config.database_ipc_path)
+                self.logger.debug("database process IPC path available")
 
-        async with open_in_process(self.run_database_process, self.boot_info, LevelDB) as db_proc:
-            self.logger.debug("started database process")
-            await loop.run_in_executor(None, wait_for_ipc, trinity_config.database_ipc_path)
-            self.logger.debug("database process IPC path available")
-
-            component_manager_service = ComponentManager(
-                self.boot_info,
-                self.component_types,
-            )
-            self.logger.debug("running component manager")
-            manager = self.manager.run_child_service(component_manager_service)
-            try:
-                await manager.wait_forever()
-            finally:
-                db_proc.terminate()
-                await db_proc.wait()
+                component_manager_service = ComponentManager(
+                    self.boot_info,
+                    self.component_types,
+                )
+                self.logger.debug("running component manager")
+                manager = self.manager.run_child_service(component_manager_service)
+                try:
+                    await manager.wait_forever()
+                finally:
+                    db_proc.terminate()
+                    await db_proc.wait()

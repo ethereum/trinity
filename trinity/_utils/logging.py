@@ -16,6 +16,8 @@ import threading
 from typing import (
     Dict,
     Iterator,
+    Type,
+    TypeVar,
 )
 
 import cloudpickle
@@ -31,22 +33,25 @@ LOG_BACKUP_COUNT = 10
 LOG_MAX_MB = 5
 
 
-class QueueHandler(logging.Handler):
-    logger = logging.getLogger('trinity._utils.logging.QueueHandler')
+THandler = TypeVar("THandler", bound="IPCHandler")
+
+
+class IPCHandler(logging.Handler):
+    logger = logging.getLogger('trinity._utils.logging.IPCHandler')
 
     def __init__(self, sock: socket.socket):
         self._socket = BufferedSocket(sock)
         super().__init__()
 
     @classmethod
-    def connect(cls, path: Path) -> "DBClient":
+    def connect(cls: Type[THandler], path: Path) -> THandler:
         wait_for_ipc(path)
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         cls.logger.debug("Opened connection to %s: %s", path, s)
         s.connect(str(path))
         return cls(s)
 
-    def prepare(self, record: logging.LogRecord):
+    def prepare(self, record: logging.LogRecord) -> logging.LogRecord:
         msg = self.format(record)
         new_record = copy.copy(record)
         new_record.message = msg
@@ -56,7 +61,7 @@ class QueueHandler(logging.Handler):
         new_record.exc_text = None
         return new_record
 
-    def emit(self, record: logging.LogRecord):
+    def emit(self, record: logging.LogRecord) -> None:
         try:
             msg_data = cloudpickle.dumps(self.prepare(record))
             msg_length_data = len(msg_data).to_bytes(4, 'big')
@@ -65,8 +70,8 @@ class QueueHandler(logging.Handler):
             self.handleError(record)
 
 
-class QueueListener:
-    logger = logging.getLogger('trinity._utils.logging.QueueListener')
+class IPCListener:
+    logger = logging.getLogger('trinity._utils.logging.IPCListener')
 
     def __init__(self, *handlers: logging.Handler) -> None:
         self._started = threading.Event()
@@ -121,7 +126,7 @@ class QueueListener:
         sock.close()
 
     @contextlib.contextmanager
-    def run(self, ipc_path: Path) -> Iterator['DBManager']:
+    def run(self, ipc_path: Path) -> Iterator['IPCListener']:
         self.start(ipc_path)
         try:
             yield self
@@ -200,7 +205,7 @@ class QueueListener:
                 record = cloudpickle.loads(record_bytes)
                 self.handle(record)
 
-    def handle(self, record):
+    def handle(self, record: logging.LogRecord) -> None:
         """
         Handle a record.
         This just loops through the handlers offering them the record
@@ -266,7 +271,7 @@ def setup_stderr_logging(level: int=None) -> StreamHandler:
 
     logger.debug('Logging initialized for stderr: PID=%s', os.getpid())
 
-    return logger, handler_stream
+    return handler_stream
 
 
 def setup_file_logging(
@@ -290,12 +295,16 @@ def setup_file_logging(
     return handler_file
 
 
-def setup_queue_logging(ipc_path: Path, level: int) -> None:
-    queue_handler = QueueHandler.connect(ipc_path)
-    queue_handler.setLevel(level)
-
+def setup_child_process_logging(ipc_path: Path, level: int) -> None:
+    # We get the root logger here to ensure that all logs are given a chance to
+    # pass through this handler
     logger = logging.getLogger()
-    logger.addHandler(queue_handler)
+    logger.setLevel(level)
+
+    ipc_handler = IPCHandler.connect(ipc_path)
+    ipc_handler.setLevel(level)
+
+    logger.addHandler(ipc_handler)
 
     logger.debug(
         'Logging initialized for file %s: PID=%s',

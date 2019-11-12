@@ -232,6 +232,9 @@ class Eth1ChainConfig:
 TAppConfig = TypeVar('TAppConfig', bound='BaseAppConfig')
 
 
+LOGGING_IPC_FILENAME = 'logging.ipc'
+
+
 class TrinityConfig:
     """
     The :class:`~trinity.config.TrinityConfig` holds all base configurations that are generic
@@ -380,6 +383,10 @@ class TrinityConfig:
     @data_dir.setter
     def data_dir(self, value: str) -> None:
         self._data_dir = Path(value).resolve()
+
+    @property
+    def logging_ipc_path(self) -> Path:
+        return self.ipc_dir / LOGGING_IPC_FILENAME
 
     @property
     def database_ipc_path(self) -> Path:
