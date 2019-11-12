@@ -1,0 +1,38 @@
+from eth_typing import BLSSignature
+from ssz import get_hash_tree_root, uint64
+
+from eth2._utils.bls import bls
+from eth2._utils.hash import hash_eth2
+from eth2.beacon.committee_helpers import get_beacon_committee
+from eth2.beacon.helpers import compute_epoch_at_slot, get_domain
+from eth2.beacon.signature_domain import SignatureDomain
+from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import CommitteeIndex, Slot
+from eth2.configs import CommitteeConfig, Eth2Config
+
+# TODO: TARGET_AGGREGATORS_PER_COMMITTEE is not in Eth2Config now.
+TARGET_AGGREGATORS_PER_COMMITTEE = 16
+
+
+def slot_signature(
+    state: BeaconState, slot: Slot, privkey: int, config: Eth2Config
+) -> BLSSignature:
+    domain = get_domain(
+        state,
+        SignatureDomain.DOMAIN_BEACON_ATTESTER,
+        config.SLOTS_PER_EPOCH,
+        message_epoch=compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH),
+    )
+    return bls.sign(get_hash_tree_root(slot, sedes=uint64), privkey, domain)
+
+
+def is_aggregator(
+    state: BeaconState,
+    slot: Slot,
+    index: CommitteeIndex,
+    signature: BLSSignature,
+    config: Eth2Config,
+) -> bool:
+    committee = get_beacon_committee(state, slot, index, CommitteeConfig(config))
+    modulo = max(1, len(committee) // TARGET_AGGREGATORS_PER_COMMITTEE)
+    return int.from_bytes(hash_eth2(signature)[0:8], byteorder="little") % modulo == 0
