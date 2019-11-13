@@ -210,13 +210,19 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
 
         try:
             loop.run_until_complete(manager.run())
+        except KeyboardInterrupt:
+            pass
         finally:
             try:
                 loop.run_until_complete(manager.wait_stopped())
             except KeyboardInterrupt:
                 pass
-            loop.run_until_complete(asyncio.sleep(0.1))
-            loop.run_until_complete(loop.shutdown_asyncgens())
+
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except (KeyboardInterrupt, GeneratorExit):
+                pass
+
             loop.stop()
             if trinity_config.trinity_tmp_root_dir:
                 import shutil

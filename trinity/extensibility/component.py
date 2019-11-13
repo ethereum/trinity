@@ -107,4 +107,6 @@ async def run_component(component: ApplicationComponentAPI,
             await task
         except asyncio.CancelledError:
             pass
+        except KeyboardInterrupt:
+            pass
     logger.debug('Finished component shutdown: %s', component)
