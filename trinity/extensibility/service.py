@@ -1,5 +1,4 @@
 from abc import abstractmethod
-import logging
 
 from eth_utils import get_extended_debug_logger
 
@@ -34,8 +33,10 @@ class ComponentService(Service):
 
     async def run(self) -> None:
         # setup cross process logging
-        level = self.boot_info.log_level or logging.INFO
-        setup_child_process_logging(self.boot_info.trinity_config.logging_ipc_path, level)
+        setup_child_process_logging(
+            self.boot_info.trinity_config.logging_ipc_path,
+            self.boot_info.log_level,
+        )
         if self.boot_info.args.log_levels:
             set_logger_levels(self.boot_info.args.log_levels)
 

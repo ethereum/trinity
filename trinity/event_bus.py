@@ -86,11 +86,7 @@ class ComponentManager(Service):
                     self.logger.debug('entering context for component: %s', component)
                     #await stack.enter_async_context(run_component(component))
 
-                try:
-                    self.logger.info('HANG HERE IN MANAGER')
-                    await self.manager.wait_forever()
-                finally:
-                    self.logger.info('LEAVING MANAGER')
+                await self.manager.wait_forever()
 
     async def _handle_shutdown_request(self,
                                        components: Collection[ApplicationComponentAPI],
@@ -169,7 +165,7 @@ class AsyncioEventBusService(Service):
             )
 
             # run until the endpoint exits
-            await self.manager.wait_stopped()
+            await self.manager.wait_forever()
 
     async def _auto_connect_new_announced_endpoints(self) -> None:
         """

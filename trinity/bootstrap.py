@@ -3,6 +3,7 @@ import argcomplete
 import logging
 import os
 import signal
+import sys
 from typing import (
     Sequence,
     Tuple,
@@ -198,25 +199,33 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
     trinity_service = trinity_service_class(
         boot_info=boot_info,
         component_types=application_component_types,
-        log_listener=log_listener,
     )
 
     manager = AsyncioManager(trinity_service)
 
-    loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, manager.cancel)
+    with log_listener.run(trinity_config.logging_ipc_path):
+        loop = asyncio.get_event_loop()
+        loop.add_signal_handler(signal.SIGTERM, manager.cancel)
+        loop.add_signal_handler(signal.SIGINT, manager.cancel)
 
-    try:
-        loop.run_until_complete(manager.run())
-    except Exception as err:
-        logger.info('Got error: %r', err)
-        manager.cancel()
-        loop.run_until_complete(manager.wait_stopped())
-    finally:
-        loop.stop()
-        if trinity_config.trinity_tmp_root_dir:
-            import shutil
-            shutil.rmtree(trinity_config.trinity_root_dir)
+        try:
+            loop.run_until_complete(manager.run())
+        except KeyboardInterrupt:
+            logger.info('Got KeyboardInterrupt in bootstrap')
+            manager.cancel()
+            logger.info('Triggered service cancellation')
+            loop.run_until_complete(manager.wait_stopped())
+            logger.info('Service finished')
+        else:
+            logger.info('EXIT WITHOUT ERROR')
+        finally:
+            logger.info('stopping event loop')
+            loop.stop()
+            logger.info('loop stopped')
+            if trinity_config.trinity_tmp_root_dir:
+                import shutil
+                shutil.rmtree(trinity_config.trinity_root_dir)
+    sys.exit(0)
 
 
 def display_launch_logs(trinity_config: TrinityConfig) -> None:

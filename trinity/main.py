@@ -1,5 +1,5 @@
 import asyncio
-import logging
+import signal
 from typing import (
     Tuple,
     Type,
@@ -40,7 +40,6 @@ from trinity._utils.ipc import (
 from trinity._utils.logging import (
     set_logger_levels,
     setup_child_process_logging,
-    IPCListener,
 )
 
 
@@ -57,13 +56,9 @@ async def run_database_process(boot_info: TrinityBootInfo, db_class: Type[LevelD
     trinity_config = boot_info.trinity_config
 
     # setup cross process logging
-    level = boot_info.log_level if boot_info.log_level is None else logging.INFO
-
-    setup_child_process_logging(trinity_config.logging_ipc_path, level)
+    setup_child_process_logging(trinity_config.logging_ipc_path, boot_info.log_level)
     if boot_info.args.log_levels:
         set_logger_levels(boot_info.args.log_levels)
-
-    loop = asyncio.get_event_loop()
 
     with trinity_config.process_id_file('database'):
         app_config = trinity_config.get_app_config(Eth1AppConfig)
@@ -75,12 +70,15 @@ async def run_database_process(boot_info: TrinityBootInfo, db_class: Type[LevelD
             chain_config = app_config.get_chain_config()
             initialize_database(chain_config, chaindb, base_db)
 
+        loop = asyncio.get_event_loop()
+
         manager = DBManager(base_db)
         with manager.run(trinity_config.database_ipc_path):
             try:
                 await loop.run_in_executor(None, manager.wait_stopped)
             except KeyboardInterrupt:
-                pass
+                manager.logger.info('Got KeyboardInterrupt in Database')
+                manager.stop()
 
 
 class TrinityMain(Service):
@@ -88,11 +86,9 @@ class TrinityMain(Service):
 
     def __init__(self,
                  boot_info: TrinityBootInfo,
-                 component_types: Tuple[Type[ApplicationComponentAPI], ...],
-                 log_listener: IPCListener) -> None:
+                 component_types: Tuple[Type[ApplicationComponentAPI], ...]) -> None:
         self.boot_info = boot_info
         self.component_types = component_types
-        self.log_listener = log_listener
 
     def ensure_dirs(self) -> None:
         ensure_eth1_dirs(self.boot_info.trinity_config.get_app_config(Eth1AppConfig))
@@ -107,26 +103,32 @@ class TrinityMain(Service):
         self.logger.debug("Starting logging listener")
         # start the listener thread which handles logs produced in other
         # processes in the local logger.
-        with self.log_listener.run(trinity_config.logging_ipc_path):
 
-            self.ensure_dirs()
+        self.ensure_dirs()
 
-            async with open_in_process(self.run_database_process, self.boot_info, LevelDB) as db_proc:  # noqa: E501
-                self.logger.debug("started database process")
-                await loop.run_in_executor(None, wait_for_ipc, trinity_config.database_ipc_path)
-                self.logger.debug("database process IPC path available")
+        async with open_in_process(self.run_database_process, self.boot_info, LevelDB) as db_proc:  # noqa: E501
+            self.logger.debug("started database process")
+            await loop.run_in_executor(None, wait_for_ipc, trinity_config.database_ipc_path)
+            self.logger.debug("database process IPC path available")
 
-                component_manager_service = ComponentManager(
-                    self.boot_info,
-                    self.component_types,
-                )
-                self.logger.debug("running component manager")
-                manager = self.manager.run_child_service(component_manager_service)
+            component_manager_service = ComponentManager(
+                self.boot_info,
+                self.component_types,
+            )
+            self.logger.debug("running component manager")
+            manager = self.manager.run_child_service(component_manager_service)
+            try:
+                await manager.wait_forever()
+            except KeyboardInterrupt:
+                self.logger.info('Got KeyboardInterrupt in main TrinityMain')
+                self.manager.cancel()
+            finally:
+                self.logger.info('Starting termination')
+                db_proc.send_signal(signal.SIGINT)
+                self.logger.info('issued terminate to proc')
                 try:
-                    self.logger.info('HANG HERE')
-                    await manager.wait_forever()
-                    self.logger.info('UNREACHABLE')
-                finally:
-                    self.logger.info('Starting termination')
+                    await asyncio.wait_for(db_proc.wait(), timeout=10)
+                except asyncio.TimeoutError:
                     db_proc.terminate()
-                    await db_proc.wait()
+                self.logger.info('finished `db_proc.wait()` call')
+        self.logger.info('exited database process context')

@@ -166,7 +166,7 @@ class DBManager:
             name=f"serve:{ipc_path}",
             target=self.serve,
             args=(ipc_path,),
-            daemon=False,
+            daemon=True,
         ).start()
         self.wait_started()
 
@@ -210,7 +210,7 @@ class DBManager:
                 name="_close_socket_on_stop",
                 target=self._close_socket_on_stop,
                 args=(sock,),
-                daemon=False,
+                daemon=True,
             ).start()
 
             # These options help fix an issue with the socket reporting itself
@@ -234,7 +234,7 @@ class DBManager:
                     name="_serve_conn",
                     target=self._serve_conn,
                     args=(conn,),
-                    daemon=False,
+                    daemon=True,
                 ).start()
 
     def _serve_conn(self, raw_socket: socket.socket) -> None:
