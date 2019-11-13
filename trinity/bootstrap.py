@@ -210,18 +210,11 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
 
         try:
             loop.run_until_complete(manager.run())
-        except KeyboardInterrupt:
-            logger.info('Got KeyboardInterrupt in bootstrap')
-            manager.cancel()
-            logger.info('Triggered service cancellation')
-            loop.run_until_complete(manager.wait_stopped())
-            logger.info('Service finished')
-        else:
-            logger.info('EXIT WITHOUT ERROR')
         finally:
-            logger.info('stopping event loop')
+            loop.run_until_complete(manager.wait_stopped())
+            loop.run_until_complete(asyncio.sleep(0.1))
+            loop.run_until_complete(loop.shutdown_asyncgens())
             loop.stop()
-            logger.info('loop stopped')
             if trinity_config.trinity_tmp_root_dir:
                 import shutil
                 shutil.rmtree(trinity_config.trinity_root_dir)

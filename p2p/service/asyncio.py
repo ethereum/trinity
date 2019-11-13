@@ -190,7 +190,7 @@ class AsyncioManager(BaseManager):
         await self._stopped.wait()
 
     async def wait_forever(self) -> None:
-        await asyncio.Event().wait()
+        await self.wait_stopped()
 
     async def _run_and_manage_task(self,
                                    async_fn: Callable[..., Awaitable[Any]],

@@ -86,7 +86,7 @@ class ComponentManager(Service):
                     self.logger.debug('entering context for component: %s', component)
                     #await stack.enter_async_context(run_component(component))
 
-                await self.manager.wait_forever()
+                await self.manager.wait_stopped()
 
     async def _handle_shutdown_request(self,
                                        components: Collection[ApplicationComponentAPI],
