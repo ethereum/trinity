@@ -427,13 +427,16 @@ def slice_hashes(hash_list: bytes) -> Iterable[Hash32]:
             yield cast(Hash32, next_hash)
 
 
+TChainReorg = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
+
+
 def partial_import_block(beam_chain: BeamChain,
                          block: BlockAPI,
                          ) -> Callable[[], Tuple[Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]], Tuple[Hash32, ...]]]:  # noqa: E501
     """
     Get an argument-free function that will import the given block.
     """
-    def _import_block() -> Tuple[Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]], Tuple[Hash32, ...]]:
+    def _import_block() -> Tuple[TChainReorg, Tuple[Hash32, ...]]:
         t = Timer()
         beam_chain.clear_first_vm()
         try:
@@ -462,7 +465,10 @@ def partial_import_block(beam_chain: BeamChain,
             db = beam_chain.chaindb.db
             witness_hashes: Tuple[Hash32, ...]
             if witness_key not in db:
-                beam_chain.logger.warning("Witness data for block %s not found", humanize_hash(block.hash))
+                beam_chain.logger.warning(
+                    "Witness data for block %s not found",
+                    humanize_hash(block.hash),
+                )
                 witness_hashes = ()
             else:
                 witness_hashes_concat = db[witness_key]

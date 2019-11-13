@@ -1,61 +1,15 @@
-import asyncio
-from typing import (
-    cast,
-    Tuple,
-)
+from typing import Tuple, cast
 
 from cached_property import cached_property
 
-from lahja import EndpointAPI
-
-from eth_typing import BlockNumber
-
-from eth.constants import GENESIS_BLOCK_NUMBER
-from eth.rlp.headers import BlockHeader
-from lahja import (
-    BroadcastConfig,
-)
-
-from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI
-from p2p.exceptions import PeerConnectionLost
-from p2p.protocol import (
-    Payload,
-)
-
-from trinity._utils.decorators import (
-    async_suppress_exceptions,
-)
-from trinity.protocol.common.peer import (
-    BaseChainPeer,
-    BaseChainPeerFactory,
-    BaseChainPeerPool,
-)
-from trinity.protocol.common.peer_pool_event_bus import (
-    BaseProxyPeer,
-    BaseProxyPeerPool,
-    PeerPoolEventServer,
-)
-from trinity.protocol.common.typing import (
-    BlockBodyBundles,
-    NodeDataBundles,
-    ReceiptsBundles,
-)
-from trinity.protocol.eth.peer import (
-    ETHPeer,
-    ETHPeerFactory,
-    ETHPeerPool,
-)
-from trinity.protocol.eth.proto import (
-    ETHHandshakeParams,
-    ETHProtocol,
-)
-from trinity.protocol.eth.handshaker import (
-    ETHHandshaker,
-)
+from p2p.abc import BehaviorAPI, HandshakerAPI
+from trinity.protocol.eth.handshaker import ETHHandshaker
+from trinity.protocol.eth.peer import ETHPeer, ETHPeerFactory, ETHPeerPool
+from trinity.protocol.eth.proto import ETHHandshakeParams, ETHProtocol
 
 from .api import FirehoseAPI
 from .handshaker import FirehoseHandshaker
-from .proto import FirehoseProtocol, FirehoseHandshakeParams
+from .proto import FirehoseHandshakeParams, FirehoseProtocol
 
 
 class FirehosePeer(ETHPeer):

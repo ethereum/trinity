@@ -1,78 +1,31 @@
-from abc import ABC, abstractmethod
 import asyncio
 from collections import Counter, defaultdict
 import typing
-from typing import (
-    cast,
-    Dict,
-    FrozenSet,
-    Iterable,
-    List,
-    NamedTuple,
-    Set,
-    Tuple,
-    Type,
-)
+from typing import Dict, FrozenSet, Iterable, NamedTuple, Set, Tuple, Type, cast
 
 from cancel_token import CancelToken, OperationCancelled
+from lahja import EndpointAPI
+
 from eth.abc import AtomicDatabaseAPI
 from eth_typing import Hash32
-import rlp
-
 from p2p.abc import CommandAPI
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
-from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
 from p2p.service import BaseService
-
-from trinity.protocol.eth.commands import (
-    NodeData,
-)
+from trinity._utils.datastructures import TaskQueue
+from trinity.protocol.eth import constants as eth_constants
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.fh.commands import NewBlockWitnessHashes
+from trinity.protocol.fh.events import CreatedNewBlockWitnessHashes
 from trinity.protocol.fh.peer import FirehosePeer
 from trinity.protocol.fh.proto import FirehoseProtocol
 from trinity.sync.beam.constants import (
-    GAP_BETWEEN_TESTS,
+    GAP_BETWEEN_WITNESS_DOWNLOADS,
     NON_IDEAL_RESPONSE_PENALTY,
+    WITNESS_QUEUE_SIZE,
 )
-from trinity.sync.common.peers import WaitingPeers
 
 from .queen import QueenTrackerMixin
-
-from concurrent.futures import CancelledError
-import itertools
-
-from lahja import EndpointAPI
-
-from eth_hash.auto import keccak
-from eth_utils import (
-    to_checksum_address,
-    ValidationError,
-)
-from eth_typing import (
-    Address,
-)
-
-from trie import HexaryTrie
-from trie.exceptions import MissingTrieNode
-
-from trinity._utils.datastructures import TaskQueue
-from trinity._utils.timer import Timer
-from trinity.protocol.common.typing import (
-    NodeDataBundles,
-)
-from trinity.protocol.eth.constants import (
-    MAX_STATE_FETCH,
-)
-from trinity.protocol.eth import (
-    constants as eth_constants,
-)
-from trinity.protocol.fh.events import (
-    CreatedNewBlockWitnessHashes,
-)
-
-from trinity.sync.common.events import StatelessBlockImportDone
 
 
 class NodeDownloadTask(NamedTuple):
@@ -81,7 +34,11 @@ class NodeDownloadTask(NamedTuple):
     block_number: int
 
     @classmethod
-    def nodes_at_block(cls, node_hashes: Iterable[Hash32], block_number: int) -> Tuple['NodeDownloadTask', ...]:
+    def nodes_at_block(
+            cls,
+            node_hashes: Iterable[Hash32],
+            block_number: int) -> Tuple['NodeDownloadTask', ...]:
+
         return tuple(cls(node_hash, block_number) for node_hash in node_hashes)
 
 
@@ -127,10 +84,8 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
 
         # Track the nodes to download for the witness
 
-        # How many pending witness node hashes can we have?
-        buffer_size = 10000 * 200  # 10k hashes is high-end for typical block, 200 blocks would be very far behind
         self._witness_node_tasks = TaskQueue[NodeDownloadTask](
-            buffer_size,
+            WITNESS_QUEUE_SIZE,
             lambda task: task.block_number,
         )
 
@@ -195,10 +150,16 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
 
             self.run_task(self._make_request(peer, urgent_hash_tasks, batch_id))
 
-    async def _make_request(self, peer: ETHPeer, request_tasks: Tuple[NodeDownloadTask, ...], batch_id: int) -> None:
+    async def _make_request(
+            self,
+            peer: ETHPeer,
+            request_tasks: Tuple[NodeDownloadTask, ...], batch_id: int) -> None:
+
         self._num_requests_by_peer[peer] += 1
         try:
-            nodes = await peer.eth_api.get_node_data(tuple(set(task.node_hash for task in request_tasks)))
+            nodes = await peer.eth_api.get_node_data(
+                tuple(set(task.node_hash for task in request_tasks))
+            )
         except asyncio.TimeoutError:
             self._witness_node_tasks.complete(batch_id, ())
             self.call_later(NON_IDEAL_RESPONSE_PENALTY, self.waiting_peers.put_nowait, peer)
@@ -211,7 +172,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
             self._witness_node_tasks.complete(batch_id, ())
             self.call_later(NON_IDEAL_RESPONSE_PENALTY, self.waiting_peers.put_nowait, peer)
         else:
-            self.waiting_peers.put_nowait(peer)
+            self.call_later(GAP_BETWEEN_WITNESS_DOWNLOADS, self.waiting_peers.put_nowait, peer)
 
             node_lookup = dict(nodes)
             completed_tasks = tuple(
@@ -301,7 +262,10 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
             self.logger.warning("Added Firehose peer: %s", peer)
             self._firehose_peers.add(cast(FirehosePeer, peer))
         else:
-            self.logger.warning("Ignoring peer for witness broadcast, not firehose-enabled: %s", peer)
+            self.logger.warning(
+                "Ignoring peer for witness broadcast, not firehose-enabled: %s",
+                peer,
+            )
 
     def deregister_peer(self, peer: BasePeer) -> None:
         super().deregister_peer(peer)
@@ -314,10 +278,15 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
             if not event.witness_hashes:
                 self.logger.warning("Witness metadata for %s is completely empty", event.block)
             else:
-                self.logger.warning("Witness broadcastor received block import complete event: %s", event.block)
+                self.logger.warning(
+                    "Witness broadcastor received block import complete event: %s",
+                    event.block,
+                )
                 self._broadcast_witness_metadata(event.block.hash, event.witness_hashes)
 
-    def _broadcast_witness_metadata(self, header_hash: Hash32, witness_hashes: Tuple[Hash32, ...]) -> None:
+    def _broadcast_witness_metadata(
+            self, header_hash: Hash32, witness_hashes: Tuple[Hash32, ...]) -> None:
+
         for peer in self._firehose_peers:
             self.logger.warning("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
             peer.fh_api.send_new_block_witness_hashes(header_hash, witness_hashes)

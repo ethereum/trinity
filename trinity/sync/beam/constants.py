@@ -31,6 +31,13 @@ NON_IDEAL_RESPONSE_PENALTY = 0.5
 # backfill requests? This is called "tests" because we are importantly
 # checking how fast a peer is.
 GAP_BETWEEN_TESTS = 0.25
+
+# How many seconds should we leave the witness-downloading peer idle,
+# in between requests? The more time spent here, the quicker that a
+# newly discovered peer can be picked up as a queen. The less time
+# spent here, the faster that witnesses will download.
+GAP_BETWEEN_WITNESS_DOWNLOADS = 0.05
+
 # One reason to leave this as non-zero is: if we are regularly switching
 # the "queen peer" then we want to improve the chances that the new queen
 # (formerly backfill) is idle and ready to serve urgent nodes.
@@ -58,3 +65,10 @@ BEAM_PIVOT_BUFFER_FRACTION = 1 / 2
 # We need MAX_UNCLE_DEPTH + 1 headers to check during uncle validation
 # We need to request one more header, to set the starting tip
 FULL_BLOCKS_NEEDED_TO_START_BEAM = MAX_UNCLE_DEPTH + 2
+
+# How many pending witness node hash tasks can we have?
+# For reference: on mainnet, 10k hashes for a proof is on the high end
+# for typical block. So 200 * 10k would allow for queuing up to 200 blocks.
+# If we're queuing much more than that, we've almost certainly fallen behind,
+# and need to pivot anyway.
+WITNESS_QUEUE_SIZE = 10000 * 200

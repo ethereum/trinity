@@ -4,17 +4,12 @@ from typing import (
     Tuple,
 )
 
-from eth.rlp.headers import BlockHeader
-from eth.rlp.receipts import Receipt
-from eth.rlp.transactions import BaseTransactionFields
 
 from eth_typing import Hash32
 
 from p2p.commands import BaseCommand, RLPCodec
 
-from trinity.protocol.common.commands import SnappyCommand
-from trinity.rlp.block_body import BlockBody
-from trinity.rlp.sedes import HashOrNumber, hash_sedes
+from trinity.rlp.sedes import hash_sedes
 
 STATUS_STRUCTURE = sedes.List((
     sedes.big_endian_int,

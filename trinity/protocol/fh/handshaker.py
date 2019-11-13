@@ -21,7 +21,10 @@ from .commands import Status
 class FirehoseHandshakeReceipt(HandshakeReceipt):
     handshake_params: FirehoseHandshakeParams
 
-    def __init__(self, protocol: FirehoseProtocol, handshake_params: FirehoseHandshakeParams) -> None:
+    def __init__(
+            self,
+            protocol: FirehoseProtocol,
+            handshake_params: FirehoseHandshakeParams) -> None:
         super().__init__(protocol)
         self.handshake_params = handshake_params
 

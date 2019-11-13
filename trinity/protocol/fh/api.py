@@ -1,8 +1,8 @@
-from typing import cast, Any, Dict, Sequence, Tuple
+from typing import Any, Dict, Tuple, cast
 
 from cached_property import cached_property
 
-from eth_typing import BlockNumber, Hash32
+from eth_typing import Hash32
 from eth_utils import (
     ExtendedDebugLogger,
     humanize_hash,
@@ -10,7 +10,7 @@ from eth_utils import (
 from lru import LRU
 
 from p2p.abc import ConnectionAPI
-from p2p.exchange import ExchangeAPI, ExchangeLogic
+from p2p.exchange import ExchangeAPI
 from p2p.logic import Application, CommandHandler
 from p2p.qualifiers import HasProtocol
 from p2p.typing import Payload
@@ -20,7 +20,6 @@ from .commands import (
     NewBlockWitnessHashesPayload,
 )
 from .constants import MAX_WITNESS_HISTORY_PER_PEER
-from .handshaker import FirehoseHandshakeReceipt
 from .proto import FirehoseProtocol
 
 
@@ -72,13 +71,18 @@ class FirehoseAPI(Application):
     def protocol(self) -> FirehoseProtocol:
         return self.connection.get_protocol_by_type(FirehoseProtocol)
 
-    def send_new_block_witness_hashes(self, header_hash: Hash32, node_hashes: Tuple[Hash32]) -> None:
+    def send_new_block_witness_hashes(
+            self, header_hash: Hash32, node_hashes: Tuple[Hash32]) -> None:
         """
         This will skip sending if the peer already sent the witness hashes to us.
         """
         if self.witnesses.has_witness(header_hash):
             # TODO this is a neat place to check if a peer is giving us bad witness data
-            self.logger.warning("SKIP Sending %d hashes of witness to: %s", len(node_hashes), self.connection)
+            self.logger.warning(
+                "SKIP Sending %d hashes of witness to: %s",
+                len(node_hashes),
+                self.connection,
+            )
             # remove witness from history, as cleanup
             self.witnesses.pop_node_hashes(header_hash)
         else:

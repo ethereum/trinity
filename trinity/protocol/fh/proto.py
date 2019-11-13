@@ -1,41 +1,11 @@
-from typing import (
-    NamedTuple,
-    Sequence,
-    TYPE_CHECKING,
-    Union,
-)
+from typing import NamedTuple, Sequence, TYPE_CHECKING
 
-from eth_typing import (
-    Hash32,
-    BlockNumber,
-)
+from eth_utils import ValidationError, get_extended_debug_logger
 
-from eth_utils import (
-    ValidationError,
-    get_extended_debug_logger,
-)
-
-from lahja import EndpointAPI
-
-from eth.abc import (
-    BlockHeaderAPI,
-    ReceiptAPI,
-    SignedTransactionAPI,
-)
-
-from lahja import (
-    BroadcastConfig,
-)
-
-from p2p.abc import SessionAPI
+from eth_typing import Hash32
 from p2p.protocol import Protocol
 
-from trinity.rlp.block_body import BlockBody
-
-from .commands import (
-    NewBlockWitnessHashes,
-    Status,
-)
+from .commands import NewBlockWitnessHashes, Status
 
 if TYPE_CHECKING:
     from .peer import FirehosePeer  # noqa: F401

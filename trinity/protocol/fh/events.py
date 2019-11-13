@@ -1,40 +1,10 @@
-from dataclasses import (
-    dataclass,
-)
-from typing import (
-    Sequence,
-    Tuple,
-    Type,
-)
+from dataclasses import dataclass
+from typing import Tuple
 
-from eth.abc import (
-    BlockAPI,
-    BlockHeaderAPI,
-    ReceiptAPI,
-    SignedTransactionAPI,
-)
+from lahja import BaseEvent
+
 from eth.rlp.blocks import BaseBlock
-
-from lahja import (
-    BaseEvent,
-    BaseRequestResponseEvent,
-)
-
-from eth_typing import (
-    BlockIdentifier,
-    Hash32,
-)
-
-from p2p.abc import SessionAPI
-
-from trinity.protocol.common.events import (
-    PeerPoolMessageEvent,
-)
-from trinity.protocol.common.typing import (
-    BlockBodyBundles,
-    NodeDataBundles,
-    ReceiptsBundles,
-)
+from eth_typing import Hash32
 
 
 @dataclass
