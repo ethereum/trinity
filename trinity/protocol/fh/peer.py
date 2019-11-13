@@ -1,5 +1,6 @@
 import asyncio
 from typing import (
+    cast,
     Tuple,
 )
 
@@ -48,6 +49,9 @@ from trinity.protocol.eth.proto import (
     ETHHandshakeParams,
     ETHProtocol,
 )
+from trinity.protocol.eth.handshaker import (
+    ETHHandshaker,
+)
 
 from .api import FirehoseAPI
 from .handshaker import FirehoseHandshaker
@@ -73,10 +77,11 @@ class FirehosePeerFactory(ETHPeerFactory):
     peer_class = FirehosePeer
 
     async def get_handshakers(self) -> Tuple[HandshakerAPI, ...]:
-        handshakers = super().get_handshakers()
+        handshakers = await super().get_handshakers()
 
         # rather than regenerate these values, look them up from the eth handshaker
-        eth_params = handshakers[-1].handshake_params
+        eth_handshaker = cast(ETHHandshaker, handshakers[-1])
+        eth_params = eth_handshaker.handshake_params
 
         if not isinstance(eth_params, ETHHandshakeParams):
             raise TypeError(

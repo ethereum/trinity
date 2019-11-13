@@ -2,6 +2,7 @@ import asyncio
 from typing import (
     Any,
     Tuple,
+    Type,
 )
 
 from cached_property import cached_property
@@ -16,7 +17,7 @@ from lahja import (
     BroadcastConfig,
 )
 
-from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI
+from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI, ProtocolAPI
 from p2p.exceptions import PeerConnectionLost
 
 from trinity._utils.decorators import (
@@ -76,7 +77,7 @@ from .handshaker import ETHV63Handshaker, ETHHandshaker
 class ETHPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    supported_sub_protocols = (ETHProtocolV63, ETHProtocol)
+    supported_sub_protocols: Tuple[Type[ProtocolAPI], ...] = (ETHProtocolV63, ETHProtocol)
     sub_proto: ETHProtocol = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:

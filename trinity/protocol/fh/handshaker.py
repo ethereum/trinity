@@ -26,10 +26,6 @@ class FirehoseHandshakeReceipt(HandshakeReceipt):
         self.handshake_params = handshake_params
 
     @cached_property
-    def head_hash(self) -> Hash32:
-        return self.handshake_params.head_hash
-
-    @cached_property
     def genesis_hash(self) -> Hash32:
         return self.handshake_params.genesis_hash
 
@@ -68,7 +64,6 @@ class FirehoseHandshaker(Handshaker):
             remote_params = FirehoseHandshakeParams(
                 version=msg['protocol_version'],
                 network_id=msg['network_id'],
-                head_hash=msg['best_hash'],
                 genesis_hash=msg['genesis_hash'],
             )
             receipt = FirehoseHandshakeReceipt(protocol, remote_params)

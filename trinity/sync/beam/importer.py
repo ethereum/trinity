@@ -423,16 +423,17 @@ def slice_hashes(hash_list: bytes) -> Iterable[Hash32]:
             raise TypeError(
                 f"Value is not a hash, because it's only {len(next_hash)} long: {next_hash}"
             )
-        yield next_hash
+        else:
+            yield cast(Hash32, next_hash)
 
 
 def partial_import_block(beam_chain: BeamChain,
                          block: BlockAPI,
-                         ) -> Callable[[], Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]]:  # noqa: E501
+                         ) -> Callable[[], Tuple[Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]], Tuple[Hash32, ...]]]:  # noqa: E501
     """
     Get an argument-free function that will import the given block.
     """
-    def _import_block() -> Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]:
+    def _import_block() -> Tuple[Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]], Tuple[Hash32, ...]]:
         t = Timer()
         beam_chain.clear_first_vm()
         try:
@@ -459,6 +460,7 @@ def partial_import_block(beam_chain: BeamChain,
             # Collect witness trie node hashes needed to import block
             witness_key = b'witnesshashes:' + block.hash
             db = beam_chain.chaindb.db
+            witness_hashes: Tuple[Hash32, ...]
             if witness_key not in db:
                 beam_chain.logger.warning("Witness data for block %s not found", humanize_hash(block.hash))
                 witness_hashes = ()
@@ -530,7 +532,7 @@ class BlockImportServer(Service):
                 )
 
                 await event_bus.broadcast(
-                    CreatedNewBlockWitnessHashes(event.block.hash, witness_hashes)
+                    CreatedNewBlockWitnessHashes(event.block, witness_hashes)
                 )
             else:
                 if self.manager.is_running:

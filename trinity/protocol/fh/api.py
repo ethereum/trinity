@@ -3,7 +3,10 @@ from typing import cast, Any, Dict, Sequence, Tuple
 from cached_property import cached_property
 
 from eth_typing import BlockNumber, Hash32
-from eth_utils import humanize_hash
+from eth_utils import (
+    ExtendedDebugLogger,
+    humanize_hash,
+)
 from lru import LRU
 
 from p2p.abc import ConnectionAPI
@@ -23,6 +26,7 @@ from .proto import FirehoseProtocol
 
 class RecentWitnesses(CommandHandler):
     command_type = NewBlockWitnessHashes
+    logger = ExtendedDebugLogger('trinity.protocol.fh.api.RecentWitnesses')
 
     _recent_witness_hashes: LRU
 
@@ -52,6 +56,7 @@ class RecentWitnesses(CommandHandler):
 class FirehoseAPI(Application):
     name = 'fh'  # TODO: Is this always the same value as in fh/proto?
     qualifier = HasProtocol(FirehoseProtocol)
+    logger = ExtendedDebugLogger('trinity.protocol.fh.api.FirehoseAPI')
 
     witnesses: RecentWitnesses
 
@@ -67,7 +72,7 @@ class FirehoseAPI(Application):
     def protocol(self) -> FirehoseProtocol:
         return self.connection.get_protocol_by_type(FirehoseProtocol)
 
-    def send_new_block_witness_hashes(self, header_hash: Hash32, node_hashes: Sequence[Hash32]) -> None:
+    def send_new_block_witness_hashes(self, header_hash: Hash32, node_hashes: Tuple[Hash32]) -> None:
         """
         This will skip sending if the peer already sent the witness hashes to us.
         """

@@ -622,8 +622,7 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
         self._blocks_imported += 1
         self._log_stats()
 
-        reorg_info, _witness_metadata = import_done.result
-        return reorg_info
+        return import_done.result
 
     async def preview_transactions(
             self,

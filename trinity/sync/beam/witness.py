@@ -3,6 +3,7 @@ import asyncio
 from collections import Counter, defaultdict
 import typing
 from typing import (
+    cast,
     Dict,
     FrozenSet,
     Iterable,
@@ -119,18 +120,19 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
         self._db = db
         self._peer_pool = peer_pool
 
-        self._waiting_peers = WaitingPeers[ETHPeer](NodeData)
-
         self._num_requests_by_peer = Counter()
 
         # {header_hash: {node_hash: num_peers_that_broadcast}}
-        self._aggregated_witness_metadata = defaultdict(Counter)
+        self._aggregated_witness_metadata: Dict[Hash32, Dict[Hash32, int]] = defaultdict(Counter)
 
         # Track the nodes to download for the witness
 
         # How many pending witness node hashes can we have?
         buffer_size = 10000 * 200  # 10k hashes is high-end for typical block, 200 blocks would be very far behind
-        self._witness_node_tasks = TaskQueue[Hash32](buffer_size, NodeDownloadTask.block_number.fget)
+        self._witness_node_tasks = TaskQueue[NodeDownloadTask](
+            buffer_size,
+            lambda task: task.block_number,
+        )
 
     async def trigger_download(self, block_hash: Hash32, block_number: int, urgent: bool) -> None:
         """
@@ -168,7 +170,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
     async def _collect_witnesses(self) -> None:
         while self.is_operational:
 
-            peer = await self._waiting_peers.get_fastest()
+            peer = await self.waiting_peers.get_fastest()
             if not peer.is_operational:
                 # drop any peers that aren't alive anymore
                 self.logger.warning("Dropping %s from backfill as no longer operational", peer)
@@ -176,8 +178,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
                     self._queen_peer = None
                 continue
 
-            old_queen = self._queen_peer
-            self._update_queen(peer)
+            old_queen = self._update_queen(peer)
             if peer == self._queen_peer:
                 self.logger.debug("Switching queen peer from %s to %s", old_queen, peer)
                 continue
@@ -185,7 +186,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
             if peer.eth_api.get_node_data.is_requesting:
                 # skip the peer if there's an active request
                 self.logger.debug("Backfill is skipping active peer %s", peer)
-                self.call_later(10, self._waiting_peers.put_nowait, peer)
+                self.call_later(10, self.waiting_peers.put_nowait, peer)
                 continue
 
             batch_id, urgent_hash_tasks = await self.wait(
@@ -200,7 +201,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
             nodes = await peer.eth_api.get_node_data(tuple(set(task.node_hash for task in request_tasks)))
         except asyncio.TimeoutError:
             self._witness_node_tasks.complete(batch_id, ())
-            self.call_later(NON_IDEAL_RESPONSE_PENALTY, self._waiting_peers.put_nowait, peer)
+            self.call_later(NON_IDEAL_RESPONSE_PENALTY, self.waiting_peers.put_nowait, peer)
         except (PeerConnectionLost, OperationCancelled):
             # Something unhappy, but we don't really care, peer will be gone by next loop
             self._witness_node_tasks.complete(batch_id, ())
@@ -208,9 +209,9 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
             self.logger.info("Unexpected err while getting witness nodes from %s: %s", peer, exc)
             self.logger.debug("Problem downloading witness nodes from peer...", exc_info=True)
             self._witness_node_tasks.complete(batch_id, ())
-            self.call_later(NON_IDEAL_RESPONSE_PENALTY, self._waiting_peers.put_nowait, peer)
+            self.call_later(NON_IDEAL_RESPONSE_PENALTY, self.waiting_peers.put_nowait, peer)
         else:
-            self._waiting_peers.put_nowait(peer)
+            self.waiting_peers.put_nowait(peer)
 
             node_lookup = dict(nodes)
             completed_tasks = tuple(
@@ -237,7 +238,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
     def register_peer(self, peer: BasePeer) -> None:
         super().register_peer(peer)
         # when a new peer is added to the pool, add it to the idle peer list
-        self._waiting_peers.put_nowait(peer)  # type: ignore
+        self.waiting_peers.put_nowait(peer)  # type: ignore
 
     def deregister_peer(self, peer: BasePeer) -> None:
         super().deregister_peer(peer)
@@ -298,7 +299,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
         # This service is only interested in peers that implement firehose
         if peer.connection.has_protocol(FirehoseProtocol):
             self.logger.warning("Added Firehose peer: %s", peer)
-            self._firehose_peers.add(peer)
+            self._firehose_peers.add(cast(FirehosePeer, peer))
         else:
             self.logger.warning("Ignoring peer for witness broadcast, not firehose-enabled: %s", peer)
 
@@ -306,15 +307,15 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
         super().deregister_peer(peer)
         if peer in self._firehose_peers:
             self.logger.warning("Removing Firehose peer: %s", peer)
-            self._firehose_peers.remove(peer)
+            self._firehose_peers.remove(cast(FirehosePeer, peer))
 
     async def _broadcast_new_witnesses(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(CreatedNewBlockWitnessHashes)):
             if not event.witness_hashes:
-                self.logger.warning("Witness metadata for %s is completely empty", event.header_hash)
+                self.logger.warning("Witness metadata for %s is completely empty", event.block)
             else:
                 self.logger.warning("Witness broadcastor received block import complete event: %s", event.block)
-                self._broadcast_witness_metadata(event.header_hash, event.witness_hashes)
+                self._broadcast_witness_metadata(event.block.hash, event.witness_hashes)
 
     def _broadcast_witness_metadata(self, header_hash: Hash32, witness_hashes: Tuple[Hash32, ...]) -> None:
         for peer in self._firehose_peers:

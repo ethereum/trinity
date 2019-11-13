@@ -3,6 +3,7 @@ from dataclasses import (
 )
 from typing import (
     Sequence,
+    Tuple,
     Type,
 )
 
@@ -12,6 +13,7 @@ from eth.abc import (
     ReceiptAPI,
     SignedTransactionAPI,
 )
+from eth.rlp.blocks import BaseBlock
 
 from lahja import (
     BaseEvent,
@@ -41,5 +43,5 @@ class CreatedNewBlockWitnessHashes(BaseEvent):
     Event to announce that some new block metadata was generated locally. Specifically,
     a list of trie node hashes that form the witness of all data read when executing a block.
     """
-    header_hash: Hash32
-    witness_hashes: Sequence[Hash32]
+    block: BaseBlock
+    witness_hashes: Tuple[Hash32, ...]
