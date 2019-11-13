@@ -84,7 +84,7 @@ class ComponentManager(Service):
             async with AsyncExitStack() as stack:
                 for component in active_components:
                     self.logger.debug('entering context for component: %s', component)
-                    #await stack.enter_async_context(run_component(component))
+                    await stack.enter_async_context(run_component(component))
 
                 await self.manager.wait_stopped()
 

@@ -211,7 +211,10 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
         try:
             loop.run_until_complete(manager.run())
         finally:
-            loop.run_until_complete(manager.wait_stopped())
+            try:
+                loop.run_until_complete(manager.wait_stopped())
+            except KeyboardInterrupt:
+                pass
             loop.run_until_complete(asyncio.sleep(0.1))
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.stop()

@@ -5,7 +5,7 @@ from argparse import (
 )
 from typing import Iterable
 
-from asyncio_run_in_process import open_in_process
+from asyncio_run_in_process import run_in_process
 from sqlalchemy.orm import Session
 
 from eth_utils import to_tuple, get_extended_debug_logger
@@ -139,8 +139,7 @@ class NetworkDBComponent(BaseApplicationComponent):
     async def run(self) -> None:
         network_db_service = NetworkDBService(self._boot_info, self.name)
 
-        async with open_in_process(AsyncioManager.run_service, network_db_service) as proc:
-            await proc.wait()
+        await run_in_process(AsyncioManager.run_service, network_db_service)
 
 
 class NetworkDBService(ComponentService):

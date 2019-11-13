@@ -48,7 +48,10 @@ class ComponentService(Service):
 
         async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
             self.event_bus = endpoint
-            await self.run_component_service()
+            try:
+                await self.run_component_service()
+            except KeyboardInterrupt:
+                self.manager.cancel()
 
     @abstractmethod
     async def run_component_service(self) -> None:
