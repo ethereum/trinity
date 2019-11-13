@@ -96,38 +96,6 @@ class AsyncioManager(BaseManager):
             except Exception:
                 self._errors.append(sys.exc_info())
 
-    async def _handle_run(self) -> None:
-        """
-        Run and monitor the actual :meth:`ServiceAPI.run` method.
-
-        In the event that it throws an exception the service will be cancelled.
-
-        Upon a clean exit
-        Triggers cancellation in the case where the service exits normally or
-        throws an exception.
-        """
-        try:
-            await self._service.run()
-        except asyncio.CancelledError:
-            raise
-        except Exception as err:
-            self.logger.debug(
-                '%s: _handle_run got error, storing exception and setting cancelled',
-                self
-            )
-            self._errors.append(sys.exc_info())
-            self.cancel()
-        else:
-            # NOTE: Any service which uses daemon tasks will need to trigger
-            # cancellation in order for the service to exit since this code
-            # path does not trigger task cancellation.  It might make sense to
-            # trigger cancellation if all of the running tasks are daemon
-            # tasks.
-            self.logger.debug(
-                '%s: _handle_run exited cleanly, waiting for full stop...',
-                self
-            )
-
     @classmethod
     async def run_service(cls, service: ServiceAPI, loop: asyncio.AbstractEventLoop = None) -> None:
         manager = cls(service, loop=loop)
@@ -152,8 +120,7 @@ class AsyncioManager(BaseManager):
                 self._system_tasks.add(handle_cancelled_task)
                 self._system_tasks.add(handle_stopped_task)
 
-                handle_run_task = asyncio.ensure_future(self._handle_run(), loop=self._loop)
-                self._service_tasks.add(handle_run_task)
+                self.run_task(self._service.run)
 
                 self._started.set()
 
