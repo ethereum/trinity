@@ -358,7 +358,7 @@ class Node(BaseService):
             await self.request_status(peer_id)
         except HandshakeFailure as e:
             self.logger.info("HandshakeFailure: %s", str(e))
-            # TODO: handle it
+            raise ConnectionRefusedError() from e
 
     async def dial_peer_with_retries(self, ip: str, port: int, peer_id: ID) -> None:
         """
