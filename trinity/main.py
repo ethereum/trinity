@@ -123,7 +123,10 @@ class TrinityMain(Service):
                 self.logger.debug("running component manager")
                 manager = self.manager.run_child_service(component_manager_service)
                 try:
+                    self.logger.info('HANG HERE')
                     await manager.wait_forever()
+                    self.logger.info('UNREACHABLE')
                 finally:
+                    self.logger.info('Starting termination')
                     db_proc.terminate()
                     await db_proc.wait()

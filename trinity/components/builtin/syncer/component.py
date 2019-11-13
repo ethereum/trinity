@@ -188,7 +188,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
             args.force_beam_block_number,
         )
 
-        await syncer.run()
+        await AsyncioManager.run_service(syncer)
 
 
 class LightSyncStrategy(BaseSyncStrategy):

@@ -7,6 +7,7 @@ from argparse import (
     _SubParsersAction,
 )
 import asyncio
+import logging
 from typing import (
     AsyncIterator,
 )
@@ -16,6 +17,9 @@ from async_generator import asynccontextmanager
 from lahja.base import EndpointAPI
 
 from trinity.boot_info import TrinityBootInfo
+
+
+logger = logging.getLogger('trinity.extensibility.run_component')
 
 
 class BaseComponentAPI(ABC):
@@ -68,7 +72,7 @@ class ApplicationComponentAPI(BaseComponentAPI):
         ...
 
 
-class BaseApplicationComponent(BaseComponentAPI):
+class BaseApplicationComponent(ApplicationComponentAPI):
     """
     Base class for ApplicationComponentAPI implementations.
     """
@@ -91,9 +95,11 @@ async def run_component(component: ApplicationComponentAPI,
                         ) -> AsyncIterator[None]:
     task = asyncio.ensure_future(component.run(), loop=loop)
 
+    logger.debug('Running component: %s', component)
     try:
         yield
     finally:
+        logger.debug('Stopping component: %s', component)
         if not task.done():
             task.cancel()
 
@@ -101,3 +107,4 @@ async def run_component(component: ApplicationComponentAPI,
             await task
         except asyncio.CancelledError:
             pass
+    logger.debug('Finished component shutdown: %s', component)

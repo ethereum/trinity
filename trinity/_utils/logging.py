@@ -179,7 +179,6 @@ class IPCListener:
             sock = BufferedSocket(raw_socket)
 
             while self.is_running:
-                self.logger.info('1 ######################')
                 try:
                     length_data = sock.read_exactly(4)
                 except OSError as err:
@@ -189,7 +188,6 @@ class IPCListener:
                     self.logger.exception("Error reading operation flag")
                     break
 
-                self.logger.info('2 ######################')
                 data_length = int.from_bytes(length_data, 'big')
 
                 try:
@@ -200,7 +198,6 @@ class IPCListener:
                 except Exception:
                     self.logger.exception("Error reading operation flag")
                     break
-                self.logger.info('3 ######################')
 
                 record = cloudpickle.loads(record_bytes)
                 self.handle(record)

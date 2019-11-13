@@ -136,6 +136,10 @@ class PeerDiscoveryComponent(BaseApplicationComponent):
             help="Disable peer discovery",
         )
 
+    @property
+    def is_enabled(self) -> bool:
+        return True
+
     async def run(self) -> None:
         service = DiscoveryBootstrapService(self._boot_info, self.name)
 

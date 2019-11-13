@@ -63,7 +63,7 @@ class ComponentManager(Service):
             self.manager.run_daemon_task(self._track_and_propagate_available_endpoints)
 
             # start the component manager
-            components = tuple(
+            all_components = tuple(
                 component_type(self._boot_info, endpoint)
                 for component_type
                 in self._component_types
@@ -71,16 +71,26 @@ class ComponentManager(Service):
             active_components = tuple(
                 component
                 for component
-                in components
+                in all_components
                 if component.is_enabled
             )
 
-            self.logger.debug('running components')
+            self.logger.debug(
+                'running %d/%d enabled components: %s',
+                len(active_components),
+                len(all_components),
+                '|'.join((component.name for component in active_components)),
+            )
             async with AsyncExitStack() as stack:
                 for component in active_components:
-                    await stack.enter_async_context(run_component(component))
+                    self.logger.debug('entering context for component: %s', component)
+                    #await stack.enter_async_context(run_component(component))
 
-                await self.manager.wait_forever()
+                try:
+                    self.logger.info('HANG HERE IN MANAGER')
+                    await self.manager.wait_forever()
+                finally:
+                    self.logger.info('LEAVING MANAGER')
 
     async def _handle_shutdown_request(self,
                                        components: Collection[ApplicationComponentAPI],

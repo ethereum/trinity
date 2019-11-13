@@ -157,6 +157,9 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
         level=log_level_to_file,
     )
 
+    logger = logging.getLogger()
+    logger.setLevel(log_level_to_stderr or logging.INFO)
+
     display_launch_logs(trinity_config)
 
     # compute the minimum configured log level across all configured loggers.
@@ -205,7 +208,12 @@ def main_entry(trinity_service_class: Type['TrinityMain'],
 
     try:
         loop.run_until_complete(manager.run())
+    except Exception as err:
+        logger.info('Got error: %r', err)
+        manager.cancel()
+        loop.run_until_complete(manager.wait_stopped())
     finally:
+        loop.stop()
         if trinity_config.trinity_tmp_root_dir:
             import shutil
             shutil.rmtree(trinity_config.trinity_root_dir)
