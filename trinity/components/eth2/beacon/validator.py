@@ -74,6 +74,7 @@ from trinity._utils.shellart import (
 from trinity.components.eth2.beacon.slot_ticker import (
     SlotTickEvent,
 )
+from trinity.components.eth2.misc.tick_type import TickType
 from trinity.protocol.bcc_libp2p.node import Node
 
 
@@ -133,7 +134,7 @@ class Validator(BaseService):
         """
         async for event in self.event_bus.stream(SlotTickEvent):
             try:
-                if not event.is_second_tick:
+                if event.tick_type == TickType.SLOT_START:
                     await self.handle_first_tick(event.slot)
                 else:
                     await self.handle_second_tick(event.slot)

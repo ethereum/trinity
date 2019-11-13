@@ -37,7 +37,7 @@ async def test_slot_ticker_second_half_tick(event_bus, event_loop):
     slot_ticker = SlotTicker(
         genesis_slot=0,
         genesis_time=int(time.time()) + 1,
-        seconds_per_slot=2,
+        seconds_per_slot=3,
         event_bus=event_bus,
     )
     asyncio.ensure_future(slot_ticker.run(), loop=event_loop)
@@ -45,20 +45,20 @@ async def test_slot_ticker_second_half_tick(event_bus, event_loop):
     try:
         first_slot_event = await asyncio.wait_for(
             event_bus.wait_for(SlotTickEvent),
-            timeout=4,
+            timeout=6,
             loop=event_loop,
         )
     except asyncio.TimeoutError:
         assert False, "Slot not ticking"
-    assert not first_slot_event.is_second_tick
+    assert first_slot_event.tick_type.is_start
     try:
         second_slot_event = await asyncio.wait_for(
             event_bus.wait_for(SlotTickEvent),
-            timeout=4,
+            timeout=6,
             loop=event_loop,
         )
     except asyncio.TimeoutError:
         assert False, "No second half tick"
     assert second_slot_event.slot == first_slot_event.slot
-    assert second_slot_event.is_second_tick
+    assert second_slot_event.tick_type.is_two_third
     await slot_ticker.cancel()

@@ -45,6 +45,7 @@ from trinity.components.eth2.beacon.validator import (
 from trinity.components.eth2.beacon.slot_ticker import (
     SlotTickEvent,
 )
+from trinity.components.eth2.misc.tick_type import TickType
 
 
 override_lengths(XIAO_LONG_BAO_CONFIG)
@@ -216,7 +217,7 @@ async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
         SlotTickEvent(
             slot=1,
             elapsed_time=2,
-            is_second_tick=False,
+            tick_type=TickType.SLOT_START,
         ),
         BroadcastConfig(internal=True),
     )
@@ -233,7 +234,7 @@ async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
         SlotTickEvent(
             slot=1,
             elapsed_time=2,
-            is_second_tick=True,
+            tick_type=TickType.SLOT_TWO_THIRD,
         ),
         BroadcastConfig(internal=True),
     )
