@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
 
 default_bls_pubkey = EMPTY_PUBKEY
-default_bls_pubkey = EMPTY_PUBKEY
 
 # NOTE: there is a bug in our current version of ``flake8`` (==3.5.0)
 # which does not recognize the inline typing:
