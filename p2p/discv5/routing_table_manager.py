@@ -14,7 +14,7 @@ from mypy_extensions import (
     TypedDict,
 )
 
-from p2p.trio_service import (
+from p2p.service import (
     Service,
 )
 from p2p.trio_utils import (
