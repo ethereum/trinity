@@ -136,7 +136,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
 
     async def _collect_witnesses(self) -> None:
         while self.is_operational:
-            peer = await self._queening_queue.pop_fastest_peasant()
+            peer = await self.wait(self._queening_queue.pop_fastest_peasant())
 
             batch_id, urgent_hash_tasks = await self.wait(
                 self._witness_node_tasks.get(eth_constants.MAX_STATE_FETCH),
@@ -281,4 +281,4 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
         """
         self.logger.info("Starting witness metadata broadcaster")
         with self.subscribe(self._peer_pool):
-            await self._broadcast_new_witnesses()
+            await self.wait(self._broadcast_new_witnesses())
