@@ -81,14 +81,7 @@ class SlotTicker(BaseService):
             if elapsed_time >= self.seconds_per_slot:
                 elapsed_slots = elapsed_time // self.seconds_per_slot
                 slot = Slot(elapsed_slots + self.genesis_slot)
-
-                elapsed_time_in_slot = elapsed_time % self.seconds_per_slot
-                if elapsed_time_in_slot >= (self.seconds_per_slot * 2 / 3):
-                    tick_type = TickType.SLOT_TWO_THIRD
-                elif elapsed_time_in_slot >= (self.seconds_per_slot / 3):
-                    tick_type = TickType.SLOT_ONE_THIRD
-                else:
-                    tick_type = TickType.SLOT_START
+                tick_type = self._get_tick_type(elapsed_time)
 
                 # Case 1: new slot
                 if slot > self.latest_slot:
@@ -116,7 +109,8 @@ class SlotTicker(BaseService):
 
     async def _broadcast_slot_tick_event(self, slot, elapsed_time, tick_type):
         self.logger.debug(
-            bold_white("[%s] tick for slot %s, elapsed %ds)"), tick_type, slot, elapsed_time
+            bold_white("[%s] tick at %ss of slot #%s, total elapsed %ds"),
+            tick_type, elapsed_time % self.seconds_per_slot, slot, elapsed_time,
         )
         await self.event_bus.broadcast(
             SlotTickEvent(
@@ -126,3 +120,13 @@ class SlotTicker(BaseService):
             ),
             BroadcastConfig(internal=True),
         )
+
+    def _get_tick_type(self, elapsed_time: int) -> TickType:
+        elapsed_time_in_slot = elapsed_time % self.seconds_per_slot
+        if elapsed_time_in_slot >= (self.seconds_per_slot * 2 / 3):
+            tick_type = TickType.SLOT_TWO_THIRD
+        elif elapsed_time_in_slot >= (self.seconds_per_slot / 3):
+            tick_type = TickType.SLOT_ONE_THIRD
+        else:
+            tick_type = TickType.SLOT_START
+        return tick_type
