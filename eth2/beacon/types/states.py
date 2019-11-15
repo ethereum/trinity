@@ -1,23 +1,14 @@
-from typing import Any, Callable, Sequence
+from typing import Sequence, Type, TypeVar
 
 from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 
-from eth2._utils.tuple import update_tuple_item, update_tuple_item_with_fn
 from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_SIGNING_ROOT
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.typing import (
-    Bitfield,
-    Epoch,
-    Gwei,
-    SigningRoot,
-    Slot,
-    Timestamp,
-    ValidatorIndex,
-)
+from eth2.beacon.typing import Bitfield, Epoch, Gwei, SigningRoot, Slot, Timestamp
 from eth2.configs import Eth2Config
 
 from .block_headers import BeaconBlockHeader, default_beacon_block_header
@@ -36,7 +27,19 @@ from .validators import Validator
 default_justification_bits = Bitfield((False,) * JUSTIFICATION_BITS_LENGTH)
 
 
-class BeaconState(ssz.Serializable):
+TBeaconState = TypeVar("TBeaconState", bound="BeaconState")
+
+
+# Use mainnet constants for defaults. We can't import the config object because of an import cycle.
+# TODO: When py-ssz is updated to support size configs, the config will be passed to the `create`
+# classmethod and we can create the defaults dynamically there.
+default_block_roots = default_tuple_of_size(2 ** 13, ZERO_SIGNING_ROOT)
+default_state_roots = default_tuple_of_size(2 ** 13, ZERO_HASH32)
+default_randao_mixes = default_tuple_of_size(2 ** 16, ZERO_HASH32)
+default_slashings = default_tuple_of_size(2 ** 13, Gwei(0))
+
+
+class BeaconState(HashableContainer):
 
     fields = [
         # Versioning
@@ -79,23 +82,24 @@ class BeaconState(ssz.Serializable):
         ("finalized_checkpoint", Checkpoint),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TBeaconState],
         *,
         genesis_time: Timestamp = default_timestamp,
         slot: Slot = default_slot,
         fork: Fork = default_fork,
         latest_block_header: BeaconBlockHeader = default_beacon_block_header,
-        block_roots: Sequence[SigningRoot] = default_tuple,
-        state_roots: Sequence[Hash32] = default_tuple,
+        block_roots: Sequence[SigningRoot] = default_block_roots,
+        state_roots: Sequence[Hash32] = default_state_roots,
         historical_roots: Sequence[Hash32] = default_tuple,
         eth1_data: Eth1Data = default_eth1_data,
         eth1_data_votes: Sequence[Eth1Data] = default_tuple,
         eth1_deposit_index: int = 0,
         validators: Sequence[Validator] = default_tuple,
         balances: Sequence[Gwei] = default_tuple,
-        randao_mixes: Sequence[Hash32] = default_tuple,
-        slashings: Sequence[Gwei] = default_tuple,
+        randao_mixes: Sequence[Hash32] = default_randao_mixes,
+        slashings: Sequence[Gwei] = default_slashings,
         previous_epoch_attestations: Sequence[PendingAttestation] = default_tuple,
         current_epoch_attestations: Sequence[PendingAttestation] = default_tuple,
         justification_bits: Bitfield = default_justification_bits,
@@ -104,7 +108,7 @@ class BeaconState(ssz.Serializable):
         finalized_checkpoint: Checkpoint = default_checkpoint,
         config: Eth2Config = None,
         validator_and_balance_length_check: bool = True,
-    ) -> None:
+    ) -> TBeaconState:
         # We usually want to check that the lengths of each list are the same
         # In some cases, e.g. SSZ fuzzing, they are not and we still want to instantiate an object.
         if validator_and_balance_length_check:
@@ -133,7 +137,7 @@ class BeaconState(ssz.Serializable):
                     config.EPOCHS_PER_SLASHINGS_VECTOR, Gwei(0)
                 )
 
-        super().__init__(
+        return super().create(
             genesis_time=genesis_time,
             slot=slot,
             fork=fork,
@@ -164,65 +168,6 @@ class BeaconState(ssz.Serializable):
     @property
     def validator_count(self) -> int:
         return len(self.validators)
-
-    def update_validator(
-        self,
-        validator_index: ValidatorIndex,
-        validator: Validator,
-        balance: Gwei = None,
-    ) -> "BeaconState":
-        """
-        Replace ``self.validators[validator_index]`` with ``validator``.
-
-        Callers can optionally provide a ``balance`` which will replace
-        ``self.balances[validator_index] with ``balance``.
-        """
-        if (
-            validator_index >= len(self.validators)
-            or validator_index >= len(self.balances)
-            or validator_index < 0
-        ):
-            raise IndexError("Incorrect validator index")
-
-        state = self.update_validator_with_fn(validator_index, lambda *_: validator)
-        if balance:
-            return state._update_validator_balance(validator_index, balance)
-        else:
-            return state
-
-    def update_validator_with_fn(
-        self,
-        validator_index: ValidatorIndex,
-        fn: Callable[[Validator, Any], Validator],
-        *args: Any,
-    ) -> "BeaconState":
-        """
-        Replace ``self.validators[validator_index]`` with
-        the result of calling ``fn`` on the existing ``validator``.
-        Any auxillary args passed in ``args`` are provided to ``fn`` along with the
-        ``validator``.
-        """
-        if validator_index >= len(self.validators) or validator_index < 0:
-            raise IndexError("Incorrect validator index")
-
-        return self.copy(
-            validators=update_tuple_item_with_fn(
-                self.validators, validator_index, fn, *args
-            )
-        )
-
-    def _update_validator_balance(
-        self, validator_index: ValidatorIndex, balance: Gwei
-    ) -> "BeaconState":
-        """
-        Update the balance of validator of the given ``validator_index``.
-        """
-        if validator_index >= len(self.balances) or validator_index < 0:
-            raise IndexError("Incorrect validator index")
-
-        return self.copy(
-            balances=update_tuple_item(self.balances, validator_index, balance)
-        )
 
     def current_epoch(self, slots_per_epoch: int) -> Epoch:
         return compute_epoch_at_slot(self.slot, slots_per_epoch)

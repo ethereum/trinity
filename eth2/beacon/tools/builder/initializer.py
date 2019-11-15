@@ -74,7 +74,7 @@ def create_mock_deposits_and_root(
         tree, root = make_deposit_tree_and_root(deposit_datas_at_count)
         proof = make_deposit_proof(deposit_datas_at_count, tree, root, index)
 
-        deposit = Deposit(proof=proof, data=data)
+        deposit = Deposit.create(proof=proof, data=data)
         deposits += (deposit,)
 
     if len(deposit_datas) > 0:
@@ -102,12 +102,14 @@ def create_mock_deposit(
     assert len(deposits) == 1
     deposit = deposits[0]
 
-    state = state.copy(
-        eth1_data=state.eth1_data.copy(
-            deposit_root=root,
-            deposit_count=state.eth1_data.deposit_count + len(deposits),
-        ),
-        eth1_deposit_index=0 if not leaves else len(leaves),
+    eth1_data = state.eth1_data.mset(
+        "deposit_root",
+        root,
+        "deposit_count",
+        state.eth1_data.deposit_count + len(deposits),
+    )
+    state = state.mset(
+        "eth1_data", eth1_data, "eth1_deposit_index", 0 if not leaves else len(leaves)
     )
 
     return state, deposit
@@ -124,7 +126,7 @@ def create_mock_genesis(
         pubkeys=pubkeys, keymap=keymap, config=config
     )
 
-    genesis_eth1_data = Eth1Data(
+    genesis_eth1_data = Eth1Data.create(
         deposit_root=deposit_root,
         deposit_count=len(genesis_deposits),
         block_hash=ZERO_HASH32,

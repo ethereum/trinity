@@ -34,7 +34,7 @@ def test_activate_validator(
         assert some_validator.activation_epoch == config.GENESIS_EPOCH
     else:
         some_validator = create_mock_validator(
-            pubkeys[: validator_count + 1], config, is_active=is_already_activated
+            pubkeys[validator_count + 1], config, is_active=is_already_activated
         )
         assert some_validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
         assert some_validator.activation_epoch == FAR_FUTURE_EPOCH
@@ -61,9 +61,7 @@ def test_compute_exit_queue_epoch(
         range(len(state.validators)), len(state.validators) // 4
     ):
         some_future_epoch = config.GENESIS_EPOCH + random.randrange(1, 2 ** 32)
-        state = state.update_validator_with_fn(
-            index, lambda validator, *_: validator.copy(exit_epoch=some_future_epoch)
-        )
+        state = state.transform(["validators", index, "exit_epoch"], some_future_epoch)
 
     if is_delayed_exit_epoch_the_maximum_exit_queue_epoch:
         expected_candidate_exit_queue_epoch = compute_activation_exit_epoch(
@@ -75,8 +73,8 @@ def test_compute_exit_queue_epoch(
             some_prior_epoch = random.randrange(
                 config.GENESIS_EPOCH, expected_candidate_exit_queue_epoch
             )
-            state = state.update_validator_with_fn(
-                index, lambda validator, *_: validator.copy(exit_epoch=some_prior_epoch)
+            state = state.transform(
+                ["validators", index, "exit_epoch"], some_prior_epoch
             )
             validator = state.validators[index]
             assert expected_candidate_exit_queue_epoch >= validator.exit_epoch
@@ -109,11 +107,8 @@ def test_compute_exit_queue_epoch(
         for index in random.sample(
             range(len(unqueued_validators)), additional_queued_validator_count
         ):
-            state = state.update_validator_with_fn(
-                index,
-                lambda validator, *_: validator.copy(
-                    exit_epoch=expected_candidate_exit_queue_epoch
-                ),
+            state = state.transform(
+                ["validators", index, "exit_epoch"], expected_candidate_exit_queue_epoch
             )
 
         all_queued_validators = tuple(
@@ -145,10 +140,11 @@ def test_initiate_validator_exit(genesis_state, is_already_exited, config):
     if is_already_exited:
         churn_limit = get_validator_churn_limit(state, config)
         exit_queue_epoch = _compute_exit_queue_epoch(state, churn_limit, config)
-        validator = validator.copy(
-            exit_epoch=exit_queue_epoch,
-            withdrawable_epoch=exit_queue_epoch
-            + config.MIN_VALIDATOR_WITHDRAWABILITY_DELAY,
+        validator = validator.mset(
+            "exit_epoch",
+            exit_queue_epoch,
+            "withdrawable_epoch",
+            exit_queue_epoch + config.MIN_VALIDATOR_WITHDRAWABILITY_DELAY,
         )
 
     exited_validator = initiate_exit_for_validator(validator, state, config)
@@ -174,8 +170,8 @@ def test_set_validator_slashed(
     some_validator = genesis_state.validators[0]
 
     if is_already_slashed:
-        some_validator = some_validator.copy(
-            slashed=True, withdrawable_epoch=some_future_epoch
+        some_validator = some_validator.mset(
+            "slashed", True, "withdrawable_epoch", some_future_epoch
         )
         assert some_validator.slashed
         assert some_validator.withdrawable_epoch == some_future_epoch
@@ -203,10 +199,9 @@ def test_slash_validator(genesis_state, config):
     slashable_range = range(earliest_slashable_epoch, some_epoch)
     sampling_quotient = 4
 
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(
-            earliest_slashable_epoch, config.SLOTS_PER_EPOCH
-        )
+    state = genesis_state.set(
+        "slot",
+        compute_start_slot_at_epoch(earliest_slashable_epoch, config.SLOTS_PER_EPOCH),
     )
     validator_count_to_slash = len(state.validators) // sampling_quotient
     assert validator_count_to_slash > 1
@@ -264,8 +259,8 @@ def test_slash_validator(genesis_state, config):
     # emulate slashings across the current slashable range
     expected_proposer_rewards = {}
     for epoch, coalition in slashings.items():
-        state = state.copy(
-            slot=compute_start_slot_at_epoch(epoch, config.SLOTS_PER_EPOCH)
+        state = state.set(
+            "slot", compute_start_slot_at_epoch(epoch, config.SLOTS_PER_EPOCH)
         )
 
         expected_total_slashed_balance = expected_slashings[epoch]
@@ -281,8 +276,8 @@ def test_slash_validator(genesis_state, config):
         for index in coalition:
             state = slash_validator(state, index, config)
 
-    state = state.copy(
-        slot=compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
+    state = state.set(
+        "slot", compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
     )
     # verify result
     for epoch, coalition in slashings.items():

@@ -1,7 +1,9 @@
+from typing import Type, TypeVar
+
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSSignature, Hash32
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import SignedHashableContainer
 from ssz.sedes import bytes32, bytes96, uint64
 
 from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_SIGNING_ROOT
@@ -9,8 +11,10 @@ from eth2.beacon.typing import SigningRoot, Slot
 
 from .defaults import default_slot
 
+TBeaconBlockHeader = TypeVar("TBeaconBlockHeader", bound="BeaconBlockHeader")
 
-class BeaconBlockHeader(ssz.SignedSerializable):
+
+class BeaconBlockHeader(SignedHashableContainer):
 
     fields = [
         ("slot", uint64),
@@ -20,16 +24,17 @@ class BeaconBlockHeader(ssz.SignedSerializable):
         ("signature", bytes96),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TBeaconBlockHeader],
         *,
         slot: Slot = default_slot,
         parent_root: SigningRoot = ZERO_SIGNING_ROOT,
         state_root: Hash32 = ZERO_HASH32,
         body_root: Hash32 = ZERO_HASH32,
         signature: BLSSignature = EMPTY_SIGNATURE,
-    ):
-        super().__init__(
+    ) -> TBeaconBlockHeader:
+        return super().create(
             slot=slot,
             parent_root=parent_root,
             state_root=state_root,
@@ -52,4 +57,4 @@ class BeaconBlockHeader(ssz.SignedSerializable):
         return f"<{self.__class__.__name__}: {str(self)}>"
 
 
-default_beacon_block_header = BeaconBlockHeader()
+default_beacon_block_header = BeaconBlockHeader.create()

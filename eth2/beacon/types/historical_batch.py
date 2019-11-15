@@ -1,8 +1,8 @@
-from typing import Sequence
+from typing import Sequence, Type, TypeVar
 
 from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
-import ssz
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import Vector, bytes32
 
 from eth2.beacon.constants import ZERO_SIGNING_ROOT
@@ -11,18 +11,21 @@ from eth2.configs import Eth2Config
 
 from .defaults import default_tuple, default_tuple_of_size
 
+THistoricalBatch = TypeVar("THistoricalBatch", bound="HistoricalBatch")
 
-class HistoricalBatch(ssz.Serializable):
+
+class HistoricalBatch(HashableContainer):
 
     fields = [("block_roots", Vector(bytes32, 1)), ("state_roots", Vector(bytes32, 1))]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[THistoricalBatch],
         *,
         block_roots: Sequence[SigningRoot] = default_tuple,
         state_roots: Sequence[Hash32] = default_tuple,
         config: Eth2Config = None
-    ) -> None:
+    ) -> THistoricalBatch:
         if config:
             # try to provide sane defaults
             if block_roots == default_tuple:
@@ -34,4 +37,4 @@ class HistoricalBatch(ssz.Serializable):
                     config.SLOTS_PER_HISTORICAL_ROOT, ZERO_HASH32
                 )
 
-        super().__init__(block_roots=block_roots, state_roots=state_roots)
+        return super().create(block_roots=block_roots, state_roots=state_roots)

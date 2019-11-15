@@ -80,12 +80,12 @@ def _mk_pending_attestation(
     slot: Slot = default_slot,
     committee_index: CommitteeIndex = default_committee_index,
 ) -> PendingAttestation:
-    return PendingAttestation(
+    return PendingAttestation.create(
         aggregation_bits=bitfield,
-        data=AttestationData(
+        data=AttestationData.create(
             slot=slot,
             index=committee_index,
-            target=Checkpoint(epoch=target_epoch, root=target_root),
+            target=Checkpoint.create(epoch=target_epoch, root=target_root),
         ),
     )
 
@@ -240,7 +240,7 @@ def create_block_header_with_signature(
     parent_root: SigningRoot = SAMPLE_HASH_1,
     state_root: Hash32 = SAMPLE_HASH_2,
 ) -> BeaconBlockHeader:
-    block_header = BeaconBlockHeader(
+    block_header = BeaconBlockHeader.create(
         slot=state.slot,
         parent_root=parent_root,
         state_root=state_root,
@@ -254,7 +254,7 @@ def create_block_header_with_signature(
         signature_domain=SignatureDomain.DOMAIN_BEACON_PROPOSER,
         slots_per_epoch=slots_per_epoch,
     )
-    return block_header.copy(signature=block_header_signature)
+    return block_header.set("signature", block_header_signature)
 
 
 #
@@ -297,7 +297,7 @@ def create_mock_proposer_slashing_at_block(
         slots_per_epoch,
     )
 
-    return ProposerSlashing(
+    return ProposerSlashing.create(
         proposer_index=proposer_index, header_1=block_header_1, header_2=block_header_2
     )
 
@@ -344,14 +344,14 @@ def create_mock_slashable_attestation(
     assert committees_per_slot > 0
     committee_index = CommitteeIndex(0)
 
-    attestation_data = AttestationData(
+    attestation_data = AttestationData.create(
         slot=attestation_slot,
         index=committee_index,
         beacon_block_root=beacon_block_root,
-        source=Checkpoint(
+        source=Checkpoint.create(
             epoch=state.current_justified_checkpoint.epoch, root=source_root
         ),
-        target=Checkpoint(
+        target=Checkpoint.create(
             epoch=compute_epoch_at_slot(attestation_slot, config.SLOTS_PER_EPOCH),
             root=target_root,
         ),
@@ -370,7 +370,7 @@ def create_mock_slashable_attestation(
     )
     validator_indices = tuple(committee[i] for i in attesting_indices)
 
-    return IndexedAttestation(
+    return IndexedAttestation.create(
         attesting_indices=validator_indices, data=attestation_data, signature=signature
     )
 
@@ -393,7 +393,7 @@ def create_mock_attester_slashing_is_double_vote(
         state, config, keymap, attestation_slot_2
     )
 
-    return AttesterSlashing(
+    return AttesterSlashing.create(
         attestation_1=slashable_attestation_1, attestation_2=slashable_attestation_2
     )
 
@@ -411,25 +411,26 @@ def create_mock_attester_slashing_is_surround_vote(
     attestation_slot_1 = Slot(attestation_slot_2 + config.SLOTS_PER_EPOCH)
 
     slashable_attestation_1 = create_mock_slashable_attestation(
-        state.copy(
-            slot=attestation_slot_1, current_justified_epoch=config.GENESIS_EPOCH
+        state.mset(
+            "slot", attestation_slot_1, "current_justified_epoch", config.GENESIS_EPOCH
         ),
         config,
         keymap,
         attestation_slot_1,
     )
     slashable_attestation_2 = create_mock_slashable_attestation(
-        state.copy(
-            slot=attestation_slot_1,
-            current_justified_epoch=config.GENESIS_EPOCH
-            + 1,  # source_epoch_1 < source_epoch_2
+        state.mset(
+            "slot",
+            attestation_slot_1,
+            "current_justified_epoch",
+            config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
         ),
         config,
         keymap,
         attestation_slot_2,
     )
 
-    return AttesterSlashing(
+    return AttesterSlashing.create(
         attestation_1=slashable_attestation_1, attestation_2=slashable_attestation_2
     )
 
@@ -519,7 +520,7 @@ def _create_mock_signed_attestation(
     )
 
     # create attestation from attestation_data, particpipant_bitfield, and signature
-    return Attestation(
+    return Attestation.create(
         aggregation_bits=aggregation_bits,
         data=attestation_data,
         signature=aggregate_signature,
@@ -547,15 +548,15 @@ def create_signed_attestation_at_slot(
 
     target_root = _get_target_root(state, config, beacon_block_root)
 
-    attestation_data = AttestationData(
+    attestation_data = AttestationData.create(
         slot=attestation_slot,
         index=committee_index,
         beacon_block_root=beacon_block_root,
-        source=Checkpoint(
+        source=Checkpoint.create(
             epoch=state.current_justified_checkpoint.epoch,
             root=state.current_justified_checkpoint.root,
         ),
-        target=Checkpoint(root=target_root, epoch=target_epoch),
+        target=Checkpoint.create(root=target_root, epoch=target_epoch),
     )
 
     return _create_mock_signed_attestation(
@@ -599,15 +600,15 @@ def create_mock_signed_attestations_at_slot(
     for committee, committee_index, _ in iterate_committees_at_slot(
         state, attestation_slot, committees_per_slot, CommitteeConfig(config)
     ):
-        attestation_data = AttestationData(
+        attestation_data = AttestationData.create(
             slot=attestation_slot,
             index=CommitteeIndex(committee_index),
             beacon_block_root=beacon_block_root,
-            source=Checkpoint(
+            source=Checkpoint.create(
                 epoch=state.current_justified_checkpoint.epoch,
                 root=state.current_justified_checkpoint.root,
             ),
-            target=Checkpoint(root=target_root, epoch=target_epoch),
+            target=Checkpoint.create(root=target_root, epoch=target_epoch),
         )
 
         num_voted_attesters = int(len(committee) * voted_attesters_ratio)
@@ -635,16 +636,19 @@ def create_mock_voluntary_exit(
 ) -> VoluntaryExit:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     target_epoch = current_epoch if exit_epoch is None else exit_epoch
-    voluntary_exit = VoluntaryExit(epoch=target_epoch, validator_index=validator_index)
-    return voluntary_exit.copy(
-        signature=sign_transaction(
+    voluntary_exit = VoluntaryExit.create(
+        epoch=target_epoch, validator_index=validator_index
+    )
+    return voluntary_exit.set(
+        "signature",
+        sign_transaction(
             message_hash=voluntary_exit.signing_root,
             privkey=keymap[state.validators[validator_index].pubkey],
             state=state,
             slot=compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH),
             signature_domain=SignatureDomain.DOMAIN_VOLUNTARY_EXIT,
             slots_per_epoch=config.SLOTS_PER_EPOCH,
-        )
+        ),
     )
 
 
@@ -662,11 +666,11 @@ def create_mock_deposit_data(
     if amount is None:
         amount = config.MAX_EFFECTIVE_BALANCE
 
-    data = DepositData(
+    data = DepositData.create(
         pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
     )
     signature = sign_proof_of_possession(deposit_data=data, privkey=privkey)
-    return data.copy(signature=signature)
+    return data.set("signature", signature)
 
 
 def make_deposit_tree_and_root(

@@ -1,5 +1,3 @@
-from typing import Tuple
-
 from eth_utils import ValidationError
 
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
@@ -90,12 +88,13 @@ def process_attestations(
         )
 
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    new_current_epoch_attestations: Tuple[PendingAttestation, ...] = tuple()
-    new_previous_epoch_attestations: Tuple[PendingAttestation, ...] = tuple()
+    current_epoch_attestations = state.current_epoch_attestations
+    previous_epoch_attestations = state.previous_epoch_attestations
+
     for attestation in block.body.attestations:
         validate_attestation(state, attestation, config)
         proposer_index = get_beacon_proposer_index(state, CommitteeConfig(config))
-        pending_attestation = PendingAttestation(
+        pending_attestation = PendingAttestation.create(
             aggregation_bits=attestation.aggregation_bits,
             data=attestation.data,
             inclusion_delay=state.slot - attestation.data.slot,
@@ -103,17 +102,19 @@ def process_attestations(
         )
 
         if attestation.data.target.epoch == current_epoch:
-            new_current_epoch_attestations += (pending_attestation,)
+            current_epoch_attestations = current_epoch_attestations.append(
+                pending_attestation
+            )
         else:
-            new_previous_epoch_attestations += (pending_attestation,)
+            previous_epoch_attestations = previous_epoch_attestations.append(
+                pending_attestation
+            )
 
-    return state.copy(
-        current_epoch_attestations=(
-            state.current_epoch_attestations + new_current_epoch_attestations
-        ),
-        previous_epoch_attestations=(
-            state.previous_epoch_attestations + new_previous_epoch_attestations
-        ),
+    return state.mset(
+        "current_epoch_attestations",
+        current_epoch_attestations,
+        "previous_epoch_attestations",
+        previous_epoch_attestations,
     )
 
 

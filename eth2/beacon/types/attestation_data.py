@@ -1,5 +1,7 @@
+from typing import Type, TypeVar
+
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32, uint64
 
 from eth2.beacon.constants import ZERO_SIGNING_ROOT
@@ -7,8 +9,10 @@ from eth2.beacon.types.checkpoints import Checkpoint, default_checkpoint
 from eth2.beacon.types.defaults import default_committee_index, default_slot
 from eth2.beacon.typing import CommitteeIndex, SigningRoot, Slot
 
+TAttestationData = TypeVar("TAttestationData", bound="AttestationData")
 
-class AttestationData(ssz.Serializable):
+
+class AttestationData(HashableContainer):
 
     fields = [
         ("slot", uint64),
@@ -20,15 +24,16 @@ class AttestationData(ssz.Serializable):
         ("target", Checkpoint),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TAttestationData],
         slot: Slot = default_slot,
         index: CommitteeIndex = default_committee_index,
         beacon_block_root: SigningRoot = ZERO_SIGNING_ROOT,
         source: Checkpoint = default_checkpoint,
         target: Checkpoint = default_checkpoint,
-    ) -> None:
-        super().__init__(
+    ) -> TAttestationData:
+        return super().create(
             slot=slot,
             index=index,
             beacon_block_root=beacon_block_root,
@@ -46,4 +51,4 @@ class AttestationData(ssz.Serializable):
         )
 
 
-default_attestation_data = AttestationData()
+default_attestation_data = AttestationData.create()

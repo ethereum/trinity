@@ -28,7 +28,7 @@ async def test_handshake_failure_invalid_status_packet(monkeypatch, mock_timeout
     async with ConnectionPairFactory(handshake=False) as (alice, bob):
 
         def status_with_wrong_fork_version(chain):
-            return Status(
+            return Status.create(
                 head_fork_version=b"\x12\x34\x56\x78"  # version different from another node.
             )
 
@@ -39,7 +39,7 @@ async def test_handshake_failure_invalid_status_packet(monkeypatch, mock_timeout
         assert bob.peer_id not in alice.handshaked_peers
 
         def status_with_wrong_checkpoint(chain):
-            return Status(
+            return Status.create(
                 finalized_root=b"\x78"
                 * 32  # finalized root different from another node.
             )
@@ -102,12 +102,12 @@ async def test_request_beacon_blocks_by_range_invalid_request(monkeypatch):
 
         head_slot = 1
         request_head_block_root = b"\x56" * 32
-        head_block = BeaconBlock(
+        head_block = BeaconBlock.create(
             slot=head_slot,
             parent_root=ZERO_HASH32,
             state_root=ZERO_HASH32,
             signature=EMPTY_SIGNATURE,
-            body=BeaconBlockBody(),
+            body=BeaconBlockBody.create(),
         )
 
         # TEST: Can not request blocks with `start_slot` greater than head block slot
@@ -134,8 +134,8 @@ async def test_request_beacon_blocks_by_range_invalid_request(monkeypatch):
         start_slot = head_slot
         state_machine = bob.chain.get_state_machine()
         old_state = bob.chain.get_head_state()
-        new_checkpoint = old_state.finalized_checkpoint.copy(
-            epoch=old_state.finalized_checkpoint.epoch + 1
+        new_checkpoint = old_state.finalized_checkpoint.set(
+            "epoch", old_state.finalized_checkpoint.epoch + 1
         )
 
         def get_canonical_block_by_slot(slot):
@@ -147,13 +147,13 @@ async def test_request_beacon_blocks_by_range_invalid_request(monkeypatch):
 
         def get_state_machine(at_slot=None):
             class MockStateMachine:
-                state = old_state.copy(finalized_checkpoint=new_checkpoint)
+                state = old_state.set("finalized_checkpoint", new_checkpoint)
                 config = state_machine.config
 
             return MockStateMachine()
 
         def get_head_state():
-            return old_state.copy(finalized_checkpoint=new_checkpoint)
+            return old_state.set("finalized_checkpoint", new_checkpoint)
 
         monkeypatch.setattr(bob.chain, "get_state_machine", get_state_machine)
         monkeypatch.setattr(bob.chain, "get_head_state", get_head_state)
@@ -198,14 +198,14 @@ async def test_request_beacon_blocks_by_root(monkeypatch):
     async with ConnectionPairFactory() as (alice, bob):
 
         # Mock up block database
-        head_block = BeaconBlock(
+        head_block = BeaconBlock.create(
             slot=0,
             parent_root=ZERO_HASH32,
             state_root=ZERO_HASH32,
             signature=EMPTY_SIGNATURE,
-            body=BeaconBlockBody(),
+            body=BeaconBlockBody.create(),
         )
-        blocks = [head_block.copy(slot=slot) for slot in range(5)]
+        blocks = [head_block.set("slot", slot) for slot in range(5)]
         mock_root_to_block_db = {block.signing_root: block for block in blocks}
 
         def get_block_by_root(root):

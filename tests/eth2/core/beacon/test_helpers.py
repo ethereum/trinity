@@ -25,10 +25,10 @@ def get_pseudo_chain(length, genesis_block):
     """
     Get a pseudo chain, only slot and parent_root are valid.
     """
-    block = genesis_block.copy()
-    yield block
+    block = genesis_block
+    yield genesis_block
     for slot in range(1, length * 3):
-        block = genesis_block.copy(slot=slot, parent_root=block.signing_root)
+        block = genesis_block.mset("slot", slot, "parent_root", block.signing_root)
         yield block
 
 
@@ -71,8 +71,8 @@ def test_get_block_root_at_slot(
     blocks, block_roots = generate_mock_latest_historical_roots(
         sample_block, current_slot, slots_per_epoch, slots_per_historical_root
     )
-    state = BeaconState(**sample_beacon_state_params).copy(
-        slot=current_slot, block_roots=block_roots
+    state = BeaconState.create(**sample_beacon_state_params).mset(
+        "slot", current_slot, "block_roots", block_roots
     )
 
     if success:
@@ -89,22 +89,22 @@ def test_get_active_validator_indices(sample_validator_record_params):
     current_epoch = 1
     # 3 validators are ACTIVE
     validators = [
-        Validator(**sample_validator_record_params).copy(
-            activation_epoch=0, exit_epoch=FAR_FUTURE_EPOCH
+        Validator.create(**sample_validator_record_params).mset(
+            "activation_epoch", 0, "exit_epoch", FAR_FUTURE_EPOCH
         )
         for i in range(3)
     ]
     active_validator_indices = get_active_validator_indices(validators, current_epoch)
     assert len(active_validator_indices) == 3
 
-    validators[0] = validators[0].copy(
-        activation_epoch=current_epoch + 1  # activation_epoch > current_epoch
+    validators[0] = validators[0].set(
+        "activation_epoch", current_epoch + 1  # activation_epoch > current_epoch
     )
     active_validator_indices = get_active_validator_indices(validators, current_epoch)
     assert len(active_validator_indices) == 2
 
-    validators[1] = validators[1].copy(
-        exit_epoch=current_epoch  # current_epoch == exit_epoch
+    validators[1] = validators[1].set(
+        "exit_epoch", current_epoch  # current_epoch == exit_epoch
     )
     active_validator_indices = get_active_validator_indices(validators, current_epoch)
     assert len(active_validator_indices) == 1
@@ -121,7 +121,7 @@ def test_get_active_validator_indices(sample_validator_record_params):
 def test_get_total_balance(genesis_state, balances, validator_indices, expected):
     state = genesis_state
     for i, index in enumerate(validator_indices):
-        state = state._update_validator_balance(index, balances[i])
+        state = state.transform(["balances", index], balances[i])
     total_balance = get_total_balance(state, validator_indices)
     assert total_balance == expected
 
@@ -139,7 +139,7 @@ def test_get_total_balance(genesis_state, balances, validator_indices, expected)
 def test_get_fork_version(
     previous_version, current_version, epoch, current_epoch, expected
 ):
-    fork = Fork(
+    fork = Fork.create(
         previous_version=previous_version, current_version=current_version, epoch=epoch
     )
     assert expected == _get_fork_version(fork, current_epoch)
@@ -170,11 +170,11 @@ def test_get_domain(
     expected,
 ):
     state = genesis_state
-    fork = Fork(
+    fork = Fork.create(
         previous_version=previous_version, current_version=current_version, epoch=epoch
     )
     assert expected == get_domain(
-        state=state.copy(fork=fork),
+        state=state.set("fork", fork),
         signature_domain=signature_domain,
         slots_per_epoch=slots_per_epoch,
         message_epoch=current_epoch,
@@ -198,8 +198,8 @@ def test_get_seed(
 
     state = genesis_state
     epoch = 1
-    state = state.copy(
-        slot=compute_start_slot_at_epoch(epoch, committee_config.SLOTS_PER_EPOCH)
+    state = state.set(
+        "slot", compute_start_slot_at_epoch(epoch, committee_config.SLOTS_PER_EPOCH)
     )
 
     epoch_as_bytes = epoch.to_bytes(32, "little")

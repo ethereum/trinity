@@ -25,10 +25,11 @@ from eth2.beacon.tools.builder.validator import create_mock_voluntary_exit
 def test_validate_voluntary_exit(
     genesis_state, keymap, slots_per_epoch, persistent_committee_period, config
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(
+    state = genesis_state.set(
+        "slot",
+        compute_start_slot_at_epoch(
             config.GENESIS_EPOCH + persistent_committee_period, slots_per_epoch
-        )
+        ),
     )
     validator_index = 0
     valid_voluntary_exit = create_mock_voluntary_exit(
@@ -53,7 +54,9 @@ def test_validate_validator_has_not_exited(
 
     validator_index = 0
 
-    validator = state.validators[validator_index].copy(exit_epoch=validator_exit_epoch)
+    validator = state.validators[validator_index].set(
+        "exit_epoch", validator_exit_epoch
+    )
 
     if success:
         _validate_validator_has_not_exited(validator)
@@ -78,8 +81,8 @@ def test_validate_eligible_exit_epoch(
     config,
     success,
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(current_epoch, slots_per_epoch)
+    state = genesis_state.set(
+        "slot", compute_start_slot_at_epoch(current_epoch, slots_per_epoch)
     )
 
     validator_index = 0
@@ -110,14 +113,14 @@ def test_validate_validator_minimum_lifespan(
     persistent_committee_period,
     success,
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(current_epoch, slots_per_epoch)
+    state = genesis_state.set(
+        "slot", compute_start_slot_at_epoch(current_epoch, slots_per_epoch)
     )
     validator_index = 0
-    validator = state.validators[validator_index].copy(
-        activation_epoch=activation_epoch
+    validator = state.validators[validator_index].set(
+        "activation_epoch", activation_epoch
     )
-    state = state.update_validator(validator_index, validator)
+    state = state.transform(["validators", validator_index], validator)
 
     if success:
         _validate_validator_minimum_lifespan(
@@ -154,7 +157,9 @@ def test_validate_voluntary_exit_signature(genesis_state, keymap, config, succes
         )
     else:
         # Use wrong signature
-        voluntary_exit = voluntary_exit.copy(signature=b"\x12" * 96)  # wrong signature
+        voluntary_exit = voluntary_exit.set(
+            "signature", b"\x12" * 96
+        )  # wrong signature
         with pytest.raises(ValidationError):
             _validate_voluntary_exit_signature(
                 state, voluntary_exit, validator, slots_per_epoch

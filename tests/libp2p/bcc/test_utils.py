@@ -25,9 +25,6 @@ from trinity.protocol.bcc_libp2p.utils import (
 )
 from trinity.tools.bcc_factories import BeaconBlockFactory
 
-# Wrong type of `fork_version`, which should be `bytes4`.
-invalid_ssz_msg = Status(head_fork_version="1")
-
 
 def test_peer_id_from_pubkey():
     pubkey = datatypes.PublicKey(
@@ -67,7 +64,7 @@ class FakeNetStream:
         return len(data)
 
 
-@pytest.mark.parametrize("msg", (Status(),))
+@pytest.mark.parametrize("msg", (Status.create(),))
 @pytest.mark.asyncio
 async def test_read_write_req_msg(msg):
     s = FakeNetStream()
@@ -76,7 +73,7 @@ async def test_read_write_req_msg(msg):
     assert msg_read == msg
 
 
-@pytest.mark.parametrize("msg", (Status(),))
+@pytest.mark.parametrize("msg", (Status.create(),))
 @pytest.mark.asyncio
 async def test_read_write_resp_msg(msg):
     s = FakeNetStream()
@@ -111,15 +108,6 @@ async def test_read_req_failure(mock_timeout):
     await s.write(b"\x03123")
     with pytest.raises(ReadMessageFailure):
         await read_req(s, Status)
-
-
-@pytest.mark.asyncio
-async def test_write_req_failure():
-    s = FakeNetStream()
-
-    # Test: Raise `WriteMessageFailure` if `ssz.SerializationError` is thrown.
-    with pytest.raises(WriteMessageFailure):
-        await write_req(s, invalid_ssz_msg)
 
 
 @pytest.mark.asyncio
@@ -166,11 +154,7 @@ async def test_write_resp_failure():
     # Test: Raise `WriteMessageFailure` if `resp_code` is not SUCCESS,
     #   but `msg` is not `str`.
     with pytest.raises(WriteMessageFailure):
-        await write_resp(s, Status(), ResponseCode.INVALID_REQUEST)
-
-    # Test: Raise `WriteMessageFailure` if `ssz.SerializationError` is thrown.
-    with pytest.raises(WriteMessageFailure):
-        await write_req(s, invalid_ssz_msg)
+        await write_resp(s, Status.create(), ResponseCode.INVALID_REQUEST)
 
 
 @pytest.mark.parametrize(

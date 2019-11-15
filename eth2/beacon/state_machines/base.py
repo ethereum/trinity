@@ -164,6 +164,6 @@ class BeaconStateMachine(BaseBeaconStateMachine):
             state, block=block, check_proposer_signature=check_proposer_signature
         )
 
-        block = block.copy(state_root=state.hash_tree_root)
+        block = block.set("state_root", state.hash_tree_root)
 
         return state, block

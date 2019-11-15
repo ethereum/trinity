@@ -31,7 +31,7 @@ def test_verify_indexed_attestation_signature(
     sample_indexed_attestation_params,
     sample_fork_params,
 ):
-    state = genesis_state.copy(fork=Fork(**sample_fork_params))
+    state = genesis_state.set("fork", Fork.create(**sample_fork_params))
 
     # NOTE: we can do this before "correcting" the params as they
     # touch disjoint subsets of the provided params
@@ -47,14 +47,14 @@ def test_verify_indexed_attestation_signature(
         state,
         config,
     )
-    valid_votes = IndexedAttestation(**valid_params)
+    valid_votes = IndexedAttestation.create(**valid_params)
 
     validate_indexed_attestation_aggregate_signature(
         state, valid_votes, slots_per_epoch
     )
 
     invalid_params = _corrupt_signature(slots_per_epoch, valid_params, state.fork)
-    invalid_votes = IndexedAttestation(**invalid_params)
+    invalid_votes = IndexedAttestation.create(**invalid_params)
     with pytest.raises(ValidationError):
         validate_indexed_attestation_aggregate_signature(
             state, invalid_votes, slots_per_epoch
@@ -81,7 +81,7 @@ def _get_indices_and_signatures(validator_count, state, config, message_hash, pr
 def _run_verify_indexed_vote(
     slots_per_epoch, params, state, max_validators_per_committee, should_succeed
 ):
-    votes = IndexedAttestation(**params)
+    votes = IndexedAttestation.create(**params)
     if should_succeed:
         validate_indexed_attestation(
             state, votes, max_validators_per_committee, slots_per_epoch
@@ -130,7 +130,7 @@ def _corrupt_signature(slots_per_epoch, params, fork):
 
 
 def _create_indexed_attestation_messages(params):
-    attestation = IndexedAttestation(**params)
+    attestation = IndexedAttestation.create(**params)
     return attestation.data.hash_tree_root
 
 
@@ -140,7 +140,6 @@ def _create_indexed_attestation_messages(params):
     [
         (lambda params: params, True, False, False),
         (_corrupt_attesting_indices, False, False, False),
-        (_corrupt_attesting_indices_max, False, False, True),
         (_corrupt_signature, False, True, False),
     ],
 )
@@ -161,7 +160,7 @@ def test_validate_indexed_attestation(
     max_validators_per_committee,
     config,
 ):
-    state = genesis_state.copy(fork=Fork(**sample_fork_params))
+    state = genesis_state.set("fork", Fork.create(**sample_fork_params))
 
     # NOTE: we can do this before "correcting" the params as they
     # touch disjoint subsets of the provided params
@@ -211,7 +210,7 @@ def test_verify_indexed_attestation_after_fork(
         "epoch": 15,
     }
 
-    state = genesis_state.copy(slot=20, fork=Fork(**past_fork_params))
+    state = genesis_state.mset("slot", 20, "fork", Fork.create(**past_fork_params))
 
     message_hash = _create_indexed_attestation_messages(
         sample_indexed_attestation_params
@@ -237,21 +236,21 @@ def test_verify_indexed_attestation_after_fork(
 def test_is_slashable_attestation_data(
     sample_attestation_data_params, is_double_vote, is_surround_vote
 ):
-    data_1 = AttestationData(**sample_attestation_data_params)
-    data_2 = AttestationData(**sample_attestation_data_params)
+    data_1 = AttestationData.create(**sample_attestation_data_params)
+    data_2 = AttestationData.create(**sample_attestation_data_params)
 
     if is_double_vote:
-        data_2 = data_2.copy(
-            beacon_block_root=(
-                int.from_bytes(data_1.beacon_block_root, "little") + 1
-            ).to_bytes(32, "little")
+        data_2 = data_2.set(
+            "beacon_block_root",
+            (int.from_bytes(data_1.beacon_block_root, "little") + 1).to_bytes(
+                32, "little"
+            ),
         )
 
     if is_surround_vote:
-        data_1 = data_1.copy(
-            source=data_1.source.copy(epoch=data_2.source.epoch - 1),
-            target=data_1.target.copy(epoch=data_2.target.epoch + 1),
-        )
+        data_1 = data_1.transform(
+            ("source", "epoch"), data_2.source.epoch - 1
+        ).transform(("target", "epoch"), data_2.target.epoch + 1)
 
     assert is_slashable_attestation_data(data_1, data_2) == (
         is_double_vote or is_surround_vote

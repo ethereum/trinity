@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Sequence, Type, TypeVar
 
 from eth._utils.datatypes import Configurable
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSSignature, Hash32
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import HashableContainer, SignedHashableContainer
 from ssz.sedes import List, bytes32, bytes96, uint64
 
 from eth2.beacon.constants import (
@@ -28,21 +28,25 @@ if TYPE_CHECKING:
     from eth2.beacon.db.chain import BaseBeaconChainDB  # noqa: F401
 
 
-class BeaconBlockBody(ssz.Serializable):
+TBeaconBlockBody = TypeVar("TBeaconBlockBody", bound="BeaconBlockBody")
+
+
+class BeaconBlockBody(HashableContainer):
 
     fields = [
         ("randao_reveal", bytes96),
         ("eth1_data", Eth1Data),
         ("graffiti", bytes32),
-        ("proposer_slashings", List(ProposerSlashing, 1)),
+        ("proposer_slashings", List(ProposerSlashing, 16)),
         ("attester_slashings", List(AttesterSlashing, 1)),
-        ("attestations", List(Attestation, 1)),
-        ("deposits", List(Deposit, 1)),
-        ("voluntary_exits", List(VoluntaryExit, 1)),
+        ("attestations", List(Attestation, 128)),
+        ("deposits", List(Deposit, 16)),
+        ("voluntary_exits", List(VoluntaryExit, 16)),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TBeaconBlockBody],
         *,
         randao_reveal: bytes96 = EMPTY_SIGNATURE,
         eth1_data: Eth1Data = default_eth1_data,
@@ -52,8 +56,8 @@ class BeaconBlockBody(ssz.Serializable):
         attestations: Sequence[Attestation] = default_tuple,
         deposits: Sequence[Deposit] = default_tuple,
         voluntary_exits: Sequence[VoluntaryExit] = default_tuple,
-    ) -> None:
-        super().__init__(
+    ) -> TBeaconBlockBody:
+        return super().create(
             randao_reveal=randao_reveal,
             eth1_data=eth1_data,
             graffiti=graffiti,
@@ -66,7 +70,7 @@ class BeaconBlockBody(ssz.Serializable):
 
     @property
     def is_empty(self) -> bool:
-        return self == BeaconBlockBody()
+        return self == BeaconBlockBody.create()
 
     def __str__(self) -> str:
         return (
@@ -83,10 +87,13 @@ class BeaconBlockBody(ssz.Serializable):
         return f"<{self.__class__.__name__}: {str(self)}>"
 
 
-default_beacon_block_body = BeaconBlockBody()
+default_beacon_block_body = BeaconBlockBody.create()
 
 
-class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
+TBaseBeaconBlock = TypeVar("TBaseBeaconBlock", bound="BaseBeaconBlock")
+
+
+class BaseBeaconBlock(SignedHashableContainer, Configurable, ABC):
     fields = [
         ("slot", uint64),
         ("parent_root", bytes32),
@@ -95,16 +102,17 @@ class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
         ("signature", bytes96),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TBaseBeaconBlock],
         *,
         slot: Slot = default_slot,
         parent_root: SigningRoot = ZERO_SIGNING_ROOT,
         state_root: Hash32 = ZERO_HASH32,
         body: BeaconBlockBody = default_beacon_block_body,
         signature: BLSSignature = EMPTY_SIGNATURE,
-    ) -> None:
-        super().__init__(
+    ) -> TBaseBeaconBlock:
+        return super().create(
             slot=slot,
             parent_root=parent_root,
             state_root=state_root,
@@ -129,7 +137,7 @@ class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
 
     @property
     def header(self) -> BeaconBlockHeader:
-        return BeaconBlockHeader(
+        return BeaconBlockHeader.create(
             slot=self.slot,
             parent_root=self.parent_root,
             state_root=self.state_root,
@@ -151,6 +159,9 @@ class BaseBeaconBlock(ssz.SignedSerializable, Configurable, ABC):
         return f"<{self.__class__.__name__}: {str(self)}>"
 
 
+TBeaconBlock = TypeVar("TBeaconBlock", bound="BeaconBlock")
+
+
 class BeaconBlock(BaseBeaconBlock):
     block_body_class = BeaconBlockBody
 
@@ -162,7 +173,7 @@ class BeaconBlock(BaseBeaconBlock):
         Return the block denoted by the given block ``root``.
         """
         block = chaindb.get_block_by_root(root, cls)
-        body = cls.block_body_class(
+        body = cls.block_body_class.create(
             randao_reveal=block.body.randao_reveal,
             eth1_data=block.body.eth1_data,
             graffiti=block.body.graffiti,
@@ -173,7 +184,7 @@ class BeaconBlock(BaseBeaconBlock):
             voluntary_exits=block.body.voluntary_exits,
         )
 
-        return cls(
+        return cls.create(
             slot=block.slot,
             parent_root=block.parent_root,
             state_root=block.state_root,
@@ -183,8 +194,10 @@ class BeaconBlock(BaseBeaconBlock):
 
     @classmethod
     def from_parent(
-        cls, parent_block: "BaseBeaconBlock", block_params: FromBlockParams
-    ) -> "BaseBeaconBlock":
+        cls: Type[TBaseBeaconBlock],
+        parent_block: "BaseBeaconBlock",
+        block_params: FromBlockParams,
+    ) -> TBaseBeaconBlock:
         """
         Initialize a new block with the ``parent_block`` as the block's
         previous block root.
@@ -194,16 +207,18 @@ class BeaconBlock(BaseBeaconBlock):
         else:
             slot = block_params.slot
 
-        return cls(
+        return cls.create(
             slot=slot,
             parent_root=parent_block.signing_root,
             state_root=parent_block.state_root,
-            body=cls.block_body_class(),
+            body=cls.block_body_class.create(),
         )
 
     @classmethod
-    def convert_block(cls, block: "BaseBeaconBlock") -> "BeaconBlock":
-        return cls(
+    def convert_block(
+        cls: Type[TBaseBeaconBlock], block: "BaseBeaconBlock"
+    ) -> TBaseBeaconBlock:
+        return cls.create(
             slot=block.slot,
             parent_root=block.parent_root,
             state_root=block.state_root,
@@ -212,8 +227,10 @@ class BeaconBlock(BaseBeaconBlock):
         )
 
     @classmethod
-    def from_header(cls, header: BeaconBlockHeader) -> "BeaconBlock":
-        return cls(
+    def from_header(
+        cls: Type[TBaseBeaconBlock], header: BeaconBlockHeader
+    ) -> TBeaconBlock:
+        return cls.create(
             slot=header.slot,
             parent_root=header.parent_root,
             state_root=header.state_root,

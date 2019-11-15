@@ -24,28 +24,31 @@ from eth2.beacon.types.states import BeaconState
 
 @pytest.fixture(params=[1, 10, 999])
 def block(request, sample_beacon_block_params):
-    return BeaconBlock(**sample_beacon_block_params).copy(
-        parent_root=GENESIS_PARENT_HASH, slot=request.param
+    return BeaconBlock.create(**sample_beacon_block_params).mset(
+        "parent_root", GENESIS_PARENT_HASH, "slot", request.param
     )
 
 
 @pytest.fixture()
 def state(sample_beacon_state_params):
-    return BeaconState(**sample_beacon_state_params)
+    return BeaconState.create(**sample_beacon_state_params)
 
 
 @pytest.fixture()
 def block_with_attestation(
     chaindb, sample_block, sample_attestation_params, fork_choice_scoring
 ):
-    sample_attestation = Attestation(**sample_attestation_params)
+    sample_attestation = Attestation.create(**sample_attestation_params)
 
     genesis = sample_block
     chaindb.persist_block(genesis, genesis.__class__, fork_choice_scoring)
-    block1 = genesis.copy(
-        parent_root=genesis.signing_root,
-        slot=genesis.slot + 1,
-        body=genesis.body.copy(attestations=(sample_attestation,)),
+    block1 = genesis.mset(
+        "parent_root",
+        genesis.signing_root,
+        "slot",
+        genesis.slot + 1,
+        "body",
+        genesis.body.set("attestations", (sample_attestation,)),
     )
     return block1, sample_attestation
 
@@ -97,7 +100,7 @@ def test_chaindb_persist_block_and_hash_tree_root_to_signing_root(
 def test_chaindb_persist_block_and_unknown_parent(
     chaindb, block, fork_choice_scoring, seed
 ):
-    n_block = block.copy(parent_root=hash_eth2(seed))
+    n_block = block.set("parent_root", hash_eth2(seed))
     with pytest.raises(ParentNotFound):
         chaindb.persist_block(n_block, n_block.__class__, fork_choice_scoring)
 
@@ -112,8 +115,8 @@ def test_chaindb_persist_block_and_block_to_root(chaindb, block, fork_choice_sco
 def test_chaindb_get_score(
     chaindb, fixture_sm_class, sample_beacon_block_params, fork_choice_scoring
 ):
-    genesis = BeaconBlock(**sample_beacon_block_params).copy(
-        parent_root=GENESIS_PARENT_HASH, slot=0
+    genesis = BeaconBlock.create(**sample_beacon_block_params).mset(
+        "parent_root", GENESIS_PARENT_HASH, "slot", 0
     )
     chaindb.persist_block(genesis, genesis.__class__, fork_choice_scoring)
 
@@ -132,8 +135,8 @@ def test_chaindb_get_score(
         == expected_genesis_score
     )
 
-    block1 = BeaconBlock(**sample_beacon_block_params).copy(
-        parent_root=genesis.signing_root, slot=1
+    block1 = BeaconBlock.create(**sample_beacon_block_params).mset(
+        "parent_root", genesis.signing_root, "slot", 1
     )
     chaindb.persist_block(block1, block1.__class__, fork_choice_scoring)
 
@@ -182,7 +185,7 @@ def test_chaindb_get_head_state_slot(chaindb, state):
     with pytest.raises(HeadStateSlotNotFound):
         chaindb.get_head_state_slot()
     current_slot = state.slot + 10
-    current_state = state.copy(slot=current_slot)
+    current_state = state.set("slot", current_slot)
     chaindb.persist_state(current_state)
     assert chaindb.get_head_state_slot() == current_state.slot
     past_state = state
@@ -219,15 +222,15 @@ def test_chaindb_get_finalized_head(
     fork_choice_scoring,
 ):
     chaindb = chaindb_at_genesis
-    block = BeaconBlock(**sample_beacon_block_params).copy(
-        parent_root=genesis_block.signing_root
+    block = BeaconBlock.create(**sample_beacon_block_params).set(
+        "parent_root", genesis_block.signing_root
     )
 
     assert chaindb.get_finalized_head(genesis_block.__class__) == genesis_block
     assert chaindb.get_justified_head(genesis_block.__class__) == genesis_block
 
-    state_with_finalized_block = genesis_state.copy(
-        finalized_checkpoint=Checkpoint(root=block.signing_root)
+    state_with_finalized_block = genesis_state.set(
+        "finalized_checkpoint", Checkpoint.create(root=block.signing_root)
     )
     chaindb.persist_state(state_with_finalized_block)
     chaindb.persist_block(block, BeaconBlock, fork_choice_scoring)
@@ -245,18 +248,17 @@ def test_chaindb_get_justified_head(
     config,
 ):
     chaindb = chaindb_at_genesis
-    block = BeaconBlock(**sample_beacon_block_params).copy(
-        parent_root=genesis_block.signing_root
+    block = BeaconBlock.create(**sample_beacon_block_params).set(
+        "parent_root", genesis_block.signing_root
     )
 
     assert chaindb.get_finalized_head(genesis_block.__class__) == genesis_block
     assert chaindb.get_justified_head(genesis_block.__class__) == genesis_block
 
     # test that there is only one justified head per epoch
-    state_with_bad_epoch = genesis_state.copy(
-        current_justified_checkpoint=Checkpoint(
-            root=block.signing_root, epoch=config.GENESIS_EPOCH
-        )
+    state_with_bad_epoch = genesis_state.set(
+        "current_justified_checkpoint",
+        Checkpoint.create(root=block.signing_root, epoch=config.GENESIS_EPOCH),
     )
     chaindb.persist_state(state_with_bad_epoch)
     chaindb.persist_block(block, BeaconBlock, fork_choice_scoring)
@@ -265,10 +267,9 @@ def test_chaindb_get_justified_head(
     assert chaindb.get_justified_head(genesis_block.__class__) == genesis_block
 
     # test that the we can update justified head if we satisfy the invariants
-    state_with_justified_block = genesis_state.copy(
-        current_justified_checkpoint=Checkpoint(
-            root=block.signing_root, epoch=config.GENESIS_EPOCH + 1
-        )
+    state_with_justified_block = genesis_state.set(
+        "current_justified_checkpoint",
+        Checkpoint.create(root=block.signing_root, epoch=config.GENESIS_EPOCH + 1),
     )
     chaindb.persist_state(state_with_justified_block)
 
@@ -295,12 +296,12 @@ def test_chaindb_get_canonical_head(chaindb, block, fork_choice_scoring):
     result_block = chaindb.get_canonical_head(block.__class__)
     assert result_block == block
 
-    block_2 = block.copy(slot=block.slot + 1, parent_root=block.signing_root)
+    block_2 = block.mset("slot", block.slot + 1, "parent_root", block.signing_root)
     chaindb.persist_block(block_2, block_2.__class__, fork_choice_scoring)
     result_block = chaindb.get_canonical_head(block.__class__)
     assert result_block == block_2
 
-    block_3 = block.copy(slot=block_2.slot + 1, parent_root=block_2.signing_root)
+    block_3 = block.mset("slot", block_2.slot + 1, "parent_root", block_2.signing_root)
     chaindb.persist_block(block_3, block_3.__class__, fork_choice_scoring)
     result_block = chaindb.get_canonical_head(block.__class__)
     assert result_block == block_3

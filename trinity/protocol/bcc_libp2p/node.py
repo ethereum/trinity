@@ -584,7 +584,7 @@ class Node(BaseService):
             self.logger.debug("Fail to open stream to %s", str(peer_id))
         else:
             async with Interaction(stream) as interaction:
-                goodbye = Goodbye(reason)
+                goodbye = Goodbye.create(reason)
                 try:
                     await interaction.write_request(goodbye)
                 except WriteMessageFailure:
@@ -628,7 +628,7 @@ class Node(BaseService):
             raise RequestFailure(str(error)) from error
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
-            request = BeaconBlocksByRangeRequest(
+            request = BeaconBlocksByRangeRequest.create(
                 head_block_root=head_block_root,
                 start_slot=start_slot,
                 count=count,
@@ -662,7 +662,7 @@ class Node(BaseService):
             raise RequestFailure(str(error)) from error
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
-            request = BeaconBlocksByRootRequest(block_roots=block_roots)
+            request = BeaconBlocksByRootRequest.create(block_roots=block_roots)
             await interaction.write_request(request)
             blocks = tuple([
                 block async for block in

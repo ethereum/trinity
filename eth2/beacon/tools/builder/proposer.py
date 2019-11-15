@@ -85,11 +85,11 @@ def create_block_on_state(
     # TODO: Add more operations
     randao_reveal = _generate_randao_reveal(privkey, slot, state, config)
     eth1_data = state.eth1_data
-    body = BeaconBlockBody(
+    body = BeaconBlockBody.create(
         randao_reveal=randao_reveal, eth1_data=eth1_data, attestations=attestations
     )
 
-    block = block.copy(body=body)
+    block = block.set("body", body)
 
     # Apply state transition to get state root
     state, block = state_machine.import_block(
@@ -106,7 +106,7 @@ def create_block_on_state(
         slots_per_epoch=config.SLOTS_PER_EPOCH,
     )
 
-    block = block.copy(signature=signature)
+    block = block.set("signature", signature)
 
     return block
 

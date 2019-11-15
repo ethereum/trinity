@@ -76,8 +76,10 @@ class OperationHandler(
         # update API provided by `py-ssz`.
         # NOTE: we ignore the type here, otherwise need to spell out each of the keyword
         # arguments individually... save some work and just build them dynamically
-        block = BeaconBlock(
-            body=BeaconBlockBody(**{f"{cls.name}s": (operation,)})  # type: ignore
+        block = BeaconBlock.create(
+            body=BeaconBlockBody.create(
+                **{f"{cls.name}s": (operation,)}  # type: ignore
+            )
         )
         try:
             return cls.processor(state, block, config)

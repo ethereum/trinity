@@ -48,7 +48,7 @@ def process_deposit(
     # needs to be done here because while the deposit contract will never
     # create an invalid Merkle branch, it may admit an invalid deposit
     # object, and we need to be able to skip over it
-    state = state.copy(eth1_deposit_index=state.eth1_deposit_index + 1)
+    state = state.set("eth1_deposit_index", state.eth1_deposit_index + 1)
 
     pubkey = deposit.data.pubkey
     amount = deposit.data.amount
@@ -72,9 +72,11 @@ def process_deposit(
             pubkey, withdrawal_credentials, amount, config
         )
 
-        return state.copy(
-            validators=state.validators + (validator,),
-            balances=state.balances + (amount,),
+        return state.mset(
+            "validators",
+            state.validators.append(validator),
+            "balances",
+            state.balances.append(amount),
         )
     else:
         index = ValidatorIndex(validator_pubkeys.index(pubkey))

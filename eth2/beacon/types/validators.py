@@ -1,6 +1,8 @@
+from typing import Type, TypeVar
+
 from eth_typing import BLSPubkey, Hash32
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import boolean, bytes32, bytes48, uint64
 
 from eth2.beacon.constants import FAR_FUTURE_EPOCH, ZERO_HASH32
@@ -25,7 +27,10 @@ def calculate_effective_balance(amount: Gwei, config: Eth2Config) -> Gwei:
     )
 
 
-class Validator(ssz.Serializable):
+TValidator = TypeVar("TValidator", bound="Validator")
+
+
+class Validator(HashableContainer):
 
     fields = [
         ("pubkey", bytes48),
@@ -42,8 +47,9 @@ class Validator(ssz.Serializable):
         ("withdrawable_epoch", uint64),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TValidator],
         *,
         pubkey: BLSPubkey = default_bls_pubkey,
         withdrawal_credentials: Hash32 = ZERO_HASH32,
@@ -53,8 +59,8 @@ class Validator(ssz.Serializable):
         activation_epoch: Epoch = default_epoch,
         exit_epoch: Epoch = default_epoch,
         withdrawable_epoch: Epoch = default_epoch,
-    ) -> None:
-        super().__init__(
+    ) -> TValidator:
+        return super().create(
             pubkey=pubkey,
             withdrawal_credentials=withdrawal_credentials,
             effective_balance=effective_balance,
@@ -94,7 +100,7 @@ class Validator(ssz.Serializable):
         """
         Return a new pending ``Validator`` with the given fields.
         """
-        return cls(
+        return cls.create(
             pubkey=pubkey,
             withdrawal_credentials=withdrawal_credentials,
             effective_balance=calculate_effective_balance(amount, config),
