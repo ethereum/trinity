@@ -91,7 +91,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
             lambda task: task.block_number,
         )
 
-        self._queening_queue = QueeningQueue(peer_pool, token=token)
+        self._queening_queue = QueeningQueue(peer_pool, token=self.cancel_token)
 
     async def get_queen_peer(self) -> ETHPeer:
         return await self._queening_queue.get_queen_peer()

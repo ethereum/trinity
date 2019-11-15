@@ -145,7 +145,7 @@ class BeamSyncer(BaseService):
             self.cancel_token,
         )
 
-        self._witness_collector = BeamStateWitnessCollector(db, peer_pool, token)
+        self._witness_collector = BeamStateWitnessCollector(db, peer_pool, self.cancel_token)
 
         self._state_downloader = BeamDownloader(
             db,
