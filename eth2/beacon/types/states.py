@@ -1,10 +1,8 @@
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, Type, TypeVar
 
 from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import humanize_hash
-import ssz
-from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 
 from eth2._utils.tuple import update_tuple_item, update_tuple_item_with_fn
 from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_SIGNING_ROOT
@@ -19,6 +17,8 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 from eth2.configs import Eth2Config
+from ssz.hashable_container import HashableContainer
+from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 
 from .block_headers import BeaconBlockHeader, default_beacon_block_header
 from .checkpoints import Checkpoint, default_checkpoint
@@ -36,7 +36,10 @@ from .validators import Validator
 default_justification_bits = Bitfield((False,) * JUSTIFICATION_BITS_LENGTH)
 
 
-class BeaconState(ssz.Serializable):
+TBeaconState = TypeVar("TBeaconState", bound="BeaconState")
+
+
+class BeaconState(HashableContainer):
 
     fields = [
         # Versioning
@@ -79,8 +82,9 @@ class BeaconState(ssz.Serializable):
         ("finalized_checkpoint", Checkpoint),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TBeaconState],
         *,
         genesis_time: Timestamp = default_timestamp,
         slot: Slot = default_slot,
@@ -104,7 +108,7 @@ class BeaconState(ssz.Serializable):
         finalized_checkpoint: Checkpoint = default_checkpoint,
         config: Eth2Config = None,
         validator_and_balance_length_check: bool = True,
-    ) -> None:
+    ) -> TBeaconState:
         # We usually want to check that the lengths of each list are the same
         # In some cases, e.g. SSZ fuzzing, they are not and we still want to instantiate an object.
         if validator_and_balance_length_check:
@@ -133,7 +137,7 @@ class BeaconState(ssz.Serializable):
                     config.EPOCHS_PER_SLASHINGS_VECTOR, Gwei(0)
                 )
 
-        super().__init__(
+        return super().create(
             genesis_time=genesis_time,
             slot=slot,
             fork=fork,

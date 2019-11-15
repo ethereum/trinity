@@ -1,9 +1,13 @@
-import ssz
+from typing import Type, TypeVar
+
+from ssz.hashable_container import HashableContainer
 
 from .attestations import IndexedAttestation, default_indexed_attestation
 
+TAttesterSlashing = TypeVar("TAttesterSlashing", bound="AttesterSlashing")
 
-class AttesterSlashing(ssz.Serializable):
+
+class AttesterSlashing(HashableContainer):
 
     fields = [
         # First attestation
@@ -12,12 +16,13 @@ class AttesterSlashing(ssz.Serializable):
         ("attestation_2", IndexedAttestation),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TAttesterSlashing],
         attestation_1: IndexedAttestation = default_indexed_attestation,
         attestation_2: IndexedAttestation = default_indexed_attestation,
-    ) -> None:
-        super().__init__(attestation_1, attestation_2)
+    ) -> TAttesterSlashing:
+        return super().create(attestation_1=attestation_1, attestation_2=attestation_2)
 
     def __str__(self) -> str:
         return (
