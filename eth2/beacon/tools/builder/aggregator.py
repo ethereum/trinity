@@ -8,14 +8,14 @@ from eth2.beacon.helpers import compute_epoch_at_slot, get_domain
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import CommitteeIndex, Slot
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import CommitteeConfig
 
 # TODO: TARGET_AGGREGATORS_PER_COMMITTEE is not in Eth2Config now.
 TARGET_AGGREGATORS_PER_COMMITTEE = 16
 
 
 def slot_signature(
-    state: BeaconState, slot: Slot, privkey: int, config: Eth2Config
+    state: BeaconState, slot: Slot, privkey: int, config: CommitteeConfig
 ) -> BLSSignature:
     """
     Sign on ``slot`` and return the signature.
@@ -34,7 +34,7 @@ def is_aggregator(
     slot: Slot,
     index: CommitteeIndex,
     signature: BLSSignature,
-    config: Eth2Config,
+    config: CommitteeConfig,
 ) -> bool:
     """
     Check if the validator is one of the aggregators of the given ``slot``.
@@ -51,6 +51,6 @@ def is_aggregator(
 
         - Chart analysis: https://docs.google.com/spreadsheets/d/1C7pBqEWJgzk3_jesLkqJoDTnjZOODnGTOJUrxUMdxMA  # noqa: E501
     """
-    committee = get_beacon_committee(state, slot, index, CommitteeConfig(config))
+    committee = get_beacon_committee(state, slot, index, config)
     modulo = max(1, len(committee) // TARGET_AGGREGATORS_PER_COMMITTEE)
     return int.from_bytes(hash_eth2(signature)[0:8], byteorder="little") % modulo == 0

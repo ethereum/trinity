@@ -9,6 +9,7 @@ from eth2.beacon.tools.builder.aggregator import (
     is_aggregator,
     slot_signature,
 )
+from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.slow
@@ -16,8 +17,10 @@ from eth2.beacon.tools.builder.aggregator import (
     ("validator_count", "target_committee_size", "slots_per_epoch"), [(1000, 100, 10)]
 )
 def test_aggregate_votes(validator_count, privkeys, genesis_state, config):
+    config = CommitteeConfig(config)
     state = genesis_state
     epoch = compute_epoch_at_slot(state.slot, config.SLOTS_PER_EPOCH)
+
     sum_aggregator_count = 0
     for committee, committee_index, slot in iterate_committees_at_epoch(
         state, epoch, config
