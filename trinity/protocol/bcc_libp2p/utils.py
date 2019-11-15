@@ -404,7 +404,7 @@ class Interaction:
 
     @property
     def peer_id(self) -> ID:
-        return self.stream.mplex_conn.peer_id
+        return self.stream.muxed_conn.peer_id
 
     def debug(self, message: str) -> None:
         self.logger.debug(

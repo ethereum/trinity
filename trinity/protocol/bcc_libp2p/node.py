@@ -273,9 +273,8 @@ class Node(BaseService):
             muxer_opt=muxer_protocol_ops,
             sec_opt=security_protocol_ops,
             peerstore_opt=None,  # let the function initialize it
-            disc_opt=None,  # no routing required here
         )
-        self.host = BasicHost(network=network, router=None)
+        self.host = BasicHost(public_key=key_pair.public_key, network=network)
 
         if gossipsub_params is None:
             gossipsub_params = GossipsubParams()
