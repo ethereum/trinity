@@ -15,16 +15,14 @@ from p2p.receipt import HandshakeReceipt
 from trinity.exceptions import WrongGenesisFailure, WrongNetworkFailure
 
 from .commands import Status, StatusPayload
-from .proto import FirehoseProtocol, FirehoseHandshakeParams
+from .proto import FirehoseProtocol
 
 
 class FirehoseHandshakeReceipt(HandshakeReceipt):
-    handshake_params: FirehoseHandshakeParams
-
     def __init__(
             self,
             protocol: FirehoseProtocol,
-            handshake_params: FirehoseHandshakeParams) -> None:
+            handshake_params: StatusPayload) -> None:
         super().__init__(protocol)
         self.handshake_params = handshake_params
 

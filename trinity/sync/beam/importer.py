@@ -52,9 +52,6 @@ from lahja.common import BroadcastConfig
 from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
 from trinity.exceptions import StateUnretrievable
-from trinity.protocol.fh.events import (
-    CreatedNewBlockWitnessHashes,
-)
 from trinity.sync.beam.constants import (
     MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS,
     NUM_PREVIEW_SHARDS,
@@ -71,7 +68,7 @@ from trinity.sync.common.events import (
     StatelessBlockImportDone,
 )
 
-ImportBlockType = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
+TChainReorg = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
 
 
 class BeamStats:
@@ -402,14 +399,21 @@ def _broadcast_import_complete(
         event_bus: EndpointAPI,
         block: BlockAPI,
         broadcast_config: BroadcastConfig,
-        future: 'asyncio.Future[ImportBlockType]') -> None:
+        future: 'asyncio.Future[Tuple[TChainReorg, Tuple[Hash32, ...]]]') -> None:
+    if future.cancelled():
+        reorg, witness_hashes, exception = None, None, None
+    else:
+        reorg, witness_hashes = future.result()
+        exception = future.exception()
+
     completed = not future.cancelled()
     event_bus.broadcast_nowait(
         StatelessBlockImportDone(
             block,
             completed,
-            future.result() if completed else None,
-            future.exception() if completed else None,
+            reorg,
+            witness_hashes,
+            exception,
         ),
         broadcast_config,
     )
@@ -427,12 +431,9 @@ def slice_hashes(hash_list: bytes) -> Iterable[Hash32]:
             yield cast(Hash32, next_hash)
 
 
-TChainReorg = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
-
-
 def partial_import_block(beam_chain: BeamChain,
                          block: BlockAPI,
-                         ) -> Callable[[], Tuple[Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]], Tuple[Hash32, ...]]]:  # noqa: E501
+                         ) -> Callable[[], Tuple[TChainReorg, Tuple[Hash32, ...]]]:  # noqa: E501
     """
     Get an argument-free function that will import the given block.
     """
@@ -535,10 +536,6 @@ class BlockImportServer(Service):
                     "Not broadcasting about %s Beam import. Listening for next request, because %r",
                     event.block,
                     exc
-                )
-
-                await event_bus.broadcast(
-                    CreatedNewBlockWitnessHashes(event.block, witness_hashes)
                 )
             else:
                 if self.manager.is_running:

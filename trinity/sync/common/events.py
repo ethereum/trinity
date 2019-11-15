@@ -126,7 +126,8 @@ class StatelessBlockImportDone(BaseEvent):
 
     block: BaseBlock
     completed: bool
-    result: Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]
+    reorg: Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]
+    witness_hashes: Tuple[Hash32, ...]
     # flake8 gets confused by the Tuple syntax above
     exception: BaseException  # noqa: E701
 

@@ -21,6 +21,7 @@ STATUS_STRUCTURE = sedes.List((
 class StatusPayload(NamedTuple):
     version: int
     network_id: int
+    # TODO: replace genesis_hash with the fork_id defined in eth/64
     genesis_hash: Hash32
 
 

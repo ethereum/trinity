@@ -622,7 +622,7 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
         self._blocks_imported += 1
         self._log_stats()
 
-        return import_done.result
+        return import_done.reorg
 
     async def preview_transactions(
             self,

@@ -16,13 +16,15 @@ from trinity._utils.datastructures import TaskQueue
 from trinity.protocol.eth import constants as eth_constants
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.fh.commands import NewBlockWitnessHashes
-from trinity.protocol.fh.events import CreatedNewBlockWitnessHashes
 from trinity.protocol.fh.peer import FirehosePeer
 from trinity.protocol.fh.proto import FirehoseProtocol
 from trinity.sync.beam.constants import (
     GAP_BETWEEN_WITNESS_DOWNLOADS,
     NON_IDEAL_RESPONSE_PENALTY,
     WITNESS_QUEUE_SIZE,
+)
+from trinity.sync.common.events import (
+    StatelessBlockImportDone,
 )
 
 from .queen import QueeningQueue, QueenTrackerAPI
@@ -256,7 +258,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
             self._firehose_peers.remove(cast(FirehosePeer, peer))
 
     async def _broadcast_new_witnesses(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(CreatedNewBlockWitnessHashes)):
+        async for event in self.wait_iter(self._event_bus.stream(StatelessBlockImportDone)):
             if not event.witness_hashes:
                 self.logger.warning("Witness metadata for %s is completely empty", event.block)
             else:

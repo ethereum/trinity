@@ -9,8 +9,9 @@ from trinity.protocol.eth.peer import ETHPeer, ETHPeerFactory, ETHPeerPool
 from trinity.protocol.eth.proto import ETHProtocol
 
 from .api import FirehoseAPI
+from .commands import StatusPayload
 from .handshaker import FirehoseHandshaker
-from .proto import FirehoseHandshakeParams, FirehoseProtocol
+from .proto import FirehoseProtocol
 
 
 class FirehosePeer(ETHPeer):
@@ -44,7 +45,7 @@ class FirehosePeerFactory(ETHPeerFactory):
                 f"Got: {type(eth_params)}"
             )
 
-        handshake_params = FirehoseHandshakeParams(
+        handshake_params = StatusPayload(
             version=FirehoseProtocol.version,
             network_id=eth_params.network_id,
             genesis_hash=eth_params.genesis_hash,
