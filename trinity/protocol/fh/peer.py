@@ -4,8 +4,9 @@ from cached_property import cached_property
 
 from p2p.abc import BehaviorAPI, HandshakerAPI
 from trinity.protocol.eth.handshaker import ETHHandshaker
+from trinity.protocol.eth.payloads import StatusPayload as ETHStatusPayload
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerFactory, ETHPeerPool
-from trinity.protocol.eth.proto import ETHHandshakeParams, ETHProtocol
+from trinity.protocol.eth.proto import ETHProtocol
 
 from .api import FirehoseAPI
 from .handshaker import FirehoseHandshaker
@@ -37,7 +38,7 @@ class FirehosePeerFactory(ETHPeerFactory):
         eth_handshaker = cast(ETHHandshaker, handshakers[-1])
         eth_params = eth_handshaker.handshake_params
 
-        if not isinstance(eth_params, ETHHandshakeParams):
+        if not isinstance(eth_params, ETHStatusPayload):
             raise TypeError(
                 "Expected eth handshake parameters to be the last handshaker. "
                 f"Got: {type(eth_params)}"

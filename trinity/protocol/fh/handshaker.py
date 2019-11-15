@@ -1,4 +1,4 @@
-from typing import cast, Any, Dict
+from typing import cast
 
 from cached_property import cached_property
 
@@ -14,8 +14,8 @@ from p2p.receipt import HandshakeReceipt
 
 from trinity.exceptions import WrongGenesisFailure, WrongNetworkFailure
 
+from .commands import Status, StatusPayload
 from .proto import FirehoseProtocol, FirehoseHandshakeParams
-from .commands import Status
 
 
 class FirehoseHandshakeReceipt(HandshakeReceipt):
@@ -43,9 +43,8 @@ class FirehoseHandshakeReceipt(HandshakeReceipt):
 
 class FirehoseHandshaker(Handshaker):
     protocol_class = FirehoseProtocol
-    handshake_params: FirehoseHandshakeParams
 
-    def __init__(self, handshake_params: FirehoseHandshakeParams) -> None:
+    def __init__(self, handshake_params: StatusPayload) -> None:
         self.handshake_params = handshake_params
 
     async def do_handshake(self,
@@ -56,18 +55,16 @@ class FirehoseHandshaker(Handshaker):
         Raises HandshakeFailure if the handshake is not successful.
         """
         protocol = cast(FirehoseProtocol, protocol)
-        protocol.send_handshake(self.handshake_params)
+        protocol.send(Status(self.handshake_params))
 
-        async for cmd, msg in multiplexer.stream_protocol_messages(protocol):
+        async for cmd in multiplexer.stream_protocol_messages(protocol):
             if not isinstance(cmd, Status):
                 raise HandshakeFailure(f"Expected a Firehose Status msg, got {cmd}, disconnecting")
 
-            msg = cast(Dict[str, Any], msg)
-
-            remote_params = FirehoseHandshakeParams(
-                version=msg['protocol_version'],
-                network_id=msg['network_id'],
-                genesis_hash=msg['genesis_hash'],
+            remote_params = StatusPayload(
+                version=cmd.payload.version,
+                network_id=cmd.payload.network_id,
+                genesis_hash=cmd.payload.genesis_hash,
             )
             receipt = FirehoseHandshakeReceipt(protocol, remote_params)
 

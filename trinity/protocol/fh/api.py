@@ -1,4 +1,4 @@
-from typing import Any, Dict, Tuple, cast
+from typing import Any, Tuple
 
 from cached_property import cached_property
 
@@ -13,7 +13,6 @@ from p2p.abc import ConnectionAPI
 from p2p.exchange import ExchangeAPI
 from p2p.logic import Application, CommandHandler
 from p2p.qualifiers import HasProtocol
-from p2p.typing import Payload
 
 from .commands import (
     NewBlockWitnessHashes,
@@ -23,7 +22,7 @@ from .constants import MAX_WITNESS_HISTORY_PER_PEER
 from .proto import FirehoseProtocol
 
 
-class RecentWitnesses(CommandHandler):
+class RecentWitnesses(CommandHandler[NewBlockWitnessHashes]):
     command_type = NewBlockWitnessHashes
     logger = ExtendedDebugLogger('trinity.protocol.fh.api.RecentWitnesses')
 
@@ -32,10 +31,8 @@ class RecentWitnesses(CommandHandler):
     def __init__(self) -> None:
         self._recent_witness_hashes = LRU(MAX_WITNESS_HISTORY_PER_PEER)
 
-    async def handle(self, connection: ConnectionAPI, msg: Payload) -> None:
-        msg = cast(Dict[str, Any], msg)
-        header_hash = msg['block_hash']
-        witness_hashes = msg['node_hashes']
+    async def handle(self, connection: ConnectionAPI, cmd: NewBlockWitnessHashes) -> None:
+        header_hash, witness_hashes = cmd.payload
 
         self._recent_witness_hashes[header_hash] = witness_hashes
         self.logger.warning(

@@ -1,7 +1,7 @@
 import asyncio
 from collections import Counter, defaultdict
 import typing
-from typing import Dict, FrozenSet, Iterable, NamedTuple, Set, Tuple, Type, cast
+from typing import Any, Dict, FrozenSet, Iterable, NamedTuple, Set, Tuple, Type, cast
 
 from cancel_token import CancelToken, OperationCancelled
 from lahja import EndpointAPI
@@ -25,7 +25,7 @@ from trinity.sync.beam.constants import (
     WITNESS_QUEUE_SIZE,
 )
 
-from .queen import QueenTrackerMixin
+from .queen import QueeningQueue, QueenTrackerAPI
 
 
 class NodeDownloadTask(NamedTuple):
@@ -42,14 +42,14 @@ class NodeDownloadTask(NamedTuple):
         return tuple(cls(node_hash, block_number) for node_hash in node_hashes)
 
 
-class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
+class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
     """
     Collect witnesses that peers claim we need. Along the way, track the speed
     of the fastest peer, so that they can be our go-to peer ("Queen" peer)
     when an actively imported block gets stuck waiting for data.
     """
     # We are only interested in witness metadata
-    subscription_msg_types: FrozenSet[Type[CommandAPI]] = frozenset({NewBlockWitnessHashes})
+    subscription_msg_types: FrozenSet[Type[CommandAPI[Any]]] = frozenset({NewBlockWitnessHashes})
 
     # This is a rather arbitrary value, but when the sync is operating normally we never see
     # the msg queue grow past a few hundred items, so this should be a reasonable limit for
@@ -134,7 +134,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerMixin):
 
     async def _collect_witnesses(self) -> None:
         while self.is_operational:
-            peer = await self._queening_queue.get_fastest_peasant()
+            peer = await self._queening_queue.pop_fastest_peasant()
 
             batch_id, urgent_hash_tasks = await self.wait(
                 self._witness_node_tasks.get(eth_constants.MAX_STATE_FETCH),
@@ -217,7 +217,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
     """
 
     # We are only interested in peers entering or leaving the pool
-    subscription_msg_types: FrozenSet[Type[CommandAPI]] = frozenset()
+    subscription_msg_types: FrozenSet[Type[CommandAPI[Any]]] = frozenset()
 
     # This is a rather arbitrary value, but when the sync is operating normally we never see
     # the msg queue grow past a few hundred items, so this should be a reasonable limit for
