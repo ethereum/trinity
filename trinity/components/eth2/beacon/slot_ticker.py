@@ -1,5 +1,6 @@
 import asyncio
 import time
+from typing import Set
 
 from cancel_token import (
     CancelToken,
@@ -68,46 +69,43 @@ class SlotTicker(BaseService):
 
     async def _keep_ticking(self) -> None:
         """
-        Ticker should tick twice in one slot:
-        one for a new slot, one for the second half of an already ticked slot,
-        e.g., if `seconds_per_slot` is `6`, for slot `49` it should tick once
-        for the first 3 seconds and once for the last 3 seconds.
+        Ticker should tick three times in one slot:
+        SLOT_START: at the beginning of the slot
+        SLOT_ONE_THIRD: at 1/3 of the slot
+        SLOT_TWO_THIRD: at 2/3 of the slot
         """
         # Use `sent_tick_types_at_slot` set to record
         # the tick types that haven been sent at current slot.
-        sent_tick_types_at_slot = set()
+        sent_tick_types_at_slot: Set[TickType] = set()
         while self.is_operational:
             elapsed_time = Second(int(time.time()) - self.genesis_time)
-            if elapsed_time >= self.seconds_per_slot:
-                elapsed_slots = elapsed_time // self.seconds_per_slot
-                slot = Slot(elapsed_slots + self.genesis_slot)
-                tick_type = self._get_tick_type(elapsed_time)
 
-                # Case 1: new slot
-                if slot > self.latest_slot:
-                    self.latest_slot = slot
-                    await self._broadcast_slot_tick_event(slot, elapsed_time, tick_type)
-                    # Clear set
-                    sent_tick_types_at_slot = set()
-                    sent_tick_types_at_slot.add(TickType.SLOT_START)
-                # Case 2: 1/3 of the given slot
-                elif (
-                    tick_type.is_one_third
-                    and TickType.SLOT_ONE_THIRD not in sent_tick_types_at_slot
-                ):
-                    # TODO: Add aggregator logic
-                    pass
-                # Case 3: 2/3 of the given slot
-                elif (
-                    tick_type.is_two_third
-                    and TickType.SLOT_TWO_THIRD not in sent_tick_types_at_slot
-                ):
-                    await self._broadcast_slot_tick_event(slot, elapsed_time, tick_type)
-                    sent_tick_types_at_slot.add(TickType.SLOT_TWO_THIRD)
+            # Skip genesis slot
+            if elapsed_time < self.seconds_per_slot:
+                continue
+
+            elapsed_slots = elapsed_time // self.seconds_per_slot
+            slot = Slot(elapsed_slots + self.genesis_slot)
+            tick_type = self._get_tick_type(elapsed_time)
+
+            # New slot
+            if slot > self.latest_slot:
+                self.latest_slot = slot
+                await self._broadcast_slot_tick_event(slot, elapsed_time, tick_type)
+                # Clear set
+                sent_tick_types_at_slot = set()
+                sent_tick_types_at_slot.add(TickType.SLOT_START)
+            elif (
+                not tick_type.is_start and tick_type not in sent_tick_types_at_slot
+            ):
+                await self._broadcast_slot_tick_event(slot, elapsed_time, tick_type)
+                sent_tick_types_at_slot.add(tick_type)
 
             await asyncio.sleep(self.seconds_per_slot // DEFAULT_CHECK_FREQUENCY)
 
-    async def _broadcast_slot_tick_event(self, slot, elapsed_time, tick_type):
+    async def _broadcast_slot_tick_event(
+        self, slot: Slot, elapsed_time: Second, tick_type: TickType
+    ) -> None:
         self.logger.debug(
             bold_white("[%s] tick at %ss of slot #%s, total elapsed %ds"),
             tick_type, elapsed_time % self.seconds_per_slot, slot, elapsed_time,
@@ -121,7 +119,7 @@ class SlotTicker(BaseService):
             BroadcastConfig(internal=True),
         )
 
-    def _get_tick_type(self, elapsed_time: int) -> TickType:
+    def _get_tick_type(self, elapsed_time: Second) -> TickType:
         elapsed_time_in_slot = elapsed_time % self.seconds_per_slot
         if elapsed_time_in_slot >= (self.seconds_per_slot * 2 / 3):
             tick_type = TickType.SLOT_TWO_THIRD
