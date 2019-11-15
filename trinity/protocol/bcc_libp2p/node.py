@@ -8,6 +8,7 @@ from typing import (
     Dict,
     Optional,
     Sequence,
+    Set,
     Tuple,
 )
 
@@ -21,6 +22,9 @@ from eth_utils.toolz import first
 from eth2.beacon.chains.base import (
     BaseBeaconChain,
 )
+from eth2.beacon.types.aggregate_and_proof import (
+    AggregateAndProof,
+)
 from eth2.beacon.types.attestations import (
     Attestation,
 )
@@ -33,6 +37,7 @@ from eth2.beacon.typing import (
     Slot,
     Version,
     SigningRoot,
+    SubnetId,
 )
 
 from libp2p import (
@@ -96,8 +101,10 @@ from .configs import (
     GOSSIPSUB_PROTOCOL_ID,
     GoodbyeReasonCode,
     GossipsubParams,
+    PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF,
     PUBSUB_TOPIC_BEACON_BLOCK,
     PUBSUB_TOPIC_BEACON_ATTESTATION,
+    PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION,
     REQ_RESP_BEACON_BLOCKS_BY_RANGE,
     REQ_RESP_GOODBYE,
     REQ_RESP_STATUS,
@@ -123,6 +130,7 @@ from .messages import (
     BeaconBlocksByRootRequest,
 )
 from .topic_validators import (
+    get_beacon_aggregate_and_proof_validator,
     get_beacon_attestation_validator,
     get_beacon_block_validator,
 )
@@ -247,6 +255,7 @@ class Node(BaseService):
     bootstrap_nodes: Tuple[Multiaddr, ...]
     preferred_nodes: Tuple[Multiaddr, ...]
     chain: BaseBeaconChain
+    subnets: Set[SubnetId]
 
     handshaked_peers: PeerPool = None
 
@@ -261,13 +270,15 @@ class Node(BaseService):
             gossipsub_params: Optional[GossipsubParams] = None,
             cancel_token: CancelToken = None,
             bootstrap_nodes: Tuple[Multiaddr, ...] = (),
-            preferred_nodes: Tuple[Multiaddr, ...] = ()) -> None:
+            preferred_nodes: Tuple[Multiaddr, ...] = (),
+            subnets: Optional[Set[SubnetId]] = None) -> None:
         super().__init__(cancel_token)
         self.listen_ip = listen_ip
         self.listen_port = listen_port
         self.key_pair = key_pair
         self.bootstrap_nodes = bootstrap_nodes
         self.preferred_nodes = preferred_nodes
+        self.subnets = subnets if subnets is not None else set()
         # TODO: Add key and peer_id to the peerstore
         if security_protocol_ops is None:
             security_protocol_ops = {
@@ -328,14 +339,22 @@ class Node(BaseService):
         await self.connect_preferred_nodes()
         # TODO: Connect bootstrap nodes?
 
-        # pubsub
+        # Pubsub
+        # Global channel
         await self.pubsub.subscribe(PUBSUB_TOPIC_BEACON_BLOCK)
         await self.pubsub.subscribe(PUBSUB_TOPIC_BEACON_ATTESTATION)
+        await self.pubsub.subscribe(PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF)
+        # Attestation subnets
+        for subnet_id in self.subnets:
+            topic = PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION.substitute(subnet_id=str(subnet_id))
+            await self.pubsub.subscribe(topic)
+
         self._setup_topic_validators()
 
         self._is_started = True
 
     def _setup_topic_validators(self) -> None:
+        # Global channel
         self.pubsub.set_topic_validator(
             PUBSUB_TOPIC_BEACON_BLOCK,
             get_beacon_block_validator(self.chain),
@@ -344,6 +363,19 @@ class Node(BaseService):
         self.pubsub.set_topic_validator(
             PUBSUB_TOPIC_BEACON_ATTESTATION,
             get_beacon_attestation_validator(self.chain),
+            False,
+        )
+        # Attestation subnets
+        for subnet_id in self.subnets:
+            self.pubsub.set_topic_validator(
+                PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION.substitute(subnet_id=str(subnet_id)),
+                get_beacon_attestation_validator(self.chain),
+                False,
+            )
+
+        self.pubsub.set_topic_validator(
+            PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF,
+            get_beacon_aggregate_and_proof_validator(self.chain),
             False,
         )
 
@@ -422,6 +454,22 @@ class Node(BaseService):
 
     async def broadcast_attestation(self, attestation: Attestation) -> None:
         await self._broadcast_data(PUBSUB_TOPIC_BEACON_ATTESTATION, ssz.encode(attestation))
+
+    async def broadcast_attestation_to_subnet(
+        self, attestation: Attestation, subnet_id: SubnetId
+    ) -> None:
+        await self._broadcast_data(
+            PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION.substitute(subnet_id=str(subnet_id)),
+            ssz.encode(attestation)
+        )
+
+    async def broadcast_beacon_aggregate_and_proof(
+        self, aggregate_and_proof: AggregateAndProof
+    ) -> None:
+        await self._broadcast_data(
+            PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF,
+            ssz.encode(aggregate_and_proof),
+        )
 
     async def _broadcast_data(self, topic: str, data: bytes) -> None:
         await self.pubsub.publish(topic, data)

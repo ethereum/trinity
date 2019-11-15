@@ -1,4 +1,5 @@
 import enum
+from string import Template
 from typing import (
     NamedTuple,
 )
@@ -11,18 +12,18 @@ from typing import (
 # Network configuration
 #
 
-# TODO: TBD
 # The max size of uncompressed gossip messages.
 GOSSIP_MAX_SIZE = 2 ** 20  # 1 MiB
 # The maximum allowed size of uncompressed req/resp chunked responses.
 MAX_CHUNK_SIZE = 2**20  # 1 MiB
-# TODO: TBD
-# The number of shard subnets used in the gossipsub protocol.
-SHARD_SUBNET_COUNT = None
+# The number of attestation subnets used in the gossipsub protocol.
+ATTESTATION_SUBNET_COUNT = 64
 # Maximum time to wait for first byte of request response (time-to-first-byte).
 TTFB_TIMEOUT = 5  # seconds
 # Maximum time for complete response transfer.
 RESP_TIMEOUT = 10  # seconds
+# The maximum number of slots during which an attestation can be propagated.
+ATTESTATION_PROPAGATION_SLOT_RANGE = 32
 
 #
 # Gossip domain
@@ -56,8 +57,11 @@ class GossipsubParams(NamedTuple):
 
 # Topics
 PUBSUB_TOPIC_BEACON_BLOCK = "beacon_block"
+PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF = "beacon_aggregate_and_proof"
 PUBSUB_TOPIC_BEACON_ATTESTATION = "beacon_attestation"
-PUBSUB_TOPIC_SHARD_ATTESTATION_FMT = "shard{}_attestation"
+PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION = Template(
+    "committee_index${subnet_id}_beacon_attestation"
+)
 PUBSUB_TOPIC_VOLUNTARY_EXIT = "voluntary_exit"
 PUBSUB_TOPIC_PROPOSER_SLASHING = "proposer_slashing"
 PUBSUB_TOPIC_ATTESTER_SLASHING = "attester_slashing"

@@ -5,6 +5,7 @@ from typing import (
     Dict,
     Iterable,
     List,
+    Optional,
     Set,
     Tuple,
     Union,
@@ -32,6 +33,7 @@ from eth2.beacon.chains.base import (
     BaseBeaconChain,
 )
 from eth2.beacon.operations.attestation_pool import AttestationPool
+from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import (
     Attestation,
 )
@@ -41,17 +43,17 @@ from eth2.beacon.types.blocks import (
 )
 from eth2.beacon.typing import (
     SigningRoot,
+    SubnetId,
 )
-from eth2.beacon.state_machines.forks.serenity.block_validation import (
-    validate_attestation_slot,
-)
-from eth2.beacon.typing import Slot
+from eth2.beacon.typing import CommitteeIndex, Slot
 
 from trinity.protocol.bcc_libp2p.node import Node
 
 from .configs import (
+    PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF,
     PUBSUB_TOPIC_BEACON_BLOCK,
     PUBSUB_TOPIC_BEACON_ATTESTATION,
+    PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION,
 )
 
 PROCESS_ORPHAN_BLOCKS_PERIOD = 10.0
@@ -115,17 +117,20 @@ class BCCReceiveServer(BaseService):
     topic_msg_queues: Dict[str, 'asyncio.Queue[rpc_pb2.Message]']
     attestation_pool: AttestationPool
     orphan_block_pool: OrphanBlockPool
+    subnets: Set[SubnetId]
 
     def __init__(
             self,
             chain: BaseBeaconChain,
             p2p_node: Node,
             topic_msg_queues: Dict[str, 'asyncio.Queue[rpc_pb2.Message]'],
+            subnets: Optional[Set[SubnetId]] = None,
             cancel_token: CancelToken = None) -> None:
         super().__init__(cancel_token)
         self.chain = chain
-        self.topic_msg_queues = topic_msg_queues
         self.p2p_node = p2p_node
+        self.topic_msg_queues = topic_msg_queues
+        self.subnets = subnets if subnets is not None else set()
         self.attestation_pool = AttestationPool()
         self.orphan_block_pool = OrphanBlockPool()
         self.ready = asyncio.Event()
@@ -134,12 +139,19 @@ class BCCReceiveServer(BaseService):
         while not self.p2p_node.is_started:
             await self.sleep(0.5)
         self.logger.info("BCCReceiveServer up")
+
+        # Handle gossipsub messages
         self.run_daemon_task(self._handle_beacon_attestation_loop())
         self.run_daemon_task(self._handle_beacon_block_loop())
+        self.run_daemon_task(self._handle_aggregate_and_proof_loop())
+        self.run_daemon_task(self._handle_committee_beacon_attestation_loop())
         self.run_daemon_task(self._process_orphan_blocks_loop())
         self.ready.set()
         await self.cancellation()
 
+    #
+    # Daemon tasks
+    #
     async def _handle_message(
             self,
             topic: str,
@@ -158,7 +170,25 @@ class BCCReceiveServer(BaseService):
     async def _handle_beacon_attestation_loop(self) -> None:
         await self._handle_message(
             PUBSUB_TOPIC_BEACON_ATTESTATION,
-            self._handle_beacon_attestations
+            self._handle_beacon_attestation
+        )
+
+    async def _handle_committee_beacon_attestation_loop(self) -> None:
+        while True:
+            await asyncio.sleep(0.5)
+            for subnet_id in self.subnets:
+                topic = PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION.substitute(
+                    subnet_id=str(subnet_id)
+                )
+                await self._handle_message(
+                    topic,
+                    self._handle_committee_beacon_attestation,
+                )
+
+    async def _handle_aggregate_and_proof_loop(self) -> None:
+        await self._handle_message(
+            PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF,
+            self._handle_beacon_aggregate_and_proof,
         )
 
     async def _handle_beacon_block_loop(self) -> None:
@@ -204,16 +234,25 @@ class BCCReceiveServer(BaseService):
                     else:
                         self._process_received_block(block)
 
-    async def _handle_beacon_attestations(self, msg: rpc_pb2.Message) -> None:
+    #
+    # Message handlers
+    #
+    async def _handle_committee_beacon_attestation(self, msg: rpc_pb2.Message) -> None:
+        await self._handle_beacon_attestation(msg)
+
+    async def _handle_beacon_aggregate_and_proof(self, msg: rpc_pb2.Message) -> None:
+        aggregate_and_proof = ssz.decode(msg.data, sedes=AggregateAndProof)
+
+        self.logger.debug("Received aggregate_and_proof=%s", aggregate_and_proof)
+
+        self._add_attestation(aggregate_and_proof.aggregate)
+
+    async def _handle_beacon_attestation(self, msg: rpc_pb2.Message) -> None:
         attestation = ssz.decode(msg.data, sedes=Attestation)
 
         self.logger.debug("Received attestation=%s", attestation)
 
-        # Check if attestation has been seen already.
-        if not self._is_attestation_new(attestation):
-            return
-        # Add new attestation to attestation pool.
-        self.attestation_pool.add(attestation)
+        self._add_attestation(attestation)
 
     async def _handle_beacon_block(self, msg: rpc_pb2.Message) -> None:
         block = ssz.decode(msg.data, BeaconBlock)
@@ -226,6 +265,14 @@ class BCCReceiveServer(BaseService):
         if attestation.hash_tree_root in self.attestation_pool:
             return False
         return not self.chain.attestation_exists(attestation.hash_tree_root)
+
+    def _add_attestation(self, attestation: Attestation) -> None:
+        # Check if attestation has been seen already.
+        if not self._is_attestation_new(attestation):
+            return
+
+        # Add new attestation to attestation pool.
+        self.attestation_pool.add(attestation)
 
     def _process_received_block(self, block: BaseBeaconBlock) -> None:
         # If the block is an orphan, put it to the orphan pool
@@ -308,18 +355,34 @@ class BCCReceiveServer(BaseService):
     def _is_block_seen(self, block: BaseBeaconBlock) -> bool:
         return self._is_block_root_seen(block_root=block.signing_root)
 
+    #
+    # Exposed APIs for Validator
+    #
     @to_tuple
     def get_ready_attestations(self, current_slot: Slot) -> Iterable[Attestation]:
+        """
+        Get the attestations that are ready to be included in ``current_slot`` block.
+        """
         config = self.chain.get_state_machine().config
-        for attestation in self.attestation_pool.get_all():
-            try:
-                validate_attestation_slot(
-                    attestation.data.slot,
-                    current_slot,
-                    config.SLOTS_PER_EPOCH,
-                    config.MIN_ATTESTATION_INCLUSION_DELAY,
-                )
-            except ValidationError:
-                continue
-            else:
-                yield attestation
+        return self.attestation_pool.get_valid_attestation_by_current_slot(current_slot, config)
+
+    def get_aggregatable_attestations(
+        self,
+        slot: Slot,
+        committee_index: CommitteeIndex
+    ) -> Tuple[Attestation, ...]:
+        """
+        Get the attestations of ``slot`` and ``committee_index``.
+        """
+        try:
+            block = self.chain.get_canonical_block_by_slot(slot)
+        except BlockNotFound:
+            return ()
+
+        beacon_block_root = block.signing_root
+        return self.attestation_pool.get_acceptable_attestations(
+            slot, committee_index, beacon_block_root
+        )
+
+    def import_attestation(self, attestation: Attestation) -> None:
+        self.attestation_pool.add(attestation)
