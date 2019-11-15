@@ -34,8 +34,11 @@ def test_aggregate_votes(validator_count, privkeys, genesis_state, config):
                     aggregator_count += 1
         assert aggregator_count > 0
         sum_aggregator_count += aggregator_count
+    # The average aggregator count per slot should be around
+    # `TARGET_AGGREGATORS_PER_COMMITTEE`.
+    average_aggregator_count = sum_aggregator_count / config.SLOTS_PER_EPOCH
     assert (
         TARGET_AGGREGATORS_PER_COMMITTEE - 3
-        < sum_aggregator_count / config.SLOTS_PER_EPOCH
+        < average_aggregator_count
         < TARGET_AGGREGATORS_PER_COMMITTEE + 3
     )
