@@ -16,7 +16,7 @@ from eth_utils.toolz import partition_all
 from eth.abc import SignedTransactionAPI
 
 from p2p.abc import SessionAPI
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity._utils.bloom import RollingBloom
 from trinity.protocol.eth.events import (

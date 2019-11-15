@@ -14,7 +14,7 @@ from eth_typing import Hash32
 import rlp
 
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import (

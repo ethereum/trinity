@@ -3,7 +3,7 @@ import asyncio
 from cancel_token import OperationCancelled
 import pytest
 
-from p2p.service import BaseService, run_service
+from p2p.legacy_service import BaseService, run_service
 
 
 class ParentService(BaseService):

@@ -15,7 +15,7 @@ from typing import (
 
 
 from p2p.abc import (
-    AsyncioServiceAPI,
+    LegacyServiceAPI,
     ConnectionAPI,
     ProtocolAPI,
 )
@@ -91,7 +91,7 @@ class PerformanceTrackerAPI(PerformanceAPI, Generic[TRequestCommand, TResult]):
         ...
 
 
-class ResponseCandidateStreamAPI(AsyncioServiceAPI, Generic[TRequestCommand, TResponseCommand]):
+class ResponseCandidateStreamAPI(LegacyServiceAPI, Generic[TRequestCommand, TResponseCommand]):
     response_timeout: float
 
     pending_request: Optional[Tuple[float, 'asyncio.Future[TResponseCommand]']]

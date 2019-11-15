@@ -10,7 +10,7 @@ from lahja import EndpointAPI
 from eth.abc import AtomicDatabaseAPI
 
 from p2p.peer_pool import BasePeerPool
-from p2p.service import (
+from p2p.legacy_service import (
     BaseService,
 )
 

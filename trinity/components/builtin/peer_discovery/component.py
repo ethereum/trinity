@@ -32,9 +32,7 @@ from p2p.discovery import (
 from p2p.kademlia import (
     Address,
 )
-from p2p.service import (
-    BaseService,
-)
+from p2p.legacy_service import BaseService
 
 from trinity.config import (
     Eth1AppConfig,

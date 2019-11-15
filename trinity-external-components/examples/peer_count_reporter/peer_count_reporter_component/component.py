@@ -6,7 +6,7 @@ import asyncio
 
 from lahja import EndpointAPI
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 from trinity.extensibility import AsyncioIsolatedComponent
 from trinity.protocol.common.events import PeerCountRequest
 from trinity._utils.shutdown import exit_with_services

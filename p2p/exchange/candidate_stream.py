@@ -15,7 +15,7 @@ from p2p.exceptions import (
     ConnectionBusy,
     PeerConnectionLost,
 )
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from .abc import (
     PerformanceTrackerAPI,

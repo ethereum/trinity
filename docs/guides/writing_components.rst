@@ -211,7 +211,7 @@ Let's assume we want to create a component that simply periodically prints out t
 peers.
 
 While it is absolutely possible to put this logic right into the component, the preferred way is to
-subclass :class:`~p2p.service.BaseService` and implement the core logic in such a standalone
+subclass :class:`~p2p.legacy_service.BaseService` and implement the core logic in such a standalone
 service.
 
 .. literalinclude:: ../../trinity-external-components/examples/peer_count_reporter/peer_count_reporter_component/component.py

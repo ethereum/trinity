@@ -51,7 +51,7 @@ from p2p.handshake import (
     dial_out,
     DevP2PHandshakeParams,
 )
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 from p2p.p2p_api import P2PAPI
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p.tracking.connection import (

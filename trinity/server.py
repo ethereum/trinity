@@ -24,7 +24,7 @@ from p2p.exceptions import (
     PeerConnectionLost,
 )
 from p2p.handshake import receive_dial_in, DevP2PHandshakeParams
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity._utils.version import construct_trinity_client_identifier
 from trinity.chains.base import AsyncChainAPI

@@ -8,7 +8,7 @@ from lahja import EndpointAPI
 
 from eth.db.backends.base import BaseAtomicDB
 
-from p2p.service import (
+from p2p.legacy_service import (
     BaseService,
 )
 

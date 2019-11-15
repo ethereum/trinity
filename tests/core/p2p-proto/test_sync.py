@@ -7,7 +7,7 @@ from eth.exceptions import HeaderNotFound
 from eth.vm.forks.petersburg import PetersburgVM
 from eth_utils import decode_hex
 from lahja import ConnectionConfig, AsyncioEndpoint
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 import pytest
 
 from trinity.db.eth1.chain import AsyncChainDB

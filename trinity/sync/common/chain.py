@@ -36,7 +36,7 @@ from p2p.constants import (
     SEAL_CHECK_RANDOM_SAMPLE_RATE,
 )
 from p2p.disconnect import DisconnectReason
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity._utils.headers import (
     skip_complete_headers,

@@ -26,7 +26,7 @@ import ssz
 
 from libp2p.pubsub.pb import rpc_pb2
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from eth2.beacon.chains.base import (
     BaseBeaconChain,

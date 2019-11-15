@@ -65,9 +65,7 @@ from eth2.beacon.typing import (
     ValidatorIndex,
 )
 from eth2.configs import CommitteeConfig
-from p2p.service import (
-    BaseService,
-)
+from p2p.legacy_service import BaseService
 from trinity._utils.shellart import (
     bold_green,
 )

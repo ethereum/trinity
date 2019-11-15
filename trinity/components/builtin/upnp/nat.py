@@ -17,7 +17,7 @@ from p2p.exceptions import (
     NoInternalAddressMatchesDevice,
 )
 import netifaces
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from eth._warnings import catch_and_ignore_import_warning
 with catch_and_ignore_import_warning():

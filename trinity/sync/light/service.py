@@ -61,7 +61,7 @@ from p2p.constants import (
 )
 from p2p.disconnect import DisconnectReason
 from p2p.peer import PeerSubscriber
-from p2p.service import (
+from p2p.legacy_service import (
     BaseService,
     service_timeout,
 )

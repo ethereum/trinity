@@ -2,7 +2,7 @@ from lahja import EndpointAPI
 
 from cancel_token import CancelToken
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from .tracker import (
     BaseEth1PeerTracker,

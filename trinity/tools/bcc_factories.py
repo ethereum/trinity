@@ -26,7 +26,7 @@ from eth.constants import (
     ZERO_HASH32,
 )
 
-from p2p.service import run_service
+from p2p.legacy_service import run_service
 from p2p.tools.factories import (
     get_open_port,
     CancelTokenFactory,

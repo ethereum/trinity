@@ -363,7 +363,7 @@ class ServiceEventsAPI(ABC):
 TReturn = TypeVar('TReturn')
 
 
-class AsyncioServiceAPI(ABC):
+class LegacyServiceAPI(ABC):
     events: ServiceEventsAPI
     cancel_token: CancelToken
 
@@ -394,7 +394,7 @@ class AsyncioServiceAPI(ABC):
     @abstractmethod
     async def run(
             self,
-            finished_callback: Optional[Callable[['AsyncioServiceAPI'], None]] = None) -> None:
+            finished_callback: Optional[Callable[['LegacyServiceAPI'], None]] = None) -> None:
         ...
 
     @abstractmethod
@@ -402,7 +402,7 @@ class AsyncioServiceAPI(ABC):
         ...
 
     @abstractmethod
-    def run_daemon(self, service: 'AsyncioServiceAPI') -> None:
+    def run_daemon(self, service: 'LegacyServiceAPI') -> None:
         ...
 
     @abstractmethod
@@ -485,7 +485,7 @@ class SubscriptionAPI(ContextManager['SubscriptionAPI']):
 HandlerFn = Callable[['ConnectionAPI', CommandAPI[Any]], Awaitable[Any]]
 
 
-class ConnectionAPI(AsyncioServiceAPI):
+class ConnectionAPI(LegacyServiceAPI):
     protocol_receipts: Tuple[HandshakeReceiptAPI, ...]
 
     #

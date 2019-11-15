@@ -7,7 +7,7 @@ from lahja import EndpointAPI
 
 from eth.abc import ChainAPI
 
-from p2p.service import (
+from p2p.legacy_service import (
     BaseService,
 )
 

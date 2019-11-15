@@ -42,7 +42,7 @@ from trinity.rpc.http import (
 from trinity._utils.shutdown import (
     exit_with_services,
 )
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 
 class JsonRpcServerComponent(AsyncioIsolatedComponent):

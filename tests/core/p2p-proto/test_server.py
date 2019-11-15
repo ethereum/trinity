@@ -16,7 +16,7 @@ from p2p.kademlia import (
     Address,
 )
 from p2p.handshake import negotiate_protocol_handshakes
-from p2p.service import run_service
+from p2p.legacy_service import run_service
 from p2p.tools.factories import (
     get_open_port,
     DevP2PHandshakeParamsFactory,

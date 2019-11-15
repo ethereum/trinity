@@ -1,7 +1,7 @@
 from cancel_token import CancelToken
 
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.header import BaseAsyncHeaderDB

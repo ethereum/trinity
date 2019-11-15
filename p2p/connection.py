@@ -42,7 +42,7 @@ from p2p.exceptions import (
     UnknownProtocolCommand,
 )
 from p2p.subscription import Subscription
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 from p2p.p2p_proto import BaseP2PProtocol, DevP2PReceipt, Disconnect
 from p2p.typing import Capabilities
 

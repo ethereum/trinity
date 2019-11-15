@@ -81,7 +81,7 @@ from multiaddr import (
 
 import ssz
 
-from p2p.service import (
+from p2p.legacy_service import (
     BaseService,
 )
 

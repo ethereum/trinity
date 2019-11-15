@@ -11,7 +11,7 @@ from eth_keys import keys
 
 from p2p.abc import NodeAPI
 from p2p.peer import BasePeer, BasePeerContext, BasePeerFactory
-from p2p.service import run_service
+from p2p.legacy_service import run_service
 
 from p2p.tools.paragon import ParagonPeer, ParagonContext, ParagonPeerFactory
 

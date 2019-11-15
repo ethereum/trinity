@@ -34,7 +34,7 @@ from lahja import (
     EndpointAPI,
 )
 
-from p2p.abc import AsyncioServiceAPI, NodeAPI, SessionAPI
+from p2p.abc import LegacyServiceAPI, NodeAPI, SessionAPI
 from p2p.constants import (
     DEFAULT_MAX_PEERS,
     DEFAULT_PEER_BOOT_TIMEOUT,
@@ -73,7 +73,7 @@ from p2p.disconnect import (
 from p2p.resource_lock import (
     ResourceLock,
 )
-from p2p.service import (
+from p2p.legacy_service import (
     BaseService,
 )
 from p2p.token_bucket import TokenBucket
@@ -456,7 +456,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         else:
             await self.start_peer(peer)
 
-    def _peer_finished(self, peer: AsyncioServiceAPI) -> None:
+    def _peer_finished(self, peer: LegacyServiceAPI) -> None:
         """
         Remove the given peer from our list of connected nodes.
         This is passed as a callback to be called when a peer finishes.

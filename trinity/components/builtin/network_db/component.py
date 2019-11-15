@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from eth_utils import to_tuple
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,

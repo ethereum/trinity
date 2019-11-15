@@ -5,7 +5,7 @@ from eth_typing import BlockNumber
 
 from eth.abc import AtomicDatabaseAPI
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.chain import BaseAsyncChainDB

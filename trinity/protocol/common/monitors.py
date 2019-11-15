@@ -11,7 +11,7 @@ from eth_utils import ValidationError
 
 from p2p.exceptions import NoConnectedPeers
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity.protocol.common.peer import BaseChainPeer, BaseChainPeerPool
 

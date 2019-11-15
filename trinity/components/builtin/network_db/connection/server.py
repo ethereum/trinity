@@ -4,7 +4,7 @@ from cancel_token import CancelToken
 
 from eth_utils import humanize_seconds
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 from p2p.tracking.connection import BaseConnectionTracker
 
 from .events import (

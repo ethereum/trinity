@@ -14,7 +14,7 @@ from p2p.handshake import (
     DevP2PReceipt,
     negotiate_protocol_handshakes,
 )
-from p2p.service import run_service
+from p2p.legacy_service import run_service
 
 from .cancel_token import CancelTokenFactory
 from .multiplexer import MultiplexerPairFactory

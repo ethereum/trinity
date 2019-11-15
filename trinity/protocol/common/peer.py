@@ -36,7 +36,7 @@ from p2p.peer_backend import (
 from p2p.peer_pool import (
     BasePeerPool,
 )
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,

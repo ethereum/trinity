@@ -6,7 +6,7 @@ from eth._utils.address import (
     force_bytes_to_address
 )
 
-from p2p.service import run_service
+from p2p.legacy_service import run_service
 from p2p.tools.factories import SessionFactory
 
 from trinity.components.builtin.tx_pool.pool import (

@@ -73,7 +73,7 @@ from p2p.events import (
 )
 from p2p.exceptions import AlreadyWaitingDiscoveryResponse, NoEligibleNodes, UnableToGetDiscV5Ticket
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 if TYPE_CHECKING:
     # Promoted workaround for inheriting from generic stdlib class

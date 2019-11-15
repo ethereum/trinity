@@ -6,7 +6,7 @@ from cancel_token import CancelToken, OperationCancelled
 from p2p.abc import CommandAPI
 from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 from trinity.protocol.eth.commands import NodeData
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import NON_IDEAL_RESPONSE_PENALTY

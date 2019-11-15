@@ -8,7 +8,7 @@ from typing import (
 from async_generator import asynccontextmanager
 
 from p2p.abc import ConnectionAPI
-from p2p.service import run_service
+from p2p.legacy_service import run_service
 
 from .abc import ExchangeAPI, NormalizerAPI, ValidatorAPI
 from .candidate_stream import ResponseCandidateStream

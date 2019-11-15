@@ -7,7 +7,7 @@ from typing import (
     AsyncGenerator,
 )
 
-from p2p.service import (
+from p2p.legacy_service import (
     BaseService,
 )
 

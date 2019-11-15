@@ -44,7 +44,7 @@ from eth_utils.toolz import (
 from lahja import EndpointAPI
 from lahja.common import BroadcastConfig
 
-from p2p.service import BaseService
+from p2p.legacy_service import BaseService
 
 from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
