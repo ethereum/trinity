@@ -1,17 +1,16 @@
 from typing import Dict
 
-import ssz
-import ssz.sedes as sedes
-
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.blocks import BeaconBlockBody
 from eth2.beacon.types.historical_batch import HistoricalBatch
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.configs import Eth2Config
+from ssz.hashable_container import HashableContainer
+import ssz.sedes as sedes
 
 
-def _mk_overrides(config: Eth2Config) -> Dict[ssz.Serializable, Dict[str, int]]:
+def _mk_overrides(config: Eth2Config) -> Dict[HashableContainer, Dict[str, int]]:
     return {
         Attestation: {"aggregation_bits": config.MAX_VALIDATORS_PER_COMMITTEE},
         BeaconBlockBody: {
@@ -56,4 +55,5 @@ def override_lengths(config: Eth2Config) -> None:
                 if isinstance(field_sedes, sedes.List):
                     field_sedes.max_length = overrides[field_name]
                 if isinstance(field_sedes, sedes.Vector):
-                    field_sedes.length = overrides[field_name]
+                    # NOTE: Vector.length is a property that returns the value of max_length
+                    field_sedes.max_length = overrides[field_name]
