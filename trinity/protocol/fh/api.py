@@ -69,7 +69,7 @@ class FirehoseAPI(Application):
         return self.connection.get_protocol_by_type(FirehoseProtocol)
 
     def send_new_block_witness_hashes(
-            self, header_hash: Hash32, node_hashes: Tuple[Hash32]) -> None:
+            self, header_hash: Hash32, node_hashes: Tuple[Hash32, ...]) -> None:
         """
         This will skip sending if the peer already sent the witness hashes to us.
         """

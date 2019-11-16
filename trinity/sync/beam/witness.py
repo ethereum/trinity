@@ -121,9 +121,10 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
 
     async def _collect_peer_witness_metadata(self) -> None:
         while self.is_operational:
-            peer, cmd, msg = await self.wait(self.msg_queue.get())
-            counter = self._aggregated_witness_metadata[msg.get('block_hash')]
-            counter.update(msg['node_hashes'])
+            peer, cmd = await self.wait(self.msg_queue.get())
+            new_hashes = cast(NewBlockWitnessHashes, cmd)
+            counter = self._aggregated_witness_metadata[new_hashes.block_hash]
+            counter.update(new_hashes.node_hashes)
 
     async def _run(self) -> None:
         self.run_daemon_task(self._periodically_report_progress())
