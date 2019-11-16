@@ -47,6 +47,9 @@ from libp2p.crypto.keys import (
 from libp2p.host.basic_host import (
     BasicHost,
 )
+from libp2p.host.exceptions import (
+    StreamFailure,
+)
 from libp2p.network.network_interface import (
     INetwork,
 )
@@ -563,7 +566,11 @@ class Node(BaseService):
     async def request_status(self, peer_id: ID) -> None:
         self.logger.info("Initiate handshake with %s", str(peer_id))
 
-        stream = await self.new_stream(peer_id, REQ_RESP_STATUS_SSZ)
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_STATUS_SSZ)
+        except StreamFailure as error:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+            raise HandshakeFailure from error
         async with self.new_handshake_interaction(stream) as interaction:
             my_status = get_my_status(self.chain)
             await interaction.write_request(my_status)
@@ -586,13 +593,18 @@ class Node(BaseService):
             await self.disconnect_peer(peer_id)
 
     async def say_goodbye(self, peer_id: ID, reason: GoodbyeReasonCode) -> None:
-        stream = await self.new_stream(peer_id, REQ_RESP_GOODBYE_SSZ)
-        async with Interaction(stream) as interaction:
-            goodbye = Goodbye(reason)
-            try:
-                await interaction.write_request(goodbye)
-            except WriteMessageFailure:
-                pass
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_GOODBYE_SSZ)
+        except StreamFailure:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+        else:
+            async with Interaction(stream) as interaction:
+                goodbye = Goodbye(reason)
+                try:
+                    await interaction.write_request(goodbye)
+                except WriteMessageFailure:
+                    pass
+        finally:
             await self.disconnect_peer(peer_id)
 
     def _check_peer_handshaked(self, peer_id: ID) -> None:
@@ -624,7 +636,11 @@ class Node(BaseService):
         count: int,
         step: int,
     ) -> Tuple[BaseBeaconBlock, ...]:
-        stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ)
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ)
+        except StreamFailure as error:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+            raise RequestFailure(str(error)) from error
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
             request = BeaconBlocksByRangeRequest(
@@ -654,7 +670,11 @@ class Node(BaseService):
             self,
             peer_id: ID,
             block_roots: Sequence[SigningRoot]) -> Tuple[BaseBeaconBlock, ...]:
-        stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
+        except StreamFailure as error:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+            raise RequestFailure(str(error)) from error
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
             request = BeaconBlocksByRootRequest(block_roots=block_roots)
