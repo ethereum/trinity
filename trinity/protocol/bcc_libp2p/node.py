@@ -312,7 +312,10 @@ class Node(BaseService):
         # host
         self._register_rpc_handlers()
         # TODO: Register notifees
-        await self.host.get_network().listen(self.listen_maddr)
+        is_listening = await self.host.get_network().listen(self.listen_maddr)
+        if not is_listening:
+            self.logger.error("Fail to listen on maddr: %s", self.listen_maddr)
+            raise
         self.logger.warning("Node listening: %s", self.listen_maddr_with_peer_id)
         await self.connect_preferred_nodes()
         # TODO: Connect bootstrap nodes?
