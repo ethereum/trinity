@@ -108,7 +108,7 @@ def setup_trinity_file_and_queue_logging(
     log_queue = ctx.Queue()
 
     log_file_with_timestamp = logfile_path.with_suffix(datetime.now().strftime('.%Y%m%d_%H%M%S'))
-        handler_file = RotatingFileHandler(
+    handler_file = RotatingFileHandler(
         str(log_file_with_timestamp),
         maxBytes=(10000000 * LOG_MAX_MB),
         backupCount=LOG_BACKUP_COUNT, 
