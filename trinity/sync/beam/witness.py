@@ -1,7 +1,18 @@
 import asyncio
 from collections import Counter, defaultdict
 import typing
-from typing import Any, Dict, FrozenSet, Iterable, NamedTuple, Set, Tuple, Type, cast
+from typing import (
+    Any,
+    DefaultDict,
+    Dict,
+    FrozenSet,
+    Iterable,
+    NamedTuple,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 
 from cancel_token import CancelToken, OperationCancelled
 from lahja import EndpointAPI
@@ -23,9 +34,7 @@ from trinity.sync.beam.constants import (
     NON_IDEAL_RESPONSE_PENALTY,
     WITNESS_QUEUE_SIZE,
 )
-from trinity.sync.common.events import (
-    StatelessBlockImportDone,
-)
+from trinity.sync.common.events import StatelessBlockImportDone
 
 from .queen import QueeningQueue, QueenTrackerAPI
 
@@ -82,7 +91,8 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         self._num_requests_by_peer = Counter()
 
         # {header_hash: {node_hash: num_peers_that_broadcast}}
-        self._aggregated_witness_metadata: Dict[Hash32, Dict[Hash32, int]] = defaultdict(Counter)
+        self._aggregated_witness_metadata: DefaultDict[Hash32, typing.Counter[Hash32]]
+        self._aggregated_witness_metadata = defaultdict(Counter)
 
         # Track the nodes to download for the witness
 
@@ -123,8 +133,8 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         while self.is_operational:
             peer, cmd = await self.wait(self.msg_queue.get())
             new_hashes = cast(NewBlockWitnessHashes, cmd)
-            counter = self._aggregated_witness_metadata[new_hashes.block_hash]
-            counter.update(new_hashes.node_hashes)
+            counter = self._aggregated_witness_metadata[new_hashes.payload.block_hash]
+            counter.update(new_hashes.payload.node_hashes)
 
     async def _run(self) -> None:
         self.run_daemon_task(self._periodically_report_progress())
