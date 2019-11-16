@@ -13,12 +13,10 @@ if TYPE_CHECKING:
 class FirehoseProtocol(BaseProtocol):
     name = 'fh'
     version = 1
-    _commands = (
+    commands = (
         Status,
         NewBlockWitnessHashes,
     )
-    cmd_length = 24  # twelve more identified possibilities for new sync, plus wiggle room
-
-    peer: 'FirehosePeer'
+    command_length = 24  # twelve more identified possibilities for new sync, plus wiggle room
 
     logger = get_extended_debug_logger('trinity.protocol.fh.proto.FirehoseProtocol')
