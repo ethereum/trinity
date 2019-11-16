@@ -417,9 +417,9 @@ class Node(BaseService):
               for node_maddr in self.preferred_nodes),
             return_exceptions=True,
         )
-        for result in results:
+        for result, node_maddr in zip(results, self.preferred_nodes):
             if isinstance(result, Exception):
-                logger.warning("could not connect to %s", result)
+                logger.warning("Could not connect to preferred node at %s", node_maddr)
 
     async def disconnect_peer(self, peer_id: ID) -> None:
         if peer_id in self.handshaked_peers:
