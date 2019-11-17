@@ -2,7 +2,6 @@ import asyncio
 from dataclasses import dataclass
 import logging
 import operator
-import traceback
 import random
 from typing import (
     AsyncIterator,
@@ -348,13 +347,8 @@ class Node(BaseService):
             False,
         )
 
-    async def dial_peer(self, ip: str, port: int, peer_id: ID) -> None:
-        """
-        Dial the peer ``peer_id`` through the IPv4 protocol
-        """
+    async def _connect_and_handshake(self, peer_id: ID, maddr: Multiaddr) -> None:
         try:
-            maddr = make_tcp_ip_maddr(ip, port)
-            self.logger.debug("Dialing peer_id %s maddr %s", peer_id, maddr)
             await self.host.connect(
                 PeerInfo(
                     peer_id=peer_id,
@@ -362,61 +356,65 @@ class Node(BaseService):
                 )
             )
         except SwarmException as e:
-            self.logger.debug("Fail to dial peer_id %s maddr %s, error: %s", peer_id, maddr, e)
+            self.logger.debug("Fail to dial peer_id: %s, maddr: %s, error: %s", peer_id, maddr, e)
             raise DialPeerError from e
 
         try:
             # TODO: set a time limit on completing handshake
             await self.request_status(peer_id)
         except HandshakeFailure as e:
-            self.logger.debug("Fail to dial peer_id %s maddr %s, error: %s", peer_id, maddr, e)
+            self.logger.debug("Fail to handshake with peer_id: %s, error: %s", peer_id, e)
             raise DialPeerError from e
 
-    async def dial_peer_with_retries(self, ip: str, port: int, peer_id: ID) -> None:
+    async def dial_peer(self, ip: str, port: int, peer_id: ID) -> None:
         """
         Dial the peer ``peer_id`` through the IPv4 protocol
         """
+        maddr = make_tcp_ip_maddr(ip, port)
+        self.logger.debug("Dialing peer_id: %s, maddr: %s", peer_id, maddr)
+        await self._connect_and_handshake(peer_id, maddr)
+        self.logger.debug("Successfully connect to peer_id %s maddr %s", peer_id, maddr)
+
+    async def dial_peer_maddr(self, maddr: Multiaddr, peer_id: ID) -> None:
+        """
+        Dial the peer with given multi-address
+        """
+        self.logger.debug("Dialing peer_id: %s, maddr: %s", peer_id, maddr)
+        await self._connect_and_handshake(peer_id, maddr)
+        self.logger.debug("Successfully connect to peer_id %s maddr %s", peer_id, maddr)
+
+    async def dial_peer_maddr_with_retries(self, maddr: Multiaddr) -> None:
+        """
+        Dial the peer with given multi-address repeatedly for `DIAL_RETRY_COUNT` times
+        """
+        try:
+            p2p_id = maddr.value_for_protocol(protocols.P_P2P)
+        except (BinaryParseError, ProtocolLookupError) as error:
+            self.logger.debug("Invalid maddr: %s, error: %s", maddr, error)
+            raise DialPeerError from error
+        peer_id = ID.from_base58(p2p_id)
+
         for i in range(DIAL_RETRY_COUNT):
             try:
                 # exponential backoff...
                 await asyncio.sleep(2**i + random.random())
-                await self.dial_peer(ip, port, peer_id)
+                await self.dial_peer_maddr(maddr, peer_id)
                 return
             except DialPeerError:
                 self.logger.debug(
-                    "Could not connect to peer %s at %s:%d;"
+                    "Could not dial peer: %s, maddr: %s",
                     " retrying attempt %d of %d...",
                     peer_id,
-                    ip,
-                    port,
+                    maddr,
                     i,
                     DIAL_RETRY_COUNT,
                 )
                 continue
         raise DialPeerError
 
-    async def dial_peer_maddr(self, maddr: Multiaddr) -> None:
-        """
-        Parse `maddr`, get the ip:port and PeerID, and call `dial_peer` with the parameters.
-        """
-        try:
-            ip = maddr.value_for_protocol(protocols.P_IP4)
-            port = int(maddr.value_for_protocol(protocols.P_TCP))
-            p2p_id = maddr.value_for_protocol(protocols.P_P2P)
-        except (BinaryParseError, ProtocolLookupError) as error:
-            self.logger.debug("Invalid maddr: %s, error: %s", maddr, error)
-            raise
-        try:
-            peer_id = ID.from_base58(p2p_id)
-            await self.dial_peer_with_retries(ip=ip, port=port, peer_id=peer_id)
-        except DialPeerError:
-            traceback.print_exc()
-            raise
-        self.logger.debug("Successfully connect to peer_id %s maddr %s", peer_id, maddr)
-
     async def connect_preferred_nodes(self) -> None:
         results = await asyncio.gather(
-            *(self.dial_peer_maddr(node_maddr)
+            *(self.dial_peer_maddr_with_retries(node_maddr)
               for node_maddr in self.preferred_nodes),
             return_exceptions=True,
         )
