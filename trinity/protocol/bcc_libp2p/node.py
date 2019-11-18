@@ -347,7 +347,11 @@ class Node(BaseService):
             False,
         )
 
-    async def _connect_and_handshake(self, peer_id: ID, maddr: Multiaddr) -> None:
+    async def dial_peer_maddr(self, maddr: Multiaddr, peer_id: ID) -> None:
+        """
+        Dial the peer with given multi-address
+        """
+        self.logger.debug("Dialing peer_id: %s, maddr: %s", peer_id, maddr)
         try:
             await self.host.connect(
                 PeerInfo(
@@ -365,22 +369,6 @@ class Node(BaseService):
         except HandshakeFailure as e:
             self.logger.debug("Fail to handshake with peer_id: %s, error: %s", peer_id, e)
             raise DialPeerError from e
-
-    async def dial_peer(self, ip: str, port: int, peer_id: ID) -> None:
-        """
-        Dial the peer ``peer_id`` through the IPv4 protocol
-        """
-        maddr = make_tcp_ip_maddr(ip, port)
-        self.logger.debug("Dialing peer_id: %s, maddr: %s", peer_id, maddr)
-        await self._connect_and_handshake(peer_id, maddr)
-        self.logger.debug("Successfully connect to peer_id %s maddr %s", peer_id, maddr)
-
-    async def dial_peer_maddr(self, maddr: Multiaddr, peer_id: ID) -> None:
-        """
-        Dial the peer with given multi-address
-        """
-        self.logger.debug("Dialing peer_id: %s, maddr: %s", peer_id, maddr)
-        await self._connect_and_handshake(peer_id, maddr)
         self.logger.debug("Successfully connect to peer_id %s maddr %s", peer_id, maddr)
 
     async def dial_peer_maddr_with_retries(self, maddr: Multiaddr) -> None:
