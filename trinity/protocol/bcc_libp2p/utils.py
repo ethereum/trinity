@@ -357,8 +357,11 @@ class Interaction:
                         exc_value: Optional[BaseException],
                         traceback: Optional[TracebackType],
                         ) -> None:
-        await self.stream.close()
-        self.debug("Ended")
+        if exc_type is None:
+            await self.stream.close()
+            self.debug("Ended")
+        else:
+            self.debug(f"{exc_type}: {exc_value}")
 
     async def write_request(self, message: MsgType) -> None:
         self.debug(f"Request {type(message).__name__}  {to_formatted_dict(message)}")
