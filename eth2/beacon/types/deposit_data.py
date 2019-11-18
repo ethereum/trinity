@@ -6,7 +6,7 @@ from eth_utils import humanize_hash
 
 from eth2.beacon.constants import EMPTY_SIGNATURE
 from eth2.beacon.typing import Gwei
-from ssz.hashable_container import HashableContainer
+from ssz.hashable_container import SignedHashableContainer
 from ssz.sedes import bytes32, bytes48, bytes96, uint64
 
 from .defaults import default_bls_pubkey, default_gwei
@@ -14,7 +14,7 @@ from .defaults import default_bls_pubkey, default_gwei
 TDepositData = TypeVar("TDepositData", bound="DepositData")
 
 
-class DepositData(HashableContainer):
+class DepositData(SignedHashableContainer):
     """
     :class:`~eth2.beacon.types.deposit_data.DepositData` corresponds to the data broadcast from the
     Ethereum 1.0 deposit contract after a successful call to the ``deposit`` function on that

@@ -100,7 +100,7 @@ class Validator(HashableContainer):
         """
         Return a new pending ``Validator`` with the given fields.
         """
-        return cls(
+        return cls.create(
             pubkey=pubkey,
             withdrawal_credentials=withdrawal_credentials,
             effective_balance=calculate_effective_balance(amount, config),

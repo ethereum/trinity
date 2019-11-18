@@ -25,22 +25,15 @@ from eth2.configs import CommitteeConfig, Eth2Config
 def increase_balance(
     state: BeaconState, index: ValidatorIndex, delta: Gwei
 ) -> BeaconState:
-    return state.copy(
-        balances=update_tuple_item_with_fn(
-            state.balances, index, lambda balance, *_: Gwei(balance + delta)
-        )
-    )
+    return state.transform(("balances", index), lambda balance: Gwei(balance + delta))
 
 
 def decrease_balance(
     state: BeaconState, index: ValidatorIndex, delta: Gwei
 ) -> BeaconState:
-    return state.copy(
-        balances=update_tuple_item_with_fn(
-            state.balances,
-            index,
-            lambda balance, *_: Gwei(0) if delta > balance else Gwei(balance - delta),
-        )
+    return state.transform(
+        ("balances", index),
+        lambda balance: Gwei(0) if delta > balance else Gwei(balance - delta),
     )
 
 

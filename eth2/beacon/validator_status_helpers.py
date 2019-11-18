@@ -16,8 +16,11 @@ from eth2.configs import CommitteeConfig, Eth2Config
 
 
 def activate_validator(validator: Validator, activation_epoch: Epoch) -> Validator:
-    return validator.copy(
-        activation_eligibility_epoch=activation_epoch, activation_epoch=activation_epoch
+    return validator.mset(
+        "activation_eligibility_epoch",
+        activation_epoch,
+        "activation_epoch",
+        activation_epoch,
     )
 
 
