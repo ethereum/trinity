@@ -30,6 +30,7 @@ from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import Bitfield, Epoch, Gwei, ValidatorIndex
 from eth2.beacon.validator_status_helpers import initiate_exit_for_validator
 from eth2.configs import CommitteeConfig, Eth2Config
+from ssz.hashable_list import HashableList
 
 
 def _bft_threshold_met(participation: Gwei, total: Gwei) -> bool:
@@ -138,7 +139,9 @@ def _determine_new_justified_checkpoint_and_bitfield(
         new_current_justified_root = state.current_justified_checkpoint.root
 
     return (
-        Checkpoint(epoch=new_current_justified_epoch, root=new_current_justified_root),
+        Checkpoint.create(
+            epoch=new_current_justified_epoch, root=new_current_justified_root
+        ),
         justification_bits,
     )
 
@@ -210,7 +213,7 @@ def _determine_new_finalized_checkpoint(
     else:
         new_finalized_root = state.finalized_checkpoint.root
 
-    return Checkpoint(epoch=new_finalized_epoch, root=new_finalized_root)
+    return Checkpoint.create(epoch=new_finalized_epoch, root=new_finalized_root)
 
 
 def process_justification_and_finalization(
@@ -231,11 +234,15 @@ def process_justification_and_finalization(
         state, justification_bits, config
     )
 
-    return state.copy(
-        justification_bits=justification_bits,
-        previous_justified_checkpoint=state.current_justified_checkpoint,
-        current_justified_checkpoint=new_current_justified_checkpoint,
-        finalized_checkpoint=new_finalized_checkpoint,
+    return state.mset(
+        "justification_bits",
+        justification_bits,
+        "previous_justified_checkpoint",
+        state.current_justified_checkpoint,
+        "current_justified_checkpoint",
+        new_current_justified_checkpoint,
+        "finalized_checkpoint",
+        new_finalized_checkpoint,
     )
 
 
@@ -404,20 +411,23 @@ def _update_validator_activation_epoch(
     state: BeaconState, config: Eth2Config, validator: Validator
 ) -> Validator:
     if validator.activation_epoch == FAR_FUTURE_EPOCH:
-        return validator.copy(
-            activation_epoch=compute_activation_exit_epoch(
+        return validator.set(
+            "activation_epoch",
+            compute_activation_exit_epoch(
                 state.current_epoch(config.SLOTS_PER_EPOCH), config.MAX_SEED_LOOKAHEAD
-            )
+            ),
         )
     else:
         return validator
 
 
 def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconState:
-    new_validators = tuple(
-        _process_activation_eligibility_or_ejections(state, validator, config)
-        for validator in state.validators
-    )
+    new_validators = state.validators
+    for index, validator in enumerate(state.validators):
+        new_validator = _process_activation_eligibility_or_ejections(
+            state, validator, config
+        )
+        new_validators = new_validators.set(index, new_validator)
 
     activation_exit_epoch = compute_activation_exit_epoch(
         state.finalized_checkpoint.epoch, config.MAX_SEED_LOOKAHEAD
@@ -433,11 +443,11 @@ def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconSt
     )
 
     for index in activation_queue[: get_validator_churn_limit(state, config)]:
-        new_validators = update_tuple_item_with_fn(
-            new_validators, index, _update_validator_activation_epoch(state, config)
+        new_validators = new_validators.transform(
+            (index,), _update_validator_activation_epoch(state, config)
         )
 
-    return state.copy(validators=new_validators)
+    return state.set("validators", new_validators)
 
 
 def _determine_slashing_penalty(
@@ -492,11 +502,8 @@ def _update_effective_balances(
                 balance - balance % config.EFFECTIVE_BALANCE_INCREMENT,
                 config.MAX_EFFECTIVE_BALANCE,
             )
-            new_validators = update_tuple_item_with_fn(
-                new_validators,
-                index,
-                lambda v, new_balance: v.copy(effective_balance=new_balance),
-                new_effective_balance,
+            new_validators = new_validators.transform(
+                (index, "effective_balance"), new_effective_balance
             )
     return new_validators
 
@@ -526,10 +533,12 @@ def _compute_next_historical_roots(
     next_epoch = state.next_epoch(config.SLOTS_PER_EPOCH)
     new_historical_roots = state.historical_roots
     if next_epoch % (config.SLOTS_PER_HISTORICAL_ROOT // config.SLOTS_PER_EPOCH) == 0:
-        historical_batch = HistoricalBatch(
+        historical_batch = HistoricalBatch.create(
             block_roots=state.block_roots, state_roots=state.state_roots
         )
-        new_historical_roots += (historical_batch.hash_tree_root,)
+        new_historical_roots = new_historical_roots.append(
+            historical_batch.hash_tree_root
+        )
     return new_historical_roots
 
 
@@ -539,14 +548,21 @@ def process_final_updates(state: BeaconState, config: Eth2Config) -> BeaconState
     new_slashings = _compute_next_slashings(state, config)
     new_randao_mixes = _compute_next_randao_mixes(state, config)
     new_historical_roots = _compute_next_historical_roots(state, config)
-    return state.copy(
-        eth1_data_votes=new_eth1_data_votes,
-        validators=new_validators,
-        slashings=new_slashings,
-        randao_mixes=new_randao_mixes,
-        historical_roots=new_historical_roots,
-        previous_epoch_attestations=state.current_epoch_attestations,
-        current_epoch_attestations=tuple(),
+    return state.mset(
+        "eth1_data_votes",
+        new_eth1_data_votes,
+        "validators",
+        new_validators,
+        "slashings",
+        new_slashings,
+        "randao_mixes",
+        new_randao_mixes,
+        "historical_roots",
+        new_historical_roots,
+        "previous_epoch_attestations",
+        state.current_epoch_attestations,
+        "current_epoch_attestations",
+        HashableList.from_iterable((), sedes=state.current_epoch_attestations.sedes),
     )
 
 
