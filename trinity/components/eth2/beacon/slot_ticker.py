@@ -1,6 +1,6 @@
 import asyncio
 import time
-from typing import Set
+from typing import Optional, Set
 
 from cancel_token import (
     CancelToken,
@@ -28,10 +28,6 @@ from trinity._utils.shellart import (
 from trinity.components.eth2.misc.tick_type import TickType
 
 
-# Check twice per second: SECONDS_PER_SLOT * 2
-DEFAULT_CHECK_FREQUENCY = 24
-
-
 @dataclass
 class SlotTickEvent(BaseEvent):
 
@@ -53,6 +49,7 @@ class SlotTicker(BaseService):
             genesis_time: int,
             seconds_per_slot: Second,
             event_bus: EndpointAPI,
+            check_frequency: Optional[int] = None,
             token: CancelToken = None) -> None:
         super().__init__(token)
         self.genesis_slot = genesis_slot
@@ -60,6 +57,8 @@ class SlotTicker(BaseService):
         # FIXME: seconds_per_slot is assumed to be constant here.
         # Should it changed in the future fork, fix it as #491 described.
         self.seconds_per_slot = seconds_per_slot
+        # Check twice per second by default
+        self.check_frequency = seconds_per_slot * 2 if check_frequency is None else check_frequency
         self.latest_slot = genesis_slot
         self.event_bus = event_bus
 
@@ -101,7 +100,7 @@ class SlotTicker(BaseService):
                 await self._broadcast_slot_tick_event(slot, elapsed_time, tick_type)
                 sent_tick_types_at_slot.add(tick_type)
 
-            await asyncio.sleep(self.seconds_per_slot // DEFAULT_CHECK_FREQUENCY)
+            await asyncio.sleep(self.seconds_per_slot // self.check_frequency)
 
     async def _broadcast_slot_tick_event(
         self, slot: Slot, elapsed_time: Second, tick_type: TickType
