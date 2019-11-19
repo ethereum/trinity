@@ -19,6 +19,7 @@ from eth2.beacon.typing import (
 from eth2.configs import Eth2Config
 from ssz.hashable_container import HashableContainer
 from ssz.hashable_list import HashableList
+from ssz.hashable_vector import HashableVector
 from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 
 from .block_headers import BeaconBlockHeader, default_beacon_block_header
@@ -95,7 +96,9 @@ class BeaconState(HashableContainer):
         state_roots: Sequence[Hash32] = default_tuple,
         historical_roots: Sequence[Hash32] = default_tuple,
         eth1_data: Eth1Data = default_eth1_data,
-        eth1_data_votes: Sequence[Eth1Data] = default_tuple,
+        eth1_data_votes: Sequence[Eth1Data] = HashableList.from_iterable(
+            (), List(Eth1Data, 2 ** 8)  # TODO
+        ),
         eth1_deposit_index: int = 0,
         validators: Sequence[Validator] = HashableList.from_iterable(
             (), List(Validator, 2 ** 8)  # TODO
@@ -103,7 +106,9 @@ class BeaconState(HashableContainer):
         balances: Sequence[Gwei] = HashableList.from_iterable(
             (), List(uint64, 2 ** 8)  # TODO
         ),
-        randao_mixes: Sequence[Hash32] = default_tuple,
+        randao_mixes: Sequence[Hash32] = HashableVector.from_iterable(
+            (b"\x00" * 32,) * 2 ** 8, Vector(bytes32, 2 ** 8)  # TODO
+        ),
         slashings: Sequence[Gwei] = default_tuple,
         previous_epoch_attestations: Sequence[PendingAttestation] = default_tuple,
         current_epoch_attestations: Sequence[PendingAttestation] = default_tuple,

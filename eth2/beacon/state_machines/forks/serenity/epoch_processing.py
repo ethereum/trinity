@@ -483,7 +483,7 @@ def _determine_next_eth1_votes(
     state: BeaconState, config: Eth2Config
 ) -> Tuple[Eth1Data, ...]:
     if (state.slot + 1) % config.SLOTS_PER_ETH1_VOTING_PERIOD == 0:
-        return tuple()
+        return HashableList.from_iterable((), state.eth1_data_votes.sedes)
     else:
         return state.eth1_data_votes
 
@@ -510,9 +510,7 @@ def _update_effective_balances(
 
 def _compute_next_slashings(state: BeaconState, config: Eth2Config) -> Tuple[Gwei, ...]:
     next_epoch = state.next_epoch(config.SLOTS_PER_EPOCH)
-    return update_tuple_item(
-        state.slashings, next_epoch % config.EPOCHS_PER_SLASHINGS_VECTOR, Gwei(0)
-    )
+    return state.slashings.set(next_epoch % config.EPOCHS_PER_SLASHINGS_VECTOR, Gwei(0))
 
 
 def _compute_next_randao_mixes(
@@ -520,8 +518,7 @@ def _compute_next_randao_mixes(
 ) -> Tuple[Hash32, ...]:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     next_epoch = state.next_epoch(config.SLOTS_PER_EPOCH)
-    return update_tuple_item(
-        state.randao_mixes,
+    return state.randao_mixes.set(
         next_epoch % config.EPOCHS_PER_HISTORICAL_VECTOR,
         get_randao_mix(state, current_epoch, config.EPOCHS_PER_HISTORICAL_VECTOR),
     )

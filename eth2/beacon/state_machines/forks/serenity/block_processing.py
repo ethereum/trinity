@@ -74,11 +74,7 @@ def process_randao(
         hash_eth2(block.body.randao_reveal),
     )
 
-    return state.copy(
-        randao_mixes=update_tuple_item(
-            state.randao_mixes, randao_mix_index, new_randao_mix
-        )
-    )
+    return state.transform(("randao_mixes", randao_mix_index), new_randao_mix)
 
 
 def process_eth1_data(
@@ -86,7 +82,7 @@ def process_eth1_data(
 ) -> BeaconState:
     body = block.body
 
-    new_eth1_data_votes = state.eth1_data_votes + (body.eth1_data,)
+    new_eth1_data_votes = state.eth1_data_votes.append(body.eth1_data)
 
     new_eth1_data = state.eth1_data
     if (
@@ -95,7 +91,9 @@ def process_eth1_data(
     ):
         new_eth1_data = body.eth1_data
 
-    return state.copy(eth1_data=new_eth1_data, eth1_data_votes=new_eth1_data_votes)
+    return state.mset(
+        "eth1_data", new_eth1_data, "eth1_data_votes", new_eth1_data_votes
+    )
 
 
 def process_block(
