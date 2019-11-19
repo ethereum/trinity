@@ -1039,25 +1039,10 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
             self.logger.debug(
                 "%s announced Head TD %d, which is higher than ours (%d), starting sync",
                 peer, peer.head_info.head_td, head_td)
+            pass
+    
+    async def handle_sync_status_requests(self) -> None:
+        async for req in self._peer_pool.event_bus.stream(SyncingRequest):
+            self._peer_pool.event_bus.broadcast(SyncingResponse(*self._skeleton.get_sync_status()),
+                                               req.broadcast_config())
 
-    def _run_handle_sync_status_requests(self) -> None:
-        if self._peer_pool.has_event_bus:
-            event_bus = self._peer_pool.get_event_bus()
-            self.run_daemon_task(self._handle_sync_status_requests(event_bus))
-        else:
-            self.logger.warning(
-                "Cannot start task for handling eth_syncing requests "
-                "as peer pool doesn't have an event_bus"
-            )
-
-    def _get_sync_status(self) -> Tuple[bool, Optional[SyncProgress]]:
-        if not self._is_syncing_skeleton or not self._meat.sync_progress:
-            return False, None
-        return True, self._meat.sync_progress
-
-    async def _handle_sync_status_requests(self, event_bus: EndpointAPI) -> None:
-        async for req in self.wait_iter(event_bus.stream(SyncingRequest)):
-            await event_bus.broadcast(
-                SyncingResponse(*self._get_sync_status()),
-                req.broadcast_config()
-            )
