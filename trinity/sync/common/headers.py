@@ -1039,10 +1039,8 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
             self.logger.debug(
                 "%s announced Head TD %d, which is higher than ours (%d), starting sync",
                 peer, peer.head_info.head_td, head_td)
-            pass
-    
+
     async def handle_sync_status_requests(self) -> None:
         async for req in self._peer_pool.event_bus.stream(SyncingRequest):
             self._peer_pool.event_bus.broadcast(SyncingResponse(*self._skeleton.get_sync_status()),
                                                req.broadcast_config())
-
