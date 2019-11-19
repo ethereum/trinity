@@ -1,7 +1,6 @@
 from typing import Any, Dict, Optional, Tuple, Type, Union
 
 from eth_utils import ValidationError
-import ssz
 
 from eth2._utils.bls import SignatureError
 from eth2.beacon.state_machines.forks.serenity.block_processing import (
@@ -25,6 +24,7 @@ from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.configs import Eth2Config
+import ssz
 
 from . import TestType
 
@@ -76,8 +76,10 @@ class OperationHandler(
         # update API provided by `py-ssz`.
         # NOTE: we ignore the type here, otherwise need to spell out each of the keyword
         # arguments individually... save some work and just build them dynamically
-        block = BeaconBlock(
-            body=BeaconBlockBody(**{f"{cls.name}s": (operation,)})  # type: ignore
+        block = BeaconBlock.create(
+            body=BeaconBlockBody.create(
+                **{f"{cls.name}s": (operation,)}
+            )  # type: ignore
         )
         try:
             return cls.processor(state, block, config)

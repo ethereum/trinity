@@ -35,14 +35,15 @@ def process_block_header(
             state, block, committee_config=CommitteeConfig(config)
         )
 
-    return state.copy(
-        latest_block_header=BeaconBlockHeader(
+    return state.set(
+        "latest_block_header",
+        BeaconBlockHeader.create(
             slot=block.slot,
             parent_root=block.parent_root,
             # `state_root` is zeroed and overwritten in the next `process_slot` call
             body_root=block.body.hash_tree_root,
             # `signature` is zeroed
-        )
+        ),
     )
 
 

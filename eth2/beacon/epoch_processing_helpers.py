@@ -4,7 +4,6 @@ from eth_utils import to_tuple
 
 from eth2._utils.bitfield import Bitfield, has_voted
 from eth2._utils.numeric import integer_squareroot
-from eth2._utils.tuple import update_tuple_item_with_fn
 from eth2.beacon.committee_helpers import get_beacon_committee
 from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH
 from eth2.beacon.exceptions import InvalidEpochError
@@ -20,6 +19,8 @@ from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
+from ssz.hashable_list import HashableList
+from ssz.sedes import List, uint64
 
 
 def increase_balance(
@@ -44,7 +45,7 @@ def get_attesting_indices(
     config: CommitteeConfig,
 ) -> Set[ValidatorIndex]:
     """
-    Return the sorted attesting indices corresponding to ``attestation_data`` and ``bitfield``.
+    Return the attesting indices corresponding to ``attestation_data`` and ``bitfield``.
     """
     committee = get_beacon_committee(
         state, attestation_data.slot, attestation_data.index, config
@@ -59,8 +60,10 @@ def get_indexed_attestation(
         state, attestation.data, attestation.aggregation_bits, config
     )
 
-    return IndexedAttestation(
-        attesting_indices=sorted(attesting_indices),
+    return IndexedAttestation.create(
+        attesting_indices=HashableList.from_iterable(
+            sorted(attesting_indices), sedes=List(uint64, 2 ** 8)  # TODO: fix size
+        ),
         data=attestation.data,
         signature=attestation.signature,
     )
