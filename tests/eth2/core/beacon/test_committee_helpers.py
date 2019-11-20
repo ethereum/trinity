@@ -68,7 +68,7 @@ def test_compute_proposer_index(genesis_validators, config):
         if index == proposer_index:
             validators += (validator,)
         else:
-            validators += (validator.copy(effective_balance=one_eth_in_gwei),)
+            validators += (validator.set("effective_balance", one_eth_in_gwei),)
 
     assert (
         compute_proposer_index(
@@ -88,12 +88,14 @@ def test_get_beacon_proposer_index(genesis_state, config):
     state = genesis_state
     validators = tuple(
         [
-            state.validators[index].copy(effective_balance=config.MAX_EFFECTIVE_BALANCE)
+            state.validators[index].set(
+                "effective_balance", config.MAX_EFFECTIVE_BALANCE
+            )
             for index in range(len(state.validators))
         ]
     )
     for slot in range(0, config.SLOTS_PER_EPOCH):
-        state = state.copy(slot=slot, validators=validators)
+        state = state.mset("slot", slot, "validators", validators)
         committee_config = CommitteeConfig(config)
         proposer_index = get_beacon_proposer_index(state, committee_config)
         assert proposer_index
