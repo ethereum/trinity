@@ -21,14 +21,21 @@ from eth2.beacon.tools.builder.state import create_mock_genesis_state_from_valid
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
+from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, BeaconBlockHeader
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData
+from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.forks import Fork
+from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex, Version
 from eth2.configs import CommitteeConfig, Eth2Config, Eth2GenesisConfig
+from ssz.hashable_list import HashableList
+from ssz.hashable_vector import HashableVector
+from ssz.sedes import List, Vector, bytes32
 
 
 # SSZ
@@ -386,8 +393,8 @@ def sample_attestation_data_params():
         "slot": 5,
         "index": 1,
         "beacon_block_root": b"\x11" * 32,
-        "source": Checkpoint(epoch=11, root=b"\x22" * 32),
-        "target": Checkpoint(epoch=12, root=b"\x33" * 32),
+        "source": Checkpoint.create(epoch=11, root=b"\x22" * 32),
+        "target": Checkpoint.create(epoch=12, root=b"\x33" * 32),
     }
 
 
@@ -395,7 +402,7 @@ def sample_attestation_data_params():
 def sample_indexed_attestation_params(sample_signature, sample_attestation_data_params):
     return {
         "attesting_indices": (10, 11, 12, 15, 28),
-        "data": AttestationData(**sample_attestation_data_params),
+        "data": AttestationData.create(**sample_attestation_data_params),
         "signature": sample_signature,
     }
 
@@ -404,7 +411,7 @@ def sample_indexed_attestation_params(sample_signature, sample_attestation_data_
 def sample_pending_attestation_record_params(sample_attestation_data_params):
     return {
         "aggregation_bits": (True, False) * 4 * 16,
-        "data": AttestationData(**sample_attestation_data_params),
+        "data": AttestationData.create(**sample_attestation_data_params),
         "inclusion_delay": 1,
         "proposer_index": ValidatorIndex(12),
     }
@@ -454,7 +461,7 @@ def sample_block_header_params():
 
 @pytest.fixture
 def sample_proposer_slashing_params(sample_block_header_params):
-    block_header_data = BeaconBlockHeader(**sample_block_header_params)
+    block_header_data = BeaconBlockHeader.create(**sample_block_header_params)
     return {
         "proposer_index": 1,
         "header_1": block_header_data,
@@ -464,7 +471,7 @@ def sample_proposer_slashing_params(sample_block_header_params):
 
 @pytest.fixture
 def sample_attester_slashing_params(sample_indexed_attestation_params):
-    indexed_attestation = IndexedAttestation(**sample_indexed_attestation_params)
+    indexed_attestation = IndexedAttestation.create(**sample_indexed_attestation_params)
     return {"attestation_1": indexed_attestation, "attestation_2": indexed_attestation}
 
 
@@ -472,7 +479,7 @@ def sample_attester_slashing_params(sample_indexed_attestation_params):
 def sample_attestation_params(sample_signature, sample_attestation_data_params):
     return {
         "aggregation_bits": (True,) * 16,
-        "data": AttestationData(**sample_attestation_data_params),
+        "data": AttestationData.create(**sample_attestation_data_params),
         "signature": sample_signature,
     }
 
@@ -494,7 +501,7 @@ def sample_voluntary_exit_params(sample_signature):
 def sample_beacon_block_body_params(sample_signature, sample_eth1_data_params):
     return {
         "randao_reveal": sample_signature,
-        "eth1_data": Eth1Data(**sample_eth1_data_params),
+        "eth1_data": Eth1Data.create(**sample_eth1_data_params),
         "graffiti": ZERO_HASH32,
         "proposer_slashings": (),
         "attester_slashings": (),
@@ -512,7 +519,7 @@ def sample_beacon_block_params(
         "slot": genesis_slot + 10,
         "parent_root": ZERO_HASH32,
         "state_root": b"\x55" * 32,
-        "body": BeaconBlockBody(**sample_beacon_block_body_params),
+        "body": BeaconBlockBody.create(**sample_beacon_block_body_params),
         "signature": sample_signature,
     }
 
@@ -530,14 +537,14 @@ def sample_beacon_state_params(
         # Versioning
         "genesis_time": 0,
         "slot": genesis_slot + 100,
-        "fork": Fork(**sample_fork_params),
+        "fork": Fork.create(**sample_fork_params),
         # History
-        "latest_block_header": BeaconBlockHeader(**sample_block_header_params),
+        "latest_block_header": BeaconBlockHeader.create(**sample_block_header_params),
         "block_roots": (ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         "state_roots": (ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         "historical_roots": (),
         # Eth1
-        "eth1_data": Eth1Data(**sample_eth1_data_params),
+        "eth1_data": Eth1Data.create(**sample_eth1_data_params),
         "eth1_data_votes": (),
         "eth1_deposit_index": 0,
         # Registry
@@ -552,21 +559,21 @@ def sample_beacon_state_params(
         "current_epoch_attestations": (),
         # Justification
         "justification_bits": (False,) * JUSTIFICATION_BITS_LENGTH,
-        "previous_justified_checkpoint": Checkpoint(epoch=0, root=b"\x99" * 32),
-        "current_justified_checkpoint": Checkpoint(epoch=0, root=b"\x55" * 32),
+        "previous_justified_checkpoint": Checkpoint.create(epoch=0, root=b"\x99" * 32),
+        "current_justified_checkpoint": Checkpoint.create(epoch=0, root=b"\x55" * 32),
         # Finality
-        "finalized_checkpoint": Checkpoint(epoch=0, root=b"\x33" * 32),
+        "finalized_checkpoint": Checkpoint.create(epoch=0, root=b"\x33" * 32),
     }
 
 
 @pytest.fixture()
 def sample_block(sample_beacon_block_params):
-    return SerenityBeaconBlock(**sample_beacon_block_params)
+    return SerenityBeaconBlock.create(**sample_beacon_block_params)
 
 
 @pytest.fixture()
 def sample_state(sample_beacon_state_params):
-    return BeaconState(**sample_beacon_state_params)
+    return BeaconState.create(**sample_beacon_state_params)
 
 
 @pytest.fixture
@@ -574,7 +581,7 @@ def sample_aggregate_and_proof_params(sample_attestation_params):
     return {
         "index": 5,
         "selection_proof": 1,
-        "aggregate": Attestation(**sample_attestation_params),
+        "aggregate": Attestation.create(**sample_attestation_params),
     }
 
 
@@ -606,8 +613,8 @@ def genesis_balances(validator_count, max_effective_balance):
 def genesis_state(
     genesis_validators, genesis_balances, genesis_time, sample_eth1_data_params, config
 ):
-    genesis_eth1_data = Eth1Data(**sample_eth1_data_params).copy(
-        deposit_count=len(genesis_validators)
+    genesis_eth1_data = Eth1Data.create(**sample_eth1_data_params).set(
+        "deposit_count", len(genesis_validators)
     )
 
     return create_mock_genesis_state_from_validators(
