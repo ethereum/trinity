@@ -37,11 +37,11 @@ class BeaconBlockBody(HashableContainer):
         ("randao_reveal", bytes96),
         ("eth1_data", Eth1Data),
         ("graffiti", bytes32),
-        ("proposer_slashings", List(ProposerSlashing, 1)),
+        ("proposer_slashings", List(ProposerSlashing, 16)),
         ("attester_slashings", List(AttesterSlashing, 1)),
-        ("attestations", List(Attestation, 1)),
-        ("deposits", List(Deposit, 1)),
-        ("voluntary_exits", List(VoluntaryExit, 1)),
+        ("attestations", List(Attestation, 128)),
+        ("deposits", List(Deposit, 16)),
+        ("voluntary_exits", List(VoluntaryExit, 16)),
     ]
 
     @classmethod
@@ -70,7 +70,7 @@ class BeaconBlockBody(HashableContainer):
 
     @property
     def is_empty(self) -> bool:
-        return self == BeaconBlockBody()
+        return self == BeaconBlockBody.create()
 
     def __str__(self) -> str:
         return (
