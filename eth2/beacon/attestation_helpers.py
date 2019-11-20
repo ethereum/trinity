@@ -37,6 +37,7 @@ def validate_indexed_attestation(
     indexed_attestation: IndexedAttestation,
     max_validators_per_committee: int,
     slots_per_epoch: int,
+    validate_signature: bool = True,
 ) -> None:
     """
     Derived from spec: `is_valid_indexed_attestation`.
@@ -54,14 +55,15 @@ def validate_indexed_attestation(
             f"Indices should be sorted; the attesting indices are not: {attesting_indices}."
         )
 
-    try:
-        validate_indexed_attestation_aggregate_signature(
-            state, indexed_attestation, slots_per_epoch
-        )
-    except SignatureError as error:
-        raise ValidationError(
-            f"Incorrect aggregate signature on the {indexed_attestation}", error
-        )
+    if validate_signature:
+        try:
+            validate_indexed_attestation_aggregate_signature(
+                state, indexed_attestation, slots_per_epoch
+            )
+        except SignatureError as error:
+            raise ValidationError(
+                f"Incorrect aggregate signature on the {indexed_attestation}", error
+            )
 
 
 def is_slashable_attestation_data(

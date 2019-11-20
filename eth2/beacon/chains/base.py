@@ -88,6 +88,18 @@ class BaseBeaconChain(Configurable, ABC):
     def get_genesis_state_machine_class(self) -> Type["BaseBeaconStateMachine"]:
         ...
 
+    @abstractmethod
+    def on_tick(self, time: int, slot: Slot = None) -> None:
+        ...
+
+    @abstractmethod
+    def on_block(self, block: BaseBeaconBlock, slot: Slot = None) -> None:
+        ...
+
+    @abstractmethod
+    def on_attestation(self, attestation: Attestation, slot: Slot = None) -> None:
+        ...
+
     #
     # State API
     #
@@ -281,6 +293,19 @@ class BeaconChain(BaseBeaconChain):
     @classmethod
     def get_genesis_state_machine_class(cls) -> Type["BaseBeaconStateMachine"]:
         return cls.sm_configuration[0][1]
+
+    # TODO how to handle the current slot in fork choice handlers
+    def on_tick(self, time: int, slot: Slot = None) -> None:
+        state_machine = self.get_state_machine(at_slot=slot)
+        state_machine.on_tick(time)
+
+    def on_block(self, block: BaseBeaconBlock, slot: Slot = None) -> None:
+        state_machine = self.get_state_machine(at_slot=slot)
+        state_machine.on_block(block)
+
+    def on_attestation(self, attestation: Attestation, slot: Slot = None) -> None:
+        state_machine = self.get_state_machine(at_slot=slot)
+        state_machine.on_attestation(attestation)
 
     #
     # State API

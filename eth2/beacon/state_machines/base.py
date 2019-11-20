@@ -6,6 +6,7 @@ from eth._utils.datatypes import Configurable
 
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.fork_choice.scoring import ScoringFn as ForkChoiceScoringFn
+from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import FromBlockParams
@@ -53,6 +54,18 @@ class BaseBeaconStateMachine(Configurable, ABC):
 
     @abstractmethod
     def get_fork_choice_scoring(self) -> ForkChoiceScoringFn:
+        ...
+
+    @abstractmethod
+    def on_tick(self, time: int) -> None:
+        ...
+
+    @abstractmethod
+    def on_block(self, block: BaseBeaconBlock) -> None:
+        ...
+
+    @abstractmethod
+    def on_attestation(self, attestation: Attestation) -> None:
         ...
 
     #
@@ -117,6 +130,15 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     @property
     def state_transition(self) -> BaseStateTransition:
         return self.get_state_transiton_class()(self.config)
+
+    def on_tick(self, time: int) -> None:
+        pass
+
+    def on_block(self, block: BaseBeaconBlock) -> None:
+        pass
+
+    def on_attestation(self, attestation: Attestation) -> None:
+        pass
 
     #
     # Import block API
