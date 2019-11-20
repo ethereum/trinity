@@ -211,7 +211,7 @@ class BeaconBlock(BaseBeaconBlock):
             slot=slot,
             parent_root=parent_block.signing_root,
             state_root=parent_block.state_root,
-            body=cls.block_body_class(),
+            body=cls.block_body_class.create(),
         )
 
     @classmethod

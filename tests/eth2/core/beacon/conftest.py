@@ -489,7 +489,7 @@ def sample_attestation_params(sample_signature, sample_attestation_data_params):
 def sample_deposit_params(sample_deposit_data_params, deposit_contract_tree_depth):
     return {
         "proof": (b"\x22" * 32,) * (deposit_contract_tree_depth + 1),
-        "data": DepositData(**sample_deposit_data_params),
+        "data": DepositData.create(**sample_deposit_data_params),
     }
 
 
@@ -581,7 +581,7 @@ def sample_state(sample_beacon_state_params):
 def sample_aggregate_and_proof_params(sample_attestation_params):
     return {
         "index": 5,
-        "selection_proof": 1,
+        "selection_proof": bytes([1] * 96),
         "aggregate": Attestation.create(**sample_attestation_params),
     }
 

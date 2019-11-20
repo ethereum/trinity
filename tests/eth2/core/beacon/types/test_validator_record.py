@@ -6,7 +6,7 @@ from eth2.beacon.typing import Gwei
 
 
 def test_defaults(sample_validator_record_params):
-    validator = Validator(**sample_validator_record_params)
+    validator = Validator.create(**sample_validator_record_params)
     assert validator.pubkey == sample_validator_record_params["pubkey"]
     assert (
         validator.withdrawal_credentials
@@ -26,12 +26,12 @@ def test_is_active(
         "activation_epoch": activation_epoch,
         "exit_epoch": exit_epoch,
     }
-    validator = Validator(**validator_record_params)
+    validator = Validator.create(**validator_record_params)
     assert validator.is_active(epoch) == expected
 
 
 def test_create_pending_validator(config):
-    pubkey = 123
+    pubkey = b"\x12" * 48
     withdrawal_credentials = b"\x11" * 32
 
     effective_balance = 22 * GWEI_PER_ETH

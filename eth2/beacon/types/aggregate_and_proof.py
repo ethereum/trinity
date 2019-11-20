@@ -1,15 +1,19 @@
+from typing import Type, TypeVar
+
 from eth_typing import BLSSignature
 from eth_utils import humanize_hash
-import ssz
-from ssz.sedes import bytes96, uint64
 
 from eth2.beacon.constants import EMPTY_SIGNATURE
 from eth2.beacon.types.attestations import Attestation, default_attestation
 from eth2.beacon.types.defaults import default_validator_index
 from eth2.beacon.typing import ValidatorIndex
+from ssz.hashable_container import HashableContainer
+from ssz.sedes import bytes96, uint64
+
+TAggregateAndProof = TypeVar("TAggregateAndProof", bound="AggregateAndProof")
 
 
-class AggregateAndProof(ssz.Serializable):
+class AggregateAndProof(HashableContainer):
 
     fields = [
         ("index", uint64),
@@ -17,13 +21,14 @@ class AggregateAndProof(ssz.Serializable):
         ("aggregate", Attestation),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TAggregateAndProof],
         index: ValidatorIndex = default_validator_index,
         selection_proof: BLSSignature = EMPTY_SIGNATURE,
         aggregate: Attestation = default_attestation,
-    ) -> None:
-        super().__init__(
+    ) -> TAggregateAndProof:
+        return super().create(
             index=index, selection_proof=selection_proof, aggregate=aggregate
         )
 
@@ -35,4 +40,4 @@ class AggregateAndProof(ssz.Serializable):
         )
 
 
-default_aggregate_and_proof = AggregateAndProof()
+default_aggregate_and_proof = AggregateAndProof.create()
