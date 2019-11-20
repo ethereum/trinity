@@ -662,11 +662,11 @@ def create_mock_deposit_data(
     if amount is None:
         amount = config.MAX_EFFECTIVE_BALANCE
 
-    data = DepositData(
+    data = DepositData.create(
         pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
     )
     signature = sign_proof_of_possession(deposit_data=data, privkey=privkey)
-    return data.copy(signature=signature)
+    return data.set("signature", signature)
 
 
 def make_deposit_tree_and_root(

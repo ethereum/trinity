@@ -30,12 +30,13 @@ from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex, Version
 from eth2.configs import CommitteeConfig, Eth2Config, Eth2GenesisConfig
 from ssz.hashable_list import HashableList
 from ssz.hashable_vector import HashableVector
-from ssz.sedes import List, Vector, bytes32
+from ssz.sedes import List, Vector, bytes32, uint64
 
 
 # SSZ
@@ -598,15 +599,21 @@ def genesis_validators(validator_count, pubkeys, config):
     """
     Returns ``validator_count`` number of activated validators.
     """
-    return tuple(
-        create_mock_validator(pubkey=pubkey, config=config)
-        for pubkey in pubkeys[:validator_count]
+    return HashableList.from_iterable(
+        (
+            create_mock_validator(pubkey=pubkey, config=config)
+            for pubkey in pubkeys[:validator_count]
+        ),
+        List(Validator, config.VALIDATOR_REGISTRY_LIMIT),
     )
 
 
 @pytest.fixture
-def genesis_balances(validator_count, max_effective_balance):
-    return (max_effective_balance,) * validator_count
+def genesis_balances(validator_count, max_effective_balance, config):
+    return HashableList.from_iterable(
+        (max_effective_balance,) * validator_count,
+        List(uint64, config.VALIDATOR_REGISTRY_LIMIT),
+    )
 
 
 @pytest.fixture
