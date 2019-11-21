@@ -45,6 +45,7 @@ def _mk_attestation_inputs_in_epoch(epoch, block_producer, state, config):
             # empty committee this slot
             continue
 
+<<<<<<< HEAD
         block = block_producer(slot)
         root = block.signing_root
         attestation_data = AttestationData(
@@ -52,6 +53,10 @@ def _mk_attestation_inputs_in_epoch(epoch, block_producer, state, config):
             index=committee_index,
             target=Checkpoint(epoch=epoch, root=root),
             beacon_block_root=root,
+=======
+        attestation_data = AttestationData.create(
+            slot=slot, index=committee_index, target=Checkpoint.create(epoch=epoch)
+>>>>>>> 34804039... Make most fork choice tests pass
         )
         committee_size = len(committee)
         aggregation_bits = bitfield.get_empty_bitfield(committee_size)
@@ -78,7 +83,7 @@ def _extract_attestations_from_index_keying(values):
     results = ()
     for value in values:
         aggregation_bits, data = second(value)
-        attestation = Attestation(aggregation_bits=aggregation_bits, data=data)
+        attestation = Attestation.create(aggregation_bits=aggregation_bits, data=data)
         if attestation not in results:
             results += (attestation,)
     return results
@@ -104,10 +109,10 @@ def _find_collision(state, config, validator_index, epoch, block_producer):
             # TODO(ralexstokes) refactor w/ tools/builder
             block = block_producer(slot)
             root = block.signing_root
-            attestation_data = AttestationData(
+            attestation_data = AttestationData.create(
                 slot=slot,
                 index=committee_index,
-                target=Checkpoint(epoch=epoch, root=root),
+                target=Checkpoint.create(epoch=epoch),
                 beacon_block_root=root,
             )
             committee_count = len(committee)
@@ -198,8 +203,8 @@ def test_store_get_latest_attestation(
     find the latest ones for each validator?
     """
     some_epoch = 3
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
+    state = genesis_state.set(
+        "slot", compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
     )
     some_time = (
         _compute_seconds_since_genesis_for_epoch(some_epoch, config)
@@ -284,6 +289,21 @@ def test_store_get_latest_attestation(
         pool_attestations_by_index,
     )
 
+<<<<<<< HEAD
+=======
+    # ensure we get the expected results
+    state = state.mset(
+        "previous_epoch_attestations",
+        previous_epoch_attestations,
+        "current_epoch_attestations",
+        current_epoch_attestations,
+    )
+
+    pool = empty_attestation_pool
+    for attestation in pool_attestations:
+        pool.add(attestation)
+
+>>>>>>> 34804039... Make most fork choice tests pass
     chain_db = None  # not relevant for this test
     context = Context.from_genesis(genesis_state, genesis_block)
     context.time = some_time
@@ -317,11 +337,14 @@ def test_store_get_latest_attestation(
 
 
 def _mk_block(block_params, slot, parent, block_offset):
-    return BeaconBlock(**block_params).copy(
-        slot=slot,
-        parent_root=parent.signing_root,
+    return BeaconBlock.create(**block_params).mset(
+        "slot",
+        slot,
+        "parent_root",
+        parent.signing_root,
         # mix in something unique
-        state_root=block_offset.to_bytes(32, byteorder="big"),
+        "state_root",
+        block_offset.to_bytes(32, byteorder="big"),
     )
 
 
@@ -426,13 +449,13 @@ def _mk_attestation_for_block_with_committee(block, committee, committee_index, 
     for index in range(committee_count):
         aggregation_bits = bitfield.set_voted(aggregation_bits, index)
 
-    attestation = Attestation(
+    attestation = Attestation.create(
         aggregation_bits=aggregation_bits,
-        data=AttestationData(
+        data=AttestationData.create(
             slot=block.slot,
             index=committee_index,
             beacon_block_root=block.signing_root,
-            target=Checkpoint(
+            target=Checkpoint.create(
                 epoch=compute_epoch_at_slot(block.slot, config.SLOTS_PER_EPOCH)
             ),
         ),
@@ -534,12 +557,12 @@ def test_lmd_ghost_fork_choice_scoring(
     some_epoch = 3
     some_slot_offset = 10
 
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
+    state = genesis_state.mset(
+        "slot",
+        compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
         + some_slot_offset,
-        current_justified_checkpoint=Checkpoint(
-            epoch=some_epoch, root=root_block.signing_root
-        ),
+        "current_justified_checkpoint",
+        Checkpoint.create(epoch=some_epoch, root=root_block.signing_root),
     )
     assert some_epoch >= state.current_justified_checkpoint.epoch
 
