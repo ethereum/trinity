@@ -395,7 +395,7 @@ def _process_activation_eligibility_or_ejections(
         validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
         and validator.effective_balance == config.MAX_EFFECTIVE_BALANCE
     ):
-        validator = validator.copy(activation_eligibility_epoch=current_epoch)
+        validator = validator.set("activation_eligibility_epoch", current_epoch)
 
     if (
         validator.is_active(current_epoch)

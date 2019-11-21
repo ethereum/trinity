@@ -26,8 +26,8 @@ def test_validate_block_slot(
     block_slot,
     expected,
 ):
-    state = BeaconState(**sample_beacon_state_params).copy(slot=state_slot)
-    block = BeaconBlock(**sample_beacon_block_params).copy(slot=block_slot)
+    state = BeaconState.create(**sample_beacon_state_params).set("slot", state_slot)
+    block = BeaconBlock.create(**sample_beacon_block_params).set("slot", block_slot)
     if isinstance(expected, Exception):
         with pytest.raises(ValidationError):
             validate_block_slot(state, block)
@@ -58,24 +58,25 @@ def test_validate_proposer_signature(
     config,
 ):
 
-    state = BeaconState(**sample_beacon_state_params).copy(
-        validators=tuple(
-            create_mock_validator(proposer_pubkey, config) for _ in range(10)
-        ),
-        balances=(max_effective_balance,) * 10,
+    state = BeaconState.create(**sample_beacon_state_params).mset(
+        "validators",
+        tuple(create_mock_validator(proposer_pubkey, config) for _ in range(10)),
+        "balances",
+        (max_effective_balance,) * 10,
     )
 
-    block = BeaconBlock(**sample_beacon_block_params)
+    block = BeaconBlock.create(**sample_beacon_block_params)
     header = block.header
 
-    proposed_block = block.copy(
-        signature=bls.sign(
+    proposed_block = block.set(
+        "signature",
+        bls.sign(
             message_hash=header.signing_root,
             privkey=proposer_privkey,
             domain=get_domain(
                 state, SignatureDomain.DOMAIN_BEACON_PROPOSER, slots_per_epoch
             ),
-        )
+        ),
     )
 
     if is_valid_signature:
@@ -107,8 +108,8 @@ def test_randao_reveal_validation(
     genesis_state,
     config,
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(epoch, config.SLOTS_PER_EPOCH)
+    state = genesis_state.set(
+        "slot", compute_start_slot_at_epoch(epoch, config.SLOTS_PER_EPOCH)
     )
     message_hash = epoch.to_bytes(32, byteorder="little")
     slots_per_epoch = config.SLOTS_PER_EPOCH
