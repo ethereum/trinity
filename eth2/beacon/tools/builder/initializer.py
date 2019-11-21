@@ -126,7 +126,7 @@ def create_mock_genesis(
         pubkeys=pubkeys, keymap=keymap, config=config
     )
 
-    genesis_eth1_data = Eth1Data(
+    genesis_eth1_data = Eth1Data.create(
         deposit_root=deposit_root,
         deposit_count=len(genesis_deposits),
         block_hash=ZERO_HASH32,
