@@ -34,8 +34,8 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
     # verify a special case (score(genesis) == 0)
     assert valid_chain.get_score(genesis_block.signing_root) == 0
 
-    block = genesis_block.copy(
-        slot=genesis_block.slot + 1, parent_root=genesis_block.signing_root
+    block = genesis_block.mset(
+        "slot", genesis_block.slot + 1, "parent_root", genesis_block.signing_root
     )
     valid_chain.chaindb.persist_block(block, block.__class__, fork_choice_scoring)
 
@@ -198,7 +198,7 @@ def test_get_attestation_root(
     a0 = attestations[0]
     assert valid_chain.get_attestation_by_root(a0.hash_tree_root) == a0
     assert valid_chain.attestation_exists(a0.hash_tree_root)
-    fake_attestation = a0.copy(signature=b"\x78" * 96)
+    fake_attestation = a0.set("signature", b"\x78" * 96)
     with pytest.raises(AttestationRootNotFound):
         valid_chain.get_attestation_by_root(fake_attestation.hash_tree_root)
     assert not valid_chain.attestation_exists(fake_attestation.hash_tree_root)
