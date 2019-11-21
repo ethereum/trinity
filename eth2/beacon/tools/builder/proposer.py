@@ -1,7 +1,6 @@
 from typing import Dict, Sequence, Type
 
 from eth_typing import BLSPubkey, BLSSignature
-import ssz
 
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.exceptions import ProposerIndexError
@@ -14,6 +13,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockBody
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import FromBlockParams, Slot, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
+import ssz
 
 
 def is_proposer(
@@ -85,11 +85,11 @@ def create_block_on_state(
     # TODO: Add more operations
     randao_reveal = _generate_randao_reveal(privkey, slot, state, config)
     eth1_data = state.eth1_data
-    body = BeaconBlockBody(
+    body = BeaconBlockBody.create(
         randao_reveal=randao_reveal, eth1_data=eth1_data, attestations=attestations
     )
 
-    block = block.copy(body=body)
+    block = block.set("body", body)
 
     # Apply state transition to get state root
     state, block = state_machine.import_block(
@@ -106,7 +106,7 @@ def create_block_on_state(
         slots_per_epoch=config.SLOTS_PER_EPOCH,
     )
 
-    block = block.copy(signature=signature)
+    block = block.set("signature", signature)
 
     return block
 
