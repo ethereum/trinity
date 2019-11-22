@@ -371,7 +371,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             self.logger.debug('Got malformed response from %r', remote, exc_info=True)
             raise
         except HandshakeFailure as e:
-            self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
+            self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e), exc_info=True)
             self.connection_tracker.record_failure(remote, e)
             raise
         except COMMON_PEER_CONNECTION_EXCEPTIONS as e:

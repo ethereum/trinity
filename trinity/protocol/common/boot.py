@@ -57,9 +57,13 @@ class DAOCheckBootManager(BasePeerBootManager):
                 )
 
             except (asyncio.TimeoutError, PeerConnectionLost) as err:
+                '''
                 raise DAOForkCheckFailure(
                     f"Timed out waiting for DAO fork header from {self.peer}: {err}"
                 ) from err
+                '''
+                self.logger.warning("Timed out waiting for dao fork header, but continuing anyway with %s", self.peer)
+                return
             except ValidationError as err:
                 raise DAOForkCheckFailure(
                     f"Invalid header response during DAO fork check: {err}"
@@ -74,10 +78,14 @@ class DAOCheckBootManager(BasePeerBootManager):
                     )
                     return
                 else:
+                    '''
                     raise DAOForkCheckFailure(
                         f"{self.peer} has tip {tip_header!r}, but only returned {headers!r} "
                         "at DAO fork #{dao_fork_num}. Peer seems to be witholding DAO headers..."
                     )
+                    '''
+                    self.logger.warning("%s withheld dao fork header, but continuing anyway", self.peer)
+                    return
             else:
                 parent, header = headers
 

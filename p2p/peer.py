@@ -282,10 +282,14 @@ class BasePeer(BaseService):
             except PeerConnectionLost:
                 self.logger.debug("Tried to disconnect from %s, but already disconnected", self)
 
+        '''
         if self.is_operational:
             await self.cancel()
+        else:
+            await self.events.finished.wait()
+'''
 
-        await self.events.finished.wait()
+        #await asyncio.wait_for(self.events.finished.wait(), timeout=7)
 
     def disconnect_nowait(self, reason: DisconnectReason) -> None:
         if reason is DisconnectReason.BAD_PROTOCOL:

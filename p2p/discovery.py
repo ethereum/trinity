@@ -981,7 +981,7 @@ class PreferredNodeDiscoveryService(DiscoveryService):
     preferred_node_recycle_time seconds.
     """
     preferred_nodes: Sequence[NodeAPI] = None
-    preferred_node_recycle_time: int = 300
+    preferred_node_recycle_time: int = 240
     _preferred_node_tracker: Dict[NodeAPI, float] = None
 
     def __init__(self,
@@ -1000,7 +1000,7 @@ class PreferredNodeDiscoveryService(DiscoveryService):
             enr_field_providers)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
-        self._preferred_node_tracker = collections.defaultdict(lambda: 0)
+        self._preferred_node_tracker = collections.defaultdict(int)
 
     @to_tuple
     def _get_eligible_preferred_nodes(self) -> Iterator[NodeAPI]:

@@ -480,11 +480,12 @@ def partial_import_block(beam_chain: BeamChain,
             vm = beam_chain.get_first_vm()
             beam_stats = vm.get_beam_stats()
             beam_chain.logger.debug(
-                "BeamImport %s (%d txns) total time: %.1f s, %%exec %.0f, stats: %s",
+                "BeamImport %s (%d txns) total time: %.1f s, %%exec %.0f, %%jit %.1f, stats: %s",
                 block.header,
                 len(block.transactions),
                 import_time,
                 100 * (import_time - beam_stats.data_pause_time) / import_time,
+                100 * (beam_stats.num_nodes) / len(witness_hashes) if witness_hashes else 100,
                 beam_stats,
             )
             return reorg_info, witness_hashes

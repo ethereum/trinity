@@ -1129,6 +1129,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
                 block.transactions,
                 parent_state_root,
             )
+            self.logger.warning("finished previewing transactions for %s", block)
 
     async def _import_ready_blocks(self) -> None:
         """
