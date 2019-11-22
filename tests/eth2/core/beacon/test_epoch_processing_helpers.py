@@ -3,7 +3,6 @@ import random
 import pytest
 
 from eth2._utils.bitfield import get_empty_bitfield, set_voted
-from eth2._utils.tuple import update_tuple_item
 from eth2.beacon.committee_helpers import get_beacon_committee
 from eth2.beacon.constants import FAR_FUTURE_EPOCH, GWEI_PER_ETH
 from eth2.beacon.epoch_processing_helpers import (

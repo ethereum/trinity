@@ -1,5 +1,3 @@
-from typing import Tuple
-
 from eth_utils import ValidationError
 
 from eth2.beacon.committee_helpers import get_beacon_proposer_index

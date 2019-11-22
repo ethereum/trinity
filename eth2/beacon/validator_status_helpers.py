@@ -2,7 +2,6 @@ from functools import partial
 
 from eth_utils.toolz import curry
 
-from eth2._utils.tuple import update_tuple_item_with_fn
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.constants import FAR_FUTURE_EPOCH
 from eth2.beacon.epoch_processing_helpers import (

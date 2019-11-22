@@ -1,5 +1,3 @@
-from typing import Sequence, Tuple
-
 from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import ValidationError

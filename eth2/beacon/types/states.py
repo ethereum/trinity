@@ -1,10 +1,9 @@
-from typing import Any, Callable, Sequence, Type, TypeVar
+from typing import Sequence, Type, TypeVar
 
 from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import humanize_hash
 
-from eth2._utils.tuple import update_tuple_item
 from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_SIGNING_ROOT
 from eth2.beacon.helpers import compute_epoch_at_slot
 from eth2.beacon.typing import (
@@ -14,7 +13,6 @@ from eth2.beacon.typing import (
     SigningRoot,
     Slot,
     Timestamp,
-    ValidatorIndex,
 )
 from eth2.configs import Eth2Config
 from ssz.hashable_container import HashableContainer

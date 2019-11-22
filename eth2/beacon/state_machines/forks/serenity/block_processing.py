@@ -1,6 +1,5 @@
 from eth2._utils.hash import hash_eth2
 from eth2._utils.numeric import bitwise_xor
-from eth2._utils.tuple import update_tuple_item
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.helpers import get_randao_mix
 from eth2.beacon.state_machines.forks.serenity.block_validation import (

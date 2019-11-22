@@ -21,22 +21,17 @@ from eth2.beacon.tools.builder.state import create_mock_genesis_state_from_valid
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
-from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, BeaconBlockHeader
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData
-from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.forks import Fork
-from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
-from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex, Version
 from eth2.configs import CommitteeConfig, Eth2Config, Eth2GenesisConfig
 from ssz.hashable_list import HashableList
-from ssz.hashable_vector import HashableVector
-from ssz.sedes import List, Vector, bytes32, uint64
+from ssz.sedes import List, uint64
 
 
 # SSZ
