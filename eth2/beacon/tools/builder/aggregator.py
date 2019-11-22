@@ -1,5 +1,4 @@
 from eth_typing import BLSSignature
-from ssz import get_hash_tree_root, uint64
 
 from eth2._utils.bls import bls
 from eth2._utils.hash import hash_eth2
@@ -9,6 +8,7 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import CommitteeIndex, Slot
 from eth2.configs import CommitteeConfig
+from ssz import get_hash_tree_root, uint64
 
 # TODO: TARGET_AGGREGATORS_PER_COMMITTEE is not in Eth2Config now.
 TARGET_AGGREGATORS_PER_COMMITTEE = 16

@@ -2,7 +2,6 @@ from pathlib import Path
 import time
 
 from eth_utils import decode_hex
-import ssz
 
 from eth2._utils.hash import hash_eth2
 from eth2.beacon.genesis import initialize_beacon_state_from_eth1
@@ -10,6 +9,7 @@ from eth2.beacon.tools.builder.initializer import create_mock_deposits_and_root
 from eth2.beacon.tools.fixtures.config_types import Minimal
 from eth2.beacon.tools.fixtures.loading import load_config_at_path, load_yaml_at
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
+import ssz
 
 KEY_DIR = Path("eth2/beacon/scripts/quickstart_state")
 KEY_SET_FILE = Path("keygen_16_validators.yaml")

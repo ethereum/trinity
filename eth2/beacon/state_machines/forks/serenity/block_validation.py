@@ -2,7 +2,6 @@ from typing import Iterable, Sequence, Tuple, cast  # noqa: F401
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import ValidationError, encode_hex
-import ssz
 
 from eth2._utils.bls import bls
 from eth2.beacon.attestation_helpers import (
@@ -30,6 +29,7 @@ from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import VoluntaryExit
 from eth2.beacon.typing import CommitteeIndex, Epoch, SigningRoot, Slot
 from eth2.configs import CommitteeConfig, Eth2Config
+import ssz
 
 
 def validate_correct_number_of_deposits(

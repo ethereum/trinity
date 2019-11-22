@@ -1,6 +1,5 @@
-import ssz
-
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
+import ssz
 
 
 def test_defaults(sample_proposer_slashing_params):

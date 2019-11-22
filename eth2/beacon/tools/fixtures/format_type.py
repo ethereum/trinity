@@ -3,9 +3,8 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Type
 
-import ssz
-
 from eth2.beacon.tools.fixtures.loading import load_yaml_at
+import ssz
 
 
 class FormatType(abc.ABC):

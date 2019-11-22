@@ -1,7 +1,6 @@
 from typing import Any, Dict, Optional, Tuple, Type, cast
 
 from eth_typing import Hash32
-from ssz.sedes import bytes32
 
 from eth2.beacon.genesis import (
     initialize_beacon_state_from_eth1,
@@ -14,6 +13,7 @@ from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Timestamp
 from eth2.configs import Eth2Config
+from ssz.sedes import bytes32
 
 from . import TestType
 

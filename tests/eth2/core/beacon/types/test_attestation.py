@@ -1,7 +1,7 @@
 import pytest
-import ssz
 
 from eth2.beacon.types.attestations import Attestation
+import ssz
 
 
 @pytest.mark.parametrize("param,default_value", [("signature", b"\x00" * 96)])

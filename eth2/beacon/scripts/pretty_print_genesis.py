@@ -5,12 +5,12 @@ from pathlib import Path
 import sys
 
 from ruamel.yaml import YAML
-import ssz
-from ssz.tools import to_formatted_dict
 
 from eth2.beacon.tools.fixtures.loading import load_config_at_path
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
+import ssz
+from ssz.tools import to_formatted_dict
 
 
 def main():

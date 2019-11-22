@@ -1,12 +1,13 @@
-from typing import TypeVar, Type
+from typing import Type, TypeVar
+
 from eth_utils import humanize_hash
-from ssz.hashable_container import HashableContainer
-from ssz.sedes import bytes32, uint64
 
 from eth2.beacon.constants import ZERO_SIGNING_ROOT
 from eth2.beacon.types.checkpoints import Checkpoint, default_checkpoint
 from eth2.beacon.types.defaults import default_committee_index, default_slot
 from eth2.beacon.typing import CommitteeIndex, SigningRoot, Slot
+from ssz.hashable_container import HashableContainer
+from ssz.sedes import bytes32, uint64
 
 TAttestationData = TypeVar("TAttestationData", bound="AttestationData")
 

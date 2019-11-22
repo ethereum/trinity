@@ -1,6 +1,5 @@
-from ssz.tools import to_formatted_dict
-
 from eth2.beacon.types.states import BeaconState
+from ssz.tools import to_formatted_dict
 
 
 def validate_state(post_state: BeaconState, expected_state: BeaconState) -> None:

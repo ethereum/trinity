@@ -8,7 +8,6 @@ from eth.exceptions import BlockNotFound, CanonicalHeadNotFound, ParentNotFound
 from eth.validation import validate_word
 from eth_typing import Hash32
 from eth_utils import ValidationError, encode_hex, to_tuple
-import ssz
 
 from eth2.beacon.constants import ZERO_SIGNING_ROOT
 from eth2.beacon.db.exceptions import (
@@ -27,6 +26,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, HashTreeRoot, SigningRoot, Slot
 from eth2.configs import Eth2GenesisConfig
+import ssz
 
 
 class AttestationKey(ssz.Serializable):

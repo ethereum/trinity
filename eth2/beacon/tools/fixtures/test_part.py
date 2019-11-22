@@ -2,9 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Type, cast
 
-import ssz
-
 from eth2.beacon.tools.fixtures.format_type import FormatType, SSZType, YAMLType
+import ssz
 
 
 @dataclass

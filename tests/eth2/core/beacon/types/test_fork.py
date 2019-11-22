@@ -1,6 +1,5 @@
-import ssz
-
 from eth2.beacon.types.forks import Fork
+import ssz
 
 
 def test_defaults(sample_fork_params):

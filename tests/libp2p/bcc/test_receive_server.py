@@ -5,7 +5,6 @@ from eth.exceptions import BlockNotFound
 from eth_utils import ValidationError
 from libp2p.pubsub.pb import rpc_pb2
 import pytest
-import ssz
 
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.chains.testnet import SkeletonLakeChain
@@ -19,6 +18,7 @@ from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock
 from eth2.beacon.typing import FromBlockParams
 from eth2.configs import Eth2GenesisConfig
+import ssz
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.protocol.bcc_libp2p.configs import (
     PUBSUB_TOPIC_BEACON_ATTESTATION,

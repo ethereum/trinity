@@ -1,6 +1,5 @@
-import ssz
-
 from eth2.beacon.types.attester_slashings import AttesterSlashing
+import ssz
 
 
 def test_defaults(sample_attester_slashing_params):
