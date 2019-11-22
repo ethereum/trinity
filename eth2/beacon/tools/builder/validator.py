@@ -408,7 +408,7 @@ def create_mock_attester_slashing_is_surround_vote(
     attestation_slot_2 = compute_start_slot_at_epoch(
         attestation_epoch, config.SLOTS_PER_EPOCH
     )
-    attestation_slot_1 = Slot.create(attestation_slot_2 + config.SLOTS_PER_EPOCH)
+    attestation_slot_1 = Slot(attestation_slot_2 + config.SLOTS_PER_EPOCH)
 
     slashable_attestation_1 = create_mock_slashable_attestation(
         state.mset(

@@ -6,14 +6,7 @@ from eth_utils import humanize_hash
 
 from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_SIGNING_ROOT
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.typing import (
-    Bitfield,
-    Epoch,
-    Gwei,
-    SigningRoot,
-    Slot,
-    Timestamp,
-)
+from eth2.beacon.typing import Bitfield, Epoch, Gwei, SigningRoot, Slot, Timestamp
 from eth2.configs import Eth2Config
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
@@ -96,7 +89,7 @@ class BeaconState(HashableContainer):
         eth1_deposit_index: int = 0,
         validators: Sequence[Validator] = default_tuple,
         balances: Sequence[Gwei] = default_tuple,
-        randao_mixes: Sequence[Hash32] = (b"\x00" * 32,) * 2 ** 8,  # TODO
+        randao_mixes: Sequence[Hash32] = (Hash32(b"\x00" * 32),) * 2 ** 8,  # TODO
         slashings: Sequence[Gwei] = default_tuple,
         previous_epoch_attestations: Sequence[PendingAttestation] = default_tuple,
         current_epoch_attestations: Sequence[PendingAttestation] = default_tuple,

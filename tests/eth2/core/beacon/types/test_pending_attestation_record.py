@@ -1,10 +1,11 @@
-import ssz
-
 from eth2.beacon.types.pending_attestations import PendingAttestation
+import ssz
 
 
 def test_defaults(sample_pending_attestation_record_params):
-    pending_attestation = PendingAttestation.create(**sample_pending_attestation_record_params)
+    pending_attestation = PendingAttestation.create(
+        **sample_pending_attestation_record_params
+    )
 
     assert pending_attestation.data == sample_pending_attestation_record_params["data"]
     assert (
