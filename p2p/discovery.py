@@ -981,7 +981,7 @@ class PreferredNodeDiscoveryService(DiscoveryService):
     preferred_node_recycle_time seconds.
     """
     preferred_nodes: Sequence[NodeAPI] = None
-    preferred_node_recycle_time: int = 240
+    preferred_node_recycle_time: int = 60
     _preferred_node_tracker: Dict[NodeAPI, float] = None
 
     def __init__(self,

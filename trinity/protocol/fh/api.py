@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Awaitable, Callable, List, Tuple
 
 from cached_property import cached_property
@@ -37,7 +38,7 @@ class RecentWitnesses(CommandHandler[NewBlockWitnessHashes]):
         header_hash, witness_hashes = cmd.payload
 
         self._recent_witness_hashes[header_hash] = witness_hashes
-        self.logger.warning(
+        self.logger.debug2(
             "Got %d witness hashes on block %s from %s",
             len(witness_hashes),
             humanize_hash(header_hash),
@@ -88,14 +89,19 @@ class FirehoseAPI(Application):
         This will skip sending if the peer already sent the witness hashes to us.
         """
         if self.witnesses.has_witness(header_hash):
-            # TODO this is a neat place to check if a peer is giving us bad witness data
-            self.logger.warning(
+            self.logger.info(
                 "SKIP Sending %d hashes of witness to: %s",
                 len(node_hashes),
                 self.connection,
             )
             # remove witness from history, as cleanup
-            self.witnesses.pop_node_hashes(header_hash)
+            received_witness_hashes = self.witnesses.pop_node_hashes(header_hash)
+            if set(node_hashes) != set(received_witness_hashes):
+                self.logger.warning(
+                    "Remote node generated a different witness than we did locally!!! Sizes: remote: %d, local: %d",
+                    len(set(received_witness_hashes)),
+                    len(set(node_hashes)),
+                )
         else:
             # Trying the new API that might not exist yet
             payload = NewBlockWitnessHashesPayload(header_hash, node_hashes)

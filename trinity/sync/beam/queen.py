@@ -181,3 +181,9 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
             "Unreachable: every queen peer check should have finished and returned. "
             f"Was checking {peer} against queen {self._queen_peer}."
         )
+
+    def __len__(self) -> int:
+        """
+        How many peasants are there waiting?
+        """
+        return len(self._waiting_peers)

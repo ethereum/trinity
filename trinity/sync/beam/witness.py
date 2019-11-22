@@ -20,7 +20,9 @@ from eth_utils import encode_hex
 from lahja import EndpointAPI
 
 from eth.abc import AtomicDatabaseAPI
+from eth.rlp.blocks import BaseBlock
 from eth_typing import Hash32
+
 from p2p.abc import CommandAPI
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
@@ -35,6 +37,7 @@ from trinity.protocol.fh.proto import FirehoseProtocol
 from trinity.sync.beam.constants import (
     GAP_BETWEEN_WITNESS_DOWNLOADS,
     NON_IDEAL_RESPONSE_PENALTY,
+    NUM_BLOCKS_WITH_DOWNLOADABLE_STATE,
     WITNESS_QUEUE_SIZE,
 )
 from trinity.sync.common.events import StatelessBlockImportDone
@@ -109,6 +112,8 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         self._block_number_lookup: Dict[Hash32, int] = {}  # TODO: delete after import
 
         self._firehose_peers = set()
+        self._highest_block_number = -1
+        self._lowest_block_number = None
 
     async def get_queen_peer(self) -> ETHPeer:
         return await self._queening_queue.get_queen_peer()
@@ -123,13 +128,21 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         node_hashes = self._get_node_hashes(block_hash)
         node_tasks = NodeDownloadTask.nodes_at_block(node_hashes, block_number)
 
+        self._highest_block_number = max(block_number, self._highest_block_number)
+        if self._lowest_block_number is None:
+            self._lowest_block_number = block_number
+        else:
+            self._lowest_block_number = min(block_number, self._lowest_block_number)
+
         if urgent or block_hash not in self._block_number_lookup:
             self._block_number_lookup[block_hash] = (block_number, urgent)
+            '''
             self.logger.warning(
                 "Adding (urgent? %s) block number lookup for hash %s...",
                 "Y" if urgent else "N",
                 encode_hex(block_hash[:3]),
             )
+'''
 
         if not len(node_tasks):
             # there aren't any available nodes to trigger a download for, so end early
@@ -167,7 +180,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
                 self.logger.warning("%s was already in the set of Firehose peers", fh_peer)
             else:
                 self._firehose_peers.add(fh_peer)
-                fh_peer.witnesses.subscribe(self._handle_new_hashes)
+                fh_peer.fh_api.witnesses.subscribe(self._handle_new_hashes)
 
     def deregister_peer(self, peer: BasePeer) -> None:
         super().deregister_peer(peer)
@@ -179,7 +192,11 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         block_hash, node_hashes = payload
         counter = self._aggregated_witness_metadata[block_hash]
         counter.update(node_hashes)
-        self.logger.warning("Received witness data for block hash %s...", encode_hex(block_hash[:3]))
+        self.logger.info(
+            "Received %d witness hashes for block hash %s...",
+            len(node_hashes),
+            encode_hex(block_hash[:3]),
+        )
 
         if block_hash in self._block_number_lookup:
             block_number, urgent = self._block_number_lookup[block_hash]
@@ -194,7 +211,9 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         while self.is_operational:
             peer, cmd = await self.wait(self.msg_queue.get())
             new_hashes = cast(NewBlockWitnessHashes, cmd)
-            await self._handle_new_hashes(new_hashes.payload)
+            if peer not in self._firehose_peers:
+                self.logger.warning("Handling new hashes from %s not recognized as a firehose peer. Huh?", peer)
+                await self._handle_new_hashes(new_hashes.payload)
 
     async def _run(self) -> None:
         self.run_daemon_task(self._periodically_report_progress())
@@ -209,13 +228,13 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         while self.is_operational:
             peer = await self.wait(self._queening_queue.pop_fastest_peasant())
 
-            if len(self._witness_node_tasks) == 0:
+            remaining_tasks = len(self._witness_node_tasks)
+            if remaining_tasks == 0:
                 self.logger.warning("There are no witness tasks to pop off. Pausing...")
 
             batch_id, urgent_hash_tasks = await self.wait(
                 self._witness_node_tasks.get(eth_constants.MAX_STATE_FETCH),
             )
-            self.logger.warning("Loading a witness task to request %d hashes from %s", len(urgent_hash_tasks), peer)
 
             self.run_task(self._make_request(peer, urgent_hash_tasks, batch_id))
 
@@ -224,7 +243,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
             peer: ETHPeer,
             request_tasks: Tuple[NodeDownloadTask, ...], batch_id: int) -> None:
 
-        self.logger.warning("Requesting %d nodes from %s", len(request_tasks), peer)
+        self.logger.debug("Requesting %d nodes from %s", len(request_tasks), peer)
         try:
             nodes = await peer.eth_api.get_node_data(
                 tuple(set(task.node_hash for task in request_tasks))
@@ -245,17 +264,48 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         else:
             node_lookup = dict(nodes)
             num_nodes = len(node_lookup)
-            self.logger.warning("%s returned %d witness nodes", peer, num_nodes)
             if num_nodes > 0:
                 self._queening_queue.readd_peasant(peer, GAP_BETWEEN_WITNESS_DOWNLOADS)
             else:
                 self._queening_queue.readd_peasant(peer, NON_IDEAL_RESPONSE_PENALTY)
 
-            completed_tasks = tuple(
+            completed_tasks = set(
                 task for task in request_tasks
-                if task.node_hash in node_lookup or task.node_hash in self._db
+                if task.node_hash in node_lookup
             )
-            self._witness_node_tasks.complete(batch_id, completed_tasks)
+            side_channel_tasks = set(
+                task for task in request_tasks
+                if task.node_hash in self._db
+            )
+            # self._lowest_block_number must be set here, because the download shouldn't happen
+            # until a trigger, which sets lowest block number
+            stale_tasks = set(
+                task for task in request_tasks
+                if task.block_number < self._highest_block_number - NUM_BLOCKS_WITH_DOWNLOADABLE_STATE or task.block_number < self._lowest_block_number # noqa: E501
+            )
+
+            closing_tasks_set = completed_tasks | side_channel_tasks | stale_tasks
+            remaining_tasks = set(request_tasks) - closing_tasks_set
+            if len(closing_tasks_set):
+                self.logger.info(
+                    "%s returned %d witness nodes, with %d completed tasks w/ block #s %r, %d side-channeled tasks w/ block #s %r, and %d stale tasks w/ block #s %r, for a total of %d closed tasks; %d tasks remain from block #s %r",
+                    peer,
+                    num_nodes,
+                    len(completed_tasks),
+                    set(task.block_number for task in completed_tasks),
+                    len(side_channel_tasks),
+                    set(task.block_number for task in side_channel_tasks),
+                    len(stale_tasks),
+                    set(task.block_number for task in stale_tasks),
+                    len(closing_tasks_set),
+                    len(remaining_tasks),
+                    set(task.block_number for task in remaining_tasks),
+                )
+            else:
+                self.logger.debug("%s returned no witness nodes, and nothing else interesting happened", peer)
+
+            closing_tasks = tuple(closing_tasks_set)
+            self._witness_node_tasks.complete(batch_id, closing_tasks)
             self._insert_results(tuple(node_lookup.keys()), node_lookup)
             self._num_requests_by_peer[peer] += num_nodes
 
@@ -281,6 +331,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
             msg = "all=%d" % self._total_processed_nodes
             msg += "  new=%d" % self._num_added
             msg += "  missed=%d" % self._num_missed
+            msg += "  pending=%d" % len(self._witness_node_tasks)
             msg += "  queen=%s" % self._queening_queue.queen
             self.logger.debug("Witness-Filler: %s", msg)
 
@@ -345,16 +396,20 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
             if not event.witness_hashes:
                 self.logger.warning("Witness metadata for %s is empty", event.block)
             else:
-                self.logger.warning("Broadcasting witnesses from %s", event.block)
-                await self._broadcast_witness_metadata(event.block.hash, event.witness_hashes)
+                await self._broadcast_witness_metadata(event.block, event.witness_hashes)
 
     async def _broadcast_witness_metadata(
-            self, header_hash: Hash32, witness_hashes: Tuple[Hash32, ...]) -> None:
+            self, block: BaseBlock, witness_hashes: Tuple[Hash32, ...]) -> None:
 
+        if len(self._firehose_peers) == 0:
+            self.logger.info(
+                "Skipping witness broadcast for %s, because not connected to any peers",
+                block,
+            )
         for peer in self._firehose_peers:
             self.logger.warning("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
             try:
-                peer.fh_api.send_new_block_witness_hashes(header_hash, witness_hashes)
+                peer.fh_api.send_new_block_witness_hashes(block.hash, witness_hashes)
             except asyncio.TimeoutError as err:
                 self.logger.debug("Timed out broadcasting witness to %s", peer)
                 continue

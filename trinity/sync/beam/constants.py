@@ -25,7 +25,7 @@ MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS = MAX_CONCURRENT_SPECULATIVE_EXECUTIONS /
 # If a peer does something not ideal, give it a little time to breath,
 # and maybe to try out another peeer. Then reinsert it relatively soon.
 # Measured in seconds.
-NON_IDEAL_RESPONSE_PENALTY = 0.5
+NON_IDEAL_RESPONSE_PENALTY = 2
 
 # How many seconds should we leave the backfill peer idle, in between
 # backfill requests? This is called "tests" because we are importantly
@@ -36,7 +36,7 @@ GAP_BETWEEN_TESTS = 0.25
 # in between requests? The more time spent here, the quicker that a
 # newly discovered peer can be picked up as a queen. The less time
 # spent here, the faster that witnesses will download.
-GAP_BETWEEN_WITNESS_DOWNLOADS = 0.05
+GAP_BETWEEN_WITNESS_DOWNLOADS = 0
 
 # One reason to leave this as non-zero is: if we are regularly switching
 # the "queen peer" then we want to improve the chances that the new queen
@@ -72,3 +72,7 @@ FULL_BLOCKS_NEEDED_TO_START_BEAM = MAX_UNCLE_DEPTH + 2
 # If we're queuing much more than that, we've almost certainly fallen behind,
 # and need to pivot anyway.
 WITNESS_QUEUE_SIZE = 10000 * 200
+
+# What is the expected history of how long a peer can serve state data?
+# denominated in number of blocks
+NUM_BLOCKS_WITH_DOWNLOADABLE_STATE = 60
