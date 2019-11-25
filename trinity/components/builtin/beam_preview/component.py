@@ -1,9 +1,10 @@
 import asyncio
-from abc import abstractmethod
 
 from lahja import EndpointAPI
 
-from trinity._utils.shutdown import exit_with_services
+from p2p.service import run_service
+
+from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
 )
@@ -30,58 +31,53 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
     in an isolated process.
     """
     _beam_chain = None
+    shard_num: int
 
     @property
-    @abstractmethod
-    def shard_num(self) -> int:
-        """
-        Which shard this particular component belongs to. Currently,
-        there are always 4 shards, so this number must be one of:
-        {0, 1, 2, 3}.
-        """
-        ...
+    def is_enabled(self) -> bool:
+        return self._boot_info.args.sync_mode.upper() == SYNC_BEAM.upper()
 
-    @property
-    def name(self) -> str:
-        return f"Beam Sync Chain Preview {self.shard_num}"
-
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if self.boot_info.args.sync_mode.upper() == SYNC_BEAM.upper():
-            self.start()
-
-    def do_start(self) -> None:
-        trinity_config = self.boot_info.trinity_config
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        trinity_config = boot_info.trinity_config
         app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
 
         base_db = DBClient.connect(trinity_config.database_ipc_path)
 
-        self._beam_chain = make_pausing_beam_chain(
+        loop = asyncio.get_event_loop()
+
+        beam_chain = make_pausing_beam_chain(
             chain_config.vm_configuration,
             chain_config.chain_id,
             base_db,
-            self.event_bus,
-            self._loop,
+            event_bus,
             # these preview executions are lower priority than the primary block import
+            loop=loop,
             urgent=False,
         )
 
-        import_server = BlockPreviewServer(self.event_bus, self._beam_chain, self.shard_num)
-        asyncio.ensure_future(exit_with_services(import_server, self._event_bus_service))
-        asyncio.ensure_future(import_server.run())
+        preview_server = BlockPreviewServer(event_bus, beam_chain, cls.shard_num)
+
+        async with run_service(preview_server):
+            await preview_server.cancellation()
 
 
 class BeamChainPreviewComponent0(BeamChainPreviewComponent):
     shard_num = 0
+    name = "Beam Sync Chain Preview 0"
 
 
 class BeamChainPreviewComponent1(BeamChainPreviewComponent):
     shard_num = 1
+    name = "Beam Sync Chain Preview 1"
 
 
 class BeamChainPreviewComponent2(BeamChainPreviewComponent):
     shard_num = 2
+    name = "Beam Sync Chain Preview 2"
 
 
 class BeamChainPreviewComponent3(BeamChainPreviewComponent):
     shard_num = 3
+    name = "Beam Sync Chain Preview 3"

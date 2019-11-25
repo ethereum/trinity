@@ -10,7 +10,6 @@ from lahja import (
     EndpointAPI,
     TrioEndpoint,
 )
-from lahja.base import BaseEndpoint
 
 from cancel_token import CancelToken
 
@@ -112,11 +111,17 @@ class AsyncioEventBusService(BaseService):
     def get_event_bus(self) -> AsyncioEndpoint:
         return self._endpoint
 
+    def get_main_endpoint_config(self) -> ConnectionConfig:
+        if self._main_endpoint_config is None:
+            self._main_endpoint_config = ConnectionConfig.from_name(
+                MAIN_EVENTBUS_ENDPOINT,
+                self._trinity_config.ipc_dir,
+            )
+        return self._main_endpoint_config
+
     async def _run(self) -> None:
         async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
             self._endpoint = endpoint
-            # signal that the endpoint is now available
-            self._endpoint_available.set()
 
             # run background task that automatically connects to newly announced endpoints
             self.run_daemon_task(
@@ -134,12 +139,16 @@ class AsyncioEventBusService(BaseService):
 
             # announce ourself to the event bus
             await endpoint.wait_until_endpoint_subscribed_to(
-                MAIN_EVENTBUS_ENDPOINT, EventBusConnected
+                main_endpoint_config.name,
+                EventBusConnected,
             )
             await endpoint.broadcast(
                 EventBusConnected(self._connection_config),
-                BroadcastConfig(filter_endpoint=MAIN_EVENTBUS_ENDPOINT),
+                BroadcastConfig(filter_endpoint=main_endpoint_config.name)
             )
+
+            # signal that the endpoint is now available
+            self._endpoint_available.set()
 
             # run until the endpoint exits
             await self.cancellation()
@@ -209,7 +218,7 @@ class TrioEventBusService(Service):
 
 
 async def _auto_connect_new_announced_endpoints(
-    endpoint: BaseEndpoint,
+    endpoint: EndpointAPI,
     new_available_endpoints_stream: AsyncGenerator[AvailableEndpointsUpdated, None],
 ) -> None:
     """

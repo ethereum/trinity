@@ -24,6 +24,7 @@ from p2p.kademlia import (
     Address,
 )
 
+from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
     Eth1DbMode,
@@ -58,17 +59,12 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
     """
     Continously discover other Ethereum nodes.
     """
+    name = "Discovery"
+    endpoint_name = DISCOVERY_EVENTBUS_ENDPOINT
 
     @property
-    def name(self) -> str:
-        return "Discovery"
-
-    @property
-    def normalized_name(self) -> str:
-        return DISCOVERY_EVENTBUS_ENDPOINT
-
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        self.start()
+    def is_enabled(self) -> bool:
+        return True
 
     @classmethod
     def configure_parser(cls,
@@ -80,12 +76,15 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             help="Disable peer discovery",
         )
 
-    async def run(self) -> None:
-        config = self.boot_info.trinity_config
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        config = boot_info.trinity_config
+        external_ip = "0.0.0.0"
+        address = Address(external_ip, config.port, config.port)
 
-        if self.boot_info.args.disable_discovery:
+        if boot_info.args.disable_discovery:
             discovery_service: Service = StaticDiscoveryService(
-                self.event_bus,
+                event_bus,
                 config.preferred_nodes,
             )
         else:
@@ -93,16 +92,15 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
             await socket.bind((external_ip, config.port))
             discovery_service = PreferredNodeDiscoveryService(
-                self.boot_info.trinity_config.nodekey,
-                Address(external_ip, config.port, config.port),
+                boot_info.trinity_config.nodekey,
+                address,
                 config.bootstrap_nodes,
                 config.preferred_nodes,
-                self.event_bus,
-                socket,
+                event_bus,
             )
 
         try:
             await TrioManager.run_service(discovery_service)
         except Exception:
-            await self.event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
+            await event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
             raise

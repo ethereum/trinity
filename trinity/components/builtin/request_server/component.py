@@ -2,7 +2,6 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-import asyncio
 
 from lahja import EndpointAPI
 
@@ -10,8 +9,10 @@ from eth.db.backends.base import BaseAtomicDB
 
 from p2p.service import (
     BaseService,
+    run_service,
 )
 
+from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
     Eth1DbMode,
@@ -27,18 +28,14 @@ from trinity.extensibility import (
 )
 from trinity.protocol.eth.servers import ETHRequestServer
 from trinity.protocol.les.servers import LightRequestServer
-from trinity._utils.shutdown import exit_with_services
 
 
 class RequestServerComponent(AsyncioIsolatedComponent):
+    name = "Request Server"
 
     @property
-    def name(self) -> str:
-        return "Request Server"
-
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if not self.boot_info.args.disable_request_server:
-            self.start()
+    def is_enabled(self) -> bool:
+        return not self._boot_info.args.disable_request_server
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -48,37 +45,40 @@ class RequestServerComponent(AsyncioIsolatedComponent):
             help="Disables the Request Server",
         )
 
-    def do_start(self) -> None:
-
-        trinity_config = self.boot_info.trinity_config
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        trinity_config = boot_info.trinity_config
         base_db = DBClient.connect(trinity_config.database_ipc_path)
 
         if trinity_config.has_app_config(Eth1AppConfig):
-            server = self.make_eth1_request_server(
+            server = cls.make_eth1_request_server(
                 trinity_config.get_app_config(Eth1AppConfig),
                 base_db,
+                event_bus,
             )
         else:
             raise Exception("Trinity config must have eth1 config")
 
-        asyncio.ensure_future(exit_with_services(server, self._event_bus_service))
-        asyncio.ensure_future(server.run())
+        async with run_service(server):
+            await server.cancellation()
 
-    def make_eth1_request_server(self,
+    @classmethod
+    def make_eth1_request_server(cls,
                                  app_config: Eth1AppConfig,
-                                 base_db: BaseAtomicDB) -> BaseService:
+                                 base_db: BaseAtomicDB,
+                                 event_bus: EndpointAPI) -> BaseService:
 
         if app_config.database_mode is Eth1DbMode.LIGHT:
             header_db = AsyncHeaderDB(base_db)
             server: BaseService = LightRequestServer(
-                self.event_bus,
+                event_bus,
                 TO_NETWORKING_BROADCAST_CONFIG,
                 header_db
             )
         elif app_config.database_mode is Eth1DbMode.FULL:
             chain_db = AsyncChainDB(base_db)
             server = ETHRequestServer(
-                self.event_bus,
+                event_bus,
                 TO_NETWORKING_BROADCAST_CONFIG,
                 chain_db
             )

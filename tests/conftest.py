@@ -94,21 +94,33 @@ def event_loop():
         loop.close()
 
 
-@asynccontextmanager
-async def make_networking_event_bus():
+@pytest.fixture
+def event_bus_config():
     # Tests run concurrently, therefore we need unique IPC paths
     ipc_path = Path(f"networking-{uuid.uuid4()}.ipc")
-    networking_connection_config = ConnectionConfig(
+    connection_config = ConnectionConfig(
         name=NETWORKING_EVENTBUS_ENDPOINT,
         path=ipc_path
     )
-    async with AsyncioEndpoint.serve(networking_connection_config) as endpoint:
+    return connection_config
+
+
+@asynccontextmanager
+async def make_networking_event_bus(connection_config=None):
+    # Tests run concurrently, therefore we need unique IPC paths
+    if connection_config is None:
+        ipc_path = Path(f"networking-{uuid.uuid4()}.ipc")
+        connection_config = ConnectionConfig(
+            name=NETWORKING_EVENTBUS_ENDPOINT,
+            path=ipc_path
+        )
+    async with AsyncioEndpoint.serve(connection_config) as endpoint:
         yield endpoint
 
 
 @pytest.fixture
-async def event_bus():
-    async with make_networking_event_bus() as endpoint:
+async def event_bus(event_bus_config):
+    async with make_networking_event_bus(event_bus_config) as endpoint:
         yield endpoint
 
 

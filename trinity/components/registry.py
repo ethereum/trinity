@@ -5,7 +5,7 @@ from typing import (
 )
 
 from trinity.extensibility import (
-    BaseComponent,
+    BaseComponentAPI,
 )
 from trinity.components.builtin.attach.component import (
     DbShellComponent,
@@ -55,7 +55,7 @@ from trinity.components.builtin.tx_pool.component import (
 )
 
 
-BASE_COMPONENTS: Tuple[Type[BaseComponent], ...] = (
+BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     AttachComponent,
     DbShellComponent,
     FixUncleanShutdownComponent,
@@ -65,13 +65,13 @@ BASE_COMPONENTS: Tuple[Type[BaseComponent], ...] = (
     UpnpComponent,
 )
 
-BEACON_NODE_COMPONENTS: Tuple[Type[BaseComponent], ...] = (
+BEACON_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     BeaconNodeComponent,
     InteropComponent,
 )
 
 
-ETH1_NODE_COMPONENTS: Tuple[Type[BaseComponent], ...] = (
+ETH1_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     BeamChainExecutionComponent,
     BeamChainPreviewComponent0,
     BeamChainPreviewComponent1,
@@ -86,7 +86,7 @@ ETH1_NODE_COMPONENTS: Tuple[Type[BaseComponent], ...] = (
 )
 
 
-def discover_components() -> Tuple[Type[BaseComponent], ...]:
+def discover_components() -> Tuple[Type[BaseComponentAPI], ...]:
     # Components need to define entrypoints at 'trinity.components' to automatically get loaded
     # https://packaging.python.org/guides/creating-and-discovering-components/#using-package-metadata
 
@@ -95,13 +95,14 @@ def discover_components() -> Tuple[Type[BaseComponent], ...]:
     )
 
 
-def get_all_components(*extra_components: Type[BaseComponent]) -> Tuple[Type[BaseComponent], ...]:
+def get_all_components(*extra_components: Type[BaseComponentAPI],
+                       ) -> Tuple[Type[BaseComponentAPI], ...]:
     return BASE_COMPONENTS + extra_components + discover_components()
 
 
-def get_components_for_eth1_client() -> Tuple[Type[BaseComponent], ...]:
+def get_components_for_eth1_client() -> Tuple[Type[BaseComponentAPI], ...]:
     return get_all_components(*ETH1_NODE_COMPONENTS)
 
 
-def get_components_for_beacon_client() -> Tuple[Type[BaseComponent], ...]:
+def get_components_for_beacon_client() -> Tuple[Type[BaseComponentAPI], ...]:
     return get_all_components(*BEACON_NODE_COMPONENTS)

@@ -3,6 +3,7 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
+import logging
 import pkg_resources
 import sys
 import pathlib
@@ -14,7 +15,7 @@ from trinity.config import (
     TrinityConfig,
 )
 from trinity.extensibility import (
-    BaseMainProcessComponent,
+    Application,
 )
 
 from trinity.components.builtin.attach.console import (
@@ -34,10 +35,8 @@ def is_ipython_available() -> bool:
         return True
 
 
-class AttachComponent(BaseMainProcessComponent):
-    @property
-    def name(self) -> str:
-        return "Attach"
+class AttachComponent(Application):
+    logger = logging.getLogger('trinity.components.attach.Attach')
 
     @classmethod
     def configure_parser(cls,
@@ -63,14 +62,12 @@ class AttachComponent(BaseMainProcessComponent):
             ipc_path = args.ipc_path or trinity_config.jsonrpc_ipc_path
             console(ipc_path, use_ipython=is_ipython_available())
         except FileNotFoundError as err:
-            cls.get_logger().error(str(err))
+            cls.logger.error(str(err))
             sys.exit(1)
 
 
-class DbShellComponent(BaseMainProcessComponent):
-    @property
-    def name(self) -> str:
-        return "DB Shell"
+class DbShellComponent(Application):
+    logger = logging.getLogger('trinity.components.attach.DbShell')
 
     @classmethod
     def configure_parser(cls,
@@ -96,6 +93,6 @@ class DbShellComponent(BaseMainProcessComponent):
             context = get_beacon_shell_context(config.database_dir, trinity_config)
             db_shell(is_ipython_available(), context)
         else:
-            cls.get_logger().error(
+            cls.logger.error(
                 "DB Shell only supports the Ethereum 1 and Beacon nodes at this time"
             )

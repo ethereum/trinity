@@ -80,7 +80,7 @@ class UPnPService(BaseService):
                 await self.add_nat_portmap()
                 # Wait for the port mapping lifetime, and then try registering it again
                 await self.wait(asyncio.sleep(self._nat_portmap_lifetime))
-            except OperationCancelled:
+            except (OperationCancelled, asyncio.CancelledError):
                 break
             except Exception:
                 self.logger.exception("Failed to setup NAT portmap")
