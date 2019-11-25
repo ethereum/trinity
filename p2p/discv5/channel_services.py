@@ -24,9 +24,6 @@ from async_service import (
     ManagerAPI,
 )
 
-from p2p.discv5.constants import (
-    DATAGRAM_BUFFER_SIZE,
-)
 from p2p.discv5.messages import (
     BaseMessage,
 )
@@ -37,6 +34,8 @@ from p2p.discv5.packets import (
 from p2p.discv5.typing import (
     NodeID,
 )
+
+from p2p.constants import DISCOVERY_DATAGRAM_BUFFER_SIZE
 
 
 #
@@ -114,7 +113,7 @@ async def DatagramReceiver(manager: ManagerAPI,
 
     async with incoming_datagram_send_channel:
         while manager.is_running:
-            datagram, (ip_address, port) = await socket.recvfrom(DATAGRAM_BUFFER_SIZE)
+            datagram, (ip_address, port) = await socket.recvfrom(DISCOVERY_DATAGRAM_BUFFER_SIZE)
             endpoint = Endpoint(inet_aton(ip_address), port)
             logger.debug(f"Received {len(datagram)} bytes from {endpoint}")
             incoming_datagram = IncomingDatagram(datagram, endpoint)
