@@ -18,13 +18,10 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
         return self._event_bus
 
     def _spawn_start(self) -> None:
-        self._setup_logging()
-
-        with self.boot_info.trinity_config.process_id_file(self.normalized_name):
-            self._loop = asyncio.get_event_loop()
-            asyncio.ensure_future(self._prepare_start())
-            self._loop.run_forever()
-            self._loop.close()
+        self._loop = asyncio.get_event_loop()
+        asyncio.ensure_future(self._prepare_start())
+        self._loop.run_forever()
+        self._loop.close()
 
     async def _prepare_start(self) -> None:
         # prevent circular import

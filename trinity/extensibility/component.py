@@ -203,11 +203,13 @@ class BaseIsolatedComponent(BaseComponent):
         self.logger.info("Component started: %s (pid=%d)", self.name, self._process.pid)
 
     def _prepare_spawn(self) -> None:
-        if self.boot_info.profile:
-            with profiler(f'profile_{self.normalized_name}'):
+        setup_child_process_logging(self.boot_info)
+        with self.boot_info.trinity_config.process_id_file(self.normalized_name):
+            if self.boot_info.profile:
+                with profiler(f'profile_{self.normalized_name}'):
+                    self._spawn_start()
+            else:
                 self._spawn_start()
-        else:
-            self._spawn_start()
 
     @abstractmethod
     def _spawn_start(self) -> None:
@@ -221,6 +223,3 @@ class BaseIsolatedComponent(BaseComponent):
         event loop.
         """
         self._status = ComponentStatus.STOPPED
-
-    def _setup_logging(self) -> None:
-        setup_child_process_logging(self.boot_info)

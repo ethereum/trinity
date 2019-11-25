@@ -182,3 +182,10 @@ P2P_PROTOCOL_COMMAND_LENGTH = 16
 
 # RLPx header data
 RLPX_HEADER_DATA = b'\xc2\x80\x80'  # rlp.encode([0, 0])
+
+# Max size of discovery packets.
+DISCOVERY_MAX_PACKET_SIZE = 1280
+
+# Buffer size used for incoming discovery UDP datagrams (must be larger than
+# DISCOVERY_MAX_PACKET_SIZE)
+DISCOVERY_DATAGRAM_BUFFER_SIZE = DISCOVERY_MAX_PACKET_SIZE * 2

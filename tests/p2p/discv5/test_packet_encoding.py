@@ -23,7 +23,6 @@ from p2p.discv5.constants import (
     NONCE_SIZE,
     ID_NONCE_SIZE,
     TAG_SIZE,
-    MAX_PACKET_SIZE,
     AUTH_SCHEME_NAME,
     MAGIC_SIZE,
 )
@@ -34,6 +33,8 @@ from p2p.tools.factories import (
     AuthTagPacketFactory,
     WhoAreYouPacketFactory,
 )
+
+from p2p.constants import DISCOVERY_MAX_PACKET_SIZE
 
 from tests.p2p.discv5.strategies import (
     enr_seq_st,
@@ -53,7 +54,7 @@ public_key_st = st.binary(min_size=33, max_size=33)
     encrypted_message_size=st.integers(
         min_value=0,
         # account for RLP prefix of auth tag
-        max_value=MAX_PACKET_SIZE - (1 + TAG_SIZE) - NONCE_SIZE,
+        max_value=DISCOVERY_MAX_PACKET_SIZE - (1 + TAG_SIZE) - NONCE_SIZE,
     ),
 )
 def test_auth_tag_packet_encoding_decoding(tag, auth_tag, encrypted_message_size):
@@ -71,7 +72,7 @@ def test_auth_tag_packet_encoding_decoding(tag, auth_tag, encrypted_message_size
 
 def test_oversize_auth_tag_packet_encoding():
     packet = AuthTagPacketFactory(
-        encrypted_message=b"\x00" * (MAX_PACKET_SIZE - (1 + TAG_SIZE) - NONCE_SIZE + 1),
+        encrypted_message=b"\x00" * (DISCOVERY_MAX_PACKET_SIZE - (1 + TAG_SIZE) - NONCE_SIZE + 1),
     )
     with pytest.raises(ValidationError):
         packet.to_wire_bytes()
@@ -86,7 +87,7 @@ def test_oversize_auth_tag_packet_encoding():
     encrypted_message_size=st.integers(
         min_value=0,
         # account for various RLP prefixes in auth header and assume max length for all entries
-        max_value=MAX_PACKET_SIZE - TAG_SIZE - sum((
+        max_value=DISCOVERY_MAX_PACKET_SIZE - TAG_SIZE - sum((
             2,  # rlp list prefix
             1 + NONCE_SIZE,  # tag
             1 + len(AUTH_SCHEME_NAME),  # auth scheme name
@@ -123,7 +124,7 @@ def test_auth_header_packet_encoding_decoding(tag,
 def test_oversize_auth_header_packet_encoding():
     auth_header = AuthHeaderFactory(encrypted_auth_response=32)
     header_size = len(rlp.encode(auth_header))
-    encrypted_message_size = MAX_PACKET_SIZE - TAG_SIZE - header_size + 1
+    encrypted_message_size = DISCOVERY_MAX_PACKET_SIZE - TAG_SIZE - header_size + 1
     encrypted_message = b"\x00" * encrypted_message_size
     packet = AuthHeaderPacketFactory(
         auth_header=auth_header,

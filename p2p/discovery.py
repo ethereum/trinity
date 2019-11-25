@@ -5,16 +5,13 @@ listening nodes.
 
 More information at https://github.com/ethereum/devp2p/blob/master/rlpx.md#node-discovery
 """
-import asyncio
 import collections
 import contextlib
 import random
-import socket
 import time
 from typing import (
     Any,
     Callable,
-    cast,
     DefaultDict,
     Dict,
     Hashable,
@@ -23,11 +20,12 @@ from typing import (
     List,
     Sequence,
     Set,
-    Text,
     Tuple,
     TYPE_CHECKING,
-    Union,
 )
+
+import trio
+import trio_typing
 
 import eth_utils.toolz
 from eth_utils import (
@@ -58,7 +56,7 @@ from eth_keys import datatypes
 
 from eth_hash.auto import keccak
 
-from cancel_token import CancelToken, OperationCancelled
+from async_service import Service
 
 from p2p import constants
 from p2p.abc import AddressAPI, NodeAPI
@@ -70,7 +68,7 @@ from p2p.events import (
 )
 from p2p.exceptions import AlreadyWaitingDiscoveryResponse, NoEligibleNodes
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
-from p2p.service import BaseService
+from p2p import trio_utils
 
 if TYPE_CHECKING:
     # Promoted workaround for inheriting from generic stdlib class
@@ -122,29 +120,31 @@ CMD_NEIGHBOURS = DiscoveryCommand("neighbours", 4, 2)
 CMD_ID_MAP = dict((cmd.id, cmd) for cmd in [CMD_PING, CMD_PONG, CMD_FIND_NODE, CMD_NEIGHBOURS])
 
 
-class DiscoveryProtocol(asyncio.DatagramProtocol):
+class DiscoveryProtocol:
     """A Kademlia-like protocol to discover RLPx nodes."""
     logger = get_extended_debug_logger("p2p.discovery.DiscoveryProtocol")
-    transport: asyncio.DatagramTransport = None
     _max_neighbours_per_packet_cache = None
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
-                 bootstrap_nodes: Sequence[NodeAPI],
-                 cancel_token: CancelToken) -> None:
+                 nursery: trio_typing.Nursery,
+                 socket: trio.socket.SocketType,
+                 bootstrap_nodes: Sequence[NodeAPI]) -> None:
         self.privkey = privkey
         self.address = address
+        # FIXME: For now we need to be passed a trio nursery/socket as we have too many async
+        # methods. We could convert these into sync methods by using channels (with the X_nowait
+        # family of APIs), but that would need a fair amount of work.
+        self.nursery = nursery
+        self.socket = socket
         self.bootstrap_nodes = bootstrap_nodes
         self.this_node = Node(self.pubkey, address)
         self.routing = RoutingTable(self.this_node)
-        self.topic_table = TopicTable(self.logger)
         self.pong_callbacks = CallbackManager()
         self.ping_callbacks = CallbackManager()
         self.neighbours_callbacks = CallbackManager()
-        self.topic_nodes_callbacks = CallbackManager()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
-        self.cancel_token = CancelToken('DiscoveryProtocol').chain(cancel_token)
 
     def update_routing_table(self, node: NodeAPI) -> None:
         """Update the routing table entry for the given node."""
@@ -154,7 +154,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             # with the least recently seen node on that bucket. If the bonding fails the node will
             # be removed from the bucket and a new one will be picked from the bucket's
             # replacement cache.
-            asyncio.ensure_future(self.bond(eviction_candidate))
+            # NOTE: trio_typing doesn't like us passing a function with a return value to
+            # start_soon(), so ignore type checking here.
+            # https://github.com/python-trio/trio-typing/issues/16
+            self.nursery.start_soon(self.bond, eviction_candidate)  # type: ignore
 
     async def bond(self, node: NodeAPI) -> bool:
         """Bond with the given node.
@@ -188,10 +191,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             # remembers us.
             await self.wait_ping(node)
         except AlreadyWaitingDiscoveryResponse:
-            self.logger.debug("binding failed, already waiting for ping")
+            self.logger.debug("bonding failed, already waiting for ping")
             return False
 
-        self.logger.debug2("bonding completed successfully with %s", node)
+        self.logger.debug("bonding completed successfully with %s", node)
         self.update_routing_table(node)
         return True
 
@@ -202,26 +205,27 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         called or a timeout (k_request_timeout) occurs. At that point it returns whether or not
         a ping was received from the given node.
         """
-        event = asyncio.Event()
+        event = trio.Event()
 
         with self.ping_callbacks.acquire(remote, event.set):
-            got_ping = False
-            try:
-                got_ping = await self.cancel_token.cancellable_wait(
-                    event.wait(), timeout=constants.KADEMLIA_REQUEST_TIMEOUT)
-                self.logger.debug2('got expected ping from %s', remote)
-            except asyncio.TimeoutError:
+            with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
+                await event.wait()
+            if cancel_scope.cancelled_caught:
                 self.logger.debug2('timed out waiting for ping from %s', remote)
+                got_ping = False
+            else:
+                self.logger.debug2('got expected ping from %s', remote)
+                got_ping = True
 
         return got_ping
 
     async def wait_pong_v4(self, remote: NodeAPI, token: Hash32) -> bool:
-        event = asyncio.Event()
+        event = trio.Event()
         callback = event.set
         return await self._wait_pong(remote, token, event, callback)
 
     async def _wait_pong(
-            self, remote: NodeAPI, token: Hash32, event: asyncio.Event,
+            self, remote: NodeAPI, token: Hash32, event: trio.Event,
             callback: Callable[..., Any]) -> bool:
         """Wait for a pong from the given remote containing the given token.
 
@@ -232,17 +236,18 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         pingid = self._mkpingid(token, remote)
 
         with self.pong_callbacks.acquire(pingid, callback):
-            got_pong = False
-            try:
-                got_pong = await self.cancel_token.cancellable_wait(
-                    event.wait(), timeout=constants.KADEMLIA_REQUEST_TIMEOUT)
-                self.logger.debug2('got expected pong with token %s', encode_hex(token))
-            except asyncio.TimeoutError:
+            with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
+                await event.wait()
+            if cancel_scope.cancelled_caught:
+                got_pong = False
                 self.logger.debug2(
                     'timed out waiting for pong from %s (token == %s)',
                     remote,
                     encode_hex(token),
                 )
+            else:
+                got_pong = True
+                self.logger.debug2('got expected pong with token %s', encode_hex(token))
 
         return got_pong
 
@@ -251,7 +256,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
 
         Returns the list of neighbours received.
         """
-        event = asyncio.Event()
+        event = trio.Event()
         neighbours: List[NodeAPI] = []
 
         def process(response: List[NodeAPI]) -> None:
@@ -263,11 +268,10 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
                 event.set()
 
         with self.neighbours_callbacks.acquire(remote, process):
-            try:
-                await self.cancel_token.cancellable_wait(
-                    event.wait(), timeout=constants.KADEMLIA_REQUEST_TIMEOUT)
+            with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
+                await event.wait()
                 self.logger.debug2('got expected neighbours response from %s', remote)
-            except asyncio.TimeoutError:
+            if cancel_scope.cancelled_caught:
                 self.logger.debug2(
                     'timed out waiting for %d neighbours from %s',
                     constants.KADEMLIA_BUCKET_SIZE,
@@ -292,9 +296,6 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         nodes_seen: Set[NodeAPI] = set()
 
         async def _find_node(node_id: int, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
-            # Short-circuit in case our token has been triggered to avoid trying to send requests
-            # over a transport that is probably closed already.
-            self.cancel_token.raise_if_triggered()
             self._send_find_node(remote, node_id)
             candidates = await self.wait_neighbours(remote)
             if not candidates:
@@ -309,7 +310,7 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             # Add new candidates to nodes_seen so that we don't attempt to bond with failing ones
             # in the future.
             nodes_seen.update(candidates)
-            bonded = await asyncio.gather(*(self.bond(c) for c in candidates))
+            bonded = await trio_utils.gather(*((self.bond, c) for c in candidates))
             self.logger.debug2("bonded with %s candidates", bonded.count(True))
             return tuple(c for c in candidates if bonded[candidates.index(c)])
 
@@ -324,12 +325,12 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             self.logger.debug2("node lookup; querying %s", nodes_to_ask)
             nodes_asked.update(nodes_to_ask)
             next_find_node_queries = (
-                _find_node(node_id, n)
+                (_find_node, node_id, n)
                 for n
                 in nodes_to_ask
                 if not self.neighbours_callbacks.locked(n)
             )
-            results = await asyncio.gather(*next_find_node_queries)
+            results = await trio_utils.gather(*next_find_node_queries)
             for candidates in results:
                 closest.extend(candidates)
             closest = sort_by_distance(closest, node_id)[:constants.KADEMLIA_BUCKET_SIZE]
@@ -374,11 +375,6 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
         self._max_neighbours_per_packet_cache = _get_max_neighbours_per_packet()
         return self._max_neighbours_per_packet_cache
 
-    def connection_made(self, transport: asyncio.BaseTransport) -> None:
-        # we need to cast here because the signature in the base class dicates BaseTransport
-        # and arguments can only be redefined contravariantly
-        self.transport = cast(asyncio.DatagramTransport, transport)
-
     async def bootstrap(self) -> None:
         for node in self.bootstrap_nodes:
             uri = node.uri()
@@ -388,36 +384,31 @@ class DiscoveryProtocol(asyncio.DatagramProtocol):
             self.logger.debug("full-bootnode: %s", uri)
             self.logger.debug("bootnode: %s...%s@%s", pubkey_head, pubkey_tail, uri_tail)
 
-        try:
-            bonding_queries = (
-                self.bond(n)
-                for n
-                in self.bootstrap_nodes
-                if (not self.ping_callbacks.locked(n) and not self.pong_callbacks.locked(n))
-            )
-            bonded = await asyncio.gather(*bonding_queries)
-            if not any(bonded):
-                self.logger.info("Failed to bond with bootstrap nodes %s", self.bootstrap_nodes)
-                return
-            await self.lookup_random()
-        except OperationCancelled as e:
-            self.logger.info("Bootstrapping cancelled: %s", e)
-
-    def datagram_received(self, data: Union[bytes, Text], addr: Tuple[str, int]) -> None:
-        ip_address, udp_port = addr
-        address = Address(ip_address, udp_port)
-        self.receive(address, cast(bytes, data))
+        bonding_queries = (
+            (self.bond, n)
+            for n
+            in self.bootstrap_nodes
+            if (not self.ping_callbacks.locked(n) and not self.pong_callbacks.locked(n))
+        )
+        bonded = await trio_utils.gather(*bonding_queries)
+        if not any(bonded):
+            self.logger.info("Failed to bond with bootstrap nodes %s", self.bootstrap_nodes)
+            return
+        await self.lookup_random()
 
     def send(self, node: NodeAPI, message: bytes) -> None:
-        self.transport.sendto(message, (node.address.ip, node.address.udp_port))
+        # NOTE: trio_typing doesn't like us passing a function with a return value to
+        # start_soon(), so ignore type checking here.
+        # https://github.com/python-trio/trio-typing/issues/16
+        self.nursery.start_soon(
+            self.socket.sendto, message, (node.address.ip, node.address.udp_port))  # type: ignore
 
-    async def stop(self) -> None:
-        self.logger.info('stopping discovery')
-        self.cancel_token.trigger()
-        self.transport.close()
-        # We run lots of asyncio tasks so this is to make sure they all get a chance to execute
-        # and exit cleanly when they notice the cancel token has been triggered.
-        await asyncio.sleep(0.1)
+    async def consume_datagram(self) -> None:
+        datagram, (ip_address, port) = await self.socket.recvfrom(
+            constants.DISCOVERY_DATAGRAM_BUFFER_SIZE)
+        address = Address(ip_address, port)
+        self.logger.debug2("Received datagram from %s", address)
+        self.receive(address, datagram)
 
     def receive(self, address: AddressAPI, message: bytes) -> None:
         try:
@@ -596,10 +587,11 @@ class PreferredNodeDiscoveryProtocol(DiscoveryProtocol):
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
+                 nursery: trio_typing.Nursery,
+                 socket: trio.socket.SocketType,
                  bootstrap_nodes: Sequence[NodeAPI],
-                 preferred_nodes: Sequence[NodeAPI],
-                 cancel_token: CancelToken) -> None:
-        super().__init__(privkey, address, bootstrap_nodes, cancel_token)
+                 preferred_nodes: Sequence[NodeAPI]) -> None:
+        super().__init__(privkey, address, nursery, socket, bootstrap_nodes)
 
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
@@ -650,17 +642,17 @@ class PreferredNodeDiscoveryProtocol(DiscoveryProtocol):
         yield from super().get_nodes_to_connect(num_nodes_needed)
 
 
-class StaticDiscoveryService(BaseService):
+class StaticDiscoveryService(Service):
     """A 'discovery' service that only connects to the given nodes"""
     _static_peers: Tuple[NodeAPI, ...]
     _event_bus: EndpointAPI
 
+    logger = get_extended_debug_logger('p2p.discovery.StaticDiscoveryService')
+
     def __init__(
             self,
             event_bus: EndpointAPI,
-            static_peers: Sequence[NodeAPI],
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            static_peers: Sequence[NodeAPI]) -> None:
         self._event_bus = event_bus
         self._static_peers = tuple(static_peers)
 
@@ -692,18 +684,18 @@ class StaticDiscoveryService(BaseService):
             event.broadcast_config()
         )
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_get_peer_candidates_requests())
-        self.run_daemon_task(self.handle_get_random_bootnode_requests())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
-        await self.cancel_token.wait()
+        await self.manager.wait_finished()
 
 
-class NoopDiscoveryService(BaseService):
+class NoopDiscoveryService(Service):
     'A stub "discovery service" which does nothing'
+    logger = get_extended_debug_logger('p2p.discovery.NoopDiscoveryService')
 
-    def __init__(self, event_bus: EndpointAPI, token: CancelToken = None) -> None:
-        super().__init__(token)
+    def __init__(self, event_bus: EndpointAPI) -> None:
         self._event_bus = event_bus
 
     async def handle_get_peer_candidates_requests(self) -> None:
@@ -724,32 +716,40 @@ class NoopDiscoveryService(BaseService):
                 event.broadcast_config()
             )
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_get_peer_candidates_requests())
-        self.run_daemon_task(self.handle_get_random_bootnode_requests())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
-        await self.cancel_token.wait()
+        await self.manager.wait_finished()
 
 
-class DiscoveryService(BaseService):
+class DiscoveryService(Service):
     _last_lookup: float = 0
     _lookup_interval: int = 30
+    _proto: DiscoveryProtocol = None
+
+    logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
 
     def __init__(self,
-                 proto: DiscoveryProtocol,
-                 port: int,
-                 event_bus: EndpointAPI,
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
-        self.proto = proto
-        self.port = port
+                 privkey: datatypes.PrivateKey,
+                 address: AddressAPI,
+                 bootstrap_nodes: Sequence[NodeAPI],
+                 event_bus: EndpointAPI) -> None:
+        self.privkey = privkey
+        self.address = address
+        self.bootstrap_nodes = bootstrap_nodes
         self._event_bus = event_bus
-        self._lookup_running = asyncio.Lock()
+        self._lookup_running = trio.Lock()
+        self.socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
+
+    async def _consume_datagrams(self) -> None:
+        while self.manager.is_running:
+            await self.proto.consume_datagram()
 
     async def handle_get_peer_candidates_requests(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(PeerCandidatesRequest)):
+        async for event in self._event_bus.stream(PeerCandidatesRequest):
 
-            self.run_task(self.maybe_lookup_random_node())
+            self.manager.run_task(self.maybe_lookup_random_node)
 
             nodes = tuple(self.proto.get_nodes_to_connect(event.max_candidates))
 
@@ -760,7 +760,7 @@ class DiscoveryService(BaseService):
             )
 
     async def handle_get_random_bootnode_requests(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(RandomBootnodeRequest)):
+        async for event in self._event_bus.stream(RandomBootnodeRequest):
 
             nodes = tuple(self.proto.get_random_bootnode())
 
@@ -770,21 +770,24 @@ class DiscoveryService(BaseService):
                 event.broadcast_config()
             )
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_get_peer_candidates_requests())
-        self.run_daemon_task(self.handle_get_random_bootnode_requests())
+    @property
+    def proto(self) -> DiscoveryProtocol:
+        if self._proto is None:
+            # Must silence mypy here because we're accessing a private attribute of our manager.
+            nursery = self.manager._task_nursery  # type: ignore
+            self._proto = DiscoveryProtocol(
+                self.privkey, self.address, nursery, self.socket,
+                self.bootstrap_nodes)
+        return self._proto
 
-        await self._start_udp_listener()
-        self.run_task(self.proto.bootstrap())
-        await self.cancel_token.wait()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
-    async def _start_udp_listener(self) -> None:
-        loop = asyncio.get_event_loop()
-        # TODO: Support IPv6 addresses as well.
-        await loop.create_datagram_endpoint(
-            lambda: self.proto,
-            local_addr=('0.0.0.0', self.port),
-            family=socket.AF_INET)
+        await self.socket.bind(('0.0.0.0', self.address.udp_port))
+        self.manager.run_daemon_task(self._consume_datagrams)
+        self.manager.run_task(self.proto.bootstrap)
+        await self.manager.wait_finished()
 
     async def maybe_lookup_random_node(self) -> None:
         if self._last_lookup + self._lookup_interval > time.time():
@@ -793,17 +796,34 @@ class DiscoveryService(BaseService):
             self.logger.debug("Node discovery lookup already in progress, not running another")
             return
         async with self._lookup_running:
-            # This method runs in the background, so we must catch OperationCancelled here
-            # otherwise asyncio will warn that its exception was never retrieved.
             try:
                 await self.proto.lookup_random()
-            except OperationCancelled:
-                pass
             finally:
                 self._last_lookup = time.time()
 
-    async def _cleanup(self) -> None:
-        await self.proto.stop()
+
+class PreferredNodeDiscoveryService(DiscoveryService):
+
+    logger = get_extended_debug_logger('p2p.discovery.PreferredNodeDiscoveryService')
+
+    def __init__(self,
+                 privkey: datatypes.PrivateKey,
+                 address: AddressAPI,
+                 bootstrap_nodes: Sequence[NodeAPI],
+                 preferred_nodes: Sequence[NodeAPI],
+                 event_bus: EndpointAPI) -> None:
+        super().__init__(privkey, address, bootstrap_nodes, event_bus)
+        self.preferred_nodes = preferred_nodes
+
+    @property
+    def proto(self) -> DiscoveryProtocol:
+        if self._proto is None:
+            # Must silence mypy here because we're accessing a private attribute of our manager.
+            nursery = self.manager._task_nursery  # type: ignore
+            self._proto = PreferredNodeDiscoveryProtocol(
+                self.privkey, self.address, nursery, self.socket, self.bootstrap_nodes,
+                self.preferred_nodes)
+        return self._proto
 
 
 class NodeTicketInfo:

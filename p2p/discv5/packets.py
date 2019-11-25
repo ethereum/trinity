@@ -55,7 +55,6 @@ from p2p.discv5.constants import (
     AUTH_RESPONSE_VERSION,
     AUTH_SCHEME_NAME,
     ID_NONCE_SIZE,
-    MAX_PACKET_SIZE,
     NONCE_SIZE,
     RANDOM_ENCRYPTED_DATA_SIZE,
     TAG_SIZE,
@@ -70,6 +69,8 @@ from p2p.discv5.typing import (
     Nonce,
     Tag,
 )
+
+from p2p.constants import DISCOVERY_MAX_PACKET_SIZE
 
 
 #
@@ -335,7 +336,7 @@ def validate_message_packet_size(encoded_packet: bytes) -> None:
 
 
 def validate_max_packet_size(encoded_packet: bytes) -> None:
-    validate_length_lte(encoded_packet, MAX_PACKET_SIZE, "packet")
+    validate_length_lte(encoded_packet, DISCOVERY_MAX_PACKET_SIZE, "packet")
 
 
 def validate_tag_prefix(encoded_packet: bytes) -> None:

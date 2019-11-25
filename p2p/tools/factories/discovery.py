@@ -6,6 +6,8 @@ from typing import (
     Tuple,
 )
 
+import trio
+
 import factory
 
 from eth_keys import keys
@@ -65,7 +67,8 @@ from p2p.discv5.typing import (
 )
 from p2p.ecies import generate_privkey
 
-from .cancel_token import CancelTokenFactory
+from p2p.kademlia import Address
+
 from .kademlia import AddressFactory
 
 
@@ -75,13 +78,15 @@ class DiscoveryProtocolFactory(factory.Factory):
 
     privkey = factory.LazyFunction(generate_privkey)
     address = factory.SubFactory(AddressFactory)
+    nursery = trio.open_nursery()
+    socket = None
     bootstrap_nodes = factory.LazyFunction(tuple)
-
-    cancel_token = factory.SubFactory(CancelTokenFactory, name='discovery-test')
 
     @classmethod
     def from_seed(cls, seed: bytes, *args: Any, **kwargs: Any) -> DiscoveryProtocol:
         privkey = keys.PrivateKey(keccak(seed))
+        if 'socket' in kwargs:
+            kwargs['address'] = Address(*kwargs['socket'].getsockname())
         return cls(*args, privkey=privkey, **kwargs)
 
 
