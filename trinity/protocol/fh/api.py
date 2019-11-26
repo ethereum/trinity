@@ -36,14 +36,14 @@ class RecentWitnesses(CommandHandler[NewBlockWitnessHashes]):
 
     async def handle(self, connection: ConnectionAPI, cmd: NewBlockWitnessHashes) -> None:
         header_hash, witness_hashes = cmd.payload
-
-        self._recent_witness_hashes[header_hash] = witness_hashes
-        self.logger.debug2(
-            "Got %d witness hashes on block %s from %s",
+        self.logger.info(
+            "Peer behavior is handling %d witness hashes on block %s from %s",
             len(witness_hashes),
             humanize_hash(header_hash),
             connection,
         )
+
+        self._recent_witness_hashes[header_hash] = witness_hashes
 
         if self._subscribers:
             await asyncio.gather(*(
