@@ -32,7 +32,6 @@ from trinity._utils.datastructures import TaskQueue
 from trinity.protocol.eth import constants as eth_constants
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.fh.commands import NewBlockWitnessHashes, NewBlockWitnessHashesPayload
-from trinity.protocol.fh.peer import FirehosePeer
 from trinity.protocol.fh.proto import FirehoseProtocol
 from trinity.sync.beam.constants import (
     GAP_BETWEEN_WITNESS_DOWNLOADS,
@@ -79,7 +78,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
     _report_interval = 10
 
     _num_requests_by_peer: typing.Counter[ETHPeer]
-    _firehose_peers: Set[FirehosePeer]
+    _firehose_peers: Set[ETHPeer]
 
     def __init__(
             self,
@@ -109,11 +108,11 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         )
 
         self._queening_queue = QueeningQueue(peer_pool, token=self.cancel_token)
-        self._block_number_lookup: Dict[Hash32, int] = {}  # TODO: delete after import
+        self._block_number_lookup: Dict[Hash32, Tuple[int, bool]] = {}  # TODO: delete after import
 
         self._firehose_peers = set()
         self._highest_block_number = -1
-        self._lowest_block_number = None
+        self._lowest_block_number: int = None
 
     async def get_queen_peer(self) -> ETHPeer:
         return await self._queening_queue.get_queen_peer()
@@ -168,13 +167,13 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
 
         # There is an opportunity to do neat stuff here preferring nodes that
         #   more peers are announcing. For now, do the simple thing and get all nodes.
-        return self._aggregated_witness_metadata[block_hash].keys()
+        return tuple(self._aggregated_witness_metadata[block_hash].keys())
 
     def register_peer(self, peer: BasePeer) -> None:
         super().register_peer(peer)
         # This service is only interested in peers that implement firehose
         if peer.connection.has_protocol(FirehoseProtocol):
-            fh_peer = cast(FirehosePeer, peer)
+            fh_peer = cast(ETHPeer, peer)
             self.logger.warning("Added *confirmed* Firehose for collection: %s", fh_peer)
             if fh_peer in self._firehose_peers:
                 self.logger.warning("%s was already in the set of Firehose peers", fh_peer)
@@ -186,7 +185,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
         super().deregister_peer(peer)
         if peer in self._firehose_peers:
             self.logger.warning("Removing Firehose peer: %s", peer)
-            self._firehose_peers.remove(cast(FirehosePeer, peer))
+            self._firehose_peers.remove(cast(ETHPeer, peer))
 
     async def _handle_new_hashes(self, payload: NewBlockWitnessHashesPayload) -> None:
         block_hash, node_hashes = payload
@@ -281,7 +280,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
             # until a trigger, which sets lowest block number
             stale_tasks = set(
                 task for task in request_tasks
-                if task.block_number < self._highest_block_number - NUM_BLOCKS_WITH_DOWNLOADABLE_STATE or task.block_number < self._lowest_block_number # noqa: E501
+                if task.block_number < self._highest_block_number - NUM_BLOCKS_WITH_DOWNLOADABLE_STATE or task.block_number < self._lowest_block_number  # noqa: E501
             )
 
             closing_tasks_set = completed_tasks | side_channel_tasks | stale_tasks
@@ -361,7 +360,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
     # now.
     msg_queue_maxsize: int = 2000
 
-    _firehose_peers: Set[FirehosePeer]
+    _firehose_peers: Set[ETHPeer]
 
     def __init__(
             self,
@@ -378,7 +377,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
         super().register_peer(peer)
         # This service is only interested in peers that implement firehose
         if peer.connection.has_protocol(FirehoseProtocol):
-            fh_peer = cast(FirehosePeer, peer)
+            fh_peer = cast(ETHPeer, peer)
             self.logger.warning("Added *confirmed* Firehose for broadcast: %s", fh_peer)
             if fh_peer in self._firehose_peers:
                 self.logger.warning("%s was already in the set of Firehose peers", fh_peer)
@@ -389,7 +388,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
         super().deregister_peer(peer)
         if peer in self._firehose_peers:
             self.logger.warning("Removing Firehose peer: %s", peer)
-            self._firehose_peers.remove(cast(FirehosePeer, peer))
+            self._firehose_peers.remove(cast(ETHPeer, peer))
 
     async def _broadcast_new_witnesses(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(StatelessBlockImportDone)):

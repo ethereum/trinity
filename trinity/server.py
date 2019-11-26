@@ -30,7 +30,7 @@ from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.common.context import ChainContext
 from trinity.protocol.common.peer import BasePeerPool
-from trinity.protocol.fh.peer import FirehosePeerPool
+from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.les.peer import LESPeerPool
 
 DIAL_IN_OUT_RATIO = 0.75
@@ -197,9 +197,9 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             await self.peer_pool.start_peer(peer)
 
 
-class FullServer(BaseServer[FirehosePeerPool]):
+class FullServer(BaseServer[ETHPeerPool]):
 
-    def _make_peer_pool(self) -> FirehosePeerPool:
+    def _make_peer_pool(self) -> ETHPeerPool:
         context = ChainContext(
             headerdb=self.headerdb,
             network_id=self.network_id,
@@ -208,7 +208,7 @@ class FullServer(BaseServer[FirehosePeerPool]):
             listen_port=self.p2p_handshake_params.listen_port,
             p2p_version=self.p2p_handshake_params.version,
         )
-        return FirehosePeerPool(
+        return ETHPeerPool(
             privkey=self.privkey,
             max_peers=self.max_peers,
             context=context,

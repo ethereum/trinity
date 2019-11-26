@@ -64,6 +64,7 @@ class RecentWitnesses(CommandHandler[NewBlockWitnessHashes]):
     def get_node_hashes(self, header_hash: Hash32) -> Tuple[Hash32, ...]:
         return self._recent_witness_hashes[header_hash]
 
+
 class FirehoseAPI(Application):
     name = 'fh'  # TODO: Is this always the same value as in fh/proto?
     qualifier = HasProtocol(FirehoseProtocol)
@@ -82,6 +83,9 @@ class FirehoseAPI(Application):
     @cached_property
     def protocol(self) -> FirehoseProtocol:
         return self.connection.get_protocol_by_type(FirehoseProtocol)
+
+    def get_extra_stats(self) -> Tuple[str, ...]:
+        return tuple()
 
     def send_new_block_witness_hashes(
             self, header_hash: Hash32, node_hashes: Tuple[Hash32, ...]) -> None:

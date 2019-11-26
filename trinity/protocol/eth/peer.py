@@ -9,7 +9,10 @@ from cached_property import cached_property
 
 from lahja import EndpointAPI
 
-from eth_typing import BlockNumber
+from eth_typing import (
+    BlockNumber,
+    Hash32,
+)
 
 from eth.abc import BlockHeaderAPI
 from eth.constants import GENESIS_BLOCK_NUMBER
@@ -19,6 +22,7 @@ from lahja import (
 
 from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI, ProtocolAPI
 from p2p.exceptions import PeerConnectionLost
+from p2p.handshake import Handshaker
 
 from trinity._utils.decorators import (
     async_suppress_exceptions,
@@ -38,8 +42,12 @@ from trinity.protocol.common.typing import (
     ReceiptsBundles,
     NodeDataBundles,
 )
-from . import forkid
+from trinity.protocol.fh.api import FirehoseAPI
+from trinity.protocol.fh.commands import StatusPayload as FirehoseStatusPayload
+from trinity.protocol.fh.handshaker import FirehoseHandshaker
+from trinity.protocol.fh.proto import FirehoseProtocol
 
+from . import forkid
 from .api import ETHV63API, ETHAPI, AnyETHAPI
 from .commands import (
     GetBlockHeaders,
@@ -77,11 +85,15 @@ from .handshaker import ETHV63Handshaker, ETHHandshaker
 class ETHPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    supported_sub_protocols: Tuple[Type[ProtocolAPI], ...] = (ETHProtocolV63, ETHProtocol)
+    supported_sub_protocols: Tuple[Type[ProtocolAPI], ...] = (ETHProtocolV63, ETHProtocol, FirehoseProtocol)
     sub_proto: ETHProtocol = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
-        return super().get_behaviors() + (ETHV63API().as_behavior(), ETHAPI().as_behavior())
+        return super().get_behaviors() + (
+            ETHV63API().as_behavior(),
+            ETHAPI().as_behavior(),
+            FirehoseAPI().as_behavior(),
+        )
 
     @cached_property
     def eth_api(self) -> AnyETHAPI:
@@ -92,10 +104,15 @@ class ETHPeer(BaseChainPeer):
         else:
             raise Exception("Unreachable code")
 
+    @cached_property
+    def fh_api(self) -> FirehoseAPI:
+        return self.connection.get_logic(FirehoseAPI.name, FirehoseAPI)
+
     def get_extra_stats(self) -> Tuple[str, ...]:
         basic_stats = super().get_extra_stats()
         eth_stats = self.eth_api.get_extra_stats()
-        return basic_stats + eth_stats
+        fh_stats = self.fh_api.get_extra_stats()
+        return basic_stats + eth_stats + fh_stats
 
 
 class ETHProxyPeer(BaseProxyPeer):
@@ -132,11 +149,20 @@ class ETHPeerFactory(BaseChainPeerFactory):
         headerdb = self.context.headerdb
         wait = self.cancel_token.cancellable_wait
 
-        head = await wait(headerdb.coro_get_canonical_head())
-        total_difficulty = await wait(headerdb.coro_get_score(head.hash))
         genesis_hash = await wait(
             headerdb.coro_get_canonical_block_hash(BlockNumber(GENESIS_BLOCK_NUMBER))
         )
+        eth_handshakers = await self._get_eth_handshakers(genesis_hash)
+        firehose_handshakers = await self._get_firehose_handshakers(genesis_hash)
+
+        return eth_handshakers + firehose_handshakers
+
+    async def _get_eth_handshaker(self, genesis_hash: Hash32) -> Tuple[Handshaker, ...]:
+        headerdb = self.context.headerdb
+        wait = self.cancel_token.cancellable_wait
+
+        head = await wait(headerdb.coro_get_canonical_head())
+        total_difficulty = await wait(headerdb.coro_get_score(head.hash))
 
         handshake_v63_params = StatusV63Payload(
             head_hash=head.hash,
@@ -162,6 +188,13 @@ class ETHPeerFactory(BaseChainPeerFactory):
             ETHV63Handshaker(handshake_v63_params),
             ETHHandshaker(handshake_params, head.block_number, fork_blocks),
         )
+
+    async def _get_firehose_handshakers(self, genesis_hash: Hash32) -> Tuple[FirehoseHandshaker, ...]:
+        handshake_params = FirehoseStatusPayload(
+            version=FirehoseProtocol.version,
+            network_id=self.context.network_id,
+            genesis_hash=genesis_hash,
+        return (FirehoseHandshaker(handshake_params), )
 
 
 async_fire_and_forget = async_suppress_exceptions(PeerConnectionLost, asyncio.TimeoutError)

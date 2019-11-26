@@ -92,3 +92,6 @@ class WaitingPeers(Generic[TChainPeer]):
             peer = wrapped_peer.original
 
         return peer
+
+    def __len__(self) -> int:
+        return self._waiting_peers.qsize()
