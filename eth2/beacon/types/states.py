@@ -30,6 +30,15 @@ default_justification_bits = Bitfield((False,) * JUSTIFICATION_BITS_LENGTH)
 TBeaconState = TypeVar("TBeaconState", bound="BeaconState")
 
 
+# Use mainnet constants for defaults. We can't import the config object because of an import cycle.
+# TODO: When py-ssz is updated to support size configs, the config will be passed to the `create`
+# classmethod and we can create the defaults dynamically there.
+default_block_roots = default_tuple_of_size(2 ** 13, ZERO_HASH32)
+default_state_roots = default_tuple_of_size(2 ** 13, ZERO_HASH32)
+default_randao_mixes = default_tuple_of_size(2 ** 16, ZERO_HASH32)
+default_slashings = default_tuple_of_size(2 ** 13, 0)
+
+
 class BeaconState(HashableContainer):
 
     fields = [
@@ -81,16 +90,16 @@ class BeaconState(HashableContainer):
         slot: Slot = default_slot,
         fork: Fork = default_fork,
         latest_block_header: BeaconBlockHeader = default_beacon_block_header,
-        block_roots: Sequence[SigningRoot] = default_tuple,
-        state_roots: Sequence[Hash32] = default_tuple,
+        block_roots: Sequence[SigningRoot] = default_block_roots,
+        state_roots: Sequence[Hash32] = default_state_roots,
         historical_roots: Sequence[Hash32] = default_tuple,
         eth1_data: Eth1Data = default_eth1_data,
         eth1_data_votes: Sequence[Eth1Data] = default_tuple,
         eth1_deposit_index: int = 0,
         validators: Sequence[Validator] = default_tuple,
         balances: Sequence[Gwei] = default_tuple,
-        randao_mixes: Sequence[Hash32] = (Hash32(b"\x00" * 32),) * 2 ** 8,  # TODO
-        slashings: Sequence[Gwei] = default_tuple,
+        randao_mixes: Sequence[Hash32] = default_randao_mixes,
+        slashings: Sequence[Gwei] = default_slashings,
         previous_epoch_attestations: Sequence[PendingAttestation] = default_tuple,
         current_epoch_attestations: Sequence[PendingAttestation] = default_tuple,
         justification_bits: Bitfield = default_justification_bits,

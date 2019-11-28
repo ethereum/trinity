@@ -61,9 +61,7 @@ def get_indexed_attestation(
     )
 
     return IndexedAttestation.create(
-        attesting_indices=HashableList.from_iterable(
-            sorted(attesting_indices), sedes=List(uint64, 2 ** 8)  # TODO: fix size
-        ),
+        attesting_indices=sorted(attesting_indices),
         data=attestation.data,
         signature=attestation.signature,
     )
