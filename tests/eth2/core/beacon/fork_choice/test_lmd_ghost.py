@@ -2,6 +2,7 @@ import random
 
 from eth_utils import to_dict
 from eth_utils.toolz import (
+    curry,
     first,
     keyfilter,
     merge,
@@ -36,7 +37,7 @@ from eth2.beacon.types.checkpoints import Checkpoint
 
 # TODO(ralexstokes) merge this and next into tools/builder
 @to_dict
-def _mk_attestation_inputs_in_epoch(epoch, root, state, config):
+def _mk_attestation_inputs_in_epoch(epoch, block_producer, state, config):
     for committee, committee_index, slot in iterate_committees_at_epoch(
         state, epoch, config
     ):
@@ -44,6 +45,8 @@ def _mk_attestation_inputs_in_epoch(epoch, root, state, config):
             # empty committee this slot
             continue
 
+        block = block_producer(slot)
+        root = block.signing_root
         attestation_data = AttestationData(
             slot=slot,
             index=committee_index,
@@ -62,11 +65,11 @@ def _mk_attestation_inputs_in_epoch(epoch, root, state, config):
 
 
 def _mk_attestations_for_epoch_by_count(
-    number_of_committee_samples, epoch, root, state, config
+    number_of_committee_samples, epoch, block_producer, state, config
 ):
     results = {}
     for _ in range(number_of_committee_samples):
-        sample = _mk_attestation_inputs_in_epoch(epoch, root, state, config)
+        sample = _mk_attestation_inputs_in_epoch(epoch, block_producer, state, config)
         results = merge(results, sample)
     return results
 
@@ -89,7 +92,7 @@ def _keep_by_latest_slot(values):
     return max(values, key=first)[1][1]
 
 
-def _find_collision(state, config, validator_index, epoch, root):
+def _find_collision(state, config, validator_index, epoch, block_producer):
     """
     Given a target epoch, make the attestation expected for the
     validator w/ the given ``validator_index``.
@@ -99,6 +102,8 @@ def _find_collision(state, config, validator_index, epoch, root):
     ):
         if validator_index in committee:
             # TODO(ralexstokes) refactor w/ tools/builder
+            block = block_producer(slot)
+            root = block.signing_root
             attestation_data = AttestationData(
                 slot=slot,
                 index=committee_index,
@@ -118,7 +123,7 @@ def _find_collision(state, config, validator_index, epoch, root):
         raise Exception("should have found a duplicate validator")
 
 
-def _introduce_collisions(all_attestations_by_index, root, state, config):
+def _introduce_collisions(all_attestations_by_index, block_producer, state, config):
     """
     Find some attestations for later epochs for the validators
     that are current attesting in each source of attestation.
@@ -136,7 +141,11 @@ def _introduce_collisions(all_attestations_by_index, root, state, config):
         dst_epoch = src_epoch + 1
 
         collision = _find_collision(
-            state, config, validator_index=src_index, epoch=dst_epoch, root=root
+            state,
+            config,
+            validator_index=src_index,
+            epoch=dst_epoch,
+            block_producer=block_producer,
         )
         collisions += (merge(dst, collision),)
     return collisions
@@ -159,13 +168,25 @@ def _compute_seconds_since_genesis_for_epoch(epoch, config):
     return epoch * config.SLOTS_PER_EPOCH * config.SECONDS_PER_SLOT
 
 
+block_producer_cache = {}
+
+
+@curry
+def _mk_block_at_slot(block_template, slot):
+    if slot in block_producer_cache:
+        return block_producer_cache[slot]
+    else:
+        block = block_template.copy(slot=slot)
+        block_producer_cache[slot] = block
+        return block
+
+
 @pytest.mark.parametrize(
     ("validator_count",),
     [
         (8,),  # low number of validators
-        (128,),  # medium number of validators
-        # NOTE: the test at 1024 count takes too long :(
-        (256,),  # high number of validators
+        (64,),  # medium number of validators
+        # # NOTE: tests at higher validator counts takes too long :(
     ],
 )
 @pytest.mark.parametrize(("collisions_from_another_epoch",), [(True,), (False,)])
@@ -194,13 +215,11 @@ def test_store_get_latest_attestation(
     assert number_of_committee_samples <= previous_epoch_committee_count
     assert number_of_committee_samples <= current_epoch_committee_count
 
+    block_producer = _mk_block_at_slot(genesis_block)
+
     # prepare samples from previous epoch
     previous_epoch_attestations_by_index = _mk_attestations_for_epoch_by_count(
-        number_of_committee_samples,
-        previous_epoch,
-        genesis_block.signing_root,
-        state,
-        config,
+        number_of_committee_samples, previous_epoch, block_producer, state, config
     )
     previous_epoch_attestations = _extract_attestations_from_index_keying(
         previous_epoch_attestations_by_index.values()
@@ -208,11 +227,7 @@ def test_store_get_latest_attestation(
 
     # prepare samples from current epoch
     current_epoch_attestations_by_index = _mk_attestations_for_epoch_by_count(
-        number_of_committee_samples,
-        current_epoch,
-        genesis_block.signing_root,
-        state,
-        config,
+        number_of_committee_samples, current_epoch, block_producer, state, config
     )
     current_epoch_attestations_by_index = keyfilter(
         lambda index: index not in previous_epoch_attestations_by_index,
@@ -223,11 +238,7 @@ def test_store_get_latest_attestation(
     )
 
     pool_attestations_by_index = _mk_attestations_for_epoch_by_count(
-        number_of_committee_samples,
-        current_epoch,
-        genesis_block.signing_root,
-        state,
-        config,
+        number_of_committee_samples, current_epoch, block_producer, state, config
     )
     pool_attestations_by_index = keyfilter(
         lambda index: (
@@ -252,7 +263,7 @@ def test_store_get_latest_attestation(
             current_epoch_attestations_by_index,
             pool_attestations_by_index,
         ) = _introduce_collisions(
-            all_attestations_by_index, genesis_block.signing_root, state, config
+            all_attestations_by_index, block_producer, state, config
         )
 
         previous_epoch_attestations = _extract_attestations_from_index_keying(
@@ -284,6 +295,14 @@ def test_store_get_latest_attestation(
         pool_attestations,
     ):
         for attestation in attestations:
+            # NOTE: we need to synchronize the context w/ chain data used to construct
+            # attestations above; this synchronization takes advantage of some of the
+            # internals of ``on_attestation`` to shortcut constructing the complete network
+            # state needed to test the function of the ``Store``.
+            block = block_producer(attestation.data.slot)
+            context.blocks[block.signing_root] = block
+            context.block_states[block.signing_root] = genesis_state
+
             store.on_attestation(attestation, validate_signature=False)
 
     # sanity check
