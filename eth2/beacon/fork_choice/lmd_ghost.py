@@ -328,6 +328,13 @@ class Store:
             * self._config.SECONDS_PER_SLOT
         )
 
+        beacon_block_root = attestation.data.beacon_block_root
+        if beacon_block_root not in self._context.blocks:
+            raise ValidationError("Attestations must be for a known block")
+
+        if self._context.blocks[beacon_block_root].slot > attestation.data.slot:
+            raise ValidationError("Attestations must not be for a block in the future")
+
         if target not in self._context.checkpoint_states:
             base_state = process_slots(
                 base_state,
