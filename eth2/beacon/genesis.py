@@ -2,7 +2,11 @@ from typing import Sequence, Type
 
 from eth_typing import Hash32
 
-from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH, SECONDS_PER_DAY
+from eth2.beacon.constants import (
+    DEPOSIT_CONTRACT_TREE_DEPTH,
+    SECONDS_PER_DAY,
+    ZERO_HASH32,
+)
 from eth2.beacon.deposit_helpers import process_deposit
 from eth2.beacon.helpers import get_active_validator_indices
 from eth2.beacon.types.block_headers import BeaconBlockHeader
@@ -55,6 +59,8 @@ def initialize_beacon_state_from_eth1(
         latest_block_header=BeaconBlockHeader.create(
             body_root=BeaconBlockBody.create().hash_tree_root
         ),
+        block_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
+        state_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         randao_mixes=(eth1_block_hash,) * config.EPOCHS_PER_HISTORICAL_VECTOR,
         config=config,
     )
