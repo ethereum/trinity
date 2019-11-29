@@ -19,8 +19,6 @@ from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
-from ssz.hashable_list import HashableList
-from ssz.sedes import List, uint64
 
 
 def increase_balance(
