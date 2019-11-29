@@ -164,7 +164,6 @@ def test_process_eth1_data(
         # a majority of eth1_data_votes
         (1,),
         (7,),
-        (12,),
         # NOTE: we are accepting more than one block per slot if
         # there are multiple majorities so no need to test this
     ),

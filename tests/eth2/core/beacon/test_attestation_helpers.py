@@ -140,7 +140,6 @@ def _create_indexed_attestation_messages(params):
     [
         (lambda params: params, True, False, False),
         (_corrupt_attesting_indices, False, False, False),
-        (_corrupt_attesting_indices_max, False, False, True),
         (_corrupt_signature, False, True, False),
     ],
 )
