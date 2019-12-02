@@ -111,7 +111,7 @@ deps = {
         "eth-typing>=2.1.0,<3.0.0",
         "lru-dict>=1.1.6",
         "py-ecc==1.7.1",
-        "rlp>=1.1.0,<2.0.0",
+        "rlp>=1.2.0,<2.0.0",
         PYEVM_DEPENDENCY,
         "ssz==0.1.5",
     ],
