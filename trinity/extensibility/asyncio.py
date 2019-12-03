@@ -59,8 +59,6 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             loop.run_until_complete(task)
         except asyncio.CancelledError:
             pass
-        except KeyboardInterrupt:
-            pass
         finally:
             loop.close()
 
@@ -83,8 +81,6 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             except asyncio.CancelledError:
                 await event_bus_service.cancel()
                 raise
-            except OperationCancelled:
-                pass
 
     @classmethod
     @abstractmethod
