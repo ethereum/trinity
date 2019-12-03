@@ -193,7 +193,6 @@ def setup_child_process_logging(boot_info: BootInfo) -> None:
 
     ipc_handler = IPCHandler.connect(boot_info.trinity_config.logging_ipc_path)
     ipc_handler.setLevel(boot_info.child_process_log_level)
-    ipc_handler.setFormatter(LOG_FORMATTER)
 
     logger.addHandler(ipc_handler)
 

@@ -3,8 +3,6 @@ import asyncio
 import logging
 import signal
 
-from cancel_token import OperationCancelled
-
 from lahja import EndpointAPI, ConnectionConfig
 
 from p2p.service import run_service
