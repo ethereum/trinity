@@ -111,7 +111,12 @@ class ETHPeer(BaseChainPeer):
     def get_extra_stats(self) -> Tuple[str, ...]:
         basic_stats = super().get_extra_stats()
         eth_stats = self.eth_api.get_extra_stats()
-        fh_stats = self.fh_api.get_extra_stats()
+
+        if self.connection.has_logic(FirehoseAPI):
+            fh_stats = self.fh_api.get_extra_stats()
+        else:
+            fh_stats = ()
+
         return basic_stats + eth_stats + fh_stats
 
 
