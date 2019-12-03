@@ -110,5 +110,5 @@ async def test_asyncio_isolated_component(boot_info,
         event_bus.subscribe(IsStarted, lambda ev: got_started.set())
         event_bus.subscribe(GotCancellation, lambda ev: got_cancelled.set())
 
-        await asyncio.wait_for(got_started.wait(), timeout=2)
-    await asyncio.wait_for(got_cancelled.wait(), timeout=2)
+        await asyncio.wait_for(got_started.wait(), timeout=10)
+    await asyncio.wait_for(got_cancelled.wait(), timeout=10)
