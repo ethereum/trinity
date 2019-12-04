@@ -184,7 +184,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
     def deregister_peer(self, peer: BasePeer) -> None:
         super().deregister_peer(peer)
         if peer in self._firehose_peers:
-            self.logger.warning("Removing Firehose peer: %s", peer)
+            self.logger.debug("Removing Firehose peer: %s", peer)
             self._firehose_peers.remove(cast(ETHPeer, peer))
 
     async def _handle_new_hashes(self, payload: NewBlockWitnessHashesPayload) -> None:
@@ -378,7 +378,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
         # This service is only interested in peers that implement firehose
         if peer.connection.has_protocol(FirehoseProtocol):
             fh_peer = cast(ETHPeer, peer)
-            self.logger.warning("Added *confirmed* Firehose for broadcast: %s", fh_peer)
+            self.logger.debug("Added *confirmed* Firehose for broadcast: %s", fh_peer)
             if fh_peer in self._firehose_peers:
                 self.logger.warning("%s was already in the set of Firehose peers", fh_peer)
             else:
