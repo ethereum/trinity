@@ -219,7 +219,9 @@ class BasePeer(BaseService):
             self._subscribers.remove(subscriber)
 
     async def _cleanup(self) -> None:
-        self.connection.cancel_nowait()
+        if self.connection.is_operational:
+            # the connection might be closed from when its cancel token triggers
+            self.connection.cancel_nowait()
 
     def setup_protocol_handlers(self) -> None:
         """
