@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import asyncio
 from concurrent import futures
+import functools
 from operator import attrgetter
 from typing import (
     Any,
@@ -559,6 +560,7 @@ def partial_trigger_missing_state_downloads(
     Get an argument-free function that will trigger missing state downloads,
     by executing all the transactions, in the context of the given header.
     """
+    @exit_quietly_on(BrokenPipeError)
     def _trigger_missing_state_downloads() -> None:
         vm = beam_chain.get_vm(header)
         unused_header = header.copy(gas_used=0)
@@ -610,6 +612,20 @@ def partial_trigger_missing_state_downloads(
             )
 
     return _trigger_missing_state_downloads
+
+
+def exit_quietly_on(*exceptions):
+    def _decorator(fn):
+        @functools.wraps(fn)
+        def _wrapped_fn(*args, **kwargs) -> Any:
+            try:
+                return fn(*args, **kwargs)
+            except exceptions:
+                pass
+
+        return _wrapped_fn
+
+    return _decorator
 
 
 def partial_speculative_execute(
