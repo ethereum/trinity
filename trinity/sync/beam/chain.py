@@ -415,6 +415,8 @@ class HeaderOnlyPersist(BaseService):
         if self._is_header_eligible_to_beam_sync(tip):
             self._force_end_block_number = tip.block_number + 1
             self.logger.info("Tip is recent enough, syncing from last synced header at %s", tip)
+        else:
+            self.logger.warning("Tip %s is too far behind to Beam Sync, skipping ahead...", tip)
 
         await self.wait(self._persist_headers())
 
