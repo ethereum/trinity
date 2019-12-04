@@ -2,6 +2,7 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
+import asyncio
 import logging
 import os
 from typing import cast
@@ -166,4 +167,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             for service in services:
                 await stack.enter_async_context(run_service(service))
 
-            await libp2p_node.cancellation()
+            await asyncio.wait(tuple(
+                service.cancellation()
+                for service in services
+            ), return_when=asyncio.FIRST_COMPLETED)

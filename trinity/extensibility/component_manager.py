@@ -37,30 +37,24 @@ class ComponentManager(BaseService):
                  boot_info: BootInfo,
                  component_types: Sequence[Type[ComponentAPI]],
                  kill_trinity_fn: Callable[[str], Any],
-                 main_endpoint_config: ConnectionConfig = None,
                  cancel_token: CancelToken = None,
                  loop: asyncio.AbstractEventLoop = None) -> None:
         self._boot_info = boot_info
         self._component_types = component_types
         self._kill_trinity_fn = kill_trinity_fn
-        self._main_endpoint_config = main_endpoint_config
         self._endpoint_available = asyncio.Event()
         super().__init__(cancel_token, loop)
-
-    def get_main_endpoint_config(self) -> ConnectionConfig:
-        if self._main_endpoint_config is None:
-            self._main_endpoint_config = ConnectionConfig.from_name(
-                MAIN_EVENTBUS_ENDPOINT,
-                self._boot_info.trinity_config.ipc_dir
-            )
-        return self._main_endpoint_config
 
     async def get_event_bus(self) -> EndpointAPI:
         await self._endpoint_available.wait()
         return self._endpoint
 
     async def _run(self) -> None:
-        connection_config = self.get_main_endpoint_config()
+        connection_config = ConnectionConfig.from_name(
+            MAIN_EVENTBUS_ENDPOINT,
+            self._boot_info.trinity_config.ipc_dir
+        )
+
         async with AsyncioEndpoint.serve(connection_config) as endpoint:
             self._endpoint = endpoint
 
@@ -72,16 +66,21 @@ class ComponentManager(BaseService):
             # signal the endpoint is up and running and available
             self._endpoint_available.set()
 
+            # instantiate all of the components
             all_components = tuple(
                 component_cls(self._boot_info)
                 for component_cls
                 in self._component_types
             )
+            # filter out any components that should not be enabled.
             enabled_components = tuple(
                 component
                 for component in all_components
                 if component.is_enabled
             )
+
+            # a little bit of extra try/finally structure here to produce good
+            # logging messages about the component lifecycle.
             try:
                 async with AsyncExitStack() as stack:
                     self.logger.info(
@@ -89,6 +88,7 @@ class ComponentManager(BaseService):
                         len(enabled_components),
                         '/'.join(component.name for component in enabled_components),
                     )
+                    # Concurrently start the components.
                     await asyncio.gather(*(
                         stack.enter_async_context(run_component(component))
                         for component in enabled_components

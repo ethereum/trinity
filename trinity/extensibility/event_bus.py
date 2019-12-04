@@ -111,14 +111,6 @@ class AsyncioEventBusService(BaseService):
     def get_event_bus(self) -> AsyncioEndpoint:
         return self._endpoint
 
-    def get_main_endpoint_config(self) -> ConnectionConfig:
-        if self._main_endpoint_config is None:
-            self._main_endpoint_config = ConnectionConfig.from_name(
-                MAIN_EVENTBUS_ENDPOINT,
-                self._trinity_config.ipc_dir,
-            )
-        return self._main_endpoint_config
-
     async def _run(self) -> None:
         async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
             self._endpoint = endpoint

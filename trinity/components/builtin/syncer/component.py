@@ -325,6 +325,6 @@ class SyncerComponent(AsyncioIsolatedComponent):
             node.cancel_token
         )
 
-        if strategy:
+        if strategy.shutdown_node_on_halt:
             cls.logger.error("Sync ended unexpectedly. Shutting down trinity")
             await event_bus.broadcast(ShutdownRequest("Sync ended unexpectedly"))

@@ -3,13 +3,12 @@ import asyncio
 import logging
 import signal
 
-from lahja import EndpointAPI, ConnectionConfig
+from lahja import EndpointAPI
 
 from p2p.service import run_service
 
 from trinity._utils.ipc import kill_process_gracefully
 from trinity._utils.mp import ctx
-from trinity._utils.os import friendly_filename_or_url
 from trinity.boot_info import BootInfo
 
 from .component import BaseIsolatedComponent
@@ -17,9 +16,6 @@ from .event_bus import AsyncioEventBusService
 
 
 class AsyncioIsolatedComponent(BaseIsolatedComponent):
-    endpoint_name: str = None
-    main_endpoint_config: ConnectionConfig = None
-
     async def run(self) -> None:
         """
         Call chain is:
@@ -62,14 +58,10 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
 
     @classmethod
     async def _do_run(cls, boot_info: BootInfo) -> None:
-        if cls.endpoint_name is None:
-            endpoint_name = friendly_filename_or_url(cls.name)
-        else:
-            endpoint_name = cls.endpoint_name
+        endpoint_name = cls._get_endpoint_name()
         event_bus_service = AsyncioEventBusService(
             boot_info.trinity_config,
             endpoint_name,
-            main_endpoint_config=cls.main_endpoint_config,
         )
         async with run_service(event_bus_service):
             await event_bus_service.wait_event_bus_available()
@@ -84,6 +76,6 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
     @abstractmethod
     async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         """
-        This is where subclasses should override
+        Define the entry point of the component. Should be overwritten in subclasses.
         """
         ...

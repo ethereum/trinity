@@ -42,8 +42,6 @@ class EthstatsComponent(AsyncioIsolatedComponent):
     node_id: str
     node_contact: str
 
-    name = 'Ethstats'
-
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
         ethstats_parser = arg_parser.add_argument_group('ethstats (experimental)')
@@ -112,20 +110,14 @@ class EthstatsComponent(AsyncioIsolatedComponent):
         else:
             server_url = get_default_server_url(boot_info.trinity_config.network_id)
 
-        server_secret = args.ethstats_server_secret
-
-        node_id = args.ethstats_node_id
-        node_contact = args.ethstats_node_contact
-        stats_interval = args.ethstats_interval
-
         service = EthstatsService(
             boot_info,
             event_bus,
             server_url,
-            server_secret,
-            node_id,
-            node_contact,
-            stats_interval,
+            args.ethstats_server_secret,
+            args.ethstats_node_id,
+            args.ethstats_node_contact,
+            args.ethstats_interval,
         )
 
         async with run_service(service):

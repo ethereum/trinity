@@ -26,24 +26,24 @@ class GotCancellation(BaseEvent):
     pass
 
 
-class ComponentService(BaseService):
+class AsyncioComponentService(BaseService):
     def __init__(self, event_bus) -> None:
         super().__init__()
         self.event_bus = event_bus
 
     async def _run(self) -> None:
-        self.logger.error('Broadcasting `IsStarted`')
+        self.logger.debug('Broadcasting `IsStarted`')
         await self.event_bus.broadcast(IsStarted())
         try:
-            self.logger.error('Waiting for cancellation')
+            self.logger.debug('Waiting for cancellation')
             await self.cancellation()
         finally:
-            self.logger.error('Got cancellation: broadcasting `GotCancellation`')
+            self.logger.debug('Got cancellation: broadcasting `GotCancellation`')
             await self.event_bus.broadcast(GotCancellation())
-            self.logger.error('EXITING')
+            self.logger.debug('EXITING')
 
 
-class ComponentForTest(AsyncioIsolatedComponent):
+class AsyncioComponentForTest(AsyncioIsolatedComponent):
     name = "component-test"
     endpoint_name = 'component-test'
     logger = logging.getLogger('trinity.testing.ComponentForTest')
@@ -54,19 +54,19 @@ class ComponentForTest(AsyncioIsolatedComponent):
 
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        cls.logger.error('Entered `do_run`')
-        service = ComponentService(event_bus)
+        cls.logger.debug('Entered `do_run`')
+        service = AsyncioComponentService(event_bus)
         async with run_service(service):
-            cls.logger.error('Running service')
+            cls.logger.debug('Running service')
             try:
                 await service.cancellation()
             finally:
-                cls.logger.error('Got cancellation')
+                cls.logger.debug('Got cancellation')
 
 
 @pytest.fixture
 def trinity_config(xdg_trinity_root):
-    data_dir = get_local_data_dir('muffin', xdg_trinity_root)
+    data_dir = get_local_data_dir('mainnet', xdg_trinity_root)
     return TrinityConfig(
         network_id=1,
         data_dir=data_dir,
@@ -99,7 +99,7 @@ async def test_asyncio_isolated_component(boot_info,
                                           log_listener):
     # Test the lifecycle management for isolated process components to be sure
     # they start and stop as expected
-    manager = ComponentManager(boot_info, (ComponentForTest,), lambda reason: None)
+    manager = ComponentManager(boot_info, (AsyncioComponentForTest,), lambda reason: None)
 
     async with run_service(manager):
         event_bus = await manager.get_event_bus()

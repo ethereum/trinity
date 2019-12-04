@@ -12,9 +12,9 @@ from typing import AsyncIterator
 
 from async_generator import asynccontextmanager
 
-from trinity._utils.logging import (
-    setup_child_process_logging,
-)
+from trinity._utils.logging import setup_child_process_logging
+from trinity._utils.os import friendly_filename_or_url
+from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
 
 
@@ -26,8 +26,7 @@ class BaseComponentAPI(ABC):
     @abstractmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
         """
-        Give the component a chance to amend the Trinity CLI argument parser. This hook is called
-        before :meth:`~trinity.extensibility.component.BaseComponent.on_ready`
+        Give the component a chance to amend the Trinity CLI argument parser.
         """
         ...
 
@@ -65,6 +64,8 @@ class ComponentAPI(BaseComponentAPI):
 
 class BaseComponent(ComponentAPI):
     def __init__(self, boot_info: BootInfo) -> None:
+        if not hasattr(self, 'name'):
+            raise AttributeError(f"No name attribute defined for {self}")
         self._boot_info = boot_info
 
     def __str__(self) -> str:
@@ -92,10 +93,24 @@ class BaseIsolatedComponent(BaseComponent):
     isolated component is stopped it does first receive a SIGINT followed by a SIGTERM soon after.
     It is up to the component to handle these signals accordingly.
     """
+    endpoint_name: str = None
+
     @classmethod
     def _run_process(cls, boot_info: BootInfo) -> None:
         setup_child_process_logging(boot_info)
-        cls.run_process(boot_info)
+
+        if boot_info.profile:
+            with profiler(f'profile_{cls._get_endpoint_name}'):
+                cls.run_process(boot_info)
+        else:
+            cls.run_process(boot_info)
+
+    @classmethod
+    def _get_endpoint_name(cls) -> str:
+        if cls.endpoint_name is None:
+            return friendly_filename_or_url(cls.name)
+        else:
+            return cls.endpoint_name
 
     @classmethod
     @abstractmethod

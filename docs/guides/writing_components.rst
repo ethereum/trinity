@@ -87,6 +87,10 @@ Components are run by the
 :class:`~trinity.extensibility.component_manager.ComponentManager` which is
 responsible for running and stopping components.
 
+Each component is expected to implement
+:meth:`~trinity.extensibility.component.ComponentAPI.run` which must be a
+coroutine.
+
 
 Defining components
 ~~~~~~~~~~~~~~~~~~~
@@ -133,6 +137,41 @@ its existence later.
 
   For a more advanced example, that also configures a subcommand, checkout the ``trinity attach``
   component.
+
+Most CLI argument validation can happen within the standard library APIs
+exposed by ``argparse``.  If a component needs to do runtime validation it can
+do so via
+:meth:`~trinity.extensibility.component.BaseComponentAPI.validate_cli`.
+Convention here is to raise ``eth_utils.ValidationError`` if an error is
+encountered.
+
+
+Communication Patterns
+----------------------
+
+For most components to be useful they need to be able to communicate with the rest of the application
+as well as other components. In addition to that, this kind of communication needs to work across
+process boundaries as components will often operate in independent processes.
+
+To achieve this, Trinity uses the
+`Lahja project <https://github.com/ethereum/lahja>`_, which enables us to operate
+a lightweight event bus that works across processes. An event bus is a software dedicated to the
+transmission of events from a broadcaster to interested parties.
+
+This kind of architecture allows for efficient and decoupled communication between different parts
+of Trinity including components.
+
+For instance, a component may be interested to perform some action every time that a new peer connects
+to our node. These kind of events get exposed on the EventBus and hence allow a wide range of
+components to make use of them.
+
+For an event to be usable across processes it needs to be pickleable and in general should be a
+shallow Data Transfer Object (`DTO <https://en.wikipedia.org/wiki/Data_transfer_object>`_)
+
+.. note::
+  This guide will soon cover communication through the event bus in more detail. For now, the
+  `Lahja documentation <https://github.com/ethereum/lahja/blob/master/README.md>`_ gives us some
+  more information about the available APIs and how to use them.
 
 
 Distributing components

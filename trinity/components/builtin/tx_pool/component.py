@@ -47,6 +47,16 @@ class TxComponent(AsyncioIsolatedComponent):
             help="Disables the Transaction Pool",
         )
 
+    @classmethod
+    def validate_cli(cls, boot_info: BootInfo) -> None:
+        network_id = boot_info.trinity_config.network_id
+        if network_id not in {MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID}:
+            raise ValidationError(
+                "The TxPool component only supports Mainnet and Ropsten.  You "
+                "can run with the transaction pool disabled using "
+                "--disable-tx-pool"
+            )
+
     @property
     def is_enabled(self) -> bool:
         light_mode = self._boot_info.args.sync_mode == SYNC_LIGHT
@@ -74,8 +84,7 @@ class TxComponent(AsyncioIsolatedComponent):
         elif boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
             validator = DefaultTransactionValidator(chain, PETERSBURG_ROPSTEN_BLOCK)
         else:
-            # TODO: this should cause the node to shut down maybe?
-            raise ValidationError("The TxPool component only supports MainnetChain or RopstenChain")
+            raise Exception("This code path should not be reachable")
 
         proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 

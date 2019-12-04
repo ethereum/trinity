@@ -3,6 +3,7 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
+import asyncio
 import logging
 from typing import ClassVar, Iterable
 
@@ -242,4 +243,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         async with AsyncExitStack() as stack:
             for service in tracker_services:
                 await stack.enter_async_context(run_service(service))
-            await tracker_services[0].cancellation()
+            await asyncio.wait(tuple(
+                service.cancellation()
+                for service in tracker_services
+            ), return_when=asyncio.FIRST_COMPLETED)
