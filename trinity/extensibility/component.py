@@ -69,7 +69,7 @@ class BaseComponent(ComponentAPI):
         self._boot_info = boot_info
 
     def __str__(self) -> str:
-        return f"<Component[self.name]>"
+        return f"<Component[{self.name}]>"
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(boot_info={self._boot_info})"
@@ -121,13 +121,13 @@ class BaseIsolatedComponent(BaseComponent):
 @asynccontextmanager
 async def run_component(component: ComponentAPI) -> AsyncIterator[None]:
     task = asyncio.ensure_future(component.run())
-    logger.debug("Starting component: %s", component)
+    logger.debug("Starting component: %s", component.name)
     try:
         yield
     finally:
-        logger.debug("Stopping component: %s", component)
+        logger.debug("Stopping component: %s", component.name)
         if not task.done():
-            logger.debug("Cancelling component task: %s", component)
+            logger.debug("Cancelling component: %s", component.name)
             task.cancel()
 
         try:
@@ -135,4 +135,4 @@ async def run_component(component: ComponentAPI) -> AsyncIterator[None]:
         except asyncio.CancelledError:
             pass
 
-        logger.debug("Stopped component: %s", component)
+        logger.debug("Stopped component: %s", component.name)
