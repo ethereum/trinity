@@ -1,12 +1,15 @@
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Type
+from typing import Any, Dict, Optional, Tuple, Type
 
+from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import ValidationError
+import ssz
 
 from eth2.beacon.attestation_helpers import validate_indexed_attestation
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.epoch_processing_helpers import get_indexed_attestation
+from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
 from eth2.beacon.helpers import (
     compute_epoch_at_slot,
     compute_start_slot_at_epoch,
@@ -20,6 +23,47 @@ from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, SigningRoot, Slot, Timestamp, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
+
+LMD_GHOST_SCORE_DATA_LENGTH = 2
+
+
+def score_block_by_root(root: SigningRoot) -> int:
+    return int.from_bytes(root, byteorder="big")
+
+
+class LMDGHOSTScore(BaseScore):
+    _score: Tuple[Gwei, int]
+
+    def __init__(self, score: Tuple[Gwei, int]) -> None:
+        self._score = score
+
+    def __lt__(self, other: "LMDGHOSTScore") -> bool:
+        return self._score < other._score
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, LMDGHOSTScore):
+            return NotImplemented
+        return self._score == other._score
+
+    def serialize(self) -> bytes:
+        return ssz.encode(
+            self._score,
+            sedes=ssz.sedes.Vector(ssz.sedes.uint256, LMD_GHOST_SCORE_DATA_LENGTH),
+        )
+
+    @classmethod
+    def deserialize(cls, data: bytes) -> "LMDGHOSTScore":
+        score = ssz.decode(
+            data, sedes=ssz.sedes.Vector(ssz.sedes.uint256, LMD_GHOST_SCORE_DATA_LENGTH)
+        )
+        return cls(score)
+
+    @classmethod
+    def from_genesis(
+        cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
+    ) -> BaseScore:
+        score = (Gwei(0), score_block_by_root(SigningRoot(ZERO_HASH32)))
+        return LMDGHOSTScore(score)
 
 
 def compute_slots_since_epoch_start(slot: Slot, slots_per_epoch: int) -> Slot:
@@ -98,10 +142,6 @@ def _effective_balance_for_validator(
     state: BeaconState, validator_index: ValidatorIndex
 ) -> Gwei:
     return state.validators[validator_index].effective_balance
-
-
-def score_block_by_root(root: SigningRoot) -> int:
-    return int.from_bytes(root, byteorder="big")
 
 
 class Store:
@@ -377,7 +417,7 @@ class Store:
                     epoch=target.epoch, root=attestation.data.beacon_block_root
                 )
 
-    def scoring(self, block: BaseBeaconBlock) -> int:
+    def scoring(self, block: BaseBeaconBlock) -> LMDGHOSTScore:
         """
         Return the score of the target ``_block`` according to the LMD GHOST algorithm,
         using the lexicographic ordering of the block root to break ties.
@@ -387,4 +427,16 @@ class Store:
         attestation_score = self.get_latest_attesting_balance(root)
         block_root_score = score_block_by_root(root)
 
-        return attestation_score + block_root_score
+        return LMDGHOSTScore((attestation_score, block_root_score))
+
+
+class LMDGHOSTScoring(BaseForkChoiceScoring):
+    def __init__(self, store: Store) -> None:
+        self._store = store
+
+    @classmethod
+    def get_score_class(cls) -> Type[BaseScore]:
+        return LMDGHOSTScore
+
+    def score(self, block: BaseBeaconBlock) -> BaseScore:
+        return self._store.scoring(block)

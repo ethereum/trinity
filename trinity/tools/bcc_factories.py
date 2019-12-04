@@ -3,7 +3,9 @@ import asyncio
 from typing import (
     Any,
     AsyncIterator,
+    Dict,
     Iterable,
+    Collection,
     Tuple,
     Type,
     Sequence,
@@ -33,7 +35,8 @@ from p2p.tools.factories import (
 )
 
 from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_SIGNING_ROOT
-from eth2.beacon.fork_choice.higher_slot import higher_slot_scoring
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
+from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.blocks import (
     BeaconBlock,
     BeaconBlockBody,
@@ -108,19 +111,29 @@ class PeerFactory(factory.Factory):
 @asynccontextmanager
 async def ConnectionPairFactory(
     alice_chaindb: AsyncBeaconChainDB = None,
+    alice_branch: Collection[BaseBeaconBlock] = None,
     bob_chaindb: AsyncBeaconChainDB = None,
+    bob_branch: Collection[BaseBeaconBlock] = None,
+    genesis_state: BeaconState = None,
     cancel_token: CancelToken = None,
     handshake: bool = True,
 ) -> AsyncIterator[Tuple[Node, Node]]:
     if cancel_token is None:
         cancel_token = CancelTokenFactory()
-    alice_kwargs = {}
-    bob_kwargs = {}
+    alice_kwargs: Dict[str, Any] = {}
+    bob_kwargs: Dict[str, Any] = {}
 
     if alice_chaindb is not None:
         alice_kwargs["chain__db"] = alice_chaindb.db
+    if alice_branch is not None:
+        alice_kwargs["chain__branch"] = alice_branch
     if bob_chaindb is not None:
         bob_kwargs["chain__db"] = bob_chaindb.db
+    if bob_branch is not None:
+        bob_kwargs["chain__branch"] = bob_branch
+    if genesis_state is not None:
+        alice_kwargs["chain__genesis_state"] = genesis_state
+        bob_kwargs["chain__genesis_state"] = genesis_state
 
     alice = NodeFactory(cancel_token=cancel_token, **alice_kwargs)
     bob = NodeFactory(cancel_token=cancel_token, **bob_kwargs)
@@ -206,24 +219,6 @@ class AsyncBeaconChainDBFactory(factory.Factory):
     db = factory.SubFactory(AtomicDBFactory)
     genesis_config = SERENITY_GENESIS_CONFIG
 
-    @classmethod
-    def _create(cls,
-                model_class: Type[AsyncBeaconChainDB],
-                *args: Any,
-                **kwargs: Any) -> AsyncBeaconChainDB:
-        blocks = kwargs.pop('blocks', None)
-        if blocks is None:
-            blocks = (BeaconBlockFactory(),)
-        chain_db = super()._create(model_class, *args, **kwargs)
-        if len(blocks) > 0:
-            chain_db._handle_exceptional_justification_and_finality(blocks[0])
-        chain_db.persist_block_chain(
-            blocks,
-            BeaconBlock,
-            (higher_slot_scoring,) * len(blocks)
-        )
-        return chain_db
-
 
 class ReceiveServerFactory(factory.Factory):
     class Meta:
@@ -254,7 +249,7 @@ class SimpleWriterBlockImporter:
         BaseBeaconBlock, Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]
     ]:
         new_blocks, old_blocks = self._chain_db.persist_block(
-            block, BeaconBlock, higher_slot_scoring
+            block, BeaconBlock, HigherSlotScoring()
         )
         return None, new_blocks, old_blocks
 

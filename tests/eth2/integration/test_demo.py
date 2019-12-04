@@ -2,7 +2,7 @@ import pytest
 
 from eth2._utils.bls import bls
 from eth2.beacon.db.chain import BeaconChainDB
-from eth2.beacon.fork_choice.higher_slot import higher_slot_scoring
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.forks.serenity import SerenityStateMachine
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONFIG
@@ -14,7 +14,7 @@ from eth2.beacon.tools.misc.ssz_vector import override_lengths
 
 @pytest.fixture
 def fork_choice_scoring():
-    return higher_slot_scoring
+    return HigherSlotScoring()
 
 
 @pytest.mark.parametrize(("validator_count"), ((40),))

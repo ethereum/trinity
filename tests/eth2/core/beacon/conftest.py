@@ -9,7 +9,7 @@ from eth2.beacon.constants import (
     JUSTIFICATION_BITS_LENGTH,
 )
 from eth2.beacon.db.chain import BeaconChainDB
-from eth2.beacon.fork_choice.higher_slot import higher_slot_scoring
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.fork_choice.lmd_ghost import Context as LMDGHOSTContext
 from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.operations.attestation_pool import AttestationPool
@@ -624,17 +624,23 @@ def genesis_block(genesis_state):
 # State machine
 #
 @pytest.fixture
-def fixture_sm_class(config, fork_choice_scoring):
+def fixture_sm_class(config, fork_choice_scoring, fork_choice_scoring_class):
     return SerenityStateMachine.configure(
         __name__="SerenityStateMachineForTesting",
         config=config,
         get_fork_choice_scoring=lambda self: fork_choice_scoring,
+        fork_choice_scoring_class=fork_choice_scoring_class,
     )
 
 
 @pytest.fixture
+def fork_choice_scoring_class():
+    return HigherSlotScoring
+
+
+@pytest.fixture
 def fork_choice_scoring():
-    return higher_slot_scoring
+    return HigherSlotScoring()
 
 
 #

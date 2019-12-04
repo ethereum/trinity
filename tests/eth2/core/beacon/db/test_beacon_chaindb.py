@@ -5,7 +5,6 @@ from eth.exceptions import BlockNotFound, ParentNotFound
 from hypothesis import given
 from hypothesis import strategies as st
 import pytest
-import ssz
 
 from eth2._utils.hash import hash_eth2
 from eth2._utils.ssz import validate_ssz_equal
@@ -16,6 +15,7 @@ from eth2.beacon.db.exceptions import (
     JustifiedHeadNotFound,
 )
 from eth2.beacon.db.schema import SchemaV1
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScore
 from eth2.beacon.state_machines.forks.serenity.blocks import BeaconBlock
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.checkpoints import Checkpoint
@@ -109,7 +109,9 @@ def test_chaindb_persist_block_and_block_to_root(chaindb, block, fork_choice_sco
     assert chaindb.exists(block_to_root_key)
 
 
-def test_chaindb_get_score(chaindb, sample_beacon_block_params, fork_choice_scoring):
+def test_chaindb_get_score(
+    chaindb, fixture_sm_class, sample_beacon_block_params, fork_choice_scoring
+):
     genesis = BeaconBlock(**sample_beacon_block_params).copy(
         parent_root=GENESIS_PARENT_HASH, slot=0
     )
@@ -118,11 +120,17 @@ def test_chaindb_get_score(chaindb, sample_beacon_block_params, fork_choice_scor
     genesis_score_key = SchemaV1.make_block_root_to_score_lookup_key(
         genesis.signing_root
     )
-    genesis_score = ssz.decode(
-        chaindb.db.get(genesis_score_key), sedes=ssz.sedes.uint64
+    genesis_score_data = chaindb.db.get(genesis_score_key)
+    genesis_score_class = fork_choice_scoring.get_score_class()
+    genesis_score = genesis_score_class.deserialize(genesis_score_data)
+
+    expected_genesis_score = fork_choice_scoring.score(genesis)
+
+    assert genesis_score == expected_genesis_score
+    assert (
+        chaindb.get_score(genesis.signing_root, genesis_score_class)
+        == expected_genesis_score
     )
-    assert genesis_score == 0
-    assert chaindb.get_score(genesis.signing_root) == 0
 
     block1 = BeaconBlock(**sample_beacon_block_params).copy(
         parent_root=genesis.signing_root, slot=1
@@ -130,16 +138,23 @@ def test_chaindb_get_score(chaindb, sample_beacon_block_params, fork_choice_scor
     chaindb.persist_block(block1, block1.__class__, fork_choice_scoring)
 
     block1_score_key = SchemaV1.make_block_root_to_score_lookup_key(block1.signing_root)
-    block1_score = ssz.decode(chaindb.db.get(block1_score_key), sedes=ssz.sedes.uint64)
-    assert block1_score == 1
-    assert chaindb.get_score(block1.signing_root) == 1
+    block1_score_data = chaindb.db.get(block1_score_key)
+    block1_score = genesis_score_class.deserialize(block1_score_data)
+    expected_block1_score = fork_choice_scoring.score(block1)
+    assert block1_score == expected_block1_score
+    assert (
+        chaindb.get_score(block1.signing_root, genesis_score_class)
+        == expected_block1_score
+    )
 
 
 def test_chaindb_set_score(chaindb, block, maximum_score_value):
-    score = random.randrange(0, maximum_score_value)
+    score_data = random.randrange(0, maximum_score_value)
+    # NOTE: using ``HigherSlotScore`` as an integer serializer
+    score = HigherSlotScore(score_data)
     chaindb.set_score(block, score)
 
-    block_score = chaindb.get_score(block.signing_root)
+    block_score = chaindb.get_score(block.signing_root, HigherSlotScore)
 
     assert block_score == score
 

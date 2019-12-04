@@ -24,6 +24,7 @@ from eth2.beacon.epoch_processing_helpers import get_attesting_indices
 from eth2.beacon.fork_choice.lmd_ghost import (
     Context,
     LatestMessage,
+    LMDGHOSTScore,
     Store,
     _effective_balance_for_validator,
     score_block_by_root,
@@ -33,6 +34,13 @@ from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
+
+
+def test_score_serialization():
+    score = LMDGHOSTScore((2 ** 20, int.from_bytes(b"3" * 32, byteorder="big")))
+    serialized_score = score.serialize()
+    another_score = LMDGHOSTScore.deserialize(serialized_score)
+    assert score == another_score
 
 
 # TODO(ralexstokes) merge this and next into tools/builder
@@ -454,11 +462,16 @@ def _attach_attestations_to_block_tree_with_committees(block_tree, config):
 
 
 def _score_block(block, store, state, config):
-    return sum(
-        _effective_balance_for_validator(state, validator_index)
-        for validator_index, target in store._context.latest_messages
-        if store.get_ancestor(target.root, block.slot) == block
-    ) + score_block_by_root(block.signing_root)
+    return LMDGHOSTScore(
+        (
+            sum(
+                _effective_balance_for_validator(state, validator_index)
+                for validator_index, target in store._context.latest_messages
+                if store.get_ancestor(target.root, block.slot) == block
+            ),
+            score_block_by_root(block.signing_root),
+        )
+    )
 
 
 def _build_score_index_from_decorated_block_tree(block_tree, store, state, config):

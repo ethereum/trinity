@@ -3,6 +3,8 @@ import asyncio
 from async_generator import asynccontextmanager
 import pytest
 
+from eth2.beacon.genesis import get_genesis_block
+from eth2.beacon.types.blocks import BeaconBlock
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
     BeaconBlockFactory,
@@ -12,14 +14,20 @@ from trinity.tools.bcc_factories import (
 
 
 @asynccontextmanager
-async def get_sync_setup(request, event_loop, event_bus, alice_branch, bob_branch):
-    alice_chaindb = AsyncBeaconChainDBFactory(blocks=alice_branch)
-    bob_chaindb = AsyncBeaconChainDBFactory(blocks=bob_branch)
+async def get_sync_setup(
+    request, event_loop, event_bus, genesis_state, alice_branch, bob_branch
+):
+    alice_chaindb = AsyncBeaconChainDBFactory()
+    bob_chaindb = AsyncBeaconChainDBFactory()
     peer_pair = ConnectionPairFactory(
-        alice_chaindb=alice_chaindb, bob_chaindb=bob_chaindb
+        alice_chaindb=alice_chaindb,
+        alice_branch=alice_branch,
+        bob_chaindb=bob_chaindb,
+        bob_branch=bob_branch,
+        genesis_state=genesis_state,
     )
-    async with peer_pair as (alice, bob):
 
+    async with peer_pair as (alice, bob):
         alice_syncer = BeaconChainSyncerFactory(
             chain_db__db=alice.chain.chaindb.db, peer_pool=alice.handshaked_peers
         )
@@ -47,60 +55,66 @@ def assert_synced(alice, bob, correct_branch):
 
 
 @pytest.mark.asyncio
-async def test_sync_from_genesis(request, event_loop, event_bus):
-    genesis = BeaconBlockFactory()
-    alice_branch = (genesis,) + BeaconBlockFactory.create_branch(length=0, root=genesis)
-    bob_branch = (genesis,) + BeaconBlockFactory.create_branch(length=99, root=genesis)
+async def test_sync_from_genesis(request, event_loop, event_bus, genesis_state):
+    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
+    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=0, root=genesis_block
+    )
+    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=99, root=genesis_block
+    )
 
     async with get_sync_setup(
-        request, event_loop, event_bus, alice_branch, bob_branch
+        request, event_loop, event_bus, genesis_state, alice_branch, bob_branch
     ) as (alice, bob):
         assert_synced(alice, bob, bob_branch)
 
 
 @pytest.mark.asyncio
-async def test_sync_from_old_head(request, event_loop, event_bus):
-    genesis = BeaconBlockFactory()
-    alice_branch = (genesis,) + BeaconBlockFactory.create_branch(
-        length=49, root=genesis
+async def test_sync_from_old_head(request, event_loop, event_bus, genesis_state):
+    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
+    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=49, root=genesis_block
     )
     bob_branch = alice_branch + BeaconBlockFactory.create_branch(
         length=50, root=alice_branch[-1]
     )
     async with get_sync_setup(
-        request, event_loop, event_bus, alice_branch, bob_branch
+        request, event_loop, event_bus, genesis_state, alice_branch, bob_branch
     ) as (alice, bob):
         assert_synced(alice, bob, bob_branch)
 
 
 @pytest.mark.asyncio
-async def test_reorg_sync(request, event_loop, event_bus):
-    genesis = BeaconBlockFactory()
-    alice_branch = (genesis,) + BeaconBlockFactory.create_branch(
-        length=49, root=genesis, state_root=b"\x11" * 32
+async def test_reorg_sync(request, event_loop, event_bus, genesis_state):
+    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
+    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=49, root=genesis_block, state_root=b"\x11" * 32
     )
-    bob_branch = (genesis,) + BeaconBlockFactory.create_branch(
-        length=99, root=genesis, state_root=b"\x22" * 32
+    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=99, root=genesis_block, state_root=b"\x22" * 32
     )
 
     async with get_sync_setup(
-        request, event_loop, event_bus, alice_branch, bob_branch
+        request, event_loop, event_bus, genesis_state, alice_branch, bob_branch
     ) as (alice, bob):
         assert_synced(alice, bob, bob_branch)
 
 
 @pytest.mark.asyncio
-async def test_sync_when_already_at_best_head(request, event_loop, event_bus):
-    genesis = BeaconBlockFactory()
-    alice_branch = (genesis,) + BeaconBlockFactory.create_branch(
-        length=99, root=genesis, state_root=b"\x11" * 32
+async def test_sync_when_already_at_best_head(
+    request, event_loop, event_bus, genesis_state
+):
+    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
+    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=99, root=genesis_block, state_root=b"\x11" * 32
     )
-    bob_branch = (genesis,) + BeaconBlockFactory.create_branch(
-        length=50, root=genesis, state_root=b"\x22" * 32
+    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=50, root=genesis_block, state_root=b"\x22" * 32
     )
 
     async with get_sync_setup(
-        request, event_loop, event_bus, alice_branch, bob_branch
+        request, event_loop, event_bus, genesis_state, alice_branch, bob_branch
     ) as (alice, bob):
         alice_head = alice.chain.get_canonical_head()
         assert alice_head.slot == 99
@@ -111,15 +125,17 @@ async def test_sync_when_already_at_best_head(request, event_loop, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_sync_skipped_slots(request, event_loop, event_bus):
-    genesis = BeaconBlockFactory()
-    alice_branch = (genesis,) + BeaconBlockFactory.create_branch(length=0, root=genesis)
-    bob_branch = (genesis,) + BeaconBlockFactory.create_branch_by_slots(
-        slots=tuple(range(4, 99)), root=genesis
+async def test_sync_skipped_slots(request, event_loop, event_bus, genesis_state):
+    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
+    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+        length=0, root=genesis_block
+    )
+    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch_by_slots(
+        slots=tuple(range(4, 99)), root=genesis_block
     )
     assert bob_branch[0].slot == 0
     assert bob_branch[1].slot == 4
     async with get_sync_setup(
-        request, event_loop, event_bus, alice_branch, bob_branch
+        request, event_loop, event_bus, genesis_state, alice_branch, bob_branch
     ) as (alice, bob):
         assert_synced(alice, bob, bob_branch)

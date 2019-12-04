@@ -10,8 +10,29 @@ This module provides a variety of fork choice rules. Clients can introduce new r
 experiment with alternative fork choice methods.
 """
 
-from typing import Callable
+from abc import ABC, abstractmethod
+from typing import Type
 
+from eth2._utils.typing import Comparable, Serializeable
 from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.states import BeaconState
 
-ScoringFn = Callable[[BaseBeaconBlock], int]
+
+class BaseScore(ABC, Comparable, Serializeable):
+    @classmethod
+    @abstractmethod
+    def from_genesis(
+        cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
+    ) -> "BaseScore":
+        ...
+
+
+class BaseForkChoiceScoring(ABC):
+    @classmethod
+    @abstractmethod
+    def get_score_class(cls) -> Type[BaseScore]:
+        ...
+
+    @abstractmethod
+    def score(self, block: BaseBeaconBlock) -> BaseScore:
+        ...

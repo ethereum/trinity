@@ -8,10 +8,11 @@ from eth.exceptions import BlockNotFound
 from eth.validation import validate_word
 from eth_utils import ValidationError, humanize_hash
 
-from eth2._utils.funcs import constantly
 from eth2._utils.ssz import validate_imported_block_unchanged
 from eth2.beacon.db.chain import BaseBeaconChainDB, BeaconChainDB
 from eth2.beacon.exceptions import BlockClassError, StateMachineNotFound
+from eth2.beacon.fork_choice.constant import ConstantScoring
+from eth2.beacon.fork_choice.scoring import BaseScore
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
@@ -139,7 +140,7 @@ class BaseBeaconChain(Configurable, ABC):
         ...
 
     @abstractmethod
-    def get_score(self, block_root: SigningRoot) -> int:
+    def get_score(self, block_root: SigningRoot) -> BaseScore:
         ...
 
     @abstractmethod
@@ -224,7 +225,7 @@ class BeaconChain(BaseBeaconChain):
         genesis_config: Eth2GenesisConfig,
     ) -> "BaseBeaconChain":
         """
-        Initialize the ``BeaconChain`` from a genesis state.
+        Initialize the ``BeaconChain`` from a genesis state and block.
         """
         sm_class = cls.get_state_machine_class_for_block_slot(genesis_block.slot)
         if type(genesis_block) != sm_class.block_class:
@@ -236,21 +237,13 @@ class BeaconChain(BaseBeaconChain):
 
         chaindb = cls.get_chaindb_class()(db=base_db, genesis_config=genesis_config)
         chaindb.persist_state(genesis_state)
-        return cls._from_genesis_block(base_db, genesis_block, genesis_config)
 
-    @classmethod
-    def _from_genesis_block(
-        cls,
-        base_db: AtomicDatabaseAPI,
-        genesis_block: BaseBeaconBlock,
-        genesis_config: Eth2GenesisConfig,
-    ) -> "BaseBeaconChain":
-        """
-        Initialize the ``BeaconChain`` from the genesis block.
-        """
-        chaindb = cls.get_chaindb_class()(db=base_db, genesis_config=genesis_config)
-        genesis_scoring = constantly(0)
+        genesis_scoring_class = sm_class.get_fork_choice_scoring_class()
+        genesis_score_class = genesis_scoring_class.get_score_class()
+        genesis_score = genesis_score_class.from_genesis(genesis_state, genesis_block)
+        genesis_scoring = ConstantScoring(genesis_score)
         chaindb.persist_block(genesis_block, genesis_block.__class__, genesis_scoring)
+
         return cls(base_db, genesis_config)
 
     #
@@ -375,13 +368,17 @@ class BeaconChain(BaseBeaconChain):
         block_class = self.get_block_class(block_root)
         return self.chaindb.get_block_by_root(block_root, block_class)
 
-    def get_score(self, block_root: SigningRoot) -> int:
+    def get_score(self, block_root: SigningRoot) -> BaseScore:
         """
         Return the score of the block with the given hash.
 
         Raise ``BlockNotFound`` if there is no matching black hash.
         """
-        return self.chaindb.get_score(block_root)
+        block = self.get_block_by_root(block_root)
+        slot = block.slot
+        state_machine = self.get_state_machine(at_slot=slot)
+        fork_choice_scoring = state_machine.get_fork_choice_scoring()
+        return self.chaindb.get_score(block_root, fork_choice_scoring.get_score_class())
 
     def get_canonical_block_by_slot(self, slot: Slot) -> BaseBeaconBlock:
         """
@@ -429,7 +426,9 @@ class BeaconChain(BaseBeaconChain):
             raise ValidationError(
                 "Attempt to import block #{}.  Cannot import block {} before importing "
                 "its parent block at {}".format(
-                    block.slot, block.signing_root, block.parent_root
+                    block.slot,
+                    humanize_hash(block.signing_root),
+                    humanize_hash(block.parent_root),
                 )
             )
 
