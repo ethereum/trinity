@@ -493,6 +493,7 @@ def partial_speculative_execute(
     Get an argument-free function that will trigger missing state downloads,
     by executing all the transactions, in the context of the given header.
     """
+
     def _trigger_missing_state_downloads() -> None:
         vm = beam_chain.get_vm(header)
         unused_header = header.copy(gas_used=0)
