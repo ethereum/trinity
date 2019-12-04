@@ -400,12 +400,16 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
     async def _broadcast_witness_metadata(
             self, block: BaseBlock, witness_hashes: Tuple[Hash32, ...]) -> None:
 
-        if len(self._firehose_peers) == 0:
-            self.logger.info(
+        # make a copy, so the set doesn't modify during loop
+        eligible_peers = tuple(self._firehose_peers)
+
+        if len(eligible_peers) == 0:
+            self.logger.debug(
                 "Skipping witness broadcast for %s, because not connected to any peers",
                 block,
             )
-        for peer in self._firehose_peers:
+
+        for peer in eligible_peers:
             self.logger.warning("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
             try:
                 peer.fh_api.send_new_block_witness_hashes(block.hash, witness_hashes)
