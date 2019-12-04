@@ -243,7 +243,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         async with AsyncExitStack() as stack:
             for service in tracker_services:
                 await stack.enter_async_context(run_service(service))
-            await asyncio.wait(tuple(
+            await asyncio.gather(*(
                 service.cancellation()
                 for service in tracker_services
-            ), return_when=asyncio.FIRST_COMPLETED)
+            ))

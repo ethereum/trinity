@@ -65,7 +65,7 @@ class ComponentAPI(BaseComponentAPI):
 class BaseComponent(ComponentAPI):
     def __init__(self, boot_info: BootInfo) -> None:
         if not hasattr(self, 'name'):
-            raise AttributeError(f"No name attribute defined for {self}")
+            raise AttributeError(f"No name attribute defined for {self.__class__}")
         self._boot_info = boot_info
 
     def __str__(self) -> str:

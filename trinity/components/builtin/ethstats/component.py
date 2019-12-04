@@ -36,6 +36,8 @@ def get_default_server_url(network_id: int) -> str:
 
 
 class EthstatsComponent(AsyncioIsolatedComponent):
+    name = 'ethstats'
+
     server_url: str
     server_secret: str
     stats_interval: int

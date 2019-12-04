@@ -167,7 +167,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             for service in services:
                 await stack.enter_async_context(run_service(service))
 
-            await asyncio.wait(tuple(
+            await asyncio.gather(*(
                 service.cancellation()
                 for service in services
-            ), return_when=asyncio.FIRST_COMPLETED)
+            ))
