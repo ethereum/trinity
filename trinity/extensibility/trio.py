@@ -4,7 +4,7 @@ import logging
 import signal
 
 import trio
-from async_service import run_trio_service
+from async_service import background_trio_service
 
 from lahja import EndpointAPI, ConnectionConfig
 
@@ -64,10 +64,9 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
         event_bus_service = TrioEventBusService(
             boot_info.trinity_config,
             endpoint_name,
-            main_endpoint_config=cls.main_endpoint_config,
         )
-        async with trio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signal_aiter:
-            async with run_trio_service(event_bus_service):
+        with trio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signal_aiter:
+            async with background_trio_service(event_bus_service):
                 await event_bus_service.wait_event_bus_available()
                 event_bus = event_bus_service.get_event_bus()
                 async with trio.open_nursery() as nursery:
