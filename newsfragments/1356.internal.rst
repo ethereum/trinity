@@ -1,0 +1,2 @@
+Beam Sync now warns in the logs when it skips ahead of headers (relying on light-client-style
+verification of older headers).

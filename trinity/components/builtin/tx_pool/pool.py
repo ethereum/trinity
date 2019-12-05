@@ -118,7 +118,8 @@ class TxPool(BaseService):
             buffer: List[SignedTransactionAPI] = []
 
             # wait for there to be items available on the queue.
-            buffer.extend(await self._internal_queue.get())
+            transactions = await self.wait(self._internal_queue.get())
+            buffer.extend(transactions)
 
             # continue to pull items from the queue synchronously until the
             # queue is either empty or we hit a sufficient size to justify
@@ -131,7 +132,8 @@ class TxPool(BaseService):
             # Now that the queue is either empty or we have an adequate number
             # to send to our peers, broadcast them to the appropriate peers.
             for batch in partition_all(BATCH_HIGH_WATER, buffer):
-                for receiving_peer in await self._peer_pool.get_peers():
+                peers = await self.wait(self._peer_pool.get_peers())
+                for receiving_peer in peers:
                     filtered_tx = self._filter_tx_for_peer(receiving_peer, batch)
                     if len(filtered_tx) == 0:
                         self.logger.debug2(
