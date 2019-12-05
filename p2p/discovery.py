@@ -917,9 +917,9 @@ def _pack_v4(cmd_id: int, payload: Sequence[Any], privkey: datatypes.PrivateKey)
     See https://github.com/ethereum/devp2p/blob/master/rlpx.md#node-discovery for information on
     how UDP packets are structured.
     """
-    cmd_id = to_bytes(cmd_id)
+    cmd_id_bytes = to_bytes(cmd_id)
     expiration = rlp.sedes.big_endian_int.serialize(_get_msg_expiration())
-    encoded_data = cmd_id + rlp.encode(tuple(payload) + (expiration,))
+    encoded_data = cmd_id_bytes + rlp.encode(tuple(payload) + (expiration,))
     signature = privkey.sign_msg(encoded_data)
     message_hash = keccak(signature.to_bytes() + encoded_data)
     return message_hash + signature.to_bytes() + encoded_data

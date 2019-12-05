@@ -13,6 +13,9 @@ from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransactionFields
 
+from p2p.abc import (
+    SerializationCodecAPI,
+)
 from p2p.commands import BaseCommand, RLPCodec
 
 from trinity.protocol.common.payloads import BlockHeadersQuery
@@ -51,7 +54,7 @@ NEW_BLOCK_HASHES_STRUCTURE = sedes.CountableList(sedes.List([hash_sedes, sedes.b
 
 class NewBlockHashes(BaseCommand[Tuple[NewBlockHash, ...]]):
     protocol_command_id = 1
-    serialization_codec = RLPCodec(
+    serialization_codec: SerializationCodecAPI[Tuple[NewBlockHash, ...]] = RLPCodec(
         sedes=NEW_BLOCK_HASHES_STRUCTURE,
         process_inbound_payload_fn=apply_formatter_to_array(lambda args: NewBlockHash(*args)),
     )
