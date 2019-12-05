@@ -1,0 +1,2 @@
+Only allow a single connection per peer, even if an outgoing and incoming handshake are initiated
+simultaneously. (Previously, this was sometimes creating duplicate peers in the pool)
