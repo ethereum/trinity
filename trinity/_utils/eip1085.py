@@ -124,14 +124,18 @@ def validate_raw_eip1085_genesis_config(genesis_config: RawEIP1085Dict) -> None:
         raise ValidationError(str(err)) from err
 
 
+def hex_to_block_number(hex_encoded_number: str) -> BlockNumber:
+    return BlockNumber(to_int(hexstr=hex_encoded_number))
+
+
 @to_tuple
 def _extract_vm_config(vm_config: Dict[str, str]) -> Iterable[VMFork]:
     if 'frontierForkBlock' in vm_config.keys():
-        yield to_int(hexstr=vm_config['frontierForkBlock']), FrontierVM
+        yield hex_to_block_number(vm_config['frontierForkBlock']), FrontierVM
     if 'homesteadForkBlock' in vm_config.keys():
-        homestead_fork_block = to_int(hexstr=vm_config['homesteadForkBlock'])
+        homestead_fork_block = hex_to_block_number(vm_config['homesteadForkBlock'])
         if 'DAOForkBlock' in vm_config:
-            dao_fork_block_number = to_int(hexstr=vm_config['DAOForkBlock'])
+            dao_fork_block_number = hex_to_block_number(vm_config['DAOForkBlock'])
 
             HomesteadVM = MainnetDAOValidatorVM.configure(
                 _dao_fork_block_number=dao_fork_block_number,
@@ -140,17 +144,17 @@ def _extract_vm_config(vm_config: Dict[str, str]) -> Iterable[VMFork]:
         else:
             yield homestead_fork_block, BaseHomesteadVM
     if 'EIP150ForkBlock' in vm_config.keys():
-        yield to_int(hexstr=vm_config['EIP150ForkBlock']), TangerineWhistleVM
+        yield hex_to_block_number(vm_config['EIP150ForkBlock']), TangerineWhistleVM
     if 'EIP158ForkBlock' in vm_config.keys():
-        yield to_int(hexstr=vm_config['EIP158ForkBlock']), SpuriousDragonVM
+        yield hex_to_block_number(vm_config['EIP158ForkBlock']), SpuriousDragonVM
     if 'byzantiumForkBlock' in vm_config.keys():
-        yield to_int(hexstr=vm_config['byzantiumForkBlock']), ByzantiumVM
+        yield hex_to_block_number(vm_config['byzantiumForkBlock']), ByzantiumVM
     if 'constantinopleForkBlock' in vm_config.keys():
-        yield to_int(hexstr=vm_config['constantinopleForkBlock']), ConstantinopleVM
+        yield hex_to_block_number(vm_config['constantinopleForkBlock']), ConstantinopleVM
     if 'petersburgForkBlock' in vm_config.keys():
-        yield to_int(hexstr=vm_config['petersburgForkBlock']), PetersburgVM
+        yield hex_to_block_number(vm_config['petersburgForkBlock']), PetersburgVM
     if 'istanbulForkBlock' in vm_config.keys():
-        yield to_int(hexstr=vm_config['istanbulForkBlock']), IstanbulVM
+        yield hex_to_block_number(vm_config['istanbulForkBlock']), IstanbulVM
 
 
 @to_tuple
