@@ -14,5 +14,4 @@ RUN pip install -U trinity --no-cache-dir
 RUN echo "Type \`trinity-beacon\` to boot or \`trinity-beacon --help\` for an overview of commands"
 
 EXPOSE 30303 30303/udp
-# Trinity shutdowns aren't yet solid enough to avoid the fix-unclean-shutdown
 ENTRYPOINT ["trinity-beacon"]
