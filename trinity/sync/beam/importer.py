@@ -511,6 +511,9 @@ def partial_speculative_execute(
                 preview_time,
                 exc,
             )
+        except BrokenPipeError:
+            vm.logger.info("Got BrokenPipeError while Beam Sync speculatively executed %s", header)
+            vm.logger.debug("BrokenPipeError trace for %s", header, exc_info=True)
         else:
             preview_time = t.elapsed
 
