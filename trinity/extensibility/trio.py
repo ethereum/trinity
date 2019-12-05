@@ -6,11 +6,13 @@ import signal
 import trio
 from async_service import background_trio_service
 
-from lahja import EndpointAPI, ConnectionConfig
+from lahja import EndpointAPI
 
 from trinity._utils.ipc import kill_process_gracefully
+from trinity._utils.logging import child_process_logging
 from trinity._utils.mp import ctx
 from trinity._utils.os import friendly_filename_or_url
+from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
 
 from .component import BaseIsolatedComponent
@@ -18,9 +20,6 @@ from .event_bus import TrioEventBusService
 
 
 class TrioIsolatedComponent(BaseIsolatedComponent):
-    endpoint_name: str = None
-    main_endpoint_config: ConnectionConfig = None
-
     async def run(self) -> None:
         """
         Call chain is:
@@ -35,7 +34,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
             * sets up event bus and then enters user function.
         """
         process = ctx.Process(
-            target=self._run_process,
+            target=self.run_process,
             args=(self._boot_info,),
         )
         loop = asyncio.get_event_loop()
@@ -45,15 +44,17 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
         finally:
             kill_process_gracefully(
                 process,
-                logging.getLogger('trinity.extensibility.AsyncioIsolatedComponent'),
+                logging.getLogger('trinity.extensibility.TrioIsolatedComponent'),
             )
 
     @classmethod
     def run_process(cls, boot_info: BootInfo) -> None:
-        try:
-            trio.run(cls._do_run, boot_info)
-        except KeyboardInterrupt:
-            pass
+        with child_process_logging(boot_info):
+            if boot_info.profile:
+                with profiler(f'profile_{cls._get_endpoint_name}'):
+                    trio.run(cls._do_run, boot_info)
+            else:
+                trio.run(cls._do_run, boot_info)
 
     @classmethod
     async def _do_run(cls, boot_info: BootInfo) -> None:
@@ -76,7 +77,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
 
     @classmethod
     @abstractmethod
-    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         """
         This is where subclasses should override
         """

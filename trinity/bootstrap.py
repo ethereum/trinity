@@ -243,24 +243,24 @@ def main_entry(trinity_boot: BootFn,
         )
         manager = AsyncioManager(component_manager_service)
 
+        loop.add_signal_handler(
+            signal.SIGTERM,
+            manager.cancel,
+            'SIGTERM',
+        )
+        loop.add_signal_handler(
+            signal.SIGINT,
+            component_manager_service.shutdown,
+            'CTRL+C',
+        )
+
         try:
-            loop.add_signal_handler(
-                signal.SIGTERM,
-                component_manager_service.shutdown,
-                'SIGTERM',
-            )
-            loop.add_signal_handler(
-                signal.SIGINT,
-                component_manager_service.shutdown,
-                'CTRL+C',
-            )
             loop.run_until_complete(manager.run())
-        except SystemExit:
-            raise
         except BaseException as err:
-            kill_trinity_gracefully(trinity_config, logger, processes, f"Unknown: {err!r}")
+            logger.error("Error during trinity run: %r", err)
             raise
         finally:
+            kill_trinity_with_reason(component_manager_service.reason)
             if trinity_config.trinity_tmp_root_dir:
                 shutil.rmtree(trinity_config.trinity_root_dir)
 

@@ -1,0 +1,1 @@
+Full rework of ``Component`` APIs.  CLI validation is now done during application initialization.  Component lifecycle is well defined and simpler to implement.

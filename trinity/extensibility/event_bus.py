@@ -66,8 +66,7 @@ class AsyncioEventBusService(BaseService):
                 await endpoint.connect_to_endpoints(main_endpoint_config)
 
                 # announce ourself to the event bus
-                await endpoint.wait_until_endpoint_subscribed_to(
-                    main_endpoint_config.name,
+                await endpoint.wait_until_any_endpoint_subscribed_to(
                     EventBusConnected,
                 )
                 await endpoint.broadcast(
