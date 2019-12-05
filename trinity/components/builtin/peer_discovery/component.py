@@ -6,6 +6,8 @@ from typing import (
     Type,
 )
 
+import trio
+
 from async_service import Service, TrioManager
 
 from lahja import EndpointAPI
@@ -80,8 +82,6 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
 
     async def run(self) -> None:
         config = self.boot_info.trinity_config
-        external_ip = "0.0.0.0"
-        address = Address(external_ip, config.port, config.port)
 
         if self.boot_info.args.disable_discovery:
             discovery_service: Service = StaticDiscoveryService(
@@ -89,12 +89,16 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
                 config.preferred_nodes,
             )
         else:
+            external_ip = "0.0.0.0"
+            socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
+            await socket.bind((external_ip, config.port))
             discovery_service = PreferredNodeDiscoveryService(
                 self.boot_info.trinity_config.nodekey,
-                address,
+                Address(external_ip, config.port, config.port),
                 config.bootstrap_nodes,
                 config.preferred_nodes,
                 self.event_bus,
+                socket,
             )
 
         try:

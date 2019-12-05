@@ -25,7 +25,6 @@ from typing import (
 )
 
 import trio
-import trio_typing
 
 import eth_utils.toolz
 from eth_utils import (
@@ -120,31 +119,83 @@ CMD_NEIGHBOURS = DiscoveryCommand("neighbours", 4, 2)
 CMD_ID_MAP = dict((cmd.id, cmd) for cmd in [CMD_PING, CMD_PONG, CMD_FIND_NODE, CMD_NEIGHBOURS])
 
 
-class DiscoveryProtocol:
-    """A Kademlia-like protocol to discover RLPx nodes."""
-    logger = get_extended_debug_logger("p2p.discovery.DiscoveryProtocol")
+class DiscoveryService(Service):
+    _last_lookup: float = 0
+    _lookup_interval: int = 30
     _max_neighbours_per_packet_cache = None
+
+    logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
-                 nursery: trio_typing.Nursery,
-                 socket: trio.socket.SocketType,
-                 bootstrap_nodes: Sequence[NodeAPI]) -> None:
+                 bootstrap_nodes: Sequence[NodeAPI],
+                 event_bus: EndpointAPI,
+                 socket: trio.socket.SocketType) -> None:
         self.privkey = privkey
         self.address = address
-        # FIXME: For now we need to be passed a trio nursery/socket as we have too many async
-        # methods. We could convert these into sync methods by using channels (with the X_nowait
-        # family of APIs), but that would need a fair amount of work.
-        self.nursery = nursery
-        self.socket = socket
         self.bootstrap_nodes = bootstrap_nodes
+        self._event_bus = event_bus
         self.this_node = Node(self.pubkey, address)
         self.routing = RoutingTable(self.this_node)
         self.pong_callbacks = CallbackManager()
         self.ping_callbacks = CallbackManager()
         self.neighbours_callbacks = CallbackManager()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
+        self._lookup_running = trio.Lock()
+        if socket.family != trio.socket.AF_INET:
+            raise ValueError("Invalid socket family")
+        elif socket.type != trio.socket.SOCK_DGRAM:
+            raise ValueError("Invalid socket type")
+        self.socket = socket
+
+    async def consume_datagrams(self) -> None:
+        while self.manager.is_running:
+            await self.consume_datagram()
+
+    async def handle_get_peer_candidates_requests(self) -> None:
+        async for event in self._event_bus.stream(PeerCandidatesRequest):
+
+            self.manager.run_task(self.maybe_lookup_random_node)
+
+            nodes = tuple(self.get_nodes_to_connect(event.max_candidates))
+
+            self.logger.debug2("Broadcasting peer candidates (%s)", nodes)
+            await self._event_bus.broadcast(
+                event.expected_response_type()(nodes),
+                event.broadcast_config()
+            )
+
+    async def handle_get_random_bootnode_requests(self) -> None:
+        async for event in self._event_bus.stream(RandomBootnodeRequest):
+
+            nodes = tuple(self.get_random_bootnode())
+
+            self.logger.debug2("Broadcasting random boot nodes (%s)", nodes)
+            await self._event_bus.broadcast(
+                event.expected_response_type()(nodes),
+                event.broadcast_config()
+            )
+
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
+
+        self.manager.run_daemon_task(self.consume_datagrams)
+        self.manager.run_task(self.bootstrap)
+        await self.manager.wait_finished()
+
+    async def maybe_lookup_random_node(self) -> None:
+        if self._last_lookup + self._lookup_interval > time.time():
+            return
+        elif self._lookup_running.locked():
+            self.logger.debug("Node discovery lookup already in progress, not running another")
+            return
+        async with self._lookup_running:
+            try:
+                await self.lookup_random()
+            finally:
+                self._last_lookup = time.time()
 
     def update_routing_table(self, node: NodeAPI) -> None:
         """Update the routing table entry for the given node."""
@@ -154,10 +205,7 @@ class DiscoveryProtocol:
             # with the least recently seen node on that bucket. If the bonding fails the node will
             # be removed from the bucket and a new one will be picked from the bucket's
             # replacement cache.
-            # NOTE: trio_typing doesn't like us passing a function with a return value to
-            # start_soon(), so ignore type checking here.
-            # https://github.com/python-trio/trio-typing/issues/16
-            self.nursery.start_soon(self.bond, eviction_candidate)  # type: ignore
+            self.manager.run_task(self.bond, eviction_candidate)
 
     async def bond(self, node: NodeAPI) -> bool:
         """Bond with the given node.
@@ -369,11 +417,12 @@ class DiscoveryProtocol:
         else:
             raise ValueError(f"Unknown command: {cmd}")
 
-    def _get_max_neighbours_per_packet(self) -> int:
-        if self._max_neighbours_per_packet_cache is not None:
-            return self._max_neighbours_per_packet_cache
-        self._max_neighbours_per_packet_cache = _get_max_neighbours_per_packet()
-        return self._max_neighbours_per_packet_cache
+    @classmethod
+    def _get_max_neighbours_per_packet(cls) -> int:
+        if cls._max_neighbours_per_packet_cache is not None:
+            return cls._max_neighbours_per_packet_cache
+        cls._max_neighbours_per_packet_cache = _get_max_neighbours_per_packet()
+        return cls._max_neighbours_per_packet_cache
 
     async def bootstrap(self) -> None:
         for node in self.bootstrap_nodes:
@@ -396,12 +445,11 @@ class DiscoveryProtocol:
             return
         await self.lookup_random()
 
-    def send(self, node: NodeAPI, message: bytes) -> None:
-        # NOTE: trio_typing doesn't like us passing a function with a return value to
-        # start_soon(), so ignore type checking here.
-        # https://github.com/python-trio/trio-typing/issues/16
-        self.nursery.start_soon(
-            self.socket.sendto, message, (node.address.ip, node.address.udp_port))  # type: ignore
+    def send(self, node: NodeAPI, msg_type: DiscoveryCommand, payload: Sequence[Any]) -> bytes:
+        message = _pack_v4(msg_type.id, payload, self.privkey)
+        self.manager.run_task(
+            self.socket.sendto, message, (node.address.ip, node.address.udp_port))
+        return message
 
     async def consume_datagram(self) -> None:
         datagram, (ip_address, port) = await self.socket.recvfrom(
@@ -468,8 +516,7 @@ class DiscoveryProtocol:
     def send_ping_v4(self, node: NodeAPI) -> Hash32:
         version = rlp.sedes.big_endian_int.serialize(PROTO_VERSION)
         payload = (version, self.address.to_endpoint(), node.address.to_endpoint())
-        message = _pack_v4(CMD_PING.id, payload, self.privkey)
-        self.send(node, message)
+        message = self.send(node, CMD_PING, payload)
         # Return the msg hash, which is used as a token to identify pongs.
         token = Hash32(message[:MAC_SIZE])
         self.logger.debug2('>>> ping (v4) %s (token == %s)', node, encode_hex(token))
@@ -484,14 +531,12 @@ class DiscoveryProtocol:
         node_id = int_to_big_endian(
             target_node_id).rjust(constants.KADEMLIA_PUBLIC_KEY_SIZE // 8, b'\0')
         self.logger.debug2('>>> find_node to %s', node)
-        message = _pack_v4(CMD_FIND_NODE.id, tuple([node_id]), self.privkey)
-        self.send(node, message)
+        self.send(node, CMD_FIND_NODE, tuple([node_id]))
 
     def send_pong_v4(self, node: NodeAPI, token: Hash32) -> None:
         self.logger.debug2('>>> pong %s', node)
         payload = (node.address.to_endpoint(), token)
-        message = _pack_v4(CMD_PONG.id, payload, self.privkey)
-        self.send(node, message)
+        self.send(node, CMD_PONG, payload)
 
     def send_neighbours_v4(self, node: NodeAPI, neighbours: List[NodeAPI]) -> None:
         nodes = []
@@ -501,11 +546,9 @@ class DiscoveryProtocol:
 
         max_neighbours = self._get_max_neighbours_per_packet()
         for i in range(0, len(nodes), max_neighbours):
-            message = _pack_v4(
-                CMD_NEIGHBOURS.id, tuple([nodes[i:i + max_neighbours]]), self.privkey)
             self.logger.debug2('>>> neighbours to %s: %s',
                                node, neighbours[i:i + max_neighbours])
-            self.send(node, message)
+            self.send(node, CMD_NEIGHBOURS, tuple([nodes[i:i + max_neighbours]]))
 
     def process_neighbours(self, remote: NodeAPI, neighbours: List[NodeAPI]) -> None:
         """Process a neighbours response.
@@ -574,9 +617,9 @@ class DiscoveryProtocol:
             callback()
 
 
-class PreferredNodeDiscoveryProtocol(DiscoveryProtocol):
+class PreferredNodeDiscoveryService(DiscoveryService):
     """
-    A DiscoveryProtocol which has a list of preferred nodes which it will prioritize using before
+    A DiscoveryService which has a list of preferred nodes which it will prioritize using before
     trying to find nodes.  Each preferred node can only be used once every
     preferred_node_recycle_time seconds.
     """
@@ -584,15 +627,16 @@ class PreferredNodeDiscoveryProtocol(DiscoveryProtocol):
     preferred_node_recycle_time: int = 300
     _preferred_node_tracker: Dict[NodeAPI, float] = None
 
+    logger = get_extended_debug_logger('p2p.discovery.PreferredNodeDiscoveryService')
+
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
-                 nursery: trio_typing.Nursery,
-                 socket: trio.socket.SocketType,
                  bootstrap_nodes: Sequence[NodeAPI],
-                 preferred_nodes: Sequence[NodeAPI]) -> None:
-        super().__init__(privkey, address, nursery, socket, bootstrap_nodes)
-
+                 preferred_nodes: Sequence[NodeAPI],
+                 event_bus: EndpointAPI,
+                 socket: trio.socket.SocketType) -> None:
+        super().__init__(privkey, address, bootstrap_nodes, event_bus, socket)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
         self._preferred_node_tracker = collections.defaultdict(lambda: 0)
@@ -721,109 +765,6 @@ class NoopDiscoveryService(Service):
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
         await self.manager.wait_finished()
-
-
-class DiscoveryService(Service):
-    _last_lookup: float = 0
-    _lookup_interval: int = 30
-    _proto: DiscoveryProtocol = None
-
-    logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
-
-    def __init__(self,
-                 privkey: datatypes.PrivateKey,
-                 address: AddressAPI,
-                 bootstrap_nodes: Sequence[NodeAPI],
-                 event_bus: EndpointAPI) -> None:
-        self.privkey = privkey
-        self.address = address
-        self.bootstrap_nodes = bootstrap_nodes
-        self._event_bus = event_bus
-        self._lookup_running = trio.Lock()
-        self.socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
-
-    async def _consume_datagrams(self) -> None:
-        while self.manager.is_running:
-            await self.proto.consume_datagram()
-
-    async def handle_get_peer_candidates_requests(self) -> None:
-        async for event in self._event_bus.stream(PeerCandidatesRequest):
-
-            self.manager.run_task(self.maybe_lookup_random_node)
-
-            nodes = tuple(self.proto.get_nodes_to_connect(event.max_candidates))
-
-            self.logger.debug2("Broadcasting peer candidates (%s)", nodes)
-            await self._event_bus.broadcast(
-                event.expected_response_type()(nodes),
-                event.broadcast_config()
-            )
-
-    async def handle_get_random_bootnode_requests(self) -> None:
-        async for event in self._event_bus.stream(RandomBootnodeRequest):
-
-            nodes = tuple(self.proto.get_random_bootnode())
-
-            self.logger.debug2("Broadcasting random boot nodes (%s)", nodes)
-            await self._event_bus.broadcast(
-                event.expected_response_type()(nodes),
-                event.broadcast_config()
-            )
-
-    @property
-    def proto(self) -> DiscoveryProtocol:
-        if self._proto is None:
-            # Must silence mypy here because we're accessing a private attribute of our manager.
-            nursery = self.manager._task_nursery  # type: ignore
-            self._proto = DiscoveryProtocol(
-                self.privkey, self.address, nursery, self.socket,
-                self.bootstrap_nodes)
-        return self._proto
-
-    async def run(self) -> None:
-        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
-        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
-
-        await self.socket.bind(('0.0.0.0', self.address.udp_port))
-        self.manager.run_daemon_task(self._consume_datagrams)
-        self.manager.run_task(self.proto.bootstrap)
-        await self.manager.wait_finished()
-
-    async def maybe_lookup_random_node(self) -> None:
-        if self._last_lookup + self._lookup_interval > time.time():
-            return
-        elif self._lookup_running.locked():
-            self.logger.debug("Node discovery lookup already in progress, not running another")
-            return
-        async with self._lookup_running:
-            try:
-                await self.proto.lookup_random()
-            finally:
-                self._last_lookup = time.time()
-
-
-class PreferredNodeDiscoveryService(DiscoveryService):
-
-    logger = get_extended_debug_logger('p2p.discovery.PreferredNodeDiscoveryService')
-
-    def __init__(self,
-                 privkey: datatypes.PrivateKey,
-                 address: AddressAPI,
-                 bootstrap_nodes: Sequence[NodeAPI],
-                 preferred_nodes: Sequence[NodeAPI],
-                 event_bus: EndpointAPI) -> None:
-        super().__init__(privkey, address, bootstrap_nodes, event_bus)
-        self.preferred_nodes = preferred_nodes
-
-    @property
-    def proto(self) -> DiscoveryProtocol:
-        if self._proto is None:
-            # Must silence mypy here because we're accessing a private attribute of our manager.
-            nursery = self.manager._task_nursery  # type: ignore
-            self._proto = PreferredNodeDiscoveryProtocol(
-                self.privkey, self.address, nursery, self.socket, self.bootstrap_nodes,
-                self.preferred_nodes)
-        return self._proto
 
 
 class NodeTicketInfo:
