@@ -223,33 +223,33 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
             # Expected stderr logs
             {'Started main process'},
             # Unexpected stderr logs
-            {'DiscoveryProtocol  >>> ping'},
+            {'>>> ping'},
             # Expected file logs
             {'Started main process', 'Logging initialized'},
             # Unexpected file logs
-            {'DiscoveryProtocol  >>> ping'},
+            {'>>> ping'},
         ),
         (
             # Enable DEBUG2 logs across the board
             ('trinity', '-l=DEBUG2'),
-            {'Started main process', 'DiscoveryProtocol  >>> ping'},
+            {'Started main process', '>>> ping'},
             {},
-            {'Started main process', 'DiscoveryProtocol  >>> ping'},
+            {'Started main process', '>>> ping'},
             {},
         ),
         (   # Enable DEBUG2 logs for everything except discovery which is reduced to ERROR logs
             ('trinity', '-l=DEBUG2', '-l', 'p2p.discovery=ERROR'),
             {'Started main process', 'ConnectionTrackerServer  Running task <coroutine object'},
-            {'DiscoveryProtocol  >>> ping'},
+            {'>>> ping'},
             {'Started main process', 'ConnectionTrackerServer  Running task <coroutine object'},
-            {'DiscoveryProtocol  >>> ping'},
+            {'>>> ping'},
         ),
         pytest.param(
             # Reduce stderr logging to ERROR logs but report DEBUG2 or higher for file logs
             ('trinity', '--stderr-log-level=ERROR', '--file-log-level=DEBUG2',),
             {},
-            {'Started main process', 'DiscoveryProtocol  >>> ping'},
-            {'Started main process', 'DiscoveryProtocol  >>> ping'},
+            {'Started main process', '>>> ping'},
+            {'Started main process', '>>> ping'},
             {},
             # TODO: investigate in #1347
             marks=(pytest.mark.xfail),
@@ -257,14 +257,14 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
         pytest.param(
             # Reduce everything to ERROR logs, except discovery that should report DEBUG2 or higher
             ('trinity', '-l=ERROR', '-l', 'p2p.discovery=DEBUG2'),
-            {'DiscoveryProtocol  >>> ping'},
+            {'>>> ping'},
             {'Started main process'},
             {},
             {},
             # Increasing per-module log level to a higher value than the general log level does
             # not yet work for file logging. Once https://github.com/ethereum/trinity/issues/689
             # is resolved, the following should work.
-            # {'DiscoveryProtocol  >>> ping'},
+            # {'>>> ping'},
             # {'Started main process'},
             # TODO: investigate in #1347
             marks=(pytest.mark.xfail),
@@ -295,7 +295,7 @@ async def test_logger_configuration(command,
         async for line in runner.stderr:
             if marker_seen_at != 0 and time.time() - marker_seen_at > 3:
                 break
-            if "DiscoveryProtocol" in line:
+            if "DiscoveryService" in line:
                 marker_seen_at = time.time()
                 stderr_logs.append(line)
             else:

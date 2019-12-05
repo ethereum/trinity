@@ -8,7 +8,6 @@ from .discovery import (  # noqa: F401
     AuthHeaderFactory,
     AuthHeaderPacketFactory,
     AuthTagPacketFactory,
-    DiscoveryProtocolFactory,
     EndpointFactory,
     WhoAreYouPacketFactory,
 )

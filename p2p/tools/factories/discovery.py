@@ -6,8 +6,6 @@ from typing import (
     Tuple,
 )
 
-import trio
-
 import factory
 
 from eth_keys import keys
@@ -15,14 +13,12 @@ from eth_keys import keys
 from eth_utils import (
     big_endian_to_int,
     int_to_big_endian,
-    keccak,
 )
 from eth_utils.toolz import (
     merge,
     reduce,
 )
 
-from p2p.discovery import DiscoveryProtocol
 from p2p.discv5.packets import (
     AuthHeader,
     AuthHeaderPacket,
@@ -65,29 +61,6 @@ from p2p.discv5.routing_table import (
 from p2p.discv5.typing import (
     NodeID,
 )
-from p2p.ecies import generate_privkey
-
-from p2p.kademlia import Address
-
-from .kademlia import AddressFactory
-
-
-class DiscoveryProtocolFactory(factory.Factory):
-    class Meta:
-        model = DiscoveryProtocol
-
-    privkey = factory.LazyFunction(generate_privkey)
-    address = factory.SubFactory(AddressFactory)
-    nursery = trio.open_nursery()
-    socket = None
-    bootstrap_nodes = factory.LazyFunction(tuple)
-
-    @classmethod
-    def from_seed(cls, seed: bytes, *args: Any, **kwargs: Any) -> DiscoveryProtocol:
-        privkey = keys.PrivateKey(keccak(seed))
-        if 'socket' in kwargs:
-            kwargs['address'] = Address(*kwargs['socket'].getsockname())
-        return cls(*args, privkey=privkey, **kwargs)
 
 
 class AuthTagPacketFactory(factory.Factory):

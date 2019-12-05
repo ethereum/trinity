@@ -48,8 +48,10 @@ def _test() -> None:
     )
 
     async def run() -> None:
+        socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
+        await socket.bind(('0.0.0.0', listen_port))
         async with TrioEndpoint.serve(networking_connection_config) as endpoint:
-            service = DiscoveryService(privkey, addr, bootstrap_nodes, endpoint)
+            service = DiscoveryService(privkey, addr, bootstrap_nodes, endpoint, socket)
             await TrioManager.run_service(service)
 
     trio.run(run)
