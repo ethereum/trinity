@@ -1,5 +1,5 @@
 FROM python:3.7
-
+# Set up code directory
 RUN mkdir -p /usr/src/app
 WORKDIR /usr/src/app
 
@@ -7,13 +7,12 @@ WORKDIR /usr/src/app
 RUN apt-get update
 RUN apt-get -y install libsnappy-dev gcc g++ cmake
 
-ARG GITREF=interop
-
 RUN git clone https://github.com/ethereum/trinity.git .
-RUN git checkout $GITREF
-RUN pip install -e .[dev] --no-cache-dir
+RUN pip install -e .[eth2-dev] --no-cache-dir
 RUN pip install -U trinity --no-cache-dir
+
+RUN echo "Type \`trinity-beacon\` to boot or \`trinity-beacon --help\` for an overview of commands"
 
 EXPOSE 30303 30303/udp
 # Trinity shutdowns aren't yet solid enough to avoid the fix-unclean-shutdown
-ENTRYPOINT trinity $EXTRA_OPTS fix-unclean-shutdown && trinity-beacon $EXTRA_OPTS
+ENTRYPOINT ["trinity-beacon"]
