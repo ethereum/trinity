@@ -9,8 +9,8 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.tools.builder.aggregator import (
     TARGET_AGGREGATORS_PER_COMMITTEE,
     get_aggregate_from_valid_committee_attestations,
+    get_slot_signature,
     is_aggregator,
-    slot_signature,
 )
 from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
@@ -34,7 +34,9 @@ def test_aggregator_selection(validator_count, privkeys, genesis_state, config):
         aggregator_count = 0
         for index in range(validator_count):
             if index in committee:
-                signature = slot_signature(genesis_state, slot, privkeys[index], config)
+                signature = get_slot_signature(
+                    genesis_state, slot, privkeys[index], config
+                )
                 attester_is_aggregator = is_aggregator(
                     state, slot, committee_index, signature, config
                 )
