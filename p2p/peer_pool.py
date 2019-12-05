@@ -469,7 +469,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         """
         peer = cast(BasePeer, peer)
         if peer.session in self.connected_nodes:
-            self.logger.debug(
+            self.logger.info(
                 "Removing %s from pool: local_reason=%s remote_reason=%s",
                 peer,
                 peer.p2p_api.local_disconnect_reason,
