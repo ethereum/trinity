@@ -33,8 +33,7 @@ HEADER_LEN = 16
 MAC_LEN = 16
 
 # The amount of seconds a connection can be idle.
-CONN_IDLE_TIMEOUT = 30
-
+CONN_IDLE_TIMEOUT = 3000
 # The amount of seconds a connection can be idle.
 HANDSHAKE_TIMEOUT = 10
 
