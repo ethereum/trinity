@@ -377,7 +377,7 @@ jobs:
     machine: true
     steps:
       - checkout
-      - run: docker build -t ethereum/trinity:test-build .
+      - run: docker build -t ethereum/trinity:test-build -f ./docker/Dockerfile .
       - run: docker run ethereum/trinity:test-build --help
 
 workflows:
