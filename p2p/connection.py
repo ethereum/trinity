@@ -220,6 +220,8 @@ class Connection(ConnectionAPI, BaseService):
         self._logics.pop(name)
 
     def has_logic(self, name: str) -> bool:
+        if self.is_closing:
+            raise PeerConnectionLost("Cannot look up subprotocol when connection is closing")
         return name in self._logics
 
     def get_logic(self, name: str, logic_type: Type[TLogic]) -> TLogic:
