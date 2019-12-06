@@ -493,6 +493,7 @@ def partial_speculative_execute(
     Get an argument-free function that will trigger missing state downloads,
     by executing all the transactions, in the context of the given header.
     """
+
     def _trigger_missing_state_downloads() -> None:
         vm = beam_chain.get_vm(header)
         unused_header = header.copy(gas_used=0)
@@ -510,6 +511,9 @@ def partial_speculative_execute(
                 preview_time,
                 exc,
             )
+        except BrokenPipeError:
+            vm.logger.info("Got BrokenPipeError while Beam Sync speculatively executed %s", header)
+            vm.logger.debug("BrokenPipeError trace for %s", header, exc_info=True)
         else:
             preview_time = t.elapsed
 

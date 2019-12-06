@@ -143,7 +143,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
         )
 
 
-async_fire_and_forget = async_suppress_exceptions(PeerConnectionLost, asyncio.TimeoutError)  # type: ignore  # noqa: E501
+async_fire_and_forget = async_suppress_exceptions(PeerConnectionLost, asyncio.TimeoutError)
 
 
 class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
