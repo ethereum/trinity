@@ -300,6 +300,7 @@ class BaseService(CancellableMixin, AsyncioServiceAPI):
     def cancel_nowait(self) -> None:
         if self.is_cancelled:
             self.logger.warning("Tried to cancel %s, but it was already cancelled", self)
+            self.logger.debug("Second cancellation of %s: stack trace", self, stack_info=True)
             return
         elif not self.is_running:
             raise ValidationError("Cannot cancel a service that has not been started")
