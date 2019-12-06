@@ -80,6 +80,12 @@ class Connection(ConnectionAPI, BaseService):
 
         self._logics = {}
 
+    def __str__(self) -> str:
+        return f"Connection-{self.session}"
+
+    def __repr__(self) -> str:
+        return f"<Connection {self.session!r} {self._multiplexer!r} dial_out={self.is_dial_out}>"
+
     def start_protocol_streams(self) -> None:
         self._handlers_ready.set()
 
@@ -214,6 +220,8 @@ class Connection(ConnectionAPI, BaseService):
         self._logics.pop(name)
 
     def has_logic(self, name: str) -> bool:
+        if self.is_closing:
+            raise PeerConnectionLost("Cannot look up subprotocol when connection is closing")
         return name in self._logics
 
     def get_logic(self, name: str, logic_type: Type[TLogic]) -> TLogic:
