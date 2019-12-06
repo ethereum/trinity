@@ -27,6 +27,7 @@ from eth_typing import (
 from eth_utils import (
     ValidationError,
     get_extended_debug_logger,
+    humanize_seconds,
 )
 import rlp
 
@@ -442,7 +443,11 @@ class HeaderOnlyPersist(BaseService):
             self._force_end_block_number = tip.block_number + 1
             self.logger.info("Tip is recent enough, syncing from last synced header at %s", tip)
         else:
-            self.logger.warning("Tip %s is too far behind to Beam Sync, skipping ahead...", tip)
+            self.logger.warning(
+                "Tip %s is too far behind (%s) to resume Beam Sync, skipping ahead...",
+                tip,
+                humanize_seconds(time.time() - tip.timestamp),
+            )
 
         await self.wait(self._persist_headers())
 
@@ -464,10 +469,11 @@ class HeaderOnlyPersist(BaseService):
             head = await self.wait(self._db.coro_get_canonical_head())
 
             self.logger.info(
-                "Imported %d headers in %0.2f seconds, new head: %s",
+                "Imported %d headers in %0.2f seconds, new head: %s, lag: %s",
                 len(headers),
                 timer.elapsed,
                 head,
+                humanize_seconds(time.time() - head.timestamp),
             )
             self.logger.debug(
                 "Header import details: %s..%s, old canon: %s..%s, new canon: %s..%s",
@@ -596,7 +602,12 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
     async def import_block(
             self,
             block: BaseBlock) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
-        self.logger.info("Beam importing %s (%d txns) ...", block.header, len(block.transactions))
+        self.logger.info(
+            "Beam importing %s (%d txns) lag %s ...",
+            block.header,
+            len(block.transactions),
+            humanize_seconds(time.time() - block.header.timestamp),
+        )
 
         self.run_task(self._load_witness_hashes(block.header, urgent=True))
 
