@@ -522,11 +522,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                     humanize_seconds(peer.uptime),
                     peer.received_msgs_count,
                 )
-                self.logger.debug(
-                    "client_version_string='%s'",
-                    peer.p2p_api.safe_client_version_string,
-                )
                 try:
+                    self.logger.debug(
+                        "client_version_string='%s'",
+                        peer.p2p_api.safe_client_version_string,
+                    )
+
                     for line in peer.get_extra_stats():
                         self.logger.debug("    %s", line)
                 except (UnknownAPI, PeerConnectionLost) as exc:
