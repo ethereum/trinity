@@ -81,7 +81,7 @@ class Connection(ConnectionAPI, BaseService):
         self._logics = {}
 
     def __str__(self) -> str:
-        return f"Connection-{self.session}"
+        return f"Connection-{self.session}-{self._multiplexer}"
 
     def __repr__(self) -> str:
         return f"<Connection {self.session!r} {self._multiplexer!r} dial_out={self.is_dial_out}>"

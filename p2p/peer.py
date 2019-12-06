@@ -179,10 +179,10 @@ class BasePeer(BaseService):
         return NoopConnectionTracker()
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__} {self.sub_proto} {self.session}"
+        return f"{self.__class__.__name__}-{self.sub_proto}-{self.connection}"
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__} {self.sub_proto!r} {self.session!r}"
+        return f"<{self.__class__.__name__} {self.sub_proto!r} {self.connection!r}>"
 
     #
     # Proxy Transport attributes
