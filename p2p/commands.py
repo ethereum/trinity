@@ -59,9 +59,12 @@ class RLPCodec(SerializationCodecAPI[TCommandPayload]):
         return rlp.encode(self._process_outbound_payload_fn(payload), sedes=self.sedes)
 
     def decode(self, data: bytes) -> TCommandPayload:
-        return self._process_inbound_payload_fn(
-            rlp.decode(data, strict=self.decode_strict, sedes=self.sedes, recursive_cache=True)
-        )
+        try:
+            return self._process_inbound_payload_fn(
+                rlp.decode(data, strict=self.decode_strict, sedes=self.sedes, recursive_cache=True)
+            )
+        except rlp.DecodingError as err:
+            raise MalformedMessage from err
 
 
 #

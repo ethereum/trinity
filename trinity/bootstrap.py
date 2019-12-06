@@ -246,17 +246,21 @@ def main_entry(trinity_boot: BootFn,
         try:
             loop.add_signal_handler(
                 signal.SIGTERM,
-                manager.cancel,
+                component_manager_service.shutdown,
+                'SIGTERM',
             )
             loop.add_signal_handler(
                 signal.SIGINT,
-                manager.cancel,
+                component_manager_service.shutdown,
+                'CTRL+C',
             )
             loop.run_until_complete(manager.run())
+        except SystemExit:
+            raise
+        except BaseException as err:
+            kill_trinity_gracefully(trinity_config, logger, processes, f"Unknown: {err!r}")
+            raise
         finally:
-            manager.cancel()
-            kill_trinity_with_reason('who knows?')
-            loop.close()
             if trinity_config.trinity_tmp_root_dir:
                 shutil.rmtree(trinity_config.trinity_root_dir)
 
@@ -284,8 +288,9 @@ def kill_trinity_gracefully(trinity_config: TrinityConfig,
     # simply uses 'kill' to send a signal to the main process, but also because they will
     # perform a non-gracefull shutdown if the process takes too long to terminate.
 
-    hint = f"({reason})" if reason else f""
-    logger.info('Shutting down Trinity %s', hint)
+    hint = f" ({reason})" if reason else f""
+    logger.info('Shutting down Trinity%s', hint)
+
     for process in processes:
         # Our sub-processes will have received a SIGINT already (see comment above), so here we
         # wait 2s for them to finish cleanly, and if they fail we kill them for real.
@@ -296,4 +301,4 @@ def kill_trinity_gracefully(trinity_config: TrinityConfig,
 
     remove_dangling_ipc_files(logger, trinity_config.ipc_dir)
 
-    ArgumentParser().exit(message=f"Trinity shutdown complete {hint}\n")
+    ArgumentParser().exit(message=f"Trinity shutdown complete{hint}\n")

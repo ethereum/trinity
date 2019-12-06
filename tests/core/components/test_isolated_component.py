@@ -2,7 +2,10 @@ from argparse import Namespace
 import asyncio
 import logging
 import os
+from pathlib import Path
+import tempfile
 
+from async_service import background_asyncio_service
 import pytest
 
 from lahja import EndpointAPI, BaseEvent
@@ -19,27 +22,27 @@ from trinity.extensibility import AsyncioIsolatedComponent, ComponentManager
 
 
 class IsStarted(BaseEvent):
-    pass
-
-
-class GotCancellation(BaseEvent):
-    pass
+    def __init__(self, path):
+        self.path = path
 
 
 class AsyncioComponentService(BaseService):
+    touch_path = None
+
     def __init__(self, event_bus) -> None:
         super().__init__()
         self.event_bus = event_bus
 
     async def _run(self) -> None:
         self.logger.debug('Broadcasting `IsStarted`')
-        await self.event_bus.broadcast(IsStarted())
+        path = Path(tempfile.NamedTemporaryFile().name)
+        await self.event_bus.broadcast(IsStarted(path))
         try:
             self.logger.debug('Waiting for cancellation')
             await self.cancellation()
         finally:
-            self.logger.debug('Got cancellation: broadcasting `GotCancellation`')
-            await self.event_bus.broadcast(GotCancellation())
+            self.logger.debug('Got cancellation: touching `%s`', self.touch_path)
+            path.touch()
             self.logger.debug('EXITING')
 
 
@@ -99,16 +102,22 @@ async def test_asyncio_isolated_component(boot_info,
                                           log_listener):
     # Test the lifecycle management for isolated process components to be sure
     # they start and stop as expected
-    manager = ComponentManager(boot_info, (AsyncioComponentForTest,), lambda reason: None)
+    component_manager = ComponentManager(boot_info, (AsyncioComponentForTest,), lambda reason: None)
 
-    async with run_service(manager):
-        event_bus = await manager.get_event_bus()
+    async with background_asyncio_service(component_manager):
+        event_bus = await component_manager.get_event_bus()
 
-        got_started = asyncio.Event()
-        got_cancelled = asyncio.Event()
+        got_started = asyncio.Future()
 
-        event_bus.subscribe(IsStarted, lambda ev: got_started.set())
-        event_bus.subscribe(GotCancellation, lambda ev: got_cancelled.set())
+        event_bus.subscribe(IsStarted, lambda ev: got_started.set_result(ev.path))
 
-        await asyncio.wait_for(got_started.wait(), timeout=10)
-    await asyncio.wait_for(got_cancelled.wait(), timeout=10)
+        touch_path = await asyncio.wait_for(got_started, timeout=10)
+        assert not touch_path.exists()
+
+    for _ in range(1000):
+        if not touch_path.exists():
+            await asyncio.sleep(0.001)
+        else:
+            break
+    else:
+        assert touch_path.exists()

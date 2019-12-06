@@ -101,9 +101,12 @@ class ComponentManager(Service):
         except KeyboardInterrupt:
             pass
 
+    def shutdown(self, reason: str) -> None:
+        self._kill_trinity_fn(reason)
+
     async def _handle_shutdown_request(self) -> None:
         req = await self._endpoint.wait_for(ShutdownRequest)
-        self._kill_trinity_fn(req.reason)
+        self.shutdown(req.reason)
         self.manager.cancel()
 
     _available_endpoints: Tuple[ConnectionConfig, ...] = ()
