@@ -47,38 +47,41 @@ class AsyncioEventBusService(BaseService):
         return self._endpoint
 
     async def _run(self) -> None:
-        async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
-            self._endpoint = endpoint
+        try:
+            async with AsyncioEndpoint.serve(self._connection_config) as endpoint:
+                self._endpoint = endpoint
 
-            # run background task that automatically connects to newly announced endpoints
-            self.run_daemon_task(
-                _auto_connect_new_announced_endpoints(
-                    self._endpoint, self._new_available_endpoints(), self.logger,
+                # run background task that automatically connects to newly announced endpoints
+                self.run_daemon_task(
+                    _auto_connect_new_announced_endpoints(
+                        self._endpoint, self._new_available_endpoints(), self.logger,
+                    )
                 )
-            )
 
-            # connect to the *main* endpoint which communicates information
-            # about other endpoints that come online.
-            main_endpoint_config = ConnectionConfig.from_name(
-                MAIN_EVENTBUS_ENDPOINT, self._trinity_config.ipc_dir
-            )
-            await endpoint.connect_to_endpoints(main_endpoint_config)
+                # connect to the *main* endpoint which communicates information
+                # about other endpoints that come online.
+                main_endpoint_config = ConnectionConfig.from_name(
+                    MAIN_EVENTBUS_ENDPOINT, self._trinity_config.ipc_dir
+                )
+                await endpoint.connect_to_endpoints(main_endpoint_config)
 
-            # announce ourself to the event bus
-            await endpoint.wait_until_endpoint_subscribed_to(
-                main_endpoint_config.name,
-                EventBusConnected,
-            )
-            await endpoint.broadcast(
-                EventBusConnected(self._connection_config),
-                BroadcastConfig(filter_endpoint=main_endpoint_config.name)
-            )
+                # announce ourself to the event bus
+                await endpoint.wait_until_endpoint_subscribed_to(
+                    main_endpoint_config.name,
+                    EventBusConnected,
+                )
+                await endpoint.broadcast(
+                    EventBusConnected(self._connection_config),
+                    BroadcastConfig(filter_endpoint=main_endpoint_config.name)
+                )
 
-            # signal that the endpoint is now available
-            self._endpoint_available.set()
+                # signal that the endpoint is now available
+                self._endpoint_available.set()
 
-            # run until the endpoint exits
-            await self.cancellation()
+                # run until the endpoint exits
+                await self.cancellation()
+        except KeyboardInterrupt:
+            pass
 
     async def _new_available_endpoints(
         self

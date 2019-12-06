@@ -14,6 +14,8 @@ from typing import (
     Type,
 )
 
+from async_service import AsyncioManager
+
 from trinity.exceptions import (
     AmbigiousFileSystem,
     MissingPath,
@@ -224,32 +226,36 @@ def main_entry(trinity_boot: BootFn,
 
         processes = trinity_boot(boot_info)
 
-        async def kill_trinity_with_reason(reason: str) -> None:
-            await kill_trinity_gracefully(
+        loop = asyncio.get_event_loop()
+
+        def kill_trinity_with_reason(reason: str) -> None:
+            kill_trinity_gracefully(
                 trinity_config,
                 logger,
                 processes,
-                component_manager_service,
                 reason=reason
             )
 
         component_manager_service = ComponentManager(
             boot_info,
             runtime_component_types,
-            kill_trinity_with_reason
+            kill_trinity_with_reason,
         )
+        manager = AsyncioManager(component_manager_service)
 
         try:
-            loop = asyncio.get_event_loop()
-            task = asyncio.ensure_future(component_manager_service.run())
             loop.add_signal_handler(
                 signal.SIGTERM,
-                lambda: loop.run_until_complete(kill_trinity_with_reason("SIGTERM")),
+                manager.cancel,
             )
-            loop.run_until_complete(task)
-        except KeyboardInterrupt:
-            loop.run_until_complete(kill_trinity_with_reason("CTRL+C / Keyboard Interrupt"))
+            loop.add_signal_handler(
+                signal.SIGINT,
+                manager.cancel,
+            )
+            loop.run_until_complete(manager.run())
         finally:
+            manager.cancel()
+            kill_trinity_with_reason('who knows?')
             loop.close()
             if trinity_config.trinity_tmp_root_dir:
                 shutil.rmtree(trinity_config.trinity_root_dir)
@@ -263,11 +269,10 @@ def display_launch_logs(trinity_config: TrinityConfig) -> None:
     logger.info("Trinity DEBUG log file is created at %s", str(trinity_config.logfile_path))
 
 
-async def kill_trinity_gracefully(trinity_config: TrinityConfig,
-                                  logger: logging.Logger,
-                                  processes: Iterable[multiprocessing.Process],
-                                  component_manager_service: ComponentManager,
-                                  reason: str = None) -> None:
+def kill_trinity_gracefully(trinity_config: TrinityConfig,
+                            logger: logging.Logger,
+                            processes: Iterable[multiprocessing.Process],
+                            reason: str = None) -> None:
     # When a user hits Ctrl+C in the terminal, the SIGINT is sent to all processes in the
     # foreground *process group*, so both our networking and database processes will terminate
     # at the same time and not sequentially as we'd like. That shouldn't be a problem but if
@@ -281,7 +286,6 @@ async def kill_trinity_gracefully(trinity_config: TrinityConfig,
 
     hint = f"({reason})" if reason else f""
     logger.info('Shutting down Trinity %s', hint)
-    await component_manager_service.cancel()
     for process in processes:
         # Our sub-processes will have received a SIGINT already (see comment above), so here we
         # wait 2s for them to finish cleanly, and if they fail we kill them for real.
