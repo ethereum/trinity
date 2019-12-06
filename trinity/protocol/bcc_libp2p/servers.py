@@ -180,10 +180,13 @@ class BCCReceiveServer(BaseService):
                 topic = PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION.substitute(
                     subnet_id=str(subnet_id)
                 )
-                await self._handle_message(
-                    topic,
-                    self._handle_committee_beacon_attestation,
-                )
+                try:
+                    queue = self.topic_msg_queues[topic]
+                    message = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    continue
+                else:
+                    await self._handle_committee_beacon_attestation(message)
 
     async def _handle_aggregate_and_proof_loop(self) -> None:
         await self._handle_message(

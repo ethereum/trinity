@@ -54,7 +54,7 @@ def test_aggregator_selection(validator_count, privkeys, genesis_state, config):
     )
 
 
-def test_get_get_aggregate_from_valid_committee_attestations(
+def test_get_aggregate_from_valid_committee_attestations(
     sample_attestation_params, privkeys, genesis_state, config
 ):
     committee_size = 16

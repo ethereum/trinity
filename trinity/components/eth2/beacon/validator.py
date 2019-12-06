@@ -441,6 +441,10 @@ class Validator(BaseService):
             self.import_attestation(attestation)
             await self.p2p_node.broadcast_attestation_to_subnet(attestation, subnet_id)
 
+            # Log the last epoch that the validator attested
+            for index in attesting_validators_indices:
+                self.latest_attested_epoch[index] = epoch
+
             attestations = attestations + (attestation,)
         # TODO: Aggregate attestations
 
