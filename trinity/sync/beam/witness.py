@@ -152,8 +152,20 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
             if task.node_hash not in self._db and task not in self._witness_node_tasks
         )
 
-        self.logger.warning("Triggering download for block %d:%s...", block_number, encode_hex(block_hash[:3]))
-        await self._witness_node_tasks.add(new_node_tasks)
+        if new_node_tasks:
+            self.logger.warning(
+                "Triggering download of %d nodes for block %d:%s...",
+                len(new_node_tasks),
+                block_number,
+                encode_hex(block_hash[:3]),
+            )
+            await self._witness_node_tasks.add(new_node_tasks)
+        else:
+            self.logger.warning(
+                "All witness data for is block %d:%s available, ignoring witness metadata",
+                block_number,
+                encode_hex(block_hash[:3]),
+            )
 
     def _get_node_hashes(self, block_hash: Hash32) -> Tuple[Hash32, ...]:
         # Potential future option when msg_queue stops working:
