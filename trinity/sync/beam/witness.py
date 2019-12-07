@@ -422,7 +422,7 @@ class WitnessBroadcaster(BaseService, PeerSubscriber):
             )
 
         for peer in eligible_peers:
-            self.logger.warning("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
+            self.logger.info("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
             try:
                 peer.fh_api.send_new_block_witness_hashes(block.hash, witness_hashes)
             except asyncio.TimeoutError as err:
