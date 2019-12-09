@@ -37,8 +37,6 @@ There are currently three different types of components that we'll all cover in 
 
 - Components that overtake and redefine the entire ``trinity`` command
 - Components that spawn their own new isolated process
-- Components that run in the shared `networking` process
-
 
 
 Components that redefine the Trinity process
@@ -55,7 +53,7 @@ subcommand ``attach`` is the more idiomatic approach and this type of component 
 to develop exactly that.
 
 We build this kind of component by subclassing from
-:class:`~trinity.extensibility.component.BaseMainProcessComponent`. A detailed example will follow soon.
+:class:`~trinity.extensibility.component.Application`. A detailed example will follow soon.
 
 
 Components that spawn their own new isolated process
@@ -85,67 +83,20 @@ We build this kind of component subclassing from
 The component lifecycle
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Components can be in one of the following status at a time:
+Components are run by the
+:class:`~trinity.extensibility.component_manager.ComponentManager` which is
+responsible for running and stopping components.
 
-- ``NOT_READY``
-- ``READY``
-- ``STARTED``
-- ``STOPPED``
+Each component is expected to implement
+:meth:`~trinity.extensibility.component.ComponentAPI.run` which must be a
+coroutine.
 
-The current status of a component is also reflected in the
-:meth:`~trinity.extensibility.component.BaseComponent.status` property.
-
-.. note::
-
-  Strictly speaking, there's also a special state that only applies to the
-  :class:`~trinity.extensibility.component.BaseMainProcessComponent` which comes into effect when such a
-  component hijacks the Trinity process entirely. That being said, in that case, the resulting process
-  is in fact something entirely different than Trinity and the whole component infrastruture doesn't
-  even continue to exist from the moment on where that component takes over the Trinity process. This
-  is why we do not list it as an actual state of the regular component lifecycle.
-
-Component state: ``NOT_READY``
-------------------------------
-
-Every component starts out being in the ``NOT_READY`` state. This state begins with the instantiation
-of the component and lasts until the :meth:`~trinity.extensibility.component.BaseComponent.on_ready` hook
-was called which happens as soon as the core infrastructure of Trinity is ready.
-
-Component state: ``READY``
---------------------------
-
-After Trinity has finished setting up the core infrastructure,
-:meth:`~trinity.extensibility.component.BaseComponent.on_ready` is called on each component. At
-this point the component has access to important information such as the parsed arguments or
-the :class:`~trinity.config.TrinityConfig`. It also has access to the central event bus
-via its :meth:`~trinity.extensibility.component.BaseComponent.event_bus` property which enables
-the component to communicate with other parts of the application including other components.
-
-Component state: ``STARTED``
-----------------------------
-
-A component is in the ``STARTED`` state after the
-:meth:`~trinity.extensibility.component.BaseComponent.start` method was called. Components call this method
-themselves whenever they want to start which may be based on some condition like Trinity being
-started with certain parameters or some event being propagated on the central event bus.
-
-.. note::
-  Calling :meth:`~trinity.extensibility.component.BaseComponent.start` while the component is in the
-  ``NOT_READY`` state or when it is already in ``STARTED`` will cause an exception to be raised.
-
-
-Component state: ``STOPPED``
-----------------------------
-
-A component is in the ``STOPPED`` state after the 
-:meth:`~trinity.extensibility.component.BaseComponent.stop` method was called and finished any tear down
-work.
 
 Defining components
 ~~~~~~~~~~~~~~~~~~~
 
 We define a component by deriving from either
-:class:`~trinity.extensibility.component.BaseMainProcessComponent` or
+:class:`~trinity.extensibility.component.Application` or
 :class:`~trinity.extensibility.asyncio.AsyncioIsolatedComponent` depending on the kind of component that we
 intend to write. For now, we'll stick to :class:`~trinity.extensibility.asyncio.AsyncioIsolatedComponent`
 which is the most commonly used component category.
@@ -165,7 +116,7 @@ Configuring Command Line Arguments
 More often than not we want to have control over if or when a component should start. Adding
 command-line arguments that are specific to such a component, which we then check, validate, and act
 on, is a good way to deal with that. Implementing
-:meth:`~trinity.extensibility.component.BaseComponent.configure_parser` enables us to do exactly that.
+:meth:`~trinity.extensibility.component.ComponentAPI.configure_parser` enables us to do exactly that.
 
 This method is called when Trinity starts and bootstraps the component system, in other words,
 **before** the start of any component. It is passed an :class:`~argparse.ArgumentParser` as well as a
@@ -187,80 +138,16 @@ its existence later.
   For a more advanced example, that also configures a subcommand, checkout the ``trinity attach``
   component.
 
-
-Defining a components starting point
-------------------------------------
-
-Every component needs to have a well defined starting point. The exact mechanics slightly differ
-in case of a :class:`~trinity.extensibility.component.BaseMainProcessComponent` but remain fairly similar
-for the other types of components which we'll be focussing on for now.
-
-Components need to implement the :meth:`~trinity.extensibility.component.BaseComponent.do_start` method
-to define their own bootstrapping logic. This logic may involve setting up event listeners, running
-code in a loop or any other kind of action.
-
-.. warning::
-
-  Technically, there's nothing preventing a component from performing starting logic in the
-  :meth:`~trinity.extensibility.component.BaseComponent.on_ready` hook. However, doing that is an anti
-  pattern as the component infrastructure won't know about the running component, can't propagate the
-  :class:`~trinity.extensibility.events.ComponentStartedEvent` and the component won't be properly shut
-  down with Trinity if the node closes.
-
-Let's assume we want to create a component that simply periodically prints out the number of connected
-peers.
-
-While it is absolutely possible to put this logic right into the component, the preferred way is to
-subclass :class:`~p2p.service.BaseService` and implement the core logic in such a standalone
-service.
-
-.. literalinclude:: ../../trinity-external-components/examples/peer_count_reporter/peer_count_reporter_component/component.py
-   :language: python
-   :pyobject: PeerCountReporter
-
-Then, the implementation of :meth:`~trinity.extensibility.asyncio.AsyncioIsolatedComponent.do_start` is
-only concerned about running the service on a fresh event loop.
-
-.. literalinclude:: ../../trinity-external-components/examples/peer_count_reporter/peer_count_reporter_component/component.py
-   :language: python
-   :pyobject: PeerCountReporterComponent.do_start
-
-If the example may seem unnecessarily complex, it should be noted that components can be implemented
-in many different ways, but this example follows a pattern that is considered best practice within
-the Trinity Code Base.
-
-Starting a component
---------------------
-
-As we've read in the previous section not all components should run at any point in time. In fact, the
-circumstances under which we want a component to begin its work may vary from component to component.
-
-We may want a component to only start running if:
-
-- a certain (combination) of command line arguments was given
-- another component or group of components started
-- a certain number of connected peers was exceeded / undershot
-- a certain block number was reached
-- ...
-
-Hence, to actually start a component, the component needs to invoke the
-:meth:`~trinity.extensibility.component.BaseComponent.start` method at any moment when it is in its
-``READY`` state. Let's assume a simple case in which we simply want to start the component if Trinity
-is started with the ``--report-peer-count`` flag.
-
-.. literalinclude:: ../../trinity-external-components/examples/peer_count_reporter/peer_count_reporter_component/component.py
-   :language: python
-   :pyobject: PeerCountReporterComponent.on_ready
-
-In case of a :class:`~trinity.extensibility.asyncio.AsyncioIsolatedComponent`, this will cause the
-:meth:`~trinity.extensibility.asyncio.AsyncioIsolatedComponent.do_start` method to run on an entirely
-separated, new process. In other cases
-:meth:`~trinity.extensibility.asyncio.AsyncioIsolatedComponent.do_start` will simply run in the same
-process as the component manager that the component is controlled by.
+Most CLI argument validation can happen within the standard library APIs
+exposed by ``argparse``.  If a component needs to do runtime validation it can
+do so via
+:meth:`~trinity.extensibility.component.BaseComponentAPI.validate_cli`.
+Convention here is to raise ``eth_utils.ValidationError`` if an error is
+encountered.
 
 
-Communication pattern
-~~~~~~~~~~~~~~~~~~~~~
+Communication Patterns
+----------------------
 
 For most components to be useful they need to be able to communicate with the rest of the application
 as well as other components. In addition to that, this kind of communication needs to work across
@@ -281,14 +168,11 @@ components to make use of them.
 For an event to be usable across processes it needs to be pickleable and in general should be a
 shallow Data Transfer Object (`DTO <https://en.wikipedia.org/wiki/Data_transfer_object>`_)
 
-Every component has access to the event bus via its
-:meth:`~trinity.extensibility.component.BaseComponent.event_bus` property and in fact we have already
-used it in the above example to get the current number of connected peers.
-
 .. note::
   This guide will soon cover communication through the event bus in more detail. For now, the
   `Lahja documentation <https://github.com/ethereum/lahja/blob/master/README.md>`_ gives us some
   more information about the available APIs and how to use them.
+
 
 Distributing components
 ~~~~~~~~~~~~~~~~~~~~~~~

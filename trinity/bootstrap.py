@@ -14,6 +14,8 @@ from typing import (
     Type,
 )
 
+from async_service import AsyncioManager
+
 from trinity.exceptions import (
     AmbigiousFileSystem,
     MissingPath,
@@ -31,9 +33,10 @@ from trinity.config import (
     BaseAppConfig,
     TrinityConfig,
 )
-from trinity.event_bus import ComponentManagerService
 from trinity.extensibility import (
-    BaseComponent,
+    BaseComponentAPI,
+    ComponentAPI,
+    ComponentManager,
 )
 from trinity.network_configurations import (
     PRECONFIGURED_NETWORKS,
@@ -48,9 +51,6 @@ from trinity._utils.logging import (
     setup_file_logging,
     setup_stderr_logging,
     IPCListener,
-)
-from trinity._utils.shutdown import (
-    exit_with_services,
 )
 from trinity._utils.version import (
     construct_trinity_client_identifier,
@@ -87,14 +87,14 @@ BootFn = Callable[[BootInfo], Tuple[multiprocessing.Process, ...]]
 
 def main_entry(trinity_boot: BootFn,
                app_identifier: str,
-               components: Tuple[Type[BaseComponent], ...],
+               component_types: Tuple[Type[BaseComponentAPI], ...],
                sub_configs: Sequence[Type[BaseAppConfig]]) -> None:
     if is_prerelease():
         # this modifies the asyncio logger, but will be overridden by any custom settings below
         enable_warnings_by_default()
 
-    for component_type in components:
-        component_type.configure_parser(parser, subparser)
+    for component_cls in component_types:
+        component_cls.configure_parser(parser, subparser)
 
     argcomplete.autocomplete(parser)
 
@@ -195,6 +195,18 @@ def main_entry(trinity_boot: BootFn,
         *logger_levels.values(),
     )
 
+    boot_info = BootInfo(
+        args=args,
+        trinity_config=trinity_config,
+        child_process_log_level=child_process_log_level,
+        logger_levels=logger_levels,
+        profile=bool(args.profile),
+    )
+
+    # Let the components do runtime validation
+    for component_cls in component_types:
+        component_cls.validate_cli(boot_info)
+
     # Components can provide a subcommand with a `func` which does then control
     # the entire process from here.
     if hasattr(args, 'func'):
@@ -204,41 +216,50 @@ def main_entry(trinity_boot: BootFn,
     if hasattr(args, 'munge_func'):
         args.munge_func(args, trinity_config)
 
+    runtime_component_types = tuple(
+        component_cls
+        for component_cls in component_types
+        if issubclass(component_cls, ComponentAPI)
+    )
+
     with log_listener.run(trinity_config.logging_ipc_path):
-        boot_info = BootInfo(
-            args=args,
-            trinity_config=trinity_config,
-            child_process_log_level=child_process_log_level,
-            logger_levels=logger_levels,
-            profile=bool(args.profile),
-        )
 
         processes = trinity_boot(boot_info)
+
+        loop = asyncio.get_event_loop()
 
         def kill_trinity_with_reason(reason: str) -> None:
             kill_trinity_gracefully(
                 trinity_config,
                 logger,
                 processes,
-                component_manager_service,
                 reason=reason
             )
 
-        component_manager_service = ComponentManagerService(
+        component_manager_service = ComponentManager(
             boot_info,
-            components,
-            kill_trinity_with_reason
+            runtime_component_types,
+            kill_trinity_with_reason,
         )
+        manager = AsyncioManager(component_manager_service)
 
         try:
-            loop = asyncio.get_event_loop()
-            asyncio.ensure_future(exit_with_services(component_manager_service))
-            asyncio.ensure_future(component_manager_service.run())
-            loop.add_signal_handler(signal.SIGTERM, lambda: kill_trinity_with_reason("SIGTERM"))
-            loop.run_forever()
-            loop.close()
-        except KeyboardInterrupt:
-            kill_trinity_with_reason("CTRL+C / Keyboard Interrupt")
+            loop.add_signal_handler(
+                signal.SIGTERM,
+                component_manager_service.shutdown,
+                'SIGTERM',
+            )
+            loop.add_signal_handler(
+                signal.SIGINT,
+                component_manager_service.shutdown,
+                'CTRL+C',
+            )
+            loop.run_until_complete(manager.run())
+        except SystemExit:
+            raise
+        except BaseException as err:
+            kill_trinity_gracefully(trinity_config, logger, processes, f"Unknown: {err!r}")
+            raise
         finally:
             if trinity_config.trinity_tmp_root_dir:
                 shutil.rmtree(trinity_config.trinity_root_dir)
@@ -255,7 +276,6 @@ def display_launch_logs(trinity_config: TrinityConfig) -> None:
 def kill_trinity_gracefully(trinity_config: TrinityConfig,
                             logger: logging.Logger,
                             processes: Iterable[multiprocessing.Process],
-                            component_manager_service: ComponentManagerService,
                             reason: str = None) -> None:
     # When a user hits Ctrl+C in the terminal, the SIGINT is sent to all processes in the
     # foreground *process group*, so both our networking and database processes will terminate
@@ -268,9 +288,9 @@ def kill_trinity_gracefully(trinity_config: TrinityConfig,
     # simply uses 'kill' to send a signal to the main process, but also because they will
     # perform a non-gracefull shutdown if the process takes too long to terminate.
 
-    hint = f"({reason})" if reason else f""
-    logger.info('Shutting down Trinity %s', hint)
-    component_manager_service.cancel_nowait()
+    hint = f" ({reason})" if reason else f""
+    logger.info('Shutting down Trinity%s', hint)
+
     for process in processes:
         # Our sub-processes will have received a SIGINT already (see comment above), so here we
         # wait 2s for them to finish cleanly, and if they fail we kill them for real.
@@ -281,4 +301,4 @@ def kill_trinity_gracefully(trinity_config: TrinityConfig,
 
     remove_dangling_ipc_files(logger, trinity_config.ipc_dir)
 
-    ArgumentParser().exit(message=f"Trinity shutdown complete {hint}\n")
+    ArgumentParser().exit(message=f"Trinity shutdown complete{hint}\n")

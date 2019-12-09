@@ -58,4 +58,4 @@ class BeamSyncService(BaseService):
             self.force_beam_block_number,
             token=self.cancel_token,
         )
-        await beam_syncer.run()
+        await self.wait(beam_syncer.run())

@@ -1,41 +1,83 @@
 from abc import abstractmethod
+import asyncio
+import logging
+import signal
 
 import trio
+from async_service import background_trio_service
 
-from lahja import TrioEndpoint
+from lahja import EndpointAPI, ConnectionConfig
 
-from async_service.trio import TrioManager
-
-from trinity.extensibility.events import ComponentStartedEvent
+from trinity._utils.ipc import kill_process_gracefully
+from trinity._utils.mp import ctx
+from trinity._utils.os import friendly_filename_or_url
+from trinity.boot_info import BootInfo
 
 from .component import BaseIsolatedComponent
+from .event_bus import TrioEventBusService
 
 
 class TrioIsolatedComponent(BaseIsolatedComponent):
-    _event_bus: TrioEndpoint = None
+    endpoint_name: str = None
+    main_endpoint_config: ConnectionConfig = None
 
-    @property
-    def event_bus(self) -> TrioEndpoint:
-        if self._event_bus is None:
-            raise AttributeError("Event bus is not available yet")
-        return self._event_bus
-
-    @abstractmethod
     async def run(self) -> None:
-        ...
+        """
+        Call chain is:
 
-    def _spawn_start(self) -> None:
-        async def _run() -> None:
-            from trinity.event_bus import TrioEventBusService
-            self._event_bus_service = TrioEventBusService(
-                self.boot_info.trinity_config,
-                self.normalized_name,
+        - multiprocessing.Process -> _run_process
+            * isolates to a new process
+        - _run_process -> run_process
+            * sets up subprocess logging
+        - run_process -> _do_run
+            * runs the event loop and transitions into async context
+        - _do_run -> do_run
+            * sets up event bus and then enters user function.
+        """
+        process = ctx.Process(
+            target=self._run_process,
+            args=(self._boot_info,),
+        )
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, process.start)
+        try:
+            await loop.run_in_executor(None, process.join)
+        finally:
+            kill_process_gracefully(
+                process,
+                logging.getLogger('trinity.extensibility.AsyncioIsolatedComponent'),
             )
-            async with trio.open_nursery() as nursery:
-                nursery.start_soon(TrioManager.run_service, self._event_bus_service)
-                await self._event_bus_service.wait_event_bus_available()
-                self._event_bus = self._event_bus_service.get_event_bus()
-                await self.event_bus.broadcast(ComponentStartedEvent(type(self)))
-                await self.run()
 
-        trio.run(_run)
+    @classmethod
+    def run_process(cls, boot_info: BootInfo) -> None:
+        try:
+            trio.run(cls._do_run, boot_info)
+        except KeyboardInterrupt:
+            pass
+
+    @classmethod
+    async def _do_run(cls, boot_info: BootInfo) -> None:
+        if cls.endpoint_name is None:
+            endpoint_name = friendly_filename_or_url(cls.name)
+        else:
+            endpoint_name = cls.endpoint_name
+        event_bus_service = TrioEventBusService(
+            boot_info.trinity_config,
+            endpoint_name,
+        )
+        with trio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signal_aiter:
+            async with background_trio_service(event_bus_service):
+                await event_bus_service.wait_event_bus_available()
+                event_bus = event_bus_service.get_event_bus()
+                async with trio.open_nursery() as nursery:
+                    nursery.start_soon(cls.do_run, boot_info, event_bus)
+                    async for sig in signal_aiter:
+                        nursery.cancel_scope.cancel()
+
+    @classmethod
+    @abstractmethod
+    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        """
+        This is where subclasses should override
+        """
+        ...

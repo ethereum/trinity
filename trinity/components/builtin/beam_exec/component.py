@@ -2,7 +2,9 @@ import asyncio
 
 from lahja import EndpointAPI
 
-from trinity._utils.shutdown import exit_with_services
+from p2p.service import run_service
+
+from trinity.boot_info import BootInfo
 from trinity.config import Eth1AppConfig
 from trinity.constants import SYNC_BEAM
 from trinity.db.manager import DBClient
@@ -26,27 +28,27 @@ class BeamChainExecutionComponent(AsyncioIsolatedComponent):
     """
     _beam_chain = None
 
+    name = "Beam Sync Chain Execution"
+
     @property
-    def name(self) -> str:
-        return "Beam Sync Chain Execution"
+    def is_enabled(self) -> bool:
+        return self._boot_info.args.sync_mode.upper() == SYNC_BEAM.upper()
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if self.boot_info.args.sync_mode.upper() == SYNC_BEAM.upper():
-            self.start()
-
-    def do_start(self) -> None:
-        trinity_config = self.boot_info.trinity_config
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        trinity_config = boot_info.trinity_config
         app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
 
-        self._beam_chain = make_pausing_beam_chain(
+        beam_chain = make_pausing_beam_chain(
             chain_config.vm_configuration,
             chain_config.chain_id,
             DBClient.connect(trinity_config.database_ipc_path),
-            self.event_bus,
-            self._loop,
+            event_bus,
+            loop=asyncio.get_event_loop(),
         )
 
-        import_server = BlockImportServer(self.event_bus, self._beam_chain)
-        asyncio.ensure_future(exit_with_services(import_server, self._event_bus_service))
-        asyncio.ensure_future(import_server.run())
+        import_server = BlockImportServer(event_bus, beam_chain)
+
+        async with run_service(import_server):
+            await import_server.cancellation()

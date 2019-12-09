@@ -1,5 +1,4 @@
 import os
-import asyncio
 import platform
 
 from argparse import (
@@ -7,18 +6,19 @@ from argparse import (
     _SubParsersAction,
 )
 
+from eth_utils import ValidationError
+
 from lahja.base import EndpointAPI
 
+from p2p.service import run_service
+
+from trinity.boot_info import BootInfo
 from trinity.constants import (
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID,
 )
-from trinity.events import ShutdownRequest
 from trinity.extensibility import (
     AsyncioIsolatedComponent,
-)
-from trinity._utils.shutdown import (
-    exit_with_services,
 )
 
 from trinity.components.builtin.ethstats.ethstats_service import (
@@ -31,19 +31,18 @@ DEFAULT_SERVERS_URLS = {
 }
 
 
+def get_default_server_url(network_id: int) -> str:
+    return DEFAULT_SERVERS_URLS.get(network_id, '')
+
+
 class EthstatsComponent(AsyncioIsolatedComponent):
+    name = 'ethstats'
+
     server_url: str
     server_secret: str
     stats_interval: int
     node_id: str
     node_contact: str
-
-    @property
-    def name(self) -> str:
-        return 'Ethstats'
-
-    def get_default_server_url(self) -> str:
-        return DEFAULT_SERVERS_URLS.get(self.boot_info.trinity_config.network_id, '')
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -81,52 +80,47 @@ class EthstatsComponent(AsyncioIsolatedComponent):
             default=10,
         )
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        args = self.boot_info.args
+    @classmethod
+    def validate_cli(cls, boot_info: BootInfo) -> None:
+        args = boot_info.args
 
         if not args.ethstats:
             return
 
-        if not (args.ethstats_server_url or self.get_default_server_url()):
-            self.logger.error(
+        network_id = boot_info.trinity_config.network_id
+
+        if not (args.ethstats_server_url or get_default_server_url(network_id)):
+            raise ValidationError(
                 'You must provide ethstats server url using the `--ethstats-server-url`'
             )
-            manager_eventbus.broadcast_nowait(ShutdownRequest("Missing EthStats Server URL"))
-            return
 
         if not args.ethstats_server_secret:
-            self.logger.error(
+            raise ValidationError(
                 'You must provide ethstats server secret using `--ethstats-server-secret`'
             )
-            manager_eventbus.broadcast_nowait(ShutdownRequest("Missing EthStats Server Secret"))
-            return
 
-        if (args.ethstats_server_url):
-            self.server_url = args.ethstats_server_url
+    @property
+    def is_enabled(self) -> bool:
+        return bool(self._boot_info.args.ethstats)
+
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        args = boot_info.args
+
+        if args.ethstats_server_url:
+            server_url = args.ethstats_server_url
         else:
-            self.server_url = self.get_default_server_url()
+            server_url = get_default_server_url(boot_info.trinity_config.network_id)
 
-        self.server_secret = args.ethstats_server_secret
-
-        self.node_id = args.ethstats_node_id
-        self.node_contact = args.ethstats_node_contact
-        self.stats_interval = args.ethstats_interval
-
-        self.start()
-
-    def do_start(self) -> None:
         service = EthstatsService(
-            self.boot_info,
-            self.event_bus,
-            self.server_url,
-            self.server_secret,
-            self.node_id,
-            self.node_contact,
-            self.stats_interval,
+            boot_info,
+            event_bus,
+            server_url,
+            args.ethstats_server_secret,
+            args.ethstats_node_id,
+            args.ethstats_node_contact,
+            args.ethstats_interval,
         )
 
-        asyncio.ensure_future(exit_with_services(
-            service,
-            self._event_bus_service,
-        ))
-        asyncio.ensure_future(service.run())
+        async with run_service(service):
+            await service.cancellation()

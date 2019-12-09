@@ -2,18 +2,26 @@ Component
 =========
 
 
-BaseComponent
--------------
+BaseComponentAPI
+----------------
 
-.. autoclass:: trinity.extensibility.component.BaseComponent
+.. autoclass:: trinity.extensibility.component.BaseComponentAPI
   :members:
 
 
-BaseMainProcessComponent
+Application
+-----------
+
+.. autoclass:: trinity.extensibility.component.Application
+  :members:
+
+
+ComponentAPI
 ------------------------
 
-.. autoclass:: trinity.extensibility.component.BaseMainProcessComponent
+.. autoclass:: trinity.extensibility.component.ComponentAPI
   :members:
+
 
 AsyncioIsolatedComponent
 ------------------------

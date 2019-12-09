@@ -7,16 +7,11 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
-import asyncio
-from logging import (
-    Logger,
-)
-from multiprocessing.managers import (
-    BaseManager,
-)
+import logging
 from typing import (
     cast,
     Iterable,
+    Tuple,
     Type,
 )
 
@@ -29,6 +24,9 @@ from eth_utils import (
     ValidationError,
 )
 
+from p2p.service import run_service
+
+from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
 )
@@ -53,7 +51,6 @@ from trinity.protocol.common.peer import (
     BasePeerPool,
 )
 from trinity.protocol.eth.peer import (
-    BaseChainPeerPool,
     ETHPeerPool,
 )
 from trinity.protocol.les.peer import (
@@ -67,9 +64,6 @@ from trinity.sync.beam.service import (
 )
 from trinity.sync.light.chain import (
     LightChainSyncer,
-)
-from trinity._utils.shutdown import (
-    exit_with_services,
 )
 from .cli import NormalizeCheckpointURI
 
@@ -99,7 +93,7 @@ class BaseSyncStrategy(ABC):
     @abstractmethod
     async def sync(self,
                    args: Namespace,
-                   logger: Logger,
+                   logger: logging.Logger,
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
@@ -120,7 +114,7 @@ class NoopSyncStrategy(BaseSyncStrategy):
 
     async def sync(self,
                    args: Namespace,
-                   logger: Logger,
+                   logger: logging.Logger,
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
@@ -138,7 +132,7 @@ class FullSyncStrategy(BaseSyncStrategy):
 
     async def sync(self,
                    args: Namespace,
-                   logger: Logger,
+                   logger: logging.Logger,
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
@@ -184,7 +178,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
 
     async def sync(self,
                    args: Namespace,
-                   logger: Logger,
+                   logger: logging.Logger,
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
@@ -213,7 +207,7 @@ class LightSyncStrategy(BaseSyncStrategy):
 
     async def sync(self,
                    args: Namespace,
-                   logger: Logger,
+                   logger: logging.Logger,
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
@@ -231,33 +225,27 @@ class LightSyncStrategy(BaseSyncStrategy):
 
 
 class SyncerComponent(AsyncioIsolatedComponent):
-    peer_pool: BaseChainPeerPool = None
-    cancel_token: CancelToken = None
-    chain: AsyncChainAPI = None
-    db_manager: BaseManager = None
-
-    active_strategy: BaseSyncStrategy = None
-    strategies: Iterable[BaseSyncStrategy] = (
+    default_strategy = BeamSyncStrategy()
+    strategies: Tuple[BaseSyncStrategy, ...] = (
         FullSyncStrategy(),
-        BeamSyncStrategy(),
+        default_strategy,
         LightSyncStrategy(),
         NoopSyncStrategy(),
     )
 
-    default_strategy = BeamSyncStrategy
+    name = "Sync / PeerPool"
+
+    endpoint_name = NETWORKING_EVENTBUS_ENDPOINT
+
+    logger = logging.getLogger('trinity.components.sync.Sync')
 
     @property
-    def name(self) -> str:
-        return "Sync / PeerPool"
-
-    @property
-    def normalized_name(self) -> str:
-        return NETWORKING_EVENTBUS_ENDPOINT
+    def is_enabled(self) -> bool:
+        return True
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
-
-        if cls.default_strategy not in cls.extract_strategy_types():
+        if type(cls.default_strategy) not in cls.extract_strategy_types():
             raise ValidationError(f"Default strategy {cls.default_strategy} not in strategies")
 
         for sync_strategy in cls.strategies:
@@ -272,6 +260,11 @@ class SyncerComponent(AsyncioIsolatedComponent):
         )
 
     @classmethod
+    def validate_cli(cls, boot_info: BootInfo) -> None:
+        # this will trigger a ValidationError if the specified strategy isn't known.
+        cls.get_active_strategy(boot_info)
+
+    @classmethod
     @to_tuple
     def extract_modes(cls) -> Iterable[str]:
         for strategy in cls.strategies:
@@ -283,50 +276,55 @@ class SyncerComponent(AsyncioIsolatedComponent):
         for strategy in cls.strategies:
             yield type(strategy)
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        for strategy in self.strategies:
-            if strategy.get_sync_mode().lower() == self.boot_info.args.sync_mode.lower():
-                if self.active_strategy is not None:
+    @classmethod
+    def get_active_strategy(cls, boot_info: BootInfo) -> BaseSyncStrategy:
+        active_strategy: BaseSyncStrategy = None
+
+        for strategy in cls.strategies:
+            if strategy.get_sync_mode().lower() == boot_info.args.sync_mode.lower():
+                if active_strategy is not None:
                     raise ValidationError(
-                        f"Ambiguous sync strategy. Both {self.active_strategy} and {strategy} apply"
+                        f"Ambiguous sync strategy. Both {active_strategy} and {strategy} apply"
                     )
-                self.active_strategy = strategy
+                active_strategy = strategy
 
-        if not self.active_strategy:
-            self.logger.warn(
-                "No sync strategy matches --sync-mode=%s",
-                self.boot_info.args.sync_mode
-            )
-            return
+        if active_strategy is None:
+            if boot_info.args.sync_mode is not None:
+                raise ValidationError(
+                    f"No matching sync mode for: --sync-mode={boot_info.args.sync_mode}"
+                )
+            return cls.default_strategy
+        else:
+            return active_strategy
 
-        self.start()
-
-    def do_start(self) -> None:
-
-        trinity_config = self.boot_info.trinity_config
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        trinity_config = boot_info.trinity_config
         NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
-        node = NodeClass(self.event_bus, trinity_config)
+        node = NodeClass(event_bus, trinity_config)
+        strategy = cls.get_active_strategy(boot_info)
 
-        asyncio.ensure_future(self.launch_sync(node))
+        async with run_service(node):
+            await cls.launch_sync(node, strategy, boot_info, event_bus)
+            await node.cancellation()
 
-        asyncio.ensure_future(exit_with_services(
-            node,
-            self._event_bus_service,
-        ))
-        asyncio.ensure_future(node.run())
-
-    async def launch_sync(self, node: Node[BasePeer]) -> None:
+    @classmethod
+    async def launch_sync(cls,
+                          node: Node[BasePeer],
+                          strategy: BaseSyncStrategy,
+                          boot_info: BootInfo,
+                          event_bus: EndpointAPI) -> None:
         await node.events.started.wait()
-        await self.active_strategy.sync(
-            self.boot_info.args,
-            self.logger,
+        await strategy.sync(
+            boot_info.args,
+            cls.logger,
             node.get_chain(),
             node.base_db,
             node.get_peer_pool(),
-            self.event_bus,
+            event_bus,
             node.cancel_token
         )
 
-        if self.active_strategy.shutdown_node_on_halt:
-            self.logger.error("Sync ended unexpectedly. Shutting down trinity")
-            await self.event_bus.broadcast(ShutdownRequest("Sync ended unexpectedly"))
+        if strategy.shutdown_node_on_halt:
+            cls.logger.error("Sync ended unexpectedly. Shutting down trinity")
+            await event_bus.broadcast(ShutdownRequest("Sync ended unexpectedly"))

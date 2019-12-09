@@ -484,7 +484,7 @@ class FastChainSyncer(BaseService):
         self.run_daemon(self._header_syncer)
         await self._body_syncer.run()
         # The body syncer will exit when the body for the target header hash has been persisted
-        self._header_syncer.cancel_nowait()
+        await self._header_syncer.cancel()
 
 
 @enum.unique

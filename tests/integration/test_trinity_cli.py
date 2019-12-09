@@ -62,7 +62,8 @@ async def test_expected_logs_for_full_mode(command, unused_tcp_port):
     async with AsyncProcessRunner.run(command, timeout_sec=120) as runner:
         assert await contains_all(runner.stderr, {
             "Started DB server process",
-            "Component started: Sync / PeerPool",
+            "Starting components",
+            "Components started",
             "Running Tx Pool",
             "Running server",
             "IPC started at",
@@ -84,8 +85,8 @@ async def test_expected_logs_for_full_mode_with_txpool_disabled(command, unused_
     async with AsyncProcessRunner.run(command, timeout_sec=120) as runner:
         assert await contains_all(runner.stderr, {
             "Started DB server process",
-            "Component started: Sync / PeerPool",
-            "Transaction pool disabled",
+            "Starting components",
+            "Components started",
             "Running server",
             "IPC started at",
         })
@@ -106,8 +107,8 @@ async def test_expected_logs_with_disabled_txpool(command, unused_tcp_port):
     async with AsyncProcessRunner.run(command, timeout_sec=120) as runner:
         assert await contains_all(runner.stderr, {
             "Started DB server process",
-            "Component started: Sync / PeerPool",
-            "Transaction pool disabled.  Not supported in light mode.",
+            "Starting components",
+            "Components started",
         })
 
 
@@ -123,7 +124,8 @@ async def test_expected_logs_for_light_mode(command):
     async with AsyncProcessRunner.run(command, timeout_sec=40) as runner:
         assert await contains_all(runner.stderr, {
             "Started DB server process",
-            "Component started: Sync / PeerPool",
+            "Starting components",
+            "Components started",
             "IPC started at",
         })
 
@@ -141,6 +143,7 @@ async def test_expected_logs_for_light_mode(command):
                 # make up this replacement marker
                 '--data-dir={trinity_root_path}/devnet',
                 '--network-id=5',
+                '--disable-tx-pool',
                 '--log-level=DEBUG',
             ), 5, '0x065fd78e53dcef113bf9d7732dac7c5132dcf85c9588a454d832722ceb097422'),
     )
@@ -166,9 +169,9 @@ async def test_web3_commands_via_attached_console(command,
     async with AsyncProcessRunner.run(command, timeout_sec=120) as runner:
         assert await contains_all(runner.stderr, {
             "Started DB server process",
-            "Component started: Sync / PeerPool",
+            "Starting components",
+            "Components started",
             "IPC started at",
-            "Component started: JSON-RPC API",
             # Ensure we do not start making requests before Trinity is ready.
             # Waiting for the json-rpc-api event bus to connect to other endpoints
             # seems to be late enough in the process for this to be the case.

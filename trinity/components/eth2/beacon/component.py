@@ -2,27 +2,24 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-import os
 import asyncio
-from typing import (
-    cast,
-)
+import logging
+import os
+from typing import cast
 
+from async_exit_stack import AsyncExitStack
 from lahja import EndpointAPI
-
 
 from libp2p.crypto.keys import KeyPair
 from libp2p.crypto.secp256k1 import create_new_key_pair, Secp256k1PrivateKey
 
 from eth_utils import decode_hex
 
-from eth2.beacon.typing import (
-    ValidatorIndex,
-)
+from eth2.beacon.typing import ValidatorIndex
 
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
+from p2p.service import run_service
+
+from trinity.boot_info import BootInfo
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
 from trinity.extensibility import AsyncioIsolatedComponent
@@ -44,10 +41,9 @@ from trinity.sync.common.chain import (
 
 
 class BeaconNodeComponent(AsyncioIsolatedComponent):
+    name = "Beacon Node"
 
-    @property
-    def name(self) -> str:
-        return "Beacon Node"
+    logger = logging.getLogger('trinity.components.beacon.BeaconNode')
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
@@ -64,19 +60,20 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             help="0xabcd",
         )
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if self.boot_info.trinity_config.has_app_config(BeaconAppConfig):
-            self.start()
+    @property
+    def is_enabled(self) -> bool:
+        return self._boot_info.trinity_config.has_app_config(BeaconAppConfig)
 
-    def _load_or_create_node_key(self) -> KeyPair:
-        if self.boot_info.args.beacon_nodekey:
+    @classmethod
+    def _load_or_create_node_key(cls, boot_info: BootInfo) -> KeyPair:
+        if boot_info.args.beacon_nodekey:
             privkey = Secp256k1PrivateKey.new(
-                decode_hex(self.boot_info.args.beacon_nodekey)
+                decode_hex(boot_info.args.beacon_nodekey)
             )
             key_pair = KeyPair(private_key=privkey, public_key=privkey.get_public_key())
             return key_pair
         else:
-            config = self.boot_info.trinity_config
+            config = boot_info.trinity_config
             beacon_nodekey_path = f"{config.nodekey_path}-beacon"
             if os.path.isfile(beacon_nodekey_path):
                 with open(beacon_nodekey_path, "rb") as f:
@@ -94,9 +91,10 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                     f.write(private_key_bytes)
                 return key_pair
 
-    def do_start(self) -> None:
-        trinity_config = self.boot_info.trinity_config
-        key_pair = self._load_or_create_node_key()
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        trinity_config = boot_info.trinity_config
+        key_pair = cls._load_or_create_node_key(boot_info)
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         base_db = DBClient.connect(trinity_config.database_ipc_path)
         chain_config = beacon_app_config.get_chain_config()
@@ -109,7 +107,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
         libp2p_node = Node(
             key_pair=key_pair,
             listen_ip="127.0.0.1",  # FIXME: Should be configurable
-            listen_port=self.boot_info.args.port,
+            listen_port=boot_info.args.port,
             preferred_nodes=trinity_config.preferred_nodes,
             chain=chain,
         )
@@ -130,7 +128,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             try:
                 validator_index = cast(ValidatorIndex, registry_pubkeys.index(pubkey))
             except ValueError:
-                self.logger.error(f'Could not find pubkey {pubkey.hex()} in genesis state')
+                cls.logger.error(f'Could not find pubkey {pubkey.hex()} in genesis state')
                 raise
             validator_privkeys[validator_index] = validator_keymap[pubkey]
 
@@ -138,7 +136,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             chain=chain,
             p2p_node=libp2p_node,
             validator_privkeys=validator_privkeys,
-            event_bus=self.event_bus,
+            event_bus=event_bus,
             token=libp2p_node.cancel_token,
             get_ready_attestations_fn=receive_server.get_ready_attestations,
         )
@@ -147,7 +145,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             genesis_slot=chain_config.genesis_config.GENESIS_SLOT,
             genesis_time=chain_config.genesis_data.genesis_time,
             seconds_per_slot=chain_config.genesis_config.SECONDS_PER_SLOT,
-            event_bus=self.event_bus,
+            event_bus=event_bus,
             token=libp2p_node.cancel_token,
         )
 
@@ -163,16 +161,13 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
 
         )
 
-        asyncio.ensure_future(exit_with_services(
-            self._event_bus_service,
-            libp2p_node,
-            receive_server,
-            slot_ticker,
-            validator,
-            syncer,
-        ))
-        asyncio.ensure_future(libp2p_node.run())
-        asyncio.ensure_future(receive_server.run())
-        asyncio.ensure_future(slot_ticker.run())
-        asyncio.ensure_future(validator.run())
-        asyncio.ensure_future(syncer.run())
+        services = (libp2p_node, receive_server, slot_ticker, validator, syncer)
+
+        async with AsyncExitStack() as stack:
+            for service in services:
+                await stack.enter_async_context(run_service(service))
+
+            await asyncio.gather(*(
+                service.cancellation()
+                for service in services
+            ))

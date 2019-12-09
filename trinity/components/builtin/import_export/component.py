@@ -3,7 +3,9 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
+import logging
 import pathlib
+
 import rlp
 
 from eth_utils import ValidationError
@@ -19,9 +21,7 @@ from trinity.config import (
     Eth1AppConfig,
     TrinityConfig,
 )
-from trinity.extensibility import (
-    BaseMainProcessComponent,
-)
+from trinity.extensibility import Application
 from trinity.initialization import (
     ensure_eth1_dirs,
     initialize_database,
@@ -43,14 +43,11 @@ def get_chain(trinity_config: TrinityConfig) -> ChainAPI:
     return chain
 
 
-class ImportBlockComponent(BaseMainProcessComponent):
+class ImportBlockComponent(Application):
     """
     Import blocks an RLP encoded file.
     """
-
-    @property
-    def name(self) -> str:
-        return "Import"
+    logger = logging.getLogger('trinity.components.BlockImport')
 
     @classmethod
     def configure_parser(cls,
@@ -72,8 +69,6 @@ class ImportBlockComponent(BaseMainProcessComponent):
 
     @classmethod
     def run_import(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        logger = cls.get_logger()
-
         with open(args.file_path, 'rb') as import_file:
             # This won't handle large files.
             # TODO: Make this stream based: https://github.com/ethereum/trinity/issues/1282
@@ -81,7 +76,7 @@ class ImportBlockComponent(BaseMainProcessComponent):
 
         blocks = decode_all(file_bytes, sedes=FrontierBlock)
 
-        logger.info("Importing %s blocks", len(blocks))
+        cls.logger.info("Importing %s blocks", len(blocks))
 
         chain = get_chain(trinity_config)
 
@@ -89,20 +84,17 @@ class ImportBlockComponent(BaseMainProcessComponent):
             try:
                 chain.import_block(block)
             except (EVMMissingData, ValidationError) as exc:
-                logger.error(exc)
-                logger.error("Import failed")
+                cls.logger.error(exc)
+                cls.logger.error("Import failed")
             else:
-                logger.info("Successfully imported %s", block)
+                cls.logger.info("Successfully imported %s", block)
 
 
-class ExportBlockComponent(BaseMainProcessComponent):
+class ExportBlockComponent(Application):
     """
     Export blocks to an RLP encoded file.
     """
-
-    @property
-    def name(self) -> str:
-        return "Export"
+    logger = logging.getLogger('trinity.components.BlockExport')
 
     @classmethod
     def configure_parser(cls,
@@ -142,21 +134,19 @@ class ExportBlockComponent(BaseMainProcessComponent):
 
     @classmethod
     def run_export(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        logger = cls.get_logger()
-
         chain = get_chain(trinity_config)
         try:
             block = chain.get_canonical_block_by_number(args.block_number)
         except HeaderNotFound:
-            logger.error("Block number %s does not exist in the database", args.block_number)
+            cls.logger.error("Block number %s does not exist in the database", args.block_number)
             return
 
-        logger.info("Exporting %s", block)
+        cls.logger.info("Exporting %s", block)
 
         block_bytes = rlp.encode(block)
 
         if args.file_path.exists() and not (args.append or args.overwrite):
-            logger.error(
+            cls.logger.error(
                 "%s does exist. Must use `--append` or `--overwrite` to proceed.", args.file_path
             )
             return
@@ -168,9 +158,9 @@ class ExportBlockComponent(BaseMainProcessComponent):
 
         write_mode = 'w+b' if not args.append else 'a+b'
 
-        logger.info("Writing %s bytes to %s", len(block_bytes), args.file_path)
+        cls.logger.info("Writing %s bytes to %s", len(block_bytes), args.file_path)
 
         with open(args.file_path, write_mode) as export_file:
             export_file.write(block_bytes)
 
-        logger.info("Successfully exported %s", block)
+        cls.logger.info("Successfully exported %s", block)

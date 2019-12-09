@@ -118,7 +118,7 @@ class IPCSocketServer(ABC):
             # https://stackoverflow.com/questions/6380057/python-binding-socket-address-already-in-use
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(str(ipc_path))
-            sock.listen(1)
+            sock.listen(10)
 
             self._started.set()
 

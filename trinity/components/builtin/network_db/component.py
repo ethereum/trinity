@@ -1,31 +1,26 @@
-import asyncio
 from argparse import (
     Namespace,
     ArgumentParser,
     _SubParsersAction,
 )
-from typing import Iterable
+import asyncio
+import logging
+from typing import ClassVar, Iterable
 
+from async_exit_stack import AsyncExitStack
+from eth_utils import ValidationError, to_tuple
 from lahja import EndpointAPI
-
 from sqlalchemy.orm import Session
 
-from eth_utils import to_tuple
-
-from p2p.service import BaseService
+from p2p.service import BaseService, run_service
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
 )
 
-from trinity._utils.shutdown import (
-    exit_with_services,
-)
-from trinity.config import (
-    TrinityConfig,
-)
+from trinity.boot_info import BootInfo
+from trinity.config import TrinityConfig
 from trinity.db.orm import get_tracking_database
-from trinity.events import ShutdownRequest
 from trinity.extensibility import (
     AsyncioIsolatedComponent,
 )
@@ -53,13 +48,15 @@ from .eth1_peer_db.tracker import (
 
 
 class NetworkDBComponent(AsyncioIsolatedComponent):
-    @property
-    def name(self) -> str:
-        return "Network Database"
+    name = "Network Database"
+
+    endpoint_name = "network-db"
+
+    logger = logging.getLogger('trinity.components.network_db.NetworkDB')
 
     @property
-    def normalized_name(self) -> str:
-        return "network-db"
+    def is_enabled(self) -> bool:
+        return not self._boot_info.args.disable_networkdb_component
 
     @classmethod
     def configure_parser(cls,
@@ -121,49 +118,43 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         )
         remove_db_parser.set_defaults(func=cls.clear_node_db)
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if self.boot_info.args.disable_networkdb_component:
-            self.logger.warning("Network Database disabled via CLI flag")
-            # Allow this component to be disabled for extreme cases such as the
-            # user swapping in an equivalent experimental version.
-            return
-        else:
-            try:
-                get_tracking_database(get_networkdb_path(self.boot_info.trinity_config))
-            except BadDatabaseError as err:
-                manager_eventbus.broadcast_nowait(ShutdownRequest(
-                    "Error loading network database.  Trying removing database "
-                    f"with `remove-network-db` command:\n{err}"
-                ))
-            else:
-                self.start()
+    @classmethod
+    def validate_cli(cls, boot_info: BootInfo) -> None:
+        try:
+            get_tracking_database(get_networkdb_path(boot_info.trinity_config))
+        except BadDatabaseError as err:
+            raise ValidationError(
+                "Error loading network database.  Trying removing database "
+                f"with `remove-network-db` command:\n{err}"
+            ) from err
 
     @classmethod
     def clear_node_db(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
-        logger = cls.get_logger()
         db_path = get_networkdb_path(trinity_config)
 
         if db_path.exists():
-            logger.info("Removing network database at: %s", db_path.resolve())
+            cls.logger.info("Removing network database at: %s", db_path.resolve())
             db_path.unlink()
         else:
-            logger.info("No network database found at: %s", db_path.resolve())
+            cls.logger.info("No network database found at: %s", db_path.resolve())
 
-    _session: Session = None
+    _session: ClassVar[Session] = None
 
-    def _get_database_session(self) -> Session:
-        if self._session is None:
-            self._session = get_tracking_database(get_networkdb_path(self.boot_info.trinity_config))
-        return self._session
+    @classmethod
+    def _get_database_session(cls, boot_info: BootInfo) -> Session:
+        if cls._session is None:
+            cls._session = get_tracking_database(get_networkdb_path(boot_info.trinity_config))
+        return cls._session
 
     #
     # Blacklist Server
     #
-    def _get_blacklist_tracker(self) -> BaseConnectionTracker:
-        backend = self.boot_info.args.network_tracking_backend
+    @classmethod
+    def _get_blacklist_tracker(cls, boot_info: BootInfo) -> BaseConnectionTracker:
+        backend = boot_info.args.network_tracking_backend
 
         if backend is TrackingBackend.SQLITE3:
-            session = self._get_database_session()
+            session = cls._get_database_session(boot_info)
             return SQLiteConnectionTracker(session)
         elif backend is TrackingBackend.MEMORY:
             return MemoryConnectionTracker()
@@ -172,24 +163,28 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         else:
             raise Exception(f"INVARIANT: {backend}")
 
-    def _get_blacklist_service(self) -> ConnectionTrackerServer:
-        tracker = self._get_blacklist_tracker()
+    @classmethod
+    def _get_blacklist_service(cls,
+                               boot_info: BootInfo,
+                               event_bus: EndpointAPI) -> ConnectionTrackerServer:
+        tracker = cls._get_blacklist_tracker(boot_info)
         return ConnectionTrackerServer(
-            event_bus=self.event_bus,
+            event_bus=event_bus,
             tracker=tracker,
         )
 
     #
     # Eth1 Peer Server
     #
-    def _get_eth1_tracker(self) -> BaseEth1PeerTracker:
-        if not self.boot_info.args.enable_experimental_eth1_peer_tracking:
+    @classmethod
+    def _get_eth1_tracker(cls, boot_info: BootInfo) -> BaseEth1PeerTracker:
+        if not boot_info.args.enable_experimental_eth1_peer_tracking:
             return NoopEth1PeerTracker()
 
-        backend = self.boot_info.args.network_tracking_backend
+        backend = boot_info.args.network_tracking_backend
 
         if backend is TrackingBackend.SQLITE3:
-            session = self._get_database_session()
+            session = cls._get_database_session(boot_info)
 
             # TODO: correctly determine protocols and versions
             protocols = ('eth',)
@@ -198,7 +193,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
             # TODO: get genesis_hash
             return SQLiteEth1PeerTracker(
                 session,
-                network_id=self.boot_info.trinity_config.network_id,
+                network_id=boot_info.trinity_config.network_id,
                 protocols=protocols,
                 protocol_versions=protocol_versions,
             )
@@ -209,40 +204,46 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         else:
             raise Exception(f"INVARIANT: {backend}")
 
-    def _get_eth1_peer_server(self) -> PeerDBServer:
-        tracker = self._get_eth1_tracker()
+    @classmethod
+    def _get_eth1_peer_server(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> PeerDBServer:
+        tracker = cls._get_eth1_tracker(boot_info)
 
         return PeerDBServer(
-            event_bus=self.event_bus,
+            event_bus=event_bus,
             tracker=tracker,
         )
 
+    @classmethod
     @to_tuple
-    def _get_services(self) -> Iterable[BaseService]:
-        if self.boot_info.args.disable_blacklistdb:
+    def _get_services(cls,
+                      boot_info: BootInfo,
+                      event_bus: EndpointAPI) -> Iterable[BaseService]:
+        if boot_info.args.disable_blacklistdb:
             # Allow this component to be disabled for extreme cases such as the
             # user swapping in an equivalent experimental version.
-            self.logger.warning("Blacklist Database disabled via CLI flag")
+            cls.logger.warning("Blacklist Database disabled via CLI flag")
             return
         else:
-            yield self._get_blacklist_service()
+            yield cls._get_blacklist_service(boot_info, event_bus)
 
-        if self.boot_info.args.disable_eth1_peer_db:
+        if boot_info.args.disable_eth1_peer_db:
             # Allow this component to be disabled for extreme cases such as the
             # user swapping in an equivalent experimental version.
-            self.logger.warning("ETH1 Peer Database disabled via CLI flag")
+            cls.logger.warning("ETH1 Peer Database disabled via CLI flag")
         else:
-            yield self._get_eth1_peer_server()
+            yield cls._get_eth1_peer_server(boot_info, event_bus)
 
-    def do_start(self) -> None:
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         try:
-            tracker_services = self._get_services()
+            tracker_services = cls._get_services(boot_info, event_bus)
         except BadDatabaseError as err:
-            self.logger.exception(f"Unrecoverable error in Network Component: {err}")
-        else:
-            asyncio.ensure_future(exit_with_services(
-                self._event_bus_service,
-                *tracker_services,
-            ))
+            cls.logger.exception(f"Unrecoverable error in Network Component: {err}")
+
+        async with AsyncExitStack() as stack:
             for service in tracker_services:
-                asyncio.ensure_future(service.run())
+                await stack.enter_async_context(run_service(service))
+            await asyncio.gather(*(
+                service.cancellation()
+                for service in tracker_services
+            ))
