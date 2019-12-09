@@ -28,8 +28,7 @@ from trinity.tools.factories.db import AtomicDBFactory
 
 @pytest.mark.trio
 async def test_logs_handling(
-    w3,
-    deposit_contract,
+    eth1_data_provider,
     tester,
     num_blocks_confirmed,
     polling_period,
@@ -40,9 +39,7 @@ async def test_logs_handling(
     amount_0 = func_do_deposit()
     amount_1 = func_do_deposit()
     m = Eth1Monitor(
-        w3=w3,
-        deposit_contract_address=deposit_contract.address,
-        deposit_contract_abi=deposit_contract.abi,
+        eth1_data_provider=eth1_data_provider,
         num_blocks_confirmed=num_blocks_confirmed,
         polling_period=polling_period,
         start_block_number=start_block_number,
