@@ -120,8 +120,7 @@ CMD_ID_MAP = dict((cmd.id, cmd) for cmd in [CMD_PING, CMD_PONG, CMD_FIND_NODE, C
 
 
 class DiscoveryService(Service):
-    _last_lookup: float = 0
-    _lookup_interval: int = 30
+    _refresh_interval: int = 30
     _max_neighbours_per_packet_cache = None
 
     logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
@@ -142,7 +141,6 @@ class DiscoveryService(Service):
         self.ping_callbacks = CallbackManager()
         self.neighbours_callbacks = CallbackManager()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
-        self._lookup_running = trio.Lock()
         if socket.family != trio.socket.AF_INET:
             raise ValueError("Invalid socket family")
         elif socket.type != trio.socket.SOCK_DGRAM:
@@ -155,11 +153,7 @@ class DiscoveryService(Service):
 
     async def handle_get_peer_candidates_requests(self) -> None:
         async for event in self._event_bus.stream(PeerCandidatesRequest):
-
-            self.manager.run_task(self.maybe_lookup_random_node)
-
             nodes = tuple(self.get_nodes_to_connect(event.max_candidates))
-
             self.logger.debug2("Broadcasting peer candidates (%s)", nodes)
             await self._event_bus.broadcast(
                 event.expected_response_type()(nodes),
@@ -180,22 +174,15 @@ class DiscoveryService(Service):
     async def run(self) -> None:
         self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
+        self.manager.run_daemon_task(self.periodically_refresh)
 
         self.manager.run_daemon_task(self.consume_datagrams)
         self.manager.run_task(self.bootstrap)
         await self.manager.wait_finished()
 
-    async def maybe_lookup_random_node(self) -> None:
-        if self._last_lookup + self._lookup_interval > time.time():
-            return
-        elif self._lookup_running.locked():
-            self.logger.debug("Node discovery lookup already in progress, not running another")
-            return
-        async with self._lookup_running:
-            try:
-                await self.lookup_random()
-            finally:
-                self._last_lookup = time.time()
+    async def periodically_refresh(self) -> None:
+        async for _ in trio_utils.every(self._refresh_interval):
+            await self.lookup_random()
 
     def update_routing_table(self, node: NodeAPI) -> None:
         """Update the routing table entry for the given node."""
