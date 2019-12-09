@@ -63,8 +63,16 @@ if __name__ == "__main__":
     )
     from eth_keys.datatypes import PrivateKey
     import trio
-    from p2p.discv5.plugin import run_discv5
+    from p2p.discv5.plugin import DiscV5PluginConfig, run_discv5
 
-    config = load_config(args.config)
+    yaml_config = load_config(args.config)
+    config = DiscV5PluginConfig(
+        host=yaml_config['host'],
+        port=yaml_config['port'],
+        local_private_key=yaml_config['local_private_key'],
+        local_node_id=yaml_config['local_node_id'],
+        enrs=yaml_config['enrs'],
+        routing_table=yaml_config['routing_table'],
+    )
 
     trio.run(run_discv5, config)

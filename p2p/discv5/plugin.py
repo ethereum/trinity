@@ -1,7 +1,6 @@
 import logging
 from typing import (
-    Any,
-    Dict,
+    List,
     Tuple,
     TypeVar,
 )
@@ -15,6 +14,8 @@ from trio.abc import (
     ReceiveChannel,
     SendChannel,
 )
+
+from mypy_extensions import TypedDict
 
 from async_service import (
     Service,
@@ -69,10 +70,19 @@ ChannelContentType = TypeVar("ChannelContentType")
 ChannelPair = Tuple[SendChannel[ChannelContentType], ReceiveChannel[ChannelContentType]]
 
 
+class DiscV5PluginConfig(TypedDict):
+    host: str
+    port: str
+    local_private_key: str
+    local_node_id: str
+    enrs: List[str]
+    routing_table: List[str]
+
+
 class DiscV5Plugin(Service):
     logger = logging.getLogger("p2p.discv5.plugin.DiscV5Plugin")
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, config: DiscV5PluginConfig) -> None:
         self.config = config
 
         self.local_private_key = decode_hex(self.config["local_private_key"])
@@ -163,30 +173,31 @@ class DiscV5Plugin(Service):
             self.routing_table_manager
         )
 
-    async def initialize_enr_db(self, config: Dict[str, Any]) -> None:
-        for enr_repr in config["enrs"]:
+    async def initialize_enr_db(self) -> None:
+        for enr_repr in self.config["enrs"]:
             enr = ENR.from_repr(enr_repr)
             await self.enr_db.insert(enr)
 
-    def initialize_routing_table(self, config: Dict[str, Any]) -> None:
-        for node_id_hex in config["routing_table"]:
+    def initialize_routing_table(self) -> None:
+        for node_id_hex in self.config["routing_table"]:
             node_id = NodeID(decode_hex(node_id_hex))
             self.routing_table.add(node_id)
 
     async def run(self) -> None:
         self.logger.info("Running on %s:%d", self.config["host"], self.config["port"])
 
-        await self.initialize_enr_db(self.config)
-        self.initialize_routing_table(self.config)
+        await self.initialize_enr_db()
+        self.initialize_routing_table()
 
         await self.socket.bind((self.config["host"], self.config["port"]))
-        async with trio.open_nursery() as nursery:
-            for service in self.services:
-                nursery.start_soon(TrioManager.run_service, service)
-        await self.manager.wait_finished()
+        with self.socket:
+            async with trio.open_nursery() as nursery:
+                for service in self.services:
+                    nursery.start_soon(TrioManager.run_service, service)
+            await self.manager.wait_finished()
         self.logger.debug("Cancelled")
 
 
-async def run_discv5(config: Dict[str, Any]) -> None:
+async def run_discv5(config: DiscV5PluginConfig) -> None:
     plugin = DiscV5Plugin(config)
     await TrioManager.run_service(plugin)
