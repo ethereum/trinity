@@ -97,6 +97,7 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
                 config.bootstrap_nodes,
                 config.preferred_nodes,
                 event_bus,
+                socket,
             )
 
         try:

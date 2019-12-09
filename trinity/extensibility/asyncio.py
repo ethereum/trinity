@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import asyncio
+import concurrent
 import logging
 import signal
 
@@ -34,14 +35,16 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             args=(self._boot_info,),
         )
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, process.start)
-        try:
-            await loop.run_in_executor(None, process.join)
-        finally:
-            kill_process_gracefully(
-                process,
-                logging.getLogger('trinity.extensibility.AsyncioIsolatedComponent'),
-            )
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            await loop.run_in_executor(executor, process.start)
+            try:
+                await loop.run_in_executor(executor, process.join)
+            finally:
+                kill_process_gracefully(
+                    process,
+                    logging.getLogger('trinity.extensibility.AsyncioIsolatedComponent'),
+                )
 
     @classmethod
     def run_process(cls, boot_info: BootInfo) -> None:

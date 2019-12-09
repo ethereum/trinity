@@ -51,11 +51,12 @@ class TxComponent(AsyncioIsolatedComponent):
     def validate_cli(cls, boot_info: BootInfo) -> None:
         network_id = boot_info.trinity_config.network_id
         if network_id not in {MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID}:
-            raise ValidationError(
-                "The TxPool component only supports Mainnet and Ropsten.  You "
-                "can run with the transaction pool disabled using "
-                "--disable-tx-pool"
-            )
+            if not boot_info.args.disable_tx_pool:
+                raise ValidationError(
+                    "The TxPool component only supports Mainnet and Ropsten.  You "
+                    "can run with the transaction pool disabled using "
+                    "--disable-tx-pool"
+                )
 
     @property
     def is_enabled(self) -> bool:

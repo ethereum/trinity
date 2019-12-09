@@ -82,8 +82,7 @@ class ComponentManager(Service):
                 try:
                     async with AsyncExitStack() as stack:
                         self.logger.info(
-                            "Starting (%d) components: %s",
-                            len(enabled_components),
+                            "Starting components: %s",
                             '/'.join(component.name for component in enabled_components),
                         )
                         # Concurrently start the components.

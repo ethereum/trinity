@@ -944,7 +944,7 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
             pass
         else:
             if self._skeleton.is_operational:
-                self._skeleton.cancel_nowait()
+                await self._skeleton.cancel()
         finally:
             self.logger.debug2("Skeleton sync with %s ended", peer)
             self._last_target_header_hash = peer.head_info.head_hash
