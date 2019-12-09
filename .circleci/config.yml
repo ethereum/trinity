@@ -169,6 +169,12 @@ jobs:
       - image: circleci/python:3.6
         environment:
           TOXENV: py36-rpc-state-homestead
+  py36-rpc-state-istanbul:
+    <<: *common
+    docker:
+      - image: circleci/python:3.6
+        environment:
+          TOXENV: py36-rpc-state-istanbul
   py36-rpc-state-petersburg:
     <<: *common
     docker:
