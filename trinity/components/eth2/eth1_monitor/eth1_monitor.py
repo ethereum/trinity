@@ -1,5 +1,6 @@
 import bisect
 from collections import OrderedDict
+import logging
 from typing import (
     Any,
     AsyncGenerator,
@@ -88,6 +89,8 @@ def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
 
 
 class Eth1Monitor(Service):
+    logger = logging.getLogger('trinity.eth1_monitor')
+
     _w3: Web3
 
     _deposit_contract: "Web3.eth.contract"
@@ -148,6 +151,7 @@ class Eth1Monitor(Service):
         return self._db.highest_processed_block_number
 
     async def run(self) -> None:
+        self.logger.info("Eth1 Monitor up")
         self.manager.run_daemon_task(self._handle_new_logs)
         self.manager.run_daemon_task(
             self._run_handle_request, *(GetDepositRequest, self._handle_get_deposit)
@@ -280,7 +284,7 @@ class Eth1Monitor(Service):
         Keep polling latest blocks, and yield the blocks whose number is
         `latest_block.number - self._num_blocks_confirmed`.
         """
-        while True:
+        while self.is_running:
             block = _w3_get_block(self._w3, "latest")
             target_block_number = BlockNumber(block.number - self._num_blocks_confirmed)
             from_block_number = self.highest_processed_block_number
