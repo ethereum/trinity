@@ -34,6 +34,10 @@ from eth.abc import (
 from eth.constants import (
     ZERO_ADDRESS,
 )
+from eth.exceptions import (
+    HeaderNotFound,
+    TransactionNotFound,
+)
 from eth.rlp.blocks import (
     BaseBlock,
 )
@@ -48,12 +52,14 @@ from trinity.chains.base import AsyncChainAPI
 from trinity.constants import (
     TO_NETWORKING_BROADCAST_CONFIG,
 )
+from trinity.exceptions import RpcError
 from trinity.rpc.format import (
     block_to_dict,
     header_to_dict,
     format_params,
     normalize_transaction_dict,
     to_int_if_hex,
+    to_receipt_response,
     transaction_to_dict,
 )
 from trinity.rpc.modules import (
@@ -243,6 +249,57 @@ class Eth(Eth1ChainRPCModule):
         state = await state_at_block(self.chain, at_block)
         nonce = state.get_nonce(address)
         return hex(nonce)
+
+    @format_params(decode_hex)
+    async def getTransactionReceipt(self,
+                                    transaction_hash: Hash32) -> Dict[str, str]:
+
+        tx_block_number, tx_index = await self.chain.coro_get_canonical_transaction_index(
+            transaction_hash,
+        )
+
+        try:
+            block_header = await self.chain.coro_get_canonical_block_header_by_number(
+                tx_block_number
+            )
+        except HeaderNotFound as exc:
+            raise RpcError(
+                f"Block {tx_block_number} is not in the canonical chain"
+            ) from exc
+
+        try:
+            transaction = await self.chain.coro_get_canonical_transaction_by_index(
+                tx_block_number,
+                tx_index
+            )
+        except TransactionNotFound as exc:
+            raise RpcError(
+                f"Transaction {encode_hex(transaction_hash)} is not in the canonical chain"
+            ) from exc
+
+        if transaction.hash != transaction_hash:
+            raise RpcError(
+                f"Unexpected transaction {encode_hex(transaction.hash)} at index {tx_index}"
+            )
+
+        receipt = await self.chain.coro_get_transaction_receipt_by_index(
+            tx_block_number,
+            tx_index
+        )
+
+        if tx_index > 0:
+            previous_receipt = await self.chain.coro_get_transaction_receipt_by_index(
+                tx_block_number,
+                tx_index - 1
+            )
+            # The receipt only tells us the cumulative gas that was used. To find the gas used by
+            # the transaction alone we have to get the previous receipt and calculate the
+            # difference.
+            tx_gas_used = receipt.gas_used - previous_receipt.gas_used
+        else:
+            tx_gas_used = receipt.gas_used
+
+        return to_receipt_response(receipt, transaction, tx_index, block_header, tx_gas_used)
 
     @format_params(decode_hex)
     async def getUncleCountByBlockHash(self, block_hash: Hash32) -> str:

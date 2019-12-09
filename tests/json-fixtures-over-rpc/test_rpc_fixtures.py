@@ -21,6 +21,7 @@ from eth_utils import (
     is_string,
     to_checksum_address,
     to_tuple,
+    to_int,
 )
 from eth_utils.curried import (
     apply_formatter_if,
@@ -361,7 +362,7 @@ def validate_rpc_transaction_vs_fixture(transaction, fixture):
     assert actual_transaction == expected
 
 
-async def validate_transaction_by_index(rpc, transaction_fixture, at_block, index):
+async def validate_transaction_by_index(rpc, block_fixture, transaction_fixture, at_block, index):
     block_by_hash = is_by_hash(at_block)
     if block_by_hash:
         rpc_method = 'eth_getTransactionByBlockHashAndIndex'
@@ -376,12 +377,25 @@ async def validate_transaction_by_index(rpc, transaction_fixture, at_block, inde
         # that we can refer to by its number. Otherwise, it may be that we try to lookup
         # a transaction by its hash that is not in the canonical chain which isn't supported.
         await validate_transaction_by_hash(rpc, result['hash'], transaction_fixture)
+        await validate_transaction_receipt(rpc, result['hash'], block_fixture, transaction_fixture)
 
 
 async def validate_transaction_by_hash(rpc, tx_hash, transaction_fixture):
     result, error = await call_rpc(rpc, 'eth_getTransactionByHash', [tx_hash])
     assert error is None
     validate_rpc_transaction_vs_fixture(result, transaction_fixture)
+
+
+async def validate_transaction_receipt(rpc, tx_hash, block_fixture, transaction_fixture):
+    result, error = await call_rpc(rpc, 'eth_getTransactionReceipt', [tx_hash])
+    assert error is None
+    header_fixture = fixture_block_in_rpc_format(block_fixture['blockHeader'])
+    tx_index = to_int(hexstr=result['transactionIndex'])
+    tx_fixture = block_fixture['transactions'][tx_index]
+
+    assert result['to'] == "0x" if tx_fixture['to'] == "" else tx_fixture['to']
+    assert result['blockHash'] == header_fixture['hash']
+    assert result['blockNumber'] == header_fixture['number']
 
 
 async def validate_block(rpc, block_fixture, at_block):
@@ -397,7 +411,8 @@ async def validate_block(rpc, block_fixture, at_block):
     assert len(result['transactions']) == len(block_fixture['transactions'])
 
     for index, transaction_fixture in enumerate(block_fixture['transactions']):
-        await validate_transaction_by_index(rpc, transaction_fixture, at_block, index)
+        await validate_transaction_by_index(
+            rpc, block_fixture, transaction_fixture, at_block, index)
 
     await validate_transaction_count(rpc, block_fixture, at_block)
 
