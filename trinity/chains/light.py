@@ -111,6 +111,9 @@ class LightDispatchChain(AsyncChainAPI, Chain):
 
     coro_get_block_header_by_hash = async_method(Chain.get_block_header_by_hash)
 
+    coro_get_canonical_block_header_by_number = async_method(
+        Chain.get_canonical_block_header_by_number)
+
     def get_canonical_head(self) -> BlockHeaderAPI:
         return self._headerdb.get_canonical_head()
 
@@ -195,7 +198,27 @@ class LightDispatchChain(AsyncChainAPI, Chain):
     def get_canonical_transaction(self, transaction_hash: Hash32) -> SignedTransactionAPI:
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
+    async def coro_get_canonical_transaction_by_index(
+            self,
+            block_number: BlockNumber,
+            index: int) -> SignedTransactionAPI:
+        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
+
+    async def coro_get_canonical_transaction_index(
+            self,
+            transaction_hash: Hash32) -> Tuple[BlockNumber, int]:
+        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
+
     def get_transaction_receipt(self, transaction_hash: Hash32) -> ReceiptAPI:
+        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
+
+    async def coro_get_transaction_receipt(self, transaction_hash: Hash32) -> ReceiptAPI:
+        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
+
+    async def coro_get_transaction_receipt_by_index(
+            self,
+            block_number: BlockNumber,
+            index: int) -> ReceiptAPI:
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
     #

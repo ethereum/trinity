@@ -26,6 +26,7 @@ import rlp
 from eth.abc import (
     BlockAPI,
     BlockHeaderAPI,
+    ReceiptAPI,
     SignedTransactionAPI,
 )
 from eth.constants import (
@@ -33,6 +34,64 @@ from eth.constants import (
 )
 
 from trinity.chains.base import AsyncChainAPI
+from trinity._utils.address import generate_contract_address
+
+
+def format_bloom(bloom: int) -> str:
+    formatted_bloom = encode_hex(int_to_big_endian(bloom))[2:]
+    formatted_bloom = '0x' + formatted_bloom.rjust(512, '0')
+    return formatted_bloom
+
+
+def to_receipt_response(receipt: ReceiptAPI,
+                        transaction: SignedTransactionAPI,
+                        index: int,
+                        header: BlockHeaderAPI,
+                        tx_gas_used: int) -> Dict[str, Any]:
+
+    if transaction.to == CREATE_CONTRACT_ADDRESS:
+        contract_address = encode_hex(
+            generate_contract_address(transaction.sender, transaction.nonce)
+        )
+    else:
+        contract_address = None
+
+    block_hash = encode_hex(header.hash)
+    block_number = hex(header.block_number)
+    receipt_and_transaction_index = hex(index)
+    transaction_hash = encode_hex(transaction.hash)
+
+    return {
+        "blockHash": block_hash,
+        "blockNumber": block_number,
+        "contractAddress": contract_address,
+        "cumulativeGasUsed": hex(receipt.gas_used),
+        "from": encode_hex(transaction.sender),
+        'gasUsed': hex(tx_gas_used),
+        "logs": [
+            {
+                "address": encode_hex(log.address),
+                "data": encode_hex(log.data),
+                "blockHash": block_hash,
+                "blockNumber": block_number,
+                "logIndex": receipt_and_transaction_index,
+                # We only serve receipts from transactions that ended up in the canonical chain
+                # which means this can never be `True`
+                "removed": False,
+                "topics": [
+                    encode_hex(int_to_big_endian(topic)) for topic in log.topics
+                ],
+                "transactionHash": transaction_hash,
+                "transactionIndex": receipt_and_transaction_index,
+            }
+            for log in receipt.logs
+        ],
+        "logsBloom": format_bloom(receipt.bloom),
+        "root": encode_hex(receipt.state_root),
+        "to": encode_hex(transaction.to),
+        "transactionHash": transaction_hash,
+        "transactionIndex": receipt_and_transaction_index,
+    }
 
 
 def transaction_to_dict(transaction: SignedTransactionAPI) -> Dict[str, str]:
@@ -81,15 +140,13 @@ def normalize_transaction_dict(transaction_dict: Dict[str, str]) -> Dict[str, An
 
 
 def header_to_dict(header: BlockHeaderAPI) -> Dict[str, str]:
-    logs_bloom = encode_hex(int_to_big_endian(header.bloom))[2:]
-    logs_bloom = '0x' + logs_bloom.rjust(512, '0')
     header_dict = {
         "difficulty": hex(header.difficulty),
         "extraData": encode_hex(header.extra_data),
         "gasLimit": hex(header.gas_limit),
         "gasUsed": hex(header.gas_used),
         "hash": encode_hex(header.hash),
-        "logsBloom": logs_bloom,
+        "logsBloom": format_bloom(header.bloom),
         "mixHash": encode_hex(header.mix_hash),
         "nonce": encode_hex(header.nonce),
         "number": hex(header.block_number),
