@@ -464,8 +464,7 @@ async def validate_uncles(rpc, block_fixture, at_block):
 def chain_fixture(fixture_data):
     fixture_path, fixture_key, fixture_fork = fixture_data
     fixture = load_fixture(fixture_path, fixture_key)
-    if fixture_fork == 'Istanbul':
-        pytest.skip('Istanbul VM rules not yet supported')
+
     return fixture
 
 
