@@ -85,3 +85,10 @@ class WrongGenesisFailure(HandshakeFailure):
 
 
 register_error(WrongGenesisFailure, BLACKLIST_SECONDS_WRONG_NETWORK_OR_GENESIS)
+
+
+class RpcError(BaseTrinityError):
+    """
+    Raised when a JSON-RPC API request can not be fulfilled.
+    """
+    pass
