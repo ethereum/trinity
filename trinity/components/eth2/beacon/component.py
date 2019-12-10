@@ -106,7 +106,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
         # TODO: Handle `bootstrap_nodes`.
         libp2p_node = Node(
             key_pair=key_pair,
-            listen_ip="127.0.0.1",  # FIXME: Should be configurable
+            listen_ip="0.0.0.0",
             listen_port=boot_info.args.port,
             preferred_nodes=trinity_config.preferred_nodes,
             chain=chain,
