@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -56,7 +55,7 @@ from trinity.rpc.modules import (
 ROOT_PROJECT_DIR = Path(__file__).parent.parent.parent
 
 
-BASE_FIXTURE_PATH = os.path.join(ROOT_PROJECT_DIR, 'fixtures', 'BlockchainTests')
+BASE_FIXTURE_PATH = ROOT_PROJECT_DIR / 'fixtures' / 'BlockchainTests'
 
 SLOW_TESTS = (
     'bcExploitTest/SuicideIssue.json',
@@ -475,15 +474,96 @@ class MainnetFullChain(FullChain):
     vm_configuration = MainnetChain.vm_configuration
 
 
-@pytest.mark.asyncio
-async def test_rpc_against_fixtures(event_bus, chain_fixture, fixture_data):
+async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
     chain = MainnetFullChain(None)
     rpc = RPCServer(initialize_eth1_modules(chain, event_bus), chain, event_bus)
 
     setup_result, setup_error = await call_rpc(rpc, 'evm_resetToGenesisFixture', [chain_fixture])
     # We need to advance the event loop for modules to be able to pickup the new chain
     await asyncio.sleep(0)
-    assert setup_error is None and setup_result is True, "cannot load chain for {0}".format(fixture_data)  # noqa: E501
+    return rpc, setup_result, setup_error
+    assert setup_error is None and setup_result is True, f"cannot load chain for {fixture_path}"
+
+
+@pytest.mark.parametrize(
+    "tx_hash, fixture, expected_result",
+    (
+        (
+            "0x50406b46b2face98d3b1ccb3e8f1e9b490617d1b366568b4786847867dcdc7e8",
+            ('ValidBlocks/bcValidBlockTest/ExtraData32.json', 'ExtraData32_Homestead'),
+            {
+                'blockHash': '0x047635136e99cd68496efc834378e678538c64445be3c4ce4f1ebec5ca5c5fcf',
+                'blockNumber': '0x1',
+                'contractAddress': None,
+                'cumulativeGasUsed': '0x560b',
+                'from': '0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b',
+                'gasUsed': '0x560b',
+                'logs': [{
+                    'address': '0x095e7baea6a6c7c4c2dfeb977efac326af552d87',
+                    'data': '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+                    'blockHash': '0x047635136e99cd68496efc834378e678538c64445be3c4ce4f1ebec5ca5c5fcf',  # noqa: E501
+                    'blockNumber': '0x1',
+                    'logIndex': '0x0',
+                    'removed': False,
+                    'topics': ['0x00'],
+                    'transactionHash': '0x50406b46b2face98d3b1ccb3e8f1e9b490617d1b366568b4786847867dcdc7e8',  # noqa: E501
+                    'transactionIndex': '0x0'
+                }],
+                'logsBloom': '0x00000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000040000000000000000000000000000000000000000000000000000000',  # noqa: E501
+                'root': '0x24d2203a1c8ad4d1c75b526aaa429b440208f863d26b599cb016b17bae845167',
+                'to': '0x095e7baea6a6c7c4c2dfeb977efac326af552d87',
+                'transactionHash': '0x50406b46b2face98d3b1ccb3e8f1e9b490617d1b366568b4786847867dcdc7e8',  # noqa: E501
+                'transactionIndex': '0x0'
+            }
+        ),
+        (
+            "0xd6cda738c9f26fdaf805c6335ceec07dd57d1d081142b9c7ec7de2afdb79a5c4",
+            ('ValidBlocks/bcBlockGasLimitTest/TransactionGasHigherThanLimit2p63m1.json', 'TransactionGasHigherThanLimit2p63m1_EIP158'),  # noqa: E501
+            {
+                'blockHash': '0x66649dd76e3155944f61e5f012fd920bbb22dca1ea211d392cbc49992cc1c789',
+                'blockNumber': '0x1',
+                'contractAddress': None,
+                'cumulativeGasUsed': '0xa410',
+                'from': '0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b',
+                'gasUsed': '0x5208',
+                'logs': [],
+                'logsBloom': '0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',  # noqa: E501
+                'root': '0xd9778a6246f1547ac91548f6ac374d1c3691d70c46186ab2470a2dcd009a54cd',
+                'to': '0xaaaf5374fce5edbc8e2a8697c15331677e6ebf0b',
+                'transactionHash': '0xd6cda738c9f26fdaf805c6335ceec07dd57d1d081142b9c7ec7de2afdb79a5c4',  # noqa: E501
+                'transactionIndex': '0x1'
+            }
+        ),
+    ),
+)
+@pytest.mark.asyncio
+async def test_eth_getTransactionReceipt(event_bus, tx_hash, fixture, expected_result):
+
+    fixture_path = BASE_FIXTURE_PATH / fixture[0]
+    chain_fixture = load_fixture(fixture_path, fixture[1])
+
+    rpc, setup_result, setup_error = await setup_rpc_server(event_bus, chain_fixture, fixture_path)
+
+    await validate_accounts(rpc, chain_fixture['pre'])
+
+    for block_fixture in chain_fixture['blocks']:
+
+        block_result, block_error = await call_rpc(rpc, 'evm_applyBlockFixture', [block_fixture])
+        assert block_error is None
+        assert block_result == block_fixture['rlp']
+
+    result, error = await call_rpc(rpc, 'eth_getTransactionReceipt', [tx_hash])
+
+    assert result == expected_result
+
+
+@pytest.mark.asyncio
+async def test_rpc_against_fixtures(event_bus, chain_fixture, fixture_data):
+    rpc, setup_result, setup_error = await setup_rpc_server(
+        event_bus,
+        chain_fixture,
+        fixture_data[0]
+    )
 
     await validate_accounts(rpc, chain_fixture['pre'])
 
