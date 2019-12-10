@@ -1,0 +1,2 @@
+Quiet down a flood of :class:`BrokenPipeError` that occasionally trigger on shutdown during Beam
+Sync.
