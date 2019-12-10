@@ -34,7 +34,6 @@ from eth.constants import (
 )
 
 from trinity.chains.base import AsyncChainAPI
-from trinity._utils.address import generate_contract_address
 
 
 def format_bloom(bloom: int) -> str:
@@ -51,7 +50,7 @@ def to_receipt_response(receipt: ReceiptAPI,
 
     if transaction.to == CREATE_CONTRACT_ADDRESS:
         contract_address = encode_hex(
-            generate_contract_address(transaction.sender, transaction.nonce)
+            transaction.generate_contract_address(transaction.sender, transaction.nonce)
         )
     else:
         contract_address = None
