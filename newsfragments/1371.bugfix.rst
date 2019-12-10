@@ -1,5 +1,0 @@
-Ensure ThreadPoolExecutor in beam importer is set up with contextmanager
-
-Without contextmanager one needs to manually call `shutdown` on the
-executor which we weren't doing either. This change may fix some
-warnings during shutdown of the client.

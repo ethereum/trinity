@@ -5,6 +5,49 @@ Trinity is moving fast. Read up on all the latest improvements.
 
 .. towncrier release notes start
 
+Trinity 0.1.0-alpha.32 (2019-12-09)
+-----------------------------------
+
+Bugfixes
+~~~~~~~~
+
+- Upgrade py-evm to v0.3.0-alpha.10, for critical Istanbul bugfix, related to net gas metering. (`#1893 <https://github.com/ethereum/trinity/issues/1893>`__)
+- Only allow a single connection per peer, even if an outgoing and incoming handshake are initiated
+  simultaneously. Bonus: squashed UnknownAPI log when talking to a peer that is disconnecting. (`#1352 <https://github.com/ethereum/trinity/issues/1352>`__)
+- Quiet down a flood of :class:`BrokenPipeError` that occasionally triggers on shutdown during Beam
+  Sync. (`#1355 <https://github.com/ethereum/trinity/issues/1355>`__)
+- Ensure ThreadPoolExecutor in beam importer is set up with contextmanager
+
+  Without contextmanager one needs to manually call `shutdown` on the
+  executor which we weren't doing either. This change may fix some
+  warnings during shutdown of the client. (`#1371 <https://github.com/ethereum/trinity/issues/1371>`__)
+
+
+Performance improvements
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Speed up the TxPool shutdown a bit: it had hanging tasks that we were waiting 5s to force-close. (`#1356 <https://github.com/ethereum/trinity/issues/1356>`__)
+
+
+Improved Documentation
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Add Matomo Tracking to Docs site.
+
+  Matomo is an Open Source web analytics platform that allows us
+  to get better insights and optimize for our audience without
+  the negative consequences of other compareable platforms.
+
+  Read more: https://matomo.org/why-matomo/ (`#1365 <https://github.com/ethereum/trinity/issues/1365>`__)
+
+
+Internal Changes - for Trinity Contributors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Beam Sync now warns in the logs when it skips ahead of headers (relying on light-client-style
+  verification of older headers). (`#1356 <https://github.com/ethereum/trinity/issues/1356>`__)
+
+
 Trinity 0.1.0-alpha.31 (2019-12-04)
 -----------------------------------
 

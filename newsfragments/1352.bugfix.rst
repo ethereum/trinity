@@ -1,2 +1,0 @@
-Only allow a single connection per peer, even if an outgoing and incoming handshake are initiated
-simultaneously. Bonus: squashed UnknownAPI log when talking to a peer that is disconnecting.

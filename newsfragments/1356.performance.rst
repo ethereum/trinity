@@ -1,1 +1,0 @@
-Speed up the TxPool shutdown a bit: it had hanging tasks that we were waiting 5s to force-close.
