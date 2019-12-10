@@ -114,16 +114,17 @@ class DepositDataDB(BaseDepositDataDB):
     ) -> None:
         self.db = db
         self._deposit_count = self._get_deposit_count()
-        # If the parameter `highest_processed_block_number` is given, set it in the database.
+        latest_processed_block_number = self._get_highest_processed_block_number()
         if highest_processed_block_number is not None:
             if highest_processed_block_number < 0:
                 raise DepositDataDBValidationError(
                     "`highest_processed_block_number` should be non-negative: "
                     f"highest_processed_block_number={highest_processed_block_number}"
                 )
-            self._set_highest_processed_block_number(
-                self.db, highest_processed_block_number
-            )
+            elif highest_processed_block_number > latest_processed_block_number:
+                self._set_highest_processed_block_number(
+                    self.db, highest_processed_block_number
+                )
         self._highest_processed_block_number = (
             self._get_highest_processed_block_number()
         )
