@@ -49,6 +49,7 @@ from trinity.components.builtin.upnp.component import (
     UpnpComponent,
 )
 from trinity.components.eth2.beacon.component import BeaconNodeComponent
+from trinity.components.eth2.eth1_monitor.component import Eth1MonitorComponent
 from trinity.components.eth2.interop.component import InteropComponent
 from trinity.components.builtin.tx_pool.component import (
     TxComponent,
@@ -68,6 +69,7 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
 BEACON_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     BeaconNodeComponent,
     InteropComponent,
+    Eth1MonitorComponent,
 )
 
 
