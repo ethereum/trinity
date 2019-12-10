@@ -20,6 +20,7 @@ import trio
 from web3 import Web3
 
 from eth.abc import AtomicDatabaseAPI
+from eth_utils import encode_hex
 
 from eth2.beacon.typing import Timestamp
 from eth2.beacon.types.deposits import Deposit
@@ -58,7 +59,7 @@ def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
 
 
 class Eth1Monitor(Service):
-    logger = logging.getLogger('trinity.eth1_monitor')
+    logger = logging.getLogger('trinity.Eth1Monitor')
 
     _eth1_data_provider: BaseEth1DataProvider
 
@@ -123,6 +124,11 @@ class Eth1Monitor(Service):
         async for block in self._new_blocks():
             self._handle_block_data(block)
             logs = self._get_logs_from_block(block.number)
+            self.logger.info(
+                "Eth1 Monitor got new eth1 block: %s, number of logs contained in the block: %s",
+                block,
+                len(logs),
+            )
             self._process_logs(logs, block.number)
 
     def _handle_get_deposit(self, req: GetDepositRequest) -> GetDepositResponse:
@@ -225,6 +231,7 @@ class Eth1Monitor(Service):
         self, event_type: Type[TRequest], event_handler: Callable[[TRequest], Any]
     ) -> None:
         async for req in self._event_bus.stream(event_type):
+            self.logger.info("Monitor receive deposit data request: %s", req)
             try:
                 resp = event_handler(req)
             except Exception as e:
