@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import time
 from typing import Any, Dict, NamedTuple, Tuple, Union
 
 from eth_typing import Address, BLSPubkey, BLSSignature, BlockNumber, Hash32
@@ -7,6 +8,8 @@ from eth_utils import encode_hex, event_abi_to_log_topic
 from web3 import Web3
 from web3.utils.events import get_event_data
 
+from eth2._utils.hash import hash_eth2
+from eth2.beacon.constants import GWEI_PER_ETH
 from eth2.beacon.typing import Gwei, Timestamp
 
 
@@ -54,6 +57,71 @@ class BaseEth1DataProvider(ABC):
     @abstractmethod
     def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
         ...
+
+
+AVERAGE_BLOCK_TIME = 20
+
+
+class FakeEth1DataProvider(BaseEth1DataProvider):
+
+    start_block_number: BlockNumber
+    start_block_timestamp: Timestamp
+
+    num_deposits_per_block: int
+
+    def __init__(
+        self,
+        start_block_number: BlockNumber,
+        start_block_timestamp: Timestamp,
+        num_deposits_per_block: int,
+    ) -> None:
+        self.start_block_number = start_block_number
+        self.start_block_timestamp = start_block_timestamp
+        self.num_deposits_per_block = num_deposits_per_block
+
+    def get_block(self, arg: Union[BlockNumber, str]) -> Eth1Block:
+        if isinstance(arg, int):
+            block_time = (
+                self.start_block_timestamp + (arg - self.start_block_number) * AVERAGE_BLOCK_TIME
+            )
+            return Eth1Block(
+                block_hash=hash_eth2(int(arg).to_bytes(4, byteorder='big')),
+                number=arg,
+                timestamp=Timestamp(block_time),
+            )
+        else:
+            # Assume `arg` == 'latest'
+            current_time = int(time.time())
+            num_blocks_inbetween = (current_time - self.start_block_timestamp) // AVERAGE_BLOCK_TIME
+            block_number = self.start_block_number + num_blocks_inbetween
+            return Eth1Block(
+                block_hash=hash_eth2(block_number.to_bytes(4, byteorder='big')),
+                number=BlockNumber(block_number),
+                timestamp=Timestamp(current_time - (current_time % AVERAGE_BLOCK_TIME)),
+            )
+
+    def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
+        logs = []
+        for _ in range(self.num_deposits_per_block):
+            log = DepositLog(
+                block_hash=hash_eth2(block_number.to_bytes(4, byteorder='big')),
+                pubkey=BLSPubkey(b'\x12' * 48),
+                withdrawal_credentials=Hash32(b'\x23' * 32),
+                signature=BLSSignature(b'\x34' * 96),
+                amount=32 * GWEI_PER_ETH,
+            )
+            logs.append(log)
+        return tuple(logs)
+
+    def get_deposit_count(self, block_number: BlockNumber) -> bytes:
+        deposit_count = self.num_deposits_per_block * (block_number - self.start_block_number)
+        return deposit_count.to_bytes(4, byteorder='big')
+
+    def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
+        block_root = hash_eth2(block_number.to_bytes(4, byteorder='big'))
+        return hash_eth2(
+            block_root + self.get_deposit_count(block_number)
+        )
 
 
 class Web3Eth1DataProvider(BaseEth1DataProvider):
