@@ -11,13 +11,16 @@ import random
 import time
 from typing import (
     Any,
+    Awaitable,
     Callable,
+    cast,
     DefaultDict,
     Dict,
     Hashable,
     Iterable,
     Iterator,
     List,
+    Optional,
     Sequence,
     Set,
     Tuple,
@@ -37,6 +40,7 @@ from lahja import (
 )
 
 import rlp
+from rlp.exceptions import DeserializationError
 
 from eth_typing import Hash32
 
@@ -48,6 +52,7 @@ from eth_utils import (
     to_tuple,
     int_to_big_endian,
     big_endian_to_int,
+    ValidationError,
 )
 
 from eth_keys import keys
@@ -59,6 +64,15 @@ from async_service import Service
 
 from p2p import constants
 from p2p.abc import AddressAPI, NodeAPI
+from p2p.discv5.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
+from p2p.discv5.enr_db import MemoryEnrDb
+from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
+from p2p.discv5.constants import (
+    IP_V4_ADDRESS_ENR_KEY,
+    TCP_PORT_ENR_KEY,
+    UDP_PORT_ENR_KEY,
+)
+from p2p.discv5.typing import NodeID
 from p2p.events import (
     PeerCandidatesRequest,
     RandomBootnodeRequest,
@@ -77,7 +91,7 @@ else:
     UserDict = collections.UserDict
 
 # V4 handler methods take a Node, payload and msg_hash as arguments.
-V4_HANDLER_TYPE = Callable[[NodeAPI, Tuple[Any, ...], Hash32], None]
+V4_HANDLER_TYPE = Callable[[NodeAPI, Tuple[Any, ...], Hash32], Awaitable[Any]]
 
 MAX_ENTRIES_PER_TOPIC = 50
 # UDP packet constants.
@@ -96,27 +110,25 @@ class WrongMAC(DefectiveMessage):
     pass
 
 
-class UnknownCommand(DefectiveMessage):
-    pass
-
-
 class DiscoveryCommand:
-    def __init__(self, name: str, id: int, elem_count: int) -> None:
+    def __init__(self, name: str, id: int) -> None:
         self.name = name
         self.id = id
-        # Number of required top-level list elements for this cmd.
-        # Elements beyond this length must be trimmed.
-        self.elem_count = elem_count
 
     def __repr__(self) -> str:
         return 'Command(%s:%d)' % (self.name, self.id)
 
 
-CMD_PING = DiscoveryCommand("ping", 1, 4)
-CMD_PONG = DiscoveryCommand("pong", 2, 3)
-CMD_FIND_NODE = DiscoveryCommand("find_node", 3, 2)
-CMD_NEIGHBOURS = DiscoveryCommand("neighbours", 4, 2)
-CMD_ID_MAP = dict((cmd.id, cmd) for cmd in [CMD_PING, CMD_PONG, CMD_FIND_NODE, CMD_NEIGHBOURS])
+CMD_PING = DiscoveryCommand("ping", 1)
+CMD_PONG = DiscoveryCommand("pong", 2)
+CMD_FIND_NODE = DiscoveryCommand("find_node", 3)
+CMD_NEIGHBOURS = DiscoveryCommand("neighbours", 4)
+CMD_ENR_REQUEST = DiscoveryCommand("enr_request", 5)
+CMD_ENR_RESPONSE = DiscoveryCommand("enr_response", 6)
+CMD_ID_MAP = dict(
+    (cmd.id, cmd)
+    for cmd in [
+        CMD_PING, CMD_PONG, CMD_FIND_NODE, CMD_NEIGHBOURS, CMD_ENR_REQUEST, CMD_ENR_RESPONSE])
 
 
 class DiscoveryService(Service):
@@ -137,6 +149,11 @@ class DiscoveryService(Service):
         self._event_bus = event_bus
         self.this_node = Node(self.pubkey, address)
         self.routing = RoutingTable(self.this_node)
+        self.enr_incoming_channels: Dict[Hash32, trio.MemorySendChannel[ENR]] = {}
+        # FIXME: Use a persistent EnrDb implementation.
+        self._enr_db = MemoryEnrDb(default_identity_scheme_registry)
+        # FIXME: Use a concurrency-safe EnrDb implementation.
+        self._enr_db_lock = trio.Lock()
         self.pong_callbacks = CallbackManager()
         self.ping_callbacks = CallbackManager()
         self.neighbours_callbacks = CallbackManager()
@@ -205,7 +222,7 @@ class DiscoveryService(Service):
         elif node == self.this_node:
             return False
 
-        token = self.send_ping_v4(node)
+        token = await self.send_ping_v4(node)
         log_version = "v4"
 
         try:
@@ -232,6 +249,57 @@ class DiscoveryService(Service):
         self.logger.debug("bonding completed successfully with %s", node)
         self.update_routing_table(node)
         return True
+
+    async def request_enr(self, remote: NodeAPI) -> ENR:
+        # No need to use a timeout because bond() takes care of that internally.
+        await self.bond(remote)
+        token = self.send_enr_request(remote)
+        send_chan: trio.MemorySendChannel[ENR]
+        recv_chan: trio.MemoryReceiveChannel[ENR]
+        send_chan, recv_chan = trio.open_memory_channel(1)
+        enr = None
+        try:
+            async with recv_chan:
+                self.enr_incoming_channels[token] = send_chan
+                with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT):
+                    enr = await recv_chan.receive()
+        finally:
+            self.enr_incoming_channels.pop(token, None)
+        return enr
+
+    async def get_local_enr(self) -> ENR:
+        async with self._enr_db_lock:
+            try:
+                return await self._enr_db.get(cast(NodeID, self.this_node.id_bytes))
+            except KeyError:
+                pass
+
+            kv_pairs = {
+                IDENTITY_SCHEME_ENR_KEY: V4IdentityScheme.id,
+                V4IdentityScheme.public_key_enr_key: self.pubkey.to_compressed_bytes(),
+                IP_V4_ADDRESS_ENR_KEY: self.address.ip_packed,
+                UDP_PORT_ENR_KEY: self.address.udp_port,
+                TCP_PORT_ENR_KEY: self.address.tcp_port,
+            }
+            enr_seq = 1
+            unsigned_enr = UnsignedENR(enr_seq, kv_pairs)
+            enr = unsigned_enr.to_signed_enr(self.privkey.to_bytes())
+            await self._enr_db.insert(enr)
+            return enr
+
+    async def get_local_enr_seq(self) -> int:
+        enr = await self.get_local_enr()
+        return enr.sequence_number
+
+    async def get_enr(self, remote: NodeAPI) -> Optional[ENR]:
+        """Get the most recent ENR for the given node and update our local DB if necessary."""
+        enr = await self.request_enr(remote)
+        if enr is None:
+            self.logger.debug("Failed to get ENR for %s", remote)
+            return None
+        async with self._enr_db_lock:
+            await self._enr_db.insert_or_update(enr)
+            return await self._enr_db.get(cast(NodeID, remote.id_bytes))
 
     async def wait_ping(self, remote: NodeAPI) -> bool:
         """Wait for a ping from the given remote.
@@ -403,6 +471,10 @@ class DiscoveryService(Service):
             return self.recv_find_node_v4
         elif cmd == CMD_NEIGHBOURS:
             return self.recv_neighbours_v4
+        elif cmd == CMD_ENR_REQUEST:
+            return self.recv_enr_request
+        elif cmd == CMD_ENR_RESPONSE:
+            return self.recv_enr_response
         else:
             raise ValueError(f"Unknown command: {cmd}")
 
@@ -445,53 +517,89 @@ class DiscoveryService(Service):
             constants.DISCOVERY_DATAGRAM_BUFFER_SIZE)
         address = Address(ip_address, port)
         self.logger.debug2("Received datagram from %s", address)
-        self.receive(address, datagram)
+        await self.receive(address, datagram)
 
-    def receive(self, address: AddressAPI, message: bytes) -> None:
+    async def receive(self, address: AddressAPI, message: bytes) -> None:
         try:
             remote_pubkey, cmd_id, payload, message_hash = _unpack_v4(message)
         except DefectiveMessage as e:
             self.logger.error('error unpacking message (%s) from %s: %s', message, address, e)
             return
 
-        # As of discovery version 4, expiration is the last element for all packets, so
-        # we can validate that here, but if it changes we may have to do so on the
-        # handler methods.
-        expiration = rlp.sedes.big_endian_int.deserialize(payload[-1])
-        if time.time() > expiration:
-            self.logger.debug('received message already expired')
+        try:
+            cmd = CMD_ID_MAP[cmd_id]
+        except KeyError:
+            self.logger.warning("Ignoring uknown msg type: %s; payload=%s", cmd_id, payload)
             return
-
-        cmd = CMD_ID_MAP[cmd_id]
-        if len(payload) != cmd.elem_count:
-            self.logger.error('invalid %s payload: %s', cmd.name, payload)
-            return
+        self.logger.debug2("Received %s with payload: %s", cmd.name, payload)
         node = Node(remote_pubkey, address)
         handler = self._get_handler(cmd)
-        handler(node, payload, message_hash)
+        await handler(node, payload, message_hash)
 
-    def recv_pong_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
-        # The pong payload should have 3 elements: to, token, expiration
-        _, token, _ = payload
+    def _is_msg_expired(self, rlp_expiration: bytes) -> bool:
+        expiration = rlp.sedes.big_endian_int.deserialize(rlp_expiration)
+        if time.time() > expiration:
+            self.logger.debug('Received message already expired')
+            return True
+        return False
+
+    async def recv_pong_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
+        # The pong payload should have at least 3 elements: to, token, expiration
+        if len(payload) < 3:
+            self.logger.warning('Ignoring PONG msg with invalid payload: %s', payload)
+            return
+        elif len(payload) == 3:
+            _, token, expiration = payload[:3]
+            enr_seq = None
+        else:
+            _, token, expiration, enr_seq = payload[:4]
+        if self._is_msg_expired(expiration):
+            return
         self.logger.debug2('<<< pong (v4) from %s (token == %s)', node, encode_hex(token))
         self.process_pong_v4(node, token)
+        await trio.hazmat.checkpoint()
 
-    def recv_neighbours_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
+    async def recv_neighbours_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The neighbours payload should have 2 elements: nodes, expiration
-        nodes, _ = payload
+        if len(payload) < 2:
+            self.logger.warning('Ignoring NEIGHBOURS msg with invalid payload: %s', payload)
+            return
+        nodes, expiration = payload[:2]
+        if self._is_msg_expired(expiration):
+            return
         neighbours = _extract_nodes_from_payload(node.address, nodes, self.logger)
         self.logger.debug2('<<< neighbours from %s: %s', node, neighbours)
         self.process_neighbours(node, neighbours)
+        await trio.hazmat.checkpoint()
 
-    def recv_ping_v4(self, node: NodeAPI, _: Any, message_hash: Hash32) -> None:
-        self.logger.debug2('<<< ping(v4) from %s', node)
+    async def recv_ping_v4(
+            self, node: NodeAPI, payload: Sequence[Any], message_hash: Hash32) -> None:
+        # The ping payload should have at least 4 elements: [version, from, to, expiration], with
+        # an optional 5th element for the node's ENR sequence number.
+        if len(payload) < 4:
+            self.logger.warning('Ignoring PING msg with invalid payload: %s', payload)
+            return
+        elif len(payload) == 4:
+            _, _, _, expiration = payload[:4]
+            enr_seq = None
+        else:
+            _, _, _, expiration, enr_seq = payload[:5]
+            enr_seq = big_endian_to_int(enr_seq)
+        self.logger.debug2('<<< ping(v4) from %s, enr_seq=%s', node, enr_seq)
+        if self._is_msg_expired(expiration):
+            return
         self.process_ping(node, message_hash)
-        self.send_pong_v4(node, message_hash)
+        await self.send_pong_v4(node, message_hash)
 
-    def recv_find_node_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
+    async def recv_find_node_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The find_node payload should have 2 elements: node_id, expiration
+        if len(payload) < 2:
+            self.logger.warning('Ignoring FIND_NODE msg with invalid payload: %s', payload)
+            return
+        node_id, expiration = payload[:2]
         self.logger.debug2('<<< find_node from %s', node)
-        node_id, _ = payload
+        if self._is_msg_expired(expiration):
+            return
         if node not in self.routing:
             # FIXME: This is not correct; a node we've bonded before may have become unavailable
             # and thus removed from self.routing, but once it's back online we should accept
@@ -501,10 +609,56 @@ class DiscoveryService(Service):
         self.update_routing_table(node)
         found = self.routing.neighbours(big_endian_to_int(node_id))
         self.send_neighbours_v4(node, found)
+        await trio.hazmat.checkpoint()
 
-    def send_ping_v4(self, node: NodeAPI) -> Hash32:
+    async def recv_enr_request(
+            self, node: NodeAPI, payload: Sequence[Any], msg_hash: Hash32) -> None:
+        # The enr_request payload should have at least one element: expiration.
+        if len(payload) < 1:
+            self.logger.warning('Ignoring ENR_REQUEST msg with invalid payload: %s', payload)
+            return
+        expiration = payload[0]
+        if self._is_msg_expired(expiration):
+            return
+        if node not in self.routing:
+            self.logger.info('Ignoring ENR_REQUEST from unknown node %s', node)
+            return
+        enr = await self.get_local_enr()
+        self.logger.debug("Sending ENR: %s", enr)
+        payload = (msg_hash, ENR.serialize(enr))
+        self.send(node, CMD_ENR_RESPONSE, payload)
+
+    async def recv_enr_response(
+            self, node: NodeAPI, payload: Sequence[Any], msg_hash: Hash32) -> None:
+        # The enr_response payload should have at least two elements: request_hash, enr.
+        if len(payload) < 2:
+            self.logger.warning('Ignoring ENR_RESPONSE msg with invalid payload: %s', payload)
+            return
+        token, serialized_enr = payload[:2]
+        try:
+            enr = ENR.deserialize(serialized_enr)
+        except DeserializationError as error:
+            raise ValidationError("ENR in response is not properly encoded") from error
+        if token not in self.enr_incoming_channels:
+            self.logger.debug("Unexpected ENR_RESPONSE with token %s", token)
+            return
+        enr.validate_signature()
+        self.logger.debug(
+            "Received ENR %s with expected response token: %s", enr, encode_hex(token))
+        await self.enr_incoming_channels[token].send(enr)
+
+    def send_enr_request(self, node: NodeAPI) -> Hash32:
+        message = self.send(node, CMD_ENR_REQUEST, [_get_msg_expiration()])
+        token = Hash32(message[:MAC_SIZE])
+        self.logger.debug("Sending ENR request with token: %s", encode_hex(token))
+        return token
+
+    async def send_ping_v4(self, node: NodeAPI) -> Hash32:
         version = rlp.sedes.big_endian_int.serialize(PROTO_VERSION)
-        payload = (version, self.address.to_endpoint(), node.address.to_endpoint())
+        expiration = _get_msg_expiration()
+        local_enr_seq = await self.get_local_enr_seq()
+        payload = (version, self.address.to_endpoint(), node.address.to_endpoint(), expiration,
+                   int_to_big_endian(local_enr_seq))
         message = self.send(node, CMD_PING, payload)
         # Return the msg hash, which is used as a token to identify pongs.
         token = Hash32(message[:MAC_SIZE])
@@ -517,14 +671,17 @@ class DiscoveryService(Service):
         return token
 
     def send_find_node_v4(self, node: NodeAPI, target_node_id: int) -> None:
+        expiration = _get_msg_expiration()
         node_id = int_to_big_endian(
             target_node_id).rjust(constants.KADEMLIA_PUBLIC_KEY_SIZE // 8, b'\0')
         self.logger.debug2('>>> find_node to %s', node)
-        self.send(node, CMD_FIND_NODE, tuple([node_id]))
+        self.send(node, CMD_FIND_NODE, (node_id, expiration))
 
-    def send_pong_v4(self, node: NodeAPI, token: Hash32) -> None:
+    async def send_pong_v4(self, node: NodeAPI, token: Hash32) -> None:
+        expiration = _get_msg_expiration()
         self.logger.debug2('>>> pong %s', node)
-        payload = (node.address.to_endpoint(), token)
+        local_enr_seq = await self.get_local_enr_seq()
+        payload = (node.address.to_endpoint(), token, expiration, int_to_big_endian(local_enr_seq))
         self.send(node, CMD_PONG, payload)
 
     def send_neighbours_v4(self, node: NodeAPI, neighbours: List[NodeAPI]) -> None:
@@ -533,11 +690,13 @@ class DiscoveryService(Service):
         for n in neighbours:
             nodes.append(n.address.to_endpoint() + [n.pubkey.to_bytes()])
 
+        expiration = _get_msg_expiration()
         max_neighbours = self._get_max_neighbours_per_packet()
         for i in range(0, len(nodes), max_neighbours):
             self.logger.debug2('>>> neighbours to %s: %s',
                                node, neighbours[i:i + max_neighbours])
-            self.send(node, CMD_NEIGHBOURS, tuple([nodes[i:i + max_neighbours]]))
+            payload = tuple([nodes[i:i + max_neighbours]]) + (expiration,)
+            self.send(node, CMD_NEIGHBOURS, payload)
 
     def process_neighbours(self, remote: NodeAPI, neighbours: List[NodeAPI]) -> None:
         """Process a neighbours response.
@@ -674,7 +833,7 @@ class PreferredNodeDiscoveryService(DiscoveryService):
 
 
 class StaticDiscoveryService(Service):
-    """A 'discovery' service that only connects to the given nodes"""
+    """A 'discovery' service that does not connect to any nodes."""
     _static_peers: Tuple[NodeAPI, ...]
     _event_bus: EndpointAPI
 
@@ -851,11 +1010,11 @@ def _get_max_neighbours_per_packet() -> int:
     addr = Address('::1', 30303, 30303)
     node_data = addr.to_endpoint() + [b'\x00' * (constants.KADEMLIA_PUBLIC_KEY_SIZE // 8)]
     neighbours = [node_data]
-    expiration = rlp.sedes.big_endian_int.serialize(_get_msg_expiration())
-    payload = rlp.encode([neighbours] + [expiration])
+    expiration = _get_msg_expiration()
+    payload = rlp.encode(tuple([neighbours]) + (expiration,))
     while HEAD_SIZE + len(payload) <= 1280:
         neighbours.append(node_data)
-        payload = rlp.encode([neighbours] + [expiration])
+        payload = rlp.encode(tuple([neighbours]) + (expiration,))
     return len(neighbours) - 1
 
 
@@ -866,8 +1025,7 @@ def _pack_v4(cmd_id: int, payload: Sequence[Any], privkey: datatypes.PrivateKey)
     how UDP packets are structured.
     """
     cmd_id_bytes = to_bytes(cmd_id)
-    expiration = rlp.sedes.big_endian_int.serialize(_get_msg_expiration())
-    encoded_data = cmd_id_bytes + rlp.encode(tuple(payload) + (expiration,))
+    encoded_data = cmd_id_bytes + rlp.encode(payload)
     signature = privkey.sign_msg(encoded_data)
     message_hash = keccak(signature.to_bytes() + encoded_data)
     return message_hash + signature.to_bytes() + encoded_data
@@ -885,18 +1043,12 @@ def _unpack_v4(message: bytes) -> Tuple[datatypes.PublicKey, int, Tuple[Any, ...
     signed_data = message[HEAD_SIZE:]
     remote_pubkey = signature.recover_public_key_from_msg(signed_data)
     cmd_id = message[HEAD_SIZE]
-    try:
-        cmd = CMD_ID_MAP[cmd_id]
-    except KeyError as e:
-        raise UnknownCommand(f"Invalid Command ID {cmd_id}") from e
     payload = tuple(rlp.decode(message[HEAD_SIZE + 1:], strict=False))
-    # Ignore excessive list elements as required by EIP-8.
-    payload = payload[:cmd.elem_count]
     return remote_pubkey, cmd_id, payload, message_hash
 
 
-def _get_msg_expiration() -> int:
-    return int(time.time() + EXPIRATION)
+def _get_msg_expiration() -> bytes:
+    return rlp.sedes.big_endian_int.serialize(int(time.time() + EXPIRATION))
 
 
 class CallbackLock:

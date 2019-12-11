@@ -77,6 +77,11 @@ class Address(AddressAPI):
     def ip(self) -> str:
         return str(self._ip)
 
+    @property
+    def ip_packed(self) -> str:
+        """The binary representation of this IP address."""
+        return self._ip.packed
+
     def __eq__(self, other: Any) -> bool:
         return (self.ip, self.udp_port) == (other.ip, other.udp_port)
 
@@ -103,7 +108,8 @@ class Node(NodeAPI):
     def __init__(self, pubkey: datatypes.PublicKey, address: AddressAPI) -> None:
         self.pubkey = pubkey
         self.address = address
-        self.id = big_endian_to_int(keccak(pubkey.to_bytes()))
+        self.id_bytes = keccak(pubkey.to_bytes())
+        self.id = big_endian_to_int(self.id_bytes)
 
     @classmethod
     def from_uri(cls: Type[TNode], uri: str) -> TNode:

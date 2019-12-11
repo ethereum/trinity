@@ -14,7 +14,24 @@ from eth_hash.auto import keccak
 from eth_keys import keys
 
 from p2p import constants
-from p2p import discovery
+from p2p.discv5.constants import (
+    IP_V4_ADDRESS_ENR_KEY,
+    TCP_PORT_ENR_KEY,
+    UDP_PORT_ENR_KEY,
+)
+from p2p.discv5.identity_schemes import V4IdentityScheme
+from p2p.discovery import (
+    CMD_FIND_NODE,
+    CMD_NEIGHBOURS,
+    CMD_PING,
+    CMD_PONG,
+    DiscoveryService,
+    PROTO_VERSION,
+    _get_msg_expiration,
+    _extract_nodes_from_payload,
+    _pack_v4,
+    _unpack_v4,
+)
 from p2p.tools.factories import (
     AddressFactory,
     NodeFactory,
@@ -33,9 +50,14 @@ async def test_ping_pong(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Collect all pongs received by alice in a list for later inspection.
     received_pongs = []
-    alice.recv_pong_v4 = lambda node, payload, hash_: received_pongs.append((node, payload))
 
-    token = alice.send_ping_v4(bob.this_node)
+    async def recv_pong(node, payload, hash_):
+        await trio.hazmat.checkpoint()
+        received_pongs.append((node, payload))
+
+    alice.recv_pong_v4 = recv_pong
+
+    token = await alice.send_ping_v4(bob.this_node)
 
     with trio.fail_after(0.5):
         await bob.consume_datagram()
@@ -48,6 +70,61 @@ async def test_ping_pong(nursery, manually_driven_discovery_pair):
 
 
 @pytest.mark.trio
+async def test_get_local_enr(manually_driven_discovery):
+    discovery = manually_driven_discovery
+
+    enr = await discovery.get_local_enr()
+
+    assert enr is not None
+    enr.validate_signature()
+    this_node = discovery.this_node
+    assert enr.sequence_number == 1
+    assert enr.identity_scheme == V4IdentityScheme
+    assert this_node.pubkey.to_compressed_bytes() == enr.public_key
+    assert this_node.address.ip_packed == enr[IP_V4_ADDRESS_ENR_KEY]
+    assert this_node.address.udp_port == enr[UDP_PORT_ENR_KEY]
+    assert this_node.address.tcp_port == enr[TCP_PORT_ENR_KEY]
+
+
+@pytest.mark.trio
+async def test_request_enr(nursery, manually_driven_discovery_pair):
+    alice, bob = manually_driven_discovery_pair
+    # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
+    bob.update_routing_table(alice.this_node)
+    alice.update_routing_table(bob.this_node)
+
+    enr = None
+    got_enr = trio.Event()
+
+    async def get_enr():
+        nonlocal enr
+        enr = await alice.request_enr(bob.this_node)
+        got_enr.set()
+
+    # Start a task in the background that requests an ENR to bob and then waits for it.
+    nursery.start_soon(get_enr)
+    await trio.sleep(0)
+
+    # Bob will now consume one datagram containing the ENR_REQUEST from alice, and as part of that
+    # will send an ENR_RESPONSE, which will then be consumed by alice, and as part of that it will
+    # be fed into the request_enr() task we're running the background.
+    with trio.fail_after(0.1):
+        await bob.consume_datagram()
+        await alice.consume_datagram()
+
+    with trio.fail_after(0.1):
+        await got_enr.wait()
+
+    enr.validate_signature()
+    assert enr.sequence_number == 1
+    assert enr.identity_scheme == V4IdentityScheme
+    assert bob.this_node.pubkey.to_compressed_bytes() == enr.public_key
+    assert bob.this_node.address.ip_packed == enr[IP_V4_ADDRESS_ENR_KEY]
+    assert bob.this_node.address.udp_port == enr[UDP_PORT_ENR_KEY]
+    assert bob.this_node.address.tcp_port == enr[TCP_PORT_ENR_KEY]
+
+
+@pytest.mark.trio
 async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Add some nodes to bob's routing table so that it has something to use when replying to
@@ -57,7 +134,12 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
     # Collect all neighbours packets received by alice in a list for later inspection.
     received_neighbours = []
-    alice.recv_neighbours_v4 = lambda node, payload, hash_: received_neighbours.append((node, payload))  # noqa: E501
+
+    async def recv_neighbours(node, payload, hash_):
+        await trio.hazmat.checkpoint()
+        received_neighbours.append((node, payload))
+
+    alice.recv_neighbours_v4 = recv_neighbours
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
     bob.update_routing_table(alice.this_node)
 
@@ -78,7 +160,7 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
     for packet in [packet1, packet2]:
         node, payload = packet
         assert node == bob.this_node
-        neighbours.extend(discovery._extract_nodes_from_payload(
+        neighbours.extend(_extract_nodes_from_payload(
             node.address, payload[0], bob.logger))
     assert len(neighbours) == constants.KADEMLIA_BUCKET_SIZE
 
@@ -112,9 +194,8 @@ async def test_wait_ping(nursery, echo):
     node = NodeFactory()
 
     # Schedule a call to discovery.recv_ping() simulating a ping from the node we expect.
-    async def recv_ping() -> None:
-        discovery.recv_ping_v4(node, echo, b'')
-    nursery.start_soon(recv_ping)
+    expiration = _get_msg_expiration()
+    nursery.start_soon(discovery.recv_ping_v4, node, [None, None, None, expiration], b'')
 
     got_ping = await discovery.wait_ping(node)
 
@@ -124,7 +205,7 @@ async def test_wait_ping(nursery, echo):
 
     # If we waited for a ping from a different node, wait_ping() would timeout and thus return
     # false.
-    nursery.start_soon(recv_ping)
+    nursery.start_soon(discovery.recv_ping_v4, node, [None, None, None, expiration], b'')
 
     node2 = NodeFactory()
     got_ping = await discovery.wait_ping(node2)
@@ -138,14 +219,12 @@ async def test_wait_pong(nursery):
     service = MockDiscoveryService([])
     us = service.this_node
     node = NodeFactory()
-
-    async def recv_pong(payload) -> None:
-        service.recv_pong_v4(node, payload, b'')
+    expiration = _get_msg_expiration()
 
     # Schedule a call to service.recv_pong() simulating a pong from the node we expect.
     token = b'token'
-    pong_msg_payload = [us.address.to_endpoint(), token, discovery._get_msg_expiration()]
-    nursery.start_soon(recv_pong, pong_msg_payload)
+    pong_msg_payload = [us.address.to_endpoint(), token, expiration]
+    nursery.start_soon(service.recv_pong_v4, node, pong_msg_payload, b'')
 
     got_pong = await service.wait_pong_v4(node, token)
 
@@ -157,8 +236,8 @@ async def test_wait_pong(nursery):
     # If the remote node echoed something different than what we expected, wait_pong() would
     # timeout.
     wrong_token = b"foo"
-    pong_msg_payload = [us.address.to_endpoint(), wrong_token, discovery._get_msg_expiration()]
-    nursery.start_soon(recv_pong, pong_msg_payload)
+    pong_msg_payload = [us.address.to_endpoint(), wrong_token, expiration]
+    nursery.start_soon(service.recv_pong_v4, node, pong_msg_payload, b'')
 
     got_pong = await service.wait_pong_v4(node, token)
 
@@ -174,13 +253,11 @@ async def test_wait_neighbours(nursery):
     # Schedule a call to service.recv_neighbours_v4() simulating a neighbours response from the
     # node we expect.
     neighbours = tuple(NodeFactory.create_batch(3))
+    expiration = _get_msg_expiration()
     neighbours_msg_payload = [
         [n.address.to_endpoint() + [n.pubkey.to_bytes()] for n in neighbours],
-        discovery._get_msg_expiration()]
-
-    async def recv_neighbours() -> None:
-        service.recv_neighbours_v4(node, neighbours_msg_payload, b'')
-    nursery.start_soon(recv_neighbours)
+        expiration]
+    nursery.start_soon(service.recv_neighbours_v4, node, neighbours_msg_payload, b'')
 
     received_neighbours = await service.wait_neighbours(node)
 
@@ -201,8 +278,12 @@ async def test_bond(nursery, monkeypatch):
     node = NodeFactory()
 
     token = b'token'
+
+    async def send_ping(node):
+        return token
+
     # Do not send pings, instead simply return the pingid we'd expect back together with the pong.
-    monkeypatch.setattr(discovery, 'send_ping_v4', lambda remote: token)
+    monkeypatch.setattr(discovery, 'send_ping_v4', send_ping)
 
     # Pretend we get a pong from the node we are bonding with.
     async def wait_pong_v4(remote, t) -> bool:
@@ -262,21 +343,20 @@ async def test_update_routing_table_triggers_bond_if_eviction_candidate(
 async def test_get_max_neighbours_per_packet(nursery):
     # This test is just a safeguard against changes that inadvertently modify the behaviour of
     # _get_max_neighbours_per_packet().
-    assert discovery.DiscoveryService._get_max_neighbours_per_packet() == 12
+    assert DiscoveryService._get_max_neighbours_per_packet() == 12
 
 
 def test_discover_v4_message_pack():
     sender, recipient = AddressFactory.create_batch(2)
-    version = rlp.sedes.big_endian_int.serialize(discovery.PROTO_VERSION)
+    version = rlp.sedes.big_endian_int.serialize(PROTO_VERSION)
     payload = (version, sender.to_endpoint(), recipient.to_endpoint())
     privkey = PrivateKeyFactory()
 
-    message = discovery._pack_v4(discovery.CMD_PING.id, payload, privkey)
+    message = _pack_v4(CMD_PING.id, payload, privkey)
 
-    pubkey, cmd_id, payload, _ = discovery._unpack_v4(message)
+    pubkey, cmd_id, payload, _ = _unpack_v4(message)
     assert pubkey == privkey.public_key
-    assert cmd_id == discovery.CMD_PING.id
-    assert len(payload) == discovery.CMD_PING.elem_count
+    assert cmd_id == CMD_PING.id
 
 
 def test_unpack_eip8_packets():
@@ -284,13 +364,12 @@ def test_unpack_eip8_packets():
     # https://github.com/ethereum/EIPs/blob/master/EIPS/eip-8.md
     for cmd, packets in eip8_packets.items():
         for _, packet in packets.items():
-            pubkey, cmd_id, payload, _ = discovery._unpack_v4(packet)
+            pubkey, cmd_id, payload, _ = _unpack_v4(packet)
             assert pubkey.to_hex() == '0xca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31387574077f301b421bc84df7266c44e9e6d569fc56be00812904767bf5ccd1fc7f'  # noqa: E501
             assert cmd.id == cmd_id
-            assert cmd.elem_count == len(payload)
 
 
-class MockDiscoveryService(discovery.DiscoveryService):
+class MockDiscoveryService(DiscoveryService):
     """A DiscoveryService that instead of sending messages over the wire simply stores them in
     self.messages.
 
@@ -309,12 +388,14 @@ class MockDiscoveryService(discovery.DiscoveryService):
         # network as that wouldn't work.
         raise ValueError("MockDiscoveryService must not be used to send network messages")
 
-    def send_ping_v4(self, node):
+    async def send_ping_v4(self, node):
+        await trio.hazmat.checkpoint()
         echo = hex(random.randint(0, 2**256))[-32:]
         self.messages.append((node, 'ping', echo))
         return echo
 
-    def send_pong_v4(self, node, echo):
+    async def send_pong_v4(self, node, echo):
+        await trio.hazmat.checkpoint()
         self.messages.append((node, 'pong', echo))
 
     def send_find_node_v4(self, node, nodeid):
@@ -329,7 +410,7 @@ def remove_whitespace(s):
 
 
 eip8_packets = {
-    discovery.CMD_PING: dict(
+    CMD_PING: dict(
         # ping packet with version 4, additional list elements
         ping1=decode_hex(remove_whitespace("""
         e9614ccfd9fc3e74360018522d30e1419a143407ffcce748de3e22116b7e8dc92ff74788c0b6663a
@@ -349,7 +430,7 @@ eip8_packets = {
         6d922dc3""")),
     ),
 
-    discovery.CMD_PONG: dict(
+    CMD_PONG: dict(
         # pong packet with additional list elements and additional random data
         pong=decode_hex(remove_whitespace("""
         09b2428d83348d27cdf7064ad9024f526cebc19e4958f0fdad87c15eb598dd61d08423e0bf66b206
@@ -360,7 +441,7 @@ eip8_packets = {
         42124e""")),
     ),
 
-    discovery.CMD_FIND_NODE: dict(
+    CMD_FIND_NODE: dict(
         # findnode packet with additional list elements and additional random data
         findnode=decode_hex(remove_whitespace("""
         c7c44041b9f7c7e41934417ebac9a8e1a4c6298f74553f2fcfdcae6ed6fe53163eb3d2b52e39fe91
@@ -371,7 +452,7 @@ eip8_packets = {
         dd7fc0c04ad9ebf3919644c91cb247affc82b69bd2ca235c71eab8e49737c937a2c396""")),
     ),
 
-    discovery.CMD_NEIGHBOURS: dict(
+    CMD_NEIGHBOURS: dict(
         # neighbours packet with additional list elements and additional random data
         neighbours=decode_hex(remove_whitespace("""
         c679fc8fe0b8b12f06577f2e802d34f6fa257e6137a995f6f4cbfc9ee50ed3710faf6e66f932c4c8
