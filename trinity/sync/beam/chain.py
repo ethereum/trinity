@@ -520,10 +520,18 @@ class HeaderOnlyPersist(BaseService):
         else:
             target_hash = self._header_syncer.get_target_header_hash()
             if target_hash in (header.hash for header in headers):
-                self.logger.info(
-                    "Caught up to skeleton peer. Switching to beam mode at %s",
-                    headers[-1],
-                )
+                if self._is_header_eligible_to_beam_sync(headers[-1]):
+                    self.logger.info(
+                        "Caught up to skeleton peer. Switching to beam mode at %s",
+                        headers[-1],
+                    )
+                else:
+                    self.logger.warning(
+                        "Caught up to skeleton peer, but it is lagging too far: %s",
+                        headers[-1],
+                        humanize_seconds(time.time() - headers[-1].timestamp),
+                    )
+                    return
 
                 # We have reached the header syncer's target
                 # Only sync against the most recent header
