@@ -39,11 +39,11 @@ deps = {
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
         "plyvel==1.1.0",
         PYEVM_DEPENDENCY,
-        "web3==4.4.1",
+        "web3==5.4.0",
         "lahja>=0.15.2,<0.16",
         "termcolor>=1.1.0,<2.0.0",
         "uvloop==0.14.0;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
-        "websockets==5.0.1",
+        "websockets>=8.1.0",
         "jsonschema==3.0.1",
         "mypy-extensions>=0.4.3,<0.5.0",
         "typing_extensions>=3.7.2,<4.0.0",
