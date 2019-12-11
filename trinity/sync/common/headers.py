@@ -980,7 +980,7 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
         self._stitcher.register_tasks(first_segment, ignore_duplicates=True)
 
         previous_segment = first_segment
-        async for segment in self.wait_iter(skeleton_generator):
+        async for segment in self.wait_iter(skeleton_generator, token=skeleton_syncer.cancel_token):
             self._stitcher.register_tasks(segment, ignore_duplicates=True)
 
             gap_length = segment[0].block_number - previous_segment[-1].block_number - 1

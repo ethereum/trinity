@@ -3,6 +3,7 @@ import logging
 import uuid
 
 from async_service import background_asyncio_service
+from eth.consensus import ConsensusContext
 from eth.db.atomic import AtomicDB
 from eth.exceptions import HeaderNotFound
 from eth.vm.forks.petersburg import PetersburgVM
@@ -206,6 +207,7 @@ async def test_beam_syncer(
             client_chain = make_pausing_beam_chain(
                 ((0, PetersburgVM), ),
                 chain_id=999,
+                consensus_context_class=ConsensusContext,
                 db=chaindb_fresh.db,
                 event_bus=pausing_endpoint,
                 loop=event_loop,

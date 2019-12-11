@@ -33,7 +33,6 @@ from eth.abc import (
     ReceiptAPI,
     SignedTransactionAPI,
     UnsignedTransactionAPI,
-    VirtualMachineAPI,
 )
 from eth.chains.base import (
     AccountState,
@@ -57,6 +56,7 @@ class LightDispatchChain(AsyncChainAPI, Chain):
     all requests hit the light peer network.
     """
     chaindb_class = AsyncChainDB
+    consensus_context = None
 
     ASYNC_TIMEOUT_SECONDS = 10
     _loop = None
@@ -90,12 +90,6 @@ class LightDispatchChain(AsyncChainAPI, Chain):
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
     def get_chain_at_block_parent(self, block: BlockAPI) -> 'LightDispatchChain':
-        raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
-
-    #
-    # VM API
-    #
-    def get_vm(self, header: BlockHeaderAPI = None) -> VirtualMachineAPI:
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
     #

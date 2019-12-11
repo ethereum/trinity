@@ -19,6 +19,8 @@ from eth_utils import (
 )
 from eth_keys import keys
 
+from eth.consensus.applier import ConsensusApplier
+from eth.consensus.noproof import NoProofConsensus
 from eth import constants as eth_constants
 from eth.chains.base import (
     Chain,
@@ -241,19 +243,14 @@ def chain_without_block_validation(
     which can be found in the funded_address and private_keys variables in the
     chain itself.
     """
-    # Disable block validation so that we don't need to construct finalized blocks.
-    overrides = {
-        'import_block': import_block_without_validation,
-        'validate_block': lambda self, block: None,
-    }
-    SpuriousDragonVMForTesting = SpuriousDragonVM.configure(validate_seal=lambda block: None)
     klass = MiningChain.configure(
         __name__='TestChainWithoutBlockValidation',
-        vm_configuration=(
-            (eth_constants.GENESIS_BLOCK_NUMBER, SpuriousDragonVMForTesting),
+        vm_configuration=ConsensusApplier(NoProofConsensus).amend_vm_configuration(
+            (
+                (eth_constants.GENESIS_BLOCK_NUMBER, SpuriousDragonVM),
+            )
         ),
         chain_id=1337,
-        **overrides,
     )
     genesis_params = {
         'block_number': eth_constants.GENESIS_BLOCK_NUMBER,

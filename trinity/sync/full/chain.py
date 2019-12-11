@@ -696,6 +696,8 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             get_completed_coro = self._block_persist_tracker.ready_tasks(BLOCK_QUEUE_SIZE_TARGET)
             completed_headers = await self.wait(get_completed_coro)
 
+            self.chain.validate_chain_extension(completed_headers)
+
             if self._block_persist_tracker.has_ready_tasks():
                 # Even after clearing out a big batch, there is no available capacity, so
                 # pause any coroutines that might wait for capacity

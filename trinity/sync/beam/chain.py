@@ -422,6 +422,9 @@ class HeaderOnlyPersist(BaseService):
 
     async def _persist_headers(self) -> None:
         async for headers in self._header_syncer.new_sync_headers(HEADER_QUEUE_SIZE_TARGET):
+
+            self._header_syncer._chain.validate_chain_extension(headers)
+
             timer = Timer()
 
             exited = await self._exit_if_checkpoint(headers)

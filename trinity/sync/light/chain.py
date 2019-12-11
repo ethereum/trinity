@@ -21,6 +21,9 @@ class LightChainSyncer(BaseService):
         self._header_syncer = LightHeaderChainSyncer(chain, db, peer_pool, token=self.cancel_token)
 
     async def _run(self) -> None:
+        head = await self.wait(self._db.coro_get_canonical_head())
+        self.logger.info("Starting light sync; current head: %s", head)
+
         self.run_daemon(self._header_syncer)
         self.run_daemon_task(self._persist_headers())
         # run sync until cancelled
@@ -28,6 +31,9 @@ class LightChainSyncer(BaseService):
 
     async def _persist_headers(self) -> None:
         async for headers in self._header_syncer.new_sync_headers():
+
+            self._header_syncer._chain.validate_chain_extension(headers)
+
             timer = Timer()
             await self.wait(self._db.coro_persist_header_chain(headers))
 

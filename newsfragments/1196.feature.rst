@@ -1,0 +1,1 @@
+Add support for networks that run under Clique consensus.
