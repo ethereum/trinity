@@ -86,12 +86,12 @@ class DbShellComponent(Application):
 
         if trinity_config.has_app_config(Eth1AppConfig):
             config = trinity_config.get_app_config(Eth1AppConfig)
-            context = get_eth1_shell_context(config.database_dir, trinity_config)
-            db_shell(is_ipython_available(), context)
+            with get_eth1_shell_context(config.database_dir, trinity_config) as context:
+                db_shell(is_ipython_available(), context)
         elif trinity_config.has_app_config(BeaconAppConfig):
             config = trinity_config.get_app_config(BeaconAppConfig)
-            context = get_beacon_shell_context(config.database_dir, trinity_config)
-            db_shell(is_ipython_available(), context)
+            with get_beacon_shell_context(config.database_dir, trinity_config) as context:
+                db_shell(is_ipython_available(), context)
         else:
             cls.logger.error(
                 "DB Shell only supports the Ethereum 1 and Beacon nodes at this time"

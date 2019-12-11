@@ -45,22 +45,23 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
 
         base_db = DBClient.connect(trinity_config.database_ipc_path)
 
-        loop = asyncio.get_event_loop()
+        with base_db:
+            loop = asyncio.get_event_loop()
 
-        beam_chain = make_pausing_beam_chain(
-            chain_config.vm_configuration,
-            chain_config.chain_id,
-            base_db,
-            event_bus,
-            # these preview executions are lower priority than the primary block import
-            loop=loop,
-            urgent=False,
-        )
+            beam_chain = make_pausing_beam_chain(
+                chain_config.vm_configuration,
+                chain_config.chain_id,
+                base_db,
+                event_bus,
+                # these preview executions are lower priority than the primary block import
+                loop=loop,
+                urgent=False,
+            )
 
-        preview_server = BlockPreviewServer(event_bus, beam_chain, cls.shard_num)
+            preview_server = BlockPreviewServer(event_bus, beam_chain, cls.shard_num)
 
-        async with run_service(preview_server):
-            await preview_server.cancellation()
+            async with run_service(preview_server):
+                await preview_server.cancellation()
 
 
 class BeamChainPreviewComponent0(BeamChainPreviewComponent):

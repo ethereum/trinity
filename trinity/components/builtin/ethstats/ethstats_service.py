@@ -1,5 +1,7 @@
 import asyncio
+import contextlib
 import platform
+from typing import Iterator
 
 import websockets
 
@@ -61,26 +63,27 @@ class EthstatsService(BaseService):
         self.node_contact = node_contact
         self.stats_interval = stats_interval
 
-        self.chain = self.get_chain()
-
     async def _run(self) -> None:
-        while self.is_operational:
-            self.logger.info('Connecting to %s...', self.server_url)
-            async with websockets.connect(self.server_url) as websocket:
-                client: EthstatsClient = EthstatsClient(
-                    websocket,
-                    self.node_id,
-                    token=self.cancel_token,
-                )
+        with self.get_chain() as chain:
+            self.chain = chain
 
-                self.run_daemon_task(self.server_handler(client))
-                self.run_daemon_task(self.statistics_handler(client))
+            while self.is_operational:
+                self.logger.info('Connecting to %s...', self.server_url)
+                async with websockets.connect(self.server_url) as websocket:
+                    client: EthstatsClient = EthstatsClient(
+                        websocket,
+                        self.node_id,
+                        token=self.cancel_token,
+                    )
 
-                await client.run()
-                if self.is_operational and not client.is_operational:
-                    self.logger.info('Connection to %s closed', self.server_url)
-                    self.logger.info('Reconnecting in 5s...')
-                    await self.sleep(5)
+                    self.run_daemon_task(self.server_handler(client))
+                    self.run_daemon_task(self.statistics_handler(client))
+
+                    await client.run()
+                    if self.is_operational and not client.is_operational:
+                        self.logger.info('Connection to %s closed', self.server_url)
+                        self.logger.info('Reconnecting in 5s...')
+                        await self.sleep(5)
 
     # Wait for messages from server, respond when they arrive
     async def server_handler(self, client: EthstatsClient) -> None:
@@ -153,20 +156,22 @@ class EthstatsService(BaseService):
             'peers': peer_count,
         }
 
-    def get_chain(self) -> ChainAPI:
+    @contextlib.contextmanager
+    def get_chain(self) -> Iterator[ChainAPI]:
         app_config = self.boot_info.trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
 
         chain: ChainAPI
         base_db = DBClient.connect(self.boot_info.trinity_config.database_ipc_path)
 
-        if self.boot_info.args.sync_mode == SYNC_LIGHT:
-            header_db = AsyncHeaderDB(base_db)
-            chain = chain_config.light_chain_class(
-                header_db,
-                peer_chain=EventBusLightPeerChain(self.event_bus)
-            )
-        else:
-            chain = chain_config.full_chain_class(base_db)
+        with base_db:
+            if self.boot_info.args.sync_mode == SYNC_LIGHT:
+                header_db = AsyncHeaderDB(base_db)
+                chain = chain_config.light_chain_class(
+                    header_db,
+                    peer_chain=EventBusLightPeerChain(self.event_bus)
+                )
+            else:
+                chain = chain_config.full_chain_class(base_db)
 
-        return chain
+            yield chain

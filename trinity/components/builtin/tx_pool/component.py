@@ -73,24 +73,24 @@ class TxComponent(AsyncioIsolatedComponent):
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         trinity_config = boot_info.trinity_config
         db = DBClient.connect(trinity_config.database_ipc_path)
+        with db:
+            app_config = trinity_config.get_app_config(Eth1AppConfig)
+            chain_config = app_config.get_chain_config()
 
-        app_config = trinity_config.get_app_config(Eth1AppConfig)
-        chain_config = app_config.get_chain_config()
+            chain = chain_config.full_chain_class(db)
 
-        chain = chain_config.full_chain_class(db)
+            if boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
+                validator = DefaultTransactionValidator(chain, PETERSBURG_MAINNET_BLOCK)
+            elif boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
+                validator = DefaultTransactionValidator(chain, PETERSBURG_ROPSTEN_BLOCK)
+            else:
+                raise Exception("This code path should not be reachable")
 
-        if boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
-            validator = DefaultTransactionValidator(chain, PETERSBURG_MAINNET_BLOCK)
-        elif boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
-            validator = DefaultTransactionValidator(chain, PETERSBURG_ROPSTEN_BLOCK)
-        else:
-            raise Exception("This code path should not be reachable")
+            proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 
-        proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+            tx_pool = TxPool(event_bus, proxy_peer_pool, validator)
 
-        tx_pool = TxPool(event_bus, proxy_peer_pool, validator)
-
-        try:
-            await run_asyncio_service(tx_pool)
-        finally:
-            cls.logger.info("Stopping Tx Pool...")
+            try:
+                await run_asyncio_service(tx_pool)
+            finally:
+                cls.logger.info("Stopping Tx Pool...")

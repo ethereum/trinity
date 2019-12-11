@@ -1,15 +1,17 @@
 import code
+import contextlib
 from functools import partial
 from pathlib import Path
 from typing import (
     Any,
     Dict,
+    Iterator,
 )
 
 from eth_utils import encode_hex
 from eth_utils.toolz import merge
 
-from eth.abc import DatabaseAPI
+from eth.abc import AtomicDatabaseAPI
 from eth.chains.base import MiningChain
 from eth.db.chain import ChainDB
 from eth.db.backends.level import LevelDB
@@ -134,75 +136,77 @@ def db_shell(use_ipython: bool, config: Dict[str, str]) -> None:
     shell(use_ipython, namespace, DB_SHELL_BANNER + greeter)
 
 
-def get_eth1_shell_context(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
+@contextlib.contextmanager
+def _get_base_db(database_dir: Path, ipc_path: Path) -> Iterator[AtomicDatabaseAPI]:
+    trinity_already_running = ipc_path.exists()
+    if trinity_already_running:
+        db = DBClient.connect(ipc_path)
+        with db:
+            yield db
+    else:
+        yield LevelDB(database_dir)
+
+
+@contextlib.contextmanager
+def get_eth1_shell_context(database_dir: Path,
+                           trinity_config: TrinityConfig) -> Iterator[Dict[str, Any]]:
     app_config = trinity_config.get_app_config(Eth1AppConfig)
     ipc_path = trinity_config.database_ipc_path
-
-    db: DatabaseAPI
-
     trinity_already_running = ipc_path.exists()
-    if trinity_already_running:
-        db = DBClient.connect(ipc_path)
-    else:
-        db = LevelDB(database_dir)
 
-    chaindb = ChainDB(db)
-    head = chaindb.get_canonical_head()
-    chain_config = app_config.get_chain_config()
-    chain = chain_config.full_chain_class(db)
+    with _get_base_db(database_dir, ipc_path) as db:
+        chaindb = ChainDB(db)
+        head = chaindb.get_canonical_head()
+        chain_config = app_config.get_chain_config()
+        chain = chain_config.full_chain_class(db)
 
-    mining_chain_class = MiningChain.configure(
-        __name__=chain_config.full_chain_class.__name__,
-        vm_configuration=chain.vm_configuration,
-        chain_id=chain.chain_id,
-    )
-    mining_chain = mining_chain_class(db)
-    return {
-        'db': db,
-        'chaindb': chaindb,
-        'trinity_config': trinity_config,
-        'chain_config': chain_config,
-        'chain': chain,
-        'mining_chain': mining_chain,
-        'block_number': head.block_number,
-        'hex_hash': head.hex_hash,
-        'state_root_hex': encode_hex(head.state_root),
-        'trinity_already_running': trinity_already_running,
-    }
+        mining_chain_class = MiningChain.configure(
+            __name__=chain_config.full_chain_class.__name__,
+            vm_configuration=chain.vm_configuration,
+            chain_id=chain.chain_id,
+        )
+        mining_chain = mining_chain_class(db)
+        yield {
+            'db': db,
+            'chaindb': chaindb,
+            'trinity_config': trinity_config,
+            'chain_config': chain_config,
+            'chain': chain,
+            'mining_chain': mining_chain,
+            'block_number': head.block_number,
+            'hex_hash': head.hex_hash,
+            'state_root_hex': encode_hex(head.state_root),
+            'trinity_already_running': trinity_already_running,
+        }
 
 
-def get_beacon_shell_context(database_dir: Path, trinity_config: TrinityConfig) -> Dict[str, Any]:
+@contextlib.contextmanager
+def get_beacon_shell_context(database_dir: Path,
+                             trinity_config: TrinityConfig) -> Iterator[Dict[str, Any]]:
     app_config = trinity_config.get_app_config(BeaconAppConfig)
-
     ipc_path = trinity_config.database_ipc_path
-
-    db: DatabaseAPI
-
     trinity_already_running = ipc_path.exists()
-    if trinity_already_running:
-        db = DBClient.connect(ipc_path)
-    else:
-        db = LevelDB(database_dir)
 
-    chain_config = app_config.get_chain_config()
-    chain = chain_config.beacon_chain_class(
-        db,
-        chain_config.genesis_config
-    )
+    with _get_base_db(database_dir, ipc_path) as db:
+        chain_config = app_config.get_chain_config()
+        chain = chain_config.beacon_chain_class(
+            db,
+            chain_config.genesis_config
+        )
 
-    chaindb = BeaconChainDB(db, chain_config.genesis_config)
-    head = chaindb.get_canonical_head(BeaconBlock)
-    return {
-        'db': db,
-        'chaindb': chaindb,
-        'trinity_config': trinity_config,
-        'chain_config': chain_config,
-        'chain': chain,
-        'block_number': head.slot,
-        'hex_hash': head.hash_tree_root.hex(),
-        'state_root_hex': encode_hex(head.state_root),
-        'trinity_already_running': trinity_already_running
-    }
+        chaindb = BeaconChainDB(db, chain_config.genesis_config)
+        head = chaindb.get_canonical_head(BeaconBlock)
+        yield {
+            'db': db,
+            'chaindb': chaindb,
+            'trinity_config': trinity_config,
+            'chain_config': chain_config,
+            'chain': chain,
+            'block_number': head.slot,
+            'hex_hash': head.hash_tree_root.hex(),
+            'state_root_hex': encode_hex(head.state_root),
+            'trinity_already_running': trinity_already_running
+        }
 
 
 def shell(use_ipython: bool, namespace: Dict[str, Any], banner: str) -> None:

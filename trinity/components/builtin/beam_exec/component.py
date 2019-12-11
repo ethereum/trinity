@@ -40,15 +40,18 @@ class BeamChainExecutionComponent(AsyncioIsolatedComponent):
         app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
 
-        beam_chain = make_pausing_beam_chain(
-            chain_config.vm_configuration,
-            chain_config.chain_id,
-            DBClient.connect(trinity_config.database_ipc_path),
-            event_bus,
-            loop=asyncio.get_event_loop(),
-        )
+        base_db = DBClient.connect(trinity_config.database_ipc_path)
 
-        import_server = BlockImportServer(event_bus, beam_chain)
+        with base_db:
+            beam_chain = make_pausing_beam_chain(
+                chain_config.vm_configuration,
+                chain_config.chain_id,
+                base_db,
+                event_bus,
+                loop=asyncio.get_event_loop(),
+            )
 
-        async with run_service(import_server):
-            await import_server.cancellation()
+            import_server = BlockImportServer(event_bus, beam_chain)
+
+            async with run_service(import_server):
+                await import_server.cancellation()

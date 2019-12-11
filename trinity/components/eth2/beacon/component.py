@@ -97,77 +97,78 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
         key_pair = cls._load_or_create_node_key(boot_info)
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         base_db = DBClient.connect(trinity_config.database_ipc_path)
-        chain_config = beacon_app_config.get_chain_config()
-        chain = chain_config.beacon_chain_class(
-            base_db,
-            chain_config.genesis_config
-        )
-
-        # TODO: Handle `bootstrap_nodes`.
-        libp2p_node = Node(
-            key_pair=key_pair,
-            listen_ip="0.0.0.0",
-            listen_port=boot_info.args.port,
-            preferred_nodes=trinity_config.preferred_nodes,
-            chain=chain,
-        )
-
-        receive_server = BCCReceiveServer(
-            chain=chain,
-            p2p_node=libp2p_node,
-            topic_msg_queues=libp2p_node.pubsub.my_topics,
-            cancel_token=libp2p_node.cancel_token,
-        )
-
-        state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
-        registry_pubkeys = [v_record.pubkey for v_record in state.validators]
-
-        validator_privkeys = {}
-        validator_keymap = chain_config.genesis_data.validator_keymap
-        for pubkey in validator_keymap:
-            try:
-                validator_index = cast(ValidatorIndex, registry_pubkeys.index(pubkey))
-            except ValueError:
-                cls.logger.error(f'Could not find pubkey {pubkey.hex()} in genesis state')
-                raise
-            validator_privkeys[validator_index] = validator_keymap[pubkey]
-
-        validator = Validator(
-            chain=chain,
-            p2p_node=libp2p_node,
-            validator_privkeys=validator_privkeys,
-            event_bus=event_bus,
-            token=libp2p_node.cancel_token,
-            get_ready_attestations_fn=receive_server.get_ready_attestations,
-        )
-
-        slot_ticker = SlotTicker(
-            genesis_slot=chain_config.genesis_config.GENESIS_SLOT,
-            genesis_time=chain_config.genesis_data.genesis_time,
-            seconds_per_slot=chain_config.genesis_config.SECONDS_PER_SLOT,
-            event_bus=event_bus,
-            token=libp2p_node.cancel_token,
-        )
-
-        syncer = BeaconChainSyncer(
-            chain_db=AsyncBeaconChainDB(
+        with base_db:
+            chain_config = beacon_app_config.get_chain_config()
+            chain = chain_config.beacon_chain_class(
                 base_db,
-                chain_config.genesis_config,
-            ),
-            peer_pool=libp2p_node.handshaked_peers,
-            block_importer=SyncBlockImporter(chain),
-            genesis_config=chain_config.genesis_config,
-            token=libp2p_node.cancel_token,
+                chain_config.genesis_config
+            )
 
-        )
+            # TODO: Handle `bootstrap_nodes`.
+            libp2p_node = Node(
+                key_pair=key_pair,
+                listen_ip="0.0.0.0",
+                listen_port=boot_info.args.port,
+                preferred_nodes=trinity_config.preferred_nodes,
+                chain=chain,
+            )
 
-        services = (libp2p_node, receive_server, slot_ticker, validator, syncer)
+            receive_server = BCCReceiveServer(
+                chain=chain,
+                p2p_node=libp2p_node,
+                topic_msg_queues=libp2p_node.pubsub.my_topics,
+                cancel_token=libp2p_node.cancel_token,
+            )
 
-        async with AsyncExitStack() as stack:
-            for service in services:
-                await stack.enter_async_context(run_service(service))
+            state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
+            registry_pubkeys = [v_record.pubkey for v_record in state.validators]
 
-            await asyncio.gather(*(
-                service.cancellation()
-                for service in services
-            ))
+            validator_privkeys = {}
+            validator_keymap = chain_config.genesis_data.validator_keymap
+            for pubkey in validator_keymap:
+                try:
+                    validator_index = cast(ValidatorIndex, registry_pubkeys.index(pubkey))
+                except ValueError:
+                    cls.logger.error(f'Could not find pubkey {pubkey.hex()} in genesis state')
+                    raise
+                validator_privkeys[validator_index] = validator_keymap[pubkey]
+
+            validator = Validator(
+                chain=chain,
+                p2p_node=libp2p_node,
+                validator_privkeys=validator_privkeys,
+                event_bus=event_bus,
+                token=libp2p_node.cancel_token,
+                get_ready_attestations_fn=receive_server.get_ready_attestations,
+            )
+
+            slot_ticker = SlotTicker(
+                genesis_slot=chain_config.genesis_config.GENESIS_SLOT,
+                genesis_time=chain_config.genesis_data.genesis_time,
+                seconds_per_slot=chain_config.genesis_config.SECONDS_PER_SLOT,
+                event_bus=event_bus,
+                token=libp2p_node.cancel_token,
+            )
+
+            syncer = BeaconChainSyncer(
+                chain_db=AsyncBeaconChainDB(
+                    base_db,
+                    chain_config.genesis_config,
+                ),
+                peer_pool=libp2p_node.handshaked_peers,
+                block_importer=SyncBlockImporter(chain),
+                genesis_config=chain_config.genesis_config,
+                token=libp2p_node.cancel_token,
+
+            )
+
+            services = (libp2p_node, receive_server, slot_ticker, validator, syncer)
+
+            async with AsyncExitStack() as stack:
+                for service in services:
+                    await stack.enter_async_context(run_service(service))
+
+                await asyncio.gather(*(
+                    service.cancellation()
+                    for service in services
+                ))

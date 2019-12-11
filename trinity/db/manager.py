@@ -7,8 +7,10 @@ import pathlib
 import socket
 import struct
 import threading
+from types import TracebackType
 from typing import (
     Iterator,
+    Type,
 )
 
 from eth_utils import ValidationError
@@ -249,6 +251,15 @@ class DBClient(BaseAtomicDB):
     def __init__(self, sock: socket.socket):
         self._socket = BufferedSocket(sock)
         self._lock = threading.Lock()
+
+    def __enter__(self) -> None:
+        self._socket.__enter__()
+
+    def __exit__(self,
+                 exc_type: Type[BaseException],
+                 exc_value: BaseException,
+                 exc_tb: TracebackType) -> None:
+        self._socket.__exit__(exc_type, exc_value, exc_tb)
 
     def __getitem__(self, key: bytes) -> bytes:
         with self._lock:

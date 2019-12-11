@@ -2,7 +2,8 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-from typing import Union, Tuple
+import contextlib
+from typing import Iterator, Tuple, Union
 
 from async_service import background_asyncio_service, Service
 from async_exit_stack import AsyncExitStack
@@ -44,41 +45,49 @@ from trinity.rpc.http import (
 )
 
 
+@contextlib.contextmanager
 def chain_for_eth1_config(trinity_config: TrinityConfig,
                           eth1_app_config: Eth1AppConfig,
-                          event_bus: EndpointAPI) -> AsyncChainAPI:
+                          event_bus: EndpointAPI) -> Iterator[AsyncChainAPI]:
     chain_config = eth1_app_config.get_chain_config()
 
     db = DBClient.connect(trinity_config.database_ipc_path)
 
-    if eth1_app_config.database_mode is Eth1DbMode.LIGHT:
-        header_db = HeaderDB(db)
-        event_bus_light_peer_chain = EventBusLightPeerChain(event_bus)
-        return chain_config.light_chain_class(
-            header_db, peer_chain=event_bus_light_peer_chain
-        )
-    elif eth1_app_config.database_mode is Eth1DbMode.FULL:
-        return chain_config.full_chain_class(db)
-    else:
-        raise Exception(f"Unsupported Database Mode: {eth1_app_config.database_mode}")
+    with db:
+        if eth1_app_config.database_mode is Eth1DbMode.LIGHT:
+            header_db = HeaderDB(db)
+            event_bus_light_peer_chain = EventBusLightPeerChain(event_bus)
+            yield chain_config.light_chain_class(
+                header_db, peer_chain=event_bus_light_peer_chain
+            )
+        elif eth1_app_config.database_mode is Eth1DbMode.FULL:
+            yield chain_config.full_chain_class(db)
+        else:
+            raise Exception(f"Unsupported Database Mode: {eth1_app_config.database_mode}")
 
 
+@contextlib.contextmanager
 def chain_for_beacon_config(trinity_config: TrinityConfig,
-                            beacon_app_config: BeaconAppConfig) -> AsyncBeaconChainDB:
+                            beacon_app_config: BeaconAppConfig,
+                            ) -> Iterator[AsyncBeaconChainDB]:
     chain_config = beacon_app_config.get_chain_config()
     db = DBClient.connect(trinity_config.database_ipc_path)
-    return AsyncBeaconChainDB(db, chain_config.genesis_config)
+    with db:
+        yield AsyncBeaconChainDB(db, chain_config.genesis_config)
 
 
+@contextlib.contextmanager
 def chain_for_config(trinity_config: TrinityConfig,
                      event_bus: EndpointAPI,
-                     ) -> Union[AsyncChainAPI, AsyncBeaconChainDB]:
+                     ) -> Iterator[Union[AsyncChainAPI, AsyncBeaconChainDB]]:
     if trinity_config.has_app_config(BeaconAppConfig):
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
-        return chain_for_beacon_config(trinity_config, beacon_app_config)
+        with chain_for_beacon_config(trinity_config, beacon_app_config) as beacon_chain:
+            yield beacon_chain
     elif trinity_config.has_app_config(Eth1AppConfig):
         eth1_app_config = trinity_config.get_app_config(Eth1AppConfig)
-        return chain_for_eth1_config(trinity_config, eth1_app_config, event_bus)
+        with chain_for_eth1_config(trinity_config, eth1_app_config, event_bus) as eth1_chain:
+            yield eth1_chain
     else:
         raise Exception("Unsupported Node Type")
 
@@ -113,31 +122,30 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         trinity_config = boot_info.trinity_config
 
-        chain = chain_for_config(trinity_config, event_bus)
+        with chain_for_config(trinity_config, event_bus) as chain:
+            if trinity_config.has_app_config(Eth1AppConfig):
+                modules = initialize_eth1_modules(chain, event_bus)
+            elif trinity_config.has_app_config(BeaconAppConfig):
+                modules = initialize_beacon_modules(chain, event_bus)
+            else:
+                raise Exception("Unsupported Node Type")
 
-        if trinity_config.has_app_config(Eth1AppConfig):
-            modules = initialize_eth1_modules(chain, event_bus)
-        elif trinity_config.has_app_config(BeaconAppConfig):
-            modules = initialize_beacon_modules(chain, event_bus)
-        else:
-            raise Exception("Unsupported Node Type")
+            rpc = RPCServer(modules, chain, event_bus)
 
-        rpc = RPCServer(modules, chain, event_bus)
+            # Run IPC Server
+            ipc_server = IPCServer(rpc, boot_info.trinity_config.jsonrpc_ipc_path)
+            services_to_exit: Tuple[Service, ...] = (
+                ipc_server,
+            )
 
-        # Run IPC Server
-        ipc_server = IPCServer(rpc, boot_info.trinity_config.jsonrpc_ipc_path)
-        services_to_exit: Tuple[Service, ...] = (
-            ipc_server,
-        )
+            # Run HTTP Server
+            if boot_info.args.enable_http:
+                http_server = HTTPServer(rpc, port=boot_info.args.rpcport)
+                services_to_exit += (http_server,)
 
-        # Run HTTP Server
-        if boot_info.args.enable_http:
-            http_server = HTTPServer(rpc, port=boot_info.args.rpcport)
-            services_to_exit += (http_server,)
-
-        async with AsyncExitStack() as stack:
-            managers = tuple([
-                await stack.enter_async_context(background_asyncio_service(service))
-                for service in services_to_exit
-            ])
-            await managers[0].wait_finished()
+            async with AsyncExitStack() as stack:
+                managers = tuple([
+                    await stack.enter_async_context(background_asyncio_service(service))
+                    for service in services_to_exit
+                ])
+                await managers[0].wait_finished()
