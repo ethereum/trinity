@@ -12,7 +12,7 @@ from typing import AsyncIterator
 
 from async_generator import asynccontextmanager
 
-from trinity._utils.logging import setup_child_process_logging
+from trinity._utils.logging import child_process_logging
 from trinity._utils.os import friendly_filename_or_url
 from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
@@ -97,13 +97,12 @@ class BaseIsolatedComponent(BaseComponent):
 
     @classmethod
     def _run_process(cls, boot_info: BootInfo) -> None:
-        setup_child_process_logging(boot_info)
-
-        if boot_info.profile:
-            with profiler(f'profile_{cls._get_endpoint_name}'):
+        with child_process_logging(boot_info):
+            if boot_info.profile:
+                with profiler(f'profile_{cls._get_endpoint_name}'):
+                    cls.run_process(boot_info)
+            else:
                 cls.run_process(boot_info)
-        else:
-            cls.run_process(boot_info)
 
     @classmethod
     def _get_endpoint_name(cls) -> str:

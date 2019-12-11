@@ -33,7 +33,7 @@ from trinity._utils.ipc import (
     kill_process_gracefully,
 )
 from trinity._utils.logging import (
-    setup_child_process_logging,
+    child_process_logging,
 )
 from trinity._utils.mp import (
     ctx,
@@ -82,22 +82,22 @@ def trinity_boot(boot_info: BootInfo) -> Tuple[multiprocessing.Process]:
 
 
 def run_database_process(boot_info: BootInfo, db_class: Type[LevelDB]) -> None:
-    setup_child_process_logging(boot_info)
-    trinity_config = boot_info.trinity_config
+    with child_process_logging(boot_info):
+        trinity_config = boot_info.trinity_config
 
-    with trinity_config.process_id_file('database'):
-        app_config = trinity_config.get_app_config(Eth1AppConfig)
+        with trinity_config.process_id_file('database'):
+            app_config = trinity_config.get_app_config(Eth1AppConfig)
 
-        base_db = db_class(db_path=app_config.database_dir)
-        chaindb = ChainDB(base_db)
+            base_db = db_class(db_path=app_config.database_dir)
+            chaindb = ChainDB(base_db)
 
-        if not is_database_initialized(chaindb):
-            chain_config = app_config.get_chain_config()
-            initialize_database(chain_config, chaindb, base_db)
+            if not is_database_initialized(chaindb):
+                chain_config = app_config.get_chain_config()
+                initialize_database(chain_config, chaindb, base_db)
 
-        manager = DBManager(base_db)
-        with manager.run(trinity_config.database_ipc_path):
-            try:
-                manager.wait_stopped()
-            except KeyboardInterrupt:
-                pass
+            manager = DBManager(base_db)
+            with manager.run(trinity_config.database_ipc_path):
+                try:
+                    manager.wait_stopped()
+                except KeyboardInterrupt:
+                    pass

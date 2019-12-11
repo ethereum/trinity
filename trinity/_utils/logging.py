@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import logging
 from logging import (
@@ -11,8 +12,10 @@ from pathlib import Path
 import pickle
 import socket
 import sys
+from types import TracebackType
 from typing import (
     Dict,
+    Iterator,
     Type,
     TypeVar,
 )
@@ -38,6 +41,15 @@ class IPCHandler(logging.Handler):
     def __init__(self, sock: socket.socket):
         self._socket = BufferedSocket(sock)
         super().__init__()
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(self,
+                 exc_type: Type[BaseException],
+                 exc_value: BaseException,
+                 exc_tb: TracebackType) -> None:
+        self._socket.close()
 
     @classmethod
     def connect(cls: Type[THandler], path: Path) -> THandler:
@@ -183,7 +195,8 @@ def setup_file_logging(
     return handler_file
 
 
-def setup_child_process_logging(boot_info: BootInfo) -> None:
+@contextlib.contextmanager
+def child_process_logging(boot_info: BootInfo) -> Iterator[None]:
     # We get the root logger here to ensure that all logs are given a chance to
     # pass through this handler
     logger = logging.getLogger()
@@ -201,6 +214,11 @@ def setup_child_process_logging(boot_info: BootInfo) -> None:
         boot_info.trinity_config.logging_ipc_path.resolve(),
         os.getpid(),
     )
+    with ipc_handler:
+        try:
+            yield
+        finally:
+            logger.removeHandler(ipc_handler)
 
 
 def _set_environ_if_missing(name: str, val: str) -> None:
