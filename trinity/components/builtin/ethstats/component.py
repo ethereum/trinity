@@ -6,11 +6,10 @@ from argparse import (
     _SubParsersAction,
 )
 
+from async_service import run_asyncio_service
 from eth_utils import ValidationError
 
 from lahja.base import EndpointAPI
-
-from p2p.service import run_service
 
 from trinity.boot_info import BootInfo
 from trinity.constants import (
@@ -122,5 +121,4 @@ class EthstatsComponent(AsyncioIsolatedComponent):
             args.ethstats_interval,
         )
 
-        async with run_service(service):
-            await service.cancellation()
+        await run_asyncio_service(service)

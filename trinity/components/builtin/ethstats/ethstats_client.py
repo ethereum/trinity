@@ -8,15 +8,9 @@ from typing import (
     NamedTuple,
 )
 
+from async_service import Service
+from eth_utils import get_extended_debug_logger
 import websockets
-
-from cancel_token import (
-    CancelToken,
-)
-
-from p2p.service import (
-    BaseService,
-)
 
 
 # Returns UTC timestamp in ms, used for latency calculation
@@ -36,35 +30,35 @@ class EthstatsException(Exception):
     pass
 
 
-class EthstatsClient(BaseService):
+class EthstatsClient(Service):
+    logger = get_extended_debug_logger('trinity.components.ethstats.Client')
+
     def __init__(
         self,
         websocket: websockets.client.WebSocketClientProtocol,
         node_id: str,
-        token: CancelToken = None,
     ) -> None:
-        super().__init__(token)
-
         self.websocket = websocket
         self.node_id = node_id
 
         self.send_queue: asyncio.Queue[EthstatsMessage] = asyncio.Queue()
         self.recv_queue: asyncio.Queue[EthstatsMessage] = asyncio.Queue()
 
-    async def _run(self) -> None:
-        await self.wait_first(
-            self.send_handler(),
-            self.recv_handler(),
-        )
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.send_handler)
+        self.manager.run_daemon_task(self.recv_handler)
+        await self.manager.wait_finished()
 
     # Get messages from websocket, deserialize them and put into queue
     async def recv_handler(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             try:
                 json_string = await self.websocket.recv()
             except websockets.ConnectionClosed as e:
                 self.logger.debug2("Connection closed: %s", e)
-                await self.cancel()
+                self.manager.cancel()
+                return
+
             try:
                 message: EthstatsMessage = self.deserialize_message(str(json_string))
             except EthstatsException as e:
@@ -75,7 +69,7 @@ class EthstatsClient(BaseService):
 
     # Get messages from queue, serialize them and send over websocket
     async def send_handler(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             message: EthstatsMessage = await self.send_queue.get()
             json_string: str = self.serialize_message(message)
 
@@ -115,7 +109,6 @@ class EthstatsClient(BaseService):
         return await self.recv_queue.get()
 
     # Following methods used to enqueue messages to be sent
-
     async def send_hello(self, secret: str, info: EthstatsData) -> None:
         await self.send_queue.put(EthstatsMessage(
             'hello',
