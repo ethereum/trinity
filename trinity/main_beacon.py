@@ -34,7 +34,7 @@ from trinity.initialization import (
 from trinity.components.registry import (
     get_components_for_beacon_client,
 )
-from trinity._utils.logging import setup_child_process_logging
+from trinity._utils.logging import child_process_logging
 from trinity._utils.ipc import (
     wait_for_ipc,
     kill_process_gracefully,
@@ -86,22 +86,22 @@ def trinity_boot(boot_info: BootInfo) -> Tuple[multiprocessing.Process, ...]:
 
 
 def run_database_process(boot_info: BootInfo, db_class: Type[LevelDB]) -> None:
-    setup_child_process_logging(boot_info)
-    trinity_config = boot_info.trinity_config
+    with child_process_logging(boot_info):
+        trinity_config = boot_info.trinity_config
 
-    with trinity_config.process_id_file('database'):
-        app_config = trinity_config.get_app_config(BeaconAppConfig)
-        chain_config = app_config.get_chain_config()
+        with trinity_config.process_id_file('database'):
+            app_config = trinity_config.get_app_config(BeaconAppConfig)
+            chain_config = app_config.get_chain_config()
 
-        base_db = db_class(db_path=app_config.database_dir)
-        chaindb = BeaconChainDB(base_db, chain_config.genesis_config)
+            base_db = db_class(db_path=app_config.database_dir)
+            chaindb = BeaconChainDB(base_db, chain_config.genesis_config)
 
-        if not is_beacon_database_initialized(chaindb, BeaconBlock):
-            initialize_beacon_database(chain_config, chaindb, base_db, BeaconBlock)
+            if not is_beacon_database_initialized(chaindb, BeaconBlock):
+                initialize_beacon_database(chain_config, chaindb, base_db, BeaconBlock)
 
-        manager = DBManager(base_db)
-        with manager.run(trinity_config.database_ipc_path):
-            try:
-                manager.wait_stopped()
-            except KeyboardInterrupt:
-                pass
+            manager = DBManager(base_db)
+            with manager.run(trinity_config.database_ipc_path):
+                try:
+                    manager.wait_stopped()
+                except KeyboardInterrupt:
+                    pass
