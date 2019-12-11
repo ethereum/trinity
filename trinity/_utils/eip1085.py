@@ -1,3 +1,7 @@
+from enum import (
+    auto,
+    Enum,
+)
 import json
 from pathlib import Path
 from typing import (
@@ -96,8 +100,16 @@ class GenesisParams(NamedTuple):
         }
 
 
+class MiningMethod(Enum):
+
+    NoProof = auto()
+    Ethash = auto()
+    Clique = auto()
+
+
 class GenesisData(NamedTuple):
     chain_id: int
+    mining_method: MiningMethod
     params: GenesisParams
     state: Dict[Address, Account]
     vm_configuration: VMConfiguration
@@ -234,6 +246,18 @@ def extract_chain_id(genesis_config: RawEIP1085Dict) -> int:
     return to_int(hexstr=genesis_config['params']['chainId'])
 
 
+def extract_mining_method(genesis_config: RawEIP1085Dict) -> MiningMethod:
+    miningMethod = genesis_config['params']['miningMethod']
+    if miningMethod.lower() == "clique":
+        return MiningMethod.Clique
+    elif miningMethod.lower() == "ethash":
+        return MiningMethod.Ethash
+    elif miningMethod.lower() == "noproof":
+        return MiningMethod.NoProof
+    else:
+        raise ValueError(f"Unsupported mining method: {miningMethod}")
+
+
 @to_dict
 def _normalize_storage(storage: Dict[HexStr, HexStr]) -> Iterable[Tuple[int, int]]:
     for slot, value in storage.items():
@@ -267,6 +291,8 @@ def extract_genesis_data(raw_genesis_config: RawEIP1085Dict) -> GenesisData:
     version = raw_genesis_config['version']
     if version != '1':
         raise ValueError(f"Unsupported version: {version}")
+
+    mining_method = extract_mining_method(raw_genesis_config)
     state = extract_genesis_state(raw_genesis_config)
     params = extract_genesis_params(raw_genesis_config)
     vm_configuration = extract_vm_configuration(raw_genesis_config)
@@ -274,6 +300,7 @@ def extract_genesis_data(raw_genesis_config: RawEIP1085Dict) -> GenesisData:
 
     return GenesisData(
         chain_id=chain_id,
+        mining_method=mining_method,
         params=params,
         state=state,
         vm_configuration=vm_configuration,

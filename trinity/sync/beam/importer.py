@@ -18,6 +18,7 @@ from eth.abc import (
     AtomicDatabaseAPI,
     BlockAPI,
     BlockHeaderAPI,
+    ConsensusContextAPI,
     SignedTransactionAPI,
     StateAPI,
     VirtualMachineAPI,
@@ -146,6 +147,7 @@ class BeamChain(FullChain):
 def make_pausing_beam_chain(
         vm_config: VMConfiguration,
         chain_id: int,
+        consensus_context_class: Type[ConsensusContextAPI],
         db: AtomicDatabaseAPI,
         event_bus: EndpointAPI,
         loop: asyncio.AbstractEventLoop,

@@ -51,6 +51,7 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
             beam_chain = make_pausing_beam_chain(
                 chain_config.vm_configuration,
                 chain_config.chain_id,
+                chain_config.consensus_context_class,
                 base_db,
                 event_bus,
                 # these preview executions are lower priority than the primary block import

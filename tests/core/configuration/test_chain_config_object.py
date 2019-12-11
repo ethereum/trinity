@@ -6,7 +6,6 @@ from eth_utils import (
 )
 
 from eth.db.atomic import AtomicDB
-from eth.vm.forks.constantinople import ConstantinopleVM
 from eth.vm.forks.homestead import HomesteadVM
 from eth.chains.mainnet import (
     MainnetChain,
@@ -93,7 +92,10 @@ def test_chain_config_from_eip1085_genesis_config():
     chain_config = Eth1ChainConfig.from_eip1085_genesis_config(EIP1085_GENESIS_CONFIG)
 
     assert chain_config.chain_id == 1234
-    assert chain_config.vm_configuration == ((0, ConstantinopleVM),)
+    assert len(chain_config.vm_configuration) == 1
+    fork_block, fork_vm = chain_config.vm_configuration[0]
+    assert fork_block == 0
+    assert fork_vm.fork == 'constantinople'
 
     params = chain_config.genesis_params
 

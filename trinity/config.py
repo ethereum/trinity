@@ -29,7 +29,17 @@ from typing import (
 
 from eth.abc import (
     AtomicDatabaseAPI,
+    ConsensusContextAPI,
 )
+from eth.consensus import (
+    CliqueApplier,
+    ConsensusApplier,
+    ConsensusContext,
+    CliqueConsensusContext,
+    NoProofConsensus,
+    PowConsensus,
+)
+
 from eth.typing import (
     VMConfiguration,
 )
@@ -76,6 +86,7 @@ from trinity._utils.eip1085 import (
     Account,
     GenesisData,
     GenesisParams,
+    MiningMethod,
     extract_genesis_data,
 )
 from trinity._utils.filesystem import (
@@ -155,12 +166,34 @@ class Eth1ChainConfig:
             return self._chain_name
 
     @property
+    def mining_method(self) -> MiningMethod:
+        return self.genesis_data.mining_method
+
+    def apply_consensus_engine(self, vms: VMConfiguration) -> VMConfiguration:
+        if self.mining_method == MiningMethod.Clique:
+            return CliqueApplier().amend_vm_configuration(vms)
+        elif self.mining_method == MiningMethod.NoProof:
+            return ConsensusApplier(NoProofConsensus).amend_vm_configuration(vms)
+        elif self.mining_method == MiningMethod.Ethash:
+            return ConsensusApplier(PowConsensus).amend_vm_configuration(vms)
+        else:
+            raise NotImplementedError(f"{self.mining_method} is not supported")
+
+    @property
+    def consensus_context_class(self) -> Type[ConsensusContextAPI]:
+        if self.mining_method == MiningMethod.Clique:
+            return CliqueConsensusContext
+        else:
+            return ConsensusContext
+
+    @property
     def full_chain_class(self) -> Type['FullChain']:
         from trinity.chains.full import FullChain  # noqa: F811
 
         return FullChain.configure(
             __name__=self.chain_name,
             vm_configuration=self.vm_configuration,
+            consensus_context_class=self.consensus_context_class,
             chain_id=self.chain_id,
         )
 
@@ -171,6 +204,7 @@ class Eth1ChainConfig:
         return LightDispatchChain.configure(
             __name__=self.chain_name,
             vm_configuration=self.vm_configuration,
+            consensus_context_class=self.consensus_context_class,
             chain_id=self.chain_id,
         )
 
@@ -226,7 +260,7 @@ class Eth1ChainConfig:
         """
         Return the vm configuration specifed from the genesis configuration file.
         """
-        return self.genesis_data.vm_configuration
+        return self.apply_consensus_engine(self.genesis_data.vm_configuration)
 
 
 LOGGING_IPC_SOCKET_FILENAME = 'logging.ipc'

@@ -82,7 +82,7 @@ class DAOCheckBootManager(BasePeerBootManager):
                 parent, header = headers
 
             try:
-                vm_class.validate_header(header, parent, check_seal=True)
+                vm_class.validate_header(header, parent)
             except ValidationError as err:
                 raise DAOForkCheckFailure(f"{self.peer} failed DAO fork check validation: {err}")
 
