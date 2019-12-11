@@ -141,12 +141,12 @@ async def ConnectionPairFactory(
 
 class BeaconBlockBodyFactory(factory.Factory):
     class Meta:
-        model = BeaconBlockBody
+        model = BeaconBlockBody.create
 
 
 class BeaconBlockFactory(factory.Factory):
     class Meta:
-        model = BeaconBlock
+        model = BeaconBlock.create
 
     slot = SERENITY_GENESIS_CONFIG.GENESIS_SLOT
     parent_root = ZERO_SIGNING_ROOT
