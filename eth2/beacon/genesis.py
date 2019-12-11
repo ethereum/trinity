@@ -62,6 +62,7 @@ def initialize_beacon_state_from_eth1(
         block_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         state_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         randao_mixes=(eth1_block_hash,) * config.EPOCHS_PER_HISTORICAL_VECTOR,
+        slashings=(0,) * config.EPOCHS_PER_SLASHINGS_VECTOR,
         config=config,
     )
 
