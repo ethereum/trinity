@@ -109,7 +109,7 @@ def _get_slot_with_validator_selected(candidate_indices, state, config):
     for index in candidate_indices:
         try:
             for slot in range(epoch_start_slot, epoch_start_slot + config.SLOTS_PER_EPOCH):
-                state = state.copy(slot=slot)
+                state = state.set("slot", slot)
                 if is_proposer(state, index, config):
                     return slot, index
         except NoCommitteeAssignment:
@@ -392,9 +392,7 @@ async def test_validator_include_ready_attestations(event_loop, event_bus, monke
 
     proposing_slot = attesting_slot + MINIMAL_SERENITY_CONFIG.MIN_ATTESTATION_INCLUSION_DELAY
     proposer_index = get_beacon_proposer_index(
-        state.copy(
-            slot=proposing_slot,
-        ),
+        state.set("slot", proposing_slot),
         CommitteeConfig(state_machine.config),
     )
 
