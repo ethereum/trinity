@@ -45,18 +45,13 @@ def _mk_attestation_inputs_in_epoch(epoch, block_producer, state, config):
             # empty committee this slot
             continue
 
-<<<<<<< HEAD
         block = block_producer(slot)
         root = block.signing_root
-        attestation_data = AttestationData(
+        attestation_data = AttestationData.create(
             slot=slot,
             index=committee_index,
-            target=Checkpoint(epoch=epoch, root=root),
+            target=Checkpoint.create(epoch=epoch, root=root),
             beacon_block_root=root,
-=======
-        attestation_data = AttestationData.create(
-            slot=slot, index=committee_index, target=Checkpoint.create(epoch=epoch)
->>>>>>> 34804039... Make most fork choice tests pass
         )
         committee_size = len(committee)
         aggregation_bits = bitfield.get_empty_bitfield(committee_size)
@@ -289,21 +284,6 @@ def test_store_get_latest_attestation(
         pool_attestations_by_index,
     )
 
-<<<<<<< HEAD
-=======
-    # ensure we get the expected results
-    state = state.mset(
-        "previous_epoch_attestations",
-        previous_epoch_attestations,
-        "current_epoch_attestations",
-        current_epoch_attestations,
-    )
-
-    pool = empty_attestation_pool
-    for attestation in pool_attestations:
-        pool.add(attestation)
-
->>>>>>> 34804039... Make most fork choice tests pass
     chain_db = None  # not relevant for this test
     context = Context.from_genesis(genesis_state, genesis_block)
     context.time = some_time
