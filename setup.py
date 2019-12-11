@@ -114,7 +114,7 @@ deps = {
         "py-ecc==1.7.1",
         "rlp>=1.1.0,<2.0.0",
         PYEVM_DEPENDENCY,
-        "ssz==0.1.5",
+        "ssz==0.2.2",
     ],
     'eth2-extra': [
         "milagro-bls-binding==0.1.3",
