@@ -173,9 +173,9 @@ async def test_web3_commands_via_attached_console(command,
             "Components started",
             "IPC started at",
             # Ensure we do not start making requests before Trinity is ready.
-            # Waiting for the json-rpc-api event bus to connect to other endpoints
-            # seems to be late enough in the process for this to be the case.
-            "EventBus Endpoint bjson-rpc-api connecting to other Endpoints",
+            # Waiting for the JSON-RPC API to be announced seems to be
+            # late enough in the process for this to be the case.
+            "New EventBus Endpoint connected bjson-rpc-api",
         })
 
         attached_trinity = pexpect.spawn(
