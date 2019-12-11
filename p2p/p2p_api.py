@@ -4,6 +4,7 @@ from typing import Optional
 from cached_property import cached_property
 
 from p2p.abc import ConnectionAPI
+from p2p.exceptions import PeerConnectionLost
 from p2p.logic import Application, CommandHandler
 from p2p.disconnect import DisconnectReason
 from p2p.p2p_proto import Disconnect, Ping, Pong
@@ -17,7 +18,10 @@ class PongWhenPinged(CommandHandler[Ping]):
     command_type = Ping
 
     async def handle(self, connection: ConnectionAPI, cmd: Ping) -> None:
-        connection.get_base_protocol().send(Pong(None))
+        try:
+            connection.get_base_protocol().send(Pong(None))
+        except PeerConnectionLost:
+            self.logger.debug("Lost connection while Ponging to %s", connection)
 
 
 class CancelOnDisconnect(CommandHandler[Disconnect]):
