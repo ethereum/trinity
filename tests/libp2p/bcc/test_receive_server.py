@@ -119,9 +119,9 @@ async def wait_all_messages_processed(queue):
 
 def test_attestation_pool():
     pool = AttestationPool()
-    a1 = Attestation()
-    a2 = Attestation(data=a1.data.copy(beacon_block_root=b"\x55" * 32))
-    a3 = Attestation(data=a1.data.copy(beacon_block_root=b"\x66" * 32))
+    a1 = Attestation.create()
+    a2 = Attestation.create(data=a1.data.set("beacon_block_root", b"\x55" * 32))
+    a3 = Attestation.create(data=a1.data.set("beacon_block_root", b"\x66" * 32))
 
     # test: add
     pool.add(a1)
@@ -284,7 +284,7 @@ async def test_bcc_receive_server_handle_beacon_blocks(receive_server):
 
 @pytest.mark.asyncio
 async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
-    attestation = Attestation()
+    attestation = Attestation.create()
     encoded_attestation = ssz.encode(attestation)
     msg = rpc_pb2.Message(
         from_id=b"my_id",
@@ -306,7 +306,7 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
 
     # Put the attestation in the next block
     block = get_blocks(receive_server.chain, num_blocks=1)[0]
-    block = block.copy(body=block.body.copy(attestations=[attestation]))
+    block = block.transform(["body", "attestations"], [attestation])
     encoded_block = ssz.encode(block, BeaconBlock)
     msg = rpc_pb2.Message(
         from_id=b"my_id",
@@ -340,8 +340,8 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
     # second iteration will request block 3 and import block 3, block 4 and block 5.
     blocks = get_blocks(receive_server.chain, num_blocks=5)
     fork_blocks = (
-        blocks[2].copy(state_root=b"\x01" * 32),
-        blocks[2].copy(state_root=b"\x12" * 32),
+        blocks[2].set("state_root", b"\x01" * 32),
+        blocks[2].set("state_root", b"\x12" * 32),
     )
     mock_peer_1_db = {block.signing_root: block for block in blocks[3:]}
     mock_peer_2_db = {block.signing_root: block for block in blocks[:3]}
@@ -404,10 +404,10 @@ async def test_bcc_receive_server_get_ready_attestations(receive_server, monkeyp
     monkeypatch.setattr(receive_server.chain, "get_head_state", mock_get_head_state)
 
     attesting_slot = MINIMAL_SERENITY_CONFIG.GENESIS_SLOT
-    a1 = Attestation(data=AttestationData(slot=attesting_slot))
-    a2 = Attestation(signature=b"\x56" * 96, data=AttestationData(slot=attesting_slot))
-    a3 = Attestation(
-        signature=b"\x78" * 96, data=AttestationData(slot=attesting_slot + 1)
+    a1 = Attestation.create(data=AttestationData.create(slot=attesting_slot))
+    a2 = Attestation.create(signature=b"\x56" * 96, data=AttestationData.create(slot=attesting_slot))
+    a3 = Attestation.create(
+        signature=b"\x78" * 96, data=AttestationData.create(slot=attesting_slot + 1)
     )
     receive_server.attestation_pool.batch_add([a1, a2, a3])
 
