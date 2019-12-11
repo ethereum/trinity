@@ -8,15 +8,14 @@ from typing import (
 )
 import uuid
 
+from async_service import Service
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
-
+from eth_utils import get_extended_debug_logger
 from eth_utils.toolz import partition_all
 from eth.abc import SignedTransactionAPI
 
 from p2p.abc import SessionAPI
-from p2p.service import BaseService
 
 from trinity._utils.bloom import RollingBloom
 from trinity.protocol.eth.events import (
@@ -41,7 +40,7 @@ BATCH_LOW_WATER = 100
 BATCH_HIGH_WATER = 200
 
 
-class TxPool(BaseService):
+class TxPool(Service):
     """
     The :class:`~trinity.tx_pool.pool.TxPool` class is responsible for holding and relaying
     of transactions, represented as :class:`~eth.abc.SignedTransactionAPI` among the
@@ -52,13 +51,13 @@ class TxPool(BaseService):
         This is a minimal viable implementation that only relays transactions but doesn't actually
         hold on to them yet. It's still missing many features of a grown up transaction pool.
     """
+    logger = get_extended_debug_logger('trinity.components.txpool.TxPool')
 
     def __init__(self,
                  event_bus: EndpointAPI,
                  peer_pool: ETHProxyPeerPool,
                  tx_validation_fn: Callable[[SignedTransactionAPI], bool],
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
+                 ) -> None:
         self._event_bus = event_bus
         self._peer_pool = peer_pool
 
@@ -96,15 +95,15 @@ class TxPool(BaseService):
     # now.
     msg_queue_maxsize: int = 2000
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.info("Running Tx Pool")
 
         # background process which aggregates transactions and relays them to
         # our other peers.
-        self.run_daemon_task(self._process_transactions())
+        self.manager.run_daemon_task(self._process_transactions)
 
-        async for event in self.wait_iter(self._event_bus.stream(TransactionsEvent)):
-            self.run_task(self._handle_tx(event.session, event.command.payload))
+        async for event in self._event_bus.stream(TransactionsEvent):
+            self.manager.run_task(self._handle_tx, event.session, event.command.payload)
 
     async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SignedTransactionAPI]) -> None:
 
@@ -114,11 +113,11 @@ class TxPool(BaseService):
         await self._internal_queue.put(txs)
 
     async def _process_transactions(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             buffer: List[SignedTransactionAPI] = []
 
             # wait for there to be items available on the queue.
-            transactions = await self.wait(self._internal_queue.get())
+            transactions = await self._internal_queue.get()
             buffer.extend(transactions)
 
             # continue to pull items from the queue synchronously until the
@@ -132,7 +131,7 @@ class TxPool(BaseService):
             # Now that the queue is either empty or we have an adequate number
             # to send to our peers, broadcast them to the appropriate peers.
             for batch in partition_all(BATCH_HIGH_WATER, buffer):
-                peers = await self.wait(self._peer_pool.get_peers())
+                peers = await self._peer_pool.get_peers()
                 for receiving_peer in peers:
                     filtered_tx = self._filter_tx_for_peer(receiving_peer, batch)
                     if len(filtered_tx) == 0:
@@ -178,6 +177,3 @@ class TxPool(BaseService):
         for val in txs:
             key = self._construct_bloom_entry(session, val)
             self._bloom.add(key)
-
-    async def do_cleanup(self) -> None:
-        self.logger.info("Stopping Tx Pool...")

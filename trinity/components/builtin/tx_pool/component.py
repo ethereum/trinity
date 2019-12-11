@@ -4,12 +4,11 @@ from argparse import (
 )
 import logging
 
+from async_service import run_asyncio_service
 from eth_utils import ValidationError
 from eth.chains.mainnet import PETERSBURG_MAINNET_BLOCK
 from eth.chains.ropsten import PETERSBURG_ROPSTEN_BLOCK
 from lahja import EndpointAPI
-
-from p2p.service import run_service
 
 from trinity.boot_info import BootInfo
 from trinity.config import (
@@ -91,5 +90,7 @@ class TxComponent(AsyncioIsolatedComponent):
 
         tx_pool = TxPool(event_bus, proxy_peer_pool, validator)
 
-        async with run_service(tx_pool):
-            await tx_pool.cancellation()
+        try:
+            await run_asyncio_service(tx_pool)
+        finally:
+            cls.logger.info("Stopping Tx Pool...")

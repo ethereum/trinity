@@ -2,11 +2,11 @@ import asyncio
 import pytest
 import uuid
 
+from async_service import background_asyncio_service
 from eth._utils.address import (
     force_bytes_to_address
 )
 
-from p2p.service import run_service
 from p2p.tools.factories import SessionFactory
 
 from trinity.components.builtin.tx_pool.pool import (
@@ -67,7 +67,7 @@ async def test_tx_propagation(event_bus,
 
     async with run_proxy_peer_pool(event_bus) as peer_pool:
         tx_pool = TxPool(event_bus, peer_pool, tx_validator)
-        async with run_service(tx_pool):
+        async with background_asyncio_service(tx_pool):
 
             run_mock_request_response(
                 GetConnectedPeersRequest, GetConnectedPeersResponse(initial_two_peers), event_bus)
@@ -144,7 +144,7 @@ async def test_does_not_propagate_invalid_tx(event_bus,
 
     async with run_proxy_peer_pool(event_bus) as peer_pool:
         tx_pool = TxPool(event_bus, peer_pool, tx_validator)
-        async with run_service(tx_pool):
+        async with background_asyncio_service(tx_pool):
             run_mock_request_response(
                 GetConnectedPeersRequest, GetConnectedPeersResponse(initial_two_peers), event_bus)
 
