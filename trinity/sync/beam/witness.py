@@ -162,7 +162,7 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
             await self._witness_node_tasks.add(new_node_tasks)
         else:
             self.logger.warning(
-                "All witness data for is block %d:%s available, ignoring witness metadata",
+                "All witness data for block %d:%s is available, ignoring",
                 block_number,
                 encode_hex(block_hash[:3]),
             )
@@ -254,7 +254,28 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
             peer: ETHPeer,
             request_tasks: Tuple[NodeDownloadTask, ...], batch_id: int) -> None:
 
-        self.logger.debug("Requesting %d nodes from %s", len(request_tasks), peer)
+        pre_side_channelled_tasks = set(
+            task for task in request_tasks
+            if task.node_hash in self._db
+        )
+        unknown_node_tasks = tuple(
+            task for task in request_tasks
+            if task.node_hash not in self._db
+        )
+
+        if not unknown_node_tasks:
+            self._queening_queue.readd_peasant(peer, GAP_BETWEEN_WITNESS_DOWNLOADS)
+
+            self.logger.info(
+                "Skipped all %d trie node download tasks as side-channelled, from blocks %r",
+                len(pre_side_channelled_tasks),
+                set(task.block_number for task in pre_side_channelled_tasks),
+            )
+            self._witness_node_tasks.complete(batch_id, pre_side_channelled_tasks)
+            # Early return, because we don't want to make any request to the peer
+            return
+
+        self.logger.debug("Requesting %d nodes from %s", len(unknown_node_tasks), peer)
         try:
             nodes = await peer.eth_api.get_node_data(
                 tuple(set(task.node_hash for task in request_tasks))
@@ -284,10 +305,13 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
                 task for task in request_tasks
                 if task.node_hash in node_lookup
             )
+
+            # find just the tasks that were side-channeled during the request
             side_channel_tasks = set(
                 task for task in request_tasks
                 if task.node_hash in self._db
-            )
+            ) - pre_side_channelled_tasks
+
             # self._lowest_block_number must be set here, because the download shouldn't happen
             # until a trigger, which sets lowest block number
             stale_tasks = set(
@@ -295,15 +319,17 @@ class BeamStateWitnessCollector(BaseService, PeerSubscriber, QueenTrackerAPI):
                 if task.block_number < self._highest_block_number - NUM_BLOCKS_WITH_DOWNLOADABLE_STATE or task.block_number < self._lowest_block_number  # noqa: E501
             )
 
-            closing_tasks_set = completed_tasks | side_channel_tasks | stale_tasks
+            closing_tasks_set = completed_tasks | side_channel_tasks | stale_tasks | pre_side_channelled_tasks
             remaining_tasks = set(request_tasks) - closing_tasks_set
             if len(closing_tasks_set):
                 self.logger.info(
-                    "%s returned %d witness nodes, with %d completed tasks w/ block #s %r, %d side-channeled tasks w/ block #s %r, and %d stale tasks w/ block #s %r, for a total of %d closed tasks; %d tasks remain from block #s %r",
+                    "%s returned %d witness nodes, with %d completed tasks w/ block #s %r, %d pre-side-channeled tasks w/ block #s %r, %d side-channeled tasks w/ block #s %r, and %d stale tasks w/ block #s %r, for a total of %d closed tasks; %d tasks remain from block #s %r",
                     peer,
                     num_nodes,
                     len(completed_tasks),
                     set(task.block_number for task in completed_tasks),
+                    len(pre_side_channelled_tasks),
+                    set(task.block_number for task in pre_side_channelled_tasks),
                     len(side_channel_tasks),
                     set(task.block_number for task in side_channel_tasks),
                     len(stale_tasks),
