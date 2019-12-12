@@ -1,0 +1,4 @@
+Upgraded py-evm to fix the error: `` KeyError: (b'\x03', 'key could not be deleted in JournalDB,
+because it was missing')``, while importing Istanbul blocks. See `other py-evm changes from
+v0.3.0-alpha.11
+<https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-11-2019-12-12>`_
