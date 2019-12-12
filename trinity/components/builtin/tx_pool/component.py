@@ -8,6 +8,7 @@ from async_service import run_asyncio_service
 from eth_utils import ValidationError
 from eth.chains.mainnet import ISTANBUL_MAINNET_BLOCK
 from eth.chains.ropsten import ISTANBUL_ROPSTEN_BLOCK
+from eth.chains.goerli import ISTANBUL_GOERLI_BLOCK
 from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
@@ -17,6 +18,7 @@ from trinity.config import (
 from trinity.constants import (
     SYNC_LIGHT,
     TO_NETWORKING_BROADCAST_CONFIG,
+    GOERLI_NETWORK_ID,
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID,
 )
@@ -49,11 +51,11 @@ class TxComponent(AsyncioIsolatedComponent):
     @classmethod
     def validate_cli(cls, boot_info: BootInfo) -> None:
         network_id = boot_info.trinity_config.network_id
-        if network_id not in {MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID}:
+        if network_id not in {MAINNET_NETWORK_ID, ROPSTEN_NETWORK_ID, GOERLI_NETWORK_ID}:
             if not boot_info.args.disable_tx_pool:
                 raise ValidationError(
-                    "The TxPool component only supports Mainnet and Ropsten.  You "
-                    "can run with the transaction pool disabled using "
+                    "The TxPool component only supports Mainnet, Ropsten and Goerli."
+                    "You can run with the transaction pool disabled using "
                     "--disable-tx-pool"
                 )
 
@@ -83,6 +85,8 @@ class TxComponent(AsyncioIsolatedComponent):
                 validator = DefaultTransactionValidator(chain, ISTANBUL_MAINNET_BLOCK)
             elif boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
                 validator = DefaultTransactionValidator(chain, ISTANBUL_ROPSTEN_BLOCK)
+            elif boot_info.trinity_config.network_id == GOERLI_NETWORK_ID:
+                validator = DefaultTransactionValidator(chain, ISTANBUL_GOERLI_BLOCK)
             else:
                 raise Exception("This code path should not be reachable")
 
