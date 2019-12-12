@@ -107,7 +107,7 @@ def _find_collision(state, config, validator_index, epoch, block_producer):
             attestation_data = AttestationData.create(
                 slot=slot,
                 index=committee_index,
-                target=Checkpoint.create(epoch=epoch),
+                target=Checkpoint.create(epoch=epoch, root=root),
                 beacon_block_root=root,
             )
             committee_count = len(committee)
@@ -176,7 +176,7 @@ def _mk_block_at_slot(block_template, slot):
     if slot in block_producer_cache:
         return block_producer_cache[slot]
     else:
-        block = block_template.copy(slot=slot)
+        block = block_template.set("slot", slot)
         block_producer_cache[slot] = block
         return block
 
