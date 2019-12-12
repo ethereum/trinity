@@ -405,7 +405,9 @@ async def test_bcc_receive_server_get_ready_attestations(receive_server, monkeyp
 
     attesting_slot = MINIMAL_SERENITY_CONFIG.GENESIS_SLOT
     a1 = Attestation.create(data=AttestationData.create(slot=attesting_slot))
-    a2 = Attestation.create(signature=b"\x56" * 96, data=AttestationData.create(slot=attesting_slot))
+    a2 = Attestation.create(
+        signature=b"\x56" * 96, data=AttestationData.create(slot=attesting_slot)
+    )
     a3 = Attestation.create(
         signature=b"\x78" * 96, data=AttestationData.create(slot=attesting_slot + 1)
     )
