@@ -2,13 +2,13 @@ from typing import (
     Sequence,
 )
 
-import ssz
 from ssz.sedes import (
     List,
     bytes4,
     bytes32,
     uint64,
 )
+from ssz.hashable_container import HashableContainer
 
 from eth2.beacon.typing import (
     Version,
@@ -21,7 +21,7 @@ from eth2.beacon.constants import ZERO_SIGNING_ROOT
 from .configs import GoodbyeReasonCode
 
 
-class Status(ssz.Serializable):
+class Status(HashableContainer):
     fields = [
         ('head_fork_version', bytes4),
         ('finalized_root', bytes32),
@@ -30,33 +30,35 @@ class Status(ssz.Serializable):
         ('head_slot', uint64),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls,
         head_fork_version: Version = default_version,
         finalized_root: SigningRoot = ZERO_SIGNING_ROOT,
         finalized_epoch: Epoch = default_epoch,
         head_root: SigningRoot = ZERO_SIGNING_ROOT,
         head_slot: Slot = default_slot,
-    ) -> None:
-        super().__init__(
-            head_fork_version,
-            finalized_root,
-            finalized_epoch,
-            head_root,
-            head_slot,
+    ) -> "Status":
+        return super().create(
+            head_fork_version=head_fork_version,
+            finalized_root=finalized_root,
+            finalized_epoch=finalized_epoch,
+            head_root=head_root,
+            head_slot=head_slot,
         )
 
 
-class Goodbye(ssz.Serializable):
+class Goodbye(HashableContainer):
     fields = [
         ('reason', uint64),
     ]
 
-    def __init__(self, reason: int) -> None:
-        super().__init__(GoodbyeReasonCode(reason))
+    @classmethod
+    def create(self, reason: int) -> None:
+        return super().create(reason=GoodbyeReasonCode(reason))
 
 
-class BeaconBlocksByRangeRequest(ssz.Serializable):
+class BeaconBlocksByRangeRequest(HashableContainer):
     fields = [
         ('head_block_root', bytes32),
         ('start_slot', uint64),
@@ -64,25 +66,27 @@ class BeaconBlocksByRangeRequest(ssz.Serializable):
         ('step', uint64),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls,
         head_block_root: SigningRoot,
         start_slot: Slot,
         count: int,
         step: int,
-    ) -> None:
-        super().__init__(
-            head_block_root,
-            start_slot,
-            count,
-            step,
+    ) -> "BeaconBlocksByRangeRequest":
+        return super().create(
+            head_block_root=head_block_root,
+            start_slot=start_slot,
+            count=count,
+            step=step,
         )
 
 
-class BeaconBlocksByRootRequest(ssz.Serializable):
+class BeaconBlocksByRootRequest(HashableContainer):
     fields = [
-        ('block_roots', List(bytes32, 1)),
+        ('block_roots', List(bytes32, 64)),
     ]
 
-    def __init__(self, block_roots: Sequence[SigningRoot]) -> None:
-        super().__init__(block_roots)
+    @classmethod
+    def create(cls, block_roots: Sequence[SigningRoot]) -> "BeaconBlocksByRootRequest":
+        return super().create(block_roots=block_roots)

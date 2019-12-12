@@ -573,7 +573,7 @@ class Node(BaseService):
     async def say_goodbye(self, peer_id: ID, reason: GoodbyeReasonCode) -> None:
         stream = await self.new_stream(peer_id, REQ_RESP_GOODBYE_SSZ)
         async with Interaction(stream) as interaction:
-            goodbye = Goodbye(reason)
+            goodbye = Goodbye.create(reason)
             try:
                 await interaction.write_request(goodbye)
             except WriteMessageFailure:
@@ -612,7 +612,7 @@ class Node(BaseService):
         stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ)
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
-            request = BeaconBlocksByRangeRequest(
+            request = BeaconBlocksByRangeRequest.create(
                 head_block_root=head_block_root,
                 start_slot=start_slot,
                 count=count,
@@ -642,7 +642,7 @@ class Node(BaseService):
         stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
-            request = BeaconBlocksByRootRequest(block_roots=block_roots)
+            request = BeaconBlocksByRootRequest.create(block_roots=block_roots)
             await interaction.write_request(request)
             blocks = tuple([
                 block async for block in

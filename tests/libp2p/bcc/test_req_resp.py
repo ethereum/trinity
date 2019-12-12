@@ -28,7 +28,7 @@ async def test_handshake_failure_invalid_status_packet(monkeypatch, mock_timeout
     async with ConnectionPairFactory(handshake=False) as (alice, bob):
 
         def status_with_wrong_fork_version(chain):
-            return Status(
+            return Status.create(
                 head_fork_version=b"\x12\x34\x56\x78"  # version different from another node.
             )
 
@@ -39,7 +39,7 @@ async def test_handshake_failure_invalid_status_packet(monkeypatch, mock_timeout
         assert bob.peer_id not in alice.handshaked_peers
 
         def status_with_wrong_checkpoint(chain):
-            return Status(
+            return Status.create(
                 finalized_root=b"\x78"
                 * 32  # finalized root different from another node.
             )
