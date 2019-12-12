@@ -10,6 +10,7 @@ from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
 from eth2._utils.merkle.common import verify_merkle_branch
 from trinity.components.eth2.eth1_monitor.eth1_monitor import (
     make_deposit_tree_and_root,
+    GetDistanceRequest,
     GetEth1DataRequest,
     GetDepositRequest,
     Eth1Monitor,
@@ -277,6 +278,8 @@ async def test_ipc(
     async def request(request_type, **kwargs):
         await endpoint_client.wait_until_any_endpoint_subscribed_to(request_type)
         resp = await endpoint_client.request(request_type(**kwargs), broadcast_config)
+        if request_type is GetDistanceRequest:
+            return resp
         return resp.to_data()
 
     # Result from IPC should be the same as the direct call with the same args.
@@ -308,3 +311,27 @@ async def test_ipc(
     }
     with pytest.raises(Eth1MonitorValidationError):
         await request(GetEth1DataRequest, **get_eth1_data_kwargs_fails)
+
+    # Test: `get_distance`
+    # Fast forward for a few blocks
+    tester.mine_blocks(5)
+    latest_block = w3.eth.getBlock("latest")
+    latest_confirmed_block_number = latest_block.number - num_blocks_confirmed
+    latest_confirmed_block = w3.eth.getBlock(latest_confirmed_block_number)
+    eth1_voting_period_start_timestamp = latest_confirmed_block["timestamp"]
+    for distance in range(latest_confirmed_block_number):
+        block = w3.eth.getBlock(latest_confirmed_block_number - distance)
+        get_distance_kwargs = {
+            "block_hash": block["hash"],
+            "eth1_voting_period_start_timestamp": eth1_voting_period_start_timestamp,
+        }
+        resp = await request(GetDistanceRequest, **get_distance_kwargs)
+        assert distance == resp.distance
+        assert resp.error is None
+    # Fails
+    get_distance_fail_kwargs = {
+        "block_hash": b'\x12' * 32,
+        "eth1_voting_period_start_timestamp": eth1_voting_period_start_timestamp,
+    }
+    resp = await request(GetDistanceRequest, **get_distance_fail_kwargs)
+    assert resp.error is not None
