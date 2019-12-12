@@ -1,1 +1,2 @@
 Add support for networks that run under Clique consensus.
+Add support for syncing the Görli network via `--goerli` flag.

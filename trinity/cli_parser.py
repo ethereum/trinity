@@ -17,6 +17,7 @@ from p2p.validation import validate_enode_uri
 from trinity import __version__
 from trinity._utils.eip1085 import validate_raw_eip1085_genesis_config
 from trinity.constants import (
+    GOERLI_NETWORK_ID,
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID,
 )
@@ -225,6 +226,16 @@ networkid_parser.add_argument(
     help=(
         "Ropsten network: pre configured proof-of-work test network.  Shortcut "
         "for `--networkid=3`"
+    ),
+)
+networkid_parser.add_argument(
+    '--goerli',
+    action='store_const',
+    const=GOERLI_NETWORK_ID,
+    dest='network_id',
+    help=(
+        "Goerli network: pre configured proof-of-authority (Clique) test network.  Shortcut "
+        "for `--networkid=5`"
     ),
 )
 

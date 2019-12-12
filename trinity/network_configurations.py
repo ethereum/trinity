@@ -8,15 +8,28 @@ from eth.abc import VirtualMachineAPI
 
 from eth_typing.evm import BlockNumber
 
-from eth.chains.mainnet import MAINNET_GENESIS_HEADER, MAINNET_VM_CONFIGURATION
-from eth.chains.ropsten import ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
+from eth.chains.goerli import (
+    GOERLI_GENESIS_HEADER,
+    GOERLI_VM_CONFIGURATION,
+)
+from eth.chains.mainnet import (
+    MAINNET_GENESIS_HEADER,
+    MAINNET_VM_CONFIGURATION,
+)
+from eth.chains.ropsten import (
+    ROPSTEN_GENESIS_HEADER,
+    ROPSTEN_VM_CONFIGURATION,
+)
+
 from eth.rlp.headers import BlockHeader
 
 from p2p.constants import (
+    GOERLI_BOOTNODES,
     MAINNET_BOOTNODES,
     ROPSTEN_BOOTNODES,
 )
 from trinity.constants import (
+    GOERLI_NETWORK_ID,
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID
 )
@@ -34,6 +47,15 @@ class Eth1NetworkConfiguration(NamedTuple):
 
 
 PRECONFIGURED_NETWORKS = {
+    GOERLI_NETWORK_ID: Eth1NetworkConfiguration(
+        GOERLI_NETWORK_ID,
+        'GoerliChain',
+        'goerli',
+        'goerli.json',
+        GOERLI_BOOTNODES,
+        GOERLI_GENESIS_HEADER,
+        GOERLI_VM_CONFIGURATION,
+    ),
     MAINNET_NETWORK_ID: Eth1NetworkConfiguration(
         MAINNET_NETWORK_ID,
         'MainnetChain',
