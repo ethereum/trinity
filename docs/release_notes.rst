@@ -5,6 +5,32 @@ Trinity is moving fast. Read up on all the latest improvements.
 
 .. towncrier release notes start
 
+Trinity 0.1.0-alpha.33 (2019-12-12)
+-----------------------------------
+
+Bugfixes
+~~~~~~~~
+
+- Upgraded py-evm to fix the error: ``KeyError: (b'\x03', 'key could not be deleted in JournalDB,
+  because it was missing')``, while importing Istanbul blocks. See `other py-evm changes from
+  v0.3.0-alpha.11
+  <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-11-2019-12-12>`_ (`#1376 <https://github.com/ethereum/trinity/issues/1376>`__)
+
+
+Internal Changes - for Trinity Contributors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Fix flaky interactive web3 console test
+
+  Due to the way components cross connect to each
+  other, not all logs of that startup routine are
+  happening deterministically. We were waiting on
+  a log that would sometimes never show up for all
+  valid reason. This test is now based on a log that
+  is guaranteed to show up unless a serious bug
+  happened. (`#1382 <https://github.com/ethereum/trinity/issues/1382>`__)
+
+
 Trinity 0.1.0-alpha.32 (2019-12-09)
 -----------------------------------
 

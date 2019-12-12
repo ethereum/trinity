@@ -1,9 +1,0 @@
-Fix flaky interactive web3 console test
-
-Due to the way components cross connect to each
-other, not all logs of that startup routine are
-happening deterministically. We were waiting on
-a log that would sometimes never show up for all
-valid reason. This test is now based on a log that
-is guaranteed to show up unless a serious bug
-happened.
