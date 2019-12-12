@@ -229,7 +229,7 @@ class Eth1Monitor(Service):
                 f"contract_deposit_root={contract_deposit_root.hex()}, "
                 f"deposit_root={deposit_root.hex()}"
             )
-        return Eth1Data(
+        return Eth1Data.create(
             deposit_root=deposit_root,
             deposit_count=accumulated_deposit_count,
             block_hash=block_hash,
@@ -257,7 +257,7 @@ class Eth1Monitor(Service):
             )
         deposit_data_in_range = self._db.get_deposit_data_range(0, deposit_count)
         tree, root = make_deposit_tree_and_root(deposit_data_in_range)
-        return Deposit(
+        return Deposit.create(
             proof=make_deposit_proof(deposit_data_in_range, tree, root, deposit_index),
             data=self._db.get_deposit_data(deposit_index),
         )
@@ -338,7 +338,7 @@ class Eth1Monitor(Service):
         `deposit_count`.
         """
         seq_deposit_data = tuple(
-            DepositData(
+            DepositData.create(
                 pubkey=log.pubkey,
                 withdrawal_credentials=log.withdrawal_credentials,
                 amount=log.amount,

@@ -33,7 +33,7 @@ SAMPLE_VALID_SIGNATURE = b"\x33" * 96
 
 class DepositDataFactory(factory.Factory):
     class Meta:
-        model = DepositData
+        model = DepositData.create
 
     pubkey = SAMPLE_PUBKEY
     withdrawal_credentials = SAMPLE_WITHDRAWAL_CREDENTIALS
