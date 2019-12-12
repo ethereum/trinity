@@ -84,7 +84,7 @@ release: clean
 	git config commit.gpgSign "$(CURRENT_SIGN_SETTING)"
 
 create-docker-image: clean
-	docker build -t ethereum/trinity:latest -t ethereum/trinity:$(version) .
+	docker build -t ethereum/trinity:latest -t ethereum/trinity:$(version) -f ./docker/Dockerfile ./docker
 
 create-dappnode-image: clean
 	sed -i -e 's/ARG GITREF=\w*/ARG GITREF=$(trinity_version)/g' ./dappnode/build/Dockerfile

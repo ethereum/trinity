@@ -373,12 +373,19 @@ jobs:
         environment:
           TOXENV: py37-eth2-components
 
-  docker-image-build-test:
+  docker-trinity-image-build-test:
     machine: true
     steps:
       - checkout
-      - run: docker build -t ethereum/trinity:test-build .
+      - run: docker build -t ethereum/trinity:test-build -f ./docker/Dockerfile .
       - run: docker run ethereum/trinity:test-build --help
+
+  docker-trinity-beacon-image-build-test:
+    machine: true
+    steps:
+      - checkout
+      - run: docker build -t ethereum/trinity-beacon:test-build -f ./docker/beacon.Dockerfile .
+      - run: docker run ethereum/trinity-beacon:test-build --help
 
 workflows:
   version: 2
@@ -434,4 +441,5 @@ workflows:
       - py37-lint
       - py37-lint-eth2
 
-      - docker-image-build-test
+      - docker-trinity-image-build-test
+      - docker-trinity-beacon-image-build-test
