@@ -9,6 +9,7 @@ from async_generator import (
 )
 import pytest
 
+from async_service import background_asyncio_service
 from lahja import AsyncioEndpoint
 
 from eth_utils import (
@@ -286,11 +287,7 @@ async def ipc_server(
         chain_with_block_validation,
         event_bus,
     )
-    ipc_server = IPCServer(rpc, jsonrpc_ipc_pipe_path, loop=event_loop)
+    ipc_server = IPCServer(rpc, jsonrpc_ipc_pipe_path)
 
-    asyncio.ensure_future(ipc_server.run(), loop=event_loop)
-
-    try:
+    async with background_asyncio_service(ipc_server):
         yield ipc_server
-    finally:
-        await ipc_server.cancel()

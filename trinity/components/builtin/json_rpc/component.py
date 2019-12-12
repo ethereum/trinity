@@ -4,6 +4,7 @@ from argparse import (
 )
 from typing import Union, Tuple
 
+from async_service import background_asyncio_service, Service
 from async_exit_stack import AsyncExitStack
 
 from lahja import EndpointAPI
@@ -11,8 +12,6 @@ from lahja import EndpointAPI
 from eth.db.header import (
     HeaderDB,
 )
-
-from p2p.service import run_service
 
 from trinity.boot_info import BootInfo
 from trinity.config import (
@@ -43,7 +42,6 @@ from trinity.rpc.ipc import (
 from trinity.rpc.http import (
     HTTPServer,
 )
-from p2p.service import BaseService
 
 
 def chain_for_eth1_config(trinity_config: TrinityConfig,
@@ -128,7 +126,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
 
         # Run IPC Server
         ipc_server = IPCServer(rpc, boot_info.trinity_config.jsonrpc_ipc_path)
-        services_to_exit: Tuple[BaseService, ...] = (
+        services_to_exit: Tuple[Service, ...] = (
             ipc_server,
         )
 
@@ -138,6 +136,8 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
             services_to_exit += (http_server,)
 
         async with AsyncExitStack() as stack:
-            for service in services_to_exit:
-                await stack.enter_async_context(run_service(service))
-            await ipc_server.cancellation()
+            managers = tuple([
+                await stack.enter_async_context(background_asyncio_service(service))
+                for service in services_to_exit
+            ])
+            await managers[0].wait_finished()

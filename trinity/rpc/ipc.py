@@ -8,16 +8,8 @@ from typing import (
     Tuple,
 )
 
+from async_service import Service
 from eth_utils.toolz import curry
-
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
-
-from p2p.service import (
-    BaseService,
-)
 
 from trinity.rpc.main import (
     RPCServer,
@@ -26,22 +18,21 @@ from trinity.rpc.main import (
 MAXIMUM_REQUEST_BYTES = 10000
 
 
+logger = logging.getLogger('trinity.rpc.IPCServer')
+
+
 @curry
 async def connection_handler(execute_rpc: Callable[[Any], Any],
-                             cancel_token: CancelToken,
                              reader: asyncio.StreamReader,
                              writer: asyncio.StreamWriter) -> None:
     """
     Catch fatal errors, log them, and close the connection
     """
-    logger = logging.getLogger('trinity.rpc.ipc')
 
     try:
-        await connection_loop(execute_rpc, reader, writer, logger, cancel_token),
+        await connection_loop(execute_rpc, reader, writer),
     except (ConnectionResetError, asyncio.IncompleteReadError):
         logger.debug("Client closed connection")
-    except OperationCancelled:
-        logger.debug("CancelToken triggered")
     except Exception:
         logger.exception("Unrecognized exception while handling requests")
     finally:
@@ -50,23 +41,21 @@ async def connection_handler(execute_rpc: Callable[[Any], Any],
 
 async def connection_loop(execute_rpc: Callable[[Any], Any],
                           reader: asyncio.StreamReader,
-                          writer: asyncio.StreamWriter,
-                          logger: logging.Logger,
-                          cancel_token: CancelToken) -> None:
+                          writer: asyncio.StreamWriter) -> None:
     # TODO: we should look into using an io.StrinIO here for more efficient
     # writing to the end of the string.
     raw_request = ''
     while True:
         request_bytes = b''
         try:
-            request_bytes = await cancel_token.cancellable_wait(reader.readuntil(b'}'))
+            request_bytes = await reader.readuntil(b'}')
         except asyncio.LimitOverrunError as e:
             logger.info("Client request was too long. Erasing buffer and restarting...")
-            request_bytes = await cancel_token.cancellable_wait(reader.read(e.consumed))
-            await cancel_token.cancellable_wait(write_error(
+            request_bytes = await reader.read(e.consumed)
+            await write_error(
                 writer,
                 f"reached limit: {e.consumed} bytes, starting with '{request_bytes[:20]!r}'",
-            ))
+            )
             continue
 
         raw_request += request_bytes.decode()
@@ -74,9 +63,7 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
         bad_prefix, raw_request = strip_non_json_prefix(raw_request)
         if bad_prefix:
             logger.info("Client started request with non json data: %r", bad_prefix)
-            await cancel_token.cancellable_wait(
-                write_error(writer, 'Cannot parse json: ' + bad_prefix),
-            )
+            await write_error(writer, 'Cannot parse json: ' + bad_prefix)
 
         try:
             request = json.loads(raw_request)
@@ -90,22 +77,18 @@ async def connection_loop(execute_rpc: Callable[[Any], Any],
 
         if not request:
             logger.debug("Client sent empty request")
-            await cancel_token.cancellable_wait(
-                write_error(writer, 'Invalid Request: empty'),
-            )
+            await write_error(writer, 'Invalid Request: empty')
             continue
 
         try:
             result = await execute_rpc(request)
         except Exception as e:
             logger.exception("Unrecognized exception while executing RPC")
-            await cancel_token.cancellable_wait(
-                write_error(writer, "unknown failure: " + str(e)),
-            )
+            await write_error(writer, "unknown failure: " + str(e))
         else:
             writer.write(result.encode())
 
-        await cancel_token.cancellable_wait(writer.drain())
+        await writer.drain()
 
 
 def strip_non_json_prefix(raw_request: str) -> Tuple[str, str]:
@@ -122,32 +105,29 @@ async def write_error(writer: asyncio.StreamWriter, message: str) -> None:
     await writer.drain()
 
 
-class IPCServer(BaseService):
+class IPCServer(Service):
     ipc_path = None
     rpc = None
     server = None
 
+    logger = logger
+
     def __init__(
             self,
             rpc: RPCServer,
-            ipc_path: pathlib.Path,
-            token: CancelToken = None,
-            loop: asyncio.AbstractEventLoop = None) -> None:
-        super().__init__(token=token, loop=loop)
+            ipc_path: pathlib.Path) -> None:
         self.rpc = rpc
         self.ipc_path = ipc_path
 
-    async def _run(self) -> None:
-        self.server = await asyncio.start_unix_server(
-            connection_handler(self.rpc.execute, self.cancel_token),
+    async def run(self) -> None:
+        server = await asyncio.start_unix_server(
+            connection_handler(self.rpc.execute),
             str(self.ipc_path),
-            loop=self.get_event_loop(),
             limit=MAXIMUM_REQUEST_BYTES,
         )
         self.logger.info('IPC started at: %s', self.ipc_path.resolve())
-        await self.cancel_token.wait()
-
-    async def _cleanup(self) -> None:
-        self.server.close()
-        await self.server.wait_closed()
-        self.ipc_path.unlink()
+        try:
+            await self.manager.wait_finished()
+        finally:
+            server.close()
+            self.ipc_path.unlink()
