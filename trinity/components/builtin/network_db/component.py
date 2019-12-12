@@ -8,11 +8,11 @@ import logging
 from typing import ClassVar, Iterable
 
 from async_exit_stack import AsyncExitStack
+from async_service import background_asyncio_service, Service
 from eth_utils import ValidationError, to_tuple
 from lahja import EndpointAPI
 from sqlalchemy.orm import Session
 
-from p2p.service import BaseService, run_service
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
@@ -217,7 +217,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
     @to_tuple
     def _get_services(cls,
                       boot_info: BootInfo,
-                      event_bus: EndpointAPI) -> Iterable[BaseService]:
+                      event_bus: EndpointAPI) -> Iterable[Service]:
         if boot_info.args.disable_blacklistdb:
             # Allow this component to be disabled for extreme cases such as the
             # user swapping in an equivalent experimental version.
@@ -241,9 +241,11 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
             cls.logger.exception(f"Unrecoverable error in Network Component: {err}")
 
         async with AsyncExitStack() as stack:
-            for service in tracker_services:
-                await stack.enter_async_context(run_service(service))
-            await asyncio.gather(*(
-                service.cancellation()
+            tracker_managers = tuple([
+                await stack.enter_async_context(background_asyncio_service(service))
                 for service in tracker_services
+            ])
+            await asyncio.gather(*(
+                manager.wait_finished()
+                for manager in tracker_managers
             ))
