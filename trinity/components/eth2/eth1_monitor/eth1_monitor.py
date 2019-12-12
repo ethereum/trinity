@@ -34,6 +34,8 @@ from eth2.beacon.tools.builder.validator import (
 from .db import BaseDepositDataDB, ListCachedDepositDataDB
 from .eth1_data_provider import BaseEth1DataProvider, DepositLog, Eth1Block
 from .events import (
+    GetDistanceRequest,
+    GetDistanceResponse,
     GetDepositResponse,
     GetDepositRequest,
     GetEth1DataRequest,
@@ -110,12 +112,29 @@ class Eth1Monitor(Service):
         self.logger.info("Eth1 Monitor up")
         self.manager.run_daemon_task(self._handle_new_logs)
         self.manager.run_daemon_task(
+            self._run_handle_request, *(GetDistanceRequest, self._handle_get_distance)
+        )
+        self.manager.run_daemon_task(
             self._run_handle_request, *(GetDepositRequest, self._handle_get_deposit)
         )
         self.manager.run_daemon_task(
             self._run_handle_request, *(GetEth1DataRequest, self._handle_get_eth1_data)
         )
         await self.manager.wait_finished()
+
+    def _handle_get_distance(self, req: GetDistanceRequest) -> GetDistanceResponse:
+        """
+        Handle requests for `get_distance` from the event bus.
+        """
+        block = self._eth1_data_provider.get_block(req.block_hash)
+        if block is None:
+            raise Eth1MonitorValidationError(
+                f"Block does not exist for block_hash={req.block_hash}"
+            )
+        eth1_voting_period_start_block_number = self._get_closest_eth1_voting_period_start_block(
+            req.eth1_voting_period_start_timestamp,
+        )
+        return GetDistanceResponse(distance=(eth1_voting_period_start_block_number - block.number))
 
     async def _handle_new_logs(self) -> None:
         """
@@ -172,7 +191,12 @@ class Eth1Monitor(Service):
                 f"`distance`={distance}, ",
                 f"eth1_voting_period_start_block_number={eth1_voting_period_start_block_number}",
             )
-        block_hash = self._eth1_data_provider.get_block(target_block_number).block_hash
+        block = self._eth1_data_provider.get_block(target_block_number)
+        if block is None:
+            raise Eth1MonitorValidationError(
+                f"Block does not exist for block number={target_block_number}"
+            )
+        block_hash = block.block_hash
         # `Eth1Data.deposit_count`: get the `deposit_count` corresponding to the block.
         accumulated_deposit_count = self._get_accumulated_deposit_count(
             target_block_number
@@ -235,9 +259,14 @@ class Eth1Monitor(Service):
             try:
                 resp = event_handler(req)
             except Exception as e:
-                await self._event_bus.broadcast(
-                    req.expected_response_type()(None, None, e), req.broadcast_config()
-                )
+                if event_type is GetDistanceRequest:
+                    await self._event_bus.broadcast(
+                        req.expected_response_type()(None, e), req.broadcast_config()
+                    )
+                else:
+                    await self._event_bus.broadcast(
+                        req.expected_response_type()(None, None, e), req.broadcast_config()
+                    )
             else:
                 await self._event_bus.broadcast(resp, req.broadcast_config())
 
@@ -248,14 +277,22 @@ class Eth1Monitor(Service):
         """
         while True:
             block = self._eth1_data_provider.get_block("latest")
+            if block is None:
+                raise Eth1MonitorValidationError(f"Fail to get latest block")
             target_block_number = BlockNumber(block.number - self._num_blocks_confirmed)
             from_block_number = self.highest_processed_block_number
+            self.logger.info("Eth1 Data Provider latest block: %s, %s, %s", block.number, target_block_number, from_block_number)
             if target_block_number > from_block_number:
                 # From `highest_processed_block_number` to `target_block_number`
                 for block_number in range(
                     from_block_number + 1, target_block_number + 1
                 ):
-                    yield self._eth1_data_provider.get_block(BlockNumber(block_number))
+                    block = self._eth1_data_provider.get_block(BlockNumber(block_number))
+                    if block is None:
+                        raise Eth1MonitorValidationError(
+                            f"Block does not exist for block number={block_number}"
+                        )
+                    yield block
             await trio.sleep(self._polling_period)
 
     def _handle_block_data(self, block: Eth1Block) -> None:
