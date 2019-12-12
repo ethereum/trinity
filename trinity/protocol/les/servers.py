@@ -1,6 +1,5 @@
 from typing import Any
 
-from cancel_token import CancelToken
 from lahja import (
     BroadcastConfig,
     EndpointAPI,
@@ -41,15 +40,13 @@ class LightRequestServer(BaseIsolatedRequestServer):
             self,
             event_bus: EndpointAPI,
             broadcast_config: BroadcastConfig,
-            db: BaseAsyncHeaderDB,
-            token: CancelToken = None) -> None:
+            db: BaseAsyncHeaderDB) -> None:
         super().__init__(
             event_bus,
             broadcast_config,
             (GetBlockHeadersEvent,),
-            token,
         )
-        self._handler = LESPeerRequestHandler(db, self.cancel_token)
+        self._handler = LESPeerRequestHandler(db)
 
     async def _handle_msg(self,
                           session: SessionAPI,

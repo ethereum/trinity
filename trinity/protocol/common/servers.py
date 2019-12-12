@@ -1,4 +1,6 @@
 from abc import abstractmethod
+import asyncio
+import logging
 from typing import (
     Any,
     AsyncIterator,
@@ -7,8 +9,7 @@ from typing import (
     Type,
 )
 
-from cancel_token import CancelToken, OperationCancelled
-
+from async_service import Service
 from lahja import EndpointAPI
 
 from eth_typing import Hash32
@@ -26,12 +27,10 @@ from lahja import (
 )
 
 from p2p.abc import CommandAPI, SessionAPI
-from p2p.cancellable import CancellableMixin
 from p2p.peer import (
     BasePeer,
     PeerSubscriber,
 )
-from p2p.service import BaseService
 
 from trinity._utils.headers import sequence_builder
 from trinity.db.eth1.header import BaseAsyncHeaderDB
@@ -41,7 +40,7 @@ from trinity.protocol.common.payloads import BlockHeadersQuery
 from .events import PeerPoolMessageEvent
 
 
-class BaseRequestServer(BaseService, PeerSubscriber):
+class BaseRequestServer(Service, PeerSubscriber):
     """
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
@@ -51,22 +50,20 @@ class BaseRequestServer(BaseService, PeerSubscriber):
     # now.
     msg_queue_maxsize = 2000
 
-    def __init__(
-            self,
-            peer_pool: BasePeerPool,
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+    logger = logging.getLogger('trinity.protocol.common.RequestServer')
+
+    def __init__(self, peer_pool: BasePeerPool) -> None:
         self._peer_pool = peer_pool
 
     async def _run(self) -> None:
-        self.run_daemon_task(self._handle_msg_loop())
+        self.manager.run_daemon_task(self._handle_msg_loop)
         with self.subscribe(self._peer_pool):
-            await self.cancellation()
+            await self.manager.wait_finished()
 
     async def _handle_msg_loop(self) -> None:
-        while self.is_operational:
-            peer, cmd = await self.wait(self.msg_queue.get())
-            self.run_task(self._quiet_handle_msg(peer, cmd))
+        while self.manager.is_running:
+            peer, cmd = await self.msg_queue.get()
+            self.manager.run_task(self._quiet_handle_msg, peer, cmd)
 
     async def _quiet_handle_msg(
             self,
@@ -74,10 +71,10 @@ class BaseRequestServer(BaseService, PeerSubscriber):
             cmd: CommandAPI[Any]) -> None:
         try:
             await self._handle_msg(peer, cmd)
-        except OperationCancelled:
-            # Silently swallow OperationCancelled exceptions because otherwise they'll be caught
-            # by the except below and treated as unexpected.
-            pass
+        except asyncio.CancelledError:
+            # catch and re-raise to avoid reporting via the except below and
+            # treated as unexpected.
+            raise
         except Exception:
             self.logger.exception("Unexpected error when processing msg from %s", peer)
 
@@ -89,34 +86,32 @@ class BaseRequestServer(BaseService, PeerSubscriber):
         ...
 
 
-class BaseIsolatedRequestServer(BaseService):
+class BaseIsolatedRequestServer(Service):
     """
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
     """
+    logger = get_extended_debug_logger('trinity.protocol.common.servers.IsolatedRequestServer')
 
     def __init__(
             self,
             event_bus: EndpointAPI,
             broadcast_config: BroadcastConfig,
-            subscribed_events: Iterable[Type[PeerPoolMessageEvent]],
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            subscribed_events: Iterable[Type[PeerPoolMessageEvent]]) -> None:
         self.event_bus = event_bus
         self.broadcast_config = broadcast_config
         self._subscribed_events = subscribed_events
 
-    async def _run(self) -> None:
-
+    async def run(self) -> None:
         for event_type in self._subscribed_events:
-            self.run_daemon_task(self.handle_stream(event_type))
+            self.manager.run_daemon_task(self.handle_stream, event_type)
 
-        await self.cancellation()
+        await self.manager.wait_finished()
 
     async def handle_stream(self, event_type: Type[PeerPoolMessageEvent]) -> None:
-        while self.is_operational:
-            async for event in self.wait_iter(self.event_bus.stream(event_type)):
-                self.run_task(self._quiet_handle_msg(event.session, event.command))
+        while self.manager.is_running:
+            async for event in self.event_bus.stream(event_type):
+                self.manager.run_task(self._quiet_handle_msg, event.session, event.command)
 
     async def _quiet_handle_msg(
             self,
@@ -124,10 +119,10 @@ class BaseIsolatedRequestServer(BaseService):
             cmd: CommandAPI[Any]) -> None:
         try:
             await self._handle_msg(session, cmd)
-        except OperationCancelled:
-            # Silently swallow OperationCancelled exceptions because otherwise they'll be caught
-            # by the except below and treated as unexpected.
-            pass
+        except asyncio.CancelledError:
+            # catch and re-raise to avoid reporting via the except below and
+            # treated as unexpected.
+            raise
         except Exception:
             self.logger.exception("Unexpected error when processing msg from %s", session)
 
@@ -138,12 +133,11 @@ class BaseIsolatedRequestServer(BaseService):
         ...
 
 
-class BasePeerRequestHandler(CancellableMixin):
+class BasePeerRequestHandler:
     logger = get_extended_debug_logger('trinity.protocol.common.servers.PeerRequestHandler')
 
-    def __init__(self, db: BaseAsyncHeaderDB, token: CancelToken) -> None:
+    def __init__(self, db: BaseAsyncHeaderDB) -> None:
         self.db = db
-        self.cancel_token = token
 
     async def lookup_headers(self,
                              query: BlockHeadersQuery) -> Tuple[BlockHeader, ...]:
@@ -173,8 +167,7 @@ class BasePeerRequestHandler(CancellableMixin):
         Generate the block numbers for a given `HeaderRequest`.
         """
         if isinstance(query.block_number_or_hash, bytes):
-            header = await self.wait(
-                self.db.coro_get_block_header_by_hash(Hash32(query.block_number_or_hash)))
+            header = await self.db.coro_get_block_header_by_hash(Hash32(query.block_number_or_hash))
             start_number = header.block_number
         elif isinstance(query.block_number_or_hash, int):
             start_number = query.block_number_or_hash
@@ -196,8 +189,7 @@ class BasePeerRequestHandler(CancellableMixin):
         """
         for block_num in block_numbers:
             try:
-                yield await self.wait(
-                    self.db.coro_get_canonical_block_header_by_number(block_num))
+                yield await self.db.coro_get_canonical_block_header_by_number(block_num)
             except HeaderNotFound:
                 self.logger.debug(
                     "Peer requested header number %s that is unavailable, stopping search.",

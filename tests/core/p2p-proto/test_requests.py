@@ -2,12 +2,16 @@ import asyncio
 
 import pytest
 
+from async_service import background_asyncio_service
+
 from p2p.exceptions import PeerConnectionLost
 
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.protocol.eth.peer import (
     ETHPeerPoolEventServer,
 )
+from trinity.protocol.eth.servers import ETHRequestServer
 
 from trinity.tools.factories import (
     ChainContextFactory,
@@ -17,7 +21,6 @@ from trinity.tools.factories import (
 from tests.core.integration_test_helpers import (
     run_peer_pool_event_server,
     run_proxy_peer_pool,
-    run_request_server,
 )
 from tests.core.peer_helpers import (
     MockPeerPoolWithConnectedPeers,
@@ -52,10 +55,11 @@ async def test_proxy_peer_requests(request,
         client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
     ), run_peer_pool_event_server(
         server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_request_server(
+    ), background_asyncio_service(ETHRequestServer(
         server_event_bus,
+        TO_NETWORKING_BROADCAST_CONFIG,
         AsyncChainDB(chaindb_20.db)
-    ), run_proxy_peer_pool(
+    )), run_proxy_peer_pool(
         client_event_bus
     ) as client_proxy_peer_pool, run_proxy_peer_pool(
         server_event_bus
@@ -141,10 +145,11 @@ async def test_requests_when_peer_in_client_vanishs(request,
         client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
     ), run_peer_pool_event_server(
         server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_request_server(
+    ), background_asyncio_service(ETHRequestServer(
         server_event_bus,
+        TO_NETWORKING_BROADCAST_CONFIG,
         AsyncChainDB(chaindb_20.db)
-    ), run_proxy_peer_pool(
+    )), run_proxy_peer_pool(
         client_event_bus
     ) as client_proxy_peer_pool, run_proxy_peer_pool(
         server_event_bus

@@ -7,6 +7,7 @@ from zipfile import ZipFile
 from async_generator import (
     asynccontextmanager,
 )
+from async_service import background_asyncio_service
 from cancel_token import OperationCancelled
 from eth_keys import keys
 from eth_utils import decode_hex
@@ -30,9 +31,6 @@ from trinity.protocol.common.peer_pool_event_bus import (
 )
 from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
-)
-from trinity.protocol.eth.servers import (
-    ETHRequestServer,
 )
 from trinity.tools.chain import AsyncMiningChain
 
@@ -124,29 +122,8 @@ async def run_peer_pool_event_server(event_bus, peer_pool, handler_type=None):
         peer_pool,
         peer_pool.cancel_token
     )
-    asyncio.ensure_future(event_server.run())
-
-    await event_server.events.started.wait()
-    try:
+    async with background_asyncio_service(event_server):
         yield event_server
-    finally:
-        await event_server.cancel()
-
-
-@asynccontextmanager
-async def run_request_server(event_bus, chaindb, server_type=None):
-    server_type = ETHRequestServer if server_type is None else server_type
-    request_server = server_type(
-        event_bus,
-        TO_NETWORKING_BROADCAST_CONFIG,
-        chaindb,
-    )
-    asyncio.ensure_future(request_server.run())
-    await request_server.events.started.wait()
-    try:
-        yield request_server
-    finally:
-        await request_server.cancel()
 
 
 @asynccontextmanager

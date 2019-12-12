@@ -3,14 +3,10 @@ from argparse import (
     _SubParsersAction,
 )
 
+from async_service import Service, run_asyncio_service
 from lahja import EndpointAPI
 
 from eth.db.backends.base import BaseAtomicDB
-
-from p2p.service import (
-    BaseService,
-    run_service,
-)
 
 from trinity.boot_info import BootInfo
 from trinity.config import (
@@ -59,18 +55,19 @@ class RequestServerComponent(AsyncioIsolatedComponent):
         else:
             raise Exception("Trinity config must have eth1 config")
 
-        async with run_service(server):
-            await server.cancellation()
+        await run_asyncio_service(server)
 
     @classmethod
     def make_eth1_request_server(cls,
                                  app_config: Eth1AppConfig,
                                  base_db: BaseAtomicDB,
-                                 event_bus: EndpointAPI) -> BaseService:
+                                 event_bus: EndpointAPI) -> Service:
+
+        server: Service
 
         if app_config.database_mode is Eth1DbMode.LIGHT:
             header_db = AsyncHeaderDB(base_db)
-            server: BaseService = LightRequestServer(
+            server = LightRequestServer(
                 event_bus,
                 TO_NETWORKING_BROADCAST_CONFIG,
                 header_db
