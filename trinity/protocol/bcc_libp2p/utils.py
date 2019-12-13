@@ -357,8 +357,11 @@ class Interaction:
                         exc_value: Optional[BaseException],
                         traceback: Optional[TracebackType],
                         ) -> None:
-        await self.stream.close()
-        self.debug("Ended")
+        if exc_type is None:
+            await self.stream.close()
+            self.debug("Ended")
+        else:
+            self.debug(f"{exc_type}: {exc_value}")
 
     async def write_request(self, message: MsgType) -> None:
         self.debug(f"Request {type(message).__name__}  {to_formatted_dict(message)}")
@@ -404,7 +407,7 @@ class Interaction:
 
     @property
     def peer_id(self) -> ID:
-        return self.stream.mplex_conn.peer_id
+        return self.stream.muxed_conn.peer_id
 
     def debug(self, message: str) -> None:
         self.logger.debug(

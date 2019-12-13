@@ -6,6 +6,10 @@ class HandshakeFailure(BaseLibp2pError):
     ...
 
 
+class DialPeerError(BaseLibp2pError):
+    ...
+
+
 class MessageIOFailure(BaseLibp2pError):
     ...
 

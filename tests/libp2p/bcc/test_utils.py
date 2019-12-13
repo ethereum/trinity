@@ -40,10 +40,10 @@ def test_peer_id_from_pubkey():
 class FakeNetStream:
     _queue: "asyncio.Queue[bytes]"
 
-    class FakeMplexConn(NamedTuple):
+    class FakeMuxedConn(NamedTuple):
         peer_id: ID = ID(b"\x12\x20" + b"\x00" * 32)
 
-    mplex_conn = FakeMplexConn()
+    muxed_conn = FakeMuxedConn()
 
     def __init__(self) -> None:
         self._queue = asyncio.Queue()

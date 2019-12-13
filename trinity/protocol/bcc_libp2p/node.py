@@ -2,7 +2,6 @@ import asyncio
 from dataclasses import dataclass
 import logging
 import operator
-import traceback
 import random
 from typing import (
     AsyncIterator,
@@ -47,6 +46,9 @@ from libp2p.crypto.keys import (
 from libp2p.host.basic_host import (
     BasicHost,
 )
+from libp2p.host.exceptions import (
+    StreamFailure,
+)
 from libp2p.network.network_interface import (
     INetwork,
 )
@@ -55,6 +57,7 @@ from libp2p.security.secio.transport import Transport as SecIOTransport
 from libp2p.network.stream.net_stream_interface import (
     INetStream,
 )
+from libp2p.network.exceptions import SwarmException
 from libp2p.peer.id import (
     ID,
 )
@@ -78,6 +81,10 @@ from multiaddr import (
     Multiaddr,
     protocols,
 )
+from multiaddr.exceptions import (
+    BinaryParseError,
+    ProtocolLookupError,
+)
 
 import ssz
 
@@ -98,6 +105,7 @@ from .configs import (
     ResponseCode,
 )
 from .exceptions import (
+    DialPeerError,
     HandshakeFailure,
     ReadMessageFailure,
     RequestFailure,
@@ -273,9 +281,8 @@ class Node(BaseService):
             muxer_opt=muxer_protocol_ops,
             sec_opt=security_protocol_ops,
             peerstore_opt=None,  # let the function initialize it
-            disc_opt=None,  # no routing required here
         )
-        self.host = BasicHost(network=network, router=None)
+        self.host = BasicHost(network=network)
 
         if gossipsub_params is None:
             gossipsub_params = GossipsubParams()
@@ -313,7 +320,10 @@ class Node(BaseService):
         # host
         self._register_rpc_handlers()
         # TODO: Register notifees
-        await self.host.get_network().listen(self.listen_maddr)
+        is_listening = await self.host.get_network().listen(self.listen_maddr)
+        if not is_listening:
+            self.logger.error("Fail to listen on maddr: %s", self.listen_maddr)
+            raise
         self.logger.warning("Node listening: %s", self.listen_maddr_with_peer_id)
         await self.connect_preferred_nodes()
         # TODO: Connect bootstrap nodes?
@@ -337,74 +347,67 @@ class Node(BaseService):
             False,
         )
 
-    async def dial_peer(self, ip: str, port: int, peer_id: ID) -> None:
+    async def dial_peer_maddr(self, maddr: Multiaddr, peer_id: ID) -> None:
         """
-        Dial the peer ``peer_id`` through the IPv4 protocol
+        Dial the peer with given multi-address
         """
+        self.logger.debug("Dialing peer_id: %s, maddr: %s", peer_id, maddr)
         try:
-            maddr = make_tcp_ip_maddr(ip, port)
-            self.logger.debug("Dialing peer_id %s maddr %s", peer_id, maddr)
             await self.host.connect(
                 PeerInfo(
                     peer_id=peer_id,
                     addrs=[maddr],
                 )
             )
-        except Exception as e:
-            raise ConnectionRefusedError() from e
+        except SwarmException as e:
+            self.logger.debug("Fail to dial peer_id: %s, maddr: %s, error: %s", peer_id, maddr, e)
+            raise DialPeerError from e
 
         try:
             # TODO: set a time limit on completing handshake
             await self.request_status(peer_id)
         except HandshakeFailure as e:
-            self.logger.info("HandshakeFailure: %s", str(e))
-            raise ConnectionRefusedError() from e
+            self.logger.debug("Fail to handshake with peer_id: %s, error: %s", peer_id, e)
+            raise DialPeerError from e
+        self.logger.debug("Successfully connect to peer_id %s maddr %s", peer_id, maddr)
 
-    async def dial_peer_with_retries(self, ip: str, port: int, peer_id: ID) -> None:
+    async def dial_peer_maddr_with_retries(self, maddr: Multiaddr) -> None:
         """
-        Dial the peer ``peer_id`` through the IPv4 protocol
+        Dial the peer with given multi-address repeatedly for `DIAL_RETRY_COUNT` times
         """
+        try:
+            p2p_id = maddr.value_for_protocol(protocols.P_P2P)
+        except (BinaryParseError, ProtocolLookupError) as error:
+            self.logger.debug("Invalid maddr: %s, error: %s", maddr, error)
+            raise DialPeerError from error
+        peer_id = ID.from_base58(p2p_id)
+
         for i in range(DIAL_RETRY_COUNT):
             try:
                 # exponential backoff...
                 await asyncio.sleep(2**i + random.random())
-                await self.dial_peer(ip, port, peer_id)
+                await self.dial_peer_maddr(maddr, peer_id)
                 return
-            except ConnectionRefusedError:
+            except DialPeerError:
                 self.logger.debug(
-                    "Could not connect to peer %s at %s:%d;"
-                    " retrying attempt %d of %d...",
+                    "Could not dial peer: %s, maddr: %s retrying attempt %d of %d...",
                     peer_id,
-                    ip,
-                    port,
+                    maddr,
                     i,
                     DIAL_RETRY_COUNT,
                 )
                 continue
-        raise ConnectionRefusedError
-
-    async def dial_peer_maddr(self, maddr: Multiaddr) -> None:
-        """
-        Parse `maddr`, get the ip:port and PeerID, and call `dial_peer` with the parameters.
-        """
-        try:
-            ip = maddr.value_for_protocol(protocols.P_IP4)
-            port = int(maddr.value_for_protocol(protocols.P_TCP))
-            peer_id = ID.from_base58(maddr.value_for_protocol(protocols.P_P2P))
-            await self.dial_peer_with_retries(ip=ip, port=port, peer_id=peer_id)
-        except Exception:
-            traceback.print_exc()
-            raise
+        raise DialPeerError
 
     async def connect_preferred_nodes(self) -> None:
         results = await asyncio.gather(
-            *(self.dial_peer_maddr(node_maddr)
+            *(self.dial_peer_maddr_with_retries(node_maddr)
               for node_maddr in self.preferred_nodes),
             return_exceptions=True,
         )
-        for result in results:
+        for result, node_maddr in zip(results, self.preferred_nodes):
             if isinstance(result, Exception):
-                logger.warning("could not connect to %s", result)
+                logger.warning("Could not connect to preferred node at %s", node_maddr)
 
     async def disconnect_peer(self, peer_id: ID) -> None:
         if peer_id in self.handshaked_peers:
@@ -548,7 +551,11 @@ class Node(BaseService):
     async def request_status(self, peer_id: ID) -> None:
         self.logger.info("Initiate handshake with %s", str(peer_id))
 
-        stream = await self.new_stream(peer_id, REQ_RESP_STATUS_SSZ)
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_STATUS_SSZ)
+        except StreamFailure as error:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+            raise HandshakeFailure from error
         async with self.new_handshake_interaction(stream) as interaction:
             my_status = get_my_status(self.chain)
             await interaction.write_request(my_status)
@@ -571,13 +578,18 @@ class Node(BaseService):
             await self.disconnect_peer(peer_id)
 
     async def say_goodbye(self, peer_id: ID, reason: GoodbyeReasonCode) -> None:
-        stream = await self.new_stream(peer_id, REQ_RESP_GOODBYE_SSZ)
-        async with Interaction(stream) as interaction:
-            goodbye = Goodbye(reason)
-            try:
-                await interaction.write_request(goodbye)
-            except WriteMessageFailure:
-                pass
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_GOODBYE_SSZ)
+        except StreamFailure:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+        else:
+            async with Interaction(stream) as interaction:
+                goodbye = Goodbye(reason)
+                try:
+                    await interaction.write_request(goodbye)
+                except WriteMessageFailure:
+                    pass
+        finally:
             await self.disconnect_peer(peer_id)
 
     def _check_peer_handshaked(self, peer_id: ID) -> None:
@@ -609,7 +621,11 @@ class Node(BaseService):
         count: int,
         step: int,
     ) -> Tuple[BaseBeaconBlock, ...]:
-        stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ)
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ)
+        except StreamFailure as error:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+            raise RequestFailure(str(error)) from error
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
             request = BeaconBlocksByRangeRequest(
@@ -639,7 +655,11 @@ class Node(BaseService):
             self,
             peer_id: ID,
             block_roots: Sequence[SigningRoot]) -> Tuple[BaseBeaconBlock, ...]:
-        stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
+        try:
+            stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
+        except StreamFailure as error:
+            self.logger.debug("Fail to open stream to %s", str(peer_id))
+            raise RequestFailure(str(error)) from error
         async with self.my_request_interaction(stream) as interaction:
             self._check_peer_handshaked(peer_id)
             request = BeaconBlocksByRootRequest(block_roots=block_roots)
