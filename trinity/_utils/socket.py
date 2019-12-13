@@ -15,6 +15,8 @@ class BufferedSocket:
         self.sendall = sock.sendall
         self.close = sock.close
         self.shutdown = sock.shutdown
+        self.__enter__ = sock.__enter__
+        self.__exit__ = sock.__exit__
 
     def read_exactly(self, num_bytes: int) -> bytes:
         while len(self._buffer) < num_bytes:
