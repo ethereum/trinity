@@ -282,7 +282,7 @@ class Node(BaseService):
             sec_opt=security_protocol_ops,
             peerstore_opt=None,  # let the function initialize it
         )
-        self.host = BasicHost(public_key=key_pair.public_key, network=network)
+        self.host = BasicHost(network=network)
 
         if gossipsub_params is None:
             gossipsub_params = GossipsubParams()
