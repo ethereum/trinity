@@ -2,9 +2,9 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-from lahja import EndpointAPI
 
-from p2p.service import run_service
+from async_service import run_asyncio_service
+from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
 from trinity.extensibility import (
@@ -41,5 +41,4 @@ class UpnpComponent(AsyncioIsolatedComponent):
         port = boot_info.trinity_config.port
         upnp_service = UPnPService(port)
 
-        async with run_service(upnp_service):
-            await upnp_service.cancellation()
+        await run_asyncio_service(upnp_service)
