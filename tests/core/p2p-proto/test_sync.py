@@ -2,6 +2,7 @@ import asyncio
 import logging
 import uuid
 
+from async_service import background_asyncio_service
 from eth.db.atomic import AtomicDB
 from eth.exceptions import HeaderNotFound
 from eth.vm.forks.petersburg import PetersburgVM
@@ -10,6 +11,7 @@ from lahja import ConnectionConfig, AsyncioEndpoint
 from p2p.service import BaseService
 import pytest
 
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.protocol.eth.peer import ETHPeerPoolEventServer
 from trinity.sync.beam.importer import (
@@ -24,6 +26,7 @@ from trinity.sync.common.chain import (
 )
 from trinity.sync.full.chain import FastChainSyncer, RegularChainSyncer, RegularChainBodySyncer
 
+from trinity.protocol.eth.servers import ETHRequestServer
 from trinity.protocol.les.peer import (
     LESPeerPoolEventServer,
 )
@@ -48,7 +51,6 @@ from tests.core.integration_test_helpers import (
     load_fixture_db,
     load_mining_chain,
     run_peer_pool_event_server,
-    run_request_server,
 )
 from tests.core.peer_helpers import (
     MockPeerPoolWithConnectedPeers,
@@ -83,9 +85,9 @@ async def test_skeleton_syncer(request, event_loop, event_bus, chaindb_fresh, ch
 
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-        ), run_request_server(
-            event_bus, AsyncChainDB(chaindb_1000.db)
-        ):
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db)
+        )):
 
             client_peer.logger.info("%s is serving 1000 blocks", client_peer)
             server_peer.logger.info("%s is syncing up 1000 blocks", server_peer)
@@ -195,9 +197,9 @@ async def test_beam_syncer(
 
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-        ), run_request_server(
-            event_bus, AsyncChainDB(chaindb_churner.db)
-        ), AsyncioEndpoint.serve(
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_churner.db)
+        )), AsyncioEndpoint.serve(
             pausing_config
         ) as pausing_endpoint, AsyncioEndpoint.serve(gatherer_config) as gatherer_endpoint:
 
@@ -266,9 +268,9 @@ async def test_regular_syncer(request, event_loop, event_bus, chaindb_fresh, cha
 
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-        ), run_request_server(
-            event_bus, AsyncChainDB(chaindb_20.db)
-        ):
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db)
+        )):
 
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
             client_peer.logger.info("%s is syncing up 20", client_peer)
@@ -388,9 +390,9 @@ async def test_regular_syncer_fallback(request, event_loop, event_bus, chaindb_f
 
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-        ), run_request_server(
-            event_bus, AsyncChainDB(chaindb_20.db)
-        ):
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db)
+        )):
 
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
             client_peer.logger.info("%s is syncing up 20", client_peer)
@@ -433,9 +435,9 @@ async def test_light_syncer(request,
 
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=LESPeerPoolEventServer
-        ), run_request_server(
-            event_bus, AsyncChainDB(chaindb_20.db), server_type=LightRequestServer
-        ):
+        ), background_asyncio_service(LightRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db),
+        )):
 
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
             client_peer.logger.info("%s is syncing up 20", client_peer)

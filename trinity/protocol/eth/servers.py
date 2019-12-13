@@ -2,9 +2,6 @@ from typing import (
     Any,
 )
 
-from cancel_token import (
-    CancelToken,
-)
 from eth.exceptions import (
     HeaderNotFound,
 )
@@ -56,8 +53,7 @@ from .commands import (
 
 
 class ETHPeerRequestHandler(BasePeerRequestHandler):
-    def __init__(self, db: BaseAsyncChainDB, token: CancelToken) -> None:
-        super().__init__(db, token)
+    def __init__(self, db: BaseAsyncChainDB) -> None:
         self.db: BaseAsyncChainDB = db
 
     async def handle_get_block_headers(
@@ -80,15 +76,17 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         # Only serve up to MAX_BODIES_FETCH items in every request.
         for block_hash in block_hashes[:MAX_BODIES_FETCH]:
             try:
-                header = await self.wait(self.db.coro_get_block_header_by_hash(block_hash))
+                header = await self.db.coro_get_block_header_by_hash(block_hash)
             except HeaderNotFound:
                 self.logger.debug(
                     "%s asked for a block with a header we don't have: %s", peer, to_hex(block_hash)
                 )
                 continue
             try:
-                transactions = await self.wait(
-                    self.db.coro_get_block_transactions(header, BaseTransactionFields))
+                transactions = await self.db.coro_get_block_transactions(
+                    header,
+                    BaseTransactionFields,
+                )
             except MissingTrieNode as exc:
                 self.logger.debug(
                     "%s asked for block transactions we don't have: %s, "
@@ -99,7 +97,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
                 )
                 continue
             try:
-                uncles = await self.wait(self.db.coro_get_block_uncles(header.uncles_hash))
+                uncles = await self.db.coro_get_block_uncles(header.uncles_hash)
             except HeaderNotFound as exc:
                 self.logger.debug(
                     "%s asked for a block with uncles we don't have: %s", peer, exc
@@ -117,14 +115,14 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         # Only serve up to MAX_RECEIPTS_FETCH items in every request.
         for block_hash in block_hashes[:MAX_RECEIPTS_FETCH]:
             try:
-                header = await self.wait(self.db.coro_get_block_header_by_hash(block_hash))
+                header = await self.db.coro_get_block_header_by_hash(block_hash)
             except HeaderNotFound:
                 self.logger.debug(
                     "%s asked receipts for a block we don't have: %s", peer, to_hex(block_hash)
                 )
                 continue
             try:
-                block_receipts = await self.wait(self.db.coro_get_receipts(header, Receipt))
+                block_receipts = await self.db.coro_get_receipts(header, Receipt)
             except MissingTrieNode as exc:
                 self.logger.debug(
                     "%s asked for block receipts we don't have: %s, "
@@ -147,7 +145,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         # Only serve up to MAX_STATE_FETCH items in every request.
         for node_hash in node_hashes[:MAX_STATE_FETCH]:
             try:
-                node = await self.wait(self.db.coro_get(node_hash))
+                node = await self.db.coro_get(node_hash)
             except KeyError:
                 missing_node_hashes.append(node_hash)
             else:
@@ -173,15 +171,13 @@ class ETHRequestServer(BaseIsolatedRequestServer):
             self,
             event_bus: EndpointAPI,
             broadcast_config: BroadcastConfig,
-            db: BaseAsyncChainDB,
-            token: CancelToken = None) -> None:
+            db: BaseAsyncChainDB) -> None:
         super().__init__(
             event_bus,
             broadcast_config,
             (GetBlockHeadersEvent, GetBlockBodiesEvent, GetNodeDataEvent, GetReceiptsEvent),
-            token,
         )
-        self._handler = ETHPeerRequestHandler(db, self.cancel_token)
+        self._handler = ETHPeerRequestHandler(db)
 
     async def _handle_msg(self,
                           session: SessionAPI,
