@@ -8,7 +8,6 @@ from eth_typing import Address, BLSPubkey, BLSSignature, BlockNumber, Hash32
 from eth_utils import encode_hex, event_abi_to_log_topic
 
 from web3 import Web3
-from web3.utils.events import get_event_data
 
 from eth2.beacon.constants import GWEI_PER_ETH
 from eth2.beacon.tools.builder.validator import make_deposit_tree_and_root
@@ -108,8 +107,10 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
         )
 
     def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
-        # NOTE: web3 v4 does not support `contract.events.Event.getLogs`.
-        # After upgrading to v5, we can change to use the function.
+        # NOTE: this installs/uninstalls an event filter; we could forego
+        # this if we had a transaction receipt or transaction hash instead;
+        # however, that only makes sense when monitoring unmined txs: it's
+        # otherwise easier to process entire blocks of deposits as batches
         logs = self.w3.eth.getLogs(
             {
                 "fromBlock": block_number,
@@ -119,9 +120,7 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
             }
         )
         parsed_logs = tuple(
-            DepositLog.from_contract_log_dict(
-                get_event_data(self._deposit_event_abi, log)
-            )
+            self._deposit_contract.events.DepositEvent().processLog(log)['args']
             for log in logs
         )
         return parsed_logs
