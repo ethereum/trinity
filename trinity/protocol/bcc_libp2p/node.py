@@ -390,8 +390,7 @@ class Node(BaseService):
                 return
             except DialPeerError:
                 self.logger.debug(
-                    "Could not dial peer: %s, maddr: %s",
-                    " retrying attempt %d of %d...",
+                    "Could not dial peer: %s, maddr: %s retrying attempt %d of %d...",
                     peer_id,
                     maddr,
                     i,
