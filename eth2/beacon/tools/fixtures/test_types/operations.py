@@ -77,8 +77,8 @@ class OperationHandler(
         # NOTE: we ignore the type here, otherwise need to spell out each of the keyword
         # arguments individually... save some work and just build them dynamically
         block = BeaconBlock.create(
-            body=BeaconBlockBody.create(  # type: ignore
-                **{f"{cls.name}s": (operation,)}
+            body=BeaconBlockBody.create(
+                **{f"{cls.name}s": (operation,)}  # type: ignore
             )
         )
         try:

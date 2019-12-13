@@ -6,6 +6,7 @@ from eth2.beacon.constants import (
     DEPOSIT_CONTRACT_TREE_DEPTH,
     SECONDS_PER_DAY,
     ZERO_HASH32,
+    ZERO_SIGNING_ROOT,
 )
 from eth2.beacon.deposit_helpers import process_deposit
 from eth2.beacon.helpers import get_active_validator_indices
@@ -16,7 +17,7 @@ from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import calculate_effective_balance
-from eth2.beacon.typing import Timestamp, ValidatorIndex
+from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex
 from eth2.beacon.validator_status_helpers import activate_validator
 from eth2.configs import Eth2Config
 import ssz
@@ -59,10 +60,10 @@ def initialize_beacon_state_from_eth1(
         latest_block_header=BeaconBlockHeader.create(
             body_root=BeaconBlockBody.create().hash_tree_root
         ),
-        block_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
+        block_roots=(ZERO_SIGNING_ROOT,) * config.SLOTS_PER_HISTORICAL_ROOT,
         state_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         randao_mixes=(eth1_block_hash,) * config.EPOCHS_PER_HISTORICAL_VECTOR,
-        slashings=(0,) * config.EPOCHS_PER_SLASHINGS_VECTOR,
+        slashings=(Gwei(0),) * config.EPOCHS_PER_SLASHINGS_VECTOR,
         config=config,
     )
 

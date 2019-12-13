@@ -33,10 +33,10 @@ TBeaconState = TypeVar("TBeaconState", bound="BeaconState")
 # Use mainnet constants for defaults. We can't import the config object because of an import cycle.
 # TODO: When py-ssz is updated to support size configs, the config will be passed to the `create`
 # classmethod and we can create the defaults dynamically there.
-default_block_roots = default_tuple_of_size(2 ** 13, ZERO_HASH32)
+default_block_roots = default_tuple_of_size(2 ** 13, ZERO_SIGNING_ROOT)
 default_state_roots = default_tuple_of_size(2 ** 13, ZERO_HASH32)
 default_randao_mixes = default_tuple_of_size(2 ** 16, ZERO_HASH32)
-default_slashings = default_tuple_of_size(2 ** 13, 0)
+default_slashings = default_tuple_of_size(2 ** 13, Gwei(0))
 
 
 class BeaconState(HashableContainer):
