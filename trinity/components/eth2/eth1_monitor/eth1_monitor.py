@@ -20,7 +20,8 @@ import trio
 from web3 import Web3
 
 from eth.abc import AtomicDatabaseAPI
-from eth_utils import encode_hex
+
+from eth_utils import humanize_hash
 
 from eth2.beacon.typing import Timestamp
 from eth2.beacon.types.deposits import Deposit
@@ -61,7 +62,6 @@ def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
 
 
 class Eth1Monitor(Service):
-    logger = logging.getLogger('trinity.Eth1Monitor')
 
     _eth1_data_provider: BaseEth1DataProvider
 
@@ -129,7 +129,7 @@ class Eth1Monitor(Service):
         block = self._eth1_data_provider.get_block(req.block_hash)
         if block is None:
             raise Eth1MonitorValidationError(
-                f"Block does not exist for block_hash={req.block_hash}"
+                f"Block does not exist for block_hash={humanize_hash(req.block_hash)}"
             )
         eth1_voting_period_start_block_number = self._get_closest_eth1_voting_period_start_block(
             req.eth1_voting_period_start_timestamp,
@@ -205,6 +205,7 @@ class Eth1Monitor(Service):
             raise Eth1MonitorValidationError(
                 f"failed to make `Eth1Data`: `deposit_count = 0` at block #{target_block_number}"
             )
+        # Verify that the deposit data in db and the deposit data in contract match
         deposit_data_in_range = self._db.get_deposit_data_range(
             0, accumulated_deposit_count
         )
@@ -212,14 +213,16 @@ class Eth1Monitor(Service):
         contract_deposit_root = self._get_deposit_root_from_contract(
             target_block_number
         )
-        if contract_deposit_root != deposit_root:
-            raise DepositDataCorrupted(
-                "deposit root built locally mismatches the one in the contract on chain: "
-                f"contract_deposit_root={contract_deposit_root.hex()}, "
-                f"deposit_root={deposit_root.hex()}"
-            )
+        # TODO: Remove this if we no longer need a fake provider
+        if not self._eth1_data_provider.is_fake_provider:
+            if contract_deposit_root != deposit_root:
+                raise DepositDataCorrupted(
+                    "deposit root built locally mismatches the one in the contract on chain: "
+                    f"contract_deposit_root={contract_deposit_root.hex()}, "
+                    f"deposit_root={deposit_root.hex()}"
+                )
         return Eth1Data(
-            deposit_root=deposit_root,
+            deposit_root=contract_deposit_root,
             deposit_count=accumulated_deposit_count,
             block_hash=block_hash,
         )
@@ -255,11 +258,10 @@ class Eth1Monitor(Service):
         self, event_type: Type[TRequest], event_handler: Callable[[TRequest], Any]
     ) -> None:
         async for req in self._event_bus.stream(event_type):
-            self.logger.info("Monitor receive deposit data request: %s", req)
             try:
                 resp = event_handler(req)
             except Exception as e:
-                if event_type is GetDistanceRequest:
+                if isinstance(req, GetDistanceRequest):
                     await self._event_bus.broadcast(
                         req.expected_response_type()(None, e), req.broadcast_config()
                     )

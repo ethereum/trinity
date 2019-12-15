@@ -7,10 +7,13 @@ import time
 
 from async_service import Service, TrioManager
 
+from eth_typing import BlockNumber
+
 from lahja import EndpointAPI
 
 # from web3 import Web3
 
+from eth2.beacon.typing import Timestamp
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import FakeEth1DataProvider
 from trinity.config import BeaconAppConfig
@@ -30,11 +33,11 @@ DEPOSIT_CONTRACT_ABI = json.loads(deposit_contract_json)["abi"]
 DEPOSIT_CONTRACT_ADDRESS = b"\x12" * 20
 NUM_BLOCKS_CONFIRMED = 100
 POLLING_PERIOD = 10
-START_BLOCK_NUMBER = 1
+START_BLOCK_NUMBER = BlockNumber(1000)
 
 # Configs for fake Eth1DataProvider
-NUM_DEPOSITS_PER_BLOCK = 5
-START_BLOCK_TIMESTAMP = int(time.time()) - 2100  # Around half an hour ago
+NUM_DEPOSITS_PER_BLOCK = 0
+START_BLOCK_TIMESTAMP = Timestamp(int(time.time()) - 2100)  # Around 45 mins ago
 
 
 class Eth1MonitorComponent(TrioIsolatedComponent):
@@ -66,13 +69,20 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         #     w3: Web3 = Web3.HTTPProvider(self.boot_info.args.eth1client_rpc)
         # else:
         #     w3: Web3 = None
+        beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
+        base_db = DBClient.connect(trinity_config.database_ipc_path)
+        chain_config = beacon_app_config.get_chain_config()
+        chain = chain_config.beacon_chain_class(
+            base_db,
+            chain_config.genesis_config
+        )
+        state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
         fake_eth1_data_provider = FakeEth1DataProvider(
             start_block_number=START_BLOCK_NUMBER,
             start_block_timestamp=START_BLOCK_TIMESTAMP,
             num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
+            num_initial_deposits=state.eth1_data.deposit_count,
         )
-
-        base_db = DBClient.connect(trinity_config.database_ipc_path)
 
         eth1_monitor_service: Service = Eth1Monitor(
             eth1_data_provider=fake_eth1_data_provider,
