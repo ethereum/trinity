@@ -81,16 +81,20 @@ async def get_validator(event_loop, event_bus, indices, num_validators=None) -> 
     }
 
     # Mock attestation pool
-    attestatation_pool = set()
+    unaggregated_attestation_pool = set()
+    aggregated_attestation_pool = set()
 
     def get_ready_attestations_fn(slot):
-        return tuple(attestatation_pool)
+        return tuple(unaggregated_attestation_pool)
 
     def get_aggregatable_attestations_fn(slot, committee_index):
-        return tuple(attestatation_pool)
+        return tuple(unaggregated_attestation_pool)
 
-    def import_attestation_fn(attestation):
-        attestatation_pool.add(attestation)
+    def import_attestation_fn(attestation, is_aggregated):
+        if is_aggregated:
+            aggregated_attestation_pool.add(attestation)
+        else:
+            unaggregated_attestation_pool.add(attestation)
 
     v = Validator(
         chain=chain,

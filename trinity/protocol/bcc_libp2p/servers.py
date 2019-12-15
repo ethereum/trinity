@@ -115,7 +115,8 @@ class BCCReceiveServer(BaseService):
     chain: BaseBeaconChain
     p2p_node: Node
     topic_msg_queues: Dict[str, 'asyncio.Queue[rpc_pb2.Message]']
-    attestation_pool: AttestationPool
+    unaggregated_attestation_pool: AttestationPool
+    aggregated_attestation_pool: AttestationPool
     orphan_block_pool: OrphanBlockPool
     subnets: Set[SubnetId]
 
@@ -131,7 +132,8 @@ class BCCReceiveServer(BaseService):
         self.p2p_node = p2p_node
         self.topic_msg_queues = topic_msg_queues
         self.subnets = subnets if subnets is not None else set()
-        self.attestation_pool = AttestationPool()
+        self.unaggregated_attestation_pool = AttestationPool()
+        self.aggregated_attestation_pool = AttestationPool()
         self.orphan_block_pool = OrphanBlockPool()
         self.ready = asyncio.Event()
 
@@ -248,34 +250,36 @@ class BCCReceiveServer(BaseService):
 
         self.logger.debug("Received aggregate_and_proof=%s", aggregate_and_proof)
 
-        self._add_attestation(aggregate_and_proof.aggregate)
+        self._add_attestation(self.aggregated_attestation_pool, aggregate_and_proof.aggregate)
 
     async def _handle_beacon_attestation(self, msg: rpc_pb2.Message) -> None:
         attestation = ssz.decode(msg.data, sedes=Attestation)
 
         self.logger.debug("Received attestation=%s", attestation)
 
-        self._add_attestation(attestation)
+        self._add_attestation(self.unaggregated_attestation_pool, attestation)
 
     async def _handle_beacon_block(self, msg: rpc_pb2.Message) -> None:
         block = ssz.decode(msg.data, BeaconBlock)
         self._process_received_block(block)
 
-    def _is_attestation_new(self, attestation: Attestation) -> bool:
+    def _is_attestation_new(
+        self, attestation_pool: AttestationPool, attestation: Attestation
+    ) -> bool:
         """
         Check if the attestation is already in the database or the attestion pool.
         """
-        if attestation.hash_tree_root in self.attestation_pool:
+        if attestation.hash_tree_root in attestation_pool:
             return False
         return not self.chain.attestation_exists(attestation.hash_tree_root)
 
-    def _add_attestation(self, attestation: Attestation) -> None:
+    def _add_attestation(self, attestation_pool: AttestationPool, attestation: Attestation) -> None:
         # Check if attestation has been seen already.
-        if not self._is_attestation_new(attestation):
+        if not self._is_attestation_new(attestation_pool, attestation):
             return
 
         # Add new attestation to attestation pool.
-        self.attestation_pool.add(attestation)
+        attestation_pool.add(attestation)
 
     def _process_received_block(self, block: BaseBeaconBlock) -> None:
         # If the block is an orphan, put it to the orphan pool
@@ -305,7 +309,7 @@ class BCCReceiveServer(BaseService):
             # TODO: should be done asynchronously?
             self._try_import_orphan_blocks(block.signing_root)
             # Remove attestations in block that are also in the attestation pool.
-            self.attestation_pool.batch_remove(block.body.attestations)
+            self.unaggregated_attestation_pool.batch_remove(block.body.attestations)
 
     def _try_import_orphan_blocks(self, parent_root: SigningRoot) -> None:
         """
@@ -367,7 +371,10 @@ class BCCReceiveServer(BaseService):
         Get the attestations that are ready to be included in ``current_slot`` block.
         """
         config = self.chain.get_state_machine().config
-        return self.attestation_pool.get_valid_attestation_by_current_slot(current_slot, config)
+        return self.unaggregated_attestation_pool.get_valid_attestation_by_current_slot(
+            current_slot,
+            config,
+        )
 
     def get_aggregatable_attestations(
         self,
@@ -383,9 +390,12 @@ class BCCReceiveServer(BaseService):
             return ()
 
         beacon_block_root = block.signing_root
-        return self.attestation_pool.get_acceptable_attestations(
+        return self.unaggregated_attestation_pool.get_acceptable_attestations(
             slot, committee_index, beacon_block_root
         )
 
-    def import_attestation(self, attestation: Attestation) -> None:
-        self.attestation_pool.add(attestation)
+    def import_attestation(self, attestation: Attestation, is_aggregated: bool) -> None:
+        if is_aggregated:
+            self.aggregated_attestation_pool.add(attestation)
+        else:
+            self.unaggregated_attestation_pool.add(attestation)

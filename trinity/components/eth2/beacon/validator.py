@@ -88,7 +88,7 @@ from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 
 GetReadyAttestationsFn = Callable[[Slot], Sequence[Attestation]]
 GetAggregatableAttestationsFn = Callable[[Slot, CommitteeIndex], Sequence[Attestation]]
-ImportAttestationFn = Callable[[Attestation], None]
+ImportAttestationFn = Callable[[Attestation, bool], None]
 
 
 # FIXME: Read this from validator config
@@ -438,7 +438,7 @@ class Validator(BaseService):
             subnet_id = SubnetId(committee_index % ATTESTATION_SUBNET_COUNT)
 
             # Import attestation to pool and then broadcast it
-            self.import_attestation(attestation)
+            self.import_attestation(attestation, False)
             await self.p2p_node.broadcast_attestation_to_subnet(attestation, subnet_id)
 
             # Log the last epoch that the validator attested
@@ -526,7 +526,7 @@ class Validator(BaseService):
                         aggregate=aggregate,
                         selection_proof=selected_proofs[validator_index],
                     )
-                    self.import_attestation(aggregate_and_proof.aggregate)
+                    self.import_attestation(aggregate_and_proof.aggregate, True)
                     await self.p2p_node.broadcast_beacon_aggregate_and_proof(aggregate_and_proof)
                     aggregate_and_proofs += (aggregate_and_proof,)
 

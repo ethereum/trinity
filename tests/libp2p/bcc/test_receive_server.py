@@ -308,7 +308,7 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
         topicIDs=[PUBSUB_TOPIC_BEACON_ATTESTATION],
     )
 
-    assert attestation not in receive_server.attestation_pool
+    assert attestation not in receive_server.unaggregated_attestation_pool
 
     beacon_attestation_queue = receive_server.topic_msg_queues[
         PUBSUB_TOPIC_BEACON_ATTESTATION
@@ -317,7 +317,7 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
     await beacon_attestation_queue.put(msg)
     await wait_all_messages_processed(beacon_attestation_queue)
     # Check that attestation is put to attestation pool
-    assert attestation in receive_server.attestation_pool
+    assert attestation in receive_server.unaggregated_attestation_pool
 
     # Put the attestation in the next block
     block = get_blocks(receive_server.chain, num_blocks=1)[0]
@@ -335,7 +335,7 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
     await beacon_block_queue.put(msg)
     await wait_all_messages_processed(beacon_block_queue)
     # Check that attestation is removed from attestation pool
-    assert attestation not in receive_server.attestation_pool
+    assert attestation not in receive_server.unaggregated_attestation_pool
 
 
 @pytest.mark.asyncio
@@ -428,7 +428,7 @@ async def test_bcc_receive_server_get_ready_attestations(receive_server, monkeyp
     a3 = Attestation.create(
         signature=b"\x78" * 96, data=AttestationData.create(slot=attesting_slot + 1)
     )
-    receive_server.attestation_pool.batch_add([a1, a2, a3])
+    receive_server.unaggregated_attestation_pool.batch_add([a1, a2, a3])
 
     # Workaround: add a fake head state slot
     # so `get_state_machine` won't trigger `HeadStateSlotNotFound` exception
