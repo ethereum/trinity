@@ -119,9 +119,13 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
                 "topics": [self._deposit_event_topic],
             }
         )
-        parsed_logs = tuple(
-            self._deposit_contract.events.DepositEvent().processLog(log)['args']
+        processed_logs = tuple(
+            self._deposit_contract.events.DepositEvent().processLog(log)
             for log in logs
+        )
+        parsed_logs = tuple(
+            DepositLog.from_contract_log_dict(log)
+            for log in processed_logs
         )
         return parsed_logs
 

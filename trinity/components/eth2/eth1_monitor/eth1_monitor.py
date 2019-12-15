@@ -326,7 +326,7 @@ class Eth1Monitor(Service):
         self, logs: Sequence[DepositLog], block_number: BlockNumber
     ) -> None:
         """
-        Simply store the deposit data from the log, and increase the corresponding block's
+        Store deposit data from the log in database, and increase the corresponding block's
         `deposit_count`.
         """
         seq_deposit_data = tuple(
