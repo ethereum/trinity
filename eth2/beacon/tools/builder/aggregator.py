@@ -109,23 +109,14 @@ def validate_aggregate_and_proof(
 
     Reference: https://github.com/ethereum/eth2.0-specs/blob/v09x/specs/networking/p2p-interface.md#global-topics  # noqa: E501
     """
-    if (
-        aggregate_and_proof.aggregate.data.slot + attestation_propagation_slot_range
-        < state.slot
-        or aggregate_and_proof.aggregate.data.slot > state.slot
-    ):
-        raise ValidationError(
-            "aggregate_and_proof.aggregate.data.slot should be within the last"
-            " {attestation_propagation_slot_range} slots. Got"
-            f" aggregate_and_proof.aggregate.data.slot={aggregate_and_proof.aggregate.data.slot},"
-            f" current slot={state.slot}"
-        )
+    attestation = aggregate_and_proof.aggregate
+
+    validate_attestation_propagation_slot_range(
+        state, attestation, attestation_propagation_slot_range
+    )
 
     attesting_indices = get_attesting_indices(
-        state,
-        aggregate_and_proof.aggregate.data,
-        aggregate_and_proof.aggregate.aggregation_bits,
-        config,
+        state, attestation.data, attestation.aggregation_bits, config
     )
     if aggregate_and_proof.aggregator_index not in attesting_indices:
         raise ValidationError(
@@ -135,8 +126,8 @@ def validate_aggregate_and_proof(
 
     if not is_aggregator(
         state,
-        aggregate_and_proof.aggregate.data.slot,
-        aggregate_and_proof.aggregate.data.index,
+        attestation.data.slot,
+        attestation.data.index,
         aggregate_and_proof.selection_proof,
         config,
     ):
@@ -147,7 +138,24 @@ def validate_aggregate_and_proof(
 
     validate_aggregator_proof(state, aggregate_and_proof, config)
 
-    validate_aggregate_signature(state, aggregate_and_proof.aggregate, config)
+    validate_attestation_signature(state, attestation, config)
+
+
+def validate_attestation_propagation_slot_range(
+    state: BeaconState,
+    attestation: Attestation,
+    attestation_propagation_slot_range: int,
+) -> None:
+    if (
+        attestation.slot + attestation_propagation_slot_range < state.slot
+        or attestation.data.slot > state.slot
+    ):
+        raise ValidationError(
+            "attestation.data.slot should be within the last"
+            " {attestation_propagation_slot_range} slots. Got"
+            f" attestationdata.slot={attestation.data.slot},"
+            f" current slot={state.slot}"
+        )
 
 
 def validate_aggregator_proof(
@@ -171,7 +179,7 @@ def validate_aggregator_proof(
     )
 
 
-def validate_aggregate_signature(
+def validate_attestation_signature(
     state: BeaconState, attestation: Attestation, config: CommitteeConfig
 ) -> None:
     indexed_attestation = get_indexed_attestation(state, attestation, config)

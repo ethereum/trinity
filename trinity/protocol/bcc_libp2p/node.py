@@ -133,6 +133,7 @@ from .topic_validators import (
     get_beacon_aggregate_and_proof_validator,
     get_beacon_attestation_validator,
     get_beacon_block_validator,
+    get_committee_index_beacon_attestation_validator,
 )
 from .utils import (
     make_rpc_v1_ssz_protocol_id,
@@ -369,7 +370,7 @@ class Node(BaseService):
         for subnet_id in self.subnets:
             self.pubsub.set_topic_validator(
                 PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION.substitute(subnet_id=str(subnet_id)),
-                get_beacon_attestation_validator(self.chain),
+                get_committee_index_beacon_attestation_validator(self.chain, subnet_id),
                 False,
             )
 
