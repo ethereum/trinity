@@ -31,13 +31,18 @@ async def get_sync_setup(
         alice_syncer = BeaconChainSyncerFactory(
             chain_db__db=alice.chain.chaindb.db, peer_pool=alice.handshaked_peers
         )
-        asyncio.ensure_future(alice_syncer.run())
 
-        def finalizer():
-            event_loop.run_until_complete(alice_syncer.cancel())
+        timeout = asyncio.Event()
 
-        request.addfinalizer(finalizer)
-        await alice_syncer.events.finished.wait()
+        async def run_until_timeout():
+            try:
+                await asyncio.wait_for(alice_syncer.run(), timeout=6)
+            except asyncio.TimeoutError:
+                timeout.set()
+
+        asyncio.ensure_future(run_until_timeout())
+
+        await timeout.wait()
         yield alice, bob
 
 
