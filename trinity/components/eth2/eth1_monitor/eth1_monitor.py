@@ -222,7 +222,7 @@ class Eth1Monitor(Service):
                     f"deposit_root={deposit_root.hex()}"
                 )
         return Eth1Data(
-            deposit_root=contract_deposit_root,
+            deposit_root=deposit_root,
             deposit_count=accumulated_deposit_count,
             block_hash=block_hash,
         )

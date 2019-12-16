@@ -11,6 +11,7 @@ from web3.utils.events import get_event_data
 
 from eth2._utils.hash import hash_eth2
 from eth2.beacon.constants import GWEI_PER_ETH
+from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.typing import Gwei, Timestamp
 from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
 
@@ -71,6 +72,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     num_deposits_per_block: int
 
+    initial_deposits: Tuple[DepositData, ...]
     num_initial_deposits: int
 
     def __init__(
@@ -78,13 +80,15 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         start_block_number: BlockNumber,
         start_block_timestamp: Timestamp,
         num_deposits_per_block: int,
-        num_initial_deposits: int,
+        initial_deposits: Tuple[DepositData, ...],
     ) -> None:
         self.start_block_number = start_block_number
         self.start_block_timestamp = start_block_timestamp
         self.num_deposits_per_block = num_deposits_per_block
-        self.num_initial_deposits = num_initial_deposits
+        self.initial_deposits = initial_deposits
+        self.num_initial_deposits = len(initial_deposits)
 
+    # TODO: Remove this if we no longer need a fake provider
     @property
     def is_fake_provider(self) -> bool:
         return True
@@ -143,10 +147,24 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             )
 
     def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
+        block_hash = block_number.to_bytes(32, byteorder='big')
+        if block_number == self.start_block_number:
+            logs = [
+                DepositLog(
+                    block_hash=block_hash,
+                    pubkey=deposit.pubkey,
+                    withdrawal_credentials=deposit.withdrawal_credentials,
+                    signature=deposit.signature,
+                    amount=deposit.amount,
+                )
+                for deposit in self.initial_deposits
+            ]
+            return logs
+
         logs = []
         for _ in range(self.num_deposits_per_block):
             log = DepositLog(
-                block_hash=block_number.to_bytes(32, byteorder='big'),
+                block_hash=block_hash,
                 pubkey=BLSPubkey(b'\x12' * 48),
                 withdrawal_credentials=Hash32(b'\x23' * 32),
                 signature=BLSSignature(b'\x34' * 96),
@@ -196,6 +214,7 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
             event_abi_to_log_topic(self._deposit_event_abi)
         )
 
+    # TODO: Remove this if we no longer need a fake provider
     @property
     def is_fake_provider(self) -> bool:
         return False

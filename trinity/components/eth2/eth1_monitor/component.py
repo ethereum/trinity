@@ -3,16 +3,21 @@ from argparse import (
     _SubParsersAction,
 )
 import json
+from pathlib import Path
 import time
 
 from async_service import Service, TrioManager
 
 from eth_typing import BlockNumber
+from eth_utils import decode_hex
 
 from lahja import EndpointAPI
 
 # from web3 import Web3
 
+from eth2._utils.hash import hash_eth2
+from eth2.beacon.tools.builder.validator import create_mock_deposit_data
+from eth2.beacon.tools.fixtures.loading import load_yaml_at
 from eth2.beacon.typing import Timestamp
 from trinity.boot_info import BootInfo
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
@@ -23,7 +28,6 @@ from trinity.events import ShutdownRequest
 from trinity.extensibility import (
     TrioIsolatedComponent,
 )
-
 
 from .eth1_monitor import Eth1Monitor
 
@@ -64,26 +68,51 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         trinity_config = boot_info.trinity_config
+        beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
+        chain_config = beacon_app_config.get_chain_config()
+        base_db = DBClient.connect(trinity_config.database_ipc_path)
 
         # TODO: For now we use fake eth1 monitor.
-        # if self.boot_info.args.eth1client_rpc:
-        #     w3: Web3 = Web3.HTTPProvider(self.boot_info.args.eth1client_rpc)
+        # if boot_info.args.eth1client_rpc:
+        #     w3: Web3 = Web3.HTTPProvider(boot_info.args.eth1client_rpc)
         # else:
         #     w3: Web3 = None
-        beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
-        base_db = DBClient.connect(trinity_config.database_ipc_path)
-        with base_db:
-            chain_config = beacon_app_config.get_chain_config()
-            chain = chain_config.beacon_chain_class(
-                base_db,
-                chain_config.genesis_config,
+
+        # TODO: For now we use fake eth1 monitor. So we load validators data from
+        # interop setting and hardcode the deposit data into fake eth1 data provider.
+        chain = chain_config.beacon_chain_class(
+            base_db,
+            chain_config.genesis_config,
+        )
+        config = chain.get_state_machine().config
+        # Below code snippet is copied from generate_beacon_genesis.py
+        key_set = load_yaml_at(
+            Path('eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml')
+        )
+        initial_deposits = ()
+        for key_pair in key_set:
+            pubkey = decode_hex(key_pair["pubkey"])
+            privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
+            withdrawal_credential = (
+                config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="big")
+                + hash_eth2(pubkey)[1:]
             )
-            state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
+
+            deposit_data = create_mock_deposit_data(
+                config=config,
+                pubkey=pubkey,
+                privkey=privkey,
+                withdrawal_credentials=withdrawal_credential,
+            )
+
+            initial_deposits += (deposit_data,)
+
+        with base_db:
             fake_eth1_data_provider = FakeEth1DataProvider(
                 start_block_number=START_BLOCK_NUMBER,
                 start_block_timestamp=START_BLOCK_TIMESTAMP,
                 num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
-                num_initial_deposits=state.eth1_data.deposit_count,
+                initial_deposits=initial_deposits,
             )
 
             eth1_monitor_service: Service = Eth1Monitor(
