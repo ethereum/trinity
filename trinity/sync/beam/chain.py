@@ -191,7 +191,7 @@ class BeamSyncer(BaseService):
                 "Timed out while trying to fulfill prerequisites of "
                 f"sync launch strategy: {exc} from {self._launch_strategy}"
             )
-            await self.cancel()
+            self.cancel_nowait()
 
         self.run_daemon(self._header_syncer)
 
@@ -516,7 +516,7 @@ class HeaderOnlyPersist(BaseService):
             self.logger.debug("Final header import before checkpoint: None")
 
         self._final_headers = final_headers
-        self.cancel_nowait()
+        await self.cancel()
 
         return True
 

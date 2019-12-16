@@ -1,0 +1,1 @@
+``AsyncioIsolatedComponent`` no longer uses the standard libary ``multiprocessing`` for process isolation, in favor of using the more async friendly ``asyncio-run-in-process``
