@@ -107,7 +107,7 @@ def validate_aggregate_and_proof(
     """
     Validate aggregate_and_proof
 
-    Reference: https://github.com/ethereum/eth2.0-specs/blob/v09x/specs/networking/p2p-interface.md#global-topics  # noqa: E501
+    Reference: https://github.com/ethereum/eth2.0-specs/blob/master/specs/networking/p2p-interface.md#global-topics  # noqa: E501
     """
     attestation = aggregate_and_proof.aggregate
 
@@ -147,7 +147,7 @@ def validate_attestation_propagation_slot_range(
     attestation_propagation_slot_range: int,
 ) -> None:
     if (
-        attestation.slot + attestation_propagation_slot_range < state.slot
+        attestation.data.slot + attestation_propagation_slot_range < state.slot
         or attestation.data.slot > state.slot
     ):
         raise ValidationError(

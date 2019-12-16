@@ -19,14 +19,14 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
-    validate_attestation,
     validate_proposer_signature,
 )
 from eth2.beacon.tools.builder.aggregator import (
     validate_aggregate_and_proof,
     validate_attestation_propagation_slot_range,
+    validate_attestation_signature,
 )
-from eth2.beacon.typing import Slot, SubnetId
+from eth2.beacon.typing import SubnetId
 from eth2.configs import CommitteeConfig
 
 from libp2p.peer.id import ID
@@ -88,7 +88,11 @@ def get_beacon_attestation_validator(chain: BaseBeaconChain) -> Callable[..., bo
 
         try:
             validate_beacon_block(chain, attestation)
-            run_validate_attestation(state, state_machine, attestation)
+            validate_attestation_signature(
+                state,
+                attestation,
+                CommitteeConfig(state_machine.config),
+            )
         except InvalidGossipMessage as error:
             logger.debug("%s", str(error))
             return False
@@ -127,7 +131,11 @@ def get_committee_index_beacon_attestation_validator(
                 attestation,
                 ATTESTATION_PROPAGATION_SLOT_RANGE,
             )
-            run_validate_attestation(state, state_machine, attestation)
+            validate_attestation_signature(
+                state,
+                attestation,
+                CommitteeConfig(state_machine.config),
+            )
         except InvalidGossipMessage as error:
             logger.debug("%s", str(error))
             return False
@@ -156,7 +164,11 @@ def get_beacon_aggregate_and_proof_validator(chain: BaseBeaconChain) -> Callable
 
         try:
             validate_beacon_block(chain, attestation)
-            run_validate_aggregate_and_proof(state, state_machine, aggregate_and_proof)
+            run_validate_aggregate_and_proof(
+                state,
+                aggregate_and_proof,
+                CommitteeConfig(state_machine.config),
+            )
         except InvalidGossipMessage as error:
             logger.debug("%s", str(error))
             return False
@@ -229,72 +241,17 @@ def validate_beacon_block(chain: BaseBeaconChain, attestation: Attestation) -> N
         )
 
 
-def run_validate_attestation(
-    state: BeaconState, state_machine: BaseBeaconStateMachine, attestation: Attestation
-) -> None:
-    # Fast forward to state in future slot in order to pass
-    # attestation.data.slot validity check
-    future_slot = max(
-        Slot(attestation.data.slot + state_machine.config.MIN_ATTESTATION_INCLUSION_DELAY),
-        state.slot
-    )
-    try:
-        future_state = state_machine.state_transition.apply_state_transition(
-            state,
-            future_slot=future_slot,
-        )
-    except ValidationError as error:
-        raise InvalidGossipMessage(
-            "Failed to fast forward to state at slot=%d, error=%s",
-            future_slot,
-            str(error),
-        )
-
-    try:
-        validate_attestation(
-            future_state,
-            attestation,
-            state_machine.config,
-        )
-    except ValidationError as error:
-        raise InvalidGossipMessage(
-            "Failed to validate attestation=%s, error=%s",
-            attestation,
-            str(error),
-        )
-
-
 def run_validate_aggregate_and_proof(
     state: BeaconState,
-    state_machine: BaseBeaconStateMachine,
     aggregate_and_proof: AggregateAndProof,
+    config: CommitteeConfig
 ) -> None:
-    # Fast forward to state in future slot in order to pass
-    # attestation.data.slot validity check
-    config = state_machine.config
-    attestation = aggregate_and_proof.aggregate
-    future_slot = max(
-        Slot(attestation.data.slot + config.MIN_ATTESTATION_INCLUSION_DELAY),
-        state.slot
-    )
-    try:
-        future_state = state_machine.state_transition.apply_state_transition(
-            state,
-            future_slot=future_slot,
-        )
-    except ValidationError as error:
-        raise InvalidGossipMessage(
-            "Failed to fast forward to state at slot=%d, error=%s",
-            future_slot,
-            str(error),
-        )
-
     try:
         validate_aggregate_and_proof(
-            future_state,
+            state,
             aggregate_and_proof,
             ATTESTATION_PROPAGATION_SLOT_RANGE,
-            CommitteeConfig(config),
+            config,
         )
     except ValidationError as error:
         InvalidGossipMessage(
