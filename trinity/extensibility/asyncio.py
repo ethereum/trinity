@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import asyncio
+import logging
 import signal
 from typing import Optional
 
@@ -16,8 +17,8 @@ from trinity.boot_info import BootInfo
 from .component import BaseIsolatedComponent
 from .event_bus import AsyncioEventBusService
 
-import logging
-logger = logging.getLogger('trinity')
+
+logger = logging.getLogger('trinity.extensibility.asyncio.AsyncioIsolatedComponent')
 
 
 class AsyncioIsolatedComponent(BaseIsolatedComponent):
@@ -35,10 +36,18 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             try:
                 await proc.wait()
             except asyncio.CancelledError as err:
+                logger.debug('Component %s exiting. Sending SIGINT to pid=%d', self, proc.pid)
                 proc.send_signal(signal.SIGINT)
                 try:
                     await asyncio.wait_for(proc.wait(), timeout=2)
                 except asyncio.TimeoutError:
+                    logger.debug(
+                        'Component %s running in process pid=%d timed out '
+                        'during shutdown. Sending SIGTERM and exiting.',
+                        self,
+                        proc.pid,
+                    )
+                    proc.send_signal(signal.SIGTERM)
                     pass
                 finally:
                     raise err
