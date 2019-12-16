@@ -14,6 +14,7 @@ from lahja import EndpointAPI
 # from web3 import Web3
 
 from eth2.beacon.typing import Timestamp
+from trinity.boot_info import BootInfo
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import FakeEth1DataProvider
 from trinity.config import BeaconAppConfig
@@ -42,13 +43,12 @@ START_BLOCK_TIMESTAMP = Timestamp(int(time.time()) - 2100)  # Around 45 mins ago
 
 class Eth1MonitorComponent(TrioIsolatedComponent):
 
-    @property
-    def name(self) -> str:
-        return "Eth1 Monitor"
+    name = "Eth1 Monitor"
+    endpoint_name = "eth1-monitor"
 
-    def on_ready(self, manager_eventbus: EndpointAPI) -> None:
-        if self.boot_info.trinity_config.has_app_config(BeaconAppConfig):
-            self.start()
+    @property
+    def is_enabled(self) -> bool:
+        return self._boot_info.trinity_config.has_app_config(BeaconAppConfig)
 
     @classmethod
     def configure_parser(cls,
@@ -61,8 +61,9 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         #     help="RPC HTTP endpoint of Eth1 client ",
         # )
 
-    async def run(self) -> None:
-        trinity_config = self.boot_info.trinity_config
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        trinity_config = boot_info.trinity_config
 
         # TODO: For now we use fake eth1 monitor.
         # if self.boot_info.args.eth1client_rpc:
@@ -71,30 +72,31 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         #     w3: Web3 = None
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         base_db = DBClient.connect(trinity_config.database_ipc_path)
-        chain_config = beacon_app_config.get_chain_config()
-        chain = chain_config.beacon_chain_class(
-            base_db,
-            chain_config.genesis_config
-        )
-        state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
-        fake_eth1_data_provider = FakeEth1DataProvider(
-            start_block_number=START_BLOCK_NUMBER,
-            start_block_timestamp=START_BLOCK_TIMESTAMP,
-            num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
-            num_initial_deposits=state.eth1_data.deposit_count,
-        )
+        with base_db:
+            chain_config = beacon_app_config.get_chain_config()
+            chain = chain_config.beacon_chain_class(
+                base_db,
+                chain_config.genesis_config,
+            )
+            state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
+            fake_eth1_data_provider = FakeEth1DataProvider(
+                start_block_number=START_BLOCK_NUMBER,
+                start_block_timestamp=START_BLOCK_TIMESTAMP,
+                num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
+                num_initial_deposits=state.eth1_data.deposit_count,
+            )
 
-        eth1_monitor_service: Service = Eth1Monitor(
-            eth1_data_provider=fake_eth1_data_provider,
-            num_blocks_confirmed=NUM_BLOCKS_CONFIRMED,
-            polling_period=POLLING_PERIOD,
-            start_block_number=START_BLOCK_NUMBER,
-            event_bus=self.event_bus,
-            base_db=base_db,
-        )
+            eth1_monitor_service: Service = Eth1Monitor(
+                eth1_data_provider=fake_eth1_data_provider,
+                num_blocks_confirmed=NUM_BLOCKS_CONFIRMED,
+                polling_period=POLLING_PERIOD,
+                start_block_number=START_BLOCK_NUMBER,
+                event_bus=event_bus,
+                base_db=base_db,
+            )
 
-        try:
-            await TrioManager.run_service(eth1_monitor_service)
-        except Exception:
-            await self.event_bus.broadcast(ShutdownRequest("Eth1 Monitor ended unexpectedly"))
-            raise
+            try:
+                await TrioManager.run_service(eth1_monitor_service)
+            except Exception:
+                await event_bus.broadcast(ShutdownRequest("Eth1 Monitor ended unexpectedly"))
+                raise
