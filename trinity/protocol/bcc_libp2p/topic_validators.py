@@ -87,7 +87,7 @@ def get_beacon_attestation_validator(chain: BaseBeaconChain) -> Callable[..., bo
         state_machine = chain.get_state_machine()
 
         try:
-            validate_beacon_block(chain, attestation)
+            validate_voting_beacon_block(chain, attestation)
             validate_attestation_signature(
                 state,
                 attestation,
@@ -125,7 +125,7 @@ def get_committee_index_beacon_attestation_validator(
         try:
             validate_subnet_id(attestation, subnet_id)
             validate_is_unaggregated(attestation)
-            validate_beacon_block(chain, attestation)
+            validate_voting_beacon_block(chain, attestation)
             validate_attestation_propagation_slot_range(
                 state,
                 attestation,
@@ -163,7 +163,7 @@ def get_beacon_aggregate_and_proof_validator(chain: BaseBeaconChain) -> Callable
         attestation = aggregate_and_proof.aggregate
 
         try:
-            validate_beacon_block(chain, attestation)
+            validate_voting_beacon_block(chain, attestation)
             run_validate_aggregate_and_proof(
                 state,
                 aggregate_and_proof,
@@ -229,7 +229,7 @@ def validate_is_unaggregated(attestation: Attestation) -> None:
         return False
 
 
-def validate_beacon_block(chain: BaseBeaconChain, attestation: Attestation) -> None:
+def validate_voting_beacon_block(chain: BaseBeaconChain, attestation: Attestation) -> None:
     # Check that beacon blocks attested to by the attestation are validated
     try:
         chain.get_block_by_root(attestation.data.beacon_block_root)

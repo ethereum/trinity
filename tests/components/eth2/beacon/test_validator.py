@@ -84,7 +84,7 @@ async def get_validator(event_loop, event_bus, indices, num_validators=None) -> 
     unaggregated_attestation_pool = set()
     aggregated_attestation_pool = set()
 
-    def get_ready_attestations_fn(slot):
+    def get_ready_attestations_fn(slot, is_aggregated):
         return tuple(unaggregated_attestation_pool)
 
     def get_aggregatable_attestations_fn(slot, committee_index):
@@ -458,7 +458,7 @@ async def test_validator_include_ready_attestations(event_loop, event_bus, monke
 
     # Mock `get_ready_attestations_fn` so it returns the attestation alice
     # attested to.
-    def get_ready_attestations_fn(slot):
+    def get_ready_attestations_fn(slot, is_aggregated):
         return attestations
     monkeypatch.setattr(alice, 'get_ready_attestations', get_ready_attestations_fn)
 

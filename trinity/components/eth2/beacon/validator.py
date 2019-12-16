@@ -5,7 +5,6 @@ from typing import (
     Callable,
     Dict,
     Iterable,
-    Sequence,
     Set,
     Tuple,
 )
@@ -86,8 +85,8 @@ from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 
 
-GetReadyAttestationsFn = Callable[[Slot], Sequence[Attestation]]
-GetAggregatableAttestationsFn = Callable[[Slot, CommitteeIndex], Sequence[Attestation]]
+GetReadyAttestationsFn = Callable[[Slot, bool], Tuple[Attestation, ...]]
+GetAggregatableAttestationsFn = Callable[[Slot, CommitteeIndex], Tuple[Attestation, ...]]
 ImportAttestationFn = Callable[[Attestation, bool], None]
 
 
@@ -263,7 +262,11 @@ class Validator(BaseService):
         """
         Propose a block and broadcast it.
         """
-        ready_attestations = self.get_ready_attestations(slot)
+        # TODO(hwwhww): Check if need to aggregate and if they are overlapping.
+        aggregated_attestations = self.get_ready_attestations(slot, True)
+        unaggregated_attestations = self.get_ready_attestations(slot, False)
+        ready_attestations = aggregated_attestations + unaggregated_attestations
+
         block = create_block_on_state(
             state=state,
             config=state_machine.config,

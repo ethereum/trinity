@@ -366,12 +366,20 @@ class BCCReceiveServer(BaseService):
     # Exposed APIs for Validator
     #
     @to_tuple
-    def get_ready_attestations(self, current_slot: Slot) -> Iterable[Attestation]:
+    def get_ready_attestations(
+        self, current_slot: Slot, is_aggregated: bool
+    ) -> Iterable[Attestation]:
         """
         Get the attestations that are ready to be included in ``current_slot`` block.
         """
         config = self.chain.get_state_machine().config
-        return self.unaggregated_attestation_pool.get_valid_attestation_by_current_slot(
+
+        if is_aggregated:
+            attestation_pool = self.aggregated_attestation_pool
+        else:
+            attestation_pool = self.unaggregated_attestation_pool
+
+        return attestation_pool.get_valid_attestation_by_current_slot(
             current_slot,
             config,
         )
