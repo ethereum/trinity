@@ -15,7 +15,7 @@ from trinity.tools.bcc_factories import (
 
 @asynccontextmanager
 async def get_sync_setup(
-    request, event_loop, event_bus, genesis_state, alice_branch, bob_branch
+    request, event_loop, event_bus, genesis_state, alice_branch, bob_branch, sync_timeout=6
 ):
     alice_chaindb = AsyncBeaconChainDBFactory()
     bob_chaindb = AsyncBeaconChainDBFactory()
@@ -32,18 +32,13 @@ async def get_sync_setup(
             chain_db__db=alice.chain.chaindb.db, peer_pool=alice.handshaked_peers
         )
 
-        timeout = asyncio.Event()
-
-        async def run_until_timeout():
-            try:
-                await asyncio.wait_for(alice_syncer.run(), timeout=6)
-            except asyncio.TimeoutError:
-                timeout.set()
-
-        asyncio.ensure_future(run_until_timeout())
-
-        await timeout.wait()
-        yield alice, bob
+        try:
+            await asyncio.wait_for(alice_syncer.run(), timeout=sync_timeout)
+        except asyncio.TimeoutError:
+            # After sync is cancelled, return to let the caller do assertions about the state
+            pass
+        finally:
+            yield alice, bob
 
 
 def assert_synced(alice, bob, correct_branch):
