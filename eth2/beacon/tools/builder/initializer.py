@@ -1,7 +1,8 @@
-from typing import Dict, Sequence, Tuple, Type
+from typing import Any, Dict, Sequence, Tuple, Type
 
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSPubkey, Hash32
+from eth_utils import decode_hex
 from py_ecc.optimized_bls12_381.optimized_curve import (
     curve_order as BLS12_381_CURVE_ORDER,
 )
@@ -30,6 +31,27 @@ def generate_privkey_from_index(index: int) -> int:
         )
         % BLS12_381_CURVE_ORDER
     )
+
+
+def create_keypair_and_mock_withdraw_credentials(
+    config: Eth2Config,
+    key_set: Dict[str, Any],
+) -> Tuple[Sequence[BLSPubkey], Sequence[int], Sequence[Hash32]]:
+    pubkeys = ()
+    privkeys = ()
+    withdrawal_credentials = ()
+    for key_pair in key_set:
+        pubkey = decode_hex(key_pair["pubkey"])
+        privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
+        withdrawal_credential = (
+            config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="big")
+            + hash_eth2(pubkey)[1:]
+        )
+
+        pubkeys += (pubkey,)
+        privkeys += (privkey,)
+        withdrawal_credentials += (withdrawal_credential,)
+    return (pubkeys, privkeys, withdrawal_credentials)
 
 
 def create_mock_deposits_and_root(

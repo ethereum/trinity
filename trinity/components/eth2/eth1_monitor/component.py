@@ -9,13 +9,14 @@ import time
 from async_service import Service, TrioManager
 
 from eth_typing import BlockNumber
-from eth_utils import decode_hex
 
 from lahja import EndpointAPI
 
 # from web3 import Web3
 
-from eth2._utils.hash import hash_eth2
+from eth2.beacon.tools.builder.initializer import (
+    create_keypair_and_mock_withdraw_credentials,
+)
 from eth2.beacon.tools.builder.validator import create_mock_deposit_data
 from eth2.beacon.tools.fixtures.loading import load_yaml_at
 from eth2.beacon.typing import Timestamp
@@ -85,34 +86,30 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
             chain_config.genesis_config,
         )
         config = chain.get_state_machine().config
-        # Below code snippet is copied from generate_beacon_genesis.py
         key_set = load_yaml_at(
             Path('eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml')
         )
-        initial_deposits = ()
-        for key_pair in key_set:
-            pubkey = decode_hex(key_pair["pubkey"])
-            privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
-            withdrawal_credential = (
-                config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="big")
-                + hash_eth2(pubkey)[1:]
-            )
-
-            deposit_data = create_mock_deposit_data(
+        pubkeys, privkeys, withdrawal_credentials = create_keypair_and_mock_withdraw_credentials(
+            config,
+            key_set,
+        )
+        initial_deposits = (
+            create_mock_deposit_data(
                 config=config,
                 pubkey=pubkey,
                 privkey=privkey,
                 withdrawal_credentials=withdrawal_credential,
             )
-
-            initial_deposits += (deposit_data,)
+            for pubkey, privkey, withdrawal_credential in zip(
+                pubkeys, privkeys, withdrawal_credentials)
+        )
 
         with base_db:
             fake_eth1_data_provider = FakeEth1DataProvider(
                 start_block_number=START_BLOCK_NUMBER,
                 start_block_timestamp=START_BLOCK_TIMESTAMP,
                 num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
-                initial_deposits=initial_deposits,
+                initial_deposits=tuple(initial_deposits),
             )
 
             eth1_monitor_service: Service = Eth1Monitor(
