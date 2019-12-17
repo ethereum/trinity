@@ -78,7 +78,11 @@ class BeaconChainSyncer(BaseService):
             # sync peer selected successfully
             await self.wait(self.sync())
             new_head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
-            self.logger.info(f"Sync with {self.sync_peer} finished, new head: {new_head}")
+            self.logger.info(
+                "Sync with %s finished, new head: %s",
+                self.sync_peer,
+                new_head,
+            )
             # Reset the sync peer
             self.sync_peer = None
             await asyncio.sleep(NEXT_SYNC_CHECK_INTERVAL)
