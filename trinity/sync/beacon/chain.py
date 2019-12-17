@@ -40,6 +40,8 @@ from eth2.configs import (
 )
 from trinity.protocol.bcc_libp2p.exceptions import RequestFailure
 
+from .exceptions import LeadingPeerNotFonud
+
 
 class BeaconChainSyncer(BaseService):
     """Sync from our finalized head until their preliminary head."""
@@ -69,8 +71,8 @@ class BeaconChainSyncer(BaseService):
         while True:
             try:
                 self.sync_peer = await self.wait(self.select_sync_peer())
-            except ValidationError as exception:
-                self.logger.info(f"No suitable peers to sync with: {exception}")
+            except LeadingPeerNotFonud as exception:
+                self.logger.info("No suitable peers to sync with: %s", exception)
                 # wait some time and try again
                 await asyncio.sleep(PEER_SELECTION_RETRY_INTERVAL)
                 continue
@@ -90,13 +92,13 @@ class BeaconChainSyncer(BaseService):
 
     async def select_sync_peer(self) -> Peer:
         if len(self.peer_pool) == 0:
-            raise ValidationError("Not connected to anyone")
+            raise LeadingPeerNotFonud("Not connected to anyone")
 
         best_peer = self.peer_pool.get_best_head_slot_peer()
         head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
 
         if best_peer.head_slot <= head.slot:
-            raise ValidationError("No peer that is ahead of us")
+            raise LeadingPeerNotFonud("No peer is ahead of us")
 
         return best_peer
 
