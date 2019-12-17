@@ -9,8 +9,8 @@ from eth_utils import encode_hex, event_abi_to_log_topic
 from web3 import Web3
 from web3.utils.events import get_event_data
 
-from eth2._utils.hash import hash_eth2
 from eth2.beacon.constants import GWEI_PER_ETH
+from eth2.beacon.tools.builder.validator import make_deposit_tree_and_root
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.typing import Gwei, Timestamp
 from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
@@ -41,6 +41,15 @@ class DepositLog(NamedTuple):
             amount=Gwei(int.from_bytes(log_args["amount"], "little")),
             signature=log_args["signature"],
         )
+
+
+def convert_deposit_log_to_deposit_data(deposit_log: DepositLog) -> DepositData:
+    return DepositData(
+        pubkey=deposit_log.pubkey,
+        withdrawal_credentials=deposit_log.withdrawal_credentials,
+        amount=deposit_log.amount,
+        signature=deposit_log.signature,
+    )
 
 
 class BaseEth1DataProvider(ABC):
@@ -86,11 +95,6 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
         self._deposit_event_topic = encode_hex(
             event_abi_to_log_topic(self._deposit_event_abi)
         )
-
-    # TODO: Remove this if we no longer need a fake provider
-    @property
-    def is_fake_provider(self) -> bool:
-        return False
 
     def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
         block_dict = self.w3.eth.getBlock(arg)
@@ -143,8 +147,9 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     num_deposits_per_block: int
 
-    initial_deposits: Tuple[DepositData, ...]
+    deposits: Tuple[DepositData, ...]
     num_initial_deposits: int
+    latest_processed_block_number: BlockNumber
 
     def __init__(
         self,
@@ -156,13 +161,9 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         self.start_block_number = start_block_number
         self.start_block_timestamp = start_block_timestamp
         self.num_deposits_per_block = num_deposits_per_block
-        self.initial_deposits = initial_deposits
+        self.deposits = initial_deposits
         self.num_initial_deposits = len(initial_deposits)
-
-    # TODO: Remove this if we no longer need a fake provider
-    @property
-    def is_fake_provider(self) -> bool:
-        return True
+        self.latest_processed_block_number = start_block_number
 
     def _get_latest_block_number(self) -> BlockNumber:
         current_time = int(time.time())
@@ -228,7 +229,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                     signature=deposit.signature,
                     amount=deposit.amount,
                 )
-                for deposit in self.initial_deposits
+                for deposit in self.deposits
             )
             return tuple(logs)
         else:
@@ -254,7 +255,17 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         return deposit_count.to_bytes(32, byteorder='little')
 
     def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
-        block_root = block_number.to_bytes(32, byteorder='big')
-        return hash_eth2(
-            block_root + self.get_deposit_count(block_number)
-        )
+        # Check and update deposit data when deposit root is requested
+        if self.latest_processed_block_number < block_number:
+            for blk_number in range(self.latest_processed_block_number + 1, block_number + 1):
+                deposit_logs = self.get_logs(blk_number)
+                self.deposits += tuple(
+                    convert_deposit_log_to_deposit_data(deposit_log)
+                    for deposit_log in deposit_logs
+                )
+            self.latest_processed_block_number = block_number
+        deposit_count_bytes = self.get_deposit_count(block_number)
+        deposit_count = int.from_bytes(deposit_count_bytes, byteorder='little')
+        deposits = self.deposits[:deposit_count]
+        _, deposit_root = make_deposit_tree_and_root(deposits)
+        return deposit_root

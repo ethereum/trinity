@@ -213,14 +213,12 @@ class Eth1Monitor(Service):
         contract_deposit_root = self._get_deposit_root_from_contract(
             target_block_number
         )
-        # TODO: Remove this if we no longer need a fake provider
-        if not self._eth1_data_provider.is_fake_provider:
-            if contract_deposit_root != deposit_root:
-                raise DepositDataCorrupted(
-                    "deposit root built locally mismatches the one in the contract on chain: "
-                    f"contract_deposit_root={contract_deposit_root.hex()}, "
-                    f"deposit_root={deposit_root.hex()}"
-                )
+        if contract_deposit_root != deposit_root:
+            raise DepositDataCorrupted(
+                "deposit root built locally mismatches the one in the contract on chain: "
+                f"contract_deposit_root={contract_deposit_root.hex()}, "
+                f"deposit_root={deposit_root.hex()}"
+            )
         return Eth1Data(
             deposit_root=deposit_root,
             deposit_count=accumulated_deposit_count,
