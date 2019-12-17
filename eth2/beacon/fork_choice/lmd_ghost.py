@@ -32,6 +32,7 @@ def score_block_by_root(root: SigningRoot) -> int:
 
 
 class LMDGHOSTScore(BaseScore):
+    # First score by the latest attesting balance, and then score by block root
     _score: Tuple[Gwei, int]
 
     def __init__(self, score: Tuple[Gwei, int]) -> None:
@@ -63,7 +64,7 @@ class LMDGHOSTScore(BaseScore):
         cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
     ) -> BaseScore:
         score = (Gwei(0), score_block_by_root(SigningRoot(ZERO_HASH32)))
-        return LMDGHOSTScore(score)
+        return cls(score)
 
 
 def compute_slots_since_epoch_start(slot: Slot, slots_per_epoch: int) -> Slot:
@@ -419,7 +420,7 @@ class Store:
 
     def scoring(self, block: BaseBeaconBlock) -> LMDGHOSTScore:
         """
-        Return the score of the target ``_block`` according to the LMD GHOST algorithm,
+        Return the score of the target ``block`` according to the LMD GHOST algorithm,
         using the lexicographic ordering of the block root to break ties.
         """
         root = block.signing_root
