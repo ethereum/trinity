@@ -88,7 +88,6 @@ class BeaconChainSyncer(BaseService):
                 # Reset the sync peer
                 self.sync_peer = None
                 await asyncio.sleep(NEXT_SYNC_CHECK_INTERVAL)
-            raise Exception("Unreachable")
 
     async def select_sync_peer(self) -> Peer:
         if len(self.peer_pool) == 0:
