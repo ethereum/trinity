@@ -62,133 +62,6 @@ class BaseEth1DataProvider(ABC):
         ...
 
 
-AVERAGE_BLOCK_TIME = 20
-
-
-class FakeEth1DataProvider(BaseEth1DataProvider):
-
-    start_block_number: BlockNumber
-    start_block_timestamp: Timestamp
-
-    num_deposits_per_block: int
-
-    initial_deposits: Tuple[DepositData, ...]
-    num_initial_deposits: int
-
-    def __init__(
-        self,
-        start_block_number: BlockNumber,
-        start_block_timestamp: Timestamp,
-        num_deposits_per_block: int,
-        initial_deposits: Tuple[DepositData, ...],
-    ) -> None:
-        self.start_block_number = start_block_number
-        self.start_block_timestamp = start_block_timestamp
-        self.num_deposits_per_block = num_deposits_per_block
-        self.initial_deposits = initial_deposits
-        self.num_initial_deposits = len(initial_deposits)
-
-    # TODO: Remove this if we no longer need a fake provider
-    @property
-    def is_fake_provider(self) -> bool:
-        return True
-
-    def _get_latest_block_number(self) -> BlockNumber:
-        current_time = int(time.time())
-        num_blocks_inbetween = (current_time - self.start_block_timestamp) // AVERAGE_BLOCK_TIME
-        return BlockNumber(self.start_block_number + num_blocks_inbetween)
-
-    def _get_block_time(self, block_number: BlockNumber) -> Timestamp:
-        return Timestamp(
-            self.start_block_timestamp +
-            (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
-        )
-
-    def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
-        # If `arg` is block number
-        if isinstance(arg, int):
-            block_time = self._get_block_time(BlockNumber(arg))
-            return Eth1Block(
-                block_hash=int(arg).to_bytes(32, byteorder='big'),
-                number=arg,
-                timestamp=Timestamp(block_time),
-            )
-        # If `arg` is block hash
-        elif isinstance(arg, bytes):
-            block_number = int.from_bytes(arg, byteorder='big')
-            latest_block_number = self._get_latest_block_number()
-            # Check if provided block number is in valid range
-            earliest_follow_block_number = self.start_block_number - ETH1_FOLLOW_DISTANCE
-            is_beyond_follow_distance = block_number < earliest_follow_block_number
-            if (is_beyond_follow_distance or block_number > latest_block_number):
-                # If provided block number does not make sense,
-                # assume it's the block at `earliest_follow_block_number`.
-                return Eth1Block(
-                    block_hash=earliest_follow_block_number.to_bytes(32, byteorder='big'),
-                    number=BlockNumber(earliest_follow_block_number),
-                    timestamp=Timestamp(
-                        self.start_block_timestamp - ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME,
-                    ),
-                )
-            block_time = self._get_block_time(block_number)
-            return Eth1Block(
-                block_hash=arg,
-                number=BlockNumber(block_number),
-                timestamp=Timestamp(block_time),
-            )
-        else:
-            # Assume `arg` == 'latest'
-            latest_block_number = self._get_latest_block_number()
-            block_time = self._get_block_time(latest_block_number)
-            return Eth1Block(
-                block_hash=latest_block_number.to_bytes(32, byteorder='big'),
-                number=BlockNumber(latest_block_number),
-                timestamp=block_time,
-            )
-
-    def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
-        block_hash = block_number.to_bytes(32, byteorder='big')
-        if block_number == self.start_block_number:
-            logs = [
-                DepositLog(
-                    block_hash=block_hash,
-                    pubkey=deposit.pubkey,
-                    withdrawal_credentials=deposit.withdrawal_credentials,
-                    signature=deposit.signature,
-                    amount=deposit.amount,
-                )
-                for deposit in self.initial_deposits
-            ]
-            return logs
-
-        logs = []
-        for _ in range(self.num_deposits_per_block):
-            log = DepositLog(
-                block_hash=block_hash,
-                pubkey=BLSPubkey(b'\x12' * 48),
-                withdrawal_credentials=Hash32(b'\x23' * 32),
-                signature=BLSSignature(b'\x34' * 96),
-                amount=Gwei(32 * GWEI_PER_ETH),
-            )
-            logs.append(log)
-        return tuple(logs)
-
-    def get_deposit_count(self, block_number: BlockNumber) -> bytes:
-        if block_number <= self.start_block_number:
-            return self.num_initial_deposits.to_bytes(32, byteorder='little')
-        deposit_count = (
-            self.num_initial_deposits +
-            (block_number - self.start_block_number) * self.num_deposits_per_block
-        )
-        return deposit_count.to_bytes(32, byteorder='little')
-
-    def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
-        block_root = block_number.to_bytes(32, byteorder='big')
-        return hash_eth2(
-            block_root + self.get_deposit_count(block_number)
-        )
-
-
 class Web3Eth1DataProvider(BaseEth1DataProvider):
 
     w3: Web3
@@ -256,4 +129,132 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
     def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
         return self._deposit_contract.functions.get_deposit_root().call(
             block_identifier=block_number
+        )
+
+
+# NOTE: This constant is for `FakeEth1DataProvider`
+AVERAGE_BLOCK_TIME = 20
+
+
+class FakeEth1DataProvider(BaseEth1DataProvider):
+
+    start_block_number: BlockNumber
+    start_block_timestamp: Timestamp
+
+    num_deposits_per_block: int
+
+    initial_deposits: Tuple[DepositData, ...]
+    num_initial_deposits: int
+
+    def __init__(
+        self,
+        start_block_number: BlockNumber,
+        start_block_timestamp: Timestamp,
+        num_deposits_per_block: int,
+        initial_deposits: Tuple[DepositData, ...],
+    ) -> None:
+        self.start_block_number = start_block_number
+        self.start_block_timestamp = start_block_timestamp
+        self.num_deposits_per_block = num_deposits_per_block
+        self.initial_deposits = initial_deposits
+        self.num_initial_deposits = len(initial_deposits)
+
+    # TODO: Remove this if we no longer need a fake provider
+    @property
+    def is_fake_provider(self) -> bool:
+        return True
+
+    def _get_latest_block_number(self) -> BlockNumber:
+        current_time = int(time.time())
+        distance = (current_time - self.start_block_timestamp) // AVERAGE_BLOCK_TIME
+        return BlockNumber(self.start_block_number + distance)
+
+    def _get_block_time(self, block_number: BlockNumber) -> Timestamp:
+        return Timestamp(
+            self.start_block_timestamp +
+            (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
+        )
+
+    def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
+        # If `arg` is block number
+        if isinstance(arg, int):
+            block_time = self._get_block_time(BlockNumber(arg))
+            return Eth1Block(
+                block_hash=int(arg).to_bytes(32, byteorder='big'),
+                number=arg,
+                timestamp=Timestamp(block_time),
+            )
+        # If `arg` is block hash
+        elif isinstance(arg, bytes):
+            block_number = int.from_bytes(arg, byteorder='big')
+            latest_block_number = self._get_latest_block_number()
+            # Check if provided block number is in valid range
+            earliest_follow_block_number = self.start_block_number - ETH1_FOLLOW_DISTANCE
+            is_beyond_follow_distance = block_number < earliest_follow_block_number
+            if (is_beyond_follow_distance or block_number > latest_block_number):
+                # If provided block number does not make sense,
+                # assume it's the block at `earliest_follow_block_number`.
+                return Eth1Block(
+                    block_hash=earliest_follow_block_number.to_bytes(32, byteorder='big'),
+                    number=BlockNumber(earliest_follow_block_number),
+                    timestamp=Timestamp(
+                        self.start_block_timestamp - ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME,
+                    ),
+                )
+            block_time = self._get_block_time(block_number)
+            return Eth1Block(
+                block_hash=arg,
+                number=BlockNumber(block_number),
+                timestamp=Timestamp(block_time),
+            )
+        else:
+            # Assume `arg` == 'latest'
+            latest_block_number = self._get_latest_block_number()
+            block_time = self._get_block_time(latest_block_number)
+            return Eth1Block(
+                block_hash=latest_block_number.to_bytes(32, byteorder='big'),
+                number=BlockNumber(latest_block_number),
+                timestamp=block_time,
+            )
+
+    def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
+        block_hash = block_number.to_bytes(32, byteorder='big')
+        if block_number == self.start_block_number:
+            logs = (
+                DepositLog(
+                    block_hash=block_hash,
+                    pubkey=deposit.pubkey,
+                    withdrawal_credentials=deposit.withdrawal_credentials,
+                    signature=deposit.signature,
+                    amount=deposit.amount,
+                )
+                for deposit in self.initial_deposits
+            )
+            return tuple(logs)
+        else:
+            logs = (
+                DepositLog(
+                    block_hash=block_hash,
+                    pubkey=BLSPubkey(b'\x12' * 48),
+                    withdrawal_credentials=Hash32(b'\x23' * 32),
+                    signature=BLSSignature(b'\x34' * 96),
+                    amount=Gwei(32 * GWEI_PER_ETH),
+                )
+                for _ in range(self.num_deposits_per_block)
+            )
+            return tuple(logs)
+
+    def get_deposit_count(self, block_number: BlockNumber) -> bytes:
+        if block_number <= self.start_block_number:
+            return self.num_initial_deposits.to_bytes(32, byteorder='little')
+        deposit_count = (
+            self.num_initial_deposits +
+            (block_number - self.start_block_number) * self.num_deposits_per_block
+        )
+        return deposit_count.to_bytes(32, byteorder='little')
+
+    def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
+        block_root = block_number.to_bytes(32, byteorder='big')
+        return hash_eth2(
+            block_root + self.get_deposit_count(block_number)
         )
