@@ -2,9 +2,11 @@ from abc import ABC, abstractmethod
 import time
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
-from eth_typing import Address, BLSPubkey, BLSSignature, BlockNumber, Hash32
+from eth.exceptions import BlockNotFound
 
+from eth_typing import Address, BLSPubkey, BLSSignature, BlockNumber, Hash32
 from eth_utils import encode_hex, event_abi_to_log_topic
+
 from web3 import Web3
 from web3.utils.events import get_event_data
 
@@ -98,7 +100,7 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
     def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
         block_dict = self.w3.eth.getBlock(arg)
         if block_dict is None:
-            return None
+            raise BlockNotFound
         return Eth1Block(
             block_hash=Hash32(block_dict["hash"]),
             number=BlockNumber(block_dict["number"]),

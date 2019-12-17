@@ -20,6 +20,7 @@ import trio
 from web3 import Web3
 
 from eth.abc import AtomicDatabaseAPI
+from eth.exceptions import BlockNotFound
 
 from eth_utils import humanize_hash
 
@@ -127,8 +128,9 @@ class Eth1Monitor(Service):
         """
         Handle requests for `get_distance` from the event bus.
         """
-        block = self._eth1_data_provider.get_block(req.block_hash)
-        if block is None:
+        try:
+            block = self._eth1_data_provider.get_block(req.block_hash)
+        except BlockNotFound:
             raise Eth1MonitorValidationError(
                 f"Block does not exist for block_hash={humanize_hash(req.block_hash)}"
             )
@@ -192,8 +194,9 @@ class Eth1Monitor(Service):
                 f"`distance`={distance}, ",
                 f"eth1_voting_period_start_block_number={eth1_voting_period_start_block_number}",
             )
-        block = self._eth1_data_provider.get_block(target_block_number)
-        if block is None:
+        try:
+            block = self._eth1_data_provider.get_block(target_block_number)
+        except BlockNotFound:
             raise Eth1MonitorValidationError(
                 f"Block does not exist for block number={target_block_number}"
             )
@@ -277,9 +280,10 @@ class Eth1Monitor(Service):
         `latest_block.number - self._num_blocks_confirmed`.
         """
         while True:
-            block = self._eth1_data_provider.get_block("latest")
-            if block is None:
-                raise Eth1MonitorValidationError(f"Fail to get latest block")
+            try:
+                block = self._eth1_data_provider.get_block("latest")
+            except BlockNotFound:
+                raise Eth1MonitorValidationError("Fail to get latest block")
             target_block_number = BlockNumber(block.number - self._num_blocks_confirmed)
             from_block_number = self.highest_processed_block_number
             if target_block_number > from_block_number:
@@ -287,8 +291,9 @@ class Eth1Monitor(Service):
                 for block_number in range(
                     from_block_number + 1, target_block_number + 1
                 ):
-                    block = self._eth1_data_provider.get_block(BlockNumber(block_number))
-                    if block is None:
+                    try:
+                        block = self._eth1_data_provider.get_block(BlockNumber(block_number))
+                    except BlockNotFound:
                         raise Eth1MonitorValidationError(
                             f"Block does not exist for block number={block_number}"
                         )

@@ -91,7 +91,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         )
         pubkeys, privkeys, withdrawal_credentials = create_keypair_and_mock_withdraw_credentials(
             config,
-            key_set,
+            key_set,  # type: ignore
         )
         initial_deposits = (
             create_mock_deposit_data(
