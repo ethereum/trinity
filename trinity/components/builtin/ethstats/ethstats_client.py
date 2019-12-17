@@ -1,7 +1,12 @@
 import asyncio
 import datetime
 import json
-import typing
+
+from typing import (
+    Any,
+    Dict,
+    NamedTuple,
+)
 
 import websockets
 
@@ -19,10 +24,10 @@ def timestamp_ms() -> int:
     return round(datetime.datetime.utcnow().timestamp() * 1000)
 
 
-EthstatsData = typing.Dict[str, typing.Any]
+EthstatsData = Dict[str, Any]
 
 
-class EthstatsMessage(typing.NamedTuple):
+class EthstatsMessage(NamedTuple):
     command: str
     data: EthstatsData
 
@@ -56,12 +61,12 @@ class EthstatsClient(BaseService):
     async def recv_handler(self) -> None:
         while self.is_operational:
             try:
-                json_string: str = await self.websocket.recv()
+                json_string = await self.websocket.recv()
             except websockets.ConnectionClosed as e:
                 self.logger.debug2("Connection closed: %s", e)
                 await self.cancel()
             try:
-                message: EthstatsMessage = self.deserialize_message(json_string)
+                message: EthstatsMessage = self.deserialize_message(str(json_string))
             except EthstatsException as e:
                 self.logger.warning('Cannot parse message from server: %s' % e)
                 return
