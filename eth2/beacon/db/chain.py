@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import functools
 from typing import Iterable, Optional, Tuple, Type, cast
 
 from cytoolz import concat, first, sliding_window
@@ -8,6 +7,7 @@ from eth.exceptions import BlockNotFound, CanonicalHeadNotFound, ParentNotFound
 from eth.validation import validate_word
 from eth_typing import Hash32
 from eth_utils import ValidationError, encode_hex, to_tuple
+from lru import LRU
 import ssz
 
 from eth2.beacon.constants import ZERO_SIGNING_ROOT
@@ -27,6 +27,14 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, HashTreeRoot, SigningRoot, Slot
 from eth2.configs import Eth2GenesisConfig
+
+# When performing a chain sync (either fast or regular modes), we'll very often need to look
+# up recent blocks to validate the chain, and decoding their SSZ representation is
+# relatively expensive so we cache that here, but use a small cache because we *should* only
+# be looking up recent blocks. We cache by root instead of ssz representation as ssz
+# representation is not unique if different length configs are considered
+state_cache = LRU(128)
+block_cache = LRU(128)
 
 
 class AttestationKey(ssz.Serializable):
@@ -368,13 +376,20 @@ class BeaconChainDB(BaseBeaconChainDB):
         Raise BlockNotFound if it is not present in the db.
         """
         validate_word(block_root, title="block root")
+
+        if block_root in block_cache and block_root in db:
+            return block_cache[block_root]
+
         try:
             block_ssz = db[block_root]
         except KeyError:
             raise BlockNotFound(
                 "No block with signing root {0} found".format(encode_hex(block_root))
             )
-        return _decode_block(block_ssz, block_class)
+
+        block = ssz.decode(block_ssz, block_class)
+        block_cache[block_root] = block
+        return block
 
     def get_slot_by_root(self, block_root: SigningRoot) -> Slot:
         """
@@ -737,11 +752,17 @@ class BeaconChainDB(BaseBeaconChainDB):
         Raises StateNotFound if it is not present in the db.
         """
         # TODO: validate_state_root
+        if state_root in state_cache and state_root in db:
+            return state_cache[state_root]
+
         try:
             state_ssz = db[state_root]
         except KeyError:
             raise StateNotFound(f"No state with root {encode_hex(state_root)} found")
-        return _decode_state(state_ssz, state_class)
+
+        state = ssz.decode(state_ssz, state_class)
+        state_cache[state] = state
+        return state
 
     def persist_state(self, state: BeaconState) -> None:
         """
@@ -911,17 +932,3 @@ class BeaconChainDB(BaseBeaconChainDB):
         Return the value for the given key or a KeyError if it doesn't exist in the database.
         """
         return self.db[key]
-
-
-# When performing a chain sync (either fast or regular modes), we'll very often need to look
-# up recent blocks to validate the chain, and decoding their SSZ representation is
-# relatively expensive so we cache that here, but use a small cache because we *should* only
-# be looking up recent blocks.
-@functools.lru_cache(128)
-def _decode_block(block_ssz: bytes, sedes: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
-    return ssz.decode(block_ssz, sedes=sedes)
-
-
-@functools.lru_cache(128)
-def _decode_state(state_ssz: bytes, state_class: Type[BeaconState]) -> BeaconState:
-    return ssz.decode(state_ssz, sedes=state_class)
