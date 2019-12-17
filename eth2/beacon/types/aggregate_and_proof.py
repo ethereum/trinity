@@ -29,7 +29,9 @@ class AggregateAndProof(HashableContainer):
         selection_proof: BLSSignature = EMPTY_SIGNATURE,
     ) -> TAggregateAndProof:
         return super().create(
-            aggregator_index=aggregator_index, aggregate=aggregate, selection_proof=selection_proof
+            aggregator_index=aggregator_index,
+            aggregate=aggregate,
+            selection_proof=selection_proof,
         )
 
     def __str__(self) -> str:

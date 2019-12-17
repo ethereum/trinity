@@ -86,7 +86,7 @@ def get_aggregate_from_valid_committee_attestations(
 
     assert len(attestations) > 0
 
-    return Attestation(
+    return Attestation.create(
         data=attestations[0].data,
         aggregation_bits=Bitfield(aggregation_bits),
         signature=aggregate_signature,

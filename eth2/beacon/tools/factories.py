@@ -51,10 +51,8 @@ class BeaconChainFactory(factory.Factory):
         else:
             num_validators = cls.num_validators
 
-        keymap = mk_keymap_of_size(num_validators)
-
         if kwargs["genesis_state"] is None:
-            keymap = mk_keymap_of_size(cls.num_validators)
+            keymap = mk_keymap_of_size(num_validators)
             genesis_state, genesis_block = create_mock_genesis(
                 config=cls.config,
                 pubkeys=tuple(keymap.keys()),

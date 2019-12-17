@@ -524,7 +524,7 @@ class Validator(BaseService):
                 # 3. For each aggregate
                 # (it's possible with same CommitteeIndex and different AttesatationData)
                 for aggregate in aggregates:
-                    aggregate_and_proof = AggregateAndProof(
+                    aggregate_and_proof = AggregateAndProof.create(
                         aggregator_index=validator_index,
                         aggregate=aggregate,
                         selection_proof=selected_proofs[validator_index],

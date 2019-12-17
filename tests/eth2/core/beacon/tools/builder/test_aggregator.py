@@ -59,16 +59,18 @@ def test_get_aggregate_from_valid_committee_attestations(
 ):
     committee_size = 16
     empty_bitfield = get_empty_bitfield(committee_size)
-    base_attestation = Attestation(**sample_attestation_params)
+    base_attestation = Attestation.create(**sample_attestation_params)
     message_hash = base_attestation.data.hash_tree_root
     attestations = []
     expected_bitfield = empty_bitfield
 
     for i in range(4, 16, 2):
         attestations.append(
-            base_attestation.copy(
-                aggregation_bits=set_voted(empty_bitfield, i),
-                signature=sign_transaction(
+            base_attestation.mset(
+                "aggregation_bits",
+                set_voted(empty_bitfield, i),
+                "signature",
+                sign_transaction(
                     message_hash=message_hash,
                     privkey=privkeys[i],
                     state=genesis_state,
