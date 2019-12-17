@@ -74,18 +74,19 @@ class BeaconChainSyncer(BaseService):
                 # wait some time and try again
                 await asyncio.sleep(PEER_SELECTION_RETRY_INTERVAL)
                 continue
-
-            # sync peer selected successfully
-            await self.wait(self.sync())
-            new_head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
-            self.logger.info(
-                "Sync with %s finished, new head: %s",
-                self.sync_peer,
-                new_head,
-            )
-            # Reset the sync peer
-            self.sync_peer = None
-            await asyncio.sleep(NEXT_SYNC_CHECK_INTERVAL)
+            else:
+                # sync peer selected successfully
+                await self.wait(self.sync())
+                new_head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
+                self.logger.info(
+                    "Sync with %s finished, new head: %s",
+                    self.sync_peer,
+                    new_head,
+                )
+                # Reset the sync peer
+                self.sync_peer = None
+                await asyncio.sleep(NEXT_SYNC_CHECK_INTERVAL)
+            raise Exception("Unreachable")
 
     async def select_sync_peer(self) -> Peer:
         if len(self.peer_pool) == 0:
