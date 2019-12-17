@@ -3,8 +3,8 @@ from typing import Type  # noqa: F401
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.db.exceptions import MissingForkChoiceContext
 from eth2.beacon.fork_choice.lmd_ghost import Context as LMDGHOSTContext
-from eth2.beacon.fork_choice.lmd_ghost import Store
-from eth2.beacon.fork_choice.scoring import ScoringFn as ForkChoiceScoringFn
+from eth2.beacon.fork_choice.lmd_ghost import LMDGHOSTScoring, Store
+from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring
 from eth2.beacon.state_machines.base import BeaconStateMachine
 from eth2.beacon.state_machines.state_transitions import (  # noqa: F401
     BaseStateTransition,
@@ -29,6 +29,7 @@ class SerenityStateMachine(BeaconStateMachine):
     block_class = SerenityBeaconBlock  # type: Type[BaseBeaconBlock]
     state_class = SerenityBeaconState  # type: Type[BeaconState]
     state_transition_class = SerenityStateTransition  # type: Type[BaseStateTransition]
+    fork_choice_scoring_class = LMDGHOSTScoring  # type: Type[BaseForkChoiceScoring]
 
     def __init__(
         self, chaindb: BaseBeaconChainDB, fork_choice_context: LMDGHOSTContext = None
@@ -40,6 +41,7 @@ class SerenityStateMachine(BeaconStateMachine):
             self.config,
             fork_choice_context or self._get_fork_choice_context(),
         )
+        self.fork_choice_scoring = LMDGHOSTScoring(self._fork_choice_store)
 
     def _get_fork_choice_context(self) -> LMDGHOSTContext:
         try:
@@ -75,8 +77,8 @@ class SerenityStateMachine(BeaconStateMachine):
             justified_head.state_root, self.state_class
         )
 
-    def get_fork_choice_scoring(self) -> ForkChoiceScoringFn:
-        return self._fork_choice_store.scoring
+    def get_fork_choice_scoring(self) -> BaseForkChoiceScoring:
+        return self.fork_choice_scoring
 
     def on_tick(self, time: Timestamp) -> None:
         self._fork_choice_store.on_tick(time)

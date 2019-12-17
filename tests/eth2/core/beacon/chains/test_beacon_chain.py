@@ -32,7 +32,9 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
     # the canonical chain.
     assert valid_chain.get_canonical_head() == genesis_block
     # verify a special case (score(genesis) == 0)
-    assert valid_chain.get_score(genesis_block.signing_root) == 0
+    assert valid_chain.get_score(
+        genesis_block.signing_root
+    ) == fork_choice_scoring.score(genesis_block)
 
     block = genesis_block.copy(
         slot=genesis_block.slot + 1, parent_root=genesis_block.signing_root
@@ -41,10 +43,10 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
 
     assert valid_chain.get_canonical_head() == block
     state_machine = valid_chain.get_state_machine(block.slot)
-    scoring_fn = state_machine.get_fork_choice_scoring()
+    scoring = state_machine.get_fork_choice_scoring()
 
-    assert valid_chain.get_score(block.signing_root) == scoring_fn(block)
-    assert scoring_fn(block) != 0
+    assert valid_chain.get_score(block.signing_root) == scoring.score(block)
+    assert scoring.score(block) != 0
 
     canonical_block_1 = valid_chain.get_canonical_block_by_slot(genesis_block.slot + 1)
     assert canonical_block_1 == block

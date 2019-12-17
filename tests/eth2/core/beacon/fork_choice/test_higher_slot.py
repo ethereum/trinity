@@ -1,6 +1,6 @@
 import pytest
 
-from eth2.beacon.fork_choice.higher_slot import higher_slot_scoring
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScore, HigherSlotScoring
 from eth2.beacon.types.blocks import BeaconBlock
 
 
@@ -8,8 +8,9 @@ from eth2.beacon.types.blocks import BeaconBlock
 def test_higher_slot_fork_choice_scoring(sample_beacon_block_params, slot):
     block = BeaconBlock(**sample_beacon_block_params).copy(slot=slot)
 
-    expected_score = slot
+    expected_score = HigherSlotScore(slot)
 
-    score = higher_slot_scoring(block)
+    scoring = HigherSlotScoring()
+    score = scoring.score(block)
 
     assert score == expected_score

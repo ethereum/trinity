@@ -5,7 +5,7 @@ import tempfile
 from eth_utils import decode_hex
 
 from eth2.configs import Eth2GenesisConfig
-from eth2.beacon.fork_choice.higher_slot import higher_slot_scoring
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.tools.misc.ssz_vector import (
     override_lengths,
@@ -37,7 +37,7 @@ async def test_http_server(aiohttp_raw_server, aiohttp_client, event_bus, base_d
         genesis_config = Eth2GenesisConfig(SERENITY_CONFIG)
         chaindb = AsyncBeaconChainDB(db, genesis_config)
 
-        fork_choice_scoring = higher_slot_scoring
+        fork_choice_scoring = HigherSlotScoring()
         genesis_state, genesis_block = create_mock_genesis(
             pubkeys=(),
             config=SERENITY_CONFIG,

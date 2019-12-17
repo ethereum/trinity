@@ -1,7 +1,15 @@
 import asyncio
+import time
 
 import pytest
 
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.skeleton_lake.config import (
+    MINIMAL_SERENITY_CONFIG,
+)
+from eth2.beacon.tools.builder.initializer import create_mock_genesis
+from eth2.beacon.tools.builder.validator import mk_keymap_of_size
+from eth2.beacon.typing import Timestamp
 from trinity.protocol.bcc_libp2p import servers, utils
 from trinity.tools.bcc_factories import NodeFactory
 
@@ -48,3 +56,26 @@ async def make_nodes(num_nodes, chains=None):
         for n in _nodes:
             await n.close()
             await n.cancel()
+
+
+@pytest.fixture
+def config():
+    return MINIMAL_SERENITY_CONFIG
+
+
+@pytest.fixture
+def number_of_validators():
+    return 8
+
+
+@pytest.fixture
+def genesis_state(number_of_validators, config):
+    keymap = mk_keymap_of_size(number_of_validators)
+    genesis_state, _ = create_mock_genesis(
+        config=config,
+        pubkeys=tuple(keymap.keys()),
+        keymap=keymap,
+        genesis_block_class=SerenityBeaconBlock,
+        genesis_time=Timestamp(int(time.time())),
+    )
+    return genesis_state

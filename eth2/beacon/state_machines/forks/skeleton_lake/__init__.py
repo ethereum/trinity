@@ -1,5 +1,4 @@
-from eth2.beacon.fork_choice.higher_slot import higher_slot_scoring
-from eth2.beacon.fork_choice.scoring import ScoringFn as ForkChoiceScoringFn
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.base import BeaconStateMachine
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
@@ -23,6 +22,7 @@ class SkeletonLakeStateMachine(BeaconStateMachine):
     block_class = SerenityBeaconBlock
     state_class = SerenityBeaconState
     state_transition_class = SerenityStateTransition
+    fork_choice_scoring_class = HigherSlotScoring
 
     # methods
     @staticmethod
@@ -31,5 +31,5 @@ class SkeletonLakeStateMachine(BeaconStateMachine):
     ) -> BaseBeaconBlock:
         return create_serenity_block_from_parent(parent_block, block_params)
 
-    def get_fork_choice_scoring(self) -> ForkChoiceScoringFn:
-        return higher_slot_scoring
+    def get_fork_choice_scoring(self) -> HigherSlotScoring:
+        return self.fork_choice_scoring_class()

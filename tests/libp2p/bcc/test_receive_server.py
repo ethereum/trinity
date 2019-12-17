@@ -9,7 +9,7 @@ import ssz
 
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.chains.testnet import SkeletonLakeChain
-from eth2.beacon.fork_choice.higher_slot import higher_slot_scoring
+from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.state_machines.forks.skeleton_lake.config import (
     MINIMAL_SERENITY_CONFIG,
@@ -51,7 +51,7 @@ class FakeChain(SkeletonLakeChain):
         except BlockNotFound:
             raise ValidationError
         (new_canonical_blocks, old_canonical_blocks) = self.chaindb.persist_block(
-            block, block.__class__, higher_slot_scoring
+            block, block.__class__, HigherSlotScoring()
         )
         return block, new_canonical_blocks, old_canonical_blocks
 
@@ -59,6 +59,8 @@ class FakeChain(SkeletonLakeChain):
 async def get_fake_chain() -> FakeChain:
     genesis_config = Eth2GenesisConfig(MINIMAL_SERENITY_CONFIG)
     chain_db = AsyncBeaconChainDBFactory(genesis_config=genesis_config)
+    genesis_block = BeaconBlockFactory()
+    chain_db.persist_block(genesis_block, SerenityBeaconBlock, HigherSlotScoring())
     return FakeChain(base_db=chain_db.db, genesis_config=genesis_config)
 
 
