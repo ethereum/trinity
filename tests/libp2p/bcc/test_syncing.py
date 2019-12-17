@@ -15,7 +15,13 @@ from trinity.tools.bcc_factories import (
 
 @asynccontextmanager
 async def get_sync_setup(
-    request, event_loop, event_bus, genesis_state, alice_branch, bob_branch, sync_timeout=6
+    request,
+    event_loop,
+    event_bus,
+    genesis_state,
+    alice_branch,
+    bob_branch,
+    sync_timeout=6,
 ):
     alice_chaindb = AsyncBeaconChainDBFactory()
     bob_chaindb = AsyncBeaconChainDBFactory()
