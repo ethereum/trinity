@@ -80,6 +80,10 @@ from trinity.protocol.bcc_libp2p.node import Node
 GetReadyAttestationsFn = Callable[[Slot], Sequence[Attestation]]
 
 
+# FIXME: Read this from validator config
+ETH1_FOLLOW_DISTANCE = 16
+
+
 class Validator(BaseService):
     chain: BaseBeaconChain
     p2p_node: Node

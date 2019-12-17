@@ -32,13 +32,9 @@ def _main():
     key_set = load_yaml_at(KEY_DIR / KEY_SET_FILE)
 
     pubkeys, privkeys, withdrawal_credentials = create_keypair_and_mock_withdraw_credentials(
-        config,
-        key_set,
+        config, key_set
     )
-    keymap = {
-        pubkey: privkey
-        for pubkey, privkey in zip(pubkeys, privkeys)
-    }
+    keymap = {pubkey: privkey for pubkey, privkey in zip(pubkeys, privkeys)}
 
     deposits, _ = create_mock_deposits_and_root(
         pubkeys, keymap, config, withdrawal_credentials

@@ -62,6 +62,7 @@ def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
 
 
 class Eth1Monitor(Service):
+    logger = logging.getLogger('trinity.eth1_monitor')
 
     _eth1_data_provider: BaseEth1DataProvider
 
@@ -281,7 +282,6 @@ class Eth1Monitor(Service):
                 raise Eth1MonitorValidationError(f"Fail to get latest block")
             target_block_number = BlockNumber(block.number - self._num_blocks_confirmed)
             from_block_number = self.highest_processed_block_number
-            self.logger.info("Eth1 Data Provider latest block: %s, %s, %s", block.number, target_block_number, from_block_number)
             if target_block_number > from_block_number:
                 # From `highest_processed_block_number` to `target_block_number`
                 for block_number in range(

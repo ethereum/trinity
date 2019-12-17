@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-import logging
 import time
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
@@ -181,8 +180,8 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         if isinstance(arg, int):
             block_time = self._get_block_time(BlockNumber(arg))
             return Eth1Block(
-                block_hash=int(arg).to_bytes(32, byteorder='big'),
-                number=arg,
+                block_hash=Hash32(int(arg).to_bytes(32, byteorder='big')),
+                number=BlockNumber(arg),
                 timestamp=Timestamp(block_time),
             )
         # If `arg` is block hash
@@ -196,13 +195,13 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                 # If provided block number does not make sense,
                 # assume it's the block at `earliest_follow_block_number`.
                 return Eth1Block(
-                    block_hash=earliest_follow_block_number.to_bytes(32, byteorder='big'),
+                    block_hash=Hash32(earliest_follow_block_number.to_bytes(32, byteorder='big')),
                     number=BlockNumber(earliest_follow_block_number),
                     timestamp=Timestamp(
                         self.start_block_timestamp - ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME,
                     ),
                 )
-            block_time = self._get_block_time(block_number)
+            block_time = self._get_block_time(BlockNumber(block_number))
             return Eth1Block(
                 block_hash=arg,
                 number=BlockNumber(block_number),
@@ -213,7 +212,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             latest_block_number = self._get_latest_block_number()
             block_time = self._get_block_time(latest_block_number)
             return Eth1Block(
-                block_hash=latest_block_number.to_bytes(32, byteorder='big'),
+                block_hash=Hash32(latest_block_number.to_bytes(32, byteorder='big')),
                 number=BlockNumber(latest_block_number),
                 timestamp=block_time,
             )
@@ -223,7 +222,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         if block_number == self.start_block_number:
             logs = (
                 DepositLog(
-                    block_hash=block_hash,
+                    block_hash=Hash32(block_hash),
                     pubkey=deposit.pubkey,
                     withdrawal_credentials=deposit.withdrawal_credentials,
                     signature=deposit.signature,
@@ -235,7 +234,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         else:
             logs = (
                 DepositLog(
-                    block_hash=block_hash,
+                    block_hash=Hash32(block_hash),
                     pubkey=BLSPubkey(b'\x12' * 48),
                     withdrawal_credentials=Hash32(b'\x23' * 32),
                     signature=BLSSignature(b'\x34' * 96),
@@ -258,7 +257,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         # Check and update deposit data when deposit root is requested
         if self.latest_processed_block_number < block_number:
             for blk_number in range(self.latest_processed_block_number + 1, block_number + 1):
-                deposit_logs = self.get_logs(blk_number)
+                deposit_logs = self.get_logs(BlockNumber(blk_number))
                 self.deposits += tuple(
                     convert_deposit_log_to_deposit_data(deposit_log)
                     for deposit_log in deposit_logs

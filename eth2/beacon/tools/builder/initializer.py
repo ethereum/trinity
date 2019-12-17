@@ -34,16 +34,15 @@ def generate_privkey_from_index(index: int) -> int:
 
 
 def create_keypair_and_mock_withdraw_credentials(
-    config: Eth2Config,
-    key_set: Dict[str, Any],
-) -> Tuple[Sequence[BLSPubkey], Sequence[int], Sequence[Hash32]]:
-    pubkeys = ()
-    privkeys = ()
-    withdrawal_credentials = ()
+    config: Eth2Config, key_set: Sequence[Dict[str, Any]]
+) -> Tuple[Tuple[BLSPubkey, ...], Tuple[int, ...], Tuple[Hash32, ...]]:
+    pubkeys: Tuple[BLSPubkey, ...] = ()
+    privkeys: Tuple[int, ...] = ()
+    withdrawal_credentials: Tuple[Hash32, ...] = ()
     for key_pair in key_set:
-        pubkey = decode_hex(key_pair["pubkey"])
+        pubkey = BLSPubkey(decode_hex(key_pair["pubkey"]))
         privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
-        withdrawal_credential = (
+        withdrawal_credential = Hash32(
             config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="big")
             + hash_eth2(pubkey)[1:]
         )
@@ -51,6 +50,7 @@ def create_keypair_and_mock_withdraw_credentials(
         pubkeys += (pubkey,)
         privkeys += (privkey,)
         withdrawal_credentials += (withdrawal_credential,)
+
     return (pubkeys, privkeys, withdrawal_credentials)
 
 
