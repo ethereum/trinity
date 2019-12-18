@@ -1,4 +1,6 @@
-import ssz
+from typing import Type, TypeVar
+
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import uint64
 
 from eth2.beacon.typing import ValidatorIndex
@@ -6,8 +8,10 @@ from eth2.beacon.typing import ValidatorIndex
 from .block_headers import BeaconBlockHeader, default_beacon_block_header
 from .defaults import default_validator_index
 
+TProposerSlashing = TypeVar("TProposerSlashing", bound="ProposerSlashing")
 
-class ProposerSlashing(ssz.Serializable):
+
+class ProposerSlashing(HashableContainer):
 
     fields = [
         # Proposer index
@@ -18,13 +22,14 @@ class ProposerSlashing(ssz.Serializable):
         ("header_2", BeaconBlockHeader),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TProposerSlashing],
         proposer_index: ValidatorIndex = default_validator_index,
         header_1: BeaconBlockHeader = default_beacon_block_header,
         header_2: BeaconBlockHeader = default_beacon_block_header,
-    ) -> None:
-        super().__init__(
+    ) -> TProposerSlashing:
+        return super().create(
             proposer_index=proposer_index, header_1=header_1, header_2=header_2
         )
 

@@ -43,7 +43,7 @@ def test_get_genesis_beacon_state(
         pubkeys=pubkeys[:validator_count], keymap=keymap, config=config
     )
 
-    genesis_eth1_data = Eth1Data(
+    genesis_eth1_data = Eth1Data.create(
         deposit_count=len(genesis_deposits),
         deposit_root=deposit_root,
         block_hash=ZERO_HASH32,
@@ -61,16 +61,16 @@ def test_get_genesis_beacon_state(
     # Versioning
     assert state.slot == genesis_slot
     assert state.genesis_time == _genesis_time_from_eth1_timestamp(eth1_timestamp)
-    assert state.fork == Fork()
+    assert state.fork == Fork.create()
 
     # History
-    assert state.latest_block_header == BeaconBlockHeader(
-        body_root=BeaconBlockBody().hash_tree_root
+    assert state.latest_block_header == BeaconBlockHeader.create(
+        body_root=BeaconBlockBody.create().hash_tree_root
     )
     assert len(state.block_roots) == slots_per_historical_root
-    assert state.block_roots == (ZERO_HASH32,) * slots_per_historical_root
+    assert tuple(state.block_roots) == (ZERO_HASH32,) * slots_per_historical_root
     assert len(state.state_roots) == slots_per_historical_root
-    assert state.block_roots == (ZERO_HASH32,) * slots_per_historical_root
+    assert tuple(state.block_roots) == (ZERO_HASH32,) * slots_per_historical_root
     assert len(state.historical_roots) == 0
 
     # Ethereum 1.0 chain data
@@ -84,11 +84,13 @@ def test_get_genesis_beacon_state(
 
     # Shuffling
     assert len(state.randao_mixes) == epochs_per_historical_vector
-    assert state.randao_mixes == (eth1_block_hash,) * epochs_per_historical_vector
+    assert (
+        tuple(state.randao_mixes) == (eth1_block_hash,) * epochs_per_historical_vector
+    )
 
     # Slashings
     assert len(state.slashings) == epochs_per_slashings_vector
-    assert state.slashings == (Gwei(0),) * epochs_per_slashings_vector
+    assert tuple(state.slashings) == (Gwei(0),) * epochs_per_slashings_vector
 
     # Attestations
     assert len(state.previous_epoch_attestations) == 0

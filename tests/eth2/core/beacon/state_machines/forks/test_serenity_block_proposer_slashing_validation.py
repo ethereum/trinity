@@ -35,10 +35,10 @@ def test_validate_proposer_slashing_epoch(genesis_state, keymap, config):
     # Valid
     validate_proposer_slashing_epoch(valid_proposer_slashing, config.SLOTS_PER_EPOCH)
 
-    header_1 = valid_proposer_slashing.header_1.copy(
-        slot=valid_proposer_slashing.header_2.slot + 2 * config.SLOTS_PER_EPOCH
+    header_1 = valid_proposer_slashing.header_1.set(
+        "slot", valid_proposer_slashing.header_2.slot + 2 * config.SLOTS_PER_EPOCH
     )
-    invalid_proposer_slashing = valid_proposer_slashing.copy(header_1=header_1)
+    invalid_proposer_slashing = valid_proposer_slashing.set("header_1", header_1)
 
     # Invalid
     with pytest.raises(ValidationError):
@@ -54,8 +54,8 @@ def test_validate_proposer_slashing_headers(genesis_state, keymap, config):
     # Valid
     validate_proposer_slashing_headers(valid_proposer_slashing)
 
-    invalid_proposer_slashing = valid_proposer_slashing.copy(
-        header_1=valid_proposer_slashing.header_2
+    invalid_proposer_slashing = valid_proposer_slashing.set(
+        "header_1", valid_proposer_slashing.header_2
     )
 
     # Invalid

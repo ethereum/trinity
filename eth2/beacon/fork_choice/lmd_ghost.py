@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any, Dict, Optional, Tuple, Type, cast
 
 from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
@@ -57,7 +57,8 @@ class LMDGHOSTScore(BaseScore):
         score = ssz.decode(
             data, sedes=ssz.sedes.Vector(ssz.sedes.uint256, LMD_GHOST_SCORE_DATA_LENGTH)
         )
-        return cls(score)
+        score_tuple = cast(Tuple[Gwei, int], tuple(score))
+        return cls(score_tuple)
 
     @classmethod
     def from_genesis(

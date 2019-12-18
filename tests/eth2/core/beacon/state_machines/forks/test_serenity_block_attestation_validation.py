@@ -82,19 +82,26 @@ def test_validate_attestation_data(
     config,
     is_valid,
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(current_epoch, slots_per_epoch) + 5,
-        previous_justified_checkpoint=Checkpoint(epoch=previous_justified_epoch),
-        current_justified_checkpoint=Checkpoint(epoch=current_justified_epoch),
+    state = genesis_state.mset(
+        "slot",
+        compute_start_slot_at_epoch(current_epoch, slots_per_epoch) + 5,
+        "previous_justified_checkpoint",
+        Checkpoint.create(epoch=previous_justified_epoch),
+        "current_justified_checkpoint",
+        Checkpoint.create(epoch=current_justified_epoch),
     )
     target_slot = compute_start_slot_at_epoch(current_epoch, config.SLOTS_PER_EPOCH)
     committee_index = 0
 
-    attestation_data = AttestationData(**sample_attestation_data_params).copy(
-        slot=target_slot,
-        index=committee_index,
-        source=Checkpoint(epoch=attestation_source_epoch),
-        target=Checkpoint(epoch=attestation_target_epoch),
+    attestation_data = AttestationData.create(**sample_attestation_data_params).mset(
+        "slot",
+        target_slot,
+        "index",
+        committee_index,
+        "source",
+        Checkpoint.create(epoch=attestation_source_epoch),
+        "target",
+        Checkpoint.create(epoch=attestation_target_epoch),
     )
 
     if is_valid:

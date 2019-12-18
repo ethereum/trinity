@@ -3,7 +3,12 @@ from typing import Sequence, Type
 from eth_typing import Hash32
 import ssz
 
-from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH, SECONDS_PER_DAY
+from eth2.beacon.constants import (
+    DEPOSIT_CONTRACT_TREE_DEPTH,
+    SECONDS_PER_DAY,
+    ZERO_HASH32,
+    ZERO_SIGNING_ROOT,
+)
 from eth2.beacon.deposit_helpers import process_deposit
 from eth2.beacon.helpers import get_active_validator_indices
 from eth2.beacon.types.block_headers import BeaconBlockHeader
@@ -13,7 +18,7 @@ from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import calculate_effective_balance
-from eth2.beacon.typing import Timestamp, ValidatorIndex
+from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex
 from eth2.beacon.validator_status_helpers import activate_validator
 from eth2.configs import Eth2Config
 
@@ -21,7 +26,7 @@ from eth2.configs import Eth2Config
 def is_genesis_trigger(
     deposits: Sequence[Deposit], timestamp: int, config: Eth2Config
 ) -> bool:
-    state = BeaconState(config=config)
+    state = BeaconState.create(config=config)
 
     for deposit in deposits:
         state = process_deposit(state, deposit, config)
@@ -47,27 +52,28 @@ def initialize_beacon_state_from_eth1(
     deposits: Sequence[Deposit],
     config: Eth2Config
 ) -> BeaconState:
-    state = BeaconState(
+    state = BeaconState.create(
         genesis_time=_genesis_time_from_eth1_timestamp(eth1_timestamp),
-        eth1_data=Eth1Data(block_hash=eth1_block_hash, deposit_count=len(deposits)),
-        latest_block_header=BeaconBlockHeader(
-            body_root=BeaconBlockBody().hash_tree_root
+        eth1_data=Eth1Data.create(
+            block_hash=eth1_block_hash, deposit_count=len(deposits)
         ),
+        latest_block_header=BeaconBlockHeader.create(
+            body_root=BeaconBlockBody.create().hash_tree_root
+        ),
+        block_roots=(ZERO_SIGNING_ROOT,) * config.SLOTS_PER_HISTORICAL_ROOT,
+        state_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         randao_mixes=(eth1_block_hash,) * config.EPOCHS_PER_HISTORICAL_VECTOR,
+        slashings=(Gwei(0),) * config.EPOCHS_PER_SLASHINGS_VECTOR,
         config=config,
     )
 
     # Process genesis deposits
     for index, deposit in enumerate(deposits):
         deposit_data_list = tuple(deposit.data for deposit in deposits[: index + 1])
-        state = state.copy(
-            eth1_data=state.eth1_data.copy(
-                deposit_root=ssz.get_hash_tree_root(
-                    deposit_data_list,
-                    ssz.List(DepositData, 2 ** DEPOSIT_CONTRACT_TREE_DEPTH),
-                )
-            )
+        deposit_root = ssz.get_hash_tree_root(
+            deposit_data_list, ssz.List(DepositData, 2 ** DEPOSIT_CONTRACT_TREE_DEPTH)
         )
+        state = state.transform(("eth1_data", "deposit_root"), deposit_root)
         state = process_deposit(state=state, deposit=deposit, config=config)
 
     # Process genesis activations
@@ -76,13 +82,16 @@ def initialize_beacon_state_from_eth1(
         balance = state.balances[validator_index]
         effective_balance = calculate_effective_balance(balance, config)
 
-        state = state.update_validator_with_fn(
-            validator_index, lambda v, *_: v.copy(effective_balance=effective_balance)
+        state = state.transform(
+            ("validators", validator_index, "effective_balance"), effective_balance
         )
 
         if effective_balance == config.MAX_EFFECTIVE_BALANCE:
-            state = state.update_validator_with_fn(
-                validator_index, activate_validator, config.GENESIS_EPOCH
+            activated_validator = activate_validator(
+                state.validators[validator_index], config.GENESIS_EPOCH
+            )
+            state = state.transform(
+                ("validators", validator_index), activated_validator
             )
 
     return state
@@ -104,4 +113,4 @@ def is_valid_genesis_state(state: BeaconState, config: Eth2Config) -> bool:
 def get_genesis_block(
     genesis_state_root: Hash32, block_class: Type[BaseBeaconBlock]
 ) -> BaseBeaconBlock:
-    return block_class(state_root=genesis_state_root)
+    return block_class.create(state_root=genesis_state_root)

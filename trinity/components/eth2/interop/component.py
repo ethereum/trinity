@@ -148,8 +148,8 @@ class InteropComponent(Application):
             cls.logger.info("Time will begin %d seconds from now", delta)
 
             # adapt the state, then print the new root!
-            state = state.copy(
-                genesis_time=args.start_time
+            state = state.set(
+                "genesis_time", args.start_time
             )
         elif args.start_delay:
             if args.start_delay < 0:
@@ -159,8 +159,8 @@ class InteropComponent(Application):
             start_time = now + args.start_delay
             cls.logger.info("Genesis time is %d", start_time)
 
-            state = state.copy(
-                genesis_time=start_time
+            state = state.set(
+                "genesis_time", start_time
             )
         else:
             cls.logger.info("Using genesis_time from genesis state to determine start time")

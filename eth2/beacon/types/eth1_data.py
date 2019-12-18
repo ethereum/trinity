@@ -1,11 +1,15 @@
+from typing import Type, TypeVar
+
 from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32, uint64
 
+TEth1Data = TypeVar("TEth1Data", bound="Eth1Data")
 
-class Eth1Data(ssz.Serializable):
+
+class Eth1Data(HashableContainer):
 
     fields = [
         ("deposit_root", bytes32),
@@ -13,13 +17,14 @@ class Eth1Data(ssz.Serializable):
         ("block_hash", bytes32),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TEth1Data],
         deposit_root: Hash32 = ZERO_HASH32,
         deposit_count: int = 0,
         block_hash: Hash32 = ZERO_HASH32,
-    ) -> None:
-        super().__init__(
+    ) -> TEth1Data:
+        return super().create(
             deposit_root=deposit_root,
             deposit_count=deposit_count,
             block_hash=block_hash,
@@ -33,4 +38,4 @@ class Eth1Data(ssz.Serializable):
         )
 
 
-default_eth1_data = Eth1Data()
+default_eth1_data = Eth1Data.create()

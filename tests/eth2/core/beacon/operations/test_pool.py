@@ -9,7 +9,9 @@ from eth2.beacon.types.attestations import Attestation
 
 def _mk_attestation(index, sample_attestation_params):
     some_signature = index.to_bytes(96, byteorder="big")
-    return Attestation(**assoc(sample_attestation_params, "signature", some_signature))
+    return Attestation.create(
+        **assoc(sample_attestation_params, "signature", some_signature)
+    )
 
 
 def test_iterating_operation_pool(sample_attestation_params):

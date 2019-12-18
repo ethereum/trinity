@@ -1,8 +1,8 @@
-from typing import Sequence
+from typing import Sequence, Type, TypeVar
 
 from eth_typing import BLSSignature
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import Bitlist, List, bytes96, uint64
 
 from eth2.beacon.constants import EMPTY_SIGNATURE
@@ -11,8 +11,10 @@ from eth2.beacon.typing import Bitfield, ValidatorIndex
 from .attestation_data import AttestationData, default_attestation_data
 from .defaults import default_bitfield, default_tuple
 
+TAttestation = TypeVar("TAttestation", bound="Attestation")
 
-class Attestation(ssz.Serializable):
+
+class Attestation(HashableContainer):
 
     fields = [
         ("aggregation_bits", Bitlist(1)),
@@ -20,13 +22,16 @@ class Attestation(ssz.Serializable):
         ("signature", bytes96),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TAttestation],
         aggregation_bits: Bitfield = default_bitfield,
         data: AttestationData = default_attestation_data,
         signature: BLSSignature = EMPTY_SIGNATURE,
-    ) -> None:
-        super().__init__(aggregation_bits, data, signature)
+    ) -> TAttestation:
+        return super().create(
+            aggregation_bits=aggregation_bits, data=data, signature=signature
+        )
 
     def __str__(self) -> str:
         return (
@@ -36,10 +41,13 @@ class Attestation(ssz.Serializable):
         )
 
 
-default_attestation = Attestation()
+default_attestation = Attestation.create()
 
 
-class IndexedAttestation(ssz.Serializable):
+TIndexedAttestation = TypeVar("TIndexedAttestation", bound="IndexedAttestation")
+
+
+class IndexedAttestation(HashableContainer):
 
     fields = [
         # Validator indices
@@ -50,13 +58,16 @@ class IndexedAttestation(ssz.Serializable):
         ("signature", bytes96),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TIndexedAttestation],
         attesting_indices: Sequence[ValidatorIndex] = default_tuple,
         data: AttestationData = default_attestation_data,
         signature: BLSSignature = EMPTY_SIGNATURE,
-    ) -> None:
-        super().__init__(attesting_indices, data, signature)
+    ) -> TIndexedAttestation:
+        return super().create(
+            attesting_indices=attesting_indices, data=data, signature=signature
+        )
 
     def __str__(self) -> str:
         return (
@@ -66,4 +77,4 @@ class IndexedAttestation(ssz.Serializable):
         )
 
 
-default_indexed_attestation = IndexedAttestation()
+default_indexed_attestation = IndexedAttestation.create()

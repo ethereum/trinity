@@ -18,9 +18,7 @@ def test_validate_deposit_proof(
     if success:
         validate_deposit_proof(state, deposit, deposit_contract_tree_depth)
     else:
-        deposit = deposit.copy(
-            data=deposit.data.copy(withdrawal_credentials=b"\x23" * 32)
-        )
+        deposit = deposit.transform(("data", "withdrawal_credentials"), b"\x23" * 32)
         with pytest.raises(ValidationError):
             validate_deposit_proof(state, deposit, deposit_contract_tree_depth)
 

@@ -31,7 +31,7 @@ def test_get_committee_assignment(
     epoch,
 ):
     state_slot = compute_start_slot_at_epoch(state_epoch, slots_per_epoch)
-    state = genesis_state.copy(slot=state_slot)
+    state = genesis_state.set("slot", state_slot)
     committee_validator_count = [0 for _ in range(max_committees_per_slot)]
     slots = []
 
@@ -63,8 +63,8 @@ def test_get_committee_assignment_no_assignment(
     state = genesis_state
     validator_index = 1
     current_epoch = state.current_epoch(slots_per_epoch)
-    validator = state.validators[validator_index].copy(exit_epoch=genesis_epoch)
-    state = state.update_validator(validator_index, validator)
+    validator = state.validators[validator_index].set("exit_epoch", genesis_epoch)
+    state = state.transform(["validators", validator_index], validator)
     assert not validator.is_active(current_epoch)
 
     with pytest.raises(NoCommitteeAssignment):

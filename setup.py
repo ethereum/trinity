@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# temporary comment
 import os
 import re
 from setuptools import setup, find_packages
@@ -114,7 +115,7 @@ deps = {
         "py-ecc==1.7.1",
         "rlp>=1.1.0,<2.0.0",
         PYEVM_DEPENDENCY,
-        "ssz==0.1.5",
+        "ssz==0.2.2",
     ],
     'eth2-extra': [
         "milagro-bls-binding==0.1.3",

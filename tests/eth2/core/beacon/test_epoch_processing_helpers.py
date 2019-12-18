@@ -3,7 +3,6 @@ import random
 import pytest
 
 from eth2._utils.bitfield import get_empty_bitfield, set_voted
-from eth2._utils.tuple import update_tuple_item
 from eth2.beacon.committee_helpers import get_beacon_committee
 from eth2.beacon.constants import FAR_FUTURE_EPOCH, GWEI_PER_ETH
 from eth2.beacon.epoch_processing_helpers import (
@@ -58,8 +57,8 @@ def test_decrease_balance(genesis_state, delta):
 
 @pytest.mark.parametrize(("validator_count,"), [(1000)])
 def test_get_attesting_indices(genesis_state, config):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(3, config.SLOTS_PER_EPOCH)
+    state = genesis_state.set(
+        "slot", compute_start_slot_at_epoch(3, config.SLOTS_PER_EPOCH)
     )
     target_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     target_slot = compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH)
@@ -68,8 +67,10 @@ def test_get_attesting_indices(genesis_state, config):
         state, target_slot, committee_index, CommitteeConfig(config)
     )
 
-    data = AttestationData(
-        slot=target_slot, index=committee_index, target=Checkpoint(epoch=target_epoch)
+    data = AttestationData.create(
+        slot=target_slot,
+        index=committee_index,
+        target=Checkpoint.create(epoch=target_epoch),
     )
     some_subset_count = random.randrange(1, len(some_committee) // 2)
     some_subset = random.sample(some_committee, some_subset_count)
@@ -116,21 +117,24 @@ def test_get_validator_churn_limit(genesis_state, expected_churn_limit, config):
 def test_get_matching_source_attestations(
     genesis_state, current_epoch, target_epoch, success, config
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(current_epoch, config.SLOTS_PER_EPOCH),
-        current_epoch_attestations=tuple(
-            PendingAttestation(
-                data=AttestationData(
+    state = genesis_state.mset(
+        "slot",
+        compute_start_slot_at_epoch(current_epoch, config.SLOTS_PER_EPOCH),
+        "current_epoch_attestations",
+        (
+            PendingAttestation.create(
+                data=AttestationData.create(
                     beacon_block_root=current_epoch.to_bytes(32, "little")
                 )
-            )
+            ),
         ),
-        previous_epoch_attestations=tuple(
-            PendingAttestation(
-                data=AttestationData(
+        "previous_epoch_attestations",
+        (
+            PendingAttestation.create(
+                data=AttestationData.create(
                     beacon_block_root=(current_epoch - 1).to_bytes(32, "little")
                 )
-            )
+            ),
         ),
     )
 
@@ -152,29 +156,24 @@ def test_get_matching_target_attestations(genesis_state, config):
     some_slot = compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
     some_target_root = b"\x33" * 32
     target_attestations = tuple(
-        (
-            PendingAttestation(
-                data=AttestationData(target=Checkpoint(root=some_target_root))
-            )
-            for _ in range(3)
+        PendingAttestation.create(
+            data=AttestationData.create(target=Checkpoint.create(root=some_target_root))
         )
+        for _ in range(3)
     )
     current_epoch_attestations = target_attestations + tuple(
-        (
-            PendingAttestation(
-                data=AttestationData(target=Checkpoint(root=b"\x44" * 32))
-            )
-            for _ in range(3)
+        PendingAttestation.create(
+            data=AttestationData.create(target=Checkpoint.create(root=b"\x44" * 32))
         )
+        for _ in range(3)
     )
-    state = genesis_state.copy(
-        slot=some_slot + 1,
-        block_roots=update_tuple_item(
-            genesis_state.block_roots,
-            some_slot % config.SLOTS_PER_HISTORICAL_ROOT,
-            some_target_root,
-        ),
-        current_epoch_attestations=current_epoch_attestations,
+    state = genesis_state.transform(
+        ["slot"],
+        some_slot + 1,
+        ["block_roots", some_slot % config.SLOTS_PER_HISTORICAL_ROOT],
+        some_target_root,
+        ["current_epoch_attestations"],
+        current_epoch_attestations,
     )
 
     attestations = get_matching_target_attestations(state, some_epoch, config)
@@ -192,12 +191,12 @@ def test_get_matching_head_attestations(genesis_state, config):
     some_target_root = b"\x33" * 32
     target_attestations = tuple(
         (
-            PendingAttestation(
-                data=AttestationData(
+            PendingAttestation.create(
+                data=AttestationData.create(
                     slot=some_slot - 1,
                     index=0,
                     beacon_block_root=some_target_root,
-                    target=Checkpoint(epoch=some_epoch - 1),
+                    target=Checkpoint.create(epoch=some_epoch - 1),
                 )
             )
             for i in range(3)
@@ -205,21 +204,22 @@ def test_get_matching_head_attestations(genesis_state, config):
     )
     current_epoch_attestations = target_attestations + tuple(
         (
-            PendingAttestation(
-                data=AttestationData(
+            PendingAttestation.create(
+                data=AttestationData.create(
                     beacon_block_root=b"\x44" * 32,
-                    target=Checkpoint(epoch=some_epoch - 1),
+                    target=Checkpoint.create(epoch=some_epoch - 1),
                 )
             )
             for _ in range(3)
         )
     )
-    state = genesis_state.copy(
-        slot=some_slot,
-        block_roots=tuple(
-            some_target_root for _ in range(config.SLOTS_PER_HISTORICAL_ROOT)
-        ),
-        current_epoch_attestations=current_epoch_attestations,
+    state = genesis_state.mset(
+        "slot",
+        some_slot,
+        "block_roots",
+        tuple(some_target_root for _ in range(config.SLOTS_PER_HISTORICAL_ROOT)),
+        "current_epoch_attestations",
+        current_epoch_attestations,
     )
 
     attestations = get_matching_head_attestations(state, some_epoch, config)
@@ -229,8 +229,8 @@ def test_get_matching_head_attestations(genesis_state, config):
 
 @pytest.mark.parametrize(("validator_count,"), [(1000)])
 def test_get_unslashed_attesting_indices(genesis_state, config):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(3, config.SLOTS_PER_EPOCH)
+    state = genesis_state.set(
+        "slot", compute_start_slot_at_epoch(3, config.SLOTS_PER_EPOCH)
     )
     target_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     target_slot = compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH)
@@ -239,8 +239,10 @@ def test_get_unslashed_attesting_indices(genesis_state, config):
         state, target_slot, committee_index, CommitteeConfig(config)
     )
 
-    data = AttestationData(
-        slot=state.slot, index=committee_index, target=Checkpoint(epoch=target_epoch)
+    data = AttestationData.create(
+        slot=state.slot,
+        index=committee_index,
+        target=Checkpoint.create(epoch=target_epoch),
     )
     some_subset_count = random.randrange(1, len(some_committee) // 2)
     some_subset = random.sample(some_committee, some_subset_count)
@@ -249,9 +251,7 @@ def test_get_unslashed_attesting_indices(genesis_state, config):
     for i, index in enumerate(some_committee):
         if index in some_subset:
             if random.choice([True, False]):
-                state = state.update_validator_with_fn(
-                    index, lambda v, *_: v.copy(slashed=True)
-                )
+                state = state.transform(["validators", index, "slashed"], True)
             bitfield = set_voted(bitfield, i)
 
     some_subset = tuple(
@@ -260,7 +260,7 @@ def test_get_unslashed_attesting_indices(genesis_state, config):
 
     indices = get_unslashed_attesting_indices(
         state,
-        (PendingAttestation(data=data, aggregation_bits=bitfield),),
+        (PendingAttestation.create(data=data, aggregation_bits=bitfield),),
         CommitteeConfig(config),
     )
 

@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Tuple, Type
 
 from eth_typing import Hash32
 import ssz
+from ssz.hashable_container import HashableContainer, SignedHashableContainer
 from ssz.tools import from_formatted_dict
 
 from eth2.beacon.tools.fixtures.test_handler import TestHandler
@@ -26,54 +27,56 @@ from eth2.configs import Eth2Config
 
 from . import TestType
 
-InputType = Tuple[bytes, ssz.Serializable]
-OutputType = Tuple[bytes, ssz.Serializable, bytes, Tuple[Hash32, Optional[Hash32]]]
+InputType = Tuple[bytes, HashableContainer]
+OutputType = Tuple[bytes, HashableContainer, bytes, Tuple[Hash32, Optional[Hash32]]]
 
 
 def _deserialize_object_from_dict(
-    data: Dict[str, Any], object_type: ssz.Serializable
-) -> ssz.Serializable:
+    data: Dict[str, Any], object_type: Type[HashableContainer]
+) -> HashableContainer:
     if object_type == BeaconState:
         # NOTE: borrowing from `py-ssz`
-        parse_args = tuple(
-            data[field_name] for field_name in object_type._meta.field_names
-        )
-        input_args = from_formatted_dict(parse_args, object_type._meta.container_sedes)
-        input_kwargs = dict(zip(object_type._meta.field_names, input_args))
+        input_kwargs = {
+            field_name: from_formatted_dict(data[field_name], field_type)
+            for field_name, field_type in object_type._meta.fields
+        }
         # NOTE: we want to inject some additiona kwargs here,
         # due to non-standard (but still valid) SSZ inputs
         input_kwargs["validator_and_balance_length_check"] = False
-        return object_type(**input_kwargs)
+        return object_type.create(**input_kwargs)
     else:
         return from_formatted_dict(data, object_type)
 
 
 def _deserialize_object_from_yaml(
-    test_case_data: TestPart, object_type: ssz.Serializable
-) -> ssz.Serializable:
+    test_case_data: TestPart, object_type: Type[HashableContainer]
+) -> HashableContainer:
     yaml_data = test_case_data.load_yaml()
     return _deserialize_object_from_dict(yaml_data, object_type)
 
 
 def _deserialize_object_from_bytes(
-    data: bytes, object_type: ssz.Serializable
-) -> ssz.Serializable:
+    data: bytes, object_type: Type[HashableContainer]
+) -> HashableContainer:
     deserialized_fields = object_type._meta.container_sedes.deserialize(data)
-    deserialized_field_dict = dict(
-        zip(object_type._meta.field_names, deserialized_fields)
-    )
+    deserialized_field_dict = {
+        field_name: field_value
+        for (field_name, _), field_value in zip(
+            object_type._meta.fields, deserialized_fields
+        )
+    }
     if object_type == BeaconState:
         # NOTE: we want to inject some additiona kwargs here,
         # due to non-standard (but still valid) SSZ inputs
         deserialized_field_dict["validator_and_balance_length_check"] = False
-        return object_type(**deserialized_field_dict)
+        return object_type.create(**deserialized_field_dict)
     else:
-        return object_type(**deserialized_field_dict)
+        return object_type.create(**deserialized_field_dict)
 
 
 class SSZHandler(TestHandler[InputType, OutputType]):
     name: str
-    object_type: ssz.Serializable
+    object_type: HashableContainer
 
     @classmethod
     def parse_inputs(
@@ -107,13 +110,13 @@ class SSZHandler(TestHandler[InputType, OutputType]):
             serialized_ssz_object, cls.object_type
         )
         return (
-            cls.object_type.serialize(ssz_object_from_yaml),
+            ssz.encode(ssz_object_from_yaml, cls.object_type),
             deserialized_object,
-            cls.object_type.serialize(deserialized_object),
+            ssz.encode(deserialized_object, cls.object_type),
             (
                 ssz.get_hash_tree_root(ssz_object_from_yaml),
                 ssz_object_from_yaml.signing_root
-                if isinstance(ssz_object_from_yaml, ssz.SignedSerializable)
+                if isinstance(ssz_object_from_yaml, SignedHashableContainer)
                 else None,
             ),
         )

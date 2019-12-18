@@ -151,13 +151,19 @@ def test_process_justification_and_finalization(
     previous_epoch = max(current_epoch - 1, 0)
     slot = (current_epoch + 1) * config.SLOTS_PER_EPOCH - 1
 
-    state = genesis_state.copy(
-        slot=slot,
-        previous_justified_checkpoint=Checkpoint(epoch=previous_justified_epoch),
-        current_justified_checkpoint=Checkpoint(epoch=current_justified_epoch),
-        justification_bits=justification_bits,
-        finalized_checkpoint=Checkpoint(epoch=finalized_epoch),
-        block_roots=tuple(
+    state = genesis_state.mset(
+        "slot",
+        slot,
+        "previous_justified_checkpoint",
+        Checkpoint.create(epoch=previous_justified_epoch),
+        "current_justified_checkpoint",
+        Checkpoint.create(epoch=current_justified_epoch),
+        "justification_bits",
+        justification_bits,
+        "finalized_checkpoint",
+        Checkpoint.create(epoch=finalized_epoch),
+        "block_roots",
+        tuple(
             i.to_bytes(32, "little") for i in range(config.SLOTS_PER_HISTORICAL_ROOT)
         ),
     )
@@ -166,13 +172,13 @@ def test_process_justification_and_finalization(
         attestations = mk_all_pending_attestations_with_full_participation_in_epoch(
             state, previous_epoch, config
         )
-        state = state.copy(previous_epoch_attestations=attestations)
+        state = state.set("previous_epoch_attestations", attestations)
 
     if current_epoch_justifiable:
         attestations = mk_all_pending_attestations_with_full_participation_in_epoch(
             state, current_epoch, config
         )
-        state = state.copy(current_epoch_attestations=attestations)
+        state = state.set("current_epoch_attestations", attestations)
 
     post_state = process_justification_and_finalization(state, config)
 
@@ -222,8 +228,11 @@ def test_get_attestation_deltas(
     sample_attestation_data_params,
 ):
 
-    state = genesis_state.copy(
-        slot=current_slot, finalized_checkpoint=Checkpoint(epoch=finalized_epoch)
+    state = genesis_state.mset(
+        "slot",
+        current_slot,
+        "finalized_checkpoint",
+        Checkpoint.create(epoch=finalized_epoch),
     )
     previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH)
     has_inactivity_penalty = (
@@ -242,19 +251,27 @@ def test_get_attestation_deltas(
             indices_to_check.add(index)
             participants_bitfield = set_voted(participants_bitfield, i)
         prev_epoch_attestations += (
-            PendingAttestation(**sample_pending_attestation_record_params).copy(
-                aggregation_bits=participants_bitfield,
-                inclusion_delay=min_attestation_inclusion_delay,
-                proposer_index=get_beacon_proposer_index(
-                    state.copy(slot=slot), CommitteeConfig(config)
+            PendingAttestation.create(**sample_pending_attestation_record_params).mset(
+                "aggregation_bits",
+                participants_bitfield,
+                "inclusion_delay",
+                min_attestation_inclusion_delay,
+                "proposer_index",
+                get_beacon_proposer_index(
+                    state.set("slot", slot), CommitteeConfig(config)
                 ),
-                data=AttestationData(**sample_attestation_data_params).copy(
-                    slot=slot,
-                    index=committee_index,
-                    beacon_block_root=get_block_root_at_slot(
+                "data",
+                AttestationData.create(**sample_attestation_data_params).mset(
+                    "slot",
+                    slot,
+                    "index",
+                    committee_index,
+                    "beacon_block_root",
+                    get_block_root_at_slot(
                         state, slot, config.SLOTS_PER_HISTORICAL_ROOT
                     ),
-                    target=Checkpoint(
+                    "target",
+                    Checkpoint.create(
                         epoch=previous_epoch,
                         root=get_block_root(
                             state,
@@ -266,7 +283,7 @@ def test_get_attestation_deltas(
                 ),
             ),
         )
-    state = state.copy(previous_epoch_attestations=prev_epoch_attestations)
+    state = state.set("previous_epoch_attestations", prev_epoch_attestations)
 
     rewards_received, penalties_received = get_attestation_deltas(state, config)
     if has_inactivity_penalty:
@@ -298,15 +315,17 @@ def test_process_registry_updates(
         config=config,
     )
 
-    state = genesis_state.copy(
-        validators=genesis_state.validators[:exiting_index]
+    state = genesis_state.mset(
+        "validators",
+        genesis_state.validators[:exiting_index]
         + (
-            genesis_state.validators[exiting_index].copy(
-                effective_balance=config.EJECTION_BALANCE - 1
+            genesis_state.validators[exiting_index].set(
+                "effective_balance", config.EJECTION_BALANCE - 1
             ),
         )
         + (activating_validator,),
-        balances=genesis_state.balances + (config.MAX_EFFECTIVE_BALANCE,),
+        "balances",
+        genesis_state.balances + (config.MAX_EFFECTIVE_BALANCE,),
     )
 
     # handles activations
@@ -379,8 +398,8 @@ def test_determine_slashing_penalty(
     total_balance,
     expected_penalty,
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(current_epoch, slots_per_epoch)
+    state = genesis_state.set(
+        "slot", compute_start_slot_at_epoch(current_epoch, slots_per_epoch)
     )
     # if the size of the v-set changes then update the parameters above
     assert len(state.validators) == 10
@@ -423,16 +442,20 @@ def test_process_slashings(
     epochs_per_slashings_vector,
     expected_penalty,
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(current_epoch, slots_per_epoch),
-        slashings=slashings,
+    state = genesis_state.mset(
+        "slot",
+        compute_start_slot_at_epoch(current_epoch, slots_per_epoch),
+        "slashings",
+        slashings,
     )
     slashing_validator_index = 0
-    validator = state.validators[slashing_validator_index].copy(
-        slashed=True,
-        withdrawable_epoch=current_epoch + epochs_per_slashings_vector // 2,
+    validator = state.validators[slashing_validator_index].mset(
+        "slashed",
+        True,
+        "withdrawable_epoch",
+        current_epoch + epochs_per_slashings_vector // 2,
     )
-    state = state.update_validator(slashing_validator_index, validator)
+    state = state.transform(["validators", slashing_validator_index], validator)
 
     result_state = process_slashings(state, config)
     penalty = (

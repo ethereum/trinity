@@ -1,13 +1,17 @@
+from typing import Type, TypeVar
+
 from eth_utils import humanize_hash
-import ssz
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes4, uint64
 
 from eth2.beacon.typing import Epoch, Version
 
 from .defaults import default_epoch, default_version
 
+TFork = TypeVar("TFork", bound="Fork")
 
-class Fork(ssz.Serializable):
+
+class Fork(HashableContainer):
 
     fields = [
         ("previous_version", bytes4),
@@ -16,13 +20,14 @@ class Fork(ssz.Serializable):
         ("epoch", uint64),
     ]
 
-    def __init__(
-        self,
+    @classmethod
+    def create(
+        cls: Type[TFork],
         previous_version: Version = default_version,
         current_version: Version = default_version,
         epoch: Epoch = default_epoch,
-    ) -> None:
-        super().__init__(
+    ) -> TFork:
+        return super().create(
             previous_version=previous_version,
             current_version=current_version,
             epoch=epoch,
@@ -36,4 +41,4 @@ class Fork(ssz.Serializable):
         )
 
 
-default_fork = Fork()
+default_fork = Fork.create()

@@ -59,8 +59,8 @@ from multiaddr import (
 )
 import multihash
 import ssz
-from ssz.sedes.serializable import (
-    BaseSerializable,
+from ssz.hashable_container import (
+    HashableContainer,
 )
 from ssz.tools import (
     to_formatted_dict,
@@ -89,7 +89,7 @@ from .messages import (
     BeaconBlocksByRootRequest,
 )
 
-MsgType = TypeVar("MsgType", bound=BaseSerializable)
+MsgType = TypeVar("MsgType", bound=HashableContainer)
 
 logger = logging.getLogger('trinity.protocol.bcc_libp2p')
 
@@ -116,7 +116,7 @@ def get_my_status(chain: BaseBeaconChain) -> Status:
     state = chain.get_head_state()
     head = chain.get_canonical_head()
     finalized_checkpoint = state.finalized_checkpoint
-    return Status(
+    return Status.create(
         head_fork_version=state.fork.current_version,
         finalized_root=finalized_checkpoint.root,
         finalized_epoch=finalized_checkpoint.epoch,
@@ -489,13 +489,13 @@ async def write_resp(
     except OverflowError as error:
         raise WriteMessageFailure(f"resp_code={resp_code} is not valid") from error
     msg_bytes: bytes
-    # MsgType: `msg` is of type `BaseSerializable` if response code is success.
+    # MsgType: `msg` is of type `HashableContainer` if response code is success.
     if resp_code == ResponseCode.SUCCESS:
-        if isinstance(msg, BaseSerializable):
+        if isinstance(msg, HashableContainer):
             msg_bytes = _serialize_ssz_msg(msg)
         else:
             raise WriteMessageFailure(
-                "type of `msg` should be `BaseSerializable` if response code is SUCCESS, "
+                "type of `msg` should be `HashableContainer` if response code is SUCCESS, "
                 f"type(msg)={type(msg)}"
             )
     # error msg is of type `str` if response code is not SUCCESS.

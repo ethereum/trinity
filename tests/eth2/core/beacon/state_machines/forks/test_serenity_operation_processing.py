@@ -21,46 +21,6 @@ from eth2.beacon.types.blocks import BeaconBlockBody
 from eth2.configs import CommitteeConfig
 
 
-@pytest.mark.parametrize(("validator_count,"), [(100)])
-def test_process_max_attestations(
-    genesis_state,
-    genesis_block,
-    sample_beacon_block_params,
-    sample_beacon_block_body_params,
-    config,
-    keymap,
-    fixture_sm_class,
-    chaindb,
-    genesis_fork_choice_context,
-):
-    attestation_slot = config.GENESIS_SLOT
-    current_slot = attestation_slot + config.MIN_ATTESTATION_INCLUSION_DELAY
-    state = genesis_state.copy(slot=current_slot)
-
-    attestations = create_mock_signed_attestations_at_slot(
-        state=state,
-        config=config,
-        state_machine=fixture_sm_class(chaindb, genesis_fork_choice_context),
-        attestation_slot=attestation_slot,
-        beacon_block_root=genesis_block.signing_root,
-        keymap=keymap,
-        voted_attesters_ratio=1.0,
-    )
-
-    attestations_count = len(attestations)
-    assert attestations_count > 0
-
-    block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
-        attestations=attestations * (config.MAX_ATTESTATIONS // attestations_count + 1)
-    )
-    block = SerenityBeaconBlock(**sample_beacon_block_params).copy(
-        slot=current_slot, body=block_body
-    )
-
-    with pytest.raises(ValidationError):
-        process_attestations(state, block, config)
-
-
 @pytest.mark.parametrize(
     (
         "validator_count",
@@ -87,7 +47,7 @@ def test_process_proposer_slashings(
     success,
 ):
     current_slot = config.GENESIS_SLOT + 1
-    state = genesis_state.copy(slot=current_slot)
+    state = genesis_state.set("slot", current_slot)
     whistleblower_index = get_beacon_proposer_index(state, CommitteeConfig(config))
     slashing_proposer_index = (whistleblower_index + 1) % len(state.validators)
     proposer_slashing = create_mock_proposer_slashing_at_block(
@@ -100,11 +60,11 @@ def test_process_proposer_slashings(
     )
     proposer_slashings = (proposer_slashing,)
 
-    block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
-        proposer_slashings=proposer_slashings
+    block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
+        "proposer_slashings", proposer_slashings
     )
-    block = SerenityBeaconBlock(**sample_beacon_block_params).copy(
-        slot=current_slot, body=block_body
+    block = SerenityBeaconBlock.create(**sample_beacon_block_params).mset(
+        "slot", current_slot, "body", block_body
     )
 
     if success:
@@ -139,25 +99,27 @@ def test_process_attester_slashings(
     min_attestation_inclusion_delay,
     success,
 ):
-    attesting_state = genesis_state.copy(
-        slot=genesis_state.slot + config.SLOTS_PER_EPOCH,
-        block_roots=tuple(
+    attesting_state = genesis_state.mset(
+        "slot",
+        genesis_state.slot + config.SLOTS_PER_EPOCH,
+        "block_roots",
+        tuple(
             i.to_bytes(32, "little") for i in range(config.SLOTS_PER_HISTORICAL_ROOT)
         ),
     )
     valid_attester_slashing = create_mock_attester_slashing_is_double_vote(
         attesting_state, config, keymap, attestation_epoch=0
     )
-    state = attesting_state.copy(
-        slot=attesting_state.slot + min_attestation_inclusion_delay
+    state = attesting_state.set(
+        "slot", attesting_state.slot + min_attestation_inclusion_delay
     )
 
     if success:
-        block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
-            attester_slashings=(valid_attester_slashing,)
+        block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
+            "attester_slashings", (valid_attester_slashing,)
         )
-        block = SerenityBeaconBlock(**sample_beacon_block_params).copy(
-            slot=state.slot, body=block_body
+        block = SerenityBeaconBlock.create(**sample_beacon_block_params).mset(
+            "slot", state.slot, "body", block_body
         )
 
         attester_index = valid_attester_slashing.attestation_1.attesting_indices[0]
@@ -167,16 +129,14 @@ def test_process_attester_slashings(
         assert not state.validators[attester_index].slashed
         assert new_state.validators[attester_index].slashed
     else:
-        invalid_attester_slashing = valid_attester_slashing.copy(
-            attestation_2=valid_attester_slashing.attestation_2.copy(
-                data=valid_attester_slashing.attestation_1.data
-            )
+        invalid_attester_slashing = valid_attester_slashing.transform(
+            ["attestation_2", "data"], valid_attester_slashing.attestation_1.data
         )
-        block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
-            attester_slashings=(invalid_attester_slashing,)
+        block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
+            "attester_slashings", (invalid_attester_slashing,)
         )
-        block = SerenityBeaconBlock(**sample_beacon_block_params).copy(
-            slot=state.slot, body=block_body
+        block = SerenityBeaconBlock.create(**sample_beacon_block_params).mset(
+            "slot", state.slot, "body", block_body
         )
 
         with pytest.raises(ValidationError):
@@ -209,7 +169,7 @@ def test_process_attestations(
 
     attestation_slot = 0
     current_slot = attestation_slot + config.MIN_ATTESTATION_INCLUSION_DELAY
-    state = genesis_state.copy(slot=current_slot)
+    state = genesis_state.set("slot", current_slot)
 
     attestations = create_mock_signed_attestations_at_slot(
         state=state,
@@ -226,15 +186,15 @@ def test_process_attestations(
     if not success:
         # create invalid attestation
         # i.e. wrong slot
-        invalid_attestation_data = attestations[-1].data.copy(slot=state.slot + 1)
-        invalid_attestation = attestations[-1].copy(data=invalid_attestation_data)
+        invalid_attestation_data = attestations[-1].data.set("slot", state.slot + 1)
+        invalid_attestation = attestations[-1].set("data", invalid_attestation_data)
         attestations = attestations[:-1] + (invalid_attestation,)
 
-    block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
-        attestations=attestations
+    block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
+        "attestations", attestations
     )
-    block = SerenityBeaconBlock(**sample_beacon_block_params).copy(
-        slot=current_slot, body=block_body
+    block = SerenityBeaconBlock.create(**sample_beacon_block_params).mset(
+        "slot", current_slot, "body", block_body
     )
 
     if success:
@@ -264,27 +224,28 @@ def test_process_voluntary_exits(
     keymap,
     success,
 ):
-    state = genesis_state.copy(
-        slot=compute_start_slot_at_epoch(
+    state = genesis_state.set(
+        "slot",
+        compute_start_slot_at_epoch(
             config.GENESIS_EPOCH + config.PERSISTENT_COMMITTEE_PERIOD,
             config.SLOTS_PER_EPOCH,
-        )
+        ),
     )
     validator_index = 0
-    validator = state.validators[validator_index].copy(
-        activation_epoch=config.GENESIS_EPOCH
+    validator = state.validators[validator_index].set(
+        "activation_epoch", config.GENESIS_EPOCH
     )
-    state = state.update_validator(validator_index, validator)
+    state = state.transform(["validators", validator_index], validator)
     valid_voluntary_exit = create_mock_voluntary_exit(
         state, config, keymap, validator_index
     )
 
     if success:
-        block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
-            voluntary_exits=(valid_voluntary_exit,)
+        block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
+            "voluntary_exits", (valid_voluntary_exit,)
         )
-        block = SerenityBeaconBlock(**sample_beacon_block_params).copy(
-            slot=state.slot, body=block_body
+        block = SerenityBeaconBlock.create(**sample_beacon_block_params).mset(
+            "slot", state.slot, "body", block_body
         )
 
         new_state = process_voluntary_exits(state, block, config)
@@ -297,14 +258,14 @@ def test_process_voluntary_exits(
             updated_validator.exit_epoch + config.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
         )
     else:
-        invalid_voluntary_exit = valid_voluntary_exit.copy(
-            signature=b"\x12" * 96  # Put wrong signature
+        invalid_voluntary_exit = valid_voluntary_exit.set(
+            "signature", b"\x12" * 96  # Put wrong signature
         )
-        block_body = BeaconBlockBody(**sample_beacon_block_body_params).copy(
-            voluntary_exits=(invalid_voluntary_exit,)
+        block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
+            "voluntary_exits", (invalid_voluntary_exit,)
         )
-        block = SerenityBeaconBlock(**sample_beacon_block_params).copy(
-            slot=state.slot, body=block_body
+        block = SerenityBeaconBlock.create(**sample_beacon_block_params).mset(
+            "slot", state.slot, "body", block_body
         )
 
         with pytest.raises(ValidationError):

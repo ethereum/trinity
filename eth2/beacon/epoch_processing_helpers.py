@@ -4,7 +4,6 @@ from eth_utils import to_tuple
 
 from eth2._utils.bitfield import Bitfield, has_voted
 from eth2._utils.numeric import integer_squareroot
-from eth2._utils.tuple import update_tuple_item_with_fn
 from eth2.beacon.committee_helpers import get_beacon_committee
 from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH
 from eth2.beacon.exceptions import InvalidEpochError
@@ -25,22 +24,15 @@ from eth2.configs import CommitteeConfig, Eth2Config
 def increase_balance(
     state: BeaconState, index: ValidatorIndex, delta: Gwei
 ) -> BeaconState:
-    return state.copy(
-        balances=update_tuple_item_with_fn(
-            state.balances, index, lambda balance, *_: Gwei(balance + delta)
-        )
-    )
+    return state.transform(("balances", index), lambda balance: Gwei(balance + delta))
 
 
 def decrease_balance(
     state: BeaconState, index: ValidatorIndex, delta: Gwei
 ) -> BeaconState:
-    return state.copy(
-        balances=update_tuple_item_with_fn(
-            state.balances,
-            index,
-            lambda balance, *_: Gwei(0) if delta > balance else Gwei(balance - delta),
-        )
+    return state.transform(
+        ("balances", index),
+        lambda balance: Gwei(0) if delta > balance else Gwei(balance - delta),
     )
 
 
@@ -51,7 +43,7 @@ def get_attesting_indices(
     config: CommitteeConfig,
 ) -> Set[ValidatorIndex]:
     """
-    Return the sorted attesting indices corresponding to ``attestation_data`` and ``bitfield``.
+    Return the attesting indices corresponding to ``attestation_data`` and ``bitfield``.
     """
     committee = get_beacon_committee(
         state, attestation_data.slot, attestation_data.index, config
@@ -66,7 +58,7 @@ def get_indexed_attestation(
         state, attestation.data, attestation.aggregation_bits, config
     )
 
-    return IndexedAttestation(
+    return IndexedAttestation.create(
         attesting_indices=sorted(attesting_indices),
         data=attestation.data,
         signature=attestation.signature,
