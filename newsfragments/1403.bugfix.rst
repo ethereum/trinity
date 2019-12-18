@@ -1,0 +1,4 @@
+Ensure ``eth_getStorageAt`` pads results to 32 byte
+
+See: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getstorageat
+Geth Example: https://api.etherscan.io/api?module=proxy&action=eth_getStorageAt&address=0x6e03d9cce9d60f3e9f2597e13cd4c54c55330cfd&position=0x0&tag=latest&apikey=YourApiKeyToken
