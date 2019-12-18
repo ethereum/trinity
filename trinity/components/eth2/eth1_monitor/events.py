@@ -4,7 +4,7 @@ import ssz
 
 from lahja import BaseEvent, BaseRequestResponseEvent
 
-from eth_typing import BlockNumber
+from eth_typing import BlockNumber, Hash32
 
 from eth2.beacon.typing import Timestamp
 from eth2.beacon.types.deposits import Deposit
@@ -58,3 +58,19 @@ class GetEth1DataRequest(BaseRequestResponseEvent[GetEth1DataResponse]):
     @staticmethod
     def expected_response_type() -> Type[GetEth1DataResponse]:
         return GetEth1DataResponse
+
+
+@dataclass
+class GetDistanceResponse(BaseEvent):
+    distance: int
+    error: Exception = None
+
+
+@dataclass
+class GetDistanceRequest(BaseRequestResponseEvent[GetDistanceResponse]):
+    block_hash: Hash32
+    eth1_voting_period_start_timestamp: Timestamp
+
+    @staticmethod
+    def expected_response_type() -> Type[GetDistanceResponse]:
+        return GetDistanceResponse

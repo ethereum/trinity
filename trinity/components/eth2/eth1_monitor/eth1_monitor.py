@@ -1,11 +1,10 @@
 import bisect
 from collections import OrderedDict
+import logging
 from typing import (
     Any,
     AsyncGenerator,
     Callable,
-    Dict,
-    NamedTuple,
     Sequence,
     Tuple,
     Type,
@@ -14,18 +13,18 @@ from typing import (
 )
 
 from async_service import Service
-from eth_typing import Address, BLSPubkey, BLSSignature, BlockNumber, Hash32
+from eth_typing import BlockNumber, Hash32
 
-from eth_utils import encode_hex, event_abi_to_log_topic
 from lahja import EndpointAPI
 import trio
 from web3 import Web3
-from web3.utils.events import get_event_data
 
 from eth.abc import AtomicDatabaseAPI
+from eth.exceptions import BlockNotFound
+
+from eth_utils import humanize_hash
 
 from eth2.beacon.typing import Timestamp
-from eth2.beacon.typing import Gwei
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.eth1_data import Eth1Data
@@ -35,7 +34,10 @@ from eth2.beacon.tools.builder.validator import (
 )
 
 from .db import BaseDepositDataDB, ListCachedDepositDataDB
+from .eth1_data_provider import BaseEth1DataProvider, DepositLog, Eth1Block
 from .events import (
+    GetDistanceRequest,
+    GetDistanceResponse,
     GetDepositResponse,
     GetDepositRequest,
     GetEth1DataRequest,
@@ -51,33 +53,6 @@ from .exceptions import (
 TRequest = TypeVar("TRequest", bound=Union[GetDepositRequest, GetEth1DataRequest])
 
 
-class Eth1Block(NamedTuple):
-    block_hash: Hash32
-    number: BlockNumber
-    timestamp: Timestamp
-
-
-class DepositLog(NamedTuple):
-    block_hash: Hash32
-    pubkey: BLSPubkey
-    # NOTE: The following noqa is to avoid a bug in pycodestyle. We can remove it after upgrading
-    #   `flake8`. Ref: https://github.com/PyCQA/pycodestyle/issues/635#issuecomment-411916058
-    withdrawal_credentials: Hash32  # noqa: E701
-    amount: Gwei
-    signature: BLSSignature
-
-    @classmethod
-    def from_contract_log_dict(cls, log: Dict[Any, Any]) -> "DepositLog":
-        log_args = log["args"]
-        return cls(
-            block_hash=log["blockHash"],
-            pubkey=log_args["pubkey"],
-            withdrawal_credentials=log_args["withdrawal_credentials"],
-            amount=Gwei(int.from_bytes(log_args["amount"], "little")),
-            signature=log_args["signature"],
-        )
-
-
 def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
     block_dict = w3.eth.getBlock(*args, **kwargs)
     return Eth1Block(
@@ -88,11 +63,10 @@ def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
 
 
 class Eth1Monitor(Service):
-    _w3: Web3
+    logger = logging.getLogger('trinity.eth1_monitor')
 
-    _deposit_contract: "Web3.eth.contract"
-    _deposit_event_abi: Dict[str, Any]
-    _deposit_event_topic: str
+    _eth1_data_provider: BaseEth1DataProvider
+
     # Number of blocks we wait to consider a block is "confirmed". This is used to avoid
     # mainchain forks.
     # We always get a `block` and parse the logs from it, where
@@ -111,25 +85,14 @@ class Eth1Monitor(Service):
     def __init__(
         self,
         *,
-        w3: Web3,
-        deposit_contract_address: Address,
-        deposit_contract_abi: Dict[str, Any],
+        eth1_data_provider: BaseEth1DataProvider,
         num_blocks_confirmed: int,
         polling_period: float,
         start_block_number: BlockNumber,
         event_bus: EndpointAPI,
         base_db: AtomicDatabaseAPI,
     ) -> None:
-        self._w3 = w3
-        self._deposit_contract = self._w3.eth.contract(
-            address=deposit_contract_address, abi=deposit_contract_abi
-        )
-        self._deposit_event_abi = (
-            self._deposit_contract.events.DepositEvent._get_event_abi()
-        )
-        self._deposit_event_topic = encode_hex(
-            event_abi_to_log_topic(self._deposit_event_abi)
-        )
+        self._eth1_data_provider = eth1_data_provider
         self._num_blocks_confirmed = num_blocks_confirmed
         self._polling_period = polling_period
         self._event_bus = event_bus
@@ -148,7 +111,11 @@ class Eth1Monitor(Service):
         return self._db.highest_processed_block_number
 
     async def run(self) -> None:
+        self.logger.info("Eth1 Monitor up")
         self.manager.run_daemon_task(self._handle_new_logs)
+        self.manager.run_daemon_task(
+            self._run_handle_request, *(GetDistanceRequest, self._handle_get_distance)
+        )
         self.manager.run_daemon_task(
             self._run_handle_request, *(GetDepositRequest, self._handle_get_deposit)
         )
@@ -157,6 +124,21 @@ class Eth1Monitor(Service):
         )
         await self.manager.wait_finished()
 
+    def _handle_get_distance(self, req: GetDistanceRequest) -> GetDistanceResponse:
+        """
+        Handle requests for `get_distance` from the event bus.
+        """
+        try:
+            block = self._eth1_data_provider.get_block(req.block_hash)
+        except BlockNotFound:
+            raise Eth1MonitorValidationError(
+                f"Block does not exist for block_hash={humanize_hash(req.block_hash)}"
+            )
+        eth1_voting_period_start_block_number = self._get_closest_eth1_voting_period_start_block(
+            req.eth1_voting_period_start_timestamp,
+        )
+        return GetDistanceResponse(distance=(eth1_voting_period_start_block_number - block.number))
+
     async def _handle_new_logs(self) -> None:
         """
         Handle new blocks and the logs of them.
@@ -164,6 +146,11 @@ class Eth1Monitor(Service):
         async for block in self._new_blocks():
             self._handle_block_data(block)
             logs = self._get_logs_from_block(block.number)
+            self.logger.info(
+                "Eth1 Monitor got new eth1 block: %s, number of logs contained in the block: %s",
+                block,
+                len(logs),
+            )
             self._process_logs(logs, block.number)
 
     def _handle_get_deposit(self, req: GetDepositRequest) -> GetDepositResponse:
@@ -207,7 +194,13 @@ class Eth1Monitor(Service):
                 f"`distance`={distance}, ",
                 f"eth1_voting_period_start_block_number={eth1_voting_period_start_block_number}",
             )
-        block_hash = _w3_get_block(self._w3, target_block_number).block_hash
+        try:
+            block = self._eth1_data_provider.get_block(target_block_number)
+        except BlockNotFound:
+            raise Eth1MonitorValidationError(
+                f"Block does not exist for block number={target_block_number}"
+            )
+        block_hash = block.block_hash
         # `Eth1Data.deposit_count`: get the `deposit_count` corresponding to the block.
         accumulated_deposit_count = self._get_accumulated_deposit_count(
             target_block_number
@@ -216,6 +209,7 @@ class Eth1Monitor(Service):
             raise Eth1MonitorValidationError(
                 f"failed to make `Eth1Data`: `deposit_count = 0` at block #{target_block_number}"
             )
+        # Verify that the deposit data in db and the deposit data in contract match
         deposit_data_in_range = self._db.get_deposit_data_range(
             0, accumulated_deposit_count
         )
@@ -269,9 +263,14 @@ class Eth1Monitor(Service):
             try:
                 resp = event_handler(req)
             except Exception as e:
-                await self._event_bus.broadcast(
-                    req.expected_response_type()(None, None, e), req.broadcast_config()
-                )
+                if isinstance(req, GetDistanceRequest):
+                    await self._event_bus.broadcast(
+                        req.expected_response_type()(None, e), req.broadcast_config()
+                    )
+                else:
+                    await self._event_bus.broadcast(
+                        req.expected_response_type()(None, None, e), req.broadcast_config()
+                    )
             else:
                 await self._event_bus.broadcast(resp, req.broadcast_config())
 
@@ -281,7 +280,10 @@ class Eth1Monitor(Service):
         `latest_block.number - self._num_blocks_confirmed`.
         """
         while True:
-            block = _w3_get_block(self._w3, "latest")
+            try:
+                block = self._eth1_data_provider.get_block("latest")
+            except BlockNotFound:
+                raise Eth1MonitorValidationError("Fail to get latest block")
             target_block_number = BlockNumber(block.number - self._num_blocks_confirmed)
             from_block_number = self.highest_processed_block_number
             if target_block_number > from_block_number:
@@ -289,7 +291,13 @@ class Eth1Monitor(Service):
                 for block_number in range(
                     from_block_number + 1, target_block_number + 1
                 ):
-                    yield _w3_get_block(self._w3, block_number)
+                    try:
+                        block = self._eth1_data_provider.get_block(BlockNumber(block_number))
+                    except BlockNotFound:
+                        raise Eth1MonitorValidationError(
+                            f"Block does not exist for block number={block_number}"
+                        )
+                    yield block
             await trio.sleep(self._polling_period)
 
     def _handle_block_data(self, block: Eth1Block) -> None:
@@ -310,25 +318,9 @@ class Eth1Monitor(Service):
 
     def _get_logs_from_block(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
         """
-        Get the logs inside the block with number `block_number`.
+        Get the parsed logs inside the block with number `block_number`.
         """
-        # NOTE: web3 v4 does not support `contract.events.Event.getLogs`.
-        # After upgrading to v5, we can change to use the function.
-        logs = self._w3.eth.getLogs(
-            {
-                "fromBlock": block_number,
-                "toBlock": block_number,
-                "address": self._deposit_contract.address,
-                "topics": [self._deposit_event_topic],
-            }
-        )
-        parsed_logs = tuple(
-            DepositLog.from_contract_log_dict(
-                get_event_data(self._deposit_event_abi, log)
-            )
-            for log in logs
-        )
-        return parsed_logs
+        return self._eth1_data_provider.get_logs(block_number)
 
     def _process_logs(
         self, logs: Sequence[DepositLog], block_number: BlockNumber
@@ -384,8 +376,8 @@ class Eth1Monitor(Service):
         Get the accumulated deposit count from deposit contract with `get_deposit_count`
         at block `block_number`.
         """
-        deposit_count_bytes = self._deposit_contract.functions.get_deposit_count().call(
-            block_identifier=block_number
+        deposit_count_bytes = self._eth1_data_provider.get_deposit_count(
+            block_number=block_number,
         )
         return int.from_bytes(deposit_count_bytes, "little")
 
@@ -394,6 +386,6 @@ class Eth1Monitor(Service):
         Get the deposit root from deposit contract with `get_deposit_root`
         at block `block_number`.
         """
-        return self._deposit_contract.functions.get_deposit_root().call(
-            block_identifier=block_number
+        return self._eth1_data_provider.get_deposit_root(
+            block_number=block_number,
         )

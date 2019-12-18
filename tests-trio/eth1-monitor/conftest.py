@@ -20,6 +20,7 @@ from lahja import ConnectionConfig
 
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_monitor import Eth1Monitor
+from trinity.components.eth2.eth1_monitor.eth1_data_provider import Web3Eth1DataProvider
 from trinity.components.eth2.eth1_monitor.factories import DepositDataFactory
 from trinity.tools.factories.db import AtomicDBFactory
 
@@ -83,18 +84,24 @@ def func_do_deposit(w3, deposit_contract):
 
 
 @pytest.fixture
+async def eth1_data_provider(w3, deposit_contract):
+    return Web3Eth1DataProvider(
+        w3=w3,
+        deposit_contract_address=deposit_contract.address,
+        deposit_contract_abi=deposit_contract.abi,
+    )
+
+
+@pytest.fixture
 async def eth1_monitor(
-    w3,
-    deposit_contract,
+    eth1_data_provider,
     num_blocks_confirmed,
     polling_period,
     endpoint_server,
     start_block_number,
 ):
     m = Eth1Monitor(
-        w3=w3,
-        deposit_contract_address=deposit_contract.address,
-        deposit_contract_abi=deposit_contract.abi,
+        eth1_data_provider=eth1_data_provider,
         num_blocks_confirmed=num_blocks_confirmed,
         polling_period=polling_period,
         start_block_number=start_block_number,

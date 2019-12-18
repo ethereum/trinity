@@ -1,12 +1,13 @@
 from pathlib import Path
 import time
 
-from eth_utils import decode_hex
 import ssz
 
-from eth2._utils.hash import hash_eth2
 from eth2.beacon.genesis import initialize_beacon_state_from_eth1
-from eth2.beacon.tools.builder.initializer import create_mock_deposits_and_root
+from eth2.beacon.tools.builder.initializer import (
+    create_keypair_and_mock_withdraw_credentials,
+    create_mock_deposits_and_root,
+)
 from eth2.beacon.tools.fixtures.config_types import Minimal
 from eth2.beacon.tools.fixtures.loading import load_config_at_path, load_yaml_at
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
@@ -30,22 +31,10 @@ def _main():
 
     key_set = load_yaml_at(KEY_DIR / KEY_SET_FILE)
 
-    pubkeys = ()
-    privkeys = ()
-    withdrawal_credentials = ()
-    keymap = {}
-    for key_pair in key_set:
-        pubkey = decode_hex(key_pair["pubkey"])
-        privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
-        withdrawal_credential = (
-            config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="big")
-            + hash_eth2(pubkey)[1:]
-        )
-
-        pubkeys += (pubkey,)
-        privkeys += (privkey,)
-        withdrawal_credentials += (withdrawal_credential,)
-        keymap[pubkey] = privkey
+    pubkeys, privkeys, withdrawal_credentials = create_keypair_and_mock_withdraw_credentials(
+        config, key_set
+    )
+    keymap = {pubkey: privkey for pubkey, privkey in zip(pubkeys, privkeys)}
 
     deposits, _ = create_mock_deposits_and_root(
         pubkeys, keymap, config, withdrawal_credentials
