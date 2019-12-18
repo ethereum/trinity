@@ -160,6 +160,10 @@ def pad32_dict_values(some_dict):
     }
 
 
+def map_0x_to_0x0(value):
+    return '0x0' if value == '0x' else value
+
+
 RPC_STATE_NORMALIZERS = {
     'balance': remove_leading_zeros,
     'code': empty_to_0x,
@@ -193,7 +197,7 @@ RPC_TRANSACTION_NORMALIZERS = {
     'nonce': remove_leading_zeros,
     'gasLimit': remove_leading_zeros,
     'gasPrice': remove_leading_zeros,
-    'value': remove_leading_zeros,
+    'value': compose(remove_leading_zeros, map_0x_to_0x0),
     'data': empty_to_0x,
     'to': compose(
         apply_formatter_if(is_address, to_checksum_address),
@@ -315,7 +319,7 @@ async def validate_account_state(rpc, state, addr, at_block):
             at_block=at_block
         )
     for key in state['storage']:
-        position = '0x0' if key == '0x' else key
+        position = map_0x_to_0x0(key)
         expected_storage = standardized_state['storage'][key]
         await assert_rpc_result(
             rpc,
