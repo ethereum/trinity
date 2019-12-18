@@ -34,6 +34,7 @@ common: &common
         name: run tox
         command: ~/.local/bin/tox
     - save_cache:
+        when: always
         paths:
           - .hypothesis
           - .tox
@@ -63,6 +64,7 @@ geth_steps: &geth_steps
         name: run tox
         command: ~/.local/bin/tox -r
     - save_cache:
+        when: always
         paths:
           - .tox
           - ~/.cache/pip
@@ -103,6 +105,7 @@ eth2_fixtures: &eth2_fixtures
         name: run tox
         command: ~/.local/bin/tox
     - save_cache:
+        when: always
         paths:
           - .hypothesis
           - .tox
