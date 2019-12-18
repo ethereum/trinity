@@ -74,6 +74,7 @@ SLOW_TESTS = (
     'randomStatetest94_Byzantium',
     'randomStatetest94_Constantinople',
     'randomStatetest94_ConstantinopleFix',
+    'randomStatetest94_Istanbul',
     'ShanghaiLove_Homestead',
     'ShanghaiLove_Frontier',
     'static_Call1024PreCalls_d1g0v0',
@@ -146,6 +147,9 @@ INCORRECT_UPSTREAM_TESTS = {
     ('GeneralStateTests/stSStoreTest/InitCollision_d0g0v0.json', 'InitCollision_d0g0v0_ConstantinopleFix'),  # noqa: E501
     ('GeneralStateTests/stSStoreTest/InitCollision_d1g0v0.json', 'InitCollision_d1g0v0_ConstantinopleFix'),  # noqa: E501
     ('GeneralStateTests/stSStoreTest/InitCollision_d3g0v0.json', 'InitCollision_d3g0v0_ConstantinopleFix'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d0g0v0_Istanbul'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d1g0v0_Istanbul'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d3g0v0_Istanbul'),  # noqa: E501
 }
 
 
