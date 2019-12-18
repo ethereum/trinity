@@ -14,6 +14,7 @@ from eth_utils.toolz import (
 
 from eth_utils import (
     add_0x_prefix,
+    decode_hex,
     encode_hex,
     is_address,
     is_hex,
@@ -37,6 +38,9 @@ from eth.tools.fixtures import (
     generate_fixture_tests,
     load_fixture,
     should_run_slow_tests,
+)
+from eth._utils.padding import (
+    pad32,
 )
 
 from trinity.chains.full import (
@@ -144,10 +148,19 @@ INCORRECT_UPSTREAM_TESTS = {
     ('GeneralStateTests/stSStoreTest/InitCollision_d3g0v0.json', 'InitCollision_d3g0v0_ConstantinopleFix'),  # noqa: E501
 }
 
+
+def pad32_dict_values(some_dict):
+    return {
+        key: encode_hex(pad32(decode_hex(value)))
+        for key, value in some_dict.items()
+    }
+
+
 RPC_STATE_NORMALIZERS = {
     'balance': remove_leading_zeros,
     'code': empty_to_0x,
     'nonce': remove_leading_zeros,
+    'storage': pad32_dict_values
 }
 
 RPC_BLOCK_REMAPPERS = {
@@ -299,7 +312,7 @@ async def validate_account_state(rpc, state, addr, at_block):
         )
     for key in state['storage']:
         position = '0x0' if key == '0x' else key
-        expected_storage = state['storage'][key]
+        expected_storage = standardized_state['storage'][key]
         await assert_rpc_result(
             rpc,
             'eth_getStorageAt',
