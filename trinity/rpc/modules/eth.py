@@ -43,6 +43,9 @@ from eth.rlp.headers import (
 from eth.vm.spoof import (
     SpoofTransaction,
 )
+from eth._utils.padding import (
+    pad32,
+)
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.constants import (
@@ -214,7 +217,8 @@ class Eth(Eth1ChainRPCModule):
 
         state = await state_at_block(self.chain, at_block)
         stored_val = state.get_storage(address, position)
-        return encode_hex(int_to_big_endian(stored_val))
+
+        return encode_hex(pad32(int_to_big_endian(stored_val)))
 
     @format_params(decode_hex)
     async def getTransactionByHash(self,

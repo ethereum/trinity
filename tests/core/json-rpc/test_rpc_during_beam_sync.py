@@ -281,7 +281,8 @@ async def test_getStorageAt_during_beam_sync(
     # sanity check, by default it works
     response = await ipc_request('eth_getStorageAt', params)
     assert 'error' not in response
-    assert response['result'] == '0x01'  # this was set in the genesis_state fixture
+    # this was set in the genesis_state fixture
+    assert response['result'] == '0x0000000000000000000000000000000000000000000000000000000000000001'  # noqa: E501
 
     missing_node = chain.chaindb.db.pop(storage_root)
 
@@ -294,7 +295,8 @@ async def test_getStorageAt_during_beam_sync(
     async with fake_beam_syncer({storage_root: missing_node}):
         response = await ipc_request('eth_getStorageAt', params)
         assert 'error' not in response
-        assert response['result'] == '0x01'  # this was set in the genesis_state fixture
+        # this was set in the genesis_state fixture
+        assert response['result'] == '0x0000000000000000000000000000000000000000000000000000000000000001'  # noqa: E501
 
 
 @pytest.fixture
