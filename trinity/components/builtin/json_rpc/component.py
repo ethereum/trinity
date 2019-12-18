@@ -108,7 +108,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
             help="Disables the JSON-RPC Server",
         )
         arg_parser.add_argument(
-            "--enable-rpchttp",
+            "--enable-http",
             action="store_true",
             help="Enables the HTTP Server",
         )
@@ -139,8 +139,8 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
                 ipc_server,
             )
 
-            # Run JSON-RPC HTTP Server
-            if boot_info.args.enable_rpchttp:
+            # Run HTTP Server
+            if boot_info.args.enable_http:
                 http_server = HTTPServer(
                     handler=RPCHandler.handle(rpc.execute),
                     port=boot_info.args.rpcport,

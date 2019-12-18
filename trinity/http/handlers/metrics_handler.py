@@ -13,13 +13,15 @@ from eth2.beacon.chains.base import (
 
 from trinity.http.handlers.base import BaseHTTPHandler, response_error
 from trinity.components.eth2.metrics.events import (
-    BeaconSlotRequest,
     Libp2pPeersRequest,
 )
 from trinity.components.eth2.metrics.registry import metrics, registry
 
 
 def root_to_int(root: Hash32) -> int:
+    """
+    Since prometheus couldn't collect bytes string, we convert Hash32 to int.
+    """
     return int.from_bytes(root[24:32], byteorder='little', signed=True)
 
 
@@ -29,17 +31,15 @@ async def process_metrics(chain: BaseBeaconChain, event_bus: EndpointAPI) -> Non
     metrics.libp2p_peers.set(libp2p_peers.result)
 
     # Per slot info
-    beacon_slot = await event_bus.request(BeaconSlotRequest())
-    metrics.beacon_slot.set(beacon_slot.result)
+    beacon_slot = chain.get_head_state_slot()
+    metrics.beacon_slot.set(beacon_slot)
 
     # Per block info
-    # TODO: use coroutine
     head_block = chain.get_canonical_head()
     metrics.beacon_head_slot.set(head_block.slot)
     metrics.beacon_head_root.set(root_to_int(head_block.hash_tree_root))
 
     # Per epoch info
-    # TODO: use coroutine
     epoch_info = chain.get_canonical_epoch_info()
     metrics.beacon_previous_justified_epoch.set(epoch_info.previous_justified_checkpoint.epoch)
     metrics.beacon_previous_justified_root.set(root_to_int(
@@ -68,13 +68,6 @@ class MetricsHandler(BaseHTTPHandler):
                 logger.debug('Receiving GET request: %s', request.path)
                 if request.path == '/metrics':
                     await process_metrics(chain, event_bus)
-                    # return web.Response(
-                    #     body=generate_latest(metrics.registry),
-                    #     content_type='text/plain',
-                    # )
-
-                    # registry = CollectorRegistry()
-                    # multiprocess.MultiProcessCollector(registry)
                     data = generate_latest(registry)
                     return web.Response(
                         body=data,

@@ -795,6 +795,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             if state.slot > head_state_slot:
                 self._add_head_state_slot_lookup(state.slot)
 
+        # For metrics
         # TODO: only persist per epoch transition
         self._persist_canonical_epoch_info(self.db, state)
 

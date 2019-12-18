@@ -39,7 +39,8 @@ class HTTPServer(BaseService):
         self.logger.info("Running HTTP Server %s:%d", self.host, self.port)
         await site.start()
 
-        await self.cancel_token.wait()
+        await self.cancellation()
 
     async def _cleanup(self) -> None:
+        self.logger.info("Closing HTTPServer...")
         await self.server.shutdown()

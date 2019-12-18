@@ -11,7 +11,7 @@ class AllMetrics():
         self.libp2p_peers = Gauge('libp2p_peers', 'Tracks number of libp2p peers', registry=registry)  # noqa: E501
 
         # On slot transition
-        self.beacon_slot = Gauge('beacon_slot', 'Latest slot of the beacon chain state	', registry=registry)  # noqa: E501
+        self.beacon_slot = Gauge('beacon_slot', 'Latest slot of the beacon chain state', registry=registry)  # noqa: E501
 
         # On block transition
         self.beacon_head_slot = Gauge('beacon_head_slot', 'Slot of the head block of the beacon chain', registry=registry)  # noqa: E501

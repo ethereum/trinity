@@ -10,22 +10,6 @@ from lahja import (
     BaseRequestResponseEvent,
 )
 
-from eth2.beacon.typing import Slot
-
-
-@dataclass
-class BeaconSlotResponse(BaseEvent):
-    """
-    beacon_slot: Latest slot of the beacon chain state
-    """
-    result: Slot
-
-
-class BeaconSlotRequest(BaseRequestResponseEvent[BeaconSlotResponse]):
-    @staticmethod
-    def expected_response_type() -> Type[BeaconSlotResponse]:
-        return BeaconSlotResponse
-
 
 @dataclass
 class Libp2pPeersResponse(BaseEvent):

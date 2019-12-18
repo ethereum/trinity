@@ -128,7 +128,7 @@ class Node:
             f"--beacon-nodekey={remove_0x_prefix(encode_hex(self.node_privkey.to_bytes()))}",
             f"--preferred_nodes={','.join(str(node.maddr) for node in self.preferred_nodes)}",
             f"--rpcport={self.rpcport}",
-            "--enable-rpchttp",
+            "--enable-http",
             "--enable-metrics",
             f"--metrics-port={self.metrics_port}",
             "--disable-discovery",
