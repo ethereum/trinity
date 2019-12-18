@@ -46,9 +46,13 @@ class BeaconChainFactory(factory.Factory):
         is disabled.
         """
         override_lengths(cls.config)
+        if "num_validators" in kwargs:
+            num_validators = kwargs["num_validators"]
+        else:
+            num_validators = cls.num_validators
 
         if kwargs["genesis_state"] is None:
-            keymap = mk_keymap_of_size(cls.num_validators)
+            keymap = mk_keymap_of_size(num_validators)
             genesis_state, genesis_block = create_mock_genesis(
                 config=cls.config,
                 pubkeys=tuple(keymap.keys()),

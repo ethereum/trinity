@@ -56,3 +56,7 @@ class ServerError(IShouldRespondAnError):
 
 class UnhandshakedPeer(BaseLibp2pError):
     ...
+
+
+class InvalidGossipMessage(BaseLibp2pError):
+    ...

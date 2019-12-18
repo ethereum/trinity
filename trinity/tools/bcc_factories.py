@@ -87,6 +87,7 @@ class NodeFactory(factory.Factory):
     cancel_token = None
     bootstrap_nodes = None
     preferred_nodes: Tuple[Multiaddr, ...] = tuple()
+    subnets: None
     chain = factory.SubFactory(BeaconChainFactory)
 
     @classmethod
@@ -227,6 +228,7 @@ class ReceiveServerFactory(factory.Factory):
     chain = None
     p2p_node = factory.SubFactory(NodeFactory)
     topic_msg_queues = None
+    subnets = None
     cancel_token = None
 
     @classmethod

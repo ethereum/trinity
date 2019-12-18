@@ -37,11 +37,27 @@ HashTreeRoot = NewType("HashTreeRoot", Hash32)
 SigningRoot = NewType("SigningRoot", Hash32)
 
 
+#
+#  Networkinig
+#
+
+# CommitteeIndex % ATTESTATION_SUBNET_COUNT
+SubnetId = NewType("SubnetId", int)
+
+
+#
+# Helpers
+#
+
+
 class FromBlockParams(NamedTuple):
     slot: Slot = None
 
 
-# defaults to emulate "zero types"
+#
+# Defaults to emulate "zero types"
+#
+
 default_slot = Slot(0)
 default_epoch = Epoch(0)
 default_committee_index = CommitteeIndex(0)

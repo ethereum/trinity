@@ -82,6 +82,9 @@ def create_block_on_state(
         parent_block=parent_block, block_params=FromBlockParams(slot=slot)
     )
 
+    # MAX_ATTESTATIONS
+    attestations = attestations[: config.MAX_ATTESTATIONS]
+
     # TODO: Add more operations
     randao_reveal = _generate_randao_reveal(privkey, slot, state, config)
     eth1_data = state.eth1_data

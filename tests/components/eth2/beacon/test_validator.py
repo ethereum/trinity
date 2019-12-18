@@ -62,22 +62,47 @@ class FakeNode:
     async def broadcast_attestation(self, attestation):
         pass
 
+    async def broadcast_attestation_to_subnet(self, attestation, subnet_id):
+        pass
 
-async def get_validator(event_loop, event_bus, indices) -> Validator:
-    chain = BeaconChainFactory()
+    async def broadcast_beacon_aggregate_and_proof(self, aggregate_and_proof):
+        pass
+
+
+async def get_validator(event_loop, event_bus, indices, num_validators=None) -> Validator:
+    if num_validators is not None:
+        chain = BeaconChainFactory(num_validators=num_validators)
+    else:
+        chain = BeaconChainFactory()
+
     validator_privkeys = {
         index: mk_key_pair_from_seed_index(index)[1]
         for index in indices
     }
 
-    def get_ready_attestations_fn(slot):
-        return ()
+    # Mock attestation pool
+    unaggregated_attestation_pool = set()
+    aggregated_attestation_pool = set()
+
+    def get_ready_attestations_fn(slot, is_aggregated):
+        return tuple(unaggregated_attestation_pool)
+
+    def get_aggregatable_attestations_fn(slot, committee_index):
+        return tuple(unaggregated_attestation_pool)
+
+    def import_attestation_fn(attestation, is_aggregated):
+        if is_aggregated:
+            aggregated_attestation_pool.add(attestation)
+        else:
+            unaggregated_attestation_pool.add(attestation)
 
     v = Validator(
         chain=chain,
         p2p_node=FakeNode(),
         validator_privkeys=validator_privkeys,
         get_ready_attestations_fn=get_ready_attestations_fn,
+        get_aggregatable_attestations_fn=get_aggregatable_attestations_fn,
+        import_attestation_fn=import_attestation_fn,
         event_bus=event_bus,
     )
     asyncio.ensure_future(v.run(), loop=event_loop)
@@ -335,13 +360,13 @@ async def test_validator_get_committee_assigment(event_loop, event_bus):
     state = alice.chain.get_head_state()
     epoch = compute_epoch_at_slot(state.slot, state_machine.config.SLOTS_PER_EPOCH)
 
-    assert alice.this_epoch_assignment[alice_indices[0]][0] == -1
-    alice._get_this_epoch_assignment(alice_indices[0], epoch)
-    assert alice.this_epoch_assignment[alice_indices[0]][0] == epoch
+    assert alice.local_validator_epoch_assignment[alice_indices[0]][0] == -1
+    alice._get_local_current_epoch_assignment(alice_indices[0], epoch)
+    assert alice.local_validator_epoch_assignment[alice_indices[0]][0] == epoch
 
 
 @pytest.mark.asyncio
-async def test_validator_attest(event_loop, event_bus, monkeypatch):
+async def test_validator_attest(event_loop, event_bus):
     alice_indices = [i for i in range(NUM_VALIDATORS)]
     alice = await get_validator(event_loop=event_loop, event_bus=event_bus, indices=alice_indices)
     head = alice.chain.get_canonical_head()
@@ -349,7 +374,7 @@ async def test_validator_attest(event_loop, event_bus, monkeypatch):
     state = alice.chain.get_head_state()
 
     epoch = compute_epoch_at_slot(state.slot, state_machine.config.SLOTS_PER_EPOCH)
-    assignment = alice._get_this_epoch_assignment(alice_indices[0], epoch)
+    assignment = alice._get_local_current_epoch_assignment(alice_indices[0], epoch)
 
     attestations = await alice.attest(assignment.slot)
     assert len(attestations) == 1
@@ -372,6 +397,53 @@ async def test_validator_attest(event_loop, event_bus, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_validator_aggregate(event_loop, event_bus):
+    num_validators = 50
+    alice_indices = [i for i in range(num_validators)]
+    alice = await get_validator(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        indices=alice_indices,
+        num_validators=num_validators,
+    )
+    alice.skip_block(
+        slot=alice.chain.get_canonical_head().slot + 100,
+        state=alice.chain.get_head_state(),
+        state_machine=alice.chain.get_state_machine(),
+    )
+    state_machine = alice.chain.get_state_machine()
+    state = alice.chain.get_head_state()
+    head = alice.chain.get_canonical_head()
+
+    epoch = compute_epoch_at_slot(state.slot, state_machine.config.SLOTS_PER_EPOCH)
+    assignment = alice._get_local_current_epoch_assignment(alice_indices[0], epoch)
+
+    attested_attsetation = await alice.attest(assignment.slot)
+    assert len(attested_attsetation) >= 1
+
+    aggregate_and_proofs = await alice.aggregate(assignment.slot)
+    assert len(aggregate_and_proofs) >= 1
+    for aggregate_and_proof in aggregate_and_proofs:
+        attestation = aggregate_and_proof.aggregate
+        assert attestation.data.slot == assignment.slot
+        assert attestation.data.beacon_block_root == head.signing_root
+        assert attestation.data.index == assignment.committee_index
+
+        # Advance the state and validate the attestation
+        config = state_machine.config
+        future_state = state_machine.state_transition.apply_state_transition(
+            state,
+            future_slot=assignment.slot + config.MIN_ATTESTATION_INCLUSION_DELAY,
+        )
+        validate_attestation(
+            future_state,
+            attestation,
+            config,
+        )
+        # break
+
+
+@pytest.mark.asyncio
 async def test_validator_include_ready_attestations(event_loop, event_bus, monkeypatch):
     # Alice controls all validators
     alice_indices = list(range(NUM_VALIDATORS))
@@ -386,7 +458,7 @@ async def test_validator_include_ready_attestations(event_loop, event_bus, monke
 
     # Mock `get_ready_attestations_fn` so it returns the attestation alice
     # attested to.
-    def get_ready_attestations_fn(slot):
+    def get_ready_attestations_fn(slot, is_aggregated):
         return attestations
     monkeypatch.setattr(alice, 'get_ready_attestations', get_ready_attestations_fn)
 

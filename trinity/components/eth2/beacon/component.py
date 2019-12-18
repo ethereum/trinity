@@ -5,7 +5,7 @@ from argparse import (
 import asyncio
 import logging
 import os
-from typing import cast
+from typing import Set, cast
 
 from async_exit_stack import AsyncExitStack
 from lahja import EndpointAPI
@@ -15,7 +15,10 @@ from libp2p.crypto.secp256k1 import create_new_key_pair, Secp256k1PrivateKey
 
 from eth_utils import decode_hex
 
-from eth2.beacon.typing import ValidatorIndex
+from eth2.beacon.typing import (
+    SubnetId,
+    ValidatorIndex,
+)
 
 from p2p.service import run_service
 
@@ -23,6 +26,7 @@ from trinity.boot_info import BootInfo
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
 from trinity.extensibility import AsyncioIsolatedComponent
+from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.servers import BCCReceiveServer
 
@@ -103,6 +107,10 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 base_db,
                 chain_config.genesis_config
             )
+            # TODO: To simplify, subsribe all subnets
+            subnets: Set[SubnetId] = set(
+                SubnetId(subnet_id) for subnet_id in range(ATTESTATION_SUBNET_COUNT)
+            )
 
             # TODO: Handle `bootstrap_nodes`.
             libp2p_node = Node(
@@ -111,12 +119,14 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 listen_port=boot_info.args.port,
                 preferred_nodes=trinity_config.preferred_nodes,
                 chain=chain,
+                subnets=subnets,
             )
 
             receive_server = BCCReceiveServer(
                 chain=chain,
                 p2p_node=libp2p_node,
                 topic_msg_queues=libp2p_node.pubsub.my_topics,
+                subnets=subnets,
                 cancel_token=libp2p_node.cancel_token,
             )
 
@@ -140,6 +150,8 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 event_bus=event_bus,
                 token=libp2p_node.cancel_token,
                 get_ready_attestations_fn=receive_server.get_ready_attestations,
+                get_aggregatable_attestations_fn=receive_server.get_aggregatable_attestations,
+                import_attestation_fn=receive_server.import_attestation,
             )
 
             slot_ticker = SlotTicker(
@@ -159,7 +171,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 block_importer=SyncBlockImporter(chain),
                 genesis_config=chain_config.genesis_config,
                 token=libp2p_node.cancel_token,
-
             )
 
             services = (libp2p_node, receive_server, slot_ticker, validator, syncer)
