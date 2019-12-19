@@ -130,21 +130,30 @@ class UPnPService(Service):
 
         external_ip = upnp_dev.WANIPConn1.GetExternalIPAddress()['NewExternalIPAddress']
         for protocol, description in [('TCP', 'ethereum p2p'), ('UDP', 'ethereum discovery')]:
-            upnp_dev.WANIPConn1.AddPortMapping(
-                NewRemoteHost=external_ip,
-                NewExternalPort=self.port,
-                NewProtocol=protocol,
-                NewInternalPort=self.port,
-                NewInternalClient=internal_ip,
-                NewEnabled='1',
-                NewPortMappingDescription=description,
-                NewLeaseDuration=self._nat_portmap_lifetime,
-            )
-        self._mapping = PortMapping(
-            '%s:%d' % (internal_ip, self.port),
-            '%s:%d' % (external_ip, self.port),
-        )
-        self.logger.info("NAT port forwarding successfully set up: %r", self._mapping)
+            try:
+                upnp_dev.WANIPConn1.AddPortMapping(
+                    NewRemoteHost=external_ip,
+                    NewExternalPort=self.port,
+                    NewProtocol=protocol,
+                    NewInternalPort=self.port,
+                    NewInternalClient=internal_ip,
+                    NewEnabled='1',
+                    NewPortMappingDescription=description,
+                    NewLeaseDuration=self._nat_portmap_lifetime,
+                )
+            except upnpclient.soap.SOAPError as exc:
+                self.logger.warning(
+                    "Failed to setup port mapping for %s/%s: %s",
+                    protocol,
+                    description,
+                    exc
+                )
+            else:
+                self._mapping = PortMapping(
+                    '%s:%d' % (internal_ip, self.port),
+                    '%s:%d' % (external_ip, self.port),
+                )
+                self.logger.info("NAT port forwarding successfully set up: %r", self._mapping)
         return external_ip
 
     async def _discover_upnp_devices(self) -> AsyncGenerator[upnpclient.upnp.Device, None]:
