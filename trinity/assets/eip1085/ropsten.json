@@ -16,6 +16,7 @@
     "constantinopleForkBlock":"0x408b70",
     "petersburgForkBlock":"0x4b5e82",
     "istanbulForkBlock":"0x62f756",
+    "muirglacierForkBlock": "0x6c993d",
     "miningMethod":"ethash"
   },
   "version":"1"

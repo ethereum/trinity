@@ -6,8 +6,8 @@ import logging
 
 from async_service import run_asyncio_service
 from eth_utils import ValidationError
-from eth.chains.mainnet import PETERSBURG_MAINNET_BLOCK
-from eth.chains.ropsten import PETERSBURG_ROPSTEN_BLOCK
+from eth.chains.mainnet import ISTANBUL_MAINNET_BLOCK
+from eth.chains.ropsten import ISTANBUL_ROPSTEN_BLOCK
 from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
@@ -80,9 +80,9 @@ class TxComponent(AsyncioIsolatedComponent):
             chain = chain_config.full_chain_class(db)
 
             if boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
-                validator = DefaultTransactionValidator(chain, PETERSBURG_MAINNET_BLOCK)
+                validator = DefaultTransactionValidator(chain, ISTANBUL_MAINNET_BLOCK)
             elif boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
-                validator = DefaultTransactionValidator(chain, PETERSBURG_ROPSTEN_BLOCK)
+                validator = DefaultTransactionValidator(chain, ISTANBUL_ROPSTEN_BLOCK)
             else:
                 raise Exception("This code path should not be reachable")
 
