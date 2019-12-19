@@ -15,6 +15,7 @@
     "byzantiumForkBlock":"0x42ae50",
     "petersburgForkBlock":"0x6f1580",
     "istanbulForkBlock": "0x8a61c8",
+    "muirglacierForkBlock": "0x8c6180",
     "chainId":"0x1",
     "homesteadForkBlock":"0x118c30",
     "miningMethod":"ethash"

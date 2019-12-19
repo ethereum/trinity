@@ -54,6 +54,7 @@ from eth.vm.forks import (
     ConstantinopleVM,
     PetersburgVM,
     IstanbulVM,
+    MuirGlacierVM,
 )
 
 
@@ -155,6 +156,8 @@ def _extract_vm_config(vm_config: Dict[str, str]) -> Iterable[VMFork]:
         yield hex_to_block_number(vm_config['petersburgForkBlock']), PetersburgVM
     if 'istanbulForkBlock' in vm_config.keys():
         yield hex_to_block_number(vm_config['istanbulForkBlock']), IstanbulVM
+    if 'muirglacierForkBlock' in vm_config.keys():
+        yield hex_to_block_number(vm_config['muirglacierForkBlock']), MuirGlacierVM
 
 
 @to_tuple
@@ -178,6 +181,7 @@ ALL_VMS = (
     ConstantinopleVM,
     PetersburgVM,
     IstanbulVM,
+    MuirGlacierVM,
 )
 
 
