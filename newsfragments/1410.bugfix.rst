@@ -1,0 +1,1 @@
+Catch exception leaking out of the `UpnpService` and log it as warning.
