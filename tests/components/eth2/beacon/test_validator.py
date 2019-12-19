@@ -377,7 +377,7 @@ async def test_validator_attest(event_loop, event_bus):
     assignment = alice._get_local_current_epoch_assignment(alice_indices[0], epoch)
 
     attestations = await alice.attest(assignment.slot)
-    assert len(attestations) == 1
+    assert len(attestations) >= 1
     attestation = attestations[0]
     assert attestation.data.slot == assignment.slot
     assert attestation.data.beacon_block_root == head.signing_root
