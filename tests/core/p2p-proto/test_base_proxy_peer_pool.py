@@ -3,6 +3,9 @@ import pytest
 
 from p2p.tools.factories import SessionFactory
 
+from p2p.service import run_service
+
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.common.events import (
     GetConnectedPeersRequest,
     GetConnectedPeersResponse,
@@ -11,17 +14,15 @@ from trinity.protocol.common.events import (
 )
 from trinity.tools.event_bus import mock_request_response
 
-from tests.core.integration_test_helpers import (
-    run_proxy_peer_pool,
-)
+from trinity.protocol.eth.peer import ETHProxyPeerPool
+
 
 TEST_NODES = tuple(SessionFactory.create_batch(4))
 
 
 @pytest.mark.asyncio
 async def test_can_instantiate_proxy_pool(event_bus):
-    async with run_proxy_peer_pool(event_bus) as proxy_peer_pool:
-        assert proxy_peer_pool is not None
+    ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 
 
 @pytest.mark.parametrize(
@@ -36,7 +37,9 @@ async def test_fetch_initial_peers(event_bus, response, expected_count):
     do_mock = mock_request_response(GetConnectedPeersRequest, response, event_bus)
 
     async with do_mock:
-        async with run_proxy_peer_pool(event_bus) as proxy_peer_pool:
+        proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+
+        async with run_service(proxy_peer_pool):
             peers = await proxy_peer_pool.fetch_initial_peers()
             assert len(peers) == expected_count
 
@@ -53,7 +56,8 @@ async def test_get_peers(event_bus, response, expected_count):
     do_mock = mock_request_response(GetConnectedPeersRequest, response, event_bus)
 
     async with do_mock:
-        async with run_proxy_peer_pool(event_bus) as proxy_peer_pool:
+        proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        async with run_service(proxy_peer_pool):
             peers = await proxy_peer_pool.get_peers()
             assert len(peers) == expected_count
 
@@ -67,7 +71,8 @@ async def test_adds_new_peers(event_bus):
         event_bus,
     )
     async with do_mock:
-        async with run_proxy_peer_pool(event_bus) as proxy_peer_pool:
+        proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        async with run_service(proxy_peer_pool):
 
             assert len(await proxy_peer_pool.get_peers()) == 1
 
@@ -87,7 +92,8 @@ async def test_removes_peers(event_bus):
     )
 
     async with do_mock:
-        async with run_proxy_peer_pool(event_bus) as proxy_peer_pool:
+        proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        async with run_service(proxy_peer_pool):
 
             assert len(await proxy_peer_pool.get_peers()) == 2
 

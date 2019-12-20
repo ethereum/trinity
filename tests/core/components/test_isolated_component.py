@@ -64,7 +64,7 @@ async def test_asyncio_isolated_component(boot_info,
         assert not touch_path.exists()
         component_manager.shutdown('exiting component manager')
 
-    for _ in range(1000):
+    for _ in range(10000):
         if not touch_path.exists():
             await asyncio.sleep(0.001)
         else:

@@ -2,13 +2,16 @@ import asyncio
 
 import pytest
 
+from async_exit_stack import AsyncExitStack
 from async_service import background_asyncio_service
 
 from p2p.exceptions import PeerConnectionLost
+from p2p.service import run_service
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.protocol.eth.peer import (
+    ETHProxyPeerPool,
     ETHPeerPoolEventServer,
 )
 from trinity.protocol.eth.servers import ETHRequestServer
@@ -20,7 +23,6 @@ from trinity.tools.factories import (
 
 from tests.core.integration_test_helpers import (
     run_peer_pool_event_server,
-    run_proxy_peer_pool,
 )
 from tests.core.peer_helpers import (
     MockPeerPoolWithConnectedPeers,
@@ -51,19 +53,26 @@ async def test_proxy_peer_requests(request,
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
 
-    async with run_peer_pool_event_server(
-        client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_peer_pool_event_server(
-        server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), background_asyncio_service(ETHRequestServer(
-        server_event_bus,
-        TO_NETWORKING_BROADCAST_CONFIG,
-        AsyncChainDB(chaindb_20.db)
-    )), run_proxy_peer_pool(
-        client_event_bus
-    ) as client_proxy_peer_pool, run_proxy_peer_pool(
-        server_event_bus
-    ):
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(run_peer_pool_event_server(
+            client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+
+        await stack.enter_async_context(run_peer_pool_event_server(
+            server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+
+        await stack.enter_async_context(background_asyncio_service(ETHRequestServer(
+            server_event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            AsyncChainDB(chaindb_20.db)
+        )))
+
+        client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(client_proxy_peer_pool))
+
+        proxy_peer_pool = ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(proxy_peer_pool))
 
         proxy_peer = await client_proxy_peer_pool.ensure_proxy_peer(client_peer.session)
 
@@ -101,15 +110,19 @@ async def test_proxy_peer_requests_with_timeouts(request,
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
 
-    async with run_peer_pool_event_server(
-        client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_peer_pool_event_server(
-        server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_proxy_peer_pool(
-        client_event_bus
-    ) as client_proxy_peer_pool, run_proxy_peer_pool(
-        server_event_bus
-    ):
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(run_peer_pool_event_server(
+            client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+        await stack.enter_async_context(run_peer_pool_event_server(
+            server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+
+        client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(client_proxy_peer_pool))
+
+        server_proxy_peer_pool = ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(server_proxy_peer_pool))
 
         proxy_peer = await client_proxy_peer_pool.ensure_proxy_peer(client_peer.session)
 
@@ -141,19 +154,24 @@ async def test_requests_when_peer_in_client_vanishs(request,
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
 
-    async with run_peer_pool_event_server(
-        client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), run_peer_pool_event_server(
-        server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
-    ), background_asyncio_service(ETHRequestServer(
-        server_event_bus,
-        TO_NETWORKING_BROADCAST_CONFIG,
-        AsyncChainDB(chaindb_20.db)
-    )), run_proxy_peer_pool(
-        client_event_bus
-    ) as client_proxy_peer_pool, run_proxy_peer_pool(
-        server_event_bus
-    ):
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(run_peer_pool_event_server(
+            client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+        await stack.enter_async_context(run_peer_pool_event_server(
+            server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+
+        await stack.enter_async_context(background_asyncio_service(ETHRequestServer(
+            server_event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            AsyncChainDB(chaindb_20.db)
+        )))
+        client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(client_proxy_peer_pool))
+
+        server_proxy_peer_pool = ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(server_proxy_peer_pool))
 
         proxy_peer = await client_proxy_peer_pool.ensure_proxy_peer(client_peer.session)
 
