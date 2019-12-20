@@ -163,7 +163,7 @@ async def validate_peer_status(chain: BaseBeaconChain, peer_status: Status) -> N
         )
 
 
-def compare_chain_tip_and_finalized_epoch(chain: BaseBeaconChain, peer_status: Status) -> None:
+def peer_is_ahead(chain: BaseBeaconChain, peer_status: Status) -> bool:
     checkpoint = chain.get_head_state().finalized_checkpoint
     head_block = chain.get_canonical_head()
 
@@ -174,9 +174,10 @@ def compare_chain_tip_and_finalized_epoch(chain: BaseBeaconChain, peer_status: S
         peer_has_higher_finalized_epoch or
         (peer_has_equal_finalized_epoch and peer_has_higher_head_slot)
     ):
-        # TODO: kickoff syncing process with this peer
         logger.debug("Peer's chain is ahead of us, start syncing with the peer.")
-        pass
+        return True
+    else:
+        return False
 
 
 def validate_start_slot(chain: BaseBeaconChain, start_slot: Slot) -> None:

@@ -135,6 +135,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 preferred_nodes=trinity_config.preferred_nodes,
                 chain=chain,
                 subnets=subnets,
+                event_bus=event_bus,
             )
 
             receive_server = BCCReceiveServer(
@@ -185,6 +186,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 peer_pool=libp2p_node.handshaked_peers,
                 block_importer=SyncBlockImporter(chain),
                 genesis_config=chain_config.genesis_config,
+                event_bus=event_bus,
                 token=libp2p_node.cancel_token,
             )
             http_server = HTTPServer(
