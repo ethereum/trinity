@@ -230,7 +230,7 @@ class TransportAPI(ABC):
         ...
 
     @abstractmethod
-    def close(self) -> None:
+    async def close(self) -> None:
         ...
 
 
@@ -311,7 +311,7 @@ class MultiplexerAPI(ABC):
         ...
 
     @abstractmethod
-    def close(self) -> None:
+    async def close(self) -> None:
         ...
 
     #

@@ -1,0 +1,1 @@
+The ``p2p.abc.TransportAPI.close`` and ``p2p.abc.MultiplexerAPI.close`` methods are now coroutines to allow ``p2p.abc.TransportAPI.close()`` to drain the underlying ``StreamWriter`` before closing it, ensuring that any pending messages are written over the socket before closing it.
