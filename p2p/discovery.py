@@ -79,7 +79,7 @@ from p2p.events import (
     BaseRequestResponseEvent,
     PeerCandidatesResponse,
 )
-from p2p.exceptions import AlreadyWaitingDiscoveryResponse, NoEligibleNodes
+from p2p.exceptions import AlreadyWaitingDiscoveryResponse, CouldNotRetrieveENR, NoEligibleNodes
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
 from p2p import trio_utils
 
@@ -265,6 +265,9 @@ class DiscoveryService(Service):
                     enr = await recv_chan.receive()
         finally:
             self.enr_incoming_channels.pop(token, None)
+
+        if enr is None:
+            raise CouldNotRetrieveENR("Failed to get ENR from %s", remote)
         return enr
 
     async def get_local_enr(self) -> ENR:
@@ -292,11 +295,11 @@ class DiscoveryService(Service):
         return enr.sequence_number
 
     async def get_enr(self, remote: NodeAPI) -> Optional[ENR]:
-        """Get the most recent ENR for the given node and update our local DB if necessary."""
+        """Get the most recent ENR for the given node and update our local DB if necessary.
+
+        Raises CouldNotRetrieveENR if we can't get a ENR from the remote node.
+        """
         enr = await self.request_enr(remote)
-        if enr is None:
-            self.logger.debug("Failed to get ENR for %s", remote)
-            return None
         async with self._enr_db_lock:
             await self._enr_db.insert_or_update(enr)
             return await self._enr_db.get(cast(NodeID, remote.id_bytes))
