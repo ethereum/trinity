@@ -71,4 +71,4 @@ class ManuallyDrivenDiscoveryService(DiscoveryService):
 
     async def run(self) -> None:
         self.ready_to_drive.set()
-        await self.manager.wait_cancelled()
+        await self.manager.wait_finished()
