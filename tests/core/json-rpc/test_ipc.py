@@ -35,12 +35,9 @@ from trinity.sync.common.events import (
 from trinity.sync.common.types import (
     SyncProgress
 )
+from trinity.tools.event_bus import mock_request_response
 
 from trinity._utils.version import construct_trinity_client_identifier
-
-from tests.core.integration_test_helpers import (
-    mock_request_response,
-)
 
 
 def wait_for(path):
@@ -247,12 +244,12 @@ async def test_network_id_ipc_request(
         event_bus,
         ipc_server):
 
-    asyncio.ensure_future(
-        mock_request_response(NetworkIdRequest, NetworkIdResponse(1337))(event_bus))
-    request_msg = build_request('net_version')
-    expected = {'result': '1337', 'id': 3, 'jsonrpc': '2.0'}
-    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
-    assert result == expected
+    do_mock = mock_request_response(NetworkIdRequest, NetworkIdResponse(1337), event_bus)
+    async with do_mock:
+        request_msg = build_request('net_version')
+        expected = {'result': '1337', 'id': 3, 'jsonrpc': '2.0'}
+        result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
+        assert result == expected
 
 
 @pytest.mark.asyncio
@@ -461,16 +458,16 @@ async def test_eth_call_with_contract_on_ipc(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'request_msg, event_bus_setup_fn, expected',
+    'request_msg, event_bus_response, expected',
     (
         (
             build_request('net_peerCount'),
-            mock_request_response(PeerCountRequest, PeerCountResponse(1)),
+            PeerCountResponse(1),
             {'result': '0x1', 'id': 3, 'jsonrpc': '2.0'},
         ),
         (
             build_request('net_peerCount'),
-            mock_request_response(PeerCountRequest, PeerCountResponse(0)),
+            PeerCountResponse(0),
             {'result': '0x0', 'id': 3, 'jsonrpc': '2.0'},
         ),
     ),
@@ -481,35 +478,35 @@ async def test_eth_call_with_contract_on_ipc(
 async def test_peer_pool_over_ipc(
         jsonrpc_ipc_pipe_path,
         request_msg,
-        event_bus_setup_fn,
+        event_bus_response,
         event_bus,
         expected,
         event_loop,
         ipc_server):
 
-    asyncio.ensure_future(event_bus_setup_fn(event_bus))
-
-    result = await get_ipc_response(
-        jsonrpc_ipc_pipe_path,
-        request_msg,
-        event_loop,
-        event_bus,
-    )
-    assert result == expected
+    do_mock = mock_request_response(PeerCountRequest, event_bus_response, event_bus)
+    async with do_mock:
+        result = await get_ipc_response(
+            jsonrpc_ipc_pipe_path,
+            request_msg,
+            event_loop,
+            event_bus,
+        )
+        assert result == expected
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    'request_msg, event_bus_setup_fn, expected',
+    'request_msg, event_bus_response, expected',
     (
         (
             build_request('eth_syncing'),
-            mock_request_response(SyncingRequest, SyncingResponse(False, None)),
+            SyncingResponse(False, None),
             {'result': False, 'id': 3, 'jsonrpc': '2.0'},
         ),
         (
             build_request('eth_syncing'),
-            mock_request_response(SyncingRequest, SyncingResponse(True, SyncProgress(0, 1, 2))),
+            SyncingResponse(True, SyncProgress(0, 1, 2)),
             {'result': {'startingBlock': 0, 'currentBlock': 1, 'highestBlock': 2}, 'id': 3,
              'jsonrpc': '2.0'},
         ),
@@ -521,21 +518,20 @@ async def test_peer_pool_over_ipc(
 async def test_eth_over_ipc(
         jsonrpc_ipc_pipe_path,
         request_msg,
-        event_bus_setup_fn,
+        event_bus_response,
         event_bus,
         expected,
         event_loop,
         ipc_server):
-
-    asyncio.ensure_future(event_bus_setup_fn(event_bus))
-
-    result = await get_ipc_response(
-        jsonrpc_ipc_pipe_path,
-        request_msg,
-        event_loop,
-        event_bus,
-    )
-    assert result == expected
+    do_mock = mock_request_response(SyncingRequest, event_bus_response, event_bus)
+    async with do_mock:
+        result = await get_ipc_response(
+            jsonrpc_ipc_pipe_path,
+            request_msg,
+            event_loop,
+            event_bus,
+        )
+        assert result == expected
 
 
 GOOD_KEY = (
