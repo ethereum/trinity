@@ -60,3 +60,7 @@ class UnhandshakedPeer(BaseLibp2pError):
 
 class InvalidGossipMessage(BaseLibp2pError):
     ...
+
+
+class NodeStartError(BaseLibp2pError):
+    ...

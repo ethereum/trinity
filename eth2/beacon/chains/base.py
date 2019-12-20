@@ -15,6 +15,7 @@ from eth2.beacon.fork_choice.constant import ConstantScoring
 from eth2.beacon.fork_choice.scoring import BaseScore
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     FromBlockParams,
@@ -114,6 +115,18 @@ class BaseBeaconChain(Configurable, ABC):
     def get_state_by_slot(self, slot: Slot) -> BeaconState:
         ...
 
+    @abstractmethod
+    def get_head_state_slot(self) -> Slot:
+        ...
+
+    @abstractmethod
+    def get_head_state(self) -> BeaconState:
+        ...
+
+    @abstractmethod
+    def get_canonical_epoch_info(self) -> EpochInfo:
+        ...
+
     #
     # Block API
     #
@@ -149,10 +162,6 @@ class BaseBeaconChain(Configurable, ABC):
 
     @abstractmethod
     def get_canonical_block_root(self, slot: Slot) -> SigningRoot:
-        ...
-
-    @abstractmethod
-    def get_head_state(self) -> BeaconState:
         ...
 
     @abstractmethod
@@ -320,6 +329,16 @@ class BeaconChain(BaseBeaconChain):
         state_root = self.chaindb.get_state_root_by_slot(slot)
         return self.chaindb.get_state_by_root(state_root, state_class)
 
+    def get_head_state_slot(self) -> Slot:
+        return self.chaindb.get_head_state_slot()
+
+    def get_head_state(self) -> BeaconState:
+        head_state_slot = self.chaindb.get_head_state_slot()
+        return self.get_state_by_slot(head_state_slot)
+
+    def get_canonical_epoch_info(self) -> EpochInfo:
+        return self.chaindb.get_canonical_epoch_info()
+
     #
     # Block API
     #
@@ -397,10 +416,6 @@ class BeaconChain(BaseBeaconChain):
         canonical chain.
         """
         return self.chaindb.get_canonical_block_root(slot)
-
-    def get_head_state(self) -> BeaconState:
-        head_state_slot = self.chaindb.get_head_state_slot()
-        return self.get_state_by_slot(head_state_slot)
 
     def import_block(
         self, block: BaseBeaconBlock, perform_validation: bool = True

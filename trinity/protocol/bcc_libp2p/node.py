@@ -114,14 +114,15 @@ from .configs import (
 from .exceptions import (
     DialPeerError,
     HandshakeFailure,
-    ReadMessageFailure,
-    RequestFailure,
-    WriteMessageFailure,
-    PeerRespondedAnError,
     IrrelevantNetwork,
-    UnhandshakedPeer,
     InvalidRequest,
     MessageIOFailure,
+    NodeStartError,
+    PeerRespondedAnError,
+    ReadMessageFailure,
+    RequestFailure,
+    UnhandshakedPeer,
+    WriteMessageFailure,
 )
 from .messages import (
     Goodbye,
@@ -335,7 +336,7 @@ class Node(BaseService):
         is_listening = await self.host.get_network().listen(self.listen_maddr)
         if not is_listening:
             self.logger.error("Fail to listen on maddr: %s", self.listen_maddr)
-            raise
+            raise NodeStartError(f"Fail to listen on maddr: {self.listen_maddr}")
         self.logger.warning("Node listening: %s", self.listen_maddr_with_peer_id)
         await self.connect_preferred_nodes()
         # TODO: Connect bootstrap nodes?

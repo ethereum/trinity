@@ -129,7 +129,7 @@ class BeaconChainSyncer(BaseService):
                     return
             else:
                 if batch[0].parent_root != last_block.signing_root:
-                    self.logger.info(f"Received batch is not linked to previous one")
+                    self.logger.info("Received batch is not linked to previous one")
                     break
             last_block = batch[-1]
 

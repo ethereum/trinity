@@ -50,6 +50,7 @@ deps = {
         "ruamel.yaml==0.15.98",
         "argcomplete>=1.10.0,<2",
         "multiaddr>=0.0.8,<0.1.0",
+        "prometheus-client==0.7.1",
         "pymultihash>=0.8.2",
         "libp2p==0.1.4",
     ],

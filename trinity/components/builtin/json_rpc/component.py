@@ -40,7 +40,8 @@ from trinity.rpc.modules import (
 from trinity.rpc.ipc import (
     IPCServer,
 )
-from trinity.rpc.http import (
+from trinity.http.handlers.rpc_handler import RPCHandler
+from trinity.http.main import (
     HTTPServer,
 )
 
@@ -140,7 +141,10 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
 
             # Run HTTP Server
             if boot_info.args.enable_http:
-                http_server = HTTPServer(rpc, port=boot_info.args.rpcport)
+                http_server = HTTPServer(
+                    handler=RPCHandler.handle(rpc.execute),
+                    port=boot_info.args.rpcport,
+                )
                 services_to_exit += (http_server,)
 
             async with AsyncExitStack() as stack:
