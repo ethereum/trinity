@@ -527,6 +527,77 @@ def _create_mock_signed_attestation(
     )
 
 
+def create_atteatsion_data(
+    state: BeaconState,
+    config: Eth2Config,
+    state_machine: BaseBeaconStateMachine,
+    attestation_slot: Slot,
+    beacon_block_root: SigningRoot,
+    committee_index: CommitteeIndex,
+) -> AttestationData:
+    target_epoch = compute_epoch_at_slot(attestation_slot, config.SLOTS_PER_EPOCH)
+
+    target_root = _get_target_root(state, config, beacon_block_root)
+
+    return AttestationData.create(
+        slot=attestation_slot,
+        index=committee_index,
+        beacon_block_root=beacon_block_root,
+        source=Checkpoint.create(
+            epoch=state.current_justified_checkpoint.epoch,
+            root=state.current_justified_checkpoint.root,
+        ),
+        target=Checkpoint.create(root=target_root, epoch=target_epoch),
+    )
+
+
+@to_tuple
+def create_signed_attestations_at_slot(
+    state: BeaconState,
+    config: Eth2Config,
+    state_machine: BaseBeaconStateMachine,
+    attestation_slot: Slot,
+    beacon_block_root: SigningRoot,
+    validator_privkeys: Dict[ValidatorIndex, int],
+    committee: Tuple[ValidatorIndex, ...],
+    committee_index: CommitteeIndex,
+    attesting_indices: Sequence[CommitteeValidatorIndex],
+) -> Iterable[Attestation]:
+    """
+    Create the attestations of the given ``attestation_slot`` slot with ``validator_privkeys``.
+    """
+    state_transition = state_machine.state_transition
+    state = state_transition.apply_state_transition(state, future_slot=attestation_slot)
+
+    attestation_data = create_atteatsion_data(
+        state,
+        config,
+        state_machine,
+        attestation_slot,
+        beacon_block_root,
+        committee_index,
+    )
+
+    validator_indices = tuple(validator_privkeys)
+    for index, committee_validator_index in enumerate(attesting_indices):
+        validator_index = validator_indices[index]
+        yield _create_mock_signed_attestation(
+            state,
+            attestation_data,
+            attestation_slot,
+            committee,
+            len(committee),
+            {
+                state.validators[validator_index].pubkey: validator_privkeys[
+                    validator_index
+                ]
+            },
+            config.SLOTS_PER_EPOCH,
+            is_for_simulation=False,
+            attesting_indices=(committee_validator_index,),
+        )
+
+
 def create_signed_attestation_at_slot(
     state: BeaconState,
     config: Eth2Config,
@@ -539,24 +610,19 @@ def create_signed_attestation_at_slot(
     attesting_indices: Sequence[CommitteeValidatorIndex],
 ) -> Attestation:
     """
-    Create the attestations of the given ``attestation_slot`` slot with ``validator_privkeys``.
+    Create the aggregated attestation of the given ``attestation_slot`` slot
+    of the given committee.
     """
     state_transition = state_machine.state_transition
     state = state_transition.apply_state_transition(state, future_slot=attestation_slot)
 
-    target_epoch = compute_epoch_at_slot(attestation_slot, config.SLOTS_PER_EPOCH)
-
-    target_root = _get_target_root(state, config, beacon_block_root)
-
-    attestation_data = AttestationData.create(
-        slot=attestation_slot,
-        index=committee_index,
-        beacon_block_root=beacon_block_root,
-        source=Checkpoint.create(
-            epoch=state.current_justified_checkpoint.epoch,
-            root=state.current_justified_checkpoint.root,
-        ),
-        target=Checkpoint.create(root=target_root, epoch=target_epoch),
+    attestation_data = create_atteatsion_data(
+        state,
+        config,
+        state_machine,
+        attestation_slot,
+        beacon_block_root,
+        committee_index,
     )
 
     return _create_mock_signed_attestation(

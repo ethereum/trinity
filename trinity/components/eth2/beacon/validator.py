@@ -49,7 +49,7 @@ from eth2.beacon.tools.builder.committee_assignment import (
     get_committee_assignment,
 )
 from eth2.beacon.tools.builder.validator import (
-    create_signed_attestation_at_slot,
+    create_signed_attestations_at_slot,
 )
 from eth2.beacon.types.aggregate_and_proof import (
     AggregateAndProof,
@@ -416,7 +416,7 @@ class Validator(BaseService):
                 index: self.validator_privkeys[index]
                 for index in attesting_validators_indices
             }
-            attestation = create_signed_attestation_at_slot(
+            attestations = create_signed_attestations_at_slot(
                 state,
                 state_machine.config,
                 state_machine,
@@ -434,15 +434,16 @@ class Validator(BaseService):
                 bold_green("validators %s attesting to block %s with attestation %s"),
                 attesting_validators_indices,
                 head,
-                attestation,
+                attestations,
             )
 
             # await self.p2p_node.broadcast_attestation(attestation)
             subnet_id = SubnetId(committee_index % ATTESTATION_SUBNET_COUNT)
 
             # Import attestation to pool and then broadcast it
-            self.import_attestation(attestation, False)
-            await self.p2p_node.broadcast_attestation_to_subnet(attestation, subnet_id)
+            for attestation in attestations:
+                self.import_attestation(attestation, False)
+                await self.p2p_node.broadcast_attestation_to_subnet(attestation, subnet_id)
 
             # Log the last epoch that the validator attested
             for index in attesting_validators_indices:
