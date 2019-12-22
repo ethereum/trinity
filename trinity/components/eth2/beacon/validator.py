@@ -248,6 +248,90 @@ class Validator(BaseService):
     #
     # Proposing block
     #
+    async def _request_eth1_data(
+        self, eth1_voting_period_start_timestamp: Timestamp, start: int, end: int
+    ) -> Tuple[Eth1Data, ...]:
+        eth1_data: Tuple[Eth1Data, ...] = ()
+        for distance in range(start, end):
+            resp: GetEth1DataResponse = await self.event_bus.request(
+                GetEth1DataRequest(
+                    distance=distance,
+                    eth1_voting_period_start_timestamp=eth1_voting_period_start_timestamp,
+                )
+            )
+            if resp.error is None:
+                eth1_data = eth1_data + (resp.to_data(),)
+
+    async def _get_eth1_vote(
+        self, slot: Slot, state: BeaconState, state_machine: BaseBeaconStateMachine
+    ) -> Eth1Data:
+        slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
+        seconds_per_slot = state_machine.config.SECONDS_PER_SLOT
+        eth1_follow_distance = ETH1_FOLLOW_DISTANCE
+        eth1_voting_period_start_timestamp = (
+            self.genesis_time
+            + (slot - slot % slots_per_eth1_voting_period) * seconds_per_slot
+        )
+
+        new_eth1_data = self._request_eth1_data(
+            eth1_voting_period_start_timestamp,
+            eth1_follow_distance,
+            2 * eth1_follow_distance,
+        )
+        # Default is the `Eth1Data` at `ETH1_FOLLOW_DISTANCE`
+        default_eth1_data = new_eth1_data[0]
+
+        # Compute `previous_eth1_distance` which is the distance between current block and
+        # `state.eth1_data`.
+        resp: GetDistanceResponse = await self.event_bus.request(
+            GetDistanceRequest(
+                block_hash=self.starting_eth1_block_hash,
+                eth1_voting_period_start_timestamp=eth1_voting_period_start_timestamp,
+            )
+        )
+        if resp.error is not None:
+            return default_eth1_data
+
+        previous_eth1_distance = resp.distance
+
+        # Request all eth1 data within `previous_eth1_distance`
+        all_eth1_data: Tuple[Eth1Data, ...] = ()
+        # Copy overlapped eth1 data from `new_eth1_data`
+        if 2 * eth1_follow_distance >= previous_eth1_distance:
+            all_eth1_data = new_eth1_data[
+                : (previous_eth1_distance - eth1_follow_distance)
+            ]
+        else:
+            all_eth1_data = new_eth1_data[:]
+            all_eth1_data = all_eth1_data + self._request_eth1_data(
+                eth1_voting_period_start_timestamp,
+                2 * eth1_follow_distance,
+                previous_eth1_distance,
+            )
+
+        # Filter out invalid votes
+        voting_period_int_sqroot = integer_squareroot(slots_per_eth1_voting_period)
+        period_tail = slot % slots_per_eth1_voting_period >= voting_period_int_sqroot
+        if period_tail:
+            votes_to_consider = all_eth1_data
+        else:
+            votes_to_consider = new_eth1_data
+
+        valid_votes: Tuple[Eth1Data, ...] = (
+            vote for vote in state.eth1_data_votes if vote in votes_to_consider
+        )
+
+        # Vote with most count wins. Otherwise vote for defaute eth1 data.
+        win_vote = max(
+            valid_votes,
+            key=lambda v: (
+                valid_votes.count(v),
+                -all_eth1_data.index(v),
+            ),  # Tiebreak by smallest distance
+            default=default_eth1_data,
+        )
+        return win_vote
+
     async def propose_block(
         self,
         proposer_index: ValidatorIndex,
@@ -259,6 +343,7 @@ class Validator(BaseService):
         """
         Propose a block and broadcast it.
         """
+        eth1_vote = await self._get_eth1_vote(slot, state, state_machine)
         # TODO(hwwhww): Check if need to aggregate and if they are overlapping.
         aggregated_attestations = self.get_ready_attestations(slot, True)
         unaggregated_attestations = self.get_ready_attestations(slot, False)
@@ -274,6 +359,7 @@ class Validator(BaseService):
             validator_index=proposer_index,
             privkey=self.validator_privkeys[proposer_index],
             attestations=ready_attestations,
+            eth1_data=eth1_vote,
             check_proposer_index=False,
         )
         self.logger.debug(
