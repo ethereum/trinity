@@ -1,7 +1,4 @@
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, _SubParsersAction
 import json
 from pathlib import Path
 import time
@@ -23,27 +20,25 @@ from eth2.beacon.typing import Timestamp
 from trinity.boot_info import BootInfo
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import FakeEth1DataProvider
+from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
 from trinity.events import ShutdownRequest
-from trinity.extensibility import (
-    TrioIsolatedComponent,
-)
+from trinity.extensibility import TrioIsolatedComponent
 
 from .eth1_monitor import Eth1Monitor
-
+from .eth1_data_provider import AVERAGE_BLOCK_TIME
 
 # Fake eth1 monitor config
 # TODO: These configs should be read from a config file, e.g., `eth1_monitor_config.yaml`.
 DEPOSIT_CONTRACT_ABI = json.loads(deposit_contract_json)["abi"]
 DEPOSIT_CONTRACT_ADDRESS = b"\x12" * 20
-NUM_BLOCKS_CONFIRMED = 100
-POLLING_PERIOD = 10
+NUM_BLOCKS_CONFIRMED = 2
+POLLING_PERIOD = AVERAGE_BLOCK_TIME // 2
 START_BLOCK_NUMBER = BlockNumber(1000)
 
 # Configs for fake Eth1DataProvider
 NUM_DEPOSITS_PER_BLOCK = 0
-START_BLOCK_TIMESTAMP = Timestamp(int(time.time()) - 2100)  # Around 45 mins ago
 
 
 class Eth1MonitorComponent(TrioIsolatedComponent):
@@ -56,9 +51,9 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         return self._boot_info.trinity_config.has_app_config(BeaconAppConfig)
 
     @classmethod
-    def configure_parser(cls,
-                         arg_parser: ArgumentParser,
-                         subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        cls, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         # TODO: For now we use fake eth1 monitor.
         pass
         # arg_parser.add_argument(
@@ -81,17 +76,13 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
 
         # TODO: For now we use fake eth1 monitor. So we load validators data from
         # interop setting and hardcode the deposit data into fake eth1 data provider.
-        chain = chain_config.beacon_chain_class(
-            base_db,
-            chain_config.genesis_config,
-        )
+        chain = chain_config.beacon_chain_class(base_db, chain_config.genesis_config)
         config = chain.get_state_machine().config
         key_set = load_yaml_at(
-            Path('eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml')
+            Path("eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml")
         )
         pubkeys, privkeys, withdrawal_credentials = create_keypair_and_mock_withdraw_credentials(
-            config,
-            key_set,  # type: ignore
+            config, key_set  # type: ignore
         )
         initial_deposits = (
             create_mock_deposit_data(
@@ -101,13 +92,19 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
                 withdrawal_credentials=withdrawal_credential,
             )
             for pubkey, privkey, withdrawal_credential in zip(
-                pubkeys, privkeys, withdrawal_credentials)
+                pubkeys, privkeys, withdrawal_credentials
+            )
         )
 
+        # Set the timestamp of start block earlier enough so that eth1 monitor
+        # can query up to 2 * `ETH1_FOLLOW_DISTANCE` of blocks in the beginning.
+        start_block_timestamp = (
+            chain_config.genesis_data.genesis_time - 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
+        )
         with base_db:
             fake_eth1_data_provider = FakeEth1DataProvider(
                 start_block_number=START_BLOCK_NUMBER,
-                start_block_timestamp=START_BLOCK_TIMESTAMP,
+                start_block_timestamp=start_block_timestamp,
                 num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
                 initial_deposits=tuple(initial_deposits),
             )
@@ -116,7 +113,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
                 eth1_data_provider=fake_eth1_data_provider,
                 num_blocks_confirmed=NUM_BLOCKS_CONFIRMED,
                 polling_period=POLLING_PERIOD,
-                start_block_number=START_BLOCK_NUMBER,
+                start_block_number=START_BLOCK_NUMBER - 1,
                 event_bus=event_bus,
                 base_db=base_db,
             )
@@ -124,5 +121,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
             try:
                 await TrioManager.run_service(eth1_monitor_service)
             except Exception:
-                await event_bus.broadcast(ShutdownRequest("Eth1 Monitor ended unexpectedly"))
+                await event_bus.broadcast(
+                    ShutdownRequest("Eth1 Monitor ended unexpectedly")
+                )
                 raise
