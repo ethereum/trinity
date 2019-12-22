@@ -1,97 +1,69 @@
-from itertools import (
-    groupby,
-)
-from typing import (
-    Callable,
-    Dict,
-    Iterable,
-    Set,
-    Tuple,
-)
+from itertools import groupby
+from typing import Callable, Dict, Iterable, Set, Tuple
 
 from lahja import EndpointAPI
 
-from cancel_token import (
-    CancelToken,
-)
-from eth_typing import BLSSignature
-from eth_utils import (
-    humanize_hash,
-    to_tuple,
-    ValidationError,
-)
+from cancel_token import CancelToken
+from eth_typing import BLSSignature, Hash32
+from eth_utils import humanize_hash, to_tuple, ValidationError
 
-from eth2.beacon.chains.base import (
-    BaseBeaconChain,
-)
-from eth2.beacon.helpers import (
-    compute_epoch_at_slot,
-)
-from eth2.beacon.state_machines.base import (
-    BaseBeaconStateMachine,
-)
-from eth2.beacon.state_machines.forks.serenity.blocks import (
-    SerenityBeaconBlock,
-)
+from eth2._utils.numeric import integer_squareroot
+from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.helpers import compute_epoch_at_slot
+from eth2.beacon.state_machines.base import BaseBeaconStateMachine
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.tools.builder.aggregator import (
     get_aggregate_from_valid_committee_attestations,
     get_slot_signature,
     is_aggregator,
 )
-from eth2.beacon.tools.builder.committee_assignment import (
-    CommitteeAssignment,
-)
+from eth2.beacon.tools.builder.committee_assignment import CommitteeAssignment
 from eth2.beacon.tools.builder.proposer import (
     create_block_on_state,
     get_beacon_proposer_index,
 )
-from eth2.beacon.tools.builder.committee_assignment import (
-    get_committee_assignment,
-)
-from eth2.beacon.tools.builder.validator import (
-    create_signed_attestations_at_slot,
-)
-from eth2.beacon.types.aggregate_and_proof import (
-    AggregateAndProof,
-)
-from eth2.beacon.types.attestations import (
-    Attestation,
-)
-from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
-)
-from eth2.beacon.types.states import (
-    BeaconState,
-)
+from eth2.beacon.tools.builder.committee_assignment import get_committee_assignment
+from eth2.beacon.tools.builder.validator import create_signed_attestation_at_slot
+from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
+from eth2.beacon.types.attestations import Attestation
+from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.deposits import Deposit
+from eth2.beacon.types.eth1_data import Eth1Data
+from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     CommitteeIndex,
     CommitteeValidatorIndex,
     Epoch,
     Slot,
     SubnetId,
+    Timestamp,
     ValidatorIndex,
 )
 from eth2.configs import CommitteeConfig
-from p2p.service import (
-    BaseService,
-)
-from trinity._utils.shellart import (
-    bold_green,
-)
-from trinity.components.eth2.beacon.slot_ticker import (
-    SlotTickEvent,
+from p2p.service import BaseService
+from trinity._utils.shellart import bold_green
+from trinity.components.eth2.eth1_monitor.events import (
+    GetDistanceRequest,
+    GetDistanceResponse,
+    GetDepositRequest,
+    GetDepositResponse,
+    GetEth1DataRequest,
+    GetEth1DataResponse,
 )
 from trinity.components.eth2.metrics.events import (
     Libp2pPeersRequest,
     Libp2pPeersResponse,
 )
+from trinity.components.eth2.beacon.slot_ticker import SlotTickEvent
 from trinity.components.eth2.metrics.registry import metrics
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 
 
 GetReadyAttestationsFn = Callable[[Slot, bool], Tuple[Attestation, ...]]
-GetAggregatableAttestationsFn = Callable[[Slot, CommitteeIndex], Tuple[Attestation, ...]]
+GetAggregatableAttestationsFn = Callable[
+    [Slot, CommitteeIndex], Tuple[Attestation, ...]
+]
 ImportAttestationFn = Callable[[Attestation, bool], None]
 
 
@@ -100,6 +72,7 @@ ETH1_FOLLOW_DISTANCE = 16
 
 
 class Validator(BaseService):
+    genesis_time: int
     chain: BaseBeaconChain
     p2p_node: Node
     validator_privkeys: Dict[ValidatorIndex, int]
@@ -107,19 +80,26 @@ class Validator(BaseService):
     slots_per_epoch: int
     latest_proposed_epoch: Dict[ValidatorIndex, Epoch]
     latest_attested_epoch: Dict[ValidatorIndex, Epoch]
-    local_validator_epoch_assignment: Dict[ValidatorIndex, Tuple[Epoch, CommitteeAssignment]]
+    local_validator_epoch_assignment: Dict[
+        ValidatorIndex, Tuple[Epoch, CommitteeAssignment]
+    ]
+
+    starting_eth1_block_hash: Hash32
 
     def __init__(
-            self,
-            chain: BaseBeaconChain,
-            p2p_node: Node,
-            validator_privkeys: Dict[ValidatorIndex, int],
-            event_bus: EndpointAPI,
-            get_ready_attestations_fn: GetReadyAttestationsFn,
-            get_aggregatable_attestations_fn: GetAggregatableAttestationsFn,
-            import_attestation_fn: ImportAttestationFn,
-            token: CancelToken = None) -> None:
+        self,
+        genesis_time: int,
+        chain: BaseBeaconChain,
+        p2p_node: Node,
+        validator_privkeys: Dict[ValidatorIndex, int],
+        event_bus: EndpointAPI,
+        get_ready_attestations_fn: GetReadyAttestationsFn,
+        get_aggregatable_attestations_fn: GetAggregatableAttestationsFn,
+        import_attestation_fn: ImportAttestationFn,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
+        self.genesis_time = genesis_time
         self.chain = chain
         self.p2p_node = p2p_node
         self.validator_privkeys = validator_privkeys
@@ -142,10 +122,14 @@ class Validator(BaseService):
         self.get_aggregatable_attestations: GetAggregatableAttestationsFn = get_aggregatable_attestations_fn  # noqa: E501
         self.import_attestation: ImportAttestationFn = import_attestation_fn
 
+        # `state.eth1_data` can be updated in the middle of voting period and thus
+        # the starting `eth1_data.block_hash` must be stored separately.
+        self.starting_eth1_block_hash = chain.get_head_state().eth1_data.block_hash
+
     async def _run(self) -> None:
         self.logger.info(
             bold_green("validating with indices %s"),
-            sorted(tuple(self.validator_privkeys.keys()))
+            sorted(tuple(self.validator_privkeys.keys())),
         )
         self.run_daemon_task(self.handle_slot_tick())
 
@@ -154,12 +138,24 @@ class Validator(BaseService):
 
         await self.cancellation()
 
+    def _check_and_update_data_per_slot(self, slot: Slot) -> None:
+        state_machine = self.chain.get_state_machine()
+        state = self.chain.get_head_state()
+        slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
+        # Update eth1 block_hash in the beginning of each voting period
+        if (
+            slot % slots_per_eth1_voting_period == 0
+            and self.starting_eth1_block_hash != state.eth1_data.block_hash
+        ):
+            self.starting_eth1_block_hash = state.eth1_data.block_hash
+
     async def handle_slot_tick(self) -> None:
         """
         The callback for `SlotTicker` and it's expected to be called twice for one slot.
         """
         async for event in self.event_bus.stream(SlotTickEvent):
             try:
+                self._check_and_update_data_per_slot(event.slot)
                 if event.tick_type.is_start:
                     await self.handle_first_tick(event.slot)
                 elif event.tick_type.is_one_third:
@@ -212,12 +208,10 @@ class Validator(BaseService):
         # epoch transition into the epoch to successfully check the proposal assignment of the
         # first slot.
         temp_state = state_machine.state_transition.apply_state_transition(
-            state,
-            future_slot=slot,
+            state, future_slot=slot
         )
         proposer_index = get_beacon_proposer_index(
-            temp_state,
-            CommitteeConfig(state_machine.config),
+            temp_state, CommitteeConfig(state_machine.config)
         )
 
         # `latest_proposed_epoch` is used to prevent validator from erraneously proposing twice
@@ -239,11 +233,7 @@ class Validator(BaseService):
         state_machine = self.chain.get_state_machine()
         state = self.chain.get_head_state()
         if state.slot < slot:
-            self.skip_block(
-                slot=slot,
-                state=state,
-                state_machine=state_machine,
-            )
+            self.skip_block(slot=slot, state=state, state_machine=state_machine)
 
         await self.attest(slot)
 
@@ -251,23 +241,21 @@ class Validator(BaseService):
         state_machine = self.chain.get_state_machine()
         state = self.chain.get_head_state()
         if state.slot < slot:
-            self.skip_block(
-                slot=slot,
-                state=state,
-                state_machine=state_machine,
-            )
+            self.skip_block(slot=slot, state=state, state_machine=state_machine)
 
         await self.aggregate(slot)
 
     #
     # Proposing block
     #
-    async def propose_block(self,
-                            proposer_index: ValidatorIndex,
-                            slot: Slot,
-                            state: BeaconState,
-                            state_machine: BaseBeaconStateMachine,
-                            head_block: BaseBeaconBlock) -> BaseBeaconBlock:
+    async def propose_block(
+        self,
+        proposer_index: ValidatorIndex,
+        slot: Slot,
+        state: BeaconState,
+        state_machine: BaseBeaconStateMachine,
+        head_block: BaseBeaconBlock,
+    ) -> BaseBeaconBlock:
         """
         Propose a block and broadcast it.
         """
@@ -300,21 +288,17 @@ class Validator(BaseService):
         metrics.validator_proposed_blocks.inc()
         return block
 
-    def skip_block(self,
-                   slot: Slot,
-                   state: BeaconState,
-                   state_machine: BaseBeaconStateMachine) -> BeaconState:
+    def skip_block(
+        self, slot: Slot, state: BeaconState, state_machine: BaseBeaconStateMachine
+    ) -> BeaconState:
         """
         Forward state to the target ``slot`` and persist the state.
         """
         post_state = state_machine.state_transition.apply_state_transition(
-            state,
-            future_slot=slot,
+            state, future_slot=slot
         )
         self.logger.debug(
-            bold_green("Skip block at slot=%s  post_state=%s"),
-            slot,
-            repr(post_state),
+            bold_green("Skip block at slot=%s  post_state=%s"), slot, repr(post_state)
         )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
@@ -325,21 +309,19 @@ class Validator(BaseService):
     # Attesting attestation
     #
     def _get_local_current_epoch_assignment(
-            self,
-            validator_index: ValidatorIndex,
-            epoch: Epoch) -> CommitteeAssignment:
+        self, validator_index: ValidatorIndex, epoch: Epoch
+    ) -> CommitteeAssignment:
         """
         Return the validator's epoch assignment at the given epoch.
 
         Note that ``epoch`` <= next_epoch.
         """
-        is_new_local_validator = validator_index not in self.local_validator_epoch_assignment
-        should_update = (
-            is_new_local_validator or (
-                not is_new_local_validator and (
-                    epoch > self.local_validator_epoch_assignment[validator_index][0]
-                )
-            )
+        is_new_local_validator = (
+            validator_index not in self.local_validator_epoch_assignment
+        )
+        should_update = is_new_local_validator or (
+            not is_new_local_validator
+            and (epoch > self.local_validator_epoch_assignment[validator_index][0])
         )
         if should_update:
             state_machine = self.chain.get_state_machine()
@@ -347,11 +329,8 @@ class Validator(BaseService):
             self.local_validator_epoch_assignment[validator_index] = (
                 epoch,
                 get_committee_assignment(
-                    state,
-                    state_machine.config,
-                    epoch,
-                    validator_index,
-                )
+                    state, state_machine.config, epoch, validator_index
+                ),
             )
         return self.local_validator_epoch_assignment[validator_index][1]
 
@@ -363,14 +342,15 @@ class Validator(BaseService):
         """
         validator_assignments = {
             validator_index: self._get_local_current_epoch_assignment(
-                validator_index,
-                epoch,
+                validator_index, epoch
             )
             for validator_index in self.validator_privkeys
         }
         return validator_assignments
 
-    def _get_attesting_assignments_at_slot(self, slot: Slot) -> Set[CommitteeAssignment]:
+    def _get_attesting_assignments_at_slot(
+        self, slot: Slot
+    ) -> Set[CommitteeAssignment]:
         """
         Return the set of ``CommitteeAssignment``s of the given ``slot``
         """
@@ -380,7 +360,7 @@ class Validator(BaseService):
         committee_assignments_at_slot = set(
             filter(
                 lambda committee_assignment: committee_assignment.slot == slot,
-                committee_assignments
+                committee_assignments,
             )
         )
         return committee_assignments_at_slot
@@ -392,10 +372,13 @@ class Validator(BaseService):
         """
         Return the local attesters that in the committee of the given assignment
         """
-        for validator_index, (_, assignment) in self.local_validator_epoch_assignment.items():
+        for (
+            validator_index,
+            (_, assignment),
+        ) in self.local_validator_epoch_assignment.items():
             if (
-                assignment.slot == target_assignment.slot and
-                assignment.committee_index == target_assignment.committee_index
+                assignment.slot == target_assignment.slot
+                and assignment.committee_index == target_assignment.committee_index
             ):
                 yield validator_index
 
@@ -409,7 +392,9 @@ class Validator(BaseService):
         state = self.chain.get_head_state()
         epoch = compute_epoch_at_slot(slot, self.slots_per_epoch)
 
-        attesting_committee_assignments_at_slot = self._get_attesting_assignments_at_slot(slot)
+        attesting_committee_assignments_at_slot = self._get_attesting_assignments_at_slot(
+            slot
+        )
 
         for committee_assignment in attesting_committee_assignments_at_slot:
             committee_index = committee_assignment.committee_index
@@ -477,18 +462,16 @@ class Validator(BaseService):
         Return the aggregate attestation of the given committee.
         """
         # TODO: The aggregator should aggregate the late attestations?
-        aggregatable_attestations = self.get_aggregatable_attestations(slot, committee_index)
+        aggregatable_attestations = self.get_aggregatable_attestations(
+            slot, committee_index
+        )
         attestation_groups = groupby(
-            aggregatable_attestations,
-            key=lambda attestation: attestation.data,
+            aggregatable_attestations, key=lambda attestation: attestation.data
         )
         for _, group in attestation_groups:
             yield get_aggregate_from_valid_committee_attestations(tuple(group))
 
-    async def aggregate(
-        self,
-        slot: Slot
-    ) -> Tuple[AggregateAndProof, ...]:
+    async def aggregate(self, slot: Slot) -> Tuple[AggregateAndProof, ...]:
         """
         Aggregate the attestations at ``slot`` and broadcast them.
         """
@@ -498,16 +481,19 @@ class Validator(BaseService):
         state = self.chain.get_head_state()
         config = state_machine.config
 
-        attesting_committee_assignments_at_slot = self._get_attesting_assignments_at_slot(slot)
+        attesting_committee_assignments_at_slot = self._get_attesting_assignments_at_slot(
+            slot
+        )
         # 1. For each committee_assignment at the given slot
         for committee_assignment in attesting_committee_assignments_at_slot:
             committee_index = committee_assignment.committee_index
 
-            local_attesters = self._get_local_attesters_at_assignment(committee_assignment)
+            local_attesters = self._get_local_attesters_at_assignment(
+                committee_assignment
+            )
             # Get the validator_index -> privkey map of the attesting validators
             attesting_validator_privkeys = {
-                index: self.validator_privkeys[index]
-                for index in local_attesters
+                index: self.validator_privkeys[index] for index in local_attesters
             }
 
             selected_proofs: Dict[ValidatorIndex, BLSSignature] = {}
@@ -515,14 +501,10 @@ class Validator(BaseService):
             for validator_index, privkey in attesting_validator_privkeys.items():
                 # Check if the vallidator is one of the aggregators
                 signature = get_slot_signature(
-                    state, slot, privkey, CommitteeConfig(config),
+                    state, slot, privkey, CommitteeConfig(config)
                 )
                 is_aggregator_result = is_aggregator(
-                    state,
-                    slot,
-                    committee_index,
-                    signature,
-                    CommitteeConfig(config),
+                    state, slot, committee_index, signature, CommitteeConfig(config)
                 )
                 if is_aggregator_result:
                     self.logger.debug(
@@ -543,7 +525,9 @@ class Validator(BaseService):
                         selection_proof=selected_proofs[validator_index],
                     )
                     self.import_attestation(aggregate_and_proof.aggregate, True)
-                    await self.p2p_node.broadcast_beacon_aggregate_and_proof(aggregate_and_proof)
+                    await self.p2p_node.broadcast_beacon_aggregate_and_proof(
+                        aggregate_and_proof
+                    )
                     aggregate_and_proofs += (aggregate_and_proof,)
 
         return aggregate_and_proofs
