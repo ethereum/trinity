@@ -11,6 +11,8 @@ from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockBody
+from eth2.beacon.types.deposits import Deposit
+from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import FromBlockParams, Slot, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
@@ -70,6 +72,8 @@ def create_block_on_state(
     validator_index: ValidatorIndex,
     privkey: int,
     attestations: Sequence[Attestation],
+    eth1_data: Eth1Data = None,
+    deposits: Sequence[Deposit] = None,
     check_proposer_index: bool = True
 ) -> BaseBeaconBlock:
     """
@@ -87,10 +91,13 @@ def create_block_on_state(
 
     # TODO: Add more operations
     randao_reveal = _generate_randao_reveal(privkey, slot, state, config)
-    eth1_data = state.eth1_data
+    if eth1_data is None:
+        eth1_data = state.eth1_data
     body = BeaconBlockBody.create(
         randao_reveal=randao_reveal, eth1_data=eth1_data, attestations=attestations
     )
+    if deposits is not None and len(deposits) > 0:
+        body = body.copy(deposits=deposits)
 
     block = block.set("body", body)
 
