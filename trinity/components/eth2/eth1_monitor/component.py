@@ -1,7 +1,6 @@
 from argparse import ArgumentParser, _SubParsersAction
 import json
 from pathlib import Path
-import time
 
 from async_service import Service, TrioManager
 
@@ -104,7 +103,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         with base_db:
             fake_eth1_data_provider = FakeEth1DataProvider(
                 start_block_number=START_BLOCK_NUMBER,
-                start_block_timestamp=start_block_timestamp,
+                start_block_timestamp=Timestamp(start_block_timestamp),
                 num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
                 initial_deposits=tuple(initial_deposits),
             )
@@ -113,7 +112,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
                 eth1_data_provider=fake_eth1_data_provider,
                 num_blocks_confirmed=NUM_BLOCKS_CONFIRMED,
                 polling_period=POLLING_PERIOD,
-                start_block_number=START_BLOCK_NUMBER - 1,
+                start_block_number=BlockNumber(START_BLOCK_NUMBER - 1),
                 event_bus=event_bus,
                 base_db=base_db,
             )
