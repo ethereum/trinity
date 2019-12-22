@@ -13,7 +13,6 @@ from eth2.beacon.constants import GWEI_PER_ETH
 from eth2.beacon.tools.builder.validator import make_deposit_tree_and_root
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.typing import Gwei, Timestamp
-from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
 
 
 class Eth1Block(NamedTuple):
@@ -53,7 +52,6 @@ def convert_deposit_log_to_deposit_data(deposit_log: DepositLog) -> DepositData:
 
 
 class BaseEth1DataProvider(ABC):
-
     @abstractmethod
     def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
         ...
@@ -141,7 +139,7 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
 
 
 # NOTE: This constant is for `FakeEth1DataProvider`
-AVERAGE_BLOCK_TIME = 20
+AVERAGE_BLOCK_TIME = 5
 
 
 class FakeEth1DataProvider(BaseEth1DataProvider):
@@ -176,8 +174,8 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     def _get_block_time(self, block_number: BlockNumber) -> Timestamp:
         return Timestamp(
-            self.start_block_timestamp +
-            (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
+            self.start_block_timestamp
+            + (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
         )
 
     def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
@@ -185,26 +183,23 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         if isinstance(arg, int):
             block_time = self._get_block_time(BlockNumber(arg))
             return Eth1Block(
-                block_hash=Hash32(int(arg).to_bytes(32, byteorder='big')),
+                block_hash=Hash32(int(arg).to_bytes(32, byteorder="big")),
                 number=BlockNumber(arg),
                 timestamp=Timestamp(block_time),
             )
         # If `arg` is block hash
         elif isinstance(arg, bytes):
-            block_number = int.from_bytes(arg, byteorder='big')
+            block_number = int.from_bytes(arg, byteorder="big")
             latest_block_number = self._get_latest_block_number()
-            # Check if provided block number is in valid range
-            earliest_follow_block_number = self.start_block_number - ETH1_FOLLOW_DISTANCE
-            is_beyond_follow_distance = block_number < earliest_follow_block_number
-            if (is_beyond_follow_distance or block_number > latest_block_number):
-                # If provided block number does not make sense,
-                # assume it's the block at `earliest_follow_block_number`.
+            # Block that's way in the future is presumed to be fake eth1 block in genesis state.
+            # Return the block at `start_block_number` in this case.
+            if block_number > latest_block_number + 100:
                 return Eth1Block(
-                    block_hash=Hash32(earliest_follow_block_number.to_bytes(32, byteorder='big')),
-                    number=BlockNumber(earliest_follow_block_number),
-                    timestamp=Timestamp(
-                        self.start_block_timestamp - ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME,
+                    block_hash=Hash32(
+                        self.start_block_number.to_bytes(32, byteorder="big")
                     ),
+                    number=BlockNumber(self.start_block_number),
+                    timestamp=Timestamp(self.start_block_timestamp),
                 )
             block_time = self._get_block_time(BlockNumber(block_number))
             return Eth1Block(
@@ -217,13 +212,13 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             latest_block_number = self._get_latest_block_number()
             block_time = self._get_block_time(latest_block_number)
             return Eth1Block(
-                block_hash=Hash32(latest_block_number.to_bytes(32, byteorder='big')),
+                block_hash=Hash32(latest_block_number.to_bytes(32, byteorder="big")),
                 number=BlockNumber(latest_block_number),
                 timestamp=block_time,
             )
 
     def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
-        block_hash = block_number.to_bytes(32, byteorder='big')
+        block_hash = block_number.to_bytes(32, byteorder="big")
         if block_number == self.start_block_number:
             logs = (
                 DepositLog(
@@ -240,9 +235,9 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             logs = (
                 DepositLog(
                     block_hash=Hash32(block_hash),
-                    pubkey=BLSPubkey(b'\x12' * 48),
-                    withdrawal_credentials=Hash32(b'\x23' * 32),
-                    signature=BLSSignature(b'\x34' * 96),
+                    pubkey=BLSPubkey(b"\x12" * 48),
+                    withdrawal_credentials=Hash32(b"\x23" * 32),
+                    signature=BLSSignature(b"\x34" * 96),
                     amount=Gwei(32 * GWEI_PER_ETH),
                 )
                 for _ in range(self.num_deposits_per_block)
@@ -251,12 +246,12 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     def get_deposit_count(self, block_number: BlockNumber) -> bytes:
         if block_number <= self.start_block_number:
-            return self.num_initial_deposits.to_bytes(32, byteorder='little')
+            return self.num_initial_deposits.to_bytes(32, byteorder="little")
         deposit_count = (
-            self.num_initial_deposits +
-            (block_number - self.start_block_number) * self.num_deposits_per_block
+            self.num_initial_deposits
+            + (block_number - self.start_block_number) * self.num_deposits_per_block
         )
-        return deposit_count.to_bytes(32, byteorder='little')
+        return deposit_count.to_bytes(32, byteorder="little")
 
     def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
         # Check and update deposit data when deposit root is requested
@@ -269,7 +264,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                 )
             self.latest_processed_block_number = block_number
         deposit_count_bytes = self.get_deposit_count(block_number)
-        deposit_count = int.from_bytes(deposit_count_bytes, byteorder='little')
+        deposit_count = int.from_bytes(deposit_count_bytes, byteorder="little")
         deposits = self.deposits[:deposit_count]
         _, deposit_root = make_deposit_tree_and_root(deposits)
         return deposit_root
