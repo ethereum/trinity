@@ -73,7 +73,6 @@ class BeaconChainSyncer(BaseService):
 
     async def _run(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(SyncRequest)):
-            self.logger.debug("A sync is triggered by %s", SyncRequest)
             try:
                 self.sync_peer = await self.wait(self.select_sync_peer())
             except LeadingPeerNotFonud as exception:
