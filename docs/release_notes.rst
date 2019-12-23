@@ -5,6 +5,44 @@ Trinity is moving fast. Read up on all the latest improvements.
 
 .. towncrier release notes start
 
+Trinity 0.1.0-alpha.34 (2019-12-23)
+-----------------------------------
+
+Features
+~~~~~~~~
+
+- Full rework of ``Component`` APIs.  CLI validation is now done during application initialization.  Component lifecycle is well defined and simpler to implement. (`#1328 <https://github.com/ethereum/trinity/issues/1328>`__)
+- Add support for `eth_getTransactionReceipt` JSON-RPC API
+
+  See: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_gettransactionreceipt (`#1337 <https://github.com/ethereum/trinity/issues/1337>`__)
+- ``AsyncioIsolatedComponent`` no longer uses the standard libary ``multiprocessing`` for process isolation, in favor of using the more async friendly ``asyncio-run-in-process`` (`#1363 <https://github.com/ethereum/trinity/issues/1363>`__)
+- Underlying ``web3`` module changed from v4 to v5, including in the console. (`#1383 <https://github.com/ethereum/trinity/issues/1383>`__)
+- End JSON-RPC responses with `\n` to support dopple. (`#1388 <https://github.com/ethereum/trinity/issues/1388>`__)
+- Upgrade Py-EVM and add support for Muir Glacier fork (`#1409 <https://github.com/ethereum/trinity/issues/1409>`__)
+
+
+Bugfixes
+~~~~~~~~
+
+- Ensure ``eth_getStorageAt`` pads results to 32 byte
+
+  See `Spec <https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_getstorageat>`_ or
+  `Geth Example <https://api.etherscan.io/api?module=proxy&action=eth_getStorageAt&address=0x6e03d9cce9d60f3e9f2597e13cd4c54c55330cfd&position=0x0&tag=latest&apikey=YourApiKeyToken>`_ (`#1403 <https://github.com/ethereum/trinity/issues/1403>`__)
+- Catch exception leaking out of the `UpnpService` and log it as warning. (`#1410 <https://github.com/ethereum/trinity/issues/1410>`__)
+
+
+Performance improvements
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Refactor ``Component`` APIs to support concurrent starting and stopping. (`#1328 <https://github.com/ethereum/trinity/issues/1328>`__)
+
+
+Internal Changes - for Trinity Contributors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Test Trinity against Istanbul tests (`#1372 <https://github.com/ethereum/trinity/issues/1372>`__)
+
+
 Trinity 0.1.0-alpha.33 (2019-12-12)
 -----------------------------------
 

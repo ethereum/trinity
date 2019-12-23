@@ -1,3 +1,0 @@
-Add support for `eth_getTransactionReceipt` JSON-RPC API
-
-See: https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_gettransactionreceipt

@@ -1,1 +1,0 @@
-Refactor ``Component`` APIs to support concurrent starting and stopping.
