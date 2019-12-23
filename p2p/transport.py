@@ -333,7 +333,7 @@ class Transport(TransportAPI):
 
         self.write(self._encrypt(header, body))
 
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close this peer's reader/writer streams.
 
         This will cause the peer to stop in case it is running.
@@ -342,6 +342,7 @@ class Transport(TransportAPI):
         """
         if not self._reader.at_eof():
             self._reader.feed_eof()
+        await self._writer.drain()
         self._writer.close()
 
     @property

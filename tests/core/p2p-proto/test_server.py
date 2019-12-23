@@ -11,15 +11,12 @@ from eth.db.chain import ChainDB
 
 from p2p.auth import HandshakeInitiator, _handshake
 from p2p.connection import Connection
-from p2p.kademlia import (
-    Node,
-    Address,
-)
 from p2p.handshake import negotiate_protocol_handshakes
 from p2p.service import run_service
 from p2p.tools.factories import (
     get_open_port,
     DevP2PHandshakeParamsFactory,
+    NodeFactory,
 )
 from p2p.tools.paragon import (
     ParagonContext,
@@ -43,15 +40,11 @@ from tests.core.integration_test_helpers import (
 
 port = get_open_port()
 NETWORK_ID = 99
-SERVER_ADDRESS = Address('127.0.0.1', udp_port=port, tcp_port=port)
 RECEIVER_PRIVKEY = keys.PrivateKey(eip8_values['receiver_private_key'])
 RECEIVER_PUBKEY = RECEIVER_PRIVKEY.public_key
-RECEIVER_REMOTE = Node(RECEIVER_PUBKEY, SERVER_ADDRESS)
 
 INITIATOR_PRIVKEY = keys.PrivateKey(eip8_values['initiator_private_key'])
 INITIATOR_PUBKEY = INITIATOR_PRIVKEY.public_key
-INITIATOR_ADDRESS = Address('127.0.0.1', get_open_port() + 1)
-INITIATOR_REMOTE = Node(INITIATOR_PUBKEY, INITIATOR_ADDRESS)
 
 
 class ParagonServer(BaseServer):
@@ -84,22 +77,40 @@ def get_server(privkey, address, event_bus):
 
 
 @pytest.fixture
-async def server(event_bus):
-    server = get_server(RECEIVER_PRIVKEY, SERVER_ADDRESS, event_bus)
+def receiver_remote():
+    return NodeFactory(
+        pubkey=RECEIVER_PUBKEY,
+        address__ip='127.0.0.1',
+    )
+
+
+@pytest.fixture
+async def server(event_bus, receiver_remote):
+    server = get_server(RECEIVER_PRIVKEY, receiver_remote.address, event_bus)
     async with run_service(server):
         # wait for the tcp server to be present
         for _ in range(50):
             if hasattr(server, '_tcp_listener'):
                 break
             await asyncio.sleep(0)
+        else:
+            raise AssertionError("Never got listener")
         yield server
 
 
 @pytest.mark.asyncio
-async def test_server_incoming_connection(monkeypatch, server, event_loop):
+async def test_server_incoming_connection(monkeypatch,
+                                          server,
+                                          event_loop,
+                                          receiver_remote,
+                                          ):
     use_eip8 = False
     token = CancelToken("initiator")
-    initiator = HandshakeInitiator(RECEIVER_REMOTE, INITIATOR_PRIVKEY, use_eip8, token)
+    initiator = HandshakeInitiator(receiver_remote, INITIATOR_PRIVKEY, use_eip8, token)
+    initiator_remote = NodeFactory(
+        pubkey=INITIATOR_PUBKEY,
+        address__ip='127.0.0.1',
+    )
     for _ in range(10):
         # The server isn't listening immediately so we give it a short grace
         # period while trying to connect.
@@ -107,12 +118,16 @@ async def test_server_incoming_connection(monkeypatch, server, event_loop):
             reader, writer = await initiator.connect()
         except ConnectionRefusedError:
             await asyncio.sleep(0)
+        else:
+            break
+    else:
+        raise AssertionError("Unable to connect within 10 loops")
     # Send auth init message to the server, then read and decode auth ack
     aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
         initiator, reader, writer, token)
 
     transport = Transport(
-        remote=RECEIVER_REMOTE,
+        remote=receiver_remote,
         private_key=initiator.privkey,
         reader=reader,
         writer=writer,
@@ -129,7 +144,7 @@ async def test_server_incoming_connection(monkeypatch, server, event_loop):
     )
     handshakers = await factory.get_handshakers()
     devp2p_handshake_params = DevP2PHandshakeParamsFactory(
-        listen_port=INITIATOR_REMOTE.address.tcp_port,
+        listen_port=initiator_remote.address.tcp_port,
     )
 
     multiplexer, devp2p_receipt, protocol_receipts = await negotiate_protocol_handshakes(
@@ -162,7 +177,7 @@ async def test_server_incoming_connection(monkeypatch, server, event_loop):
 
 
 @pytest.mark.asyncio
-async def test_peer_pool_connect(monkeypatch, event_loop, server):
+async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remote):
     started_peers = []
 
     async def mock_start_peer(peer):
@@ -175,7 +190,7 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server):
         privkey=INITIATOR_PRIVKEY,
         context=ParagonContext(),
     )
-    nodes = [RECEIVER_REMOTE]
+    nodes = [receiver_remote]
     asyncio.ensure_future(initiator_peer_pool.run(), loop=event_loop)
     await initiator_peer_pool.events.started.wait()
     await initiator_peer_pool.connect_to_nodes(nodes)
@@ -191,7 +206,7 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server):
 
 
 @pytest.mark.asyncio
-async def test_peer_pool_answers_connect_commands(event_loop, event_bus, server):
+async def test_peer_pool_answers_connect_commands(event_loop, event_bus, server, receiver_remote):
     # This is the PeerPool which will accept our message and try to connect to {server}
     initiator_peer_pool = ParagonPeerPool(
         privkey=INITIATOR_PRIVKEY,
@@ -209,7 +224,7 @@ async def test_peer_pool_answers_connect_commands(event_loop, event_bus, server)
 
         await event_bus.wait_until_any_endpoint_subscribed_to(ConnectToNodeCommand)
         await event_bus.broadcast(
-            ConnectToNodeCommand(RECEIVER_REMOTE),
+            ConnectToNodeCommand(receiver_remote),
             TO_NETWORKING_BROADCAST_CONFIG
         )
 

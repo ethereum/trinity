@@ -184,8 +184,8 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
     def is_closing(self) -> bool:
         return self._transport.is_closing
 
-    def close(self) -> None:
-        self._transport.close()
+    async def close(self) -> None:
+        await self._transport.close()
         self.cancel_token.trigger()
 
     #
