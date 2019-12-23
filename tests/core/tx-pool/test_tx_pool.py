@@ -2,6 +2,7 @@ import asyncio
 import pytest
 import uuid
 
+from async_exit_stack import AsyncExitStack
 from async_service import background_asyncio_service
 from eth._utils.address import (
     force_bytes_to_address
@@ -26,10 +27,10 @@ from trinity.protocol.eth.events import (
     TransactionsEvent,
     SendTransactionsEvent,
 )
+from trinity.tools.event_bus import mock_request_response
 
 from tests.core.integration_test_helpers import (
     run_proxy_peer_pool,
-    run_mock_request_response,
 )
 
 
@@ -65,71 +66,74 @@ async def test_tx_propagation(event_bus,
     node_one = initial_two_peers[0]
     node_two = initial_two_peers[1]
 
-    async with run_proxy_peer_pool(event_bus) as peer_pool:
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(mock_request_response(
+            GetConnectedPeersRequest,
+            GetConnectedPeersResponse(initial_two_peers),
+            event_bus,
+        ))
+        peer_pool = await stack.enter_async_context(run_proxy_peer_pool(event_bus))
         tx_pool = TxPool(event_bus, peer_pool, tx_validator)
-        async with background_asyncio_service(tx_pool):
+        await stack.enter_async_context(background_asyncio_service(tx_pool))
 
-            run_mock_request_response(
-                GetConnectedPeersRequest, GetConnectedPeersResponse(initial_two_peers), event_bus)
+        await asyncio.sleep(0.01)
 
-            await asyncio.sleep(0.01)
+        txs_broadcasted_by_peer1 = [
+            create_random_tx(chain_with_block_validation, funded_address_private_key)
+        ]
 
-            txs_broadcasted_by_peer1 = [
-                create_random_tx(chain_with_block_validation, funded_address_private_key)
-            ]
+        # this needs to go here to ensure that the subscription is *after*
+        # the one installed by the transaction pool so that the got_txns
+        # event will get set after the other handlers have been called.
+        outgoing_tx, got_txns = observe_outgoing_transactions(event_bus)
 
-            # this needs to go here to ensure that the subscription is *after*
-            # the one installed by the transaction pool so that the got_txns
-            # event will get set after the other handlers have been called.
-            outgoing_tx, got_txns = observe_outgoing_transactions(event_bus)
+        # Peer1 sends some txs
+        await event_bus.broadcast(
+            TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
+        )
 
-            # Peer1 sends some txs
-            await event_bus.broadcast(
-                TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
-            )
+        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
 
-            await asyncio.wait_for(got_txns.wait(), timeout=0.1)
+        assert outgoing_tx == [
+            (node_two, tuple(txs_broadcasted_by_peer1)),
+        ]
+        # Clear the recording, we asserted all we want and would like to have a fresh start
+        outgoing_tx.clear()
 
-            assert outgoing_tx == [
-                (node_two, tuple(txs_broadcasted_by_peer1)),
-            ]
-            # Clear the recording, we asserted all we want and would like to have a fresh start
-            outgoing_tx.clear()
+        # Peer1 sends same txs again
+        await event_bus.broadcast(
+            TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
+        )
+        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
+        # Check that Peer2 doesn't receive them again
+        assert len(outgoing_tx) == 0
 
-            # Peer1 sends same txs again
-            await event_bus.broadcast(
-                TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
-            )
-            await asyncio.wait_for(got_txns.wait(), timeout=0.1)
-            # Check that Peer2 doesn't receive them again
-            assert len(outgoing_tx) == 0
+        # Peer2 sends exact same txs back
+        await event_bus.broadcast(
+            TransactionsEvent(session=node_two, command=Transactions(txs_broadcasted_by_peer1))
+        )
+        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
 
-            # Peer2 sends exact same txs back
-            await event_bus.broadcast(
-                TransactionsEvent(session=node_two, command=Transactions(txs_broadcasted_by_peer1))
-            )
-            await asyncio.wait_for(got_txns.wait(), timeout=0.1)
+        # Check that Peer1 won't get them as that is where they originally came from
+        assert len(outgoing_tx) == 0
 
-            # Check that Peer1 won't get them as that is where they originally came from
-            assert len(outgoing_tx) == 0
+        txs_broadcasted_by_peer2 = [
+            create_random_tx(chain_with_block_validation, funded_address_private_key),
+            txs_broadcasted_by_peer1[0]
+        ]
 
-            txs_broadcasted_by_peer2 = [
-                create_random_tx(chain_with_block_validation, funded_address_private_key),
-                txs_broadcasted_by_peer1[0]
-            ]
+        # Peer2 sends old + new tx
+        await event_bus.broadcast(
+            TransactionsEvent(session=node_two, command=Transactions(txs_broadcasted_by_peer2))
+        )
+        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
+        # Not sure why this sleep is needed....
+        await asyncio.sleep(0.01)
 
-            # Peer2 sends old + new tx
-            await event_bus.broadcast(
-                TransactionsEvent(session=node_two, command=Transactions(txs_broadcasted_by_peer2))
-            )
-            await asyncio.wait_for(got_txns.wait(), timeout=0.1)
-            # Not sure why this sleep is needed....
-            await asyncio.sleep(0.01)
-
-            # Check that Peer1 receives only the one tx that it didn't know about
-            assert outgoing_tx == [
-                (node_one, (txs_broadcasted_by_peer2[0],)),
-            ]
+        # Check that Peer1 receives only the one tx that it didn't know about
+        assert outgoing_tx == [
+            (node_one, (txs_broadcasted_by_peer2[0],)),
+        ]
 
 
 @pytest.mark.asyncio
@@ -137,36 +141,41 @@ async def test_does_not_propagate_invalid_tx(event_bus,
                                              funded_address_private_key,
                                              chain_with_block_validation,
                                              tx_validator):
+    chain = chain_with_block_validation
 
     initial_two_peers = TEST_NODES[:2]
     node_one = initial_two_peers[0]
     node_two = initial_two_peers[1]
 
-    async with run_proxy_peer_pool(event_bus) as peer_pool:
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(mock_request_response(
+            GetConnectedPeersRequest,
+            GetConnectedPeersResponse(initial_two_peers),
+            event_bus,
+        ))
+        peer_pool = await stack.enter_async_context(run_proxy_peer_pool(event_bus))
         tx_pool = TxPool(event_bus, peer_pool, tx_validator)
-        async with background_asyncio_service(tx_pool):
-            run_mock_request_response(
-                GetConnectedPeersRequest, GetConnectedPeersResponse(initial_two_peers), event_bus)
+        await stack.enter_async_context(background_asyncio_service(tx_pool))
 
-            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.01)
 
-            txs_broadcasted_by_peer1 = [
-                create_random_tx(chain_with_block_validation, funded_address_private_key, is_valid=False),  # noqa: E501
-                create_random_tx(chain_with_block_validation, funded_address_private_key)
-            ]
+        txs_broadcasted_by_peer1 = [
+            create_random_tx(chain, funded_address_private_key, is_valid=False),
+            create_random_tx(chain, funded_address_private_key)
+        ]
 
-            outgoing_tx, got_txns = observe_outgoing_transactions(event_bus)
+        outgoing_tx, got_txns = observe_outgoing_transactions(event_bus)
 
-            # Peer1 sends some txs
-            await event_bus.broadcast(
-                TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
-            )
-            await asyncio.wait_for(got_txns.wait(), timeout=0.1)
+        # Peer1 sends some txs
+        await event_bus.broadcast(
+            TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
+        )
+        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
 
-            # Check that Peer2 received only the second tx which is valid
-            assert outgoing_tx == [
-                (node_two, (txs_broadcasted_by_peer1[1],)),
-            ]
+        # Check that Peer2 received only the second tx which is valid
+        assert outgoing_tx == [
+            (node_two, (txs_broadcasted_by_peer1[1],)),
+        ]
 
 
 def create_random_tx(chain, private_key, is_valid=True):
