@@ -35,7 +35,7 @@ deps = {
         "cachetools>=3.1.0,<4.0.0",
         "coincurve>=10.0.0,<11.0.0",
         "dataclasses>=0.6, <1;python_version<'3.7'",
-        "eth-utils>=1.8.1,<2",
+        "eth-utils>=1.8.4,<2",
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
         "plyvel==1.1.0",
         PYEVM_DEPENDENCY,
@@ -46,7 +46,7 @@ deps = {
         "websockets>=8.1.0",
         "jsonschema==3.0.1",
         "mypy-extensions>=0.4.3,<0.5.0",
-        "typing_extensions>=3.7.2,<4.0.0",
+        "typing_extensions>=3.7.4,<4.0.0",
         "ruamel.yaml==0.15.98",
         "argcomplete>=1.10.0,<2",
         "multiaddr>=0.0.8,<0.1.0",
