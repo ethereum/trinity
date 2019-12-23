@@ -611,6 +611,10 @@ class Node(BaseService):
             self._add_peer_from_status(peer_id, peer_status)
 
             if peer_is_ahead(self.chain, peer_status):
+                logger.debug(
+                    "Peer's chain is ahead of us, start syncing with the peer(%s)",
+                    str(peer_id),
+                )
                 await self._event_bus.broadcast(SyncRequest())
 
     async def request_status(self, peer_id: ID) -> None:
@@ -631,6 +635,10 @@ class Node(BaseService):
             self._add_peer_from_status(peer_id, peer_status)
 
             if peer_is_ahead(self.chain, peer_status):
+                logger.debug(
+                    "Peer's chain is ahead of us, start syncing with the peer(%s)",
+                    str(peer_id),
+                )
                 await self._event_bus.broadcast(SyncRequest())
 
     async def _handle_goodbye(self, stream: INetStream) -> None:

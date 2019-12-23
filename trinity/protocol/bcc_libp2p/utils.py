@@ -170,14 +170,10 @@ def peer_is_ahead(chain: BaseBeaconChain, peer_status: Status) -> bool:
     peer_has_higher_finalized_epoch = peer_status.finalized_epoch > checkpoint.epoch
     peer_has_equal_finalized_epoch = peer_status.finalized_epoch == checkpoint.epoch
     peer_has_higher_head_slot = peer_status.head_slot > head_block.slot
-    if (
+    return (
         peer_has_higher_finalized_epoch or
         (peer_has_equal_finalized_epoch and peer_has_higher_head_slot)
-    ):
-        logger.debug("Peer's chain is ahead of us, start syncing with the peer.")
-        return True
-    else:
-        return False
+    )
 
 
 def validate_start_slot(chain: BaseBeaconChain, start_slot: Slot) -> None:
