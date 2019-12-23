@@ -19,6 +19,8 @@ from typing import (
 )
 from urllib import parse as urlparse
 
+from cached_property import cached_property
+
 from eth_utils import (
     big_endian_to_int,
     decode_hex,
@@ -77,7 +79,7 @@ class Address(AddressAPI):
     def ip(self) -> str:
         return str(self._ip)
 
-    @property
+    @cached_property
     def ip_packed(self) -> str:
         """The binary representation of this IP address."""
         return self._ip.packed

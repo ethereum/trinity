@@ -20,6 +20,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    NamedTuple,
     Optional,
     Sequence,
     Set,
@@ -698,7 +699,9 @@ class DiscoveryService(Service):
         for i in range(0, len(nodes), max_neighbours):
             self.logger.debug2('>>> neighbours to %s: %s',
                                node, neighbours[i:i + max_neighbours])
-            payload = tuple([nodes[i:i + max_neighbours]]) + (expiration,)
+            payload = NeighboursPacket(
+                neighbours=nodes[i:i + max_neighbours],
+                expiration=expiration)
             self.send(node, CMD_NEIGHBOURS, payload)
 
     def process_neighbours(self, remote: NodeAPI, neighbours: List[NodeAPI]) -> None:
@@ -1003,6 +1006,11 @@ def _extract_nodes_from_payload(
             logger.debug("Skipping invalid address %s relayed by %s", address, sender)
 
 
+class NeighboursPacket(NamedTuple):
+    neighbours: List[List[bytes]]
+    expiration: bytes
+
+
 def _get_max_neighbours_per_packet() -> int:
     # As defined in https://github.com/ethereum/devp2p/blob/master/rlpx.md, the max size of a
     # datagram must be 1280 bytes, so when sending neighbours packets we must include up to
@@ -1014,10 +1022,12 @@ def _get_max_neighbours_per_packet() -> int:
     node_data = addr.to_endpoint() + [b'\x00' * (constants.KADEMLIA_PUBLIC_KEY_SIZE // 8)]
     neighbours = [node_data]
     expiration = _get_msg_expiration()
-    payload = rlp.encode(tuple([neighbours]) + (expiration,))
+    payload = rlp.encode(
+        NeighboursPacket(neighbours=neighbours, expiration=expiration))
     while HEAD_SIZE + len(payload) <= 1280:
         neighbours.append(node_data)
-        payload = rlp.encode(tuple([neighbours]) + (expiration,))
+        payload = rlp.encode(
+            NeighboursPacket(neighbours=neighbours, expiration=expiration))
     return len(neighbours) - 1
 
 
