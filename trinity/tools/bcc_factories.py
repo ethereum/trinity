@@ -15,12 +15,12 @@ from async_generator import asynccontextmanager
 
 from cancel_token import CancelToken
 
+from lahja import EndpointAPI
 from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.id import ID
 from libp2p.peer.peerinfo import (
     PeerInfo,
 )
-
 
 from eth_utils import to_tuple
 
@@ -59,7 +59,6 @@ from .factories import (
     AtomicDBFactory,
 )
 
-
 try:
     import factory
 except ImportError:
@@ -89,6 +88,7 @@ class NodeFactory(factory.Factory):
     preferred_nodes: Tuple[Multiaddr, ...] = tuple()
     subnets: None
     chain = factory.SubFactory(BeaconChainFactory)
+    event_bus = None
 
     @classmethod
     def create_batch(cls, number: int) -> Tuple[Node, ...]:
@@ -116,6 +116,7 @@ async def ConnectionPairFactory(
     bob_chaindb: AsyncBeaconChainDB = None,
     bob_branch: Collection[BaseBeaconBlock] = None,
     genesis_state: BeaconState = None,
+    alice_event_bus: EndpointAPI = None,
     cancel_token: CancelToken = None,
     handshake: bool = True,
 ) -> AsyncIterator[Tuple[Node, Node]]:
@@ -136,7 +137,7 @@ async def ConnectionPairFactory(
         alice_kwargs["chain__genesis_state"] = genesis_state
         bob_kwargs["chain__genesis_state"] = genesis_state
 
-    alice = NodeFactory(cancel_token=cancel_token, **alice_kwargs)
+    alice = NodeFactory(cancel_token=cancel_token, event_bus=alice_event_bus, **alice_kwargs)
     bob = NodeFactory(cancel_token=cancel_token, **bob_kwargs)
     async with run_service(alice), run_service(bob):
         await asyncio.sleep(0.01)
@@ -266,4 +267,5 @@ class BeaconChainSyncerFactory(factory.Factory):
         lambda obj: SimpleWriterBlockImporter(obj.chain_db)
     )
     genesis_config = SERENITY_GENESIS_CONFIG
+    event_bus = None
     token = None

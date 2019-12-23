@@ -163,20 +163,17 @@ async def validate_peer_status(chain: BaseBeaconChain, peer_status: Status) -> N
         )
 
 
-def compare_chain_tip_and_finalized_epoch(chain: BaseBeaconChain, peer_status: Status) -> None:
+def peer_is_ahead(chain: BaseBeaconChain, peer_status: Status) -> bool:
     checkpoint = chain.get_head_state().finalized_checkpoint
     head_block = chain.get_canonical_head()
 
     peer_has_higher_finalized_epoch = peer_status.finalized_epoch > checkpoint.epoch
     peer_has_equal_finalized_epoch = peer_status.finalized_epoch == checkpoint.epoch
     peer_has_higher_head_slot = peer_status.head_slot > head_block.slot
-    if (
+    return (
         peer_has_higher_finalized_epoch or
         (peer_has_equal_finalized_epoch and peer_has_higher_head_slot)
-    ):
-        # TODO: kickoff syncing process with this peer
-        logger.debug("Peer's chain is ahead of us, start syncing with the peer.")
-        pass
+    )
 
 
 def validate_start_slot(chain: BaseBeaconChain, start_slot: Slot) -> None:
@@ -410,7 +407,7 @@ class Interaction:
         return self.stream.muxed_conn.peer_id
 
     def debug(self, message: str) -> None:
-        self.logger.debug(
+        self.logger.debug2(
             "Interaction %s    with %s    %s",
             self.stream.get_protocol().split("/")[4],
             str(self.peer_id)[:15],

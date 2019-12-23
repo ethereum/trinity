@@ -10,6 +10,11 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Iterator,
+)
+
+from lahja import (
+    EndpointAPI,
 )
 
 from cancel_token import (
@@ -39,6 +44,7 @@ from eth2.beacon.typing import (
     SigningRoot,
     SubnetId,
 )
+from eth2.events import SyncRequest
 
 from libp2p import (
     initialize_default_swarm,
@@ -140,7 +146,7 @@ from .utils import (
     make_rpc_v1_ssz_protocol_id,
     make_tcp_ip_maddr,
     Interaction,
-    compare_chain_tip_and_finalized_epoch,
+    peer_is_ahead,
     validate_peer_status,
     get_my_status,
     get_requested_beacon_blocks,
@@ -160,6 +166,7 @@ REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ = make_rpc_v1_ssz_protocol_id(
 REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ = make_rpc_v1_ssz_protocol_id(
     REQ_RESP_BEACON_BLOCKS_BY_ROOT
 )
+NEXT_UPDATE_INTERVAL = 10
 
 
 @dataclass
@@ -241,6 +248,10 @@ class PeerPool:
     def get_best_head_slot_peer(self) -> Peer:
         return self.get_best("head_slot")
 
+    @property
+    def peer_ids(self) -> Iterator[ID]:
+        return iter(self.peers.keys())
+
 
 DIAL_RETRY_COUNT = 10
 
@@ -258,6 +269,7 @@ class Node(BaseService):
     preferred_nodes: Tuple[Multiaddr, ...]
     chain: BaseBeaconChain
     subnets: Set[SubnetId]
+    _event_bus: EndpointAPI
 
     handshaked_peers: PeerPool = None
 
@@ -267,6 +279,7 @@ class Node(BaseService):
             listen_ip: str,
             listen_port: int,
             chain: BaseBeaconChain,
+            event_bus: EndpointAPI,
             security_protocol_ops: Dict[TProtocol, BaseSecureTransport] = None,
             muxer_protocol_ops: Dict[TProtocol, IMuxedConn] = None,
             gossipsub_params: Optional[GossipsubParams] = None,
@@ -316,6 +329,7 @@ class Node(BaseService):
         )
 
         self.chain = chain
+        self._event_bus = event_bus
 
         self.handshaked_peers = PeerPool()
 
@@ -327,6 +341,7 @@ class Node(BaseService):
 
     async def _run(self) -> None:
         self.logger.info("libp2p node %s is up", self.listen_maddr)
+        self.run_daemon_task(self.update_status())
         await self.cancellation()
 
     async def start(self) -> None:
@@ -595,8 +610,12 @@ class Node(BaseService):
 
             self._add_peer_from_status(peer_id, peer_status)
 
-            # Check if we are behind the peer
-            compare_chain_tip_and_finalized_epoch(self.chain, peer_status)
+            if peer_is_ahead(self.chain, peer_status):
+                logger.debug(
+                    "Peer's chain is ahead of us, start syncing with the peer(%s)",
+                    str(peer_id),
+                )
+                await self._event_bus.broadcast(SyncRequest())
 
     async def request_status(self, peer_id: ID) -> None:
         self.logger.info("Initiate handshake with %s", str(peer_id))
@@ -615,8 +634,12 @@ class Node(BaseService):
 
             self._add_peer_from_status(peer_id, peer_status)
 
-            # Check if we are behind the peer
-            compare_chain_tip_and_finalized_epoch(self.chain, peer_status)
+            if peer_is_ahead(self.chain, peer_status):
+                logger.debug(
+                    "Peer's chain is ahead of us, start syncing with the peer(%s)",
+                    str(peer_id),
+                )
+                await self._event_bus.broadcast(SyncRequest())
 
     async def _handle_goodbye(self, stream: INetStream) -> None:
         async with Interaction(stream) as interaction:
@@ -720,3 +743,9 @@ class Node(BaseService):
             ])
 
             return blocks
+
+    async def update_status(self) -> None:
+        while True:
+            for peer_id in self.handshaked_peers.peer_ids:
+                asyncio.ensure_future(self.request_status(peer_id))
+            await asyncio.sleep(NEXT_UPDATE_INTERVAL)

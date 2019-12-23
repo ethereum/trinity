@@ -132,7 +132,7 @@ class Node:
             "--enable-metrics",
             f"--metrics-port={self.metrics_port}",
             "--disable-discovery",
-            "-l debug2",
+            "-l debug",
             "interop",
             f"--validators={','.join(str(v) for v in self.validators)}",
             f"--start-time={self.start_time}",

@@ -78,6 +78,11 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             help="Metrics server port",
             default=8008,
         )
+        arg_parser.add_argument(
+            "--debug-libp2p",
+            action="store_true",
+            help="Enable debug logging of libp2p",
+        )
 
     @property
     def is_enabled(self) -> bool:
@@ -116,6 +121,12 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
         key_pair = cls._load_or_create_node_key(boot_info)
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         base_db = DBClient.connect(trinity_config.database_ipc_path)
+
+        if boot_info.args.debug_libp2p:
+            logging.getLogger("libp2p").setLevel(logging.DEBUG)
+        else:
+            logging.getLogger("libp2p").setLevel(logging.INFO)
+
         with base_db:
             chain_config = beacon_app_config.get_chain_config()
             chain = chain_config.beacon_chain_class(
@@ -135,6 +146,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 preferred_nodes=trinity_config.preferred_nodes,
                 chain=chain,
                 subnets=subnets,
+                event_bus=event_bus,
             )
 
             receive_server = BCCReceiveServer(
@@ -185,6 +197,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 peer_pool=libp2p_node.handshaked_peers,
                 block_importer=SyncBlockImporter(chain),
                 genesis_config=chain_config.genesis_config,
+                event_bus=event_bus,
                 token=libp2p_node.cancel_token,
             )
             http_server = HTTPServer(

@@ -1,4 +1,3 @@
-import asyncio
 from typing import (
     Tuple,
     AsyncGenerator,
@@ -6,6 +5,9 @@ from typing import (
 
 from eth_utils import (
     ValidationError,
+)
+from lahja import (
+    EndpointAPI,
 )
 
 from cancel_token import (
@@ -24,13 +26,12 @@ from eth2.beacon.db.exceptions import FinalizedHeadNotFound
 from eth2.beacon.typing import (
     Slot,
 )
+from eth2.events import SyncRequest
 
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
 from trinity.protocol.bcc_libp2p.node import PeerPool, Peer
 from trinity.sync.beacon.constants import (
     MAX_BLOCKS_PER_REQUEST,
-    NEXT_SYNC_CHECK_INTERVAL,
-    PEER_SELECTION_RETRY_INTERVAL,
 )
 from trinity.sync.common.chain import (
     SyncBlockImporter,
@@ -51,12 +52,14 @@ class BeaconChainSyncer(BaseService):
     block_importer: SyncBlockImporter
     genesis_config: Eth2GenesisConfig
     sync_peer: Peer
+    _event_bus: EndpointAPI
 
     def __init__(self,
                  chain_db: BaseAsyncBeaconChainDB,
                  peer_pool: PeerPool,
                  block_importer: SyncBlockImporter,
                  genesis_config: Eth2GenesisConfig,
+                 event_bus: EndpointAPI,
                  token: CancelToken = None) -> None:
         super().__init__(token)
 
@@ -64,17 +67,16 @@ class BeaconChainSyncer(BaseService):
         self.peer_pool = peer_pool
         self.block_importer = block_importer
         self.genesis_config = genesis_config
+        self._event_bus = event_bus
 
         self.sync_peer = None
 
     async def _run(self) -> None:
-        while True:
+        async for event in self.wait_iter(self._event_bus.stream(SyncRequest)):
             try:
                 self.sync_peer = await self.wait(self.select_sync_peer())
             except LeadingPeerNotFonud as exception:
                 self.logger.info("No suitable peers to sync with: %s", exception)
-                # wait some time and try again
-                await asyncio.sleep(PEER_SELECTION_RETRY_INTERVAL)
                 continue
             else:
                 # sync peer selected successfully
@@ -87,7 +89,6 @@ class BeaconChainSyncer(BaseService):
                 )
                 # Reset the sync peer
                 self.sync_peer = None
-                await asyncio.sleep(NEXT_SYNC_CHECK_INTERVAL)
 
     async def select_sync_peer(self) -> Peer:
         if len(self.peer_pool) == 0:

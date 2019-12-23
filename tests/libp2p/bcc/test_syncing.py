@@ -31,15 +31,23 @@ async def get_sync_setup(
         bob_chaindb=bob_chaindb,
         bob_branch=bob_branch,
         genesis_state=genesis_state,
+        alice_event_bus=event_bus,
+        handshake=False,
     )
 
     async with peer_pair as (alice, bob):
         alice_syncer = BeaconChainSyncerFactory(
-            chain_db__db=alice.chain.chaindb.db, peer_pool=alice.handshaked_peers
+            chain_db__db=alice.chain.chaindb.db,
+            peer_pool=alice.handshaked_peers,
+            event_bus=event_bus,
         )
 
         try:
-            await asyncio.wait_for(alice_syncer.run(), timeout=sync_timeout)
+            task = asyncio.ensure_future(alice_syncer.run())
+            # sync will start when alice request_status
+            await alice.request_status(bob.peer_id)
+            # Wait sync to complete
+            await asyncio.wait_for(task, timeout=sync_timeout)
         except asyncio.TimeoutError:
             # After sync is cancelled, return to let the caller do assertions about the state
             pass
