@@ -411,7 +411,7 @@ class Interaction:
         return self.stream.muxed_conn.peer_id
 
     def debug(self, message: str) -> None:
-        self.logger.debug(
+        self.logger.debug2(
             "Interaction %s    with %s    %s",
             self.stream.get_protocol().split("/")[4],
             str(self.peer_id)[:15],
