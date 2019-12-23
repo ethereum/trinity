@@ -461,7 +461,6 @@ class Validator(BaseService):
 
             metrics.validator_sent_attestation.inc()
 
-            attestations = attestations + (attestation,)
         # TODO: Aggregate attestations
 
         return attestations
