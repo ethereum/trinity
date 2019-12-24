@@ -141,10 +141,6 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
-    def get_state_root_by_slot(self, slot: Slot) -> Hash32:
-        ...
-
-    @abstractmethod
     def get_state_by_root(
         self, state_root: Hash32, state_class: Type[BeaconState]
     ) -> BeaconState:
@@ -703,14 +699,6 @@ class BeaconChainDB(BaseBeaconChainDB):
             ssz.encode(slot, sedes=ssz.sedes.uint64),
         )
 
-    def _add_slot_to_state_root_lookup(self, slot: Slot, state_root: Hash32) -> None:
-        """
-        Set a record in the database to allow looking up the state root by
-        slot number.
-        """
-        slot_to_state_root_key = SchemaV1.make_slot_to_state_root_lookup_key(slot)
-        self.db.set(slot_to_state_root_key, state_root)
-
     def get_head_state_slot(self) -> Slot:
         return self._get_head_state_slot(self.db)
 
@@ -724,24 +712,6 @@ class BeaconChainDB(BaseBeaconChainDB):
         except KeyError:
             raise HeadStateSlotNotFound("No head state slot found")
         return head_state_slot
-
-    def get_state_root_by_slot(self, slot: Slot) -> Hash32:
-        return self._get_state_root_by_slot(self.db, slot)
-
-    @staticmethod
-    def _get_state_root_by_slot(db: DatabaseAPI, slot: Slot) -> Hash32:
-        """
-        Return the requested beacon state as specified by slot.
-
-        Raises StateNotFound if it is not present in the db.
-        """
-        slot_to_state_root_key = SchemaV1.make_slot_to_state_root_lookup_key(slot)
-        try:
-            state_root = db[slot_to_state_root_key]
-        except KeyError:
-            raise StateNotFound("No state root for slot #{0}".format(slot))
-        else:
-            return Hash32(state_root)
 
     def get_state_by_root(
         self, state_root: Hash32, state_class: Type[BeaconState]
@@ -780,7 +750,6 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     def _persist_state(self, state: BeaconState) -> None:
         self.db.set(state.hash_tree_root, ssz.encode(state))
-        self._add_slot_to_state_root_lookup(state.slot, state.hash_tree_root)
 
         self._persist_finalized_head(state)
         self._persist_justified_head(state)
