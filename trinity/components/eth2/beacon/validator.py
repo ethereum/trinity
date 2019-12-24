@@ -403,7 +403,7 @@ class Validator(BaseService):
         """
         Attest the block at the given ``slot`` and broadcast them.
         """
-        attestations: Tuple[Attestation, ...] = ()
+        result_attestations: Tuple[Attestation, ...] = ()
         head = self.chain.get_canonical_head()
         state_machine = self.chain.get_state_machine()
         state = self.chain.get_head_state()
@@ -461,10 +461,10 @@ class Validator(BaseService):
 
             metrics.validator_sent_attestation.inc()
 
-            attestations = attestations + (attestation,)
+            result_attestations = result_attestations + attestations
         # TODO: Aggregate attestations
 
-        return attestations
+        return result_attestations
 
     #
     # Aggregating attestation
