@@ -137,6 +137,10 @@ class BaseBeaconChainDB(ABC):
     # Beacon State
     #
     @abstractmethod
+    def update_head_slot_and_state_root(self, slot: Slot, root: Hash32) -> None:
+        ...
+
+    @abstractmethod
     def get_head_state_slot(self) -> Slot:
         ...
 
