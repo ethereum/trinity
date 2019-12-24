@@ -141,6 +141,10 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
+    def get_head_state_root(self) -> Hash32:
+        ...
+
+    @abstractmethod
     def get_state_by_root(
         self, state_root: Hash32, state_class: Type[BeaconState]
     ) -> BeaconState:
@@ -699,6 +703,19 @@ class BeaconChainDB(BaseBeaconChainDB):
             ssz.encode(slot, sedes=ssz.sedes.uint64),
         )
 
+    def _add_head_state_root_lookup(self, root: Hash32) -> None:
+        """
+        Write head state root into the database.
+        """
+        self.db.set(SchemaV1.make_head_state_root_lookup_key(), root)
+
+    def update_head_slot_and_state_root(self, slot: Slot, root: Hash32) -> None:
+        """
+        Write head state slot and head state root into the database.
+        """
+        self._add_head_state_slot_lookup(slot)
+        self._add_head_state_root_lookup(root)
+
     def get_head_state_slot(self) -> Slot:
         return self._get_head_state_slot(self.db)
 
@@ -712,6 +729,17 @@ class BeaconChainDB(BaseBeaconChainDB):
         except KeyError:
             raise HeadStateSlotNotFound("No head state slot found")
         return head_state_slot
+
+    def get_head_state_root(self) -> Hash32:
+        return self._get_head_state_root(self.db)
+
+    @staticmethod
+    def _get_head_state_root(db: DatabaseAPI) -> Hash32:
+        try:
+            head_state_root = db[SchemaV1.make_head_state_root_lookup_key()]
+        except KeyError:
+            raise HeadStateSlotNotFound("No head state slot found")
+        return Hash32(head_state_root)
 
     def get_state_by_root(
         self, state_root: Hash32, state_class: Type[BeaconState]
@@ -754,15 +782,12 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._persist_finalized_head(state)
         self._persist_justified_head(state)
 
-        # Update head state slot if new state slot is greater than head state slot.
+        # Check if head state info is set.
         try:
-            head_state_slot = self.get_head_state_slot()
+            self.get_head_state_root()
         except HeadStateSlotNotFound:
             # Hasn't store any head state slot yet.
-            self._add_head_state_slot_lookup(state.slot)
-        else:
-            if state.slot > head_state_slot:
-                self._add_head_state_slot_lookup(state.slot)
+            self.update_head_slot_and_state_root(state.slot, state.hash_tree_root)
 
         # For metrics
         # TODO: only persist per epoch transition

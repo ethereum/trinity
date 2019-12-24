@@ -158,7 +158,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             )
 
             state = chain.get_head_state()
-            assert state.slot == chain_config.genesis_config.GENESIS_SLOT
             registry_pubkeys = [v_record.pubkey for v_record in state.validators]
 
             validator_privkeys = {}

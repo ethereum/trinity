@@ -319,7 +319,9 @@ class BeaconChain(BaseBeaconChain):
 
     def get_head_state(self) -> BeaconState:
         head_state_slot = self.chaindb.get_head_state_slot()
-        return self.get_state_by_slot(head_state_slot)
+        head_state_root = self.chaindb.get_head_state_root()
+        state_class = self.get_state_machine(at_slot=head_state_slot).get_state_class()
+        return self.chaindb.get_state_by_root(head_state_root, state_class)
 
     def get_canonical_epoch_info(self) -> EpochInfo:
         return self.chaindb.get_canonical_epoch_info()
@@ -451,6 +453,12 @@ class BeaconChain(BaseBeaconChain):
         (new_canonical_blocks, old_canonical_blocks) = self.chaindb.persist_block(
             imported_block, imported_block.__class__, fork_choice_scoring
         )
+
+        # Set the state of new (canonical) block as head state.
+        if len(new_canonical_blocks) > 0:
+            self.chaindb.update_head_slot_and_state_root(
+                state.slot, state.hash_tree_root
+            )
 
         self.logger.debug(
             "successfully imported block at slot %s with signing root %s",
