@@ -180,7 +180,7 @@ def test_chaindb_get_genesis_block_root(chaindb, genesis_block, fork_choice_scor
     assert block_root == genesis_block.signing_root
 
 
-def test_chaindb_get_head_state_slot(chaindb, state):
+def test_chaindb_get_head_state_slot_and_root(chaindb, state):
     # No head state slot stored in the beginning
     with pytest.raises(HeadStateSlotNotFound):
         chaindb.get_head_state_slot()
@@ -188,9 +188,18 @@ def test_chaindb_get_head_state_slot(chaindb, state):
     current_state = state.set("slot", current_slot)
     chaindb.persist_state(current_state)
     assert chaindb.get_head_state_slot() == current_state.slot
-    past_state = state
-    chaindb.persist_state(past_state)
-    assert chaindb.get_head_state_slot() == current_state.slot
+    assert chaindb.get_head_state_root() == current_state.hash_tree_root
+
+
+def test_chaindb_update_head_slot_and_state_root(chaindb, state):
+    chaindb.persist_state(state)
+    assert chaindb.get_head_state_slot() == state.slot
+    assert chaindb.get_head_state_root() == state.hash_tree_root
+
+    post_state = state.set("slot", state.slot + 1)
+    chaindb.update_head_slot_and_state_root(post_state.slot, post_state.hash_tree_root)
+    assert chaindb.get_head_state_slot() == post_state.slot
+    assert chaindb.get_head_state_root() == post_state.hash_tree_root
 
 
 def test_chaindb_state(chaindb, state):
