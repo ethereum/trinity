@@ -5,7 +5,7 @@ from eth._utils.datatypes import Configurable
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSSignature, Hash32
 from eth_utils import humanize_hash
-from ssz.hashable_container import HashableContainer, SignedHashableContainer
+from ssz.hashable_container import HashableContainer
 from ssz.sedes import List, bytes32, bytes96, uint64
 
 from eth2.beacon.constants import (
@@ -17,7 +17,7 @@ from eth2.beacon.typing import FromBlockParams, SigningRoot, Slot
 
 from .attestations import Attestation
 from .attester_slashings import AttesterSlashing
-from .block_headers import BeaconBlockHeader
+from .block_headers import BeaconBlockHeader, SignedBeaconBlockHeader
 from .defaults import default_slot, default_tuple
 from .deposits import Deposit
 from .eth1_data import Eth1Data, default_eth1_data
@@ -93,13 +93,12 @@ default_beacon_block_body = BeaconBlockBody.create()
 TBaseBeaconBlock = TypeVar("TBaseBeaconBlock", bound="BaseBeaconBlock")
 
 
-class BaseBeaconBlock(SignedHashableContainer, Configurable, ABC):
+class BaseBeaconBlock(HashableContainer, Configurable, ABC):
     fields = [
         ("slot", uint64),
         ("parent_root", bytes32),
         ("state_root", bytes32),
         ("body", BeaconBlockBody),
-        ("signature", bytes96),
     ]
 
     @classmethod
@@ -110,25 +109,21 @@ class BaseBeaconBlock(SignedHashableContainer, Configurable, ABC):
         parent_root: SigningRoot = ZERO_SIGNING_ROOT,
         state_root: Hash32 = ZERO_HASH32,
         body: BeaconBlockBody = default_beacon_block_body,
-        signature: BLSSignature = EMPTY_SIGNATURE,
     ) -> TBaseBeaconBlock:
         return super().create(
             slot=slot,
             parent_root=parent_root,
             state_root=state_root,
             body=body,
-            signature=signature,
         )
 
     def __str__(self) -> str:
         return (
-            f"[signing_root]={humanize_hash(self.signing_root)},"
-            f" [hash_tree_root]={humanize_hash(self.hash_tree_root)},"
+            f"[hash_tree_root]={humanize_hash(self.hash_tree_root)},"
             f" slot={self.slot},"
             f" parent_root={humanize_hash(self.parent_root)},"
             f" state_root={humanize_hash(self.state_root)},"
-            f" body=({self.body}),"
-            f" signature={humanize_hash(self.signature)}"
+            f" body=({self.body})"
         )
 
     @property
@@ -142,7 +137,6 @@ class BaseBeaconBlock(SignedHashableContainer, Configurable, ABC):
             parent_root=self.parent_root,
             state_root=self.state_root,
             body_root=self.body.hash_tree_root,
-            signature=self.signature,
         )
 
     @classmethod
@@ -189,7 +183,6 @@ class BeaconBlock(BaseBeaconBlock):
             parent_root=block.parent_root,
             state_root=block.state_root,
             body=body,
-            signature=block.signature,
         )
 
     @classmethod
@@ -209,7 +202,7 @@ class BeaconBlock(BaseBeaconBlock):
 
         return cls.create(
             slot=slot,
-            parent_root=parent_block.signing_root,
+            parent_root=parent_block.hash_tree_root,
             state_root=parent_block.state_root,
             body=cls.block_body_class.create(),
         )
@@ -223,7 +216,6 @@ class BeaconBlock(BaseBeaconBlock):
             parent_root=block.parent_root,
             state_root=block.state_root,
             body=block.body,
-            signature=block.signature,
         )
 
     @classmethod
@@ -234,6 +226,26 @@ class BeaconBlock(BaseBeaconBlock):
             slot=header.slot,
             parent_root=header.parent_root,
             state_root=header.state_root,
-            signature=header.signature,
             body=BeaconBlockBody(),
+        )
+
+TSignedBeaconBlock = TypeVar("TSignedBeaconBlock", bound="SignedBeaconBlock")
+
+
+class SignedBeaconBlock(HashableContainer):
+    fields = [
+        ('message', BaseBeaconBlock),
+        ('signature', bytes96),
+    ]
+
+    @classmethod
+    def create(
+        cls: Type[TSignedBeaconBlock],
+        *,
+        message: BaseBeaconBlock,
+        signature: bytes,
+    ) -> TSignedBeaconBlock:
+        return super().create(
+            message=message,
+            signature=signature,
         )
