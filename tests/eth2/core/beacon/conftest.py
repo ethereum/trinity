@@ -451,7 +451,6 @@ def sample_block_header_params():
         "parent_root": b"\x22" * 32,
         "state_root": b"\x33" * 32,
         "body_root": b"\x43" * 32,
-        "signature": b"\x56" * 96,
     }
 
 
@@ -509,14 +508,13 @@ def sample_beacon_block_body_params(sample_signature, sample_eth1_data_params):
 
 @pytest.fixture
 def sample_beacon_block_params(
-    sample_signature, sample_beacon_block_body_params, genesis_slot
+    sample_beacon_block_body_params, genesis_slot
 ):
     return {
         "slot": genesis_slot + 10,
         "parent_root": ZERO_HASH32,
         "state_root": b"\x55" * 32,
         "body": BeaconBlockBody.create(**sample_beacon_block_body_params),
-        "signature": sample_signature,
     }
 
 
