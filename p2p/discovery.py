@@ -91,7 +91,7 @@ if TYPE_CHECKING:
 else:
     UserDict = collections.UserDict
 
-# V4 handler methods take a Node, payload and msg_hash as arguments.
+# V4 handler are async methods that take a Node, payload and msg_hash as arguments.
 V4_HANDLER_TYPE = Callable[[NodeAPI, Tuple[Any, ...], Hash32], Awaitable[Any]]
 
 MAX_ENTRIES_PER_TOPIC = 50
@@ -561,7 +561,6 @@ class DiscoveryService(Service):
             return
         self.logger.debug2('<<< pong (v4) from %s (token == %s)', node, encode_hex(token))
         self.process_pong_v4(node, token)
-        await trio.hazmat.checkpoint()
 
     async def recv_neighbours_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The neighbours payload should have 2 elements: nodes, expiration
@@ -574,7 +573,6 @@ class DiscoveryService(Service):
         neighbours = _extract_nodes_from_payload(node.address, nodes, self.logger)
         self.logger.debug2('<<< neighbours from %s: %s', node, neighbours)
         self.process_neighbours(node, neighbours)
-        await trio.hazmat.checkpoint()
 
     async def recv_ping_v4(
             self, node: NodeAPI, payload: Sequence[Any], message_hash: Hash32) -> None:
@@ -613,7 +611,6 @@ class DiscoveryService(Service):
         self.update_routing_table(node)
         found = self.routing.neighbours(big_endian_to_int(node_id))
         self.send_neighbours_v4(node, found)
-        await trio.hazmat.checkpoint()
 
     async def recv_enr_request(
             self, node: NodeAPI, payload: Sequence[Any], msg_hash: Hash32) -> None:

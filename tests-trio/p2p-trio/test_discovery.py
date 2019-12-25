@@ -52,7 +52,6 @@ async def test_ping_pong(nursery, manually_driven_discovery_pair):
     received_pongs = []
 
     async def recv_pong(node, payload, hash_):
-        await trio.hazmat.checkpoint()
         received_pongs.append((node, payload))
 
     alice.recv_pong_v4 = recv_pong
@@ -136,7 +135,6 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
     received_neighbours = []
 
     async def recv_neighbours(node, payload, hash_):
-        await trio.hazmat.checkpoint()
         received_neighbours.append((node, payload))
 
     alice.recv_neighbours_v4 = recv_neighbours
@@ -389,13 +387,11 @@ class MockDiscoveryService(DiscoveryService):
         raise ValueError("MockDiscoveryService must not be used to send network messages")
 
     async def send_ping_v4(self, node):
-        await trio.hazmat.checkpoint()
         echo = hex(random.randint(0, 2**256))[-32:]
         self.messages.append((node, 'ping', echo))
         return echo
 
     async def send_pong_v4(self, node, echo):
-        await trio.hazmat.checkpoint()
         self.messages.append((node, 'pong', echo))
 
     def send_find_node_v4(self, node, nodeid):
