@@ -177,9 +177,6 @@ class Validator(BaseService):
         )
         self.run_daemon_task(self.handle_slot_tick())
 
-        # Metrics
-        self.run_daemon_task(self.handle_libp2p_peers_requests())
-
         await self.cancellation()
 
     def _check_and_update_data_per_slot(self, slot: Slot) -> None:
@@ -719,11 +716,3 @@ class Validator(BaseService):
                     aggregate_and_proofs += (aggregate_and_proof,)
 
         return aggregate_and_proofs
-
-    async def handle_libp2p_peers_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(Libp2pPeersRequest)):
-            peer_count = len(self.p2p_node.handshaked_peers.peers)
-            await self.event_bus.broadcast(
-                Libp2pPeersResponse(peer_count),
-                req.broadcast_config(),
-            )
