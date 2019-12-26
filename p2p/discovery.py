@@ -621,6 +621,9 @@ class DiscoveryService(Service):
         expiration = payload[0]
         if self._is_msg_expired(expiration):
             return
+        # XXX: Maybe reconsider this and accept all ENR requests until we have a persistent
+        # routing store of nodes we've bonded with? Otherwise if a node request our ENR across a
+        # restart, we'll not reply to them.
         if node not in self.routing:
             self.logger.info('Ignoring ENR_REQUEST from unknown node %s', node)
             return
