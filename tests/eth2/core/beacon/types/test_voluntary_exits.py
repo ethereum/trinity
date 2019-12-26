@@ -1,10 +1,10 @@
 import ssz
 
-from eth2.beacon.types.voluntary_exits import VoluntaryExit
+from eth2.beacon.types.voluntary_exits import VoluntaryExit, SignedVoluntaryExit
 
 
-def test_defaults(sample_voluntary_exit_params):
+def test_defaults(sample_voluntary_exit_params, sample_signature):
     exit = VoluntaryExit.create(**sample_voluntary_exit_params)
 
-    assert exit.signature[0] == sample_voluntary_exit_params["signature"][0]
+    assert exit.epoch == sample_voluntary_exit_params["epoch"]
     assert ssz.encode(exit)
