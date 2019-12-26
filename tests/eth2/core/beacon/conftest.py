@@ -489,8 +489,8 @@ def sample_deposit_params(sample_deposit_data_params, deposit_contract_tree_dept
 
 
 @pytest.fixture
-def sample_voluntary_exit_params(sample_signature):
-    return {"epoch": 123, "validator_index": 15, "signature": sample_signature}
+def sample_voluntary_exit_params():
+    return {"epoch": 123, "validator_index": 15}
 
 
 @pytest.fixture

@@ -144,14 +144,16 @@ def process_voluntary_exits(
             f"maximum: {config.MAX_VOLUNTARY_EXITS}"
         )
 
-    for voluntary_exit in block.body.voluntary_exits:
+    for signed_voluntary_exit in block.body.voluntary_exits:
         validate_voluntary_exit(
             state,
-            voluntary_exit,
+            signed_voluntary_exit,
             config.SLOTS_PER_EPOCH,
             config.PERSISTENT_COMMITTEE_PERIOD,
         )
-        state = initiate_validator_exit(state, voluntary_exit.validator_index, config)
+        state = initiate_validator_exit(
+            state, signed_voluntary_exit.message.validator_index, config
+        )
 
     return state
 

@@ -6,6 +6,7 @@ from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
 from eth2.beacon.epoch_processing_helpers import increase_balance
 from eth2.beacon.helpers import compute_domain
 from eth2.beacon.signature_domain import SignatureDomain
+from eth2.beacon.types.deposit_data import DepositDataMessage
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
@@ -52,14 +53,18 @@ def process_deposit(
 
     pubkey = deposit.data.pubkey
     amount = deposit.data.amount
+    withdrawal_credentials = deposit.data.withdrawal_credentials
     validator_pubkeys = tuple(v.pubkey for v in state.validators)
     if pubkey not in validator_pubkeys:
         # Verify the deposit signature (proof of possession) for new validators.
         # Note: The deposit contract does not check signatures.
         # Note: Deposits are valid across forks, thus the deposit domain
         # is retrieved directly from `compute_domain`.
+        deposit_message = DepositDataMessage.create(
+            pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
+        )
         is_valid_proof_of_possession = bls.verify(
-            message_hash=deposit.data.signing_root,
+            message_hash=deposit_message.hash_tree_root,
             pubkey=pubkey,
             signature=deposit.data.signature,
             domain=compute_domain(SignatureDomain.DOMAIN_DEPOSIT),
@@ -67,7 +72,6 @@ def process_deposit(
         if not is_valid_proof_of_possession:
             return state
 
-        withdrawal_credentials = deposit.data.withdrawal_credentials
         validator = Validator.create_pending_validator(
             pubkey, withdrawal_credentials, amount, config
         )

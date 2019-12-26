@@ -33,11 +33,11 @@ from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BeaconBlockHeader
 from eth2.beacon.types.checkpoints import Checkpoint
-from eth2.beacon.types.deposit_data import DepositData
+from eth2.beacon.types.deposit_data import DepositData, DepositDataMessage
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.types.voluntary_exits import VoluntaryExit
+from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit, VoluntaryExit
 from eth2.beacon.typing import (
     Bitfield,
     CommitteeIndex,
@@ -202,9 +202,11 @@ def aggregate_votes(
 #
 # Signer
 #
-def sign_proof_of_possession(deposit_data: DepositData, privkey: int) -> BLSSignature:
+def sign_proof_of_possession(
+    deposit_data_message: DepositDataMessage, privkey: int
+) -> BLSSignature:
     return bls.sign(
-        message_hash=deposit_data.signing_root,
+        message_hash=deposit_data_message.hash_tree_root,
         privkey=privkey,
         domain=compute_domain(SignatureDomain.DOMAIN_DEPOSIT),
     )
@@ -699,16 +701,16 @@ def create_mock_voluntary_exit(
     keymap: Dict[BLSPubkey, int],
     validator_index: ValidatorIndex,
     exit_epoch: Epoch = None,
-) -> VoluntaryExit:
+) -> SignedVoluntaryExit:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     target_epoch = current_epoch if exit_epoch is None else exit_epoch
     voluntary_exit = VoluntaryExit.create(
         epoch=target_epoch, validator_index=validator_index
     )
-    return voluntary_exit.set(
-        "signature",
-        sign_transaction(
-            message_hash=voluntary_exit.signing_root,
+    return SignedVoluntaryExit.create(
+        message=voluntary_exit,
+        signature=sign_transaction(
+            message_hash=voluntary_exit.hash_tree_root,
             privkey=keymap[state.validators[validator_index].pubkey],
             state=state,
             slot=compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH),
@@ -732,11 +734,16 @@ def create_mock_deposit_data(
     if amount is None:
         amount = config.MAX_EFFECTIVE_BALANCE
 
-    data = DepositData.create(
+    message = DepositDataMessage.create(
         pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
     )
-    signature = sign_proof_of_possession(deposit_data=data, privkey=privkey)
-    return data.set("signature", signature)
+    signature = sign_proof_of_possession(deposit_data_message=message, privkey=privkey)
+    return DepositData.create(
+        pubkey=pubkey,
+        withdrawal_credentials=withdrawal_credentials,
+        amount=amount,
+        signature=signature,
+    )
 
 
 def make_deposit_tree_and_root(
