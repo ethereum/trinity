@@ -16,6 +16,7 @@ from typing import (
     cast,
     DefaultDict,
     Dict,
+    Generic,
     Hashable,
     Iterable,
     Iterator,
@@ -25,6 +26,7 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    TypeVar,
     TYPE_CHECKING,
 )
 
@@ -150,7 +152,7 @@ class DiscoveryService(Service):
         self._event_bus = event_bus
         self.this_node = Node(self.pubkey, address)
         self.routing = RoutingTable(self.this_node)
-        self.enr_incoming_channels: Dict[Hash32, trio.MemorySendChannel[ENR]] = {}
+        self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
         # FIXME: Use a persistent EnrDb implementation.
         self._enr_db = MemoryEnrDb(default_identity_scheme_registry)
         # FIXME: Use a concurrency-safe EnrDb implementation.
@@ -255,20 +257,18 @@ class DiscoveryService(Service):
         # No need to use a timeout because bond() takes care of that internally.
         await self.bond(remote)
         token = self.send_enr_request(remote)
-        send_chan: trio.MemorySendChannel[ENR]
-        recv_chan: trio.MemoryReceiveChannel[ENR]
-        send_chan, recv_chan = trio.open_memory_channel(1)
-        enr = None
+        send_chan, recv_chan = trio.open_memory_channel[Tuple[ENR, Hash32]](1)
         try:
-            async with recv_chan:
-                self.enr_incoming_channels[token] = send_chan
-                with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT):
-                    enr = await recv_chan.receive()
-        finally:
-            self.enr_incoming_channels.pop(token, None)
+            with trio.fail_after(constants.KADEMLIA_REQUEST_TIMEOUT):
+                enr, received_token = await self.enr_response_channels.wait_receive(
+                    remote, send_chan, recv_chan)
+        except trio.TooSlowError:
+            raise CouldNotRetrieveENR(f"Timed out waiting for ENR from {remote}")
 
-        if enr is None:
-            raise CouldNotRetrieveENR("Failed to get ENR from %s", remote)
+        if received_token != token:
+            raise CouldNotRetrieveENR(
+                f"Got ENR from {remote} with token {received_token!r} but expected {token!r}")
+
         return enr
 
     async def get_local_enr(self) -> ENR:
@@ -643,13 +643,19 @@ class DiscoveryService(Service):
             enr = ENR.deserialize(serialized_enr)
         except DeserializationError as error:
             raise ValidationError("ENR in response is not properly encoded") from error
-        if token not in self.enr_incoming_channels:
-            self.logger.debug("Unexpected ENR_RESPONSE with token %s", token)
+        try:
+            channel = self.enr_response_channels.get_channel(node)
+        except KeyError:
+            self.logger.debug("Unexpected ENR_RESPONSE from %s", node)
             return
         enr.validate_signature()
         self.logger.debug(
             "Received ENR %s with expected response token: %s", enr, encode_hex(token))
-        await self.enr_incoming_channels[token].send(enr)
+        try:
+            await channel.send((enr, token))
+        except trio.BrokenResourceError:
+            # This means the receiver has already closed, probably because it timed out.
+            pass
 
     def send_enr_request(self, node: NodeAPI) -> Hash32:
         message = self.send(node, CMD_ENR_REQUEST, [_get_msg_expiration()])
@@ -1109,3 +1115,33 @@ class CallbackManager(UserDict):
                 return False
             else:
                 return True
+
+
+TMsg = TypeVar("TMsg")
+
+
+class ExpectedResponseChannels(Generic[TMsg]):
+
+    def __init__(self) -> None:
+        self._channels: Dict[NodeAPI, trio.abc.SendChannel[TMsg]] = {}
+
+    def get_channel(self, remote: NodeAPI) -> trio.abc.SendChannel[TMsg]:
+        return self._channels[remote]
+
+    async def wait_receive(
+        self,
+        remote: NodeAPI,
+        send_chan: trio.abc.SendChannel[TMsg],
+        recv_chan: trio.abc.ReceiveChannel[TMsg]
+    ) -> TMsg:
+        if remote in self._channels:
+            raise AlreadyWaitingDiscoveryResponse(f"Already waiting on response from: {remote}")
+
+        self._channels[remote] = send_chan
+        try:
+            async with recv_chan:
+                reply = await recv_chan.receive()
+        finally:
+            self._channels.pop(remote, None)
+
+        return reply
