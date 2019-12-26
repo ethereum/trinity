@@ -255,22 +255,22 @@ class DiscoveryService(Service):
         return got_ping
 
     async def wait_pong_v4(self, remote: NodeAPI, token: Hash32) -> bool:
-        event = trio.Event()
-        callback = event.set
-        return await self._wait_pong(remote, token, event, callback)
-
-    async def _wait_pong(
-            self, remote: NodeAPI, token: Hash32, event: trio.Event,
-            callback: Callable[..., Any]) -> bool:
         """Wait for a pong from the given remote containing the given token.
 
         This coroutine adds a callback to pong_callbacks and yields control until the given event
         is set or a timeout (k_request_timeout) occurs. At that point it returns whether or not
-        a pong was received with the given pingid.
+        a pong was received with the given token.
         """
-        pingid = self._mkpingid(token, remote)
 
-        with self.pong_callbacks.acquire(pingid, callback):
+        event = trio.Event()
+
+        def callback(received_token: Hash32) -> None:
+            if received_token == token:
+                event.set()
+            else:
+                self.logger.warning("Pong from %s with wrong token: %s", received_token)
+
+        with self.pong_callbacks.acquire(remote, callback):
             with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
                 await event.wait()
             if cancel_scope.cancelled_caught:
@@ -572,14 +572,12 @@ class DiscoveryService(Service):
             self.parity_pong_tokens = eth_utils.toolz.valfilter(
                 lambda val: val != token, self.parity_pong_tokens)
 
-        pingid = self._mkpingid(token, remote)
-
         try:
-            callback = self.pong_callbacks.get_callback(pingid)
+            callback = self.pong_callbacks.get_callback(remote)
         except KeyError:
             self.logger.debug('unexpected v4 pong from %s (token == %s)', remote, encode_hex(token))
         else:
-            callback()
+            callback(token)
 
     def process_ping(self, remote: NodeAPI, hash_: Hash32) -> None:
         """Process a received ping packet.
@@ -915,7 +913,7 @@ class CallbackLock:
 class CallbackManager(UserDict):
     @contextlib.contextmanager
     def acquire(self,
-                key: Hashable,
+                key: NodeAPI,
                 callback: Callable[..., Any]) -> Iterator[CallbackLock]:
         if key in self:
             if not self.locked(key):
@@ -931,10 +929,10 @@ class CallbackManager(UserDict):
         finally:
             del self[key]
 
-    def get_callback(self, key: Hashable) -> Callable[..., Any]:
+    def get_callback(self, key: NodeAPI) -> Callable[..., Any]:
         return self[key].callback
 
-    def locked(self, key: Hashable) -> bool:
+    def locked(self, key: NodeAPI) -> bool:
         try:
             lock = self[key]
         except KeyError:
