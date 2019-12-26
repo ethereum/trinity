@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from eth2.beacon.chains.base import BeaconChain
-from eth2.beacon.db.exceptions import AttestationRootNotFound
+from eth2.beacon.db.exceptions import AttestationRootNotFound, StateNotFound
 from eth2.beacon.exceptions import BlockClassError
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.tools.builder.proposer import create_mock_block
@@ -56,6 +56,47 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
 
     result_block_2 = valid_chain.get_block_by_hash_tree_root(block.hash_tree_root)
     assert result_block_2 == block
+
+
+@pytest.mark.parametrize(
+    (
+        "validator_count,"
+        "slots_per_epoch,"
+        "target_committee_size,"
+        "max_committees_per_slot,"
+    ),
+    [(100, 16, 10, 16)],
+)
+def test_get_state_by_slot(valid_chain, genesis_block, genesis_state, config, keymap):
+    # Fisrt, skip block and check if `get_state_by_slot` returns the expected state
+    state_machine = valid_chain.get_state_machine(genesis_block.slot)
+    state = valid_chain.get_head_state()
+    block_skipped_slot = genesis_block.slot + 1
+    block_skipped_state = state_machine.state_transition.apply_state_transition(
+        state, future_slot=block_skipped_slot
+    )
+    valid_chain.chaindb.persist_state(block_skipped_state)
+    with pytest.raises(StateNotFound):
+        valid_chain.get_state_by_slot(block_skipped_slot)
+
+    # Next, import proposed block and check if `get_state_by_slot` returns the expected state
+    proposed_slot = block_skipped_slot + 1
+    block = create_mock_block(
+        state=block_skipped_state,
+        config=config,
+        state_machine=state_machine,
+        block_class=genesis_block.__class__,
+        parent_block=genesis_block,
+        keymap=keymap,
+        slot=proposed_slot,
+        attestations=(),
+    )
+    valid_chain.import_block(block)
+    state = valid_chain.get_head_state()
+    assert (
+        valid_chain.get_state_by_slot(proposed_slot).hash_tree_root
+        == state.hash_tree_root
+    )
 
 
 @pytest.mark.long

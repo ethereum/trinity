@@ -157,7 +157,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 cancel_token=libp2p_node.cancel_token,
             )
 
-            state = chain.get_head_state()
+            state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
             registry_pubkeys = [v_record.pubkey for v_record in state.validators]
 
             validator_privkeys = {}
