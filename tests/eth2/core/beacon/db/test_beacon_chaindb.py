@@ -197,7 +197,7 @@ def test_chaindb_update_head_slot_and_state_root(chaindb, state):
     assert chaindb.get_head_state_root() == state.hash_tree_root
 
     post_state = state.set("slot", state.slot + 1)
-    chaindb.update_head_slot_and_state_root(post_state.slot, post_state.hash_tree_root)
+    chaindb.update_head_state(post_state.slot, post_state.hash_tree_root)
     assert chaindb.get_head_state_slot() == post_state.slot
     assert chaindb.get_head_state_root() == post_state.hash_tree_root
 

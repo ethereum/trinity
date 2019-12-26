@@ -137,7 +137,7 @@ class BaseBeaconChainDB(ABC):
     # Beacon State
     #
     @abstractmethod
-    def update_head_slot_and_state_root(self, slot: Slot, root: Hash32) -> None:
+    def update_head_state(self, slot: Slot, root: Hash32) -> None:
         ...
 
     @abstractmethod
@@ -713,7 +713,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         """
         self.db.set(SchemaV1.make_head_state_root_lookup_key(), root)
 
-    def update_head_slot_and_state_root(self, slot: Slot, root: Hash32) -> None:
+    def update_head_state(self, slot: Slot, root: Hash32) -> None:
         """
         Write head state slot and head state root into the database.
         """
@@ -791,7 +791,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             self.get_head_state_root()
         except HeadStateSlotNotFound:
             # Hasn't store any head state slot yet.
-            self.update_head_slot_and_state_root(state.slot, state.hash_tree_root)
+            self.update_head_state(state.slot, state.hash_tree_root)
 
         # For metrics
         # TODO: only persist per epoch transition

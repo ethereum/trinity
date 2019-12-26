@@ -478,9 +478,7 @@ class BeaconChain(BaseBeaconChain):
 
         # Set the state of new (canonical) block as head state.
         if len(new_canonical_blocks) > 0:
-            self.chaindb.update_head_slot_and_state_root(
-                state.slot, state.hash_tree_root
-            )
+            self.chaindb.update_head_state(state.slot, state.hash_tree_root)
 
         self.logger.debug(
             "successfully imported block at slot %s with signing root %s",
