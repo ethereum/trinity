@@ -6,7 +6,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_randao_reveal,
 )
 from eth2.beacon.types.block_headers import BeaconBlockHeader
-from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.configs import CommitteeConfig, Eth2Config
 
@@ -21,17 +21,18 @@ from .operation_processing import process_operations
 
 def process_block_header(
     state: BeaconState,
-    block: BaseBeaconBlock,
+    signed_block: SignedBeaconBlock,
     config: Eth2Config,
     check_proposer_signature: bool,
 ) -> BeaconState:
+    block = signed_block.message
     validate_block_slot(state, block)
     validate_block_parent_root(state, block)
-    validate_proposer_is_not_slashed(state, block.signing_root, CommitteeConfig(config))
+    validate_proposer_is_not_slashed(state, block.hash_tree_root, CommitteeConfig(config))
 
     if check_proposer_signature:
         validate_proposer_signature(
-            state, block, committee_config=CommitteeConfig(config)
+            state, signed_block, committee_config=CommitteeConfig(config)
         )
 
     return state.set(
@@ -97,11 +98,12 @@ def process_eth1_data(
 
 def process_block(
     state: BeaconState,
-    block: BaseBeaconBlock,
+    signed_block: SignedBeaconBlock,
     config: Eth2Config,
     check_proposer_signature: bool = True,
 ) -> BeaconState:
-    state = process_block_header(state, block, config, check_proposer_signature)
+    block = signed_block.message
+    state = process_block_header(state, signed_block, config, check_proposer_signature)
     state = process_randao(state, block, config)
     state = process_eth1_data(state, block, config)
     state = process_operations(state, block, config)

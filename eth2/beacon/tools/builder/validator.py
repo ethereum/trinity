@@ -31,7 +31,7 @@ from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
-from eth2.beacon.types.blocks import BeaconBlockHeader
+from eth2.beacon.types.block_headers import BeaconBlockHeader, SignedBeaconBlockHeader
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData, DepositMessage
 from eth2.beacon.types.pending_attestations import PendingAttestation
@@ -249,14 +249,17 @@ def create_block_header_with_signature(
         body_root=body_root,
     )
     block_header_signature = sign_transaction(
-        message_hash=block_header.signing_root,
+        message_hash=block_header.hash_tree_root,
         privkey=privkey,
         state=state,
         slot=block_header.slot,
         signature_domain=SignatureDomain.DOMAIN_BEACON_PROPOSER,
         slots_per_epoch=slots_per_epoch,
     )
-    return block_header.set("signature", block_header_signature)
+    return SignedBeaconBlockHeader.create(
+        message=block_header,
+        signature=block_header_signature,
+    )
 
 
 #

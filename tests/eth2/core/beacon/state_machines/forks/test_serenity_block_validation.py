@@ -10,7 +10,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_randao_reveal,
 )
 from eth2.beacon.tools.builder.initializer import create_mock_validator
-from eth2.beacon.types.blocks import BeaconBlock
+from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.configs import CommitteeConfig
 
@@ -66,12 +66,11 @@ def test_validate_proposer_signature(
     )
 
     block = BeaconBlock.create(**sample_beacon_block_params)
-    header = block.header
 
-    proposed_block = block.set(
-        "signature",
-        bls.sign(
-            message_hash=header.signing_root,
+    proposed_block = SignedBeaconBlock.create(
+        message = block,
+        signature=bls.sign(
+            message_hash=block.hash_tree_root,
             privkey=proposer_privkey,
             domain=get_domain(
                 state, SignatureDomain.DOMAIN_BEACON_PROPOSER, slots_per_epoch

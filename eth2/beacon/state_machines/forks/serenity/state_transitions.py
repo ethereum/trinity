@@ -1,5 +1,5 @@
 from eth2.beacon.state_machines.state_transitions import BaseStateTransition
-from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 from eth2.configs import Eth2Config
@@ -17,14 +17,14 @@ class SerenityStateTransition(BaseStateTransition):
     def apply_state_transition(
         self,
         state: BeaconState,
-        block: BaseBeaconBlock = None,
+        block: SignedBeaconBlock = None,
         future_slot: Slot = None,
         check_proposer_signature: bool = True,
     ) -> BeaconState:
         # NOTE: Callers should request a transition to some slot past the ``state.slot``.
         # This can be done by providing either a ``block`` *or* a ``future_slot``.
         # We enforce this invariant with the assertion on ``target_slot``.
-        target_slot = block.slot if block else future_slot
+        target_slot = block.message.slot if block else future_slot
         assert target_slot is not None
 
         state = process_slots(state, target_slot, self.config)
