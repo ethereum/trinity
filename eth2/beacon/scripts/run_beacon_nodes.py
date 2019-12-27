@@ -53,6 +53,7 @@ class Node:
     preferred_nodes: Tuple["Node", ...]
     rpcport: Optional[int]
     metrics_port: Optional[int]
+    api_port: Optional[int]
 
     start_time: float
     proc: asyncio.subprocess.Process
@@ -76,6 +77,7 @@ class Node:
         validators: Sequence[int],
         rpcport: Optional[int] = None,
         metrics_port: Optional[int] = None,
+        api_port: Optional[int] = None,
         preferred_nodes: Optional[Tuple["Node", ...]] = None,
     ) -> None:
         self.name = name
@@ -87,6 +89,7 @@ class Node:
         self.preferred_nodes = preferred_nodes
         self.rpcport = rpcport
         self.metrics_port = metrics_port
+        self.api_port = api_port
 
         self.tasks = []
         self.start_time = start_time
@@ -130,6 +133,8 @@ class Node:
             f"--rpcport={self.rpcport}",
             "--enable-http",
             "--enable-metrics",
+            "--enable-api",
+            f"--api-port={self.api_port}",
             f"--metrics-port={self.metrics_port}",
             "--disable-discovery",
             "-l debug",
@@ -226,6 +231,7 @@ async def main():
         preferred_nodes=[],
         validators=[0, 1, 2, 3, 4, 5, 6, 7],
         rpcport=8555,
+        api_port=5555,
         start_time=start_time,
         metrics_port=9555,
     )
@@ -236,6 +242,7 @@ async def main():
         preferred_nodes=[node_alice],
         validators=[8, 9, 10, 11, 12, 13, 14, 15],
         rpcport=8666,
+        api_port=5666,
         start_time=start_time,
         metrics_port=9666,
     )

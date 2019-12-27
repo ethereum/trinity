@@ -1,6 +1,7 @@
 import time
 from typing import Any, Collection, Type
 
+from eth.abc import AtomicDatabaseAPI
 from eth.db.atomic import AtomicDB
 import factory
 
@@ -28,6 +29,7 @@ class BeaconChainFactory(factory.Factory):
     branch: Collection[BaseBeaconBlock] = None
     genesis_state: BeaconState = None
     genesis_block: SerenityBeaconBlock = None
+    base_db: AtomicDatabaseAPI = None
 
     class Meta:
         model = SkeletonLakeChain
@@ -69,12 +71,16 @@ class BeaconChainFactory(factory.Factory):
             genesis_state = kwargs["genesis_state"]
             genesis_block = kwargs["genesis_block"]
 
-        db = kwargs.pop("db", AtomicDB())
+        if kwargs["base_db"] is not None:
+            base_db = kwargs["base_db"]
+        else:
+            base_db = AtomicDB()
+
         genesis_config = Eth2GenesisConfig(
             model_class.get_genesis_state_machine_class().config
         )
         chain = model_class.from_genesis(
-            base_db=db,
+            base_db=base_db,
             genesis_state=genesis_state,
             genesis_block=genesis_block,
             genesis_config=genesis_config,
