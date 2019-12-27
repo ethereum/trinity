@@ -16,6 +16,7 @@ from eth2.beacon.chains.base import (
 from trinity.http.handlers.base import BaseHTTPHandler, response_error
 from trinity.http.exceptions import APIServerError
 from trinity.http.resources.beacon import Beacon
+from trinity.http.resources.network import Network
 from trinity.http.resources.node import Node
 from trinity.http.resources.validator import Validator
 
@@ -41,10 +42,12 @@ def _get_router(
 
     if path.startswith("/beacon"):
         return beacon_router
-    elif path.startswith("/validator"):
-        return validator_router
+    elif path.startswith("/network"):
+        return network_router
     elif path.startswith("/node"):
         return node_router
+    elif path.startswith("/validator"):
+        return validator_router
     else:
         raise APIServerError(f"Wrong path: {request.path}")
 
@@ -58,18 +61,6 @@ def _get_path_object(request: web.Request) -> str:
     return object
 
 
-async def node_router(
-    request: web.Request,
-    chain: BaseBeaconChain,
-    event_bus: EndpointAPI
-) -> Any:
-    object = _get_path_object(request)
-    node_resource = Node(chain, event_bus)
-    handler = getattr(node_resource, object)
-    result = await handler(request)
-    return result
-
-
 async def beacon_router(
     request: web.Request,
     chain: BaseBeaconChain,
@@ -78,6 +69,30 @@ async def beacon_router(
     object = _get_path_object(request)
     resource = Beacon(chain, event_bus)
     handler = getattr(resource, object)
+    result = await handler(request)
+    return result
+
+
+async def network_router(
+    request: web.Request,
+    chain: BaseBeaconChain,
+    event_bus: EndpointAPI
+) -> Any:
+    object = _get_path_object(request)
+    network_resource = Network(chain, event_bus)
+    handler = getattr(network_resource, object)
+    result = await handler(request)
+    return result
+
+
+async def node_router(
+    request: web.Request,
+    chain: BaseBeaconChain,
+    event_bus: EndpointAPI
+) -> Any:
+    object = _get_path_object(request)
+    node_resource = Node(chain, event_bus)
+    handler = getattr(node_resource, object)
     result = await handler(request)
     return result
 
@@ -110,7 +125,7 @@ class APIHandler(BaseHTTPHandler):
             logger.debug('Receiving request: %s', request.path)
             data = await process_request(request, chain, event_bus)
             return web.json_response(data=data)
-        except Exception as e:
+        except APIServerError as e:
             msg = f"[APIHandler] Error: {str(e)}"
             logger.error(msg)
-            return response_error(msg)
+            return response_error(msg, e)

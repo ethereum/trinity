@@ -17,6 +17,8 @@ TBaseResource = TypeVar("TBaseResource", bound="BaseResource")
 
 class BaseResource(ABC):
 
+    timeout = 2
+
     def __init__(self, chain: BaseBeaconChain, event_bus: EndpointAPI):
         self.chain = chain
         self.event_bus = event_bus

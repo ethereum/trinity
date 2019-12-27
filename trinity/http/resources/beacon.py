@@ -3,9 +3,7 @@ from aiohttp import web
 
 from eth_typing import Hash32
 from eth_utils import decode_hex
-from ssz.tools import (
-    to_formatted_dict,
-)
+from ssz.tools import to_formatted_dict
 
 from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.typing import SigningRoot, Slot
