@@ -22,7 +22,8 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockHeader
+from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockHeader, SignedBeaconBlock
+from eth2.beacon.types.block_headers import BeaconBlockHeader, SignedBeaconBlockHeader
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
@@ -80,9 +81,9 @@ def validate_proposer_is_not_slashed(
 
 
 def validate_proposer_signature(
-    state: BeaconState, block: BaseBeaconBlock, committee_config: CommitteeConfig
+    state: BeaconState, signed_block: SignedBeaconBlock, committee_config: CommitteeConfig
 ) -> None:
-    message_hash = block.signing_root
+    message_hash = signed_block.message.hash_tree_root
 
     # Get the public key of proposer
     beacon_proposer_index = get_beacon_proposer_index(state, committee_config)
@@ -95,7 +96,7 @@ def validate_proposer_signature(
         bls.validate(
             pubkey=proposer_pubkey,
             message_hash=message_hash,
-            signature=block.signature,
+            signature=signed_block.signature,
             domain=domain,
         )
     except SignatureError as error:
@@ -167,8 +168,8 @@ def validate_proposer_slashing(
 def validate_proposer_slashing_epoch(
     proposer_slashing: ProposerSlashing, slots_per_epoch: int
 ) -> None:
-    epoch_1 = compute_epoch_at_slot(proposer_slashing.header_1.slot, slots_per_epoch)
-    epoch_2 = compute_epoch_at_slot(proposer_slashing.header_2.slot, slots_per_epoch)
+    epoch_1 = compute_epoch_at_slot(proposer_slashing.header_1.message.slot, slots_per_epoch)
+    epoch_2 = compute_epoch_at_slot(proposer_slashing.header_2.message.slot, slots_per_epoch)
 
     if epoch_1 != epoch_2:
         raise ValidationError(
@@ -199,20 +200,20 @@ def validate_proposer_slashing_is_slashable(
 
 def validate_block_header_signature(
     state: BeaconState,
-    header: BeaconBlockHeader,
+    header: SignedBeaconBlockHeader,
     pubkey: BLSPubkey,
     slots_per_epoch: int,
 ) -> None:
     try:
         bls.validate(
             pubkey=pubkey,
-            message_hash=header.signing_root,
+            message_hash=header.message.hash_tree_root,
             signature=header.signature,
             domain=get_domain(
                 state,
                 SignatureDomain.DOMAIN_BEACON_PROPOSER,
                 slots_per_epoch,
-                compute_epoch_at_slot(header.slot, slots_per_epoch),
+                compute_epoch_at_slot(header.message.slot, slots_per_epoch),
             ),
         )
     except SignatureError as error:
