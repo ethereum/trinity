@@ -26,6 +26,7 @@ from eth2.beacon.tools.misc.ssz_vector import (
 from trinity.components.eth2.beacon.validator import (
     Validator,
 )
+from trinity.protocol.bcc_libp2p.node import PeerPool
 
 
 override_lengths(MINIMAL_SERENITY_CONFIG)
@@ -48,13 +49,21 @@ class FakeNode:
         pass
 
 
-async def get_validator(
-    event_loop, event_bus, monkeypatch, indices, num_validators=None
+    handshaked_peers = PeerPool()
+
+
+def create_validator(
+    event_bus,
+    monkeypatch,
+    indices,
+    p2p_node,
+    num_validators=None,
+    base_db=None,
 ) -> Validator:
     if num_validators is not None:
-        chain = BeaconChainFactory(num_validators=num_validators)
+        chain = BeaconChainFactory(num_validators=num_validators, base_db=base_db)
     else:
-        chain = BeaconChainFactory()
+        chain = BeaconChainFactory(base_db=base_db)
 
     validator_privkeys = {
         index: mk_key_pair_from_seed_index(index)[1]
@@ -77,9 +86,9 @@ async def get_validator(
         else:
             unaggregated_attestation_pool.add(attestation)
 
-    v = Validator(
+    return Validator(
         chain=chain,
-        p2p_node=FakeNode(),
+        p2p_node=p2p_node,
         validator_privkeys=validator_privkeys,
         get_ready_attestations_fn=get_ready_attestations_fn,
         get_aggregatable_attestations_fn=get_aggregatable_attestations_fn,
@@ -96,6 +105,16 @@ async def get_validator(
         return None
     monkeypatch.setattr(v, '_get_deposit_data', _get_deposit_data)
 
+
+async def get_validator(event_loop, event_bus, monkeypatch, handshaked_peers, indices, num_validators=None) -> Validator:
+    libp2p_node = FakeNode()
+    v = create_validator(
+        event_bus,
+        monkeypatch,
+        indices,
+        libp2p_ndoe,
+        num_validators=num_validators,
+    )
     asyncio.ensure_future(v.run(), loop=event_loop)
     await v.events.started.wait()
     # yield to `validator._run`
