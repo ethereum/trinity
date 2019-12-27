@@ -325,7 +325,10 @@ async def dial_out(remote: NodeAPI,
         # reader/writer connection pair in the event of an error during the
         # peer connection and handshake process.
         # See `p2p.auth.handshake` for the other.
-        await transport.close()
+        try:
+            await transport.close()
+        except ConnectionResetError:
+            transport.logger.debug("Could not wait for transport to close")
         raise
 
     transport.logger.debug2("Completed p2p handshake with %s", remote)
@@ -362,7 +365,10 @@ async def receive_dial_in(reader: asyncio.StreamReader,
         # reader/writer connection pair in the event of an error during the
         # peer connection and handshake process.
         # See `p2p.auth.handshake` for the other.
-        await transport.close()
+        try:
+            await transport.close()
+        except ConnectionResetError:
+            transport.logger.debug("Could not wait for transport to close")
         raise
 
     connection = Connection(
