@@ -22,7 +22,7 @@ from .defaults import default_slot, default_tuple
 from .deposits import Deposit
 from .eth1_data import Eth1Data, default_eth1_data
 from .proposer_slashings import ProposerSlashing
-from .voluntary_exits import VoluntaryExit
+from .voluntary_exits import SignedVoluntaryExit
 
 if TYPE_CHECKING:
     from eth2.beacon.db.chain import BaseBeaconChainDB  # noqa: F401
@@ -41,7 +41,7 @@ class BeaconBlockBody(HashableContainer):
         ("attester_slashings", List(AttesterSlashing, 1)),
         ("attestations", List(Attestation, 128)),
         ("deposits", List(Deposit, 16)),
-        ("voluntary_exits", List(VoluntaryExit, 16)),
+        ("voluntary_exits", List(SignedVoluntaryExit, 16)),
     ]
 
     @classmethod
@@ -55,7 +55,7 @@ class BeaconBlockBody(HashableContainer):
         attester_slashings: Sequence[AttesterSlashing] = default_tuple,
         attestations: Sequence[Attestation] = default_tuple,
         deposits: Sequence[Deposit] = default_tuple,
-        voluntary_exits: Sequence[VoluntaryExit] = default_tuple,
+        voluntary_exits: Sequence[SignedVoluntaryExit] = default_tuple,
     ) -> TBeaconBlockBody:
         return super().create(
             randao_reveal=randao_reveal,
