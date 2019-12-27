@@ -51,26 +51,28 @@ class BeaconBlockHeader(HashableContainer):
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {str(self)}>"
 
-TSignedBeaconBlockHeader = TypeVar("TSignedBeaconBlockHeader", bound="SignedBeaconBlockHeader")
+
+default_beacon_block_header = BeaconBlockHeader.create()
+
+TSignedBeaconBlockHeader = TypeVar(
+    "TSignedBeaconBlockHeader", bound="SignedBeaconBlockHeader"
+)
 
 
 class SignedBeaconBlockHeader(HashableContainer):
     fields = [
-        ('message', BeaconBlockHeader),
-        ('signature', bytes96),
+        ("message", BeaconBlockHeader),
+        ("signature", bytes96),
     ]
 
     @classmethod
     def create(
         cls: Type[TSignedBeaconBlockHeader],
         *,
-        message: BeaconBlockHeader,
-        signature: bytes,
+        message: BeaconBlockHeader = default_beacon_block_header,
+        signature: bytes = EMPTY_SIGNATURE,
     ) -> TSignedBeaconBlockHeader:
-        return super().create(
-            message=message,
-            signature=signature,
-        )
+        return super().create(message=message, signature=signature)
 
 
-default_beacon_block_header = BeaconBlockHeader.create()
+default_signed_beacon_block_header = SignedBeaconBlockHeader.create()

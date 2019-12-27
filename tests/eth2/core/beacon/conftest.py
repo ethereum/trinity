@@ -23,7 +23,12 @@ from eth2.beacon.tools.builder.state import create_mock_genesis_state_from_valid
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
-from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, BeaconBlockHeader
+from eth2.beacon.types.blocks import (
+    BeaconBlock,
+    BeaconBlockBody,
+    BeaconBlockHeader,
+    SignedBeaconBlockHeader,
+)
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.eth1_data import Eth1Data
@@ -455,12 +460,15 @@ def sample_block_header_params():
 
 
 @pytest.fixture
-def sample_proposer_slashing_params(sample_block_header_params):
+def sample_proposer_slashing_params(sample_block_header_params, sample_signature):
     block_header_data = BeaconBlockHeader.create(**sample_block_header_params)
+    signed_block_header = SignedBeaconBlockHeader.create(
+        message=block_header_data, signature=sample_signature
+    )
     return {
         "proposer_index": 1,
-        "header_1": block_header_data,
-        "header_2": block_header_data,
+        "header_1": signed_block_header,
+        "header_2": signed_block_header,
     }
 
 
@@ -507,9 +515,7 @@ def sample_beacon_block_body_params(sample_signature, sample_eth1_data_params):
 
 
 @pytest.fixture
-def sample_beacon_block_params(
-    sample_beacon_block_body_params, genesis_slot
-):
+def sample_beacon_block_params(sample_beacon_block_body_params, genesis_slot):
     return {
         "slot": genesis_slot + 10,
         "parent_root": ZERO_HASH32,
