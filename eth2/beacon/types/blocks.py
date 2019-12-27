@@ -152,6 +152,11 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {str(self)}>"
 
+    @property
+    def signing_root(self):
+        # Remove this soon
+        return self.hash_tree_root
+
 
 TBeaconBlock = TypeVar("TBeaconBlock", bound="BeaconBlock")
 

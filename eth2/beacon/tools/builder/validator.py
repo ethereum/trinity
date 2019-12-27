@@ -711,7 +711,7 @@ def create_mock_voluntary_exit(
     return SignedVoluntaryExit.create(
         message=voluntary_exit,
         signature=sign_transaction(
-            message_hash=voluntary_exit.message_hash,
+            message_hash=voluntary_exit.hash_tree_root,
             privkey=keymap[state.validators[validator_index].pubkey],
             state=state,
             slot=compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH),

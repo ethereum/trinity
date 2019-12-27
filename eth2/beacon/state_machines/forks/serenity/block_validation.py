@@ -28,7 +28,7 @@ from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
-from eth2.beacon.types.voluntary_exits import VoluntaryExit
+from eth2.beacon.types.voluntary_exits import VoluntaryExit, SignedVoluntaryExit
 from eth2.beacon.typing import CommitteeIndex, Epoch, SigningRoot, Slot
 from eth2.configs import CommitteeConfig, Eth2Config
 
@@ -433,10 +433,11 @@ def _validate_validator_minimum_lifespan(
 
 def _validate_voluntary_exit_signature(
     state: BeaconState,
-    voluntary_exit: VoluntaryExit,
+    signed_voluntary_exit: SignedVoluntaryExit,
     validator: Validator,
     slots_per_epoch: int,
 ) -> None:
+    voluntary_exit = signed_voluntary_exit.message
     domain = get_domain(
         state,
         SignatureDomain.DOMAIN_VOLUNTARY_EXIT,
@@ -446,8 +447,8 @@ def _validate_voluntary_exit_signature(
     try:
         bls.validate(
             pubkey=validator.pubkey,
-            message_hash=voluntary_exit.signing_root,
-            signature=voluntary_exit.signature,
+            message_hash=voluntary_exit.hash_tree_root,
+            signature=signed_voluntary_exit.signature,
             domain=domain,
         )
     except SignatureError as error:
@@ -459,10 +460,11 @@ def _validate_voluntary_exit_signature(
 
 def validate_voluntary_exit(
     state: BeaconState,
-    voluntary_exit: VoluntaryExit,
+    signed_voluntary_exit: SignedVoluntaryExit,
     slots_per_epoch: int,
     persistent_committee_period: int,
 ) -> None:
+    voluntary_exit = signed_voluntary_exit.message
     validator = state.validators[voluntary_exit.validator_index]
     current_epoch = state.current_epoch(slots_per_epoch)
 
@@ -473,5 +475,5 @@ def validate_voluntary_exit(
         validator, current_epoch, persistent_committee_period
     )
     _validate_voluntary_exit_signature(
-        state, voluntary_exit, validator, slots_per_epoch
+        state, signed_voluntary_exit, validator, slots_per_epoch
     )
