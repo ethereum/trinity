@@ -43,7 +43,7 @@ class DepositLog(NamedTuple):
 
 
 def convert_deposit_log_to_deposit_data(deposit_log: DepositLog) -> DepositData:
-    return DepositData(
+    return DepositData.create(
         pubkey=deposit_log.pubkey,
         withdrawal_credentials=deposit_log.withdrawal_credentials,
         amount=deposit_log.amount,
@@ -219,7 +219,9 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
         block_hash = block_number.to_bytes(32, byteorder="big")
-        if block_number == self.start_block_number:
+        if block_number < self.start_block_number:
+            return tuple()
+        elif block_number == self.start_block_number:
             logs = (
                 DepositLog(
                     block_hash=Hash32(block_hash),
