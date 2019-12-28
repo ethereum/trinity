@@ -249,16 +249,23 @@ class Validator(BaseService):
     # Proposing block
     #
     async def _get_deposit_data(
-        self, state: BeaconState, state_machine: BaseBeaconStateMachine
+        self, state: BeaconState, state_machine: BaseBeaconStateMachine, eth1_vote: Eth1Data
     ) -> Tuple[Deposit, ...]:
+        eth1_data = state.eth1_data
+        # Check if the eth1 vote pass the threshold
+        slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
+        eth1_data_votes = state.eth1_data_votes.append(eth1_vote)
+        if eth1_data_votes.count(eth1_vote) * 2 > slots_per_eth1_voting_period:
+            eth1_data = eth1_vote
+
         deposits: Tuple[Deposit, ...] = ()
         expected_deposit_count = min(
             state_machine.config.MAX_DEPOSITS,
-            state.eth1_data.deposit_count - state.eth1_deposit_index,
+            eth1_data.deposit_count - state.eth1_deposit_index,
         )
         for i in range(expected_deposit_count):
             request_params = {
-                "deposit_count": state.eth1_data.deposit_count,
+                "deposit_count": eth1_data.deposit_count,
                 "deposit_index": state.eth1_deposit_index + i,
             }
             resp: GetDepositResponse = await self.event_bus.request(

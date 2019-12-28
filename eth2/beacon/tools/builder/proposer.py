@@ -97,7 +97,7 @@ def create_block_on_state(
         randao_reveal=randao_reveal, eth1_data=eth1_data, attestations=attestations
     )
     if deposits is not None and len(deposits) > 0:
-        body = body.copy(deposits=deposits)
+        body = body.set("deposits", deposits)
 
     block = block.set("body", body)
 
