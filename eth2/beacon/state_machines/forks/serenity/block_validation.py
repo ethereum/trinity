@@ -22,7 +22,7 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockHeader, SignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockHeader, BaseSignedBeaconBlock
 from eth2.beacon.types.block_headers import BeaconBlockHeader, SignedBeaconBlockHeader
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
@@ -62,12 +62,12 @@ def validate_block_slot(state: BeaconState, block: BaseBeaconBlock) -> None:
 
 
 def validate_block_parent_root(state: BeaconState, block: BaseBeaconBlock) -> None:
-    expected_root = state.latest_block_header.signing_root
+    expected_root = state.latest_block_header.hash_tree_root
     parent_root = block.parent_root
     if parent_root != expected_root:
         raise ValidationError(
             f"block.parent_root ({encode_hex(parent_root)}) is not equal to "
-            f"state.latest_block_header.signing_root ({encode_hex(expected_root)}"
+            f"state.latest_block_header.hash_tree_root ({encode_hex(expected_root)}"
         )
 
 
@@ -81,7 +81,7 @@ def validate_proposer_is_not_slashed(
 
 
 def validate_proposer_signature(
-    state: BeaconState, signed_block: SignedBeaconBlock, committee_config: CommitteeConfig
+    state: BeaconState, signed_block: BaseSignedBeaconBlock, committee_config: CommitteeConfig
 ) -> None:
     message_hash = signed_block.message.hash_tree_root
 

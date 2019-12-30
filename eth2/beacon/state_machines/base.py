@@ -7,7 +7,7 @@ from eth._utils.datatypes import Configurable
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Timestamp
 from eth2.configs import Eth2Config
@@ -81,10 +81,10 @@ class BaseBeaconStateMachine(Configurable, ABC):
     @abstractmethod
     def import_block(
         self,
-        block: BaseBeaconBlock,
+        signed_block: BaseSignedBeaconBlock,
         state: BeaconState,
         check_proposer_signature: bool = True,
-    ) -> Tuple[BeaconState, BaseBeaconBlock]:
+    ) -> Tuple[BeaconState, BaseSignedBeaconBlock]:
         ...
 
 
@@ -149,14 +149,16 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     #
     def import_block(
         self,
-        block: BaseBeaconBlock,
+        signed_block: BaseSignedBeaconBlock,
         state: BeaconState,
         check_proposer_signature: bool = True,
-    ) -> Tuple[BeaconState, BaseBeaconBlock]:
+    ) -> Tuple[BeaconState, BaseSignedBeaconBlock]:
         state = self.state_transition.apply_state_transition(
-            state, block=block, check_proposer_signature=check_proposer_signature
+            state, signed_block=signed_block, check_proposer_signature=check_proposer_signature
         )
 
-        block = block.set("state_root", state.hash_tree_root)
+        signed_block = signed_block.set("message",
+            signed_block.message.set("state_root", state.hash_tree_root)
+        )
 
-        return state, block
+        return state, signed_block
