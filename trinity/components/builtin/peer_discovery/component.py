@@ -92,11 +92,12 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
             await socket.bind((external_ip, config.port))
             discovery_service = PreferredNodeDiscoveryService(
-                boot_info.trinity_config.nodekey,
+                config.nodekey,
                 address,
                 config.bootstrap_nodes,
                 config.preferred_nodes,
                 event_bus,
+                config.database_ipc_path,
                 socket,
             )
 

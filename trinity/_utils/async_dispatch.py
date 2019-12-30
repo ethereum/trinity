@@ -7,6 +7,8 @@ from typing import (
     TypeVar,
 )
 
+import trio
+
 TReturn = TypeVar('TReturn')
 
 
@@ -22,4 +24,13 @@ def async_method(method: Callable[..., TReturn],
             functools.partial(cls_method, **kwargs),
             *args
         )
+    return wrapper
+
+
+def trio_method(method: Callable[..., TReturn],
+                ) -> Callable[..., Coroutine[Any, Any, TReturn]]:
+    @functools.wraps(method)
+    async def wrapper(cls_or_self: Any, *args: Any, **kwargs: Any) -> TReturn:
+        cls_method = getattr(cls_or_self, method.__name__)
+        return await trio.to_thread.run_sync(functools.partial(cls_method, **kwargs), *args)
     return wrapper

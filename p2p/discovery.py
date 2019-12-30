@@ -7,6 +7,7 @@ More information at https://github.com/ethereum/devp2p/blob/master/rlpx.md#node-
 """
 import collections
 import contextlib
+from pathlib import Path
 import random
 import time
 from typing import (
@@ -56,6 +57,9 @@ from eth_keys import datatypes
 from eth_hash.auto import keccak
 
 from async_service import Service
+
+from trinity.db.manager import DBClient
+from trinity.db.eth1.header import TrioHeaderDB
 
 from p2p import constants
 from p2p.abc import AddressAPI, NodeAPI
@@ -130,11 +134,14 @@ class DiscoveryService(Service):
                  address: AddressAPI,
                  bootstrap_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
+                 db_ipc_path: Path,
                  socket: trio.socket.SocketType) -> None:
         self.privkey = privkey
         self.address = address
         self.bootstrap_nodes = bootstrap_nodes
         self._event_bus = event_bus
+        self._base_db = DBClient.connect(db_ipc_path)
+        self._headerdb = TrioHeaderDB(self._base_db)
         self.this_node = Node(self.pubkey, address)
         self.routing = RoutingTable(self.this_node)
         self.pong_callbacks = CallbackManager()
@@ -172,13 +179,14 @@ class DiscoveryService(Service):
             )
 
     async def run(self) -> None:
-        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
-        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
-        self.manager.run_daemon_task(self.periodically_refresh)
+        with self._base_db:
+            self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
+            self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
+            self.manager.run_daemon_task(self.periodically_refresh)
 
-        self.manager.run_daemon_task(self.consume_datagrams)
-        self.manager.run_task(self.bootstrap)
-        await self.manager.wait_finished()
+            self.manager.run_daemon_task(self.consume_datagrams)
+            self.manager.run_task(self.bootstrap)
+            await self.manager.wait_finished()
 
     async def periodically_refresh(self) -> None:
         async for _ in trio_utils.every(self._refresh_interval):
@@ -620,8 +628,9 @@ class PreferredNodeDiscoveryService(DiscoveryService):
                  bootstrap_nodes: Sequence[NodeAPI],
                  preferred_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
+                 db_ipc_path: Path,
                  socket: trio.socket.SocketType) -> None:
-        super().__init__(privkey, address, bootstrap_nodes, event_bus, socket)
+        super().__init__(privkey, address, bootstrap_nodes, event_bus, db_ipc_path, socket)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
         self._preferred_node_tracker = collections.defaultdict(lambda: 0)
