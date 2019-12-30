@@ -1,4 +1,5 @@
 import argparse
+import functools
 import logging
 from pathlib import Path
 import uuid
@@ -13,16 +14,31 @@ from async_service import background_trio_service
 
 from lahja import ConnectionConfig, TrioEndpoint
 
-from p2p import constants
-from p2p import kademlia
-from p2p.discovery import DiscoveryService
+from eth.db.atomic import AtomicDB
+from eth.db.backends.memory import MemoryDB
 
-from trinity.constants import NETWORKING_EVENTBUS_ENDPOINT
+from p2p import kademlia
+from p2p.discovery import DiscoveryService, generate_eth_cap_enr_field
+
+from trinity.constants import (
+    MAINNET_NETWORK_ID,
+    NETWORKING_EVENTBUS_ENDPOINT,
+    ROPSTEN_NETWORK_ID
+)
+from trinity.network_configurations import PRECONFIGURED_NETWORKS
+from trinity.db.eth1.header import TrioHeaderDB
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('-bootnode', type=str, help="The enode to use as bootnode")
+    parser.add_argument(
+        '-networkid',
+        type=int,
+        choices=[ROPSTEN_NETWORK_ID, MAINNET_NETWORK_ID],
+        default=ROPSTEN_NETWORK_ID,
+        help="1 for mainnet, 3 for testnet"
+    )
     parser.add_argument('-l', type=str, help="Log level", default="info")
     args = parser.parse_args()
 
@@ -35,6 +51,7 @@ async def main() -> None:
         log_level = getattr(logging, args.l.upper())
     logging.getLogger('p2p').setLevel(log_level)
 
+    network_cfg = PRECONFIGURED_NETWORKS[args.networkid]
     # Listen on a port other than 30303 so that we can test against a local geth instance
     # running on that port.
     listen_port = 30304
@@ -45,8 +62,7 @@ async def main() -> None:
     if args.bootnode:
         bootstrap_nodes = tuple([kademlia.Node.from_uri(args.bootnode)])
     else:
-        bootstrap_nodes = tuple(
-            kademlia.Node.from_uri(enode) for enode in constants.ROPSTEN_BOOTNODES)
+        bootstrap_nodes = tuple(kademlia.Node.from_uri(enode) for enode in network_cfg.bootnodes)
 
     ipc_path = Path(f"networking-{uuid.uuid4()}.ipc")
     networking_connection_config = ConnectionConfig(
@@ -54,10 +70,15 @@ async def main() -> None:
         path=ipc_path
     )
 
+    headerdb = TrioHeaderDB(AtomicDB(MemoryDB()))
+    headerdb.persist_header(network_cfg.genesis_header)
+    vm_config = network_cfg.vm_configuration
+    enr_field_providers = (functools.partial(generate_eth_cap_enr_field, vm_config, headerdb),)
     socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
     await socket.bind(('0.0.0.0', listen_port))
     async with TrioEndpoint.serve(networking_connection_config) as endpoint:
-        service = DiscoveryService(privkey, addr, bootstrap_nodes, endpoint, socket)
+        service = DiscoveryService(
+            privkey, addr, bootstrap_nodes, endpoint, socket, enr_field_providers)
         service.logger.info("Enode: %s", service.this_node.uri())
         async with background_trio_service(service):
             await service.manager.wait_finished()

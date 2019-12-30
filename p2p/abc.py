@@ -40,6 +40,7 @@ if TYPE_CHECKING:
     )
 
 
+ENR_FieldProvider = Callable[[], Awaitable[Tuple[bytes, Any]]]
 TAddress = TypeVar('TAddress', bound='AddressAPI')
 
 

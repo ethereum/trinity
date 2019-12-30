@@ -12,8 +12,10 @@ from eth.chains.ropsten import ROPSTEN_VM_CONFIGURATION
 from p2p.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
 from p2p.forkid import ForkID, make_forkid, validate_forkid
 
-MAINNET_GENESIS_HASH = '0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3'
-ROPSTEN_GENESIS_HASH = '0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d'
+MAINNET_GENESIS_HASH = to_bytes(
+    hexstr='0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3')
+ROPSTEN_GENESIS_HASH = to_bytes(
+    hexstr='0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d')
 
 
 @pytest.mark.parametrize(

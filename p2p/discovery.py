@@ -13,7 +13,6 @@ from typing import (
     AsyncIterator,
     Awaitable,
     Callable,
-    cast,
     Dict,
     Generic,
     Iterable,
@@ -24,8 +23,11 @@ from typing import (
     Sequence,
     Set,
     Tuple,
+    Type,
     TypeVar,
+    TYPE_CHECKING,
 )
+from typing_extensions import Literal
 
 from async_generator import aclosing
 
@@ -44,7 +46,7 @@ from lahja import (
 import rlp
 from rlp.exceptions import DeserializationError
 
-from eth_typing import Hash32
+from eth_typing import BlockNumber, Hash32
 
 from eth_utils import (
     encode_hex,
@@ -64,8 +66,11 @@ from eth_hash.auto import keccak
 
 from async_service import Service
 
+from eth.abc import VirtualMachineAPI
+from eth.constants import GENESIS_BLOCK_NUMBER
+
 from p2p import constants
-from p2p.abc import AddressAPI, NodeAPI
+from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI
 from p2p.discv5.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
 from p2p.discv5.enr_db import MemoryEnrDb
 from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
@@ -82,8 +87,12 @@ from p2p.events import (
     PeerCandidatesResponse,
 )
 from p2p.exceptions import AlreadyWaitingDiscoveryResponse, CouldNotRetrieveENR, NoEligibleNodes
+from p2p.forkid import ForkID, make_forkid
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
 from p2p import trio_utils
+
+if TYPE_CHECKING:
+    from trinity.db.eth1.header import BaseAsyncHeaderDB
 
 
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
@@ -132,6 +141,7 @@ class DiscoveryService(Service):
     # Maximum number of ENR retrieval requests active at any moment. Need to be a relatively high
     # number as during a lookup() we'll bond and fetch ENRs of many nodes.
     _max_pending_enrs: int = 20
+    _local_enr_refresh_interval: int = 60
 
     logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
 
@@ -140,7 +150,9 @@ class DiscoveryService(Service):
                  address: AddressAPI,
                  bootstrap_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
-                 socket: trio.socket.SocketType) -> None:
+                 socket: trio.socket.SocketType,
+                 enr_field_providers: Sequence[ENR_FieldProvider] = tuple(),
+                 ) -> None:
         self.privkey = privkey
         self.address = address
         self.bootstrap_nodes = bootstrap_nodes
@@ -151,10 +163,14 @@ class DiscoveryService(Service):
         self.pong_channels = ExpectedResponseChannels[Tuple[Hash32, int]]()
         self.neighbours_channels = ExpectedResponseChannels[List[NodeAPI]]()
         self.ping_channels = ExpectedResponseChannels[None]()
+        self.enr_field_providers = enr_field_providers
         # FIXME: Use a persistent EnrDb implementation.
         self._enr_db = MemoryEnrDb(default_identity_scheme_registry)
         # FIXME: Use a concurrency-safe EnrDb implementation.
         self._enr_db_lock = trio.Lock()
+        self._local_enr: ENR = None
+        self._local_enr_next_refresh: float = time.monotonic()
+        self._local_enr_lock = trio.Lock()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
         if socket.family != trio.socket.AF_INET:
             raise ValueError("Invalid socket family")
@@ -189,15 +205,18 @@ class DiscoveryService(Service):
             )
 
     async def run(self) -> None:
+        await self.load_local_enr()
+        self.run_daemons_and_bootstrap()
+        await self.manager.wait_finished()
+
+    def run_daemons_and_bootstrap(self) -> None:
         self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
         self.manager.run_daemon_task(self.periodically_refresh)
         self.manager.run_daemon_task(self.report_stats)
         self.manager.run_daemon_task(self.fetch_enrs)
-
         self.manager.run_daemon_task(self.consume_datagrams)
         self.manager.run_task(self.bootstrap)
-        await self.manager.wait_finished()
 
     async def periodically_refresh(self) -> None:
         async for _ in trio_utils.every(self._refresh_interval):
@@ -330,31 +349,85 @@ class DiscoveryService(Service):
 
         return enr
 
-    async def get_local_enr(self) -> ENR:
+    async def _generate_local_enr(self, sequence_number: int) -> ENR:
+        kv_pairs = {
+            IDENTITY_SCHEME_ENR_KEY: V4IdentityScheme.id,
+            V4IdentityScheme.public_key_enr_key: self.pubkey.to_compressed_bytes(),
+            IP_V4_ADDRESS_ENR_KEY: self.address.ip_packed,
+            UDP_PORT_ENR_KEY: self.address.udp_port,
+            TCP_PORT_ENR_KEY: self.address.tcp_port,
+        }
+        for field_provider in self.enr_field_providers:
+            key, value = await field_provider()
+            if key in kv_pairs:
+                raise AssertionError(
+                    "ENR field provider attempted to override already used key: %s", key)
+            kv_pairs[key] = value
+        unsigned_enr = UnsignedENR(sequence_number, kv_pairs)
+        return unsigned_enr.to_signed_enr(self.privkey.to_bytes())
+
+    async def load_local_enr(self) -> ENR:
+        """
+        Load our own ENR from the database, or create a new one if none exists.
+        """
         async with self._enr_db_lock:
             try:
-                return await self._enr_db.get(cast(NodeID, self.this_node.id_bytes))
+                self._local_enr = await self._enr_db.get(NodeID(self.this_node.id_bytes))
             except KeyError:
-                pass
+                self._local_enr = await self._generate_local_enr(sequence_number=1)
+                await self._enr_db.insert(self._local_enr)
+        return self._local_enr
 
-            kv_pairs = {
-                IDENTITY_SCHEME_ENR_KEY: V4IdentityScheme.id,
-                V4IdentityScheme.public_key_enr_key: self.pubkey.to_compressed_bytes(),
-                IP_V4_ADDRESS_ENR_KEY: self.address.ip_packed,
-                UDP_PORT_ENR_KEY: self.address.udp_port,
-                TCP_PORT_ENR_KEY: self.address.tcp_port,
-            }
-            enr_seq = 1
-            unsigned_enr = UnsignedENR(enr_seq, kv_pairs)
-            enr = unsigned_enr.to_signed_enr(self.privkey.to_bytes())
-            await self._enr_db.insert(enr)
-            return enr
+    async def get_local_enr(self) -> ENR:
+        """
+        Get our own ENR.
+
+        If the cached version of our ENR (self._local_enr) has been updated less than
+        self._local_enr_next_refresh seconds ago, return it. Otherwise we generate a fresh ENR
+        (with our current sequence number), compare it to the current one and then either:
+
+          1. Return the current one if they're identical
+          2. Create a new ENR with a new sequence number (current + 1), assign that to
+              self._local_enr and return it
+        """
+        # Most times self._get_local_enr() will return self._local_enr immediately but if multiple
+        # coroutines call us and end up trying to update our local ENR we'd have plenty of race
+        # conditions, so use a lock here.
+        async with self._local_enr_lock:
+            return await self._get_local_enr()
+
+    async def _get_local_enr(self) -> ENR:
+        if self._local_enr is None:
+            raise AssertionError("Local ENR must be loaded on startup")
+
+        if self._local_enr_next_refresh > time.monotonic():
+            return self._local_enr
+
+        self._local_enr_next_refresh = time.monotonic() + self._local_enr_refresh_interval
+
+        # Re-generate our ENR from scratch and compare it to the current one to see if we
+        # must create a new one with a higher sequence number.
+        current_enr = await self._generate_local_enr(self._local_enr.sequence_number)
+        if current_enr == self._local_enr:
+            return self._local_enr
+
+        # Either our node's details (e.g. IP address) or one of our ENR fields have changed, so
+        # generate a new one with a higher sequence number.
+        self._local_enr = await self._generate_local_enr(self._local_enr.sequence_number + 1)
+        self.logger.info(
+            "Node details changed, generated new local ENR with sequence number %d",
+            self._local_enr.sequence_number)
+
+        async with self._enr_db_lock:
+            await self._enr_db.update(self._local_enr)
+
+        return self._local_enr
 
     async def get_local_enr_seq(self) -> int:
         enr = await self.get_local_enr()
         return enr.sequence_number
 
-    async def get_enr(self, remote: NodeAPI) -> Optional[ENR]:
+    async def get_enr(self, remote: NodeAPI) -> ENR:
         """Get the most recent ENR for the given node and update our local DB if necessary.
 
         Raises CouldNotRetrieveENR if we can't get a ENR from the remote node.
@@ -363,7 +436,7 @@ class DiscoveryService(Service):
         self.logger.debug2("Got ENR with seq-id %s for %s", enr.sequence_number, remote)
         async with self._enr_db_lock:
             await self._enr_db.insert_or_update(enr)
-            return await self._enr_db.get(cast(NodeID, remote.id_bytes))
+            return await self._enr_db.get(NodeID(remote.id_bytes))
 
     async def wait_neighbours(self, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
         """Wait for a neihgbours packet from the given node.
@@ -642,7 +715,7 @@ class DiscoveryService(Service):
             self.logger.info('Ignoring ENR_REQUEST from unknown node %s', node)
             return
         enr = await self.get_local_enr()
-        self.logger.debug("Sending ENR: %s", enr)
+        self.logger.debug("Sending local ENR to %s: %s", node, enr)
         payload = (msg_hash, ENR.serialize(enr))
         self.send(node, CMD_ENR_RESPONSE, payload)
 
@@ -664,7 +737,8 @@ class DiscoveryService(Service):
             return
         enr.validate_signature()
         self.logger.debug(
-            "Received ENR %s with expected response token: %s", enr, encode_hex(token))
+            "Received ENR %s (%s) with expected response token: %s",
+            enr, enr.items(), encode_hex(token))
         try:
             await channel.send((enr, token))
         except trio.BrokenResourceError:
@@ -797,8 +871,10 @@ class PreferredNodeDiscoveryService(DiscoveryService):
                  bootstrap_nodes: Sequence[NodeAPI],
                  preferred_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
-                 socket: trio.socket.SocketType) -> None:
-        super().__init__(privkey, address, bootstrap_nodes, event_bus, socket)
+                 socket: trio.socket.SocketType,
+                 enr_field_providers: Optional[Sequence[ENR_FieldProvider]] = tuple()
+                 ) -> None:
+        super().__init__(privkey, address, bootstrap_nodes, event_bus, socket, enr_field_providers)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
         self._preferred_node_tracker = collections.defaultdict(lambda: 0)
@@ -1067,3 +1143,13 @@ class ExpectedResponseChannels(Generic[TMsg]):
                     yield await recv_chan.receive()
         finally:
             self._channels.pop(remote, None)
+
+
+async def generate_eth_cap_enr_field(
+        vm_config: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...],
+        headerdb: 'BaseAsyncHeaderDB',
+) -> Tuple[Literal[b'eth'], Tuple[ForkID]]:
+    head = await headerdb.coro_get_canonical_head()
+    genesis_hash = await headerdb.coro_get_canonical_block_hash(GENESIS_BLOCK_NUMBER)
+    forkid = make_forkid(genesis_hash, head.block_number, vm_config)
+    return (b'eth', (forkid,))

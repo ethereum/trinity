@@ -11,7 +11,7 @@ from eth.vm.forks.homestead import HomesteadVM
 
 from eth_typing import BlockNumber, Hash32
 
-from eth_utils import to_bytes, to_tuple
+from eth_utils import encode_hex, to_tuple
 
 from p2p.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
 
@@ -25,6 +25,9 @@ class ForkID(rlp.Serializable):
         if len(hash) != 4:
             raise ValueError("Hash {hash!r} length is not 4")
         super().__init__(hash, next)
+
+    def __repr__(self) -> str:
+        return f"ForkID(hash={encode_hex(self.hash)}, next={self.next})"
 
 
 @to_tuple
@@ -46,7 +49,7 @@ def make_forkid(
         vm_config: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...]
 ) -> ForkID:
     fork_blocks = _extract_fork_blocks(vm_config)
-    pre_hash_bytes = to_bytes(hexstr=genesis_hash)
+    pre_hash_bytes = bytes(genesis_hash)
     next_fork = 0
     for block_number in fork_blocks:
         if block_number > current_head:
@@ -71,7 +74,7 @@ def validate_forkid(
     """
 
     fork_blocks = list(_extract_fork_blocks(vm_config))
-    checksums = [binascii.crc32(to_bytes(hexstr=genesis_hash))]
+    checksums = [binascii.crc32(genesis_hash)]
     for block_number in fork_blocks:
         block_number_as_bytes = block_number.to_bytes(8, 'big')
         checksums.append(binascii.crc32(block_number_as_bytes, checksums[-1]))

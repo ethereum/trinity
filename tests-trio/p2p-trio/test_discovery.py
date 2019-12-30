@@ -1,5 +1,8 @@
+import copy
+import functools
 import random
 import re
+import time
 
 import trio
 
@@ -71,21 +74,77 @@ async def test_ping_pong(nursery, manually_driven_discovery_pair):
     assert token == payload[1]
 
 
+def validate_node_enr(node, enr, sequence_number, extra_fields=tuple()):
+    assert enr is not None
+    enr.validate_signature()
+    assert enr.sequence_number == sequence_number
+    assert enr.identity_scheme == V4IdentityScheme
+    assert node.pubkey.to_compressed_bytes() == enr.public_key
+    assert node.address.ip_packed == enr[IP_V4_ADDRESS_ENR_KEY]
+    assert node.address.udp_port == enr[UDP_PORT_ENR_KEY]
+    assert node.address.tcp_port == enr[TCP_PORT_ENR_KEY]
+    enr_items = enr.items()
+    for extra_key, extra_value in extra_fields:
+        assert (extra_key, extra_value) in enr_items
+
+
 @pytest.mark.trio
 async def test_get_local_enr(manually_driven_discovery):
     discovery = manually_driven_discovery
 
     enr = await discovery.get_local_enr()
 
-    assert enr is not None
-    enr.validate_signature()
-    this_node = discovery.this_node
-    assert enr.sequence_number == 1
-    assert enr.identity_scheme == V4IdentityScheme
-    assert this_node.pubkey.to_compressed_bytes() == enr.public_key
-    assert this_node.address.ip_packed == enr[IP_V4_ADDRESS_ENR_KEY]
-    assert this_node.address.udp_port == enr[UDP_PORT_ENR_KEY]
-    assert this_node.address.tcp_port == enr[TCP_PORT_ENR_KEY]
+    validate_node_enr(discovery.this_node, enr, sequence_number=1)
+
+    old_node = copy.copy(discovery.this_node)
+    # If our node's details change but an ENR refresh is not due yet, we'll get the ENR for the
+    # old node.
+    discovery.this_node.address.udp_port += 1
+    assert discovery._local_enr_next_refresh > time.monotonic()
+    enr = await discovery.get_local_enr()
+
+    validate_node_enr(old_node, enr, sequence_number=1)
+
+    # If a local ENR refresh is due, get_local_enr() will create a fresh ENR with a new sequence
+    # number.
+    discovery._local_enr_next_refresh = time.monotonic() - 1
+    enr = await discovery.get_local_enr()
+
+    validate_node_enr(discovery.this_node, enr, sequence_number=2)
+
+    # The new ENR will also be stored in our DB.
+    assert enr == await discovery._enr_db.get(discovery.this_node.id_bytes)
+
+    # And the next refresh time will be updated.
+    assert discovery._local_enr_next_refresh > time.monotonic()
+
+
+@pytest.mark.trio
+async def test_local_enr_on_startup(manually_driven_discovery):
+    discovery = manually_driven_discovery
+
+    validate_node_enr(discovery.this_node, discovery._local_enr, sequence_number=1)
+    # Our local ENR will also be stored in our DB.
+    assert discovery._local_enr == await discovery._enr_db.get(discovery.this_node.id_bytes)
+
+
+@pytest.mark.trio
+async def test_local_enr_fields(manually_driven_discovery):
+    discovery = manually_driven_discovery
+
+    async def test_field_provider(key, value):
+        return (key, value)
+
+    expected_fields = [(b'key1', b'value1'), (b'key2', b'value2')]
+    field_providers = tuple(
+        functools.partial(test_field_provider, key, value)
+        for key, value in expected_fields
+    )
+    discovery.enr_field_providers = field_providers
+    # Force a refresh or our local ENR.
+    discovery._local_enr_next_refresh = time.monotonic() - 1
+    enr = await discovery.get_local_enr()
+    validate_node_enr(discovery.this_node, enr, sequence_number=2, extra_fields=expected_fields)
 
 
 @pytest.mark.trio
@@ -118,13 +177,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     with trio.fail_after(1):
         await got_enr.wait()
 
-    enr.validate_signature()
-    assert enr.sequence_number == 1
-    assert enr.identity_scheme == V4IdentityScheme
-    assert bob.this_node.pubkey.to_compressed_bytes() == enr.public_key
-    assert bob.this_node.address.ip_packed == enr[IP_V4_ADDRESS_ENR_KEY]
-    assert bob.this_node.address.udp_port == enr[UDP_PORT_ENR_KEY]
-    assert bob.this_node.address.tcp_port == enr[TCP_PORT_ENR_KEY]
+    validate_node_enr(bob.this_node, enr, sequence_number=1)
 
 
 @pytest.mark.trio
