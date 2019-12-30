@@ -3,7 +3,9 @@ import logging
 import trio
 import pytest_trio
 
-from async_service import TrioManager
+from async_generator import asynccontextmanager
+
+from async_service import background_trio_service
 
 from eth_hash.auto import keccak
 
@@ -33,6 +35,7 @@ async def socket_pair():
     return sending_socket, receiving_socket
 
 
+@asynccontextmanager
 async def _manually_driven_discovery(seed, socket, nursery):
     discovery = ManuallyDrivenDiscoveryService(
         keys.PrivateKey(keccak(seed)),
@@ -40,44 +43,38 @@ async def _manually_driven_discovery(seed, socket, nursery):
         bootstrap_nodes=[],
         event_bus=None,
         socket=socket)
-    nursery.start_soon(TrioManager.run_service, discovery)
-    await discovery.ready_to_drive.wait()
-    return discovery
+    async with background_trio_service(discovery):
+        # At this point we know the service has started (i.e. its run() method has been scheduled),
+        # but maybe it hasn't had a chance to run yet, so we wait until the _local_enr is set to
+        # ensure run() has actually executed.
+        with trio.fail_after(1):
+            while discovery._local_enr is None:
+                await trio.hazmat.checkpoint()
+        yield discovery
 
 
 @pytest_trio.trio_fixture
 async def manually_driven_discovery(nursery):
     socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
-    discovery = await _manually_driven_discovery(b'seed', socket, nursery)
-    yield discovery
-    discovery.manager.cancel()
-    await discovery.manager.wait_finished()
+    async with _manually_driven_discovery(b'seed', socket, nursery) as discovery:
+        yield discovery
 
 
 @pytest_trio.trio_fixture
 async def manually_driven_discovery_pair(nursery, socket_pair):
-    discovery1 = await _manually_driven_discovery(b'seed1', socket_pair[0], nursery)
-    discovery2 = await _manually_driven_discovery(b'seed2', socket_pair[1], nursery)
-    yield discovery1, discovery2
-    discovery1.manager.cancel()
-    discovery2.manager.cancel()
-    await discovery1.manager.wait_finished()
-    await discovery2.manager.wait_finished()
+    async with _manually_driven_discovery(b'seed1', socket_pair[0], nursery) as discovery1:
+        async with _manually_driven_discovery(b'seed2', socket_pair[1], nursery) as discovery2:
+            yield discovery1, discovery2
 
 
 class ManuallyDrivenDiscoveryService(DiscoveryService):
-    """A DiscoveryService that can be executed with TrioManager.run_service() but which doesn't
-    run any background tasks (e.g. bootstrapping) by itself. Instead one must schedule any tasks
-    manually.
+    """
+    A DiscoveryService that can be executed with TrioManager.run_service() but which doesn't
+    run any daemons nor bootstraps itself. Instead one must schedule any tasks manually.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.ready_to_drive = trio.Event()
-
-    async def run(self) -> None:
-        self.ready_to_drive.set()
-        await self.manager.wait_finished()
+    def run_daemons_and_bootstrap(self) -> None:
+        pass
 
     async def consume_datagram(self) -> None:
         await super().consume_datagram()

@@ -6,6 +6,7 @@ import rlp
 
 from eth_utils import (
     decode_hex,
+    to_bytes,
     ValidationError,
 )
 from eth_utils.toolz import (
@@ -23,6 +24,7 @@ from p2p.discv5.identity_schemes import (
     V4IdentityScheme,
     IdentitySchemeRegistry,
 )
+from p2p.forkid import ForkID
 
 
 # Source: https://github.com/fjl/EIPs/blob/0acb5939555cbd0efcdd04da0d3acb0cc81d049a/EIPS/eip-778.md
@@ -60,7 +62,7 @@ REAL_LIFE_TEST_DATA = {
     "identity_scheme": V4IdentityScheme,
     "sequence_number": 40,
     "kv_pairs": {
-        b"eth": ((b'cv\x01\x90', 1700000), ),
+        b"eth": (ForkID(hash=to_bytes(hexstr='0x63760190'), next=1700000), ),
         b"id": b"v4",
         b"ip": decode_hex("5e3fc0bb"),
         b"secp256k1": decode_hex(
