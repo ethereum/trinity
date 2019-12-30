@@ -702,7 +702,7 @@ def create_mock_voluntary_exit(
     keymap: Dict[BLSPubkey, int],
     validator_index: ValidatorIndex,
     exit_epoch: Epoch = None,
-) -> VoluntaryExit:
+) -> SignedVoluntaryExit:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     target_epoch = current_epoch if exit_epoch is None else exit_epoch
     voluntary_exit = VoluntaryExit.create(
