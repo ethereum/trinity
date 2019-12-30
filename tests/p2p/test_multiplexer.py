@@ -12,6 +12,9 @@ from p2p.p2p_proto import Ping, Pong, P2PProtocolV5
 from p2p.tools.factories import MultiplexerPairFactory
 
 
+DEFAULT_TIMEOUT = 1
+
+
 class CommandA(BaseCommand):
     protocol_command_id = 0
     serialization_codec = NoneSerializationCodec()
@@ -97,11 +100,11 @@ async def test_multiplexer_only_p2p_protocol():
             bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
 
             alice_p2p_protocol.send(Ping(None))
-            cmd = await asyncio.wait_for(bob_stream.asend(None), timeout=0.1)
+            cmd = await asyncio.wait_for(bob_stream.asend(None), timeout=DEFAULT_TIMEOUT)
             assert isinstance(cmd, Ping)
 
             bob_p2p_protocol.send(Pong(None))
-            cmd = await asyncio.wait_for(alice_stream.asend(None), timeout=0.1)
+            cmd = await asyncio.wait_for(alice_stream.asend(None), timeout=DEFAULT_TIMEOUT)
 
 
 @pytest.mark.asyncio
@@ -126,20 +129,20 @@ async def test_multiplexer_p2p_and_paragon_protocol():
             alice_second_protocol.send(CommandA(None))
             alice_p2p_protocol.send(Ping(None))
             alice_second_protocol.send(CommandB(None))
-            cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=0.1)
+            cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
             assert isinstance(cmd, Ping)
 
             bob_second_protocol.send(CommandA(None))
             bob_p2p_protocol.send(Pong(None))
             bob_second_protocol.send(CommandB(None))
 
-            cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=0.1)
+            cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
             assert isinstance(cmd, Pong)
 
-            cmd_1 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_2 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_3 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_4 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=0.1)  # noqa: E501
+            cmd_1 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_2 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_3 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_4 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
 
             assert isinstance(cmd_1, CommandA)
             assert isinstance(cmd_2, CommandB)
@@ -175,7 +178,7 @@ async def test_multiplexer_p2p_and_two_more_protocols():
             alice_p2p_protocol.send(Ping(None))
             alice_second_protocol.send(CommandB(None))
             alice_third_protocol.send(CommandD(None))
-            cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=0.1)
+            cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
             assert isinstance(cmd, Ping)
 
             bob_second_protocol.send(CommandA(None))
@@ -183,17 +186,17 @@ async def test_multiplexer_p2p_and_two_more_protocols():
             bob_p2p_protocol.send(Pong(None))
             bob_second_protocol.send(CommandB(None))
             bob_third_protocol.send(CommandD(None))
-            cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=0.1)
+            cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
             assert isinstance(cmd, Pong)
 
-            cmd_1 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_2 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_3 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_4 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_5 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_6 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_7 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=0.1)  # noqa: E501
-            cmd_8 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=0.1)  # noqa: E501
+            cmd_1 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_2 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_3 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_4 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_5 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_6 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_7 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+            cmd_8 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
 
             assert isinstance(cmd_1, CommandC)
             assert isinstance(cmd_2, CommandD)
