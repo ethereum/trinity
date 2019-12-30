@@ -368,7 +368,9 @@ class DiscoveryService(Service):
             results = await trio_utils.gather(*next_find_node_queries)
             for candidates in results:
                 closest.extend(candidates)
-            closest = sort_by_distance(closest, node_id)[:constants.KADEMLIA_BUCKET_SIZE]
+            # Need to sort again and pick just the closest k nodes to ensure we converge.
+            closest = sort_by_distance(
+                eth_utils.toolz.unique(closest), node_id)[:constants.KADEMLIA_BUCKET_SIZE]
             nodes_to_ask = _exclude_if_asked(closest)
 
         self.logger.debug(

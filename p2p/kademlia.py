@@ -392,5 +392,5 @@ def _compute_shared_prefix_bits(nodes: List[NodeAPI]) -> int:
     raise AssertionError("Unable to calculate number of shared prefix bits")
 
 
-def sort_by_distance(nodes: List[NodeAPI], target_id: int) -> List[NodeAPI]:
+def sort_by_distance(nodes: Iterable[NodeAPI], target_id: int) -> List[NodeAPI]:
     return sorted(nodes, key=operator.methodcaller('distance_to', target_id))
