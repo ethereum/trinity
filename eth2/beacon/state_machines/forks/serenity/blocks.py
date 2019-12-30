@@ -1,5 +1,9 @@
-from eth2.beacon.types.blocks import BeaconBlock
+from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 
 
 class SerenityBeaconBlock(BeaconBlock):
-    pass
+    ...
+
+
+class SerenitySignedBeaconBlock(SignedBeaconBlock):
+    ...

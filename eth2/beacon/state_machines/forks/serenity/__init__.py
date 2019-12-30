@@ -58,7 +58,7 @@ class SerenityStateMachine(BeaconStateMachine):
                 genesis_root, self.block_class
             )
             genesis_state = self.chaindb.get_state_by_root(
-                genesis_block.state_root, self.state_class
+                genesis_block.message.state_root, self.state_class
             )
             return LMDGHOSTContext.from_genesis(genesis_state, genesis_block)
         else:

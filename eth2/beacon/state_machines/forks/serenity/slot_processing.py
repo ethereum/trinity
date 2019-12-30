@@ -36,7 +36,7 @@ def _process_slot(state: BeaconState, config: Eth2Config) -> BeaconState:
         state.block_roots,
         state.slot,
         slots_per_historical_root,
-        state.latest_block_header.signing_root,
+        state.latest_block_header.hash_tree_root,
     )
 
     return state.mset(

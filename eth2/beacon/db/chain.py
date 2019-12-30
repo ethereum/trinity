@@ -24,7 +24,7 @@ from eth2.beacon.db.exceptions import (
 from eth2.beacon.db.schema import SchemaV1
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock  # noqa: F401
+from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock, SignedBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, HashTreeRoot, SigningRoot, Slot
@@ -218,10 +218,10 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     def persist_block(
         self,
-        block: BaseBeaconBlock,
-        block_class: Type[BaseBeaconBlock],
+        block: BaseSignedBeaconBlock,
+        block_class: Type[BaseSignedBeaconBlock],
         fork_choice_scoring: BaseForkChoiceScoring,
-    ) -> Tuple[Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]]:
+    ) -> Tuple[Tuple[BaseSignedBeaconBlock, ...], Tuple[BaseSignedBeaconBlock, ...]]:
         """
         Persist the given block.
         """
@@ -372,7 +372,7 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     @staticmethod
     def _get_block_by_root(
-        db: DatabaseAPI, block_root: SigningRoot, block_class: Type[BaseBeaconBlock]
+        db: DatabaseAPI, block_root: SigningRoot, block_class: Type[BaseSignedBeaconBlock]
     ) -> BaseBeaconBlock:
         """
         Return the requested block header as specified by block root.
@@ -480,10 +480,10 @@ class BeaconChainDB(BaseBeaconChainDB):
     def _persist_block_chain(
         cls,
         db: DatabaseAPI,
-        blocks: Iterable[BaseBeaconBlock],
-        block_class: Type[BaseBeaconBlock],
+        blocks: Iterable[BaseSignedBeaconBlock],
+        block_class: Type[BaseSignedBeaconBlock],
         fork_choice_scorings: Iterable[BaseForkChoiceScoring],
-    ) -> Tuple[Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]]:
+    ) -> Tuple[Tuple[BaseSignedBeaconBlock, ...], Tuple[BaseSignedBeaconBlock, ...]]:
         blocks_iterator = iter(blocks)
         scorings_iterator = iter(fork_choice_scorings)
 
@@ -496,7 +496,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         try:
             previous_canonical_head = cls._get_canonical_head(
                 db, block_class
-            ).signing_root
+            ).message.hash_tree_root
             score_class = first_scoring.get_score_class()
             head_score = cls._get_score(db, previous_canonical_head, score_class)
         except CanonicalHeadNotFound:

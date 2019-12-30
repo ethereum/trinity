@@ -28,6 +28,7 @@ from eth2.beacon.types.blocks import (
     BeaconBlockBody,
     BeaconBlockHeader,
     SignedBeaconBlockHeader,
+    SignedBeaconBlock,
 )
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData
@@ -568,7 +569,7 @@ def sample_beacon_state_params(
 
 @pytest.fixture()
 def sample_block(sample_beacon_block_params):
-    return SerenityBeaconBlock.create(**sample_beacon_block_params)
+    return BeaconBlock.create(**sample_beacon_block_params)
 
 
 @pytest.fixture()
@@ -629,8 +630,11 @@ def genesis_state(
 
 
 @pytest.fixture
-def genesis_block(genesis_state):
-    return get_genesis_block(genesis_state.hash_tree_root, SerenityBeaconBlock)
+def genesis_block(genesis_state, sample_signature):
+    return SignedBeaconBlock.create(
+        message=get_genesis_block(genesis_state.hash_tree_root, BeaconBlock),
+        signature=sample_signature,
+    )
 
 
 #

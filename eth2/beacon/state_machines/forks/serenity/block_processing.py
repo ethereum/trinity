@@ -6,7 +6,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_randao_reveal,
 )
 from eth2.beacon.types.block_headers import BeaconBlockHeader
-from eth2.beacon.types.blocks import BaseBeaconBlock, SignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.configs import CommitteeConfig, Eth2Config
 
@@ -21,7 +21,7 @@ from .operation_processing import process_operations
 
 def process_block_header(
     state: BeaconState,
-    signed_block: SignedBeaconBlock,
+    signed_block: BaseSignedBeaconBlock,
     config: Eth2Config,
     check_proposer_signature: bool,
 ) -> BeaconState:
@@ -98,7 +98,7 @@ def process_eth1_data(
 
 def process_block(
     state: BeaconState,
-    signed_block: SignedBeaconBlock,
+    signed_block: BaseSignedBeaconBlock,
     config: Eth2Config,
     check_proposer_signature: bool = True,
 ) -> BeaconState:
