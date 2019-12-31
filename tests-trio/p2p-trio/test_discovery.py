@@ -49,18 +49,21 @@ def short_timeout(monkeypatch):
 async def test_ping_pong(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Collect all pongs received by alice in a list for later inspection.
+    got_pong = trio.Event()
     received_pongs = []
 
     async def recv_pong(node, payload, hash_):
         received_pongs.append((node, payload))
+        got_pong.set()
 
     alice.recv_pong_v4 = recv_pong
 
     token = await alice.send_ping_v4(bob.this_node)
 
-    with trio.fail_after(0.5):
+    with trio.fail_after(1):
         await bob.consume_datagram()
         await alice.consume_datagram()
+        await got_pong.wait()
 
     assert len(received_pongs) == 1
     node, payload = received_pongs[0]
@@ -111,7 +114,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
         await bob.consume_datagram()
         await alice.consume_datagram()
 
-    with trio.fail_after(0.1):
+    with trio.fail_after(1):
         await got_enr.wait()
 
     enr.validate_signature()
@@ -133,9 +136,11 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
     # Collect all neighbours packets received by alice in a list for later inspection.
     received_neighbours = []
+    got_neighbours = trio.Event()
 
     async def recv_neighbours(node, payload, hash_):
         received_neighbours.append((node, payload))
+        got_neighbours.set()
 
     alice.recv_neighbours_v4 = recv_neighbours
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
@@ -143,12 +148,13 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
     alice.send_find_node_v4(bob.this_node, alice.this_node.id)
 
-    with trio.fail_after(0.5):
+    with trio.fail_after(1):
         await bob.consume_datagram()
         # Alice needs to consume two datagrams here because we expect bob's response to be split
         # across two packets since a single one would be bigger than protocol's byte limit.
         await alice.consume_datagram()
         await alice.consume_datagram()
+        await got_neighbours.wait()
 
     # Bob should have sent two neighbours packets in order to keep the total packet size under the
     # 1280 bytes limit.
