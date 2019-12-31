@@ -521,7 +521,7 @@ class DiscoveryService(Service):
             constants.DISCOVERY_DATAGRAM_BUFFER_SIZE)
         address = Address(ip_address, port)
         self.logger.debug2("Received datagram from %s", address)
-        await self.receive(address, datagram)
+        self.manager.run_task(self.receive, address, datagram)
 
     async def receive(self, address: AddressAPI, message: bytes) -> None:
         try:

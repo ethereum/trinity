@@ -72,3 +72,10 @@ class ManuallyDrivenDiscoveryService(DiscoveryService):
     async def run(self) -> None:
         self.ready_to_drive.set()
         await self.manager.wait_finished()
+
+    async def consume_datagram(self) -> None:
+        await super().consume_datagram()
+        # Our parent's consume_datagram() starts a background task to process the msg, so we yield
+        # control here to give that a chance to run. This avoid us having to do so in every test
+        # that calls consume_datagram().
+        await trio.hazmat.checkpoint()
