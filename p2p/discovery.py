@@ -153,11 +153,11 @@ class DiscoveryService(Service):
         self.this_node = Node(self.pubkey, address)
         self.routing = RoutingTable(self.this_node)
         self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
+        self.pong_channels = ExpectedResponseChannels[Tuple[Hash32, int]]()
         # FIXME: Use a persistent EnrDb implementation.
         self._enr_db = MemoryEnrDb(default_identity_scheme_registry)
         # FIXME: Use a concurrency-safe EnrDb implementation.
         self._enr_db_lock = trio.Lock()
-        self.pong_callbacks = CallbackManager()
         self.ping_callbacks = CallbackManager()
         self.neighbours_callbacks = CallbackManager()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
@@ -226,16 +226,22 @@ class DiscoveryService(Service):
             return False
 
         token = await self.send_ping_v4(node)
-        log_version = "v4"
-
+        send_chan, recv_chan = trio.open_memory_channel[Tuple[Hash32, int]](1)
         try:
-            got_pong = await self.wait_pong_v4(node, token)
+            with trio.fail_after(constants.KADEMLIA_REQUEST_TIMEOUT):
+                received_token, enr_seq = await self.pong_channels.wait_receive(
+                    node, send_chan, recv_chan)
         except AlreadyWaitingDiscoveryResponse:
-            self.logger.debug("bonding failed, awaiting %s pong from %s", log_version, node)
+            self.logger.debug(f"Bonding failed, already waiting pong from {node}")
+            return False
+        except trio.TooSlowError:
+            self.logger.debug(f"Bonding with {node} timed out")
             return False
 
-        if not got_pong:
-            self.logger.debug("bonding failed, didn't receive %s pong from %s", log_version, node)
+        if received_token != token:
+            self.logger.info(
+                f"Bonding with {node} failed, expected pong with token {token!r}, "
+                f"but got {received_token!r}")
             self.routing.remove_node(node)
             return False
 
@@ -326,38 +332,6 @@ class DiscoveryService(Service):
 
         return got_ping
 
-    async def wait_pong_v4(self, remote: NodeAPI, token: Hash32) -> bool:
-        """Wait for a pong from the given remote containing the given token.
-
-        This coroutine adds a callback to pong_callbacks and yields control until the given event
-        is set or a timeout (k_request_timeout) occurs. At that point it returns whether or not
-        a pong was received with the given token.
-        """
-
-        event = trio.Event()
-
-        def callback(received_token: Hash32) -> None:
-            if received_token == token:
-                event.set()
-            else:
-                self.logger.warning("Pong from %s with wrong token: %s", received_token)
-
-        with self.pong_callbacks.acquire(remote, callback):
-            with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
-                await event.wait()
-            if cancel_scope.cancelled_caught:
-                got_pong = False
-                self.logger.debug2(
-                    'timed out waiting for pong from %s (token == %s)',
-                    remote,
-                    encode_hex(token),
-                )
-            else:
-                got_pong = True
-                self.logger.debug2('got expected pong with token %s', encode_hex(token))
-
-        return got_pong
-
     async def wait_neighbours(self, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
         """Wait for a neihgbours packet from the given node.
 
@@ -411,7 +385,8 @@ class DiscoveryService(Service):
             all_candidates = tuple(c for c in candidates if c not in nodes_seen)
             candidates = tuple(
                 c for c in all_candidates
-                if (not self.ping_callbacks.locked(c) and not self.pong_callbacks.locked(c))
+                if (not self.ping_callbacks.locked(c) and
+                    not self.pong_channels.already_waiting_for(c))
             )
             self.logger.debug2("got %s new candidates", len(candidates))
             # Add new candidates to nodes_seen so that we don't attempt to bond with failing ones
@@ -502,7 +477,8 @@ class DiscoveryService(Service):
             (self.bond, n)
             for n
             in self.bootstrap_nodes
-            if (not self.ping_callbacks.locked(n) and not self.pong_callbacks.locked(n))
+            if (not self.ping_callbacks.locked(n) and
+                not self.pong_channels.already_waiting_for(n))
         )
         bonded = await trio_utils.gather(*bonding_queries)
         if not any(bonded):
@@ -560,7 +536,7 @@ class DiscoveryService(Service):
         if self._is_msg_expired(expiration):
             return
         self.logger.debug2('<<< pong (v4) from %s (token == %s)', node, encode_hex(token))
-        self.process_pong_v4(node, token)
+        await self.process_pong_v4(node, token, enr_seq)
 
     async def recv_neighbours_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The neighbours payload should have 2 elements: nodes, expiration
@@ -726,13 +702,7 @@ class DiscoveryService(Service):
         else:
             callback(neighbours)
 
-    def process_pong_v4(self, remote: NodeAPI, token: Hash32) -> None:
-        """Process a pong packet.
-
-        Pong packets should only be received as a response to a ping, so the actual processing is
-        left to the callback from pong_callbacks, which is added (and removed after it's done
-        or timed out) in wait_pong().
-        """
+    async def process_pong_v4(self, remote: NodeAPI, token: Hash32, enr_seq: int) -> None:
         # XXX: This hack is needed because there are lots of parity 1.10 nodes out there that send
         # the wrong token on pong msgs (https://github.com/paritytech/parity/issues/8038). We
         # should get rid of this once there are no longer too many parity 1.10 nodes out there.
@@ -746,11 +716,20 @@ class DiscoveryService(Service):
                 lambda val: val != token, self.parity_pong_tokens)
 
         try:
-            callback = self.pong_callbacks.get_callback(remote)
+            channel = self.pong_channels.get_channel(remote)
         except KeyError:
-            self.logger.debug('unexpected v4 pong from %s (token == %s)', remote, encode_hex(token))
-        else:
-            callback(token)
+            # This is probably a Node which changed its identity since it was added to the DHT,
+            # causing us to expect a pong signed with a certain key when in fact it's using
+            # a different one. Another possibility is that the pong came after we've given up
+            # waiting.
+            self.logger.debug(f'Unexpected pong from {remote} with token {encode_hex(token)}')
+            return
+
+        try:
+            await channel.send((token, enr_seq))
+        except trio.BrokenResourceError:
+            # This means the receiver has already closed, probably because it timed out.
+            pass
 
     def process_ping(self, remote: NodeAPI, hash_: Hash32) -> None:
         """Process a received ping packet.
@@ -1124,6 +1103,9 @@ class ExpectedResponseChannels(Generic[TMsg]):
 
     def __init__(self) -> None:
         self._channels: Dict[NodeAPI, trio.abc.SendChannel[TMsg]] = {}
+
+    def already_waiting_for(self, remote: NodeAPI) -> bool:
+        return remote in self._channels
 
     def get_channel(self, remote: NodeAPI) -> trio.abc.SendChannel[TMsg]:
         return self._channels[remote]

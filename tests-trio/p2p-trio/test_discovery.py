@@ -219,37 +219,6 @@ async def test_wait_ping(nursery, echo):
 
 
 @pytest.mark.trio
-async def test_wait_pong(nursery):
-    service = MockDiscoveryService([])
-    us = service.this_node
-    node = NodeFactory()
-    expiration = _get_msg_expiration()
-
-    # Schedule a call to service.recv_pong() simulating a pong from the node we expect.
-    token = b'token'
-    pong_msg_payload = [us.address.to_endpoint(), token, expiration]
-    nursery.start_soon(service.recv_pong_v4, node, pong_msg_payload, b'')
-
-    got_pong = await service.wait_pong_v4(node, token)
-
-    assert got_pong
-    # Ensure wait_pong() cleaned up after itself.
-    pingid = service._mkpingid(token, node)
-    assert pingid not in service.pong_callbacks
-
-    # If the remote node echoed something different than what we expected, wait_pong() would
-    # timeout.
-    wrong_token = b"foo"
-    pong_msg_payload = [us.address.to_endpoint(), wrong_token, expiration]
-    nursery.start_soon(service.recv_pong_v4, node, pong_msg_payload, b'')
-
-    got_pong = await service.wait_pong_v4(node, token)
-
-    assert not got_pong
-    assert pingid not in service.pong_callbacks
-
-
-@pytest.mark.trio
 async def test_wait_neighbours(nursery):
     service = MockDiscoveryService([])
     node = NodeFactory()
@@ -279,6 +248,7 @@ async def test_wait_neighbours(nursery):
 @pytest.mark.trio
 async def test_bond(nursery, monkeypatch):
     discovery = MockDiscoveryService([])
+    us = discovery.this_node
     node = NodeFactory()
 
     token = b'token'
@@ -289,11 +259,9 @@ async def test_bond(nursery, monkeypatch):
     # Do not send pings, instead simply return the pingid we'd expect back together with the pong.
     monkeypatch.setattr(discovery, 'send_ping_v4', send_ping)
 
-    # Pretend we get a pong from the node we are bonding with.
-    async def wait_pong_v4(remote, t) -> bool:
-        return t == token and remote == node
-
-    monkeypatch.setattr(discovery, 'wait_pong_v4', wait_pong_v4)
+    # Schedule a call to service.recv_pong() simulating a pong from the node we expect.
+    pong_msg_payload = [us.address.to_endpoint(), token, _get_msg_expiration()]
+    nursery.start_soon(discovery.recv_pong_v4, node, pong_msg_payload, b'')
 
     bonded = await discovery.bond(node)
 
