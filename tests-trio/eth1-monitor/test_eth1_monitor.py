@@ -224,18 +224,16 @@ async def test_get_eth1_data(
     assert_get_eth1_data(block_numbers[2], 2, 1)
     assert_get_eth1_data_raises(block_numbers[2], 3)
 
-    # Assert b3, b4, b5.
-    # Since these blocks are still within `num_blocks_confirmed`,
-    # queries with `distance == 0` will return eth1_data at b2.
-    # `num_blocks_confirmed` blocks.
+    # Assert b3, b4, b5
+    # We do not have these blocks at db yet but we can still get these eth1 data.
     assert_get_eth1_data(
-        block_numbers[3], 0, 2, expected_block_number_at_distance=block_numbers[2]
+        block_numbers[3], 1, 2, expected_block_number_at_distance=block_numbers[2]
     )
     assert_get_eth1_data(
-        block_numbers[4], 0, 2, expected_block_number_at_distance=block_numbers[2]
+        block_numbers[4], 1, 2, expected_block_number_at_distance=block_numbers[3]
     )
     assert_get_eth1_data(
-        block_numbers[5], 0, 2, expected_block_number_at_distance=block_numbers[2]
+        block_numbers[5], 1, 2, expected_block_number_at_distance=block_numbers[4]
     )
 
     # Test: `DepositDataCorrupted` is raised when the calculated `deposit_root` from
@@ -248,10 +246,11 @@ async def test_get_eth1_data(
         ]
         corrupted_deposit_data_db.add_deposit_data_batch(corrupted_list_deposit_data, 1)
         m_context.setattr(eth1_monitor, "_db", corrupted_deposit_data_db)
+        latest_processed_block_number = current_height - num_blocks_confirmed
         with pytest.raises(DepositDataCorrupted):
             eth1_monitor._get_eth1_data(
                 distance=0,
-                eth1_voting_period_start_timestamp=w3.eth.getBlock(current_height)[
+                eth1_voting_period_start_timestamp=w3.eth.getBlock(latest_processed_block_number)[
                     "timestamp"
                 ],
             )
