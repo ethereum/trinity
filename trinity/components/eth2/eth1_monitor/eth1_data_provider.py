@@ -178,8 +178,8 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     def _get_block_time(self, block_number: BlockNumber) -> Timestamp:
         return Timestamp(
-            self.start_block_timestamp
-            + (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
+            self.start_block_timestamp +
+            (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
         )
 
     def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
@@ -223,10 +223,11 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
         block_hash = block_number.to_bytes(32, byteorder="big")
+        logs: Tuple[DepositLog, ...] = tuple()
         if block_number < self.start_block_number:
-            return tuple()
+            return logs
         elif block_number == self.start_block_number:
-            logs = (
+            logs = tuple(
                 DepositLog(
                     block_hash=Hash32(block_hash),
                     pubkey=deposit.pubkey,
@@ -236,9 +237,8 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                 )
                 for deposit in self.deposits
             )
-            return tuple(logs)
+            return logs
         else:
-            logs: Tuple[DepositLog, ...] = tuple()
             amount: Gwei = Gwei(32 * GWEI_PER_ETH)
             for seed in range(self.num_deposits_per_block):
                 pubkey, privkey = mk_key_pair_from_seed_index(block_number * 10 + seed)
@@ -250,7 +250,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                 )
                 signature = sign_proof_of_possession(deposit_data=deposit_data, privkey=privkey)
                 deposit_data = deposit_data.set("signature", signature)
-                logs += (
+                logs = logs + (
                     DepositLog(
                         block_hash=Hash32(block_hash),
                         pubkey=pubkey,
@@ -259,14 +259,14 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                         amount=amount,
                     ),
                 )
-            return tuple(logs)
+            return logs
 
     def get_deposit_count(self, block_number: BlockNumber) -> bytes:
         if block_number <= self.start_block_number:
             return self.num_initial_deposits.to_bytes(32, byteorder="little")
         deposit_count = (
-            self.num_initial_deposits
-            + (block_number - self.start_block_number) * self.num_deposits_per_block
+            self.num_initial_deposits +
+            (block_number - self.start_block_number) * self.num_deposits_per_block
         )
         return deposit_count.to_bytes(32, byteorder="little")
 
