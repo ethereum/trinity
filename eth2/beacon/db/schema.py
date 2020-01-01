@@ -14,7 +14,7 @@ class BaseSchema(ABC):
 
     @staticmethod
     @abstractmethod
-    def make_slot_to_state_root_lookup_key(slot: int) -> bytes:
+    def make_head_state_root_lookup_key() -> bytes:
         ...
 
     #
@@ -85,8 +85,8 @@ class SchemaV1(BaseSchema):
         return b"v1:beacon:head-state-slot"
 
     @staticmethod
-    def make_slot_to_state_root_lookup_key(slot: int) -> bytes:
-        return b"v1:beacon:slot-to-state-root%d" % slot
+    def make_head_state_root_lookup_key() -> bytes:
+        return b"v1:beacon:head-state-root"
 
     @staticmethod
     def make_canonical_epoch_info_lookup_key() -> bytes:

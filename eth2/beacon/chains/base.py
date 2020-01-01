@@ -9,7 +9,7 @@ from eth.validation import validate_word
 from eth_utils import ValidationError, humanize_hash
 
 from eth2._utils.ssz import validate_imported_block_unchanged
-from eth2.beacon.db.chain import BaseBeaconChainDB, BeaconChainDB
+from eth2.beacon.db.chain import BaseBeaconChainDB, BeaconChainDB, StateNotFound
 from eth2.beacon.exceptions import BlockClassError, StateMachineNotFound
 from eth2.beacon.fork_choice.constant import ConstantScoring
 from eth2.beacon.fork_choice.scoring import BaseScore
@@ -321,12 +321,19 @@ class BeaconChain(BaseBeaconChain):
     def get_state_by_slot(self, slot: Slot) -> BeaconState:
         """
         Return the requested state as specified by slot number.
-
         Raise ``StateNotFound`` if there's no state with the given slot number in the db.
         """
         sm_class = self.get_state_machine_class_for_block_slot(slot)
         state_class = sm_class.get_state_class()
-        state_root = self.chaindb.get_state_root_by_slot(slot)
+        try:
+            block = self.get_canonical_block_by_slot(slot)
+        except BlockNotFound:
+            # NOTE: We can apply state transition instead of raising `StateNotFound`
+            # but this api is being indirectly exposed to outside callers, e.g.
+            # a eth2 monitor requesting state at certain slot.
+            # And so applying state transition could be potential DoS vector in this case.
+            raise StateNotFound(f"No state root for slot #{slot})")
+        state_root = block.state_root
         return self.chaindb.get_state_by_root(state_root, state_class)
 
     def get_head_state_slot(self) -> Slot:
@@ -334,7 +341,9 @@ class BeaconChain(BaseBeaconChain):
 
     def get_head_state(self) -> BeaconState:
         head_state_slot = self.chaindb.get_head_state_slot()
-        return self.get_state_by_slot(head_state_slot)
+        head_state_root = self.chaindb.get_head_state_root()
+        state_class = self.get_state_machine(at_slot=head_state_slot).get_state_class()
+        return self.chaindb.get_state_by_root(head_state_root, state_class)
 
     def get_canonical_epoch_info(self) -> EpochInfo:
         return self.chaindb.get_canonical_epoch_info()
@@ -466,6 +475,10 @@ class BeaconChain(BaseBeaconChain):
         (new_canonical_blocks, old_canonical_blocks) = self.chaindb.persist_block(
             imported_block, imported_block.__class__, fork_choice_scoring
         )
+
+        # Set the state of new (canonical) block as head state.
+        if len(new_canonical_blocks) > 0:
+            self.chaindb.update_head_state(state.slot, state.hash_tree_root)
 
         self.logger.debug(
             "successfully imported block at slot %s with signing root %s",

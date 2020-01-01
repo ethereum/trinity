@@ -137,11 +137,15 @@ class BaseBeaconChainDB(ABC):
     # Beacon State
     #
     @abstractmethod
+    def update_head_state(self, slot: Slot, root: Hash32) -> None:
+        ...
+
+    @abstractmethod
     def get_head_state_slot(self) -> Slot:
         ...
 
     @abstractmethod
-    def get_state_root_by_slot(self, slot: Slot) -> Hash32:
+    def get_head_state_root(self) -> Hash32:
         ...
 
     @abstractmethod
@@ -703,13 +707,18 @@ class BeaconChainDB(BaseBeaconChainDB):
             ssz.encode(slot, sedes=ssz.sedes.uint64),
         )
 
-    def _add_slot_to_state_root_lookup(self, slot: Slot, state_root: Hash32) -> None:
+    def _add_head_state_root_lookup(self, root: Hash32) -> None:
         """
-        Set a record in the database to allow looking up the state root by
-        slot number.
+        Write head state root into the database.
         """
-        slot_to_state_root_key = SchemaV1.make_slot_to_state_root_lookup_key(slot)
-        self.db.set(slot_to_state_root_key, state_root)
+        self.db.set(SchemaV1.make_head_state_root_lookup_key(), root)
+
+    def update_head_state(self, slot: Slot, root: Hash32) -> None:
+        """
+        Write head state slot and head state root into the database.
+        """
+        self._add_head_state_slot_lookup(slot)
+        self._add_head_state_root_lookup(root)
 
     def get_head_state_slot(self) -> Slot:
         return self._get_head_state_slot(self.db)
@@ -725,23 +734,16 @@ class BeaconChainDB(BaseBeaconChainDB):
             raise HeadStateSlotNotFound("No head state slot found")
         return head_state_slot
 
-    def get_state_root_by_slot(self, slot: Slot) -> Hash32:
-        return self._get_state_root_by_slot(self.db, slot)
+    def get_head_state_root(self) -> Hash32:
+        return self._get_head_state_root(self.db)
 
     @staticmethod
-    def _get_state_root_by_slot(db: DatabaseAPI, slot: Slot) -> Hash32:
-        """
-        Return the requested beacon state as specified by slot.
-
-        Raises StateNotFound if it is not present in the db.
-        """
-        slot_to_state_root_key = SchemaV1.make_slot_to_state_root_lookup_key(slot)
+    def _get_head_state_root(db: DatabaseAPI) -> Hash32:
         try:
-            state_root = db[slot_to_state_root_key]
+            head_state_root = db[SchemaV1.make_head_state_root_lookup_key()]
         except KeyError:
-            raise StateNotFound("No state root for slot #{0}".format(slot))
-        else:
-            return Hash32(state_root)
+            raise HeadStateSlotNotFound("No head state slot found")
+        return Hash32(head_state_root)
 
     def get_state_by_root(
         self, state_root: Hash32, state_class: Type[BeaconState]
@@ -780,20 +782,16 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     def _persist_state(self, state: BeaconState) -> None:
         self.db.set(state.hash_tree_root, ssz.encode(state))
-        self._add_slot_to_state_root_lookup(state.slot, state.hash_tree_root)
 
         self._persist_finalized_head(state)
         self._persist_justified_head(state)
 
-        # Update head state slot if new state slot is greater than head state slot.
+        # Check if head state info is set.
         try:
-            head_state_slot = self.get_head_state_slot()
+            self.get_head_state_root()
         except HeadStateSlotNotFound:
             # Hasn't store any head state slot yet.
-            self._add_head_state_slot_lookup(state.slot)
-        else:
-            if state.slot > head_state_slot:
-                self._add_head_state_slot_lookup(state.slot)
+            self.update_head_state(state.slot, state.hash_tree_root)
 
         # For metrics
         # TODO: only persist per epoch transition

@@ -319,6 +319,7 @@ class Validator(BaseService):
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.
         self.chain.chaindb.persist_state(post_state)
+        self.chain.chaindb.update_head_state(post_state.slot, post_state.hash_tree_root)
         return post_state
 
     #

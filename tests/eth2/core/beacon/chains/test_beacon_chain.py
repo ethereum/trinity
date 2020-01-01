@@ -75,13 +75,9 @@ def test_get_state_by_slot(valid_chain, genesis_block, genesis_state, config, ke
     block_skipped_state = state_machine.state_transition.apply_state_transition(
         state, future_slot=block_skipped_slot
     )
+    valid_chain.chaindb.persist_state(block_skipped_state)
     with pytest.raises(StateNotFound):
         valid_chain.get_state_by_slot(block_skipped_slot)
-    valid_chain.chaindb.persist_state(block_skipped_state)
-    assert (
-        valid_chain.get_state_by_slot(block_skipped_slot).hash_tree_root
-        == block_skipped_state.hash_tree_root
-    )
 
     # Next, import proposed block and check if `get_state_by_slot` returns the expected state
     proposed_slot = block_skipped_slot + 1
@@ -126,7 +122,7 @@ def test_import_blocks(valid_chain, genesis_block, genesis_state, config, keymap
         valid_chain.import_block(block)
         assert valid_chain.get_canonical_head() == block
 
-        state = valid_chain.get_state_by_slot(block.slot)
+        state = valid_chain.get_head_state()
 
         assert block == valid_chain.get_canonical_block_by_slot(block.slot)
         assert block.signing_root == valid_chain.get_canonical_block_root(block.slot)
@@ -138,10 +134,8 @@ def test_import_blocks(valid_chain, genesis_block, genesis_state, config, keymap
         valid_chain_2.import_block(block)
 
     assert valid_chain.get_canonical_head() == valid_chain_2.get_canonical_head()
-    assert valid_chain.get_state_by_slot(blocks[-1].slot).slot != 0
-    assert valid_chain.get_state_by_slot(
-        blocks[-1].slot
-    ) == valid_chain_2.get_state_by_slot(blocks[-1].slot)
+    assert valid_chain.get_head_state().slot != 0
+    assert valid_chain.get_head_state() == valid_chain_2.get_head_state()
 
 
 def test_from_genesis(base_db, genesis_block, genesis_state, fixture_sm_class, config):
