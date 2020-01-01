@@ -72,6 +72,7 @@ class Eth1Monitor(Service):
     _db: BaseDepositDataDB
     # Mapping from `block.timestamp` to `block.number`.
     _block_timestamp_to_number: "OrderedDict[Timestamp, BlockNumber]"
+    # largest block timestamp among the blocks we have processed
     _largest_block_timestamp: Timestamp
 
     def __init__(
@@ -196,32 +197,41 @@ class Eth1Monitor(Service):
             )
         block_hash = block.block_hash
         # `Eth1Data.deposit_count`: get the `deposit_count` corresponding to the block.
-        accumulated_deposit_count = self._get_accumulated_deposit_count(
+        contract_deposit_count = self._get_deposit_count_from_contract(
             target_block_number
         )
-        if accumulated_deposit_count == 0:
+        if contract_deposit_count == 0:
             raise Eth1MonitorValidationError(
                 f"failed to make `Eth1Data`: `deposit_count = 0` at block #{target_block_number}"
             )
-        # Verify that the deposit data in db and the deposit data in contract match
-        deposit_data_in_range = self._db.get_deposit_data_range(
-            0, accumulated_deposit_count
-        )
-        _, deposit_root = make_deposit_tree_and_root(deposit_data_in_range)
         contract_deposit_root = self._get_deposit_root_from_contract(
             target_block_number
         )
-        if contract_deposit_root != deposit_root:
-            raise DepositDataCorrupted(
-                "deposit root built locally mismatches the one in the contract on chain: "
-                f"contract_deposit_root={contract_deposit_root.hex()}, "
-                f"deposit_root={deposit_root.hex()}"
-            )
-        return Eth1Data.create(
-            deposit_root=deposit_root,
-            deposit_count=accumulated_deposit_count,
+        eth1_data = Eth1Data.create(
+            deposit_root=contract_deposit_root,
+            deposit_count=contract_deposit_count,
             block_hash=block_hash,
         )
+
+        # If we have not processed any block
+        if self._largest_block_timestamp is None:
+            return eth1_data
+
+        largest_block_number = self._block_timestamp_to_number[self._largest_block_timestamp]
+        # If we have processed the target block number, validate deposit root.
+        if largest_block_number >= target_block_number:
+            # Verify that the deposit data in db and the deposit data in contract match
+            deposit_data_in_range = self._db.get_deposit_data_range(
+                0, contract_deposit_count
+            )
+            _, deposit_root = make_deposit_tree_and_root(deposit_data_in_range)
+            if contract_deposit_root != deposit_root:
+                raise DepositDataCorrupted(
+                    "deposit root built locally mismatches the one in the contract on chain: "
+                    f"contract_deposit_root={contract_deposit_root.hex()}, "
+                    f"deposit_root={deposit_root.hex()}"
+                )
+        return eth1_data
 
     def _get_deposit(self, deposit_count: int, deposit_index: int) -> Deposit:
         """
@@ -390,7 +400,7 @@ class Eth1Monitor(Service):
                 target_key = all_timestamps[index]
                 return self._block_timestamp_to_number[target_key]
 
-    def _get_accumulated_deposit_count(self, block_number: BlockNumber) -> int:
+    def _get_deposit_count_from_contract(self, block_number: BlockNumber) -> int:
         """
         Get the accumulated deposit count from deposit contract with `get_deposit_count`
         at block `block_number`.
