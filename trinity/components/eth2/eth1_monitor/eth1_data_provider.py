@@ -10,7 +10,11 @@ from eth_utils import encode_hex, event_abi_to_log_topic
 from web3 import Web3
 
 from eth2.beacon.constants import GWEI_PER_ETH
-from eth2.beacon.tools.builder.validator import make_deposit_tree_and_root
+from eth2.beacon.tools.builder.validator import (
+    make_deposit_tree_and_root,
+    mk_key_pair_from_seed_index,
+    sign_proof_of_possession,
+)
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.typing import Gwei, Timestamp
 
@@ -234,16 +238,27 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             )
             return tuple(logs)
         else:
-            logs = (
-                DepositLog(
-                    block_hash=Hash32(block_hash),
-                    pubkey=BLSPubkey(b"\x12" * 48),
-                    withdrawal_credentials=Hash32(b"\x23" * 32),
-                    signature=BLSSignature(b"\x34" * 96),
-                    amount=Gwei(32 * GWEI_PER_ETH),
+            logs: Tuple[DepositLog, ...] = tuple()
+            amount: Gwei = Gwei(32 * GWEI_PER_ETH)
+            for seed in range(self.num_deposits_per_block):
+                pubkey, privkey = mk_key_pair_from_seed_index(block_number * 10 + seed)
+                withdrawal_credentials = Hash32(b'\x12' * 32)
+                deposit_data = DepositData.create(
+                    pubkey=pubkey,
+                    withdrawal_credentials=withdrawal_credentials,
+                    amount=amount,
                 )
-                for _ in range(self.num_deposits_per_block)
-            )
+                signature = sign_proof_of_possession(deposit_data=deposit_data, privkey=privkey)
+                deposit_data = deposit_data.set("signature", signature)
+                logs += (
+                    DepositLog(
+                        block_hash=Hash32(block_hash),
+                        pubkey=pubkey,
+                        withdrawal_credentials=withdrawal_credentials,
+                        signature=signature,
+                        amount=amount,
+                    ),
+                )
             return tuple(logs)
 
     def get_deposit_count(self, block_number: BlockNumber) -> bytes:

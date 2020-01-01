@@ -37,7 +37,7 @@ POLLING_PERIOD = AVERAGE_BLOCK_TIME // 2
 START_BLOCK_NUMBER = BlockNumber(1000)
 
 # Configs for fake Eth1DataProvider
-NUM_DEPOSITS_PER_BLOCK = 0
+NUM_DEPOSITS_PER_BLOCK = 1
 
 
 class Eth1MonitorComponent(TrioIsolatedComponent):
