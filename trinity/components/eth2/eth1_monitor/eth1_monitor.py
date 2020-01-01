@@ -185,8 +185,7 @@ class Eth1Monitor(Service):
         )
         if target_block_number < 0:
             raise Eth1MonitorValidationError(
-                f"`distance` is larger than `eth1_voting_period_start_block_number`: "
-                f"`distance`={distance}, ",
+                f"target block number at`distance`={distance} is smaller than 0,",
                 f"eth1_voting_period_start_block_number={eth1_voting_period_start_block_number}",
             )
         try:

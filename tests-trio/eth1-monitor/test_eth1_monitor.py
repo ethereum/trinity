@@ -268,6 +268,7 @@ async def test_ipc(
     eth1_monitor,
     func_do_deposit,
 ):
+    contract_deployed_block_number = w3.eth.getBlock("latest")["number"]
     func_do_deposit()
     tester.mine_blocks(num_blocks_confirmed)
     await trio.sleep(polling_period)
@@ -305,9 +306,12 @@ async def test_ipc(
         await request(GetEth1DataRequest, **get_eth1_data_kwargs)
     )
     # Fails
+    latest_block = w3.eth.getBlock("latest")
     get_eth1_data_kwargs_fails = {
-        "distance": 1,
-        "eth1_voting_period_start_timestamp": w3.eth.getBlock("latest")["timestamp"],
+        # eth1 block at this distance is the block where contract is deployed so
+        # no deposits yet which will result in validation error
+        "distance": latest_block["number"] - contract_deployed_block_number,
+        "eth1_voting_period_start_timestamp": latest_block["timestamp"],
     }
     with pytest.raises(Eth1MonitorValidationError):
         await request(GetEth1DataRequest, **get_eth1_data_kwargs_fails)
