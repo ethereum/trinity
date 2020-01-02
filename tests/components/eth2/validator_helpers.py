@@ -112,7 +112,7 @@ async def get_validator(event_loop, event_bus, monkeypatch, handshaked_peers, in
         event_bus,
         monkeypatch,
         indices,
-        libp2p_ndoe,
+        libp2p_node,
         num_validators=num_validators,
     )
     asyncio.ensure_future(v.run(), loop=event_loop)
