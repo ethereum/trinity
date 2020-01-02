@@ -1,7 +1,10 @@
-import pathlib
-import tempfile
 import asyncio
 import pytest
+
+from aiohttp.test_utils import (
+    RawTestServer,
+    TestClient,
+)
 
 from eth2.beacon.tools.factories import (
     BeaconChainFactory,
@@ -11,14 +14,10 @@ from libp2p.crypto.secp256k1 import create_new_key_pair
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.http.handlers.api_handler import APIHandler
 
+
 GET_METHOD = 'GET'
 POST_METHOD = 'POST'
 
-
-@pytest.fixture
-def ipc_path():
-    with tempfile.TemporaryDirectory() as dir:
-        yield pathlib.Path(dir) / "db_manager.ipc"
 
 @pytest.fixture()
 def chain(num_validators, base_db):
@@ -35,7 +34,7 @@ def chain(num_validators, base_db):
 
 
 @pytest.fixture()
-def libp2p_node(chain, event_bus):
+async def libp2p_node(chain, event_bus):
     key_pair = create_new_key_pair()
     libp2p_node = Node(
         key_pair=key_pair,
@@ -47,7 +46,22 @@ def libp2p_node(chain, event_bus):
         event_bus=event_bus,
     )
     asyncio.ensure_future(libp2p_node.run())
+    await asyncio.sleep(0.01)
     return libp2p_node
+
+
+@pytest.fixture
+async def http_server(chain, event_bus):
+    server = RawTestServer(APIHandler.handle(chain)(event_bus))
+    return server
+
+
+@pytest.fixture
+async def http_client(http_server):
+    client = TestClient(http_server)
+    asyncio.ensure_future(client.start_server())
+    await asyncio.sleep(0.01)
+    return client
 
 
 @pytest.mark.parametrize(
@@ -67,11 +81,10 @@ def libp2p_node(chain, event_bus):
 )
 @pytest.mark.asyncio
 async def test_restful_http_server(
-    aiohttp_raw_server,
-    aiohttp_client,
+    http_client,
     event_loop,
-    base_db,
     event_bus,
+    base_db,
     method,
     resource,
     object,
@@ -81,22 +94,13 @@ async def test_restful_http_server(
     chain,
     libp2p_node,
 ):
-    server = await aiohttp_raw_server(APIHandler.handle(chain)(event_bus))
-    client = await aiohttp_client(server)
+    request_path = resource + '/' + object
+    response = await http_client.request(method, request_path)
 
-    try:
-        request_path = resource + '/' + object
-        if method == GET_METHOD:
-            response = await client.get(request_path)
+    assert response.status == status_code
 
-        assert response.status == status_code
+    if str(status_code).startswith('2'):
+        response_data = await response.json()
+        print(f'SUCCESS {request_path}: \t {response_data}\n')
 
-        if str(status_code).startswith('2'):
-            response_data = await response.json()
-            print(f'{request_path}: \t {response_data}\n')
-
-    except KeyboardInterrupt:
-        pass
-    finally:
-        # await libp2p_node.cancel()
-        await server.close()
+    await http_client.close()
