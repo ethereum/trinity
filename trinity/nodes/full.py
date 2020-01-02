@@ -20,8 +20,6 @@ class FullNode(Node[ETHPeer]):
 
     def __init__(self, event_bus: EndpointAPI, trinity_config: TrinityConfig) -> None:
         super().__init__(event_bus, trinity_config)
-        self._bootstrap_nodes = trinity_config.bootstrap_nodes
-        self._preferred_nodes = trinity_config.preferred_nodes
         self._node_key = trinity_config.nodekey
         self._node_port = trinity_config.port
         self._max_peers = trinity_config.max_peers
@@ -53,8 +51,6 @@ class FullNode(Node[ETHPeer]):
                 base_db=self._base_db,
                 network_id=self._network_id,
                 max_peers=self._max_peers,
-                bootstrap_nodes=self._bootstrap_nodes,
-                preferred_nodes=self._preferred_nodes,
                 token=self.cancel_token,
                 event_bus=self.event_bus,
             )

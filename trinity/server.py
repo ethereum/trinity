@@ -2,7 +2,6 @@ from abc import abstractmethod
 import asyncio
 from typing import (
     Generic,
-    Sequence,
     Tuple,
     Type,
     TypeVar,
@@ -15,7 +14,6 @@ from eth_typing import BlockNumber
 
 from eth.abc import AtomicDatabaseAPI, VirtualMachineAPI
 
-from p2p.abc import NodeAPI
 from p2p.constants import DEFAULT_MAX_PEERS, DEVP2P_V5
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import (
@@ -28,7 +26,6 @@ from p2p.service import BaseService
 
 from trinity._utils.version import construct_trinity_client_identifier
 from trinity.chains.base import AsyncChainAPI
-from trinity.constants import DEFAULT_PREFERRED_NODES
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.common.context import ChainContext
@@ -65,8 +62,6 @@ class BaseServer(BaseService, Generic[TPeerPool]):
                  base_db: AtomicDatabaseAPI,
                  network_id: int,
                  max_peers: int = DEFAULT_MAX_PEERS,
-                 bootstrap_nodes: Sequence[NodeAPI] = None,
-                 preferred_nodes: Sequence[NodeAPI] = None,
                  event_bus: EndpointAPI = None,
                  token: CancelToken = None,
                  ) -> None:
@@ -92,16 +87,9 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         self.port = port
         self.network_id = network_id
         self.max_peers = max_peers
-        self.bootstrap_nodes = bootstrap_nodes
-        self.preferred_nodes = preferred_nodes
-        if self.preferred_nodes is None and network_id in DEFAULT_PREFERRED_NODES:
-            self.preferred_nodes = DEFAULT_PREFERRED_NODES[self.network_id]
 
         # child services
         self.peer_pool = self._make_peer_pool()
-
-        if not bootstrap_nodes:
-            self.logger.warning("Running with no bootstrap nodes")
 
     @abstractmethod
     def _make_peer_pool(self) -> TPeerPool:
