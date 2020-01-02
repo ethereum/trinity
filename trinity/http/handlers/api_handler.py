@@ -103,11 +103,16 @@ async def validator_router(
     event_bus: EndpointAPI
 ) -> Any:
     object = _get_path_object(request)
-
-    # TODO: handle {pubkey} especially
-
     resource = Validator(chain, event_bus)
-    handler = getattr(resource, object)
+
+    if request.method == 'POST':
+        object = 'post_' + object
+
+    if object.startswith('0x'):
+        handler = resource.pubkey
+    else:
+        handler = getattr(resource, object)
+
     result = await handler(request)
     return result
 

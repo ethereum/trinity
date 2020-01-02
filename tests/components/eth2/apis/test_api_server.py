@@ -1,11 +1,15 @@
 import asyncio
+import json
 import pytest
 
 from aiohttp.test_utils import (
     RawTestServer,
     TestClient,
 )
+from ssz.tools import to_formatted_dict
 
+from eth2.beacon.types.attestations import Attestation
+from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.tools.factories import (
     BeaconChainFactory,
 )
@@ -64,19 +68,26 @@ async def http_client(http_server):
     return client
 
 
+sample_block = BeaconBlock.create()
+sample_attestation = Attestation.create()
+
+
 @pytest.mark.parametrize(
     'num_validators',
     (2,),
 )
 @pytest.mark.parametrize(
-    'method, resource, object, data, status_code',
+    'method, resource, object, json_data, status_code',
     (
         (GET_METHOD, 'beacon', 'head', '', 200),
         (GET_METHOD, 'beacon', 'block?slot=0', '', 200),
         (GET_METHOD, 'beacon', 'state?slot=4', '', 200),
         (GET_METHOD, 'network', 'peers', '', 200),
         (GET_METHOD, 'network', 'peer_id', '', 200),
-        (GET_METHOD, 'validator', 'duties', '', 200),
+        (GET_METHOD, 'validator', '0x8a82fe1e16fd56fb4937ea90f071e0c1775f439bf7812428a773f8d55b506ef45e59fe5bf974a959c49224ce226296c7', '', 200),  # noqa: E501
+        (GET_METHOD, 'validator', 'duties?validator_pubkeys=0x8a82fe1e16fd56fb4937ea90f071e0c1775f439bf7812428a773f8d55b506ef45e59fe5bf974a959c49224ce226296c7&validator_pubkeys=0x90b17b958ffd55c1a7e0ff585cdc578f3cfeddd0bc76b07e825b0f5af297d442eb22560394a6a40cf42dbd0bae2a268b', '', 200),  # noqa: E501
+        (POST_METHOD, 'validator', 'block', json.dumps(to_formatted_dict(sample_block)), 200),
+        (POST_METHOD, 'validator', 'attestation', json.dumps(to_formatted_dict(sample_attestation)), 200),  # noqa: E501
     )
 )
 @pytest.mark.asyncio
@@ -88,19 +99,23 @@ async def test_restful_http_server(
     method,
     resource,
     object,
-    data,
+    json_data,
     status_code,
     num_validators,
     chain,
     libp2p_node,
 ):
     request_path = resource + '/' + object
-    response = await http_client.request(method, request_path)
+    response = await http_client.request(method, request_path, json=json_data)
 
-    assert response.status == status_code
+    try:
+        assert response.status == status_code
+    except Exception:
+        print('[ERROR]:', response.reason)
+        raise
 
     if str(status_code).startswith('2'):
         response_data = await response.json()
-        print(f'SUCCESS {request_path}: \t {response_data}\n')
+        print(f'[SUCCESS]: {request_path}: \t {response_data}\n')
 
     await http_client.close()

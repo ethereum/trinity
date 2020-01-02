@@ -48,7 +48,6 @@ class FakeNode:
     async def broadcast_beacon_aggregate_and_proof(self, aggregate_and_proof):
         pass
 
-
     handshaked_peers = PeerPool()
 
 
