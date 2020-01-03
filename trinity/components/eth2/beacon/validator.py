@@ -120,7 +120,7 @@ ETH1_FOLLOW_DISTANCE = 16
 
 
 class Validator(BaseService):
-    genesis_time: int
+    genesis_time: Timestamp
     chain: BaseBeaconChain
     p2p_node: Node
     validator_privkeys: Dict[ValidatorIndex, int]
@@ -134,7 +134,6 @@ class Validator(BaseService):
 
     def __init__(
             self,
-            genesis_time: int,
             chain: BaseBeaconChain,
             p2p_node: Node,
             validator_privkeys: Dict[ValidatorIndex, int],
@@ -144,7 +143,7 @@ class Validator(BaseService):
             import_attestation_fn: ImportAttestationFn,
             token: CancelToken = None) -> None:
         super().__init__(token)
-        self.genesis_time = genesis_time
+        self.genesis_time = chain.get_head_state().genesis_time
         self.chain = chain
         self.p2p_node = p2p_node
         self.validator_privkeys = validator_privkeys

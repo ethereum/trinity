@@ -54,7 +54,7 @@ def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
 
 
 class Eth1Monitor(Service):
-    logger = logging.getLogger("trinity.Eth1Monitor")
+    logger = logging.getLogger("trinity.components.eth2.eth1_monitor.Eth1Monitor")
 
     _eth1_data_provider: BaseEth1DataProvider
 

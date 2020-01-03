@@ -197,6 +197,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             latest_block_number = self._get_latest_block_number()
             # Block that's way in the future is presumed to be fake eth1 block in genesis state.
             # Return the block at `start_block_number` in this case.
+            # The magic number `100` here stands for distance that's way in the future.
             if block_number > latest_block_number + 100:
                 return Eth1Block(
                     block_hash=Hash32(
@@ -241,6 +242,9 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         else:
             amount: Gwei = Gwei(32 * GWEI_PER_ETH)
             for seed in range(self.num_deposits_per_block):
+                # Multiply `block_number` by 10 to shift it one digit to the left so
+                # the input to the function is generated deterministically but does not
+                # conflict with blocks in the future.
                 pubkey, privkey = mk_key_pair_from_seed_index(block_number * 10 + seed)
                 withdrawal_credentials = Hash32(b'\x12' * 32)
                 deposit_data = DepositData.create(

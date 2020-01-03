@@ -171,7 +171,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 validator_privkeys[validator_index] = validator_keymap[pubkey]
 
             validator = Validator(
-                genesis_time=chain_config.genesis_data.genesis_time,
                 chain=chain,
                 p2p_node=libp2p_node,
                 validator_privkeys=validator_privkeys,
