@@ -7,7 +7,6 @@ from libp2p.pubsub.pb import rpc_pb2
 import pytest
 import ssz
 
-from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.chains.testnet import SkeletonLakeChain
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
@@ -17,7 +16,6 @@ from eth2.beacon.state_machines.forks.skeleton_lake.config import (
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock
-from eth2.beacon.typing import FromBlockParams
 from eth2.configs import Eth2GenesisConfig
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.protocol.bcc_libp2p.configs import (
@@ -65,23 +63,6 @@ async def get_fake_chain() -> FakeChain:
     genesis_block = BeaconBlockFactory()
     chain_db.persist_block(genesis_block, SerenityBeaconBlock, HigherSlotScoring())
     return FakeChain(base_db=chain_db.db, genesis_config=genesis_config)
-
-
-def get_blocks(
-    chain: BaseBeaconChain,
-    parent_block: SerenityBeaconBlock = None,
-    num_blocks: int = 3,
-) -> Tuple[SerenityBeaconBlock, ...]:
-    if parent_block is None:
-        parent_block = chain.get_canonical_head()
-    blocks = []
-    for _ in range(num_blocks):
-        block = chain.create_block_from_parent(
-            parent_block=parent_block, block_params=FromBlockParams()
-        )
-        blocks.append(block)
-        parent_block = block
-    return tuple(blocks)
 
 
 @pytest.fixture
@@ -201,7 +182,7 @@ def test_orphan_block_pool():
 
 @pytest.mark.asyncio
 async def test_bcc_receive_server_try_import_orphan_blocks(receive_server):
-    blocks = get_blocks(receive_server.chain, num_blocks=4)
+    blocks = BeaconBlockFactory.create_branch(4)
 
     assert not receive_server._is_block_root_in_db(blocks[0].signing_root)
     receive_server.chain.import_block(blocks[0])
@@ -244,7 +225,7 @@ async def test_bcc_receive_server_try_import_orphan_blocks(receive_server):
 
 @pytest.mark.asyncio
 async def test_bcc_receive_server_process_received_block(receive_server, monkeypatch):
-    block_not_orphan, block_orphan = get_blocks(receive_server.chain, num_blocks=2)
+    block_not_orphan, block_orphan = BeaconBlockFactory.create_branch(2)
 
     # test: if the block is an orphan, puts it in the orphan pool
     receive_server._process_received_block(block_orphan)
@@ -279,7 +260,7 @@ async def test_bcc_receive_server_process_received_block(receive_server, monkeyp
 
 @pytest.mark.asyncio
 async def test_bcc_receive_server_handle_beacon_blocks(receive_server):
-    block = get_blocks(receive_server.chain, num_blocks=1)[0]
+    block = BeaconBlockFactory(parent=receive_server.chain.get_canonical_head())
     encoded_block = ssz.encode(block, BeaconBlock)
     msg = rpc_pb2.Message(
         from_id=b"my_id",
@@ -320,7 +301,7 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
     assert attestation in receive_server.unaggregated_attestation_pool
 
     # Put the attestation in the next block
-    block = get_blocks(receive_server.chain, num_blocks=1)[0]
+    block = BeaconBlockFactory(parent=receive_server.chain.get_canonical_head())
     block = block.transform(["body", "attestations"], [attestation])
     encoded_block = ssz.encode(block, BeaconBlock)
     msg = rpc_pb2.Message(
@@ -353,7 +334,7 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
     #
     # First iteration will request block 4 and block 2 and import block 2, block 3' and block 3'',
     # second iteration will request block 3 and import block 3, block 4 and block 5.
-    blocks = get_blocks(receive_server.chain, num_blocks=5)
+    blocks = BeaconBlockFactory.create_branch(5)
     fork_blocks = (
         blocks[2].set("state_root", b"\x01" * 32),
         blocks[2].set("state_root", b"\x12" * 32),

@@ -12,9 +12,9 @@ from eth2.beacon.state_machines.state_transitions import (  # noqa: F401
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
-from eth2.beacon.typing import FromBlockParams, Timestamp
+from eth2.beacon.typing import Timestamp
 
-from .blocks import SerenityBeaconBlock, create_serenity_block_from_parent
+from .blocks import SerenityBeaconBlock
 from .configs import SERENITY_CONFIG
 from .state_transitions import SerenityStateTransition
 from .states import SerenityBeaconState
@@ -65,12 +65,6 @@ class SerenityStateMachine(BeaconStateMachine):
             return LMDGHOSTContext.from_bytes(fork_choice_context_data)
 
     # methods
-    @staticmethod
-    def create_block_from_parent(
-        parent_block: BaseBeaconBlock, block_params: FromBlockParams
-    ) -> BaseBeaconBlock:
-        return create_serenity_block_from_parent(parent_block, block_params)
-
     def _get_justified_head_state(self) -> BeaconState:
         justified_head = self.chaindb.get_justified_head(self.block_class)
         return self.chaindb.get_state_by_root(

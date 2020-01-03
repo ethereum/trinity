@@ -9,8 +9,8 @@ from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import FromBlockParams, Timestamp
-from eth2.configs import Eth2Config  # noqa: F401
+from eth2.beacon.typing import Timestamp
+from eth2.configs import Eth2Config
 
 from .state_transitions import BaseStateTransition
 
@@ -85,13 +85,6 @@ class BaseBeaconStateMachine(Configurable, ABC):
         state: BeaconState,
         check_proposer_signature: bool = True,
     ) -> Tuple[BeaconState, BaseBeaconBlock]:
-        ...
-
-    @staticmethod
-    @abstractmethod
-    def create_block_from_parent(
-        parent_block: BaseBeaconBlock, block_params: FromBlockParams
-    ) -> BaseBeaconBlock:
         ...
 
 
