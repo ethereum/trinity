@@ -1,3 +1,5 @@
+import logging
+
 import trio
 import pytest_trio
 
@@ -9,6 +11,10 @@ from eth_keys import keys
 
 from p2p.discovery import DiscoveryService
 from p2p.kademlia import Address
+
+
+# Silence factory-boy logs; we're not interested in them.
+logging.getLogger("factory").setLevel(logging.WARN)
 
 
 @pytest_trio.trio_fixture

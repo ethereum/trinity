@@ -7,7 +7,7 @@ import pytest
 
 import rlp
 
-from eth_utils import decode_hex
+from eth_utils import decode_hex, int_to_big_endian
 
 from eth_hash.auto import keccak
 
@@ -91,7 +91,8 @@ async def test_get_local_enr(manually_driven_discovery):
 @pytest.mark.trio
 async def test_request_enr(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
-    # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
+    # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
+    # request.
     bob.update_routing_table(alice.this_node)
     alice.update_routing_table(bob.this_node)
 
@@ -233,18 +234,59 @@ async def test_bond(nursery, monkeypatch):
     monkeypatch.setattr(discovery, 'send_ping_v4', send_ping)
 
     # Schedule a call to service.recv_pong() simulating a pong from the node we expect.
-    pong_msg_payload = [us.address.to_endpoint(), token, _get_msg_expiration()]
+    enr_seq = 1
+    pong_msg_payload = [
+        us.address.to_endpoint(), token, _get_msg_expiration(), int_to_big_endian(enr_seq)]
     nursery.start_soon(discovery.recv_pong_v4, node, pong_msg_payload, b'')
 
     bonded = await discovery.bond(node)
 
     assert bonded
 
+    # Upon successfully bonding, retrieval of the remote's ENR will be scheduled.
+    with trio.fail_after(1):
+        scheduled_enr_node, scheduled_enr_seq = await discovery.pending_enrs_consumer.receive()
+    assert scheduled_enr_node == node
+    assert scheduled_enr_seq == enr_seq
+
     # If we try to bond with any other nodes we'll timeout and bond() will return False.
     node2 = NodeFactory()
     bonded = await discovery.bond(node2)
 
     assert not bonded
+
+
+@pytest.mark.trio
+async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
+    alice, bob = manually_driven_discovery_pair
+    # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
+    # request.
+    bob.update_routing_table(alice.this_node)
+    alice.update_routing_table(bob.this_node)
+
+    # This task will run in a loop consuming from the pending_enrs_consumer channel and requesting
+    # ENRs.
+    alice.manager.run_task(alice.fetch_enrs)
+
+    enr_seq = 1
+    with trio.fail_after(1):
+        # This feeds a request to retrieve Bob's ENR to fetch_enrs(), which spawns a background
+        # task to do it.
+        await alice.pending_enrs_producer.send((bob.this_node, enr_seq))
+        # bob cosumes the ENR_REQUEST and replies with its own ENR
+        await bob.consume_datagram()
+        # alice consumes the ENR_RESPONSE, feeding the ENR to the background task started above.
+        await alice.consume_datagram()
+        # Now we need to wait a little bit here for that background task to pick it up and store
+        # it in our DB.
+        while True:
+            await trio.sleep(0.1)
+            if await alice._enr_db.contains(bob.this_node.id_bytes):
+                break
+
+    enr = await alice._enr_db.get(bob.this_node.id_bytes)
+    assert enr is not None
+    assert enr == await bob.get_local_enr()
 
 
 @pytest.mark.trio
