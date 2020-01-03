@@ -3,8 +3,8 @@ from typing import Any, Dict, Iterable
 from eth_utils import ValidationError, encode_hex, to_tuple
 
 from eth2.beacon.committee_helpers import (
-    iterate_committees_at_epoch,
     get_beacon_proposer_index,
+    iterate_committees_at_epoch,
 )
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.types.states import BeaconState

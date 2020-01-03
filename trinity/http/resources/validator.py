@@ -1,10 +1,11 @@
 import json
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Union
 from urllib.parse import parse_qs
 
 from aiohttp import web
 
 from eth_utils import decode_hex
+from ssz import BaseSedes
 from ssz.tools import from_formatted_dict, to_formatted_dict
 
 from eth2.beacon.helpers import compute_epoch_at_slot
@@ -24,7 +25,7 @@ from trinity.http.exceptions import (
 from trinity.http.resources.base import BaseResource, get_method, post_method
 
 
-def json_to_ssz(json_object, ssz_codec):
+def json_to_ssz(json_object: Union[str, bytes, bytearray], ssz_codec: BaseSedes) -> Any:
     dict_object = json.loads(json_object)
     return from_formatted_dict(dict_object, ssz_codec)
 
@@ -72,7 +73,7 @@ class Validator(BaseResource):
             validator_pubkeys_hex = parameters['validator_pubkeys']
 
             if 'epoch' in request.query:
-                epoch = Epoch(parameters['epoch'])
+                epoch = Epoch(request.query['epoch'])
             else:
                 epoch = compute_epoch_at_slot(state.slot, config.SLOTS_PER_EPOCH)
         except Exception as e:
@@ -98,6 +99,8 @@ class Validator(BaseResource):
             raise InvalidRequestSyntaxError_400("Failed to parse the request", e)
 
         # TODO: refactor trinity.components.eth2.validator.propose_block
+        # and move the block preparation to beacon node.
+        # Then sending request to beacon node here.
 
         return {}
 
@@ -112,6 +115,8 @@ class Validator(BaseResource):
             raise InvalidRequestSyntaxError_400("Failed to parse the request", e)
 
         # TODO: refactor trinity.components.eth2.validator.attest
+        # and move the attestation preparation to beacon node.
+        # Then sending request to beacon node here.
 
         return {}
 
@@ -124,7 +129,7 @@ class Validator(BaseResource):
             body_json = await request.json()
             block = json_to_ssz(body_json, BeaconBlock)
         except Exception as e:
-            raise InvalidRequestSyntaxError_400("Cannot read body")
+            raise InvalidRequestSyntaxError_400("Cannot read body", e)
 
         # TODO: forward to beacon node
 
@@ -137,7 +142,7 @@ class Validator(BaseResource):
             body_json = await request.json()
             attestation = json_to_ssz(body_json, Attestation)
         except Exception as e:
-            raise InvalidRequestSyntaxError_400("Cannot read body")
+            raise InvalidRequestSyntaxError_400("Cannot read body", e)
 
         # TODO: forward to attestation pool
 
