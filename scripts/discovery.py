@@ -1,7 +1,6 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import cast
 import uuid
 
 import trio
@@ -17,32 +16,23 @@ from lahja import ConnectionConfig, TrioEndpoint
 from p2p import constants
 from p2p import kademlia
 from p2p.discovery import DiscoveryService
-from p2p.discv5.typing import NodeID
 
 from trinity.constants import NETWORKING_EVENTBUS_ENDPOINT
-
-
-class TestDiscoveryService(DiscoveryService):
-
-    async def periodically_refresh(self) -> None:
-        await self.manager.wait_finished()
-
-    async def bootstrap(self) -> None:
-        return None
 
 
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('-bootnode', type=str, help="The enode to use as bootnode")
-    parser.add_argument('-debug', action="store_true")
+    parser.add_argument('-l', type=str, help="Log level", default="info")
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
 
-    log_level = logging.INFO
-    if args.debug:
+    if args.l == "debug2":  # noqa: E741
         log_level = DEBUG2_LEVEL_NUM
+    else:
+        log_level = getattr(logging, args.l.upper())
     logging.getLogger('p2p').setLevel(log_level)
 
     # Listen on a port other than 30303 so that we can test against a local geth instance
@@ -67,11 +57,10 @@ async def main() -> None:
     socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
     await socket.bind(('0.0.0.0', listen_port))
     async with TrioEndpoint.serve(networking_connection_config) as endpoint:
-        service = TestDiscoveryService(privkey, addr, bootstrap_nodes, endpoint, socket)
+        service = DiscoveryService(privkey, addr, bootstrap_nodes, endpoint, socket)
         service.logger.info("Enode: %s", service.this_node.uri())
         async with background_trio_service(service):
-            enr = await service.get_enr(bootstrap_nodes[0])
-            assert enr == await service._enr_db.get(cast(NodeID, bootstrap_nodes[0].id_bytes))
+            await service.manager.wait_finished()
 
 
 if __name__ == "__main__":

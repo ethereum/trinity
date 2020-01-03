@@ -129,6 +129,9 @@ CMD_ID_MAP = dict(
 class DiscoveryService(Service):
     _refresh_interval: int = 30
     _max_neighbours_per_packet_cache = None
+    # Maximum number of ENR retrieval requests active at any moment. Need to be a relatively high
+    # number as during a lookup() we'll bond and fetch ENRs of many nodes.
+    _max_pending_enrs: int = 20
 
     logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
 
@@ -158,6 +161,8 @@ class DiscoveryService(Service):
         elif socket.type != trio.socket.SOCK_DGRAM:
             raise ValueError("Invalid socket type")
         self.socket = socket
+        self.pending_enrs_producer, self.pending_enrs_consumer = trio.open_memory_channel[
+            Tuple[NodeAPI, int]](self._max_pending_enrs)
 
     async def consume_datagrams(self) -> None:
         while self.manager.is_running:
@@ -188,6 +193,7 @@ class DiscoveryService(Service):
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
         self.manager.run_daemon_task(self.periodically_refresh)
         self.manager.run_daemon_task(self.report_stats)
+        self.manager.run_daemon_task(self.fetch_enrs)
 
         self.manager.run_daemon_task(self.consume_datagrams)
         self.manager.run_task(self.bootstrap)
@@ -200,7 +206,7 @@ class DiscoveryService(Service):
     async def fetch_enrs(self) -> None:
         async with self.pending_enrs_consumer:
             async for (remote, enr_seq) in self.pending_enrs_consumer:
-                self.logger.debug2(f"Received request to fetch ENR for {remote}")
+                self.logger.debug2("Received request to fetch ENR for %s", remote)
                 self.manager.run_task(self._ensure_enr, remote, enr_seq)
 
     async def _ensure_enr(self, node: NodeAPI, enr_seq: int) -> None:
@@ -208,25 +214,26 @@ class DiscoveryService(Service):
         # problem as this is only triggered once we successfully bonded with a peer.
         async with self._enr_db_lock:
             try:
-                enr = await self._enr_db.get(cast(NodeID, node.id_bytes))
-                if enr.sequence_number >= enr_seq:
-                    self.logger.debug2(f"Already got latest ENR for {node}")
-                    return
+                enr = await self._enr_db.get(NodeID(node.id_bytes))
             except KeyError:
                 pass
+            else:
+                if enr.sequence_number >= enr_seq:
+                    self.logger.debug2("Already got latest ENR for %s", node)
+                    return
 
         try:
             await self.get_enr(node)
-        except CouldNotRetrieveENR:
-            self.logger.debug(f"Failed to retrieve ENR for {node}")
+        except CouldNotRetrieveENR as e:
+            self.logger.info("Failed to retrieve ENR for %s: %s", node, e)
 
     async def report_stats(self) -> None:
         async for _ in trio_utils.every(self._refresh_interval):
             self.logger.debug("============================= Stats =======================")
-            full_buckets = [b for b in self.routing.buckets if b.is_full]
-            total_nodes = sum([len(b) for b in self.routing.buckets])
+            full_buckets = [bucket for bucket in self.routing.buckets if bucket.is_full]
+            total_nodes = sum([len(bucket) for bucket in self.routing.buckets])
             nodes_in_replacement_cache = sum(
-                [len(b.replacement_cache) for b in self.routing.buckets])
+                [len(bucket.replacement_cache) for bucket in self.routing.buckets])
             self.logger.debug(
                 "Routing table has %s nodes in %s buckets (%s of which are full), and %s nodes "
                 "are in the replacement cache", total_nodes, len(self.routing.buckets),
@@ -242,6 +249,9 @@ class DiscoveryService(Service):
             # with the least recently seen node on that bucket. If the bonding fails the node will
             # be removed from the bucket and a new one will be picked from the bucket's
             # replacement cache.
+            self.logger.debug2(
+                "Routing table's bucket is full, couldn't add %s. "
+                "Checking if %s is still responding, will evict if not", node, eviction_candidate)
             self.manager.run_task(self.bond, eviction_candidate)
 
     async def bond(self, node: NodeAPI) -> bool:
@@ -262,16 +272,16 @@ class DiscoveryService(Service):
                 received_token, enr_seq = await self.pong_channels.receive_one(
                     node, send_chan, recv_chan)
         except AlreadyWaitingDiscoveryResponse:
-            self.logger.debug(f"Bonding failed, already waiting pong from {node}")
+            self.logger.debug("Bonding failed, already waiting pong from %s", node)
             return False
         except trio.TooSlowError:
-            self.logger.debug(f"Bonding with {node} timed out")
+            self.logger.debug("Bonding with %s timed out", node)
             return False
 
         if received_token != token:
             self.logger.info(
-                f"Bonding with {node} failed, expected pong with token {token!r}, "
-                f"but got {received_token!r}")
+                "Bonding with %s failed, expected pong with token %s, but got %s",
+                node, token, received_token)
             self.routing.remove_node(node)
             return False
 
@@ -289,7 +299,16 @@ class DiscoveryService(Service):
 
         self.logger.debug("bonding completed successfully with %s", node)
         self.update_routing_table(node)
+        if enr_seq is not None:
+            self.schedule_enr_retrieval(node, enr_seq)
         return True
+
+    def schedule_enr_retrieval(self, node: NodeAPI, enr_seq: int) -> None:
+        self.logger.debug("scheduling ENR retrieval from %s", node)
+        try:
+            self.pending_enrs_producer.send_nowait((node, enr_seq))
+        except trio.WouldBlock:
+            self.logger.warning("Failed to schedule ENR retrieval; channel buffer is full")
 
     async def request_enr(self, remote: NodeAPI) -> ENR:
         # No need to use a timeout because bond() takes care of that internally.
@@ -302,6 +321,8 @@ class DiscoveryService(Service):
                     remote, send_chan, recv_chan)
         except trio.TooSlowError:
             raise CouldNotRetrieveENR(f"Timed out waiting for ENR from {remote}")
+        except AlreadyWaitingDiscoveryResponse:
+            raise CouldNotRetrieveENR(f"Already waiting for ENR from {remote}")
 
         if received_token != token:
             raise CouldNotRetrieveENR(
@@ -339,6 +360,7 @@ class DiscoveryService(Service):
         Raises CouldNotRetrieveENR if we can't get a ENR from the remote node.
         """
         enr = await self.request_enr(remote)
+        self.logger.debug2("Got ENR with seq-id %s for %s", enr.sequence_number, remote)
         async with self._enr_db_lock:
             await self._enr_db.insert_or_update(enr)
             return await self._enr_db.get(cast(NodeID, remote.id_bytes))
@@ -538,6 +560,7 @@ class DiscoveryService(Service):
             enr_seq = None
         else:
             _, token, expiration, enr_seq = payload[:4]
+            enr_seq = big_endian_to_int(enr_seq)
         if self._is_msg_expired(expiration):
             return
         self.logger.debug2('<<< pong (v4) from %s (token == %s)', node, encode_hex(token))
