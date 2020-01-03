@@ -187,6 +187,7 @@ class DiscoveryService(Service):
         self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
         self.manager.run_daemon_task(self.periodically_refresh)
+        self.manager.run_daemon_task(self.report_stats)
 
         self.manager.run_daemon_task(self.consume_datagrams)
         self.manager.run_task(self.bootstrap)
@@ -195,6 +196,43 @@ class DiscoveryService(Service):
     async def periodically_refresh(self) -> None:
         async for _ in trio_utils.every(self._refresh_interval):
             await self.lookup_random()
+
+    async def fetch_enrs(self) -> None:
+        async with self.pending_enrs_consumer:
+            async for (remote, enr_seq) in self.pending_enrs_consumer:
+                self.logger.debug2(f"Received request to fetch ENR for {remote}")
+                self.manager.run_task(self._ensure_enr, remote, enr_seq)
+
+    async def _ensure_enr(self, node: NodeAPI, enr_seq: int) -> None:
+        # TODO: Check that we've recently bonded with the remote. For now it shouldn't be a
+        # problem as this is only triggered once we successfully bonded with a peer.
+        async with self._enr_db_lock:
+            try:
+                enr = await self._enr_db.get(cast(NodeID, node.id_bytes))
+                if enr.sequence_number >= enr_seq:
+                    self.logger.debug2(f"Already got latest ENR for {node}")
+                    return
+            except KeyError:
+                pass
+
+        try:
+            await self.get_enr(node)
+        except CouldNotRetrieveENR:
+            self.logger.debug(f"Failed to retrieve ENR for {node}")
+
+    async def report_stats(self) -> None:
+        async for _ in trio_utils.every(self._refresh_interval):
+            self.logger.debug("============================= Stats =======================")
+            full_buckets = [b for b in self.routing.buckets if b.is_full]
+            total_nodes = sum([len(b) for b in self.routing.buckets])
+            nodes_in_replacement_cache = sum(
+                [len(b.replacement_cache) for b in self.routing.buckets])
+            self.logger.debug(
+                "Routing table has %s nodes in %s buckets (%s of which are full), and %s nodes "
+                "are in the replacement cache", total_nodes, len(self.routing.buckets),
+                len(full_buckets), nodes_in_replacement_cache)
+            self.logger.debug("ENR DB has a total of %s entries", len(self._enr_db))
+            self.logger.debug("===========================================================")
 
     def update_routing_table(self, node: NodeAPI) -> None:
         """Update the routing table entry for the given node."""

@@ -144,6 +144,10 @@ class EnrDbApi(ABC):
         """Check if the db contains an ENR with the given node id."""
         ...
 
+    @abstractmethod
+    def __len__(self) -> int:
+        ...
+
 
 ChannelContentType = TypeVar("ChannelContentType")
 ChannelHandlerAsyncContextManager = AsyncContextManager[

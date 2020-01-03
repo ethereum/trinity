@@ -99,3 +99,6 @@ class MemoryEnrDb(BaseEnrDb):
     async def contains(self, node_id: NodeID) -> bool:
         await trio.sleep(0)  # add checkpoint to make this a proper async function
         return node_id in self.key_value_storage
+
+    def __len__(self) -> int:
+        return len(self.key_value_storage)
