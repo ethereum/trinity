@@ -120,6 +120,36 @@ def test_kbucket_add():
     assert bucket.head == node2
 
 
+def test_kbucket_replacement_cache():
+    # Check that the replacement cache has a limited size and doesn't contain duplicates.
+    # The min/max IDs are irrelevant here as we'll forcibly add nodes to the bucket.
+    bucket = KBucket(0, 10, size=10)
+    for node in NodeFactory.create_batch(bucket.size):
+        bucket.add(node)
+    assert bucket.replacement_cache == []
+
+    # Our bucket is now full, so new entries will go to the replacement cache in the order they
+    # were added.
+    assert bucket.is_full
+    overflow_nodes = NodeFactory.create_batch(bucket.size)
+    for node in overflow_nodes:
+        bucket.add(node)
+    assert bucket.replacement_cache == overflow_nodes
+
+    # If we try to add a node that is already in the replacement cache, it is simply moved to the
+    # tail of the list.
+    bucket.add(overflow_nodes[3])
+    assert bucket.replacement_cache.index(overflow_nodes[3]) == bucket.size - 1
+
+    # Adding a fresh batch of nodes will cause the ones currently in the replacement cache to be
+    # discarded.
+    cache_overflow_nodes = NodeFactory.create_batch(bucket.size)
+    for node in cache_overflow_nodes:
+        bucket.add(node)
+        assert bucket.replacement_cache[-1] == node
+    assert bucket.replacement_cache == cache_overflow_nodes
+
+
 def test_kbucket_remove():
     bucket = KBucket(0, 100, size=25)
 
