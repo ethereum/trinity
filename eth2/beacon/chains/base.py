@@ -18,7 +18,6 @@ from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
-    FromBlockParams,
     HashTreeRoot,
     SigningRoot,
     Slot,
@@ -132,12 +131,6 @@ class BaseBeaconChain(Configurable, ABC):
     #
     @abstractmethod
     def get_block_class(self, block_root: SigningRoot) -> Type[BaseBeaconBlock]:
-        ...
-
-    @abstractmethod
-    def create_block_from_parent(
-        self, parent_block: BaseBeaconBlock, block_params: FromBlockParams
-    ) -> BaseBeaconBlock:
         ...
 
     @abstractmethod
@@ -356,18 +349,6 @@ class BeaconChain(BaseBeaconChain):
         sm_class = self.get_state_machine_class_for_block_slot(slot)
         block_class = sm_class.block_class
         return block_class
-
-    def create_block_from_parent(
-        self, parent_block: BaseBeaconBlock, block_params: FromBlockParams
-    ) -> BaseBeaconBlock:
-        """
-        Passthrough helper to the ``StateMachine`` class of the block descending from the
-        given block.
-        """
-        slot = parent_block.slot + 1 if block_params.slot is None else block_params.slot
-        return self.get_state_machine_class_for_block_slot(
-            slot=slot
-        ).create_block_from_parent(parent_block, block_params)
 
     def get_block_by_root(self, block_root: SigningRoot) -> BaseBeaconBlock:
         """
