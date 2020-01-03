@@ -186,7 +186,7 @@ class Eth1Monitor(Service):
         )
         if target_block_number < 0:
             raise Eth1MonitorValidationError(
-                f"target block number at`distance`={distance} is smaller than 0,",
+                f"target block number at `distance`={distance} is smaller than 0,",
                 f"eth1_voting_period_start_block_number={eth1_voting_period_start_block_number}",
             )
         try:
@@ -355,7 +355,8 @@ class Eth1Monitor(Service):
         Assume `self._block_timestamp_to_number` is in ascending order, the most naive way to find
         the timestamp is to traverse from the tail of `self._block_timestamp_to_number`.
         """
-        # Compare with largest recoreded block timestamp first before query for latest block.
+        # Compare with the largest recoreded block timestamp first before querying
+        # for the latest block.
         # If timestamp larger than largest block timestamp, request block from eth1 provider.
         if self._largest_block_timestamp is None or timestamp > self._largest_block_timestamp:
             try:
