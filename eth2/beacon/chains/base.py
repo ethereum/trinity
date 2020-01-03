@@ -17,12 +17,7 @@ from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import (
-    HashTreeRoot,
-    SigningRoot,
-    Slot,
-    Timestamp,
-)
+from eth2.beacon.typing import HashTreeRoot, SigningRoot, Slot, Timestamp
 from eth2.configs import Eth2Config, Eth2GenesisConfig
 
 if TYPE_CHECKING:
