@@ -103,7 +103,6 @@ async def get_validator(
             unaggregated_attestation_pool.add(attestation)
 
     v = Validator(
-        genesis_time=0,
         chain=chain,
         p2p_node=FakeNode(),
         validator_privkeys=validator_privkeys,

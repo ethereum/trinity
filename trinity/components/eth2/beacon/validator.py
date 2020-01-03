@@ -328,6 +328,13 @@ class Validator(BaseService):
             )
             if resp.error is None:
                 deposits = deposits + (resp.to_data(),)
+            else:
+                self.logger.error(
+                    "Fail to get deposit data with `deposit_count`=%s,"
+                    "`deposit_index`=%s",
+                    request_params["deposit_count"],
+                    request_params["deposit_index"],
+                )
         return tuple(deposits)
 
     async def _request_eth1_data(self,
@@ -346,6 +353,13 @@ class Validator(BaseService):
             )
             if resp.error is None:
                 eth1_data = eth1_data + (resp.to_data(),)
+            else:
+                self.logger.error(
+                    "Fail to get eth1 data with `distance`=%s,"
+                    "`eth1_voting_period_start_timestamp`=%s",
+                    distance,
+                    eth1_voting_period_start_timestamp,
+                )
         return eth1_data
 
     async def _get_eth1_vote(self,
