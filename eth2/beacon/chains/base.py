@@ -145,10 +145,6 @@ class BaseBeaconChain(Configurable, ABC):
         ...
 
     @abstractmethod
-    def get_block_by_hash_tree_root(self, block_root: HashTreeRoot) -> BaseBeaconBlock:
-        ...
-
-    @abstractmethod
     def get_canonical_head(self) -> BaseBeaconBlock:
         ...
 
@@ -379,11 +375,6 @@ class BeaconChain(BaseBeaconChain):
 
         block_class = self.get_block_class(block_root)
         return self.chaindb.get_block_by_root(block_root, block_class)
-
-    def get_block_by_hash_tree_root(self, block_root: HashTreeRoot) -> BaseBeaconBlock:
-        validate_word(block_root, title="Block Hash Tree Root")
-        signing_root = self.chaindb.get_block_signing_root_by_hash_tree_root(block_root)
-        return self.get_block_by_root(signing_root)
 
     def get_canonical_head(self) -> BaseBeaconBlock:
         """

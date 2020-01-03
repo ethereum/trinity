@@ -105,12 +105,6 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
-    def get_block_signing_root_by_hash_tree_root(
-        self, block_root: HashTreeRoot
-    ) -> SigningRoot:
-        ...
-
-    @abstractmethod
     def get_score(
         self, block_root: SigningRoot, score_class: Type[BaseScore]
     ) -> BaseScore:
@@ -420,25 +414,6 @@ class BeaconChainDB(BaseBeaconChainDB):
             )
         return Slot(ssz.decode(encoded_slot, sedes=ssz.sedes.uint64))
 
-    def get_block_signing_root_by_hash_tree_root(
-        self, block_root: HashTreeRoot
-    ) -> SigningRoot:
-        return self._get_block_signing_root_by_hash_tree_root(self.db, block_root)
-
-    @staticmethod
-    def _get_block_signing_root_by_hash_tree_root(
-        db: DatabaseAPI, block_root: HashTreeRoot
-    ) -> SigningRoot:
-        validate_word(block_root, title="block hash tree root")
-        key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(block_root)
-        try:
-            signing_root = db[key]
-        except KeyError:
-            raise BlockNotFound(
-                "No block with hash tree root {0} found".format(encode_hex(block_root))
-            )
-        return cast(SigningRoot, signing_root)
-
     def get_score(
         self, block_root: SigningRoot, score_class: Type[BaseScore]
     ) -> BaseScore:
@@ -543,7 +518,6 @@ class BeaconChainDB(BaseBeaconChainDB):
         curr_block_head = first_block
         db.set(curr_block_head.signing_root, ssz.encode(curr_block_head))
         cls._add_block_root_to_slot_lookup(db, curr_block_head)
-        cls._add_block_hash_tree_root_to_signing_root_lookup(db, curr_block_head)
         cls._set_block_score_to_db(db, curr_block_head, score)
         cls._add_attestations_root_to_block_lookup(db, curr_block_head)
 
@@ -562,7 +536,6 @@ class BeaconChainDB(BaseBeaconChainDB):
             curr_block_head = child
             db.set(curr_block_head.signing_root, ssz.encode(curr_block_head))
             cls._add_block_root_to_slot_lookup(db, curr_block_head)
-            cls._add_block_hash_tree_root_to_signing_root_lookup(db, curr_block_head)
             cls._add_attestations_root_to_block_lookup(db, curr_block_head)
 
             # NOTE: len(scorings_iterator) should equal len(blocks_iterator)
@@ -685,15 +658,6 @@ class BeaconChainDB(BaseBeaconChainDB):
             block.signing_root
         )
         db.set(block_root_to_slot_key, ssz.encode(block.slot, sedes=ssz.sedes.uint64))
-
-    @staticmethod
-    def _add_block_hash_tree_root_to_signing_root_lookup(
-        db: DatabaseAPI, block: BaseBeaconBlock
-    ) -> None:
-        key = SchemaV1.make_block_hash_tree_root_to_signing_root_lookup_key(
-            block.hash_tree_root
-        )
-        db.set(key, block.signing_root)
 
     #
     # Beacon State API
