@@ -49,9 +49,7 @@ def test_randao_processing(
         "randao_reveal", randao_reveal
     )
 
-    block = BeaconBlock.create(**sample_beacon_block_params).set(
-        "body", block_body
-    )
+    block = BeaconBlock.create(**sample_beacon_block_params).set("body", block_body)
 
     new_state = process_randao(state, block, config)
 
@@ -95,9 +93,7 @@ def test_randao_processing_validates_randao_reveal(
         "randao_reveal", randao_reveal
     )
 
-    block = BeaconBlock.create(**sample_beacon_block_params).set(
-        "body", block_body
-    )
+    block = BeaconBlock.create(**sample_beacon_block_params).set("body", block_body)
 
     with pytest.raises(ValidationError):
         process_randao(state, block, config)

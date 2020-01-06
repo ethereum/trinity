@@ -44,7 +44,9 @@ def test_block_root_and_block_header_root_equivalence(sample_block):
 
 
 def test_block_is_not_genesis(sample_beacon_block_params):
-    genesis_block = SignedBeaconBlock.create().transform(("message", "parent_root"), GENESIS_PARENT_ROOT)
+    genesis_block = SignedBeaconBlock.create().transform(
+        ("message", "parent_root"), GENESIS_PARENT_ROOT
+    )
     another_block = SignedBeaconBlock.from_parent(genesis_block, FromBlockParams())
     assert genesis_block.is_genesis
     assert not another_block.is_genesis

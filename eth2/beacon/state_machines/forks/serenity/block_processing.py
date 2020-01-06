@@ -28,7 +28,9 @@ def process_block_header(
     block = signed_block.message
     validate_block_slot(state, block)
     validate_block_parent_root(state, block)
-    validate_proposer_is_not_slashed(state, block.hash_tree_root, CommitteeConfig(config))
+    validate_proposer_is_not_slashed(
+        state, block.hash_tree_root, CommitteeConfig(config)
+    )
 
     if check_proposer_signature:
         validate_proposer_signature(

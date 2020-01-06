@@ -68,7 +68,7 @@ def test_validate_proposer_signature(
     block = BeaconBlock.create(**sample_beacon_block_params)
 
     proposed_block = SignedBeaconBlock.create(
-        message = block,
+        message=block,
         signature=bls.sign(
             message_hash=block.hash_tree_root,
             privkey=proposer_privkey,

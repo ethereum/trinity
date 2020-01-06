@@ -157,7 +157,9 @@ class BaseBeaconChain(Configurable, ABC):
     def import_block(
         self, block: BaseSignedBeaconBlock, perform_validation: bool = True
     ) -> Tuple[
-        BaseSignedBeaconBlock, Tuple[BaseSignedBeaconBlock, ...], Tuple[BaseSignedBeaconBlock, ...]
+        BaseSignedBeaconBlock,
+        Tuple[BaseSignedBeaconBlock, ...],
+        Tuple[BaseSignedBeaconBlock, ...],
     ]:
         ...
 
@@ -422,7 +424,9 @@ class BeaconChain(BaseBeaconChain):
     def import_block(
         self, block: BaseSignedBeaconBlock, perform_validation: bool = True
     ) -> Tuple[
-        BaseSignedBeaconBlock, Tuple[BaseSignedBeaconBlock, ...], Tuple[BaseSignedBeaconBlock, ...]
+        BaseSignedBeaconBlock,
+        Tuple[BaseSignedBeaconBlock, ...],
+        Tuple[BaseSignedBeaconBlock, ...],
     ]:
         """
         Import a complete block and returns a 3-tuple
@@ -451,7 +455,9 @@ class BeaconChain(BaseBeaconChain):
 
         state_machine = self.get_state_machine(at_slot=parent_block.slot)
         state_class = state_machine.get_state_class()
-        state = self.chaindb.get_state_by_root(parent_block.message.state_root, state_class)
+        state = self.chaindb.get_state_by_root(
+            parent_block.message.state_root, state_class
+        )
 
         state, imported_block = state_machine.import_block(
             block, state, check_proposer_signature=perform_validation

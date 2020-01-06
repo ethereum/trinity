@@ -202,7 +202,9 @@ def aggregate_votes(
 #
 # Signer
 #
-def sign_proof_of_possession(deposit_data_message: DepositDataMessage, privkey: int) -> BLSSignature:
+def sign_proof_of_possession(
+    deposit_data_message: DepositDataMessage, privkey: int
+) -> BLSSignature:
     return bls.sign(
         message_hash=deposit_data_message.hash_tree_root,
         privkey=privkey,
@@ -255,8 +257,7 @@ def create_block_header_with_signature(
         slots_per_epoch=slots_per_epoch,
     )
     return SignedBeaconBlockHeader.create(
-        message=block_header,
-        signature=block_header_signature,
+        message=block_header, signature=block_header_signature
     )
 
 

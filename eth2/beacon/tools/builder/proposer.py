@@ -10,7 +10,12 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockBody, SignedBeaconBlock, BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import (
+    BaseBeaconBlock,
+    BeaconBlockBody,
+    SignedBeaconBlock,
+    BaseSignedBeaconBlock,
+)
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState

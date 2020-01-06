@@ -154,7 +154,9 @@ class BeaconStateMachine(BaseBeaconStateMachine):
         check_proposer_signature: bool = True,
     ) -> Tuple[BeaconState, BaseSignedBeaconBlock]:
         state = self.state_transition.apply_state_transition(
-            state, signed_block=signed_block, check_proposer_signature=check_proposer_signature
+            state,
+            signed_block=signed_block,
+            check_proposer_signature=check_proposer_signature,
         )
 
         signed_block = signed_block.transform(

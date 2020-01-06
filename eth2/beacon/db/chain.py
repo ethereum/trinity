@@ -24,7 +24,7 @@ from eth2.beacon.db.exceptions import (
 from eth2.beacon.db.schema import SchemaV1
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock, SignedBeaconBlock, BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, HashTreeRoot, SigningRoot, Slot
@@ -372,7 +372,9 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     @staticmethod
     def _get_block_by_root(
-        db: DatabaseAPI, block_root: SigningRoot, block_class: Type[BaseSignedBeaconBlock]
+        db: DatabaseAPI,
+        block_root: SigningRoot,
+        block_class: Type[BaseSignedBeaconBlock],
     ) -> BaseBeaconBlock:
         """
         Return the requested block header as specified by block root.

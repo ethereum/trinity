@@ -30,9 +30,7 @@ class DepositDataMessage(HashableContainer):
         amount: Gwei = default_gwei,
     ) -> TDepositDataMessage:
         return super().create(
-            pubkey=pubkey,
-            withdrawal_credentials=withdrawal_credentials,
-            amount=amount,
+            pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
         )
 
     def __str__(self) -> str:
@@ -44,6 +42,7 @@ class DepositDataMessage(HashableContainer):
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {str(self)}>"
+
 
 TDepositData = TypeVar("TDepositData", bound="DepositData")
 

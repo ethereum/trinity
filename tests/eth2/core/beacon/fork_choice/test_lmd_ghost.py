@@ -184,7 +184,7 @@ def _mk_block_at_slot(block_template, slot):
     if slot in block_producer_cache:
         return block_producer_cache[slot]
     else:
-        block = block_template.transform(["message","slot"], slot)
+        block = block_template.transform(["message", "slot"], slot)
         block_producer_cache[slot] = block
         return block
 

@@ -61,9 +61,7 @@ def process_deposit(
         # Note: Deposits are valid across forks, thus the deposit domain
         # is retrieved directly from `compute_domain`.
         deposit_message = DepositDataMessage.create(
-            pubkey=pubkey,
-            withdrawal_credentials=withdrawal_credentials,
-            amount=amount
+            pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
         )
         is_valid_proof_of_possession = bls.verify(
             message_hash=deposit_message.hash_tree_root,

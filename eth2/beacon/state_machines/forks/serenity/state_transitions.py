@@ -1,5 +1,5 @@
 from eth2.beacon.state_machines.state_transitions import BaseStateTransition
-from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 from eth2.configs import Eth2Config
@@ -30,6 +30,8 @@ class SerenityStateTransition(BaseStateTransition):
         state = process_slots(state, target_slot, self.config)
 
         if signed_block:
-            state = process_block(state, signed_block, self.config, check_proposer_signature)
+            state = process_block(
+                state, signed_block, self.config, check_proposer_signature
+            )
 
         return state

@@ -1,7 +1,6 @@
 from typing import Type, TypeVar
 
 from eth_typing import BLSSignature
-from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes96, uint64
 
@@ -27,34 +26,23 @@ class VoluntaryExit(HashableContainer):
         epoch: Epoch = default_epoch,
         validator_index: ValidatorIndex = default_validator_index,
     ) -> TVoluntaryExit:
-        return super().create(
-            epoch=epoch, validator_index=validator_index
-        )
+        return super().create(epoch=epoch, validator_index=validator_index)
 
     def __str__(self) -> str:
-        return (
-            f"epoch={self.epoch},"
-            f" validator_index={self.validator_index},"
-        )
+        return f"epoch={self.epoch}," f" validator_index={self.validator_index},"
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {str(self)}>"
 
 
 class SignedVoluntaryExit(HashableContainer):
-    fields = [
-        ('message', VoluntaryExit),
-        ('signature', bytes96),
-    ]
+    fields = [("message", VoluntaryExit), ("signature", bytes96)]
 
     @classmethod
     def create(
         cls: Type[VoluntaryExit],
         *,
         message: VoluntaryExit,
-        signature: bytes,
+        signature: BLSSignature = EMPTY_SIGNATURE,
     ) -> VoluntaryExit:
-        return super().create(
-            message=message,
-            signature=signature,
-        )
+        return super().create(message=message, signature=signature)

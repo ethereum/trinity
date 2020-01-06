@@ -111,10 +111,7 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
         body: BeaconBlockBody = default_beacon_block_body,
     ) -> TBaseBeaconBlock:
         return super().create(
-            slot=slot,
-            parent_root=parent_root,
-            state_root=state_root,
-            body=body,
+            slot=slot, parent_root=parent_root, state_root=state_root, body=body
         )
 
     def __str__(self) -> str:
@@ -201,6 +198,7 @@ class BeaconBlock(BaseBeaconBlock):
             body=BeaconBlockBody(),
         )
 
+
 default_beacon_block = BeaconBlock.create()
 
 
@@ -208,22 +206,16 @@ TSignedBeaconBlock = TypeVar("TSignedBeaconBlock", bound="BaseSignedBeaconBlock"
 
 
 class BaseSignedBeaconBlock(HashableContainer):
-    fields = [
-        ('message', BeaconBlock),
-        ('signature', bytes96),
-    ]
+    fields = [("message", BeaconBlock), ("signature", bytes96)]
 
     @classmethod
     def create(
         cls: Type[TSignedBeaconBlock],
         *,
-        message: BaseBeaconBlock=default_beacon_block,
-        signature: bytes=EMPTY_SIGNATURE,
+        message: BaseBeaconBlock = default_beacon_block,
+        signature: BLSSignature = EMPTY_SIGNATURE,
     ) -> TSignedBeaconBlock:
-        return super().create(
-            message=message,
-            signature=signature,
-        )
+        return super().create(message=message, signature=signature)
 
     @property
     def parent_root(self):
@@ -254,12 +246,9 @@ class SignedBeaconBlock(BaseSignedBeaconBlock):
         cls, root: HashTreeRoot, chaindb: "BaseBeaconChainDB"
     ) -> "SignedBeaconBlock":
         block = cls.block_class.from_root(root, chaindb)
-        return cls.create(
-            message=block,
-            signature=EMPTY_SIGNATURE,
-        )
+        return cls.create(message=block, signature=EMPTY_SIGNATURE)
 
-    #TODO: add abstract class
+    # TODO: add abstract class
     @classmethod
     def from_parent(
         cls: Type[TSignedBeaconBlock],
@@ -278,17 +267,11 @@ class SignedBeaconBlock(BaseSignedBeaconBlock):
             state_root=parent_block.message.state_root,
             body=cls.block_class.block_body_class.create(),
         )
-        return cls.create(
-            message=block,
-            signature=EMPTY_SIGNATURE,
-        )
+        return cls.create(message=block, signature=EMPTY_SIGNATURE)
 
     @classmethod
     def from_header(
         cls: Type[TSignedBeaconBlock], header: SignedBeaconBlockHeader
     ) -> TSignedBeaconBlock:
         block = cls.block_class.from_header(header)
-        return cls.create(
-            message=block,
-            signature=EMPTY_SIGNATURE,
-        )
+        return cls.create(message=block, signature=EMPTY_SIGNATURE)
