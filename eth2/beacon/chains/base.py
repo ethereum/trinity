@@ -13,6 +13,7 @@ from eth2.beacon.db.chain import BaseBeaconChainDB, BeaconChainDB, StateNotFound
 from eth2.beacon.exceptions import BlockClassError, StateMachineNotFound
 from eth2.beacon.fork_choice.constant import ConstantScoring
 from eth2.beacon.fork_choice.scoring import BaseScore
+from eth2.beacon.helpers import get_state_root_at_slot
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
@@ -105,6 +106,10 @@ class BaseBeaconChain(Configurable, ABC):
     #
     # State API
     #
+    @abstractmethod
+    def get_state_by_root(self, root: HashTreeRoot) -> BeaconState:
+        ...
+
     @abstractmethod
     def get_state_by_slot(self, slot: Slot) -> BeaconState:
         ...
@@ -302,6 +307,13 @@ class BeaconChain(BaseBeaconChain):
     #
     # State API
     #
+    def get_state_by_root(self, root: HashTreeRoot) -> BeaconState:
+        # TODO (hwwhww): using state class of head state for now, should be configurable if we have
+        # more forks.
+        head_state_slot = self.chaindb.get_head_state_slot()
+        state_class = self.get_state_machine(at_slot=head_state_slot).get_state_class()
+        return self.chaindb.get_state_by_root(root, state_class)
+
     def get_state_by_slot(self, slot: Slot) -> BeaconState:
         """
         Return the requested state as specified by slot number.
@@ -309,15 +321,29 @@ class BeaconChain(BaseBeaconChain):
         """
         sm_class = self.get_state_machine_class_for_block_slot(slot)
         state_class = sm_class.get_state_class()
+
+        # Get state_root
         try:
+            # If the requested state_root is computed with a canonical block,
+            # try to query the block.
+            config = self.get_config_by_slot(slot)
             block = self.get_canonical_block_by_slot(slot)
+            state_root = block.state_root
         except BlockNotFound:
-            # NOTE: We can apply state transition instead of raising `StateNotFound`
-            # but this api is being indirectly exposed to outside callers, e.g.
-            # a eth2 monitor requesting state at certain slot.
-            # And so applying state transition could be potential DoS vector in this case.
-            raise StateNotFound(f"No state root for slot #{slot})")
-        state_root = block.state_root
+            try:
+                #  If the requested state_root is computed with skipped slot recently,
+                #  try to get recent state root from state.
+                head_state = self.get_head_state()
+                state_root = get_state_root_at_slot(
+                    head_state, slot, config.SLOTS_PER_HISTORICAL_ROOT
+                )
+            except ValidationError:
+                # NOTE: We can apply state transition instead of raising `StateNotFound`
+                # but this api is being indirectly exposed to outside callers, e.g.
+                # a eth2 monitor requesting state at certain slot.
+                # And so applying state transition could be potential DoS vector in this case.
+                raise StateNotFound(f"No state root for slot #{slot})")
+
         return self.chaindb.get_state_by_root(state_root, state_class)
 
     def get_head_state_slot(self) -> Slot:

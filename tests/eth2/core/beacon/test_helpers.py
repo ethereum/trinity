@@ -11,6 +11,7 @@ from eth2.beacon.helpers import (
     get_active_validator_indices,
     get_block_root_at_slot,
     get_domain,
+    get_state_root_at_slot,
     get_total_balance,
     signature_domain_to_domain_type,
 )
@@ -35,28 +36,39 @@ def get_pseudo_chain(length, genesis_block):
 def generate_mock_latest_historical_roots(
     genesis_block, current_slot, slots_per_epoch, slots_per_historical_root
 ):
-    assert current_slot < slots_per_historical_root
-
+    if current_slot < slots_per_historical_root:
+        filling = current_slot % slots_per_historical_root
+        padding = slots_per_historical_root - current_slot
+    else:
+        filling = slots_per_historical_root
+        padding = 0
     chain_length = (current_slot // slots_per_epoch + 1) * slots_per_epoch
     blocks = get_pseudo_chain(chain_length, genesis_block)
-    block_roots = [block.signing_root for block in blocks[:current_slot]] + [
-        ZERO_HASH32 for _ in range(slots_per_historical_root - current_slot)
-    ]
-    return blocks, block_roots
+    block_roots = [
+        block.signing_root for block in blocks[current_slot - filling : current_slot]
+    ] + [ZERO_HASH32 for _ in range(padding)]
+
+    state_roots = [
+        block.state_root for block in blocks[current_slot - filling : current_slot]
+    ] + [ZERO_HASH32 for _ in range(padding)]
+    return blocks, block_roots, state_roots
 
 
 #
 # Get historical roots
 #
 @pytest.mark.parametrize(
-    ("current_slot,target_slot,success"),
+    ("slots_per_historical_root,current_slot,target_slot,success"),
     [
-        (10, 0, True),
-        (10, 9, True),
-        (10, 10, False),
-        (128, 0, True),
-        (128, 127, True),
-        (128, 128, False),
+        (32, 10, 0, True),
+        (32, 10, 9, True),
+        (32, 10, 10, False),
+        (32, 128, 0, False),
+        (32, 128, 127, True),
+        (32, 128, 128, False),
+        (128, 128, 0, True),
+        (128, 128, 127, True),
+        (128, 128, 128, False),
     ],
 )
 def test_get_block_root_at_slot(
@@ -68,7 +80,7 @@ def test_get_block_root_at_slot(
     slots_per_historical_root,
     sample_block,
 ):
-    blocks, block_roots = generate_mock_latest_historical_roots(
+    blocks, block_roots, _ = generate_mock_latest_historical_roots(
         sample_block, current_slot, slots_per_epoch, slots_per_historical_root
     )
     state = BeaconState.create(**sample_beacon_state_params).mset(
@@ -83,6 +95,47 @@ def test_get_block_root_at_slot(
     else:
         with pytest.raises(ValidationError):
             get_block_root_at_slot(state, target_slot, slots_per_historical_root)
+
+
+@pytest.mark.parametrize(
+    ("slots_per_historical_root,current_slot,target_slot,success"),
+    [
+        (32, 10, 0, True),
+        (32, 10, 9, True),
+        (32, 10, 10, True),
+        (32, 128, 0, False),
+        (32, 128, 127, True),
+        (32, 128, 128, True),
+        (128, 128, 0, True),
+        (128, 128, 127, True),
+        (128, 128, 128, True),
+    ],
+)
+def test_get_state_root_at_slot(
+    sample_beacon_state_params,
+    current_slot,
+    target_slot,
+    success,
+    slots_per_epoch,
+    slots_per_historical_root,
+    sample_block,
+):
+    blocks, _, state_roots = generate_mock_latest_historical_roots(
+        sample_block, current_slot, slots_per_epoch, slots_per_historical_root
+    )
+    state = BeaconState.create(**sample_beacon_state_params).mset(
+        "slot", current_slot, "state_roots", state_roots
+    )
+    blocks[current_slot].state_root = state.hash_tree_root
+
+    if success:
+        state_root = get_state_root_at_slot(
+            state, target_slot, slots_per_historical_root
+        )
+        assert state_root == blocks[target_slot].state_root
+    else:
+        with pytest.raises(ValidationError):
+            get_state_root_at_slot(state, target_slot, slots_per_historical_root)
 
 
 def test_get_active_validator_indices(sample_validator_record_params):
