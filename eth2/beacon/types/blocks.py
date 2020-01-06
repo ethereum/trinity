@@ -212,7 +212,7 @@ class BeaconBlock(BaseBeaconBlock):
             body=BeaconBlockBody(),
         )
 
-
+default_beacon_block = BeaconBlock.create()
 
 
 TSignedBeaconBlock = TypeVar("TSignedBeaconBlock", bound="BaseSignedBeaconBlock")
@@ -228,8 +228,8 @@ class BaseSignedBeaconBlock(HashableContainer):
     def create(
         cls: Type[TSignedBeaconBlock],
         *,
-        message: BaseBeaconBlock,
-        signature: bytes,
+        message: BaseBeaconBlock=default_beacon_block,
+        signature: bytes=EMPTY_SIGNATURE,
     ) -> TSignedBeaconBlock:
         return super().create(
             message=message,

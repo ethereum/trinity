@@ -18,7 +18,7 @@ from eth2.beacon.helpers import (
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.serenity.slot_processing import process_slots
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, SigningRoot, Slot, Timestamp, ValidatorIndex
@@ -62,7 +62,7 @@ class LMDGHOSTScore(BaseScore):
 
     @classmethod
     def from_genesis(
-        cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
+        cls, genesis_state: BeaconState, genesis_block: BaseSignedBeaconBlock
     ) -> BaseScore:
         score = (Gwei(0), score_block_by_root(SigningRoot(ZERO_HASH32)))
         return cls(score)
@@ -90,20 +90,20 @@ class Context:
     justified_checkpoint: Checkpoint
     finalized_checkpoint: Checkpoint
     best_justified_checkpoint: Checkpoint
-    blocks: Dict[Hash32, BaseBeaconBlock] = field(default_factory=dict)
+    blocks: Dict[Hash32, BaseSignedBeaconBlock] = field(default_factory=dict)
     block_states: Dict[Hash32, BeaconState] = field(default_factory=dict)
     checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
     latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
 
     @classmethod
     def from_genesis(
-        cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
+        cls, genesis_state: BeaconState, genesis_block: BaseSignedBeaconBlock
     ) -> "Context":
         return cls.at_time(genesis_state.genesis_time, genesis_state, genesis_block)
 
     @classmethod
     def at_time(
-        cls, current_time: Timestamp, state: BeaconState, block: BaseBeaconBlock
+        cls, current_time: Timestamp, state: BeaconState, block: BaseSignedBeaconBlock
     ) -> "Context":
         """
         Return a ``Context`` based on the ``current_time`` and the latest known tip of
@@ -148,14 +148,14 @@ def _effective_balance_for_validator(
 
 class Store:
     _db: BaseBeaconChainDB
-    _block_class: Type[BaseBeaconBlock]
+    _block_class: Type[BaseSignedBeaconBlock]
     _config: Eth2Config
     _context: Context
 
     def __init__(
         self,
         chain_db: BaseBeaconChainDB,
-        block_class: Type[BaseBeaconBlock],
+        block_class: Type[BaseSignedBeaconBlock],
         config: Eth2Config,
         context: Context,
     ):
@@ -174,7 +174,7 @@ class Store:
             // self._config.SECONDS_PER_SLOT
         )
 
-    def _get_block_by_root(self, root: SigningRoot) -> BaseBeaconBlock:
+    def _get_block_by_root(self, root: SigningRoot) -> BaseSignedBeaconBlock:
         return self._db.get_block_by_root(root, self._block_class)
 
     def get_ancestor_root(self, root: SigningRoot, slot: Slot) -> Optional[Hash32]:
@@ -275,7 +275,7 @@ class Store:
 
     def on_block(
         self,
-        block: BaseBeaconBlock,
+        block: BaseSignedBeaconBlock,
         post_state: BeaconState = None,
         state_machine: BaseBeaconStateMachine = None,
     ) -> None:
@@ -419,7 +419,7 @@ class Store:
                     epoch=target.epoch, root=attestation.data.beacon_block_root
                 )
 
-    def scoring(self, block: BaseBeaconBlock) -> LMDGHOSTScore:
+    def scoring(self, block: BaseSignedBeaconBlock) -> LMDGHOSTScore:
         """
         Return the score of the target ``block`` according to the LMD GHOST algorithm,
         using the lexicographic ordering of the block root to break ties.
@@ -440,5 +440,5 @@ class LMDGHOSTScoring(BaseForkChoiceScoring):
     def get_score_class(cls) -> Type[BaseScore]:
         return LMDGHOSTScore
 
-    def score(self, block: BaseBeaconBlock) -> BaseScore:
+    def score(self, block: BaseSignedBeaconBlock) -> BaseScore:
         return self._store.scoring(block)
