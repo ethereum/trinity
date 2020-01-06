@@ -5,10 +5,11 @@ import pytest
 from eth2.beacon.chains.base import BeaconChain
 from eth2.beacon.db.exceptions import AttestationRootNotFound, StateNotFound
 from eth2.beacon.exceptions import BlockClassError
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
 from eth2.beacon.tools.builder.proposer import create_mock_block
 from eth2.beacon.tools.builder.validator import create_mock_signed_attestations_at_slot
-from eth2.beacon.types.blocks import BeaconBlock
+from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
+from eth2.beacon.typing import FromBlockParams
 
 
 @pytest.fixture
@@ -36,9 +37,7 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
         genesis_block.signing_root
     ) == fork_choice_scoring.score(genesis_block)
 
-    block = genesis_block.mset(
-        "slot", genesis_block.slot + 1, "parent_root", genesis_block.signing_root
-    )
+    block = SerenitySignedBeaconBlock.from_parent(genesis_block, FromBlockParams(slot=1))
     valid_chain.chaindb.persist_block(block, block.__class__, fork_choice_scoring)
 
     assert valid_chain.get_canonical_head() == block
@@ -140,9 +139,9 @@ def test_from_genesis(base_db, genesis_block, genesis_state, fixture_sm_class, c
         __name__="TestChain", sm_configuration=((0, fixture_sm_class),), chain_id=5566
     )
 
-    assert type(genesis_block) == SerenityBeaconBlock
-    block = BeaconBlock.convert_block(genesis_block)
-    assert type(block) == BeaconBlock
+    assert type(genesis_block) == SerenitySignedBeaconBlock
+    block = SignedBeaconBlock.create(message=genesis_block.message)
+    assert type(block) == SignedBeaconBlock
 
     with pytest.raises(BlockClassError):
         klass.from_genesis(base_db, genesis_state, block, config)

@@ -16,7 +16,7 @@ from eth2.beacon.fork_choice.lmd_ghost import Context as LMDGHOSTContext
 from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.operations.attestation_pool import AttestationPool
 from eth2.beacon.state_machines.forks.serenity import SerenityStateMachine
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.tools.builder.initializer import create_mock_validator
 from eth2.beacon.tools.builder.state import create_mock_genesis_state_from_validators
@@ -631,8 +631,8 @@ def genesis_state(
 
 @pytest.fixture
 def genesis_block(genesis_state, sample_signature):
-    return SignedBeaconBlock.create(
-        message=get_genesis_block(genesis_state.hash_tree_root, BeaconBlock),
+    return SerenitySignedBeaconBlock.create(
+        message=get_genesis_block(genesis_state.hash_tree_root, SerenityBeaconBlock),
         signature=sample_signature,
     )
 
