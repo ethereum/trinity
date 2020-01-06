@@ -35,14 +35,17 @@ class VoluntaryExit(HashableContainer):
         return f"<{self.__class__.__name__}: {str(self)}>"
 
 
+TSignedVoluntaryExit = TypeVar("TSignedVoluntaryExit", bound="SignedVoluntaryExit")
+
+
 class SignedVoluntaryExit(HashableContainer):
     fields = [("message", VoluntaryExit), ("signature", bytes96)]
 
     @classmethod
     def create(
-        cls: Type[VoluntaryExit],
+        cls: Type[TSignedVoluntaryExit],
         *,
         message: VoluntaryExit,
         signature: BLSSignature = EMPTY_SIGNATURE,
-    ) -> VoluntaryExit:
+    ) -> TSignedVoluntaryExit:
         return super().create(message=message, signature=signature)
