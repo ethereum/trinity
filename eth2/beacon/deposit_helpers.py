@@ -6,8 +6,8 @@ from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
 from eth2.beacon.epoch_processing_helpers import increase_balance
 from eth2.beacon.helpers import compute_domain
 from eth2.beacon.signature_domain import SignatureDomain
-from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.deposit_data import DepositDataMessage
+from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import ValidatorIndex

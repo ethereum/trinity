@@ -41,7 +41,7 @@ from eth2.beacon.typing import (
     Epoch,
     Slot,
     Version,
-    SigningRoot,
+    HashTreeRoot,
     SubnetId,
 )
 
@@ -175,9 +175,9 @@ class Peer:
     node: "Node"
     _id: ID
     head_fork_version: Version  # noqa: E701
-    finalized_root: SigningRoot
+    finalized_root: HashTreeRoot
     finalized_epoch: Epoch
-    head_root: SigningRoot
+    head_root: HashTreeRoot
     head_slot: Slot
 
     @classmethod
@@ -206,7 +206,7 @@ class Peer:
         )
 
     async def request_beacon_blocks_by_root(
-        self, block_roots: Sequence[SigningRoot]
+        self, block_roots: Sequence[HashTreeRoot]
     ) -> Tuple[BaseBeaconBlock, ...]:
         return await self.node.request_beacon_blocks_by_root(self._id, block_roots)
 
@@ -689,7 +689,7 @@ class Node(BaseService):
     async def request_beacon_blocks_by_range(
         self,
         peer_id: ID,
-        head_block_root: SigningRoot,
+        head_block_root: HashTreeRoot,
         start_slot: Slot,
         count: int,
         step: int,
@@ -727,7 +727,7 @@ class Node(BaseService):
     async def request_beacon_blocks_by_root(
             self,
             peer_id: ID,
-            block_roots: Sequence[SigningRoot]) -> Tuple[BaseBeaconBlock, ...]:
+            block_roots: Sequence[HashTreeRoot]) -> Tuple[BaseBeaconBlock, ...]:
         try:
             stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
         except StreamFailure as error:

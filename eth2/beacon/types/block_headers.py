@@ -6,8 +6,8 @@ from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32, bytes96, uint64
 
-from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_SIGNING_ROOT
-from eth2.beacon.typing import SigningRoot, Slot
+from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_HASH_TREE_ROOT
+from eth2.beacon.typing import HashTreeRoot, Slot
 
 from .defaults import default_slot
 
@@ -28,7 +28,7 @@ class BeaconBlockHeader(HashableContainer):
         cls: Type[TBeaconBlockHeader],
         *,
         slot: Slot = default_slot,
-        parent_root: SigningRoot = ZERO_SIGNING_ROOT,
+        parent_root: HashTreeRoot = ZERO_HASH_TREE_ROOT,
         state_root: Hash32 = ZERO_HASH32,
         body_root: Hash32 = ZERO_HASH32,
     ) -> TBeaconBlockHeader:

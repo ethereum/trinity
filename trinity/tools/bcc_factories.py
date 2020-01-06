@@ -34,7 +34,7 @@ from p2p.tools.factories import (
     CancelTokenFactory,
 )
 
-from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_SIGNING_ROOT
+from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_HASH_TREE_ROOT
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.blocks import (
@@ -164,7 +164,7 @@ class BeaconBlockFactory(factory.Factory):
         model = BeaconBlock.create
 
     slot = SERENITY_GENESIS_CONFIG.GENESIS_SLOT
-    parent_root = ZERO_SIGNING_ROOT
+    parent_root = ZERO_HASH_TREE_ROOT
     state_root = ZERO_HASH32
     signature = EMPTY_SIGNATURE
     body = factory.SubFactory(BeaconBlockBodyFactory)

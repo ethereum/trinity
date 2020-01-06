@@ -1,13 +1,13 @@
 from typing import Any, Dict, Optional, Tuple, Type, Union, cast
 
 from eth_utils import decode_hex
-from py_ecc.bls.typing import Domain
 
 from eth2._utils.bls import BLSPubkey, BLSSignature, Hash32, bls
 from eth2._utils.bls.backends import MilagroBackend
 from eth2.beacon.tools.fixtures.test_handler import TestHandler
 from eth2.beacon.tools.fixtures.test_part import TestPart
 from eth2.configs import Eth2Config
+from py_ecc.bls.typing import Domain
 
 from . import TestType
 

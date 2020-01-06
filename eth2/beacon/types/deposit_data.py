@@ -11,7 +11,6 @@ from eth2.beacon.typing import Gwei
 
 from .defaults import default_bls_pubkey, default_gwei
 
-
 TDepositDataMessage = TypeVar("TDepositDataMessage", bound="DepositDataMessage")
 
 

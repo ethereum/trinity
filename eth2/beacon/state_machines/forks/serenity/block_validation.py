@@ -22,14 +22,14 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
-from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.block_headers import SignedBeaconBlockHeader
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
-from eth2.beacon.typing import CommitteeIndex, Epoch, SigningRoot, Slot
+from eth2.beacon.typing import CommitteeIndex, Epoch, HashTreeRoot, Slot
 from eth2.configs import CommitteeConfig, Eth2Config
 
 
@@ -72,7 +72,7 @@ def validate_block_parent_root(state: BeaconState, block: BaseBeaconBlock) -> No
 
 
 def validate_proposer_is_not_slashed(
-    state: BeaconState, block_root: SigningRoot, config: CommitteeConfig
+    state: BeaconState, block_root: HashTreeRoot, config: CommitteeConfig
 ) -> None:
     proposer_index = get_beacon_proposer_index(state, config)
     proposer = state.validators[proposer_index]

@@ -4,8 +4,8 @@ from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32, uint64
 
-from eth2.beacon.constants import ZERO_SIGNING_ROOT
-from eth2.beacon.typing import Epoch, SigningRoot
+from eth2.beacon.constants import ZERO_HASH_TREE_ROOT
+from eth2.beacon.typing import Epoch, HashTreeRoot
 
 from .defaults import default_epoch
 
@@ -20,7 +20,7 @@ class Checkpoint(HashableContainer):
     def create(
         cls: Type[TCheckpoint],
         epoch: Epoch = default_epoch,
-        root: SigningRoot = ZERO_SIGNING_ROOT,
+        root: HashTreeRoot = ZERO_HASH_TREE_ROOT,
     ) -> TCheckpoint:
         return super().create(epoch=epoch, root=root)
 

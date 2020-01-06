@@ -11,7 +11,7 @@ from ssz.sedes import List, bytes32, bytes96, uint64
 from eth2.beacon.constants import (
     EMPTY_SIGNATURE,
     GENESIS_PARENT_ROOT,
-    ZERO_SIGNING_ROOT,
+    ZERO_HASH_TREE_ROOT,
 )
 from eth2.beacon.typing import FromBlockParams, HashTreeRoot, Slot
 
@@ -106,7 +106,7 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
         cls: Type[TBaseBeaconBlock],
         *,
         slot: Slot = default_slot,
-        parent_root: HashTreeRoot = ZERO_SIGNING_ROOT,
+        parent_root: HashTreeRoot = ZERO_HASH_TREE_ROOT,
         state_root: Hash32 = ZERO_HASH32,
         body: BeaconBlockBody = default_beacon_block_body,
     ) -> TBaseBeaconBlock:

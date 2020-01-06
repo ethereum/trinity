@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from eth2.beacon.constants import HashTreeRoot, SigningRoot
+from eth2.beacon.constants import HashTreeRoot
 
 
 class BaseSchema(ABC):
@@ -27,7 +27,7 @@ class BaseSchema(ABC):
 
     @staticmethod
     @abstractmethod
-    def make_block_root_to_slot_lookup_key(block_root: SigningRoot) -> bytes:
+    def make_block_root_to_slot_lookup_key(block_root: HashTreeRoot) -> bytes:
         ...
 
     @staticmethod
@@ -37,7 +37,7 @@ class BaseSchema(ABC):
 
     @staticmethod
     @abstractmethod
-    def make_block_root_to_score_lookup_key(block_root: SigningRoot) -> bytes:
+    def make_block_root_to_score_lookup_key(block_root: HashTreeRoot) -> bytes:
         ...
 
     @staticmethod
@@ -106,11 +106,11 @@ class SchemaV1(BaseSchema):
         return slot_to_root_key
 
     @staticmethod
-    def make_block_root_to_score_lookup_key(block_root: SigningRoot) -> bytes:
+    def make_block_root_to_score_lookup_key(block_root: HashTreeRoot) -> bytes:
         return b"v1:beacon:block-root-to-score:%s" % block_root
 
     @staticmethod
-    def make_block_root_to_slot_lookup_key(block_root: SigningRoot) -> bytes:
+    def make_block_root_to_slot_lookup_key(block_root: HashTreeRoot) -> bytes:
         return b"v1:beacon:block-root-to-slot:%s" % block_root
 
     #

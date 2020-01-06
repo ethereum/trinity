@@ -4,10 +4,10 @@ from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32, uint64
 
-from eth2.beacon.constants import ZERO_SIGNING_ROOT
+from eth2.beacon.constants import ZERO_HASH_TREE_ROOT
 from eth2.beacon.types.checkpoints import Checkpoint, default_checkpoint
 from eth2.beacon.types.defaults import default_committee_index, default_slot
-from eth2.beacon.typing import CommitteeIndex, SigningRoot, Slot
+from eth2.beacon.typing import CommitteeIndex, HashTreeRoot, Slot
 
 TAttestationData = TypeVar("TAttestationData", bound="AttestationData")
 
@@ -29,7 +29,7 @@ class AttestationData(HashableContainer):
         cls: Type[TAttestationData],
         slot: Slot = default_slot,
         index: CommitteeIndex = default_committee_index,
-        beacon_block_root: SigningRoot = ZERO_SIGNING_ROOT,
+        beacon_block_root: HashTreeRoot = ZERO_HASH_TREE_ROOT,
         source: Checkpoint = default_checkpoint,
         target: Checkpoint = default_checkpoint,
     ) -> TAttestationData:

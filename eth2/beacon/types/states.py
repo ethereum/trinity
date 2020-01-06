@@ -6,9 +6,9 @@ from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 
-from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_SIGNING_ROOT
+from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_HASH_TREE_ROOT
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.typing import Bitfield, Epoch, Gwei, SigningRoot, Slot, Timestamp
+from eth2.beacon.typing import Bitfield, Epoch, Gwei, HashTreeRoot, Slot, Timestamp
 from eth2.configs import Eth2Config
 
 from .block_headers import BeaconBlockHeader, default_beacon_block_header
@@ -33,7 +33,7 @@ TBeaconState = TypeVar("TBeaconState", bound="BeaconState")
 # Use mainnet constants for defaults. We can't import the config object because of an import cycle.
 # TODO: When py-ssz is updated to support size configs, the config will be passed to the `create`
 # classmethod and we can create the defaults dynamically there.
-default_block_roots = default_tuple_of_size(2 ** 13, ZERO_SIGNING_ROOT)
+default_block_roots = default_tuple_of_size(2 ** 13, ZERO_HASH_TREE_ROOT)
 default_state_roots = default_tuple_of_size(2 ** 13, ZERO_HASH32)
 default_randao_mixes = default_tuple_of_size(2 ** 16, ZERO_HASH32)
 default_slashings = default_tuple_of_size(2 ** 13, Gwei(0))
@@ -90,7 +90,7 @@ class BeaconState(HashableContainer):
         slot: Slot = default_slot,
         fork: Fork = default_fork,
         latest_block_header: BeaconBlockHeader = default_beacon_block_header,
-        block_roots: Sequence[SigningRoot] = default_block_roots,
+        block_roots: Sequence[HashTreeRoot] = default_block_roots,
         state_roots: Sequence[Hash32] = default_state_roots,
         historical_roots: Sequence[Hash32] = default_tuple,
         eth1_data: Eth1Data = default_eth1_data,
@@ -122,7 +122,7 @@ class BeaconState(HashableContainer):
             # try to provide sane defaults
             if block_roots == default_tuple:
                 block_roots = default_tuple_of_size(
-                    config.SLOTS_PER_HISTORICAL_ROOT, ZERO_SIGNING_ROOT
+                    config.SLOTS_PER_HISTORICAL_ROOT, ZERO_HASH_TREE_ROOT
                 )
             if state_roots == default_tuple:
                 state_roots = default_tuple_of_size(

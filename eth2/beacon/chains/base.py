@@ -18,7 +18,7 @@ from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import HashTreeRoot, SigningRoot, Slot, Timestamp
+from eth2.beacon.typing import HashTreeRoot, Slot, Timestamp
 from eth2.configs import Eth2Config, Eth2GenesisConfig
 
 if TYPE_CHECKING:
@@ -130,11 +130,11 @@ class BaseBeaconChain(Configurable, ABC):
     # Block API
     #
     @abstractmethod
-    def get_block_class(self, block_root: SigningRoot) -> Type[BaseSignedBeaconBlock]:
+    def get_block_class(self, block_root: HashTreeRoot) -> Type[BaseSignedBeaconBlock]:
         ...
 
     @abstractmethod
-    def get_block_by_root(self, block_root: SigningRoot) -> BaseSignedBeaconBlock:
+    def get_block_by_root(self, block_root: HashTreeRoot) -> BaseSignedBeaconBlock:
         ...
 
     @abstractmethod
@@ -142,7 +142,7 @@ class BaseBeaconChain(Configurable, ABC):
         ...
 
     @abstractmethod
-    def get_score(self, block_root: SigningRoot) -> BaseScore:
+    def get_score(self, block_root: HashTreeRoot) -> BaseScore:
         ...
 
     @abstractmethod
@@ -150,7 +150,7 @@ class BaseBeaconChain(Configurable, ABC):
         ...
 
     @abstractmethod
-    def get_canonical_block_root(self, slot: Slot) -> SigningRoot:
+    def get_canonical_block_root(self, slot: Slot) -> HashTreeRoot:
         ...
 
     @abstractmethod
@@ -363,13 +363,13 @@ class BeaconChain(BaseBeaconChain):
     #
     # Block API
     #
-    def get_block_class(self, block_root: SigningRoot) -> Type[BaseSignedBeaconBlock]:
+    def get_block_class(self, block_root: HashTreeRoot) -> Type[BaseSignedBeaconBlock]:
         slot = self.chaindb.get_slot_by_root(block_root)
         sm_class = self.get_state_machine_class_for_block_slot(slot)
         block_class = sm_class.block_class
         return block_class
 
-    def get_block_by_root(self, block_root: SigningRoot) -> BaseSignedBeaconBlock:
+    def get_block_by_root(self, block_root: HashTreeRoot) -> BaseSignedBeaconBlock:
         """
         Return the requested block as specified by block hash.
 
@@ -391,7 +391,7 @@ class BeaconChain(BaseBeaconChain):
         block_class = self.get_block_class(block_root)
         return self.chaindb.get_block_by_root(block_root, block_class)
 
-    def get_score(self, block_root: SigningRoot) -> BaseScore:
+    def get_score(self, block_root: HashTreeRoot) -> BaseScore:
         """
         Return the score of the block with the given hash.
 
@@ -412,7 +412,7 @@ class BeaconChain(BaseBeaconChain):
         """
         return self.get_block_by_root(self.chaindb.get_canonical_block_root(slot))
 
-    def get_canonical_block_root(self, slot: Slot) -> SigningRoot:
+    def get_canonical_block_root(self, slot: Slot) -> HashTreeRoot:
         """
         Return the block hash with the given number in the canonical chain.
 
