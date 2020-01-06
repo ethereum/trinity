@@ -25,6 +25,7 @@ class BaseBeaconStateMachine(Configurable, ABC):
     config: Eth2Config = None
 
     block_class: Type[BaseBeaconBlock] = None
+    signed_block_class: Type[BaseSignedBeaconBlock] = None
     state_class: Type[BeaconState] = None
     state_transition_class: Type[BaseStateTransition] = None
     fork_choice_scoring_class: Type[BaseForkChoiceScoring] = None

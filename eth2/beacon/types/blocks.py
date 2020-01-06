@@ -150,8 +150,8 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
         return f"<{self.__class__.__name__}: {str(self)}>"
 
     @property
-    def signing_root(self):
-        # Remove this soon
+    def signing_root(self) -> HashTreeRoot:
+        # TODO: Remove this soon
         return self.hash_tree_root
 
 
@@ -218,23 +218,24 @@ class BaseSignedBeaconBlock(HashableContainer):
         return super().create(message=message, signature=signature)
 
     @property
-    def parent_root(self):
+    def parent_root(self) -> HashTreeRoot:
         return self.message.parent_root
 
     @property
-    def signing_root(self):
+    def signing_root(self) -> HashTreeRoot:
+        # TODO: Remove this soon too
         return self.message.hash_tree_root
 
     @property
-    def is_genesis(self):
+    def is_genesis(self) -> bool:
         return self.message.is_genesis
 
     @property
-    def slot(self):
+    def slot(self) -> Slot:
         return self.message.slot
 
     @property
-    def body(self):
+    def body(self) -> "BeaconBlockBody":
         return self.message.body
 
 
