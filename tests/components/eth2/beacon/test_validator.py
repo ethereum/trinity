@@ -69,7 +69,13 @@ class FakeNode:
         pass
 
 
-async def get_validator(event_loop, event_bus, indices, num_validators=None) -> Validator:
+async def get_validator(
+    event_loop,
+    event_bus,
+    monkeypatch,
+    indices,
+    num_validators=None,
+) -> Validator:
     if num_validators is not None:
         chain = BeaconChainFactory(num_validators=num_validators)
     else:
@@ -105,6 +111,16 @@ async def get_validator(event_loop, event_bus, indices, num_validators=None) -> 
         import_attestation_fn=import_attestation_fn,
         event_bus=event_bus,
     )
+
+    # Make requesting eth1 vote and deposit a stub
+    async def _get_eth1_vote(slot, state, state_machine):
+        return None
+    monkeypatch.setattr(v, '_get_eth1_vote', _get_eth1_vote)
+
+    async def _get_deposit_data(state, state_machine, eth1_vote):
+        return None
+    monkeypatch.setattr(v, '_get_deposit_data', _get_deposit_data)
+
     asyncio.ensure_future(v.run(), loop=event_loop)
     await v.events.started.wait()
     # yield to `validator._run`
@@ -112,7 +128,7 @@ async def get_validator(event_loop, event_bus, indices, num_validators=None) -> 
     return v
 
 
-async def get_linked_validators(event_loop, event_bus) -> Tuple[Validator, Validator]:
+async def get_linked_validators(event_loop, event_bus, monkeypatch) -> Tuple[Validator, Validator]:
     keymap = mk_keymap_of_size(NUM_VALIDATORS)
     all_indices = tuple(
         index for index in range(len(keymap))
@@ -122,8 +138,8 @@ async def get_linked_validators(event_loop, event_bus) -> Tuple[Validator, Valid
         len(all_indices) // global_peer_count,
         all_indices
     )
-    alice = await get_validator(event_loop, event_bus, alice_indices)
-    bob = await get_validator(event_loop, event_bus, bob_indices)
+    alice = await get_validator(event_loop, event_bus, monkeypatch, alice_indices)
+    bob = await get_validator(event_loop, event_bus, monkeypatch, bob_indices)
     return alice, bob
 
 
@@ -146,8 +162,12 @@ def _get_slot_with_validator_selected(candidate_indices, state, config):
 
 
 @pytest.mark.asyncio
-async def test_validator_propose_block_succeeds(event_loop, event_bus):
-    alice, bob = await get_linked_validators(event_loop=event_loop, event_bus=event_bus)
+async def test_validator_propose_block_succeeds(event_loop, event_bus, monkeypatch):
+    alice, bob = await get_linked_validators(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+    )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
 
@@ -178,8 +198,12 @@ async def test_validator_propose_block_succeeds(event_loop, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_validator_propose_block_fails(event_loop, event_bus):
-    alice, bob = await get_linked_validators(event_loop=event_loop, event_bus=event_bus)
+async def test_validator_propose_block_fails(event_loop, event_bus, monkeypatch):
+    alice, bob = await get_linked_validators(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+    )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
 
@@ -202,8 +226,13 @@ async def test_validator_propose_block_fails(event_loop, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_validator_skip_block(event_loop, event_bus):
-    alice = await get_validator(event_loop=event_loop, event_bus=event_bus, indices=[0])
+async def test_validator_skip_block(event_loop, event_bus, monkeypatch):
+    alice = await get_validator(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+        indices=[0],
+    )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
     slot = state.slot + 1
@@ -222,7 +251,12 @@ async def test_validator_skip_block(event_loop, event_bus):
 
 @pytest.mark.asyncio
 async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
-    alice = await get_validator(event_loop=event_loop, event_bus=event_bus, indices=[0])
+    alice = await get_validator(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+        indices=[0],
+    )
 
     event_first_tick_called = asyncio.Event()
     event_second_tick_called = asyncio.Event()
@@ -303,7 +337,11 @@ async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_validator_handle_first_tick(event_loop, event_bus, monkeypatch):
-    alice, bob = await get_linked_validators(event_loop=event_loop, event_bus=event_bus)
+    alice, bob = await get_linked_validators(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+    )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
 
@@ -328,7 +366,11 @@ async def test_validator_handle_first_tick(event_loop, event_bus, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_validator_handle_second_tick(event_loop, event_bus, monkeypatch):
-    alice, bob = await get_linked_validators(event_loop=event_loop, event_bus=event_bus)
+    alice, bob = await get_linked_validators(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+    )
     state = alice.chain.get_head_state()
 
     # test: `handle_second_tick` should call `attest`
@@ -353,9 +395,14 @@ async def test_validator_handle_second_tick(event_loop, event_bus, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_validator_get_committee_assigment(event_loop, event_bus):
+async def test_validator_get_committee_assigment(event_loop, event_bus, monkeypatch):
     alice_indices = [7]
-    alice = await get_validator(event_loop=event_loop, event_bus=event_bus, indices=alice_indices)
+    alice = await get_validator(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+        indices=alice_indices,
+    )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
     epoch = compute_epoch_at_slot(state.slot, state_machine.config.SLOTS_PER_EPOCH)
@@ -366,9 +413,14 @@ async def test_validator_get_committee_assigment(event_loop, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_validator_attest(event_loop, event_bus):
+async def test_validator_attest(event_loop, event_bus, monkeypatch):
     alice_indices = [i for i in range(NUM_VALIDATORS)]
-    alice = await get_validator(event_loop=event_loop, event_bus=event_bus, indices=alice_indices)
+    alice = await get_validator(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+        indices=alice_indices,
+    )
     head = alice.chain.get_canonical_head()
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
@@ -397,12 +449,13 @@ async def test_validator_attest(event_loop, event_bus):
 
 
 @pytest.mark.asyncio
-async def test_validator_aggregate(event_loop, event_bus):
+async def test_validator_aggregate(event_loop, event_bus, monkeypatch):
     num_validators = 50
     alice_indices = [i for i in range(num_validators)]
     alice = await get_validator(
         event_loop=event_loop,
         event_bus=event_bus,
+        monkeypatch=monkeypatch,
         indices=alice_indices,
         num_validators=num_validators,
     )
@@ -447,7 +500,12 @@ async def test_validator_aggregate(event_loop, event_bus):
 async def test_validator_include_ready_attestations(event_loop, event_bus, monkeypatch):
     # Alice controls all validators
     alice_indices = list(range(NUM_VALIDATORS))
-    alice = await get_validator(event_loop=event_loop, event_bus=event_bus, indices=alice_indices)
+    alice = await get_validator(
+        event_loop=event_loop,
+        event_bus=event_bus,
+        monkeypatch=monkeypatch,
+        indices=alice_indices,
+    )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
 

@@ -44,7 +44,7 @@ def validate_correct_number_of_deposits(
     if deposit_count_in_block != expected_deposit_count:
         raise ValidationError(
             f"Incorrect number of deposits ({deposit_count_in_block})"
-            f" in block (encode_hex(block_root));"
+            f" in block {encode_hex(block.signing_root)};"
             f" expected {expected_deposit_count} based on"
             f" the state {encode_hex(state.hash_tree_root)}"
         )

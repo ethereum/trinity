@@ -1,16 +1,7 @@
 import bisect
 from collections import OrderedDict
 import logging
-from typing import (
-    Any,
-    AsyncGenerator,
-    Callable,
-    Sequence,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, AsyncGenerator, Callable, Sequence, Tuple, Type, TypeVar, Union
 
 from async_service import Service
 from eth_typing import BlockNumber, Hash32
@@ -63,7 +54,7 @@ def _w3_get_block(w3: Web3, *args: Any, **kwargs: Any) -> Eth1Block:
 
 
 class Eth1Monitor(Service):
-    logger = logging.getLogger('trinity.eth1_monitor')
+    logger = logging.getLogger("trinity.components.eth2.eth1_monitor.Eth1Monitor")
 
     _eth1_data_provider: BaseEth1DataProvider
 
@@ -81,6 +72,8 @@ class Eth1Monitor(Service):
     _db: BaseDepositDataDB
     # Mapping from `block.timestamp` to `block.number`.
     _block_timestamp_to_number: "OrderedDict[Timestamp, BlockNumber]"
+    # largest block timestamp among the blocks we have processed
+    _largest_block_timestamp: Timestamp
 
     def __init__(
         self,
@@ -101,6 +94,7 @@ class Eth1Monitor(Service):
         )
 
         self._block_timestamp_to_number = OrderedDict()
+        self._largest_block_timestamp = None
 
     @property
     def total_deposit_count(self) -> int:
@@ -135,9 +129,11 @@ class Eth1Monitor(Service):
                 f"Block does not exist for block_hash={humanize_hash(req.block_hash)}"
             )
         eth1_voting_period_start_block_number = self._get_closest_eth1_voting_period_start_block(
-            req.eth1_voting_period_start_timestamp,
+            req.eth1_voting_period_start_timestamp
         )
-        return GetDistanceResponse(distance=(eth1_voting_period_start_block_number - block.number))
+        return GetDistanceResponse(
+            distance=(eth1_voting_period_start_block_number - block.number)
+        )
 
     async def _handle_new_logs(self) -> None:
         """
@@ -190,8 +186,7 @@ class Eth1Monitor(Service):
         )
         if target_block_number < 0:
             raise Eth1MonitorValidationError(
-                f"`distance` is larger than `eth1_voting_period_start_block_number`: "
-                f"`distance`={distance}, ",
+                f"target block number at `distance`={distance} is smaller than 0,",
                 f"eth1_voting_period_start_block_number={eth1_voting_period_start_block_number}",
             )
         try:
@@ -202,32 +197,41 @@ class Eth1Monitor(Service):
             )
         block_hash = block.block_hash
         # `Eth1Data.deposit_count`: get the `deposit_count` corresponding to the block.
-        accumulated_deposit_count = self._get_accumulated_deposit_count(
+        contract_deposit_count = self._get_deposit_count_from_contract(
             target_block_number
         )
-        if accumulated_deposit_count == 0:
+        if contract_deposit_count == 0:
             raise Eth1MonitorValidationError(
                 f"failed to make `Eth1Data`: `deposit_count = 0` at block #{target_block_number}"
             )
-        # Verify that the deposit data in db and the deposit data in contract match
-        deposit_data_in_range = self._db.get_deposit_data_range(
-            0, accumulated_deposit_count
-        )
-        _, deposit_root = make_deposit_tree_and_root(deposit_data_in_range)
         contract_deposit_root = self._get_deposit_root_from_contract(
             target_block_number
         )
-        if contract_deposit_root != deposit_root:
-            raise DepositDataCorrupted(
-                "deposit root built locally mismatches the one in the contract on chain: "
-                f"contract_deposit_root={contract_deposit_root.hex()}, "
-                f"deposit_root={deposit_root.hex()}"
-            )
-        return Eth1Data.create(
-            deposit_root=deposit_root,
-            deposit_count=accumulated_deposit_count,
+        eth1_data = Eth1Data.create(
+            deposit_root=contract_deposit_root,
+            deposit_count=contract_deposit_count,
             block_hash=block_hash,
         )
+
+        # If we have not processed any block
+        if self._largest_block_timestamp is None:
+            return eth1_data
+
+        largest_block_number = self._block_timestamp_to_number[self._largest_block_timestamp]
+        # If we have processed the target block number, validate deposit root.
+        if largest_block_number >= target_block_number:
+            # Verify that the deposit data in db and the deposit data in contract match
+            deposit_data_in_range = self._db.get_deposit_data_range(
+                0, contract_deposit_count
+            )
+            _, deposit_root = make_deposit_tree_and_root(deposit_data_in_range)
+            if contract_deposit_root != deposit_root:
+                raise DepositDataCorrupted(
+                    "deposit root built locally mismatches the one in the contract on chain: "
+                    f"contract_deposit_root={contract_deposit_root.hex()}, "
+                    f"deposit_root={deposit_root.hex()}"
+                )
+        return eth1_data
 
     def _get_deposit(self, deposit_count: int, deposit_index: int) -> Deposit:
         """
@@ -269,7 +273,8 @@ class Eth1Monitor(Service):
                     )
                 else:
                     await self._event_bus.broadcast(
-                        req.expected_response_type()(None, None, e), req.broadcast_config()
+                        req.expected_response_type()(None, None, e),
+                        req.broadcast_config(),
                     )
             else:
                 await self._event_bus.broadcast(resp, req.broadcast_config())
@@ -307,14 +312,15 @@ class Eth1Monitor(Service):
         """
         # Check timestamp.
         if len(self._block_timestamp_to_number) != 0:
-            latest_timestamp = next(reversed(self._block_timestamp_to_number))
             # Sanity check.
-            if block.timestamp < latest_timestamp:
+            if block.timestamp < self._largest_block_timestamp:
                 raise Eth1MonitorValidationError(
-                    "Later blocks with earlier timestamp: "
-                    f"latest_timestamp={latest_timestamp}, timestamp={block.timestamp}"
+                    "Later block with earlier timestamp: "
+                    f"largest_timestamp={self._largest_block_timestamp}, "
+                    f"block.timestamp={block.timestamp}"
                 )
         self._block_timestamp_to_number[block.timestamp] = block.number
+        self._largest_block_timestamp = block.timestamp
 
     def _get_logs_from_block(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:
         """
@@ -349,36 +355,58 @@ class Eth1Monitor(Service):
         Assume `self._block_timestamp_to_number` is in ascending order, the most naive way to find
         the timestamp is to traverse from the tail of `self._block_timestamp_to_number`.
         """
-        # NOTE: It can be done by binary search with web3 queries.
-        # Regarding the current block number is around `9000000`, not sure if it is worthwhile to
-        # do it through web3 with `log(9000000, 2)` ~= 24 `getBlock` queries. It's quite expensive
-        # compared to calculating it by the cached data which involves 0 query.
-
-        # Binary search for the right-most timestamp smaller than `timestamp`.
-        all_timestamps = tuple(self._block_timestamp_to_number.keys())
-        target_timestamp_index = bisect.bisect_right(all_timestamps, timestamp)
-        # Though `index < 0` should never happen, check it for safety.
-        if target_timestamp_index <= 0:
-            raise Eth1BlockNotFound(
-                "Failed to find the closest eth1 voting period start block to "
-                f"timestamp {timestamp}"
-            )
+        # Compare with the largest recoreded block timestamp first before querying
+        # for the latest block.
+        # If timestamp larger than largest block timestamp, request block from eth1 provider.
+        if self._largest_block_timestamp is None or timestamp > self._largest_block_timestamp:
+            try:
+                block = self._eth1_data_provider.get_block("latest")
+            except BlockNotFound:
+                raise Eth1MonitorValidationError("Fail to get latest block")
+            if block.timestamp <= timestamp:
+                return block.number
+            else:
+                block_number = block.number
+                # Try the latest `self._num_blocks_confirmed` blocks until we give up
+                for i in range(1, self._num_blocks_confirmed + 1):
+                    block = self._eth1_data_provider.get_block(block_number - i)
+                    if block.timestamp <= timestamp:
+                        return block.number
+                raise Eth1BlockNotFound(
+                    "Can not find block with timestamp closest"
+                    "to voting period start timestamp: %s",
+                    timestamp,
+                )
         else:
-            # `bisect.bisect_right` returns the index we should insert `timestamp` into
-            # `all_timestamps`, to make `all_timestamps` still in order. The element we are
-            # looking for is actually `index - 1`
-            index = target_timestamp_index - 1
-            target_key = all_timestamps[index]
-            return self._block_timestamp_to_number[target_key]
+            # NOTE: It can be done by binary search with web3 queries.
+            # Regarding the current block number is around `9000000`, not sure if it is worthwhile
+            # to do it through web3 with `log(9000000, 2)` ~= 24 `getBlock` queries.
+            # It's quite expensive compared to calculating it by the cached data
+            # which involves 0 query.
 
-    def _get_accumulated_deposit_count(self, block_number: BlockNumber) -> int:
+            # Binary search for the right-most timestamp smaller than `timestamp`.
+            all_timestamps = tuple(self._block_timestamp_to_number.keys())
+            target_timestamp_index = bisect.bisect_right(all_timestamps, timestamp)
+            # Though `index < 0` should never happen, check it for safety.
+            if target_timestamp_index <= 0:
+                raise Eth1BlockNotFound(
+                    "Failed to find the closest eth1 voting period start block to "
+                    f"timestamp {timestamp}"
+                )
+            else:
+                # `bisect.bisect_right` returns the index we should insert `timestamp` into
+                # `all_timestamps`, to make `all_timestamps` still in order. The element we are
+                # looking for is actually `index - 1`
+                index = target_timestamp_index - 1
+                target_key = all_timestamps[index]
+                return self._block_timestamp_to_number[target_key]
+
+    def _get_deposit_count_from_contract(self, block_number: BlockNumber) -> int:
         """
         Get the accumulated deposit count from deposit contract with `get_deposit_count`
         at block `block_number`.
         """
-        deposit_count_bytes = self._eth1_data_provider.get_deposit_count(
-            block_number=block_number,
-        )
+        deposit_count_bytes = self._eth1_data_provider.get_deposit_count(block_number=block_number)
         return int.from_bytes(deposit_count_bytes, "little")
 
     def _get_deposit_root_from_contract(self, block_number: BlockNumber) -> Hash32:
@@ -386,6 +414,4 @@ class Eth1Monitor(Service):
         Get the deposit root from deposit contract with `get_deposit_root`
         at block `block_number`.
         """
-        return self._eth1_data_provider.get_deposit_root(
-            block_number=block_number,
-        )
+        return self._eth1_data_provider.get_deposit_root(block_number=block_number)
