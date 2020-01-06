@@ -157,8 +157,8 @@ class BeaconStateMachine(BaseBeaconStateMachine):
             state, signed_block=signed_block, check_proposer_signature=check_proposer_signature
         )
 
-        signed_block = signed_block.set("message",
-            signed_block.message.set("state_root", state.hash_tree_root)
+        signed_block = signed_block.transform(
+            ("message", "state_root"), state.hash_tree_root
         )
 
         return state, signed_block
