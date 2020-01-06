@@ -191,17 +191,6 @@ class BeaconBlock(BaseBeaconBlock):
         )
 
     @classmethod
-    def convert_block(
-        cls: Type[TBaseBeaconBlock], block: "BaseBeaconBlock"
-    ) -> TBaseBeaconBlock:
-        return cls.create(
-            slot=block.slot,
-            parent_root=block.parent_root,
-            state_root=block.state_root,
-            body=block.body,
-        )
-
-    @classmethod
     def from_header(
         cls: Type[TBaseBeaconBlock], header: BeaconBlockHeader
     ) -> TBeaconBlock:
