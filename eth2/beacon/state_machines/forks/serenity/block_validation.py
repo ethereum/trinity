@@ -81,7 +81,9 @@ def validate_proposer_is_not_slashed(
 
 
 def validate_proposer_signature(
-    state: BeaconState, signed_block: BaseSignedBeaconBlock, committee_config: CommitteeConfig
+    state: BeaconState,
+    signed_block: BaseSignedBeaconBlock,
+    committee_config: CommitteeConfig,
 ) -> None:
     message_hash = signed_block.message.hash_tree_root
 

@@ -180,7 +180,7 @@ class BeaconChainSyncer(BaseService):
 
             yield batch
 
-            slot = batch[-1].slot + 1
+            slot = Slot(batch[-1].slot + 1)
             if slot > self.sync_peer.head_slot:
                 break
 

@@ -6,6 +6,7 @@ from eth_utils import ValidationError
 import ssz
 
 from eth2.beacon.attestation_helpers import validate_indexed_attestation
+from eth2.beacon.constants import ZERO_ROOT
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.epoch_processing_helpers import get_indexed_attestation
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
@@ -21,7 +22,6 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, Root, Slot, Timestamp, ValidatorIndex
-from eth2.beacon.constants import ZERO_ROOT
 from eth2.configs import CommitteeConfig, Eth2Config
 
 LMD_GHOST_SCORE_DATA_LENGTH = 2

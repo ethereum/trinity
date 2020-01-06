@@ -16,9 +16,11 @@ from eth2.beacon.helpers import (
     signature_domain_to_domain_type,
 )
 from eth2.beacon.signature_domain import SignatureDomain
+from eth2.beacon.types.blocks import SignedBeaconBlock
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
+from eth2.beacon.typing import FromBlockParams
 
 
 @to_tuple
@@ -29,14 +31,7 @@ def get_pseudo_chain(length, genesis_block):
     block = genesis_block
     yield genesis_block
     for slot in range(1, length * 3):
-        block = genesis_block.mset(
-            "slot",
-            slot,
-            "parent_root",
-            block.signing_root,
-            "state_root",
-            slot.to_bytes(32, "big"),
-        )
+        block = SignedBeaconBlock.from_parent(block, FromBlockParams(slot=slot))
         yield block
 
 
@@ -87,10 +82,10 @@ def test_get_block_root_at_slot(
     success,
     slots_per_epoch,
     slots_per_historical_root,
-    sample_block,
+    genesis_block,
 ):
     blocks, block_roots, _ = generate_mock_latest_historical_roots(
-        sample_block, current_slot, slots_per_epoch, slots_per_historical_root
+        genesis_block, current_slot, slots_per_epoch, slots_per_historical_root
     )
     state = BeaconState.create(**sample_beacon_state_params).mset(
         "slot", current_slot, "block_roots", block_roots
@@ -100,7 +95,7 @@ def test_get_block_root_at_slot(
         block_root = get_block_root_at_slot(
             state, target_slot, slots_per_historical_root
         )
-        assert block_root == blocks[target_slot].signing_root
+        assert block_root == blocks[target_slot].message.hash_tree_root
     else:
         with pytest.raises(ValidationError):
             get_block_root_at_slot(state, target_slot, slots_per_historical_root)

@@ -38,8 +38,6 @@ from eth2.beacon.types.attestations import (
     Attestation,
 )
 from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
-    BeaconBlock,
     BaseSignedBeaconBlock,
     SignedBeaconBlock,
 )

@@ -29,9 +29,9 @@ from trinity.protocol.bcc_libp2p.servers import AttestationPool, OrphanBlockPool
 from trinity.tools.async_method import wait_until_true
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
-    SignedBeaconBlockFactory,
     PeerFactory,
     ReceiveServerFactory,
+    SignedBeaconBlockFactory,
 )
 
 
@@ -61,7 +61,9 @@ async def get_fake_chain() -> FakeChain:
     genesis_config = Eth2GenesisConfig(MINIMAL_SERENITY_CONFIG)
     chain_db = AsyncBeaconChainDBFactory(genesis_config=genesis_config)
     genesis_block = SignedBeaconBlockFactory()
-    chain_db.persist_block(genesis_block, SerenitySignedBeaconBlock, HigherSlotScoring())
+    chain_db.persist_block(
+        genesis_block, SerenitySignedBeaconBlock, HigherSlotScoring()
+    )
     return FakeChain(base_db=chain_db.db, genesis_config=genesis_config)
 
 
@@ -337,8 +339,8 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
     # second iteration will request block 3 and import block 3, block 4 and block 5.
     blocks = SignedBeaconBlockFactory.create_branch(5)
     fork_blocks = (
-        blocks[2].transform(("message","state_root"), b"\x01" * 32),
-        blocks[2].transform(("message","state_root"), b"\x12" * 32),
+        blocks[2].transform(("message", "state_root"), b"\x01" * 32),
+        blocks[2].transform(("message", "state_root"), b"\x12" * 32),
     )
     mock_peer_1_db = {block.signing_root: block for block in blocks[3:]}
     mock_peer_2_db = {block.signing_root: block for block in blocks[:3]}

@@ -1,6 +1,6 @@
 import pytest
 
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenitySignedBeaconBlock
 from eth2.beacon.tools.builder.proposer import create_mock_block
 from eth2.beacon.types.historical_batch import HistoricalBatch
 

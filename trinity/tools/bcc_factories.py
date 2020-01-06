@@ -24,7 +24,6 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.blocks import (
     BeaconBlock,
     BeaconBlockBody,
-    BaseBeaconBlock,
     BaseSignedBeaconBlock,
     SignedBeaconBlock,
 )

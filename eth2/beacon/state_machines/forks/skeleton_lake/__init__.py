@@ -1,6 +1,9 @@
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.base import BeaconStateMachine
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+    SerenitySignedBeaconBlock,
+)
 from eth2.beacon.state_machines.forks.serenity.state_transitions import (
     SerenityStateTransition,
 )

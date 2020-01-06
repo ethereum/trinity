@@ -1,7 +1,7 @@
+from eth2.beacon.constants import GENESIS_PARENT_ROOT
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
 from eth2.beacon.typing import FromBlockParams
-from eth2.beacon.constants import GENESIS_PARENT_ROOT
 
 
 def test_defaults(sample_beacon_block_params):
@@ -43,8 +43,10 @@ def test_block_root_and_block_header_root_equivalence():
     assert block.hash_tree_root == header.hash_tree_root
 
 
-def test_block_is_not_genesis(sample_beacon_block_params):
-    genesis_block = SignedBeaconBlock.create().transform(("message", "parent_root"), GENESIS_PARENT_ROOT)
+def test_block_is_not_genesis():
+    genesis_block = SignedBeaconBlock.create().transform(
+        ("message", "parent_root"), GENESIS_PARENT_ROOT
+    )
     another_block = SignedBeaconBlock.from_parent(genesis_block, FromBlockParams())
     assert genesis_block.is_genesis
     assert not another_block.is_genesis

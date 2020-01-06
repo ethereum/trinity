@@ -8,7 +8,10 @@ from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.chains.testnet import SkeletonLakeChain
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.genesis import get_genesis_block
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+    SerenitySignedBeaconBlock,
+)
 from eth2.beacon.state_machines.forks.skeleton_lake.config import (
     MINIMAL_SERENITY_CONFIG,
 )

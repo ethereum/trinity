@@ -5,10 +5,10 @@ import pytest
 from eth2.beacon.chains.base import BeaconChain
 from eth2.beacon.db.exceptions import AttestationRootNotFound, StateNotFound
 from eth2.beacon.exceptions import BlockClassError
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenitySignedBeaconBlock
 from eth2.beacon.tools.builder.proposer import create_mock_block
 from eth2.beacon.tools.builder.validator import create_mock_signed_attestations_at_slot
-from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
+from eth2.beacon.types.blocks import SignedBeaconBlock
 from eth2.beacon.typing import FromBlockParams
 
 
@@ -37,7 +37,9 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
         genesis_block.signing_root
     ) == fork_choice_scoring.score(genesis_block.message)
 
-    block = SerenitySignedBeaconBlock.from_parent(genesis_block, FromBlockParams(slot=1))
+    block = SerenitySignedBeaconBlock.from_parent(
+        genesis_block, FromBlockParams(slot=1)
+    )
     valid_chain.chaindb.persist_block(block, block.__class__, fork_choice_scoring)
 
     assert valid_chain.get_canonical_head() == block

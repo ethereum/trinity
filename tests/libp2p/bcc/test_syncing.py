@@ -3,13 +3,11 @@ import asyncio
 from async_generator import asynccontextmanager
 import pytest
 
-from eth2.beacon.genesis import get_genesis_block
-from eth2.beacon.types.blocks import BeaconBlock
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
-    SignedBeaconBlockFactory,
     BeaconChainSyncerFactory,
     ConnectionPairFactory,
+    SignedBeaconBlockFactory,
 )
 
 
@@ -70,7 +68,9 @@ def assert_synced(alice, bob, correct_branch):
 
 @pytest.mark.asyncio
 async def test_sync_from_genesis(request, event_loop, event_bus, genesis_state):
-    genesis_block = SignedBeaconBlockFactory(message__state_root=genesis_state.hash_tree_root)
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
     alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=0, root=genesis_block
     )
@@ -86,7 +86,9 @@ async def test_sync_from_genesis(request, event_loop, event_bus, genesis_state):
 
 @pytest.mark.asyncio
 async def test_sync_from_old_head(request, event_loop, event_bus, genesis_state):
-    genesis_block = SignedBeaconBlockFactory(message__state_root=genesis_state.hash_tree_root)
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
     alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=49, root=genesis_block
     )
@@ -101,7 +103,9 @@ async def test_sync_from_old_head(request, event_loop, event_bus, genesis_state)
 
 @pytest.mark.asyncio
 async def test_reorg_sync(request, event_loop, event_bus, genesis_state):
-    genesis_block = SignedBeaconBlockFactory(message__state_root=genesis_state.hash_tree_root)
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
     alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=49, root=genesis_block, message__state_root=b"\x11" * 32
     )
@@ -119,7 +123,9 @@ async def test_reorg_sync(request, event_loop, event_bus, genesis_state):
 async def test_sync_when_already_at_best_head(
     request, event_loop, event_bus, genesis_state
 ):
-    genesis_block = SignedBeaconBlockFactory(message__state_root=genesis_state.hash_tree_root)
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
     alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=99, root=genesis_block, message__state_root=b"\x11" * 32
     )
@@ -140,7 +146,9 @@ async def test_sync_when_already_at_best_head(
 
 @pytest.mark.asyncio
 async def test_sync_skipped_slots(request, event_loop, event_bus, genesis_state):
-    genesis_block = SignedBeaconBlockFactory(message__state_root=genesis_state.hash_tree_root)
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
     alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=0, root=genesis_block
     )

@@ -60,17 +60,14 @@ TSignedBeaconBlockHeader = TypeVar(
 
 
 class SignedBeaconBlockHeader(HashableContainer):
-    fields = [
-        ("message", BeaconBlockHeader),
-        ("signature", bytes96),
-    ]
+    fields = [("message", BeaconBlockHeader), ("signature", bytes96)]
 
     @classmethod
     def create(
         cls: Type[TSignedBeaconBlockHeader],
         *,
         message: BeaconBlockHeader = default_beacon_block_header,
-        signature: bytes = EMPTY_SIGNATURE,
+        signature: BLSSignature = EMPTY_SIGNATURE,
     ) -> TSignedBeaconBlockHeader:
         return super().create(message=message, signature=signature)
 

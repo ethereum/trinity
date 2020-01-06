@@ -3,8 +3,6 @@ from eth.exceptions import BlockNotFound
 from eth.validation import validate_word
 import pytest
 
-from eth2.beacon.constants import EMPTY_SIGNATURE
-from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from trinity.protocol.bcc_libp2p import node
 from trinity.protocol.bcc_libp2p.configs import GoodbyeReasonCode, ResponseCode
 from trinity.protocol.bcc_libp2p.exceptions import HandshakeFailure, RequestFailure

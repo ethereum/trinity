@@ -241,7 +241,7 @@ def create_block_header_with_signature(
     slots_per_epoch: int,
     parent_root: Root = SAMPLE_HASH_1,
     state_root: Hash32 = SAMPLE_HASH_2,
-) -> BeaconBlockHeader:
+) -> SignedBeaconBlockHeader:
     block_header = BeaconBlockHeader.create(
         slot=state.slot,
         parent_root=parent_root,
@@ -257,8 +257,7 @@ def create_block_header_with_signature(
         slots_per_epoch=slots_per_epoch,
     )
     return SignedBeaconBlockHeader.create(
-        message=block_header,
-        signature=block_header_signature,
+        message=block_header, signature=block_header_signature
     )
 
 

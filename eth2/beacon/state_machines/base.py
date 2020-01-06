@@ -25,6 +25,7 @@ class BaseBeaconStateMachine(Configurable, ABC):
     config: Eth2Config = None
 
     block_class: Type[BaseBeaconBlock] = None
+    signed_block_class: Type[BaseSignedBeaconBlock] = None
     state_class: Type[BeaconState] = None
     state_transition_class: Type[BaseStateTransition] = None
     fork_choice_scoring_class: Type[BaseForkChoiceScoring] = None
@@ -154,11 +155,13 @@ class BeaconStateMachine(BaseBeaconStateMachine):
         check_proposer_signature: bool = True,
     ) -> Tuple[BeaconState, BaseSignedBeaconBlock]:
         state = self.state_transition.apply_state_transition(
-            state, signed_block=signed_block, check_proposer_signature=check_proposer_signature
+            state,
+            signed_block=signed_block,
+            check_proposer_signature=check_proposer_signature,
         )
 
-        signed_block = signed_block.set("message",
-            signed_block.message.set("state_root", state.hash_tree_root)
+        signed_block = signed_block.transform(
+            ("message", "state_root"), state.hash_tree_root
         )
 
         return state, signed_block

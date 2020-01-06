@@ -103,7 +103,7 @@ def create_block_on_state(
     if deposits is not None and len(deposits) > 0:
         body = body.set("deposits", deposits)
 
-    signed_block = signed_block.transform(["message", "body"], body)
+    signed_block = signed_block.transform(("message", "body"), body)
 
     # Apply state transition to get state root
     state, signed_block = state_machine.import_block(

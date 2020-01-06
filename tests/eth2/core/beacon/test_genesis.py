@@ -1,7 +1,7 @@
 from eth.constants import ZERO_HASH32
 import pytest
 
-from eth2.beacon.constants import EMPTY_SIGNATURE, JUSTIFICATION_BITS_LENGTH
+from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH
 from eth2.beacon.genesis import (
     _genesis_time_from_eth1_timestamp,
     get_genesis_block,

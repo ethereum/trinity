@@ -24,7 +24,7 @@ from eth2.beacon.db.exceptions import (
 from eth2.beacon.db.schema import SchemaV1
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock, SignedBeaconBlock, BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, Root, Slot

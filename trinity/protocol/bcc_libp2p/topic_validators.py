@@ -15,7 +15,7 @@ from eth.exceptions import BlockNotFound
 from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.chains.base import BaseBeaconChain
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock, SignedBeaconBlock
+from eth2.beacon.types.blocks import BaseSignedBeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
@@ -183,7 +183,7 @@ def get_beacon_aggregate_and_proof_validator(chain: BaseBeaconChain) -> Callable
 
 
 def run_validate_block_proposer_signature(
-    state: BeaconState, state_machine: BaseBeaconStateMachine, block: BaseBeaconBlock
+    state: BeaconState, state_machine: BaseBeaconStateMachine, block: BaseSignedBeaconBlock
 ) -> None:
     # Fast forward to state in future slot in order to pass
     # block.slot validity check

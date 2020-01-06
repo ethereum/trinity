@@ -14,19 +14,18 @@ from .block_validation import (
     validate_block_parent_root,
     validate_block_slot,
     validate_proposer_is_not_slashed,
-    validate_proposer_signature,
 )
 from .operation_processing import process_operations
 
 
 def process_block_header(
-    state: BeaconState,
-    block: BaseBeaconBlock,
-    config: Eth2Config,
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
 ) -> BeaconState:
     validate_block_slot(state, block)
     validate_block_parent_root(state, block)
-    validate_proposer_is_not_slashed(state, block.hash_tree_root, CommitteeConfig(config))
+    validate_proposer_is_not_slashed(
+        state, block.hash_tree_root, CommitteeConfig(config)
+    )
 
     return state.set(
         "latest_block_header",
@@ -90,9 +89,7 @@ def process_eth1_data(
 
 
 def process_block(
-    state: BeaconState,
-    block: BaseBeaconBlock,
-    config: Eth2Config,
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
 ) -> BeaconState:
     state = process_block_header(state, block, config)
     state = process_randao(state, block, config)

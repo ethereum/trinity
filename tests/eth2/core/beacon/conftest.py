@@ -16,7 +16,10 @@ from eth2.beacon.fork_choice.lmd_ghost import Context as LMDGHOSTContext
 from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.operations.attestation_pool import AttestationPool
 from eth2.beacon.state_machines.forks.serenity import SerenityStateMachine
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+    SerenitySignedBeaconBlock,
+)
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.tools.builder.initializer import create_mock_validator
 from eth2.beacon.tools.builder.state import create_mock_genesis_state_from_validators
@@ -26,8 +29,8 @@ from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.blocks import (
     BeaconBlockBody,
     BeaconBlockHeader,
-    SignedBeaconBlockHeader,
     SignedBeaconBlock,
+    SignedBeaconBlockHeader,
 )
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData
