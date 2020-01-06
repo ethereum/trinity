@@ -671,7 +671,7 @@ def chaindb(base_db, genesis_config):
 @pytest.fixture
 def chaindb_at_genesis(chaindb, genesis_state, genesis_block, fork_choice_scoring):
     chaindb.persist_state(genesis_state)
-    chaindb.persist_block(genesis_block, BeaconBlock, fork_choice_scoring)
+    chaindb.persist_block(genesis_block, SignedBeaconBlock, fork_choice_scoring)
     return chaindb
 
 
