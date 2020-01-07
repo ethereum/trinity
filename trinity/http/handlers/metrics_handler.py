@@ -28,7 +28,7 @@ def root_to_int(root: Hash32) -> int:
 async def process_metrics(chain: BaseBeaconChain, event_bus: EndpointAPI) -> None:
     # Networking
     libp2p_peers = await event_bus.request(Libp2pPeersRequest())
-    metrics.libp2p_peers.set(libp2p_peers.result)
+    metrics.libp2p_peers.set(len(libp2p_peers.result))
 
     # Per slot info
     beacon_slot = chain.get_head_state_slot()
