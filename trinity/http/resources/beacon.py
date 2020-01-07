@@ -12,6 +12,12 @@ from trinity.http.exceptions import APIServerError
 
 
 class Beacon(BaseResource):
+
+    async def route(self, request: web.Request, sub_collection: str) -> Any:
+        handler = getattr(self, sub_collection)
+        result = await handler(request)
+        return result
+
     @get_method
     async def head(self, request: web.Request) -> Dict[str, Any]:
         return to_formatted_dict(self.chain.get_canonical_head(), sedes=BeaconBlock)

@@ -1,5 +1,6 @@
 from abc import (
     ABC,
+    abstractmethod,
 )
 from typing import Any, Callable, TypeVar
 
@@ -16,12 +17,13 @@ TBaseResource = TypeVar("TBaseResource", bound="BaseResource")
 
 
 class BaseResource(ABC):
-
-    timeout = 2
-
     def __init__(self, chain: BaseBeaconChain, event_bus: EndpointAPI):
         self.chain = chain
         self.event_bus = event_bus
+
+    @abstractmethod
+    async def route(self, request: web.Request, sub_collection: str) -> Any:
+        ...
 
     @property
     def name(self) -> str:

@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Any, Tuple
 from aiohttp import web
 from trinity.components.eth2.metrics.events import Libp2pPeersRequest
 from trinity.http.events import (
@@ -8,6 +8,12 @@ from trinity.http.resources.base import BaseResource, get_method
 
 
 class Network(BaseResource):
+
+    async def route(self, request: web.Request, sub_collection: str) -> Any:
+        handler = getattr(self, sub_collection)
+        result = await handler(request)
+        return result
+
     @get_method
     async def peer_id(self, request: web.Request) -> str:
         response = await self.event_bus.request(Libp2pPeerIDRequest())

@@ -1,8 +1,7 @@
 import logging
 from typing import (
-    Any,
-    Callable,
     Dict,
+    Type,
 )
 
 from aiohttp import web
@@ -14,13 +13,22 @@ from eth2.beacon.chains.base import (
 )
 
 from trinity.http.handlers.base import BaseHTTPHandler, response_error
-from trinity.http.exceptions import APIServerError
+from trinity.http.exceptions import APIServerError, InvalidRequestSyntaxError_400
+from trinity.http.resources.base import BaseResource
 from trinity.http.resources.beacon import Beacon
 from trinity.http.resources.network import Network
 from trinity.http.resources.node import Node
 from trinity.http.resources.validator import Validator
 
 logger = logging.getLogger('trinity.http.handlers.api_handler.APIHandler')
+
+
+RESOURCES: Dict[str, Type[BaseResource]] = {
+    'beacon': Beacon,
+    'network': Network,
+    'node': Node,
+    'validator': Validator,
+}
 
 
 async def process_request(
@@ -31,90 +39,22 @@ async def process_request(
     """
     A simple RESTful API parser
     """
-    router = _get_router(request)
-    return await router(request, chain, event_bus)
-
-
-def _get_router(
-    request: web.Request
-) -> Callable[[web.Request, BaseBeaconChain, EndpointAPI], Any]:
-    path = request.path.lower()
-
-    if path.startswith("/beacon"):
-        return beacon_router
-    elif path.startswith("/network"):
-        return network_router
-    elif path.startswith("/node"):
-        return node_router
-    elif path.startswith("/validator"):
-        return validator_router
-    else:
-        raise APIServerError(f"Wrong path: {request.path}")
-
-
-def _get_path_object(request: web.Request) -> str:
     path = request.path.lower()
     path_array = tuple(path.split('/'))
+
     if len(path_array) <= 2:
         raise APIServerError(f"Wrong path: {path}")
-    object = path_array[2]
-    return object
 
+    resource_name = path_array[1]
+    sub_collection = path_array[2]
 
-async def beacon_router(
-    request: web.Request,
-    chain: BaseBeaconChain,
-    event_bus: EndpointAPI
-) -> Any:
-    object = _get_path_object(request)
-    resource = Beacon(chain, event_bus)
-    handler = getattr(resource, object)
-    result = await handler(request)
-    return result
-
-
-async def network_router(
-    request: web.Request,
-    chain: BaseBeaconChain,
-    event_bus: EndpointAPI
-) -> Any:
-    object = _get_path_object(request)
-    network_resource = Network(chain, event_bus)
-    handler = getattr(network_resource, object)
-    result = await handler(request)
-    return result
-
-
-async def node_router(
-    request: web.Request,
-    chain: BaseBeaconChain,
-    event_bus: EndpointAPI
-) -> Any:
-    object = _get_path_object(request)
-    node_resource = Node(chain, event_bus)
-    handler = getattr(node_resource, object)
-    result = await handler(request)
-    return result
-
-
-async def validator_router(
-    request: web.Request,
-    chain: BaseBeaconChain,
-    event_bus: EndpointAPI
-) -> Any:
-    object = _get_path_object(request)
-    resource = Validator(chain, event_bus)
-
-    if request.method == 'POST':
-        object = 'post_' + object
-
-    if object.startswith('0x'):
-        handler = resource.pubkey
+    if resource_name in RESOURCES:
+        resource_class = RESOURCES[resource_name]
     else:
-        handler = getattr(resource, object)
+        raise InvalidRequestSyntaxError_400(f"Wrong path: {request.path}")
 
-    result = await handler(request)
-    return result
+    resource = resource_class(chain, event_bus)
+    return await resource.route(request, sub_collection)
 
 
 class APIHandler(BaseHTTPHandler):

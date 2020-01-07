@@ -1,3 +1,5 @@
+from typing import Any
+
 from aiohttp import web
 
 from ssz.tools import (
@@ -9,6 +11,12 @@ from trinity.http.resources.base import BaseResource, get_method
 
 
 class Node(BaseResource):
+
+    async def route(self, request: web.Request, sub_collection: str) -> Any:
+        handler = getattr(self, sub_collection)
+        result = await handler(request)
+        return result
+
     @get_method
     async def version(self, request: web.Request) -> str:
         # TODO: add version number

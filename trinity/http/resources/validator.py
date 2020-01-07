@@ -31,6 +31,19 @@ def json_to_ssz(json_object: Union[str, bytes, bytearray], ssz_codec: BaseSedes)
 
 
 class Validator(BaseResource):
+
+    async def route(self, request: web.Request, sub_collection: str) -> Any:
+        if request.method == 'POST':
+            sub_collection = 'post_' + sub_collection
+
+        if sub_collection.startswith('0x'):
+            handler = self.pubkey
+        else:
+            handler = getattr(self, sub_collection)
+
+        result = await handler(request)
+        return result
+
     #
     # GET methods
     #
@@ -134,7 +147,6 @@ class Validator(BaseResource):
         # TODO: forward to beacon node
 
         return {}
-
 
     @post_method
     async def post_attestation(self, request: web.Request) -> Dict[str, Any]:
