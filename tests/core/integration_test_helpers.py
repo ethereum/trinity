@@ -21,13 +21,9 @@ from eth.tools.builder.chain import (
     latest_mainnet_at,
 )
 
-from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 
 from trinity.protocol.common.peer_pool_event_bus import (
     DefaultPeerPoolEventServer,
-)
-from trinity.protocol.eth.peer import (
-    ETHProxyPeerPool,
 )
 from trinity.tools.chain import AsyncMiningChain
 
@@ -109,21 +105,3 @@ async def run_peer_pool_event_server(event_bus, peer_pool, handler_type=None):
     )
     async with background_asyncio_service(event_server):
         yield event_server
-
-
-@asynccontextmanager
-async def run_proxy_peer_pool(event_bus, peer_pool_type=None):
-
-    peer_pool_type = ETHProxyPeerPool if peer_pool_type is None else peer_pool_type
-
-    proxy_peer_pool = peer_pool_type(
-        event_bus,
-        TO_NETWORKING_BROADCAST_CONFIG,
-    )
-    asyncio.ensure_future(proxy_peer_pool.run())
-
-    await proxy_peer_pool.events.started.wait()
-    try:
-        yield proxy_peer_pool
-    finally:
-        await proxy_peer_pool.cancel()
