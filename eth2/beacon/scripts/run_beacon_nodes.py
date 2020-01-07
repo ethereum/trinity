@@ -138,6 +138,7 @@ class Node:
             f"--metrics-port={self.metrics_port}",
             "--disable-discovery",
             "-l debug",
+            "--fake-eth1-data",
             "interop",
             f"--validators={','.join(str(v) for v in self.validators)}",
             f"--start-time={self.start_time}",
