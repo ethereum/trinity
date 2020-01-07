@@ -11,6 +11,7 @@ import random
 import time
 from typing import (
     Any,
+    AsyncIterator,
     Awaitable,
     Callable,
     cast,
@@ -29,6 +30,8 @@ from typing import (
     TypeVar,
     TYPE_CHECKING,
 )
+
+from async_generator import aclosing
 
 import trio
 
@@ -154,12 +157,12 @@ class DiscoveryService(Service):
         self.routing = RoutingTable(self.this_node)
         self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
         self.pong_channels = ExpectedResponseChannels[Tuple[Hash32, int]]()
+        self.neighbours_channels = ExpectedResponseChannels[List[NodeAPI]]()
         # FIXME: Use a persistent EnrDb implementation.
         self._enr_db = MemoryEnrDb(default_identity_scheme_registry)
         # FIXME: Use a concurrency-safe EnrDb implementation.
         self._enr_db_lock = trio.Lock()
         self.ping_callbacks = CallbackManager()
-        self.neighbours_callbacks = CallbackManager()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
         if socket.family != trio.socket.AF_INET:
             raise ValueError("Invalid socket family")
@@ -229,7 +232,7 @@ class DiscoveryService(Service):
         send_chan, recv_chan = trio.open_memory_channel[Tuple[Hash32, int]](1)
         try:
             with trio.fail_after(constants.KADEMLIA_REQUEST_TIMEOUT):
-                received_token, enr_seq = await self.pong_channels.wait_receive(
+                received_token, enr_seq = await self.pong_channels.receive_one(
                     node, send_chan, recv_chan)
         except AlreadyWaitingDiscoveryResponse:
             self.logger.debug(f"Bonding failed, already waiting pong from {node}")
@@ -266,7 +269,7 @@ class DiscoveryService(Service):
         send_chan, recv_chan = trio.open_memory_channel[Tuple[ENR, Hash32]](1)
         try:
             with trio.fail_after(constants.KADEMLIA_REQUEST_TIMEOUT):
-                enr, received_token = await self.enr_response_channels.wait_receive(
+                enr, received_token = await self.enr_response_channels.receive_one(
                     remote, send_chan, recv_chan)
         except trio.TooSlowError:
             raise CouldNotRetrieveENR(f"Timed out waiting for ENR from {remote}")
@@ -337,32 +340,26 @@ class DiscoveryService(Service):
 
         Returns the list of neighbours received.
         """
-        event = trio.Event()
         neighbours: List[NodeAPI] = []
-
-        def process(response: List[NodeAPI]) -> None:
-            neighbours.extend(response)
-            # This callback is expected to be called multiple times because nodes usually
-            # split the neighbours replies into multiple packets, so we only call event.set() once
-            # we've received enough neighbours.
-            if len(neighbours) >= constants.KADEMLIA_BUCKET_SIZE:
-                event.set()
-
-        with self.neighbours_callbacks.acquire(remote, process):
-            with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
-                await event.wait()
-                self.logger.debug2('got expected neighbours response from %s', remote)
-            if cancel_scope.cancelled_caught:
-                self.logger.debug2(
-                    'timed out waiting for %d neighbours from %s',
-                    constants.KADEMLIA_BUCKET_SIZE,
-                    remote,
-                )
-
+        send_chan, recv_chan = trio.open_memory_channel[List[NodeAPI]](1)
+        with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
+            # Responses to a FIND_NODE request are usually split between multiple
+            # NEIGHBOURS packets, so we may have to read from the channel multiple times.
+            gen = self.neighbours_channels.receive(remote, send_chan, recv_chan)
+            # mypy thinks wrapping our generator turns it into something else, so ignore.
+            async with aclosing(gen):  # type: ignore
+                async for batch in gen:
+                    self.logger.debug2(
+                        f'got expected neighbours response from {remote}: {batch}')
+                    neighbours.extend(batch)
+                    if len(neighbours) >= constants.KADEMLIA_BUCKET_SIZE:
+                        break
+            self.logger.debug2(f'got expected neighbours response from {remote}')
+        if cancel_scope.cancelled_caught:
+            self.logger.debug2(
+                f'timed out waiting for {constants.KADEMLIA_BUCKET_SIZE} neighbours from '
+                f'{remote}, got only {len(neighbours)}')
         return tuple(n for n in neighbours if n != self.this_node)
-
-    def _mkpingid(self, token: Hash32, node: NodeAPI) -> Hash32:
-        return Hash32(token + node.pubkey.to_bytes())
 
     def _send_find_node(self, node: NodeAPI, target_node_id: int) -> None:
         self.send_find_node_v4(node, target_node_id)
@@ -410,7 +407,7 @@ class DiscoveryService(Service):
                 (_find_node, node_id, n)
                 for n
                 in nodes_to_ask
-                if not self.neighbours_callbacks.locked(n)
+                if not self.neighbours_channels.already_waiting_for(n)
             )
             results = await trio_utils.gather(*next_find_node_queries)
             for candidates in results:
@@ -548,7 +545,17 @@ class DiscoveryService(Service):
             return
         neighbours = _extract_nodes_from_payload(node.address, nodes, self.logger)
         self.logger.debug2('<<< neighbours from %s: %s', node, neighbours)
-        self.process_neighbours(node, neighbours)
+        try:
+            channel = self.neighbours_channels.get_channel(node)
+        except KeyError:
+            self.logger.debug(f'unexpected neighbours from {node}, probably came too late')
+            return
+
+        try:
+            await channel.send(neighbours)
+        except trio.BrokenResourceError:
+            # This means the receiver has already closed, probably because it timed out.
+            pass
 
     async def recv_ping_v4(
             self, node: NodeAPI, payload: Sequence[Any], message_hash: Hash32) -> None:
@@ -685,22 +692,6 @@ class DiscoveryService(Service):
                 neighbours=nodes[i:i + max_neighbours],
                 expiration=expiration)
             self.send(node, CMD_NEIGHBOURS, payload)
-
-    def process_neighbours(self, remote: NodeAPI, neighbours: List[NodeAPI]) -> None:
-        """Process a neighbours response.
-
-        Neighbours responses should only be received as a reply to a find_node, and that is only
-        done as part of node lookup, so the actual processing is left to the callback from
-        neighbours_callbacks, which is added (and removed after it's done or timed out) in
-        wait_neighbours().
-        """
-        try:
-            callback = self.neighbours_callbacks.get_callback(remote)
-        except KeyError:
-            self.logger.debug(
-                'unexpected neighbours from %s, probably came too late', remote)
-        else:
-            callback(neighbours)
 
     async def process_pong_v4(self, remote: NodeAPI, token: Hash32, enr_seq: int) -> None:
         # XXX: This hack is needed because there are lots of parity 1.10 nodes out there that send
@@ -1110,20 +1101,55 @@ class ExpectedResponseChannels(Generic[TMsg]):
     def get_channel(self, remote: NodeAPI) -> trio.abc.SendChannel[TMsg]:
         return self._channels[remote]
 
-    async def wait_receive(
+    async def receive_one(
         self,
         remote: NodeAPI,
         send_chan: trio.abc.SendChannel[TMsg],
         recv_chan: trio.abc.ReceiveChannel[TMsg]
     ) -> TMsg:
+        """
+        Add send_chan to our dict of channels keyed by remote node and wait for a single message
+        on the given receive channel.
+
+        Closes the channel once a message is received.
+
+        Returns the read message.
+        """
+        gen = self.receive(remote, send_chan, recv_chan)
+        # mypy thinks wrapping our generator turns it into something else, so ignore.
+        async with aclosing(gen):  # type: ignore
+            async for msg in gen:
+                break
+        return msg
+
+    async def receive(
+        self,
+        remote: NodeAPI,
+        send_chan: trio.abc.SendChannel[TMsg],
+        recv_chan: trio.abc.ReceiveChannel[TMsg]
+    ) -> AsyncIterator[TMsg]:
+        """
+        Add send_chan to our dict of channels keyed by remote node and wait for multiple messages
+        on the given receive channel, yielding each of them as they are received.
+
+        Callers must ensure the generator is closed when they are done, otherwise the GC will
+        attempt to do so and will fail because that includes async operations. See
+        https://github.com/python-trio/trio/issues/265 for more. In order to ensure the generator
+        is closed, use async_generator.aclosing(), like this:
+
+            async with aclosing(channels.receive(remote, sc, rc)) as gen:
+                async for msg in gen:
+                    ...
+
+        Closes the channel upon exiting.
+        """
         if remote in self._channels:
             raise AlreadyWaitingDiscoveryResponse(f"Already waiting on response from: {remote}")
 
         self._channels[remote] = send_chan
         try:
             async with recv_chan:
-                reply = await recv_chan.receive()
+                while True:
+                    yield await recv_chan.receive()
         finally:
             self._channels.pop(remote, None)
-
-        return reply
