@@ -220,3 +220,10 @@ class LocalChainIncompatibleOrStale(BaseP2PError):
     two chains have diverged in the past at some point (possibly at genesis).
     """
     pass
+
+
+class CouldNotRetrieveENR(BaseP2PError):
+    """
+    Raised when we cannot get an ENR from a remote node.
+    """
+    pass

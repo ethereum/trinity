@@ -47,6 +47,30 @@ OFFICIAL_TEST_DATA = {
     }
 }
 
+# This is an ENR sent by geth and it includes a fork ID (https://eips.ethereum.org/EIPS/eip-2124)
+# kv pair as well.
+REAL_LIFE_TEST_DATA = {
+    "repr": (
+        "enr:-Jq4QO5zEyIBU5lSa9iaen0A2xUB5_IVrCi1DbyASTTnLV5RJan6aGPr8kU0p0MYKU5YezZgdSUE"
+        "-GOBEio6Ultyf1Aog2V0aMrJhGN2AZCDGfCggmlkgnY0gmlwhF4_wLuJc2VjcDI1NmsxoQOt7cA_B_Kg"
+        "nQ5RmwyA6ji8M1Y0jfINItRGbOOwy7XgbIN0Y3CCdl-DdWRwgnZf"
+    ),
+    "public_key": decode_hex("03adedc03f07f2a09d0e519b0c80ea38bc3356348df20d22d4466ce3b0cbb5e06c"),
+    "node_id": decode_hex("dc8542768b457753669bebfe215d5f9ef4adb7d7df84beabddbe98350869165f"),
+    "identity_scheme": V4IdentityScheme,
+    "sequence_number": 40,
+    "kv_pairs": {
+        b"eth": ((b'cv\x01\x90', 1700000), ),
+        b"id": b"v4",
+        b"ip": decode_hex("5e3fc0bb"),
+        b"secp256k1": decode_hex(
+            "03adedc03f07f2a09d0e519b0c80ea38bc3356348df20d22d4466ce3b0cbb5e06c",
+        ),
+        b"tcp": 30303,
+        b"udp": 30303,
+    }
+}
+
 
 class MockIdentityScheme(IdentityScheme):
 
@@ -373,3 +397,14 @@ def test_official_test_vector():
     unsigned_enr = UnsignedENR(enr.sequence_number, dict(enr))
     reconstructed_enr = unsigned_enr.to_signed_enr(OFFICIAL_TEST_DATA["private_key"])
     assert reconstructed_enr == enr
+
+
+def test_real_life_test_vector():
+    enr = ENR.from_repr(REAL_LIFE_TEST_DATA["repr"])
+
+    assert enr.sequence_number == REAL_LIFE_TEST_DATA["sequence_number"]
+    assert enr.public_key == REAL_LIFE_TEST_DATA["public_key"]
+    assert enr.node_id == REAL_LIFE_TEST_DATA["node_id"]
+    assert enr.identity_scheme is REAL_LIFE_TEST_DATA["identity_scheme"]
+    assert dict(enr) == REAL_LIFE_TEST_DATA["kv_pairs"]
+    assert repr(enr) == REAL_LIFE_TEST_DATA["repr"]

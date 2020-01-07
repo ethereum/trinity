@@ -25,6 +25,9 @@ from rlp.sedes import (
     big_endian_int,
     binary,
     Binary,
+    CountableList,
+    List,
+    raw,
 )
 
 from eth_utils import (
@@ -367,6 +370,8 @@ class ENR(BaseENR, ENRSedes):
         ))
 
 
+# https://eips.ethereum.org/EIPS/eip-2124
+FORK_ID_SEDES = CountableList(List([Binary.fixed_length(4), big_endian_int]))
 IDENTITY_SCHEME_ENR_KEY = b"id"
 
 ENR_KEY_SEDES_MAPPING = {
@@ -378,8 +383,8 @@ ENR_KEY_SEDES_MAPPING = {
     b"ip6": Binary.fixed_length(IP_V6_SIZE),
     b"tcp6": big_endian_int,
     b"udp6": big_endian_int,
+    b"eth": FORK_ID_SEDES,
 }
 
-# Use the binary sedes for values with an unknown key in an ENR as it is valid for all inputs and
-# conveys the least amount of interpretation of the data.
-FALLBACK_ENR_VALUE_SEDES = binary
+# Must use raw for values with an unknown key as they may be lists or individual values.
+FALLBACK_ENR_VALUE_SEDES = raw

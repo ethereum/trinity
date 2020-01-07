@@ -22,6 +22,7 @@ ENR_REPR_PREFIX = "enr:"  # prefix used when printing an ENR
 MAX_ENR_SIZE = 300  # maximum allowed size of an ENR
 IP_V4_ADDRESS_ENR_KEY = b"ip"
 UDP_PORT_ENR_KEY = b"udp"
+TCP_PORT_ENR_KEY = b"tcp"
 
 WHO_ARE_YOU_MAGIC_SUFFIX = b"WHOAREYOU"
 HKDF_INFO = b"discovery v5 key agreement"

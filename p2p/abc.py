@@ -76,6 +76,11 @@ class AddressAPI(ABC):
     def ip(self) -> str:
         ...
 
+    @property
+    @abstractmethod
+    def ip_packed(self) -> str:
+        ...
+
     @abstractmethod
     def __eq__(self, other: Any) -> bool:
         ...
@@ -100,6 +105,7 @@ class NodeAPI(ABC):
     pubkey: keys.PublicKey
     address: AddressAPI
     id: int
+    id_bytes: bytes
 
     @abstractmethod
     def __init__(self, pubkey: keys.PublicKey, address: AddressAPI) -> None:
