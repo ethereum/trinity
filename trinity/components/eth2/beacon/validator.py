@@ -98,10 +98,6 @@ from trinity.components.eth2.eth1_monitor.events import (
     GetEth1DataRequest,
     GetEth1DataResponse,
 )
-from trinity.components.eth2.metrics.events import (
-    Libp2pPeersRequest,
-    Libp2pPeersResponse,
-)
 from trinity.components.eth2.beacon.slot_ticker import (
     SlotTickEvent,
 )

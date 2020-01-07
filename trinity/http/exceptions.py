@@ -1,5 +1,6 @@
 from typing import Dict, Type
 
+
 class APIServerError(Exception):
     ...
 

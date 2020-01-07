@@ -85,7 +85,7 @@ def create_validator(
         else:
             unaggregated_attestation_pool.add(attestation)
 
-    return Validator(
+    v = Validator(
         chain=chain,
         p2p_node=p2p_node,
         validator_privkeys=validator_privkeys,
@@ -104,8 +104,12 @@ def create_validator(
         return None
     monkeypatch.setattr(v, '_get_deposit_data', _get_deposit_data)
 
+    return v
 
-async def get_validator(event_loop, event_bus, monkeypatch, handshaked_peers, indices, num_validators=None) -> Validator:
+
+async def get_validator(
+    event_loop, event_bus, monkeypatch, indices, num_validators=None
+) -> Validator:
     libp2p_node = FakeNode()
     v = create_validator(
         event_bus,
