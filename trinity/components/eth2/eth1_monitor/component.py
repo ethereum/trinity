@@ -1,10 +1,9 @@
 from argparse import ArgumentParser, _SubParsersAction
-import json
 from pathlib import Path
 
 from async_service import Service, TrioManager
 
-from eth_typing import Address, BlockNumber
+from eth_typing import BlockNumber
 
 from lahja import EndpointAPI
 
@@ -17,7 +16,7 @@ from eth2.beacon.tools.builder.validator import create_mock_deposit_data
 from eth2.beacon.tools.fixtures.loading import load_yaml_at
 from eth2.beacon.typing import Timestamp
 from trinity.boot_info import BootInfo
-from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
+from trinity.components.eth2.constants import ETH1_MONITOR_CONFIG
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import (
     BaseEth1DataProvider,
     FakeEth1DataProvider,
@@ -31,14 +30,6 @@ from trinity.extensibility import TrioIsolatedComponent
 
 from .eth1_monitor import Eth1Monitor
 from .eth1_data_provider import AVERAGE_BLOCK_TIME
-
-# Fake eth1 monitor config
-# TODO: These configs should be read from a config file, e.g., `eth1_monitor_config.yaml`.
-DEPOSIT_CONTRACT_ABI = json.loads(deposit_contract_json)["abi"]
-DEPOSIT_CONTRACT_ADDRESS = Address(b"\x12" * 20)
-NUM_BLOCKS_CONFIRMED = 2
-POLLING_PERIOD = AVERAGE_BLOCK_TIME // 2
-START_BLOCK_NUMBER = BlockNumber(1000)
 
 # Configs for fake Eth1DataProvider
 NUM_DEPOSITS_PER_BLOCK = 1
@@ -85,6 +76,16 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         chain_config = beacon_app_config.get_chain_config()
         base_db = DBClient.connect(trinity_config.database_ipc_path)
 
+        # Load the config from eth1_monitor_config
+        eth1_monitor_config = load_yaml_at(
+            trinity_config.trinity_root_dir / ETH1_MONITOR_CONFIG
+        )
+        (deposit_contract_abi,) = eth1_monitor_config["deposit_contract_abi"],
+        deposit_contract_address = eth1_monitor_config["deposit_contract_address"]
+        (num_blocks_confirmed,) = eth1_monitor_config["num_blocks_confirmed"],
+        (polling_period,) = eth1_monitor_config["polling_period"],
+        (start_block_number,) = eth1_monitor_config["start_block_number"],
+
         if boot_info.args.fake_eth1_data:
             # Load validators data from interop setting and
             # hardcode the deposit data into fake eth1 data provider.
@@ -115,7 +116,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
                 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
             )
             eth1_data_provider: BaseEth1DataProvider = FakeEth1DataProvider(
-                start_block_number=START_BLOCK_NUMBER,
+                start_block_number=start_block_number,
                 start_block_timestamp=Timestamp(start_block_timestamp),
                 num_deposits_per_block=NUM_DEPOSITS_PER_BLOCK,
                 initial_deposits=tuple(initial_deposits),
@@ -136,16 +137,16 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
 
             eth1_data_provider = Web3Eth1DataProvider(
                 w3=w3,
-                deposit_contract_address=DEPOSIT_CONTRACT_ADDRESS,
-                deposit_contract_abi=DEPOSIT_CONTRACT_ABI,
+                deposit_contract_address=deposit_contract_address,
+                deposit_contract_abi=deposit_contract_abi,
             )
 
         with base_db:
             eth1_monitor_service: Service = Eth1Monitor(
                 eth1_data_provider=eth1_data_provider,
-                num_blocks_confirmed=NUM_BLOCKS_CONFIRMED,
-                polling_period=POLLING_PERIOD,
-                start_block_number=BlockNumber(START_BLOCK_NUMBER - 1),
+                num_blocks_confirmed=num_blocks_confirmed,
+                polling_period=polling_period,
+                start_block_number=BlockNumber(start_block_number - 1),
                 event_bus=event_bus,
                 base_db=base_db,
             )

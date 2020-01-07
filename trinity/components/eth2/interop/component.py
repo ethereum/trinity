@@ -3,6 +3,7 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
+import json
 import logging
 from pathlib import (
     Path,
@@ -11,6 +12,8 @@ import sys
 import shutil
 import time
 from typing import Union, TYPE_CHECKING
+
+from eth_typing import Address, BlockNumber
 
 from eth_utils import (
     to_int,
@@ -26,6 +29,7 @@ from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONF
 from eth2.beacon.tools.misc.ssz_vector import (
     override_lengths,
 )
+from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.config import (
     TrinityConfig,
     BeaconAppConfig,
@@ -36,6 +40,7 @@ import ssz
 from eth2.beacon.types.states import BeaconState
 
 from trinity.components.eth2.constants import (
+    ETH1_MONITOR_CONFIG,
     GENESIS_FILE,
     VALIDATOR_KEY_DIR,
 )
@@ -44,6 +49,13 @@ from trinity.components.builtin.network_db.component import TrackingBackend
 
 if TYPE_CHECKING:
     from typing import Any, IO  # noqa: F401
+
+# Settings for eth1 monitor
+DEPOSIT_CONTRACT_ABI = json.loads(deposit_contract_json)["abi"]
+DEPOSIT_CONTRACT_ADDRESS = Address(b"\x12" * 20)
+NUM_BLOCKS_CONFIRMED = 5
+POLLING_PERIOD = 5
+START_BLOCK_NUMBER = BlockNumber(1000)
 
 
 class InteropComponent(Application):
@@ -221,6 +233,18 @@ class InteropComponent(Application):
                         f.write(str(parse_key(key['privkey'])))
         else:
             cls.logger.info("not running any validators")
+
+        # Generate eth1 monitor config
+        eth1_monitor_config = {
+            "deposit_contract_abi": DEPOSIT_CONTRACT_ABI,
+            "deposit_contract_address": DEPOSIT_CONTRACT_ADDRESS,
+            "num_blocks_confirmed": NUM_BLOCKS_CONFIRMED,
+            "polling_period": POLLING_PERIOD,
+            "start_block_number": START_BLOCK_NUMBER,
+        }
+        yaml = YAML(typ='unsafe')
+        with open(trinity_config.trinity_root_dir / ETH1_MONITOR_CONFIG, 'w') as f:
+            yaml.dump(eth1_monitor_config, f)
 
         # disable some components which shouldn't be running
         args.disable_discovery = True
