@@ -236,13 +236,13 @@ async def test_wait_neighbours(nursery):
 
     assert neighbours == received_neighbours
     # Ensure wait_neighbours() cleaned up after itself.
-    assert node not in service.neighbours_callbacks
+    assert not service.neighbours_channels.already_waiting_for(node)
 
     # If wait_neighbours() times out, we get an empty list of neighbours.
     received_neighbours = await service.wait_neighbours(node)
 
     assert received_neighbours == tuple()
-    assert node not in service.neighbours_callbacks
+    assert not service.neighbours_channels.already_waiting_for(node)
 
 
 @pytest.mark.trio
