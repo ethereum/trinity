@@ -56,17 +56,17 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         arg_parser.add_argument(
             "--web3-ipc-endpoint",
             type=str,
-            help="HTTP endpoint of web3 provider",
+            help="IPC endpoint of web3 provider, e.g., /my/node/ipc/path",
         )
         arg_parser.add_argument(
             "--web3-http-endpoint",
             type=str,
-            help="IPC endpoint of web3 provider",
+            help="HTTP endpoint of web3 provider, e.g., http://127.0.0.1:8545",
         )
         arg_parser.add_argument(
             "--web3-ws-endpoint",
             type=str,
-            help="WebSocket endpoint of web3 provider",
+            help="WebSocket endpoint of web3 provider, e.g., ws://127.0.0.1:8546",
         )
 
     @classmethod
