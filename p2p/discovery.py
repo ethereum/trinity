@@ -6,7 +6,6 @@ listening nodes.
 More information at https://github.com/ethereum/devp2p/blob/master/rlpx.md#node-discovery
 """
 import collections
-import contextlib
 import random
 import time
 from typing import (
@@ -18,7 +17,6 @@ from typing import (
     DefaultDict,
     Dict,
     Generic,
-    Hashable,
     Iterable,
     Iterator,
     List,
@@ -28,7 +26,6 @@ from typing import (
     Set,
     Tuple,
     TypeVar,
-    TYPE_CHECKING,
 )
 
 from async_generator import aclosing
@@ -89,12 +86,6 @@ from p2p.exceptions import AlreadyWaitingDiscoveryResponse, CouldNotRetrieveENR,
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
 from p2p import trio_utils
 
-if TYPE_CHECKING:
-    # Promoted workaround for inheriting from generic stdlib class
-    # https://github.com/python/mypy/issues/5264#issuecomment-399407428
-    UserDict = collections.UserDict[Hashable, 'CallbackLock']
-else:
-    UserDict = collections.UserDict
 
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
 V4_HANDLER_TYPE = Callable[[NodeAPI, Tuple[Any, ...], Hash32], Awaitable[Any]]
@@ -1022,53 +1013,6 @@ def _unpack_v4(message: bytes) -> Tuple[datatypes.PublicKey, int, Tuple[Any, ...
 
 def _get_msg_expiration() -> bytes:
     return rlp.sedes.big_endian_int.serialize(int(time.time() + EXPIRATION))
-
-
-class CallbackLock:
-    def __init__(self,
-                 callback: Callable[..., Any],
-                 timeout: float = 2 * constants.KADEMLIA_REQUEST_TIMEOUT) -> None:
-        self.callback = callback
-        self.timeout = timeout
-        self.created_at = time.time()
-
-    @property
-    def is_expired(self) -> bool:
-        return time.time() - self.created_at > self.timeout
-
-
-class CallbackManager(UserDict):
-    @contextlib.contextmanager
-    def acquire(self,
-                key: NodeAPI,
-                callback: Callable[..., Any]) -> Iterator[CallbackLock]:
-        if key in self:
-            if not self.locked(key):
-                del self[key]
-            else:
-                raise AlreadyWaitingDiscoveryResponse(f"Already waiting on callback for: {key}")
-
-        lock = CallbackLock(callback)
-        self[key] = lock
-
-        try:
-            yield lock
-        finally:
-            del self[key]
-
-    def get_callback(self, key: NodeAPI) -> Callable[..., Any]:
-        return self[key].callback
-
-    def locked(self, key: NodeAPI) -> bool:
-        try:
-            lock = self[key]
-        except KeyError:
-            return False
-        else:
-            if lock.is_expired:
-                return False
-            else:
-                return True
 
 
 TMsg = TypeVar("TMsg")
