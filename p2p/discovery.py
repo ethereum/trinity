@@ -14,7 +14,6 @@ from typing import (
     Awaitable,
     Callable,
     cast,
-    DefaultDict,
     Dict,
     Generic,
     Iterable,
@@ -90,7 +89,6 @@ from p2p import trio_utils
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
 V4_HANDLER_TYPE = Callable[[NodeAPI, Tuple[Any, ...], Hash32], Awaitable[Any]]
 
-MAX_ENTRIES_PER_TOPIC = 50
 # UDP packet constants.
 MAC_SIZE = 256 // 8  # 32
 SIG_SIZE = 520 // 8  # 65
@@ -868,79 +866,6 @@ class NoopDiscoveryService(Service):
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
 
         await self.manager.wait_finished()
-
-
-class NodeTicketInfo:
-    # The serial number of the last ticket we issued for a given remote node. New tickets are
-    # issued when a node sends a PING msg containing one or more topics.
-    last_issued: int = 0
-    # The serial number of the last ticket used by a given remote node. Tickets are marked as used
-    # when a node sends a REGISTER_TICKET msg using a ticket previously issued.
-    last_used: int = 0
-
-
-class TopicTable:
-    registration_lifetime = 60 * 60
-    topics: DefaultDict[bytes, 'collections.OrderedDict[NodeAPI, float]']
-
-    def __init__(self, logger: ExtendedDebugLogger) -> None:
-        self.logger = logger
-        # A per-topic FIFO set of nodes.
-        self.topics = collections.defaultdict(collections.OrderedDict)
-        # The IDs of the last issued/used tickets for any given node.
-        self.node_tickets: Dict[NodeAPI, NodeTicketInfo] = {}
-
-    def add_node(self, node: NodeAPI, topic: bytes) -> None:
-        entries = self.topics[topic]
-        if node in entries:
-            entries.pop(node)
-        while len(entries) >= MAX_ENTRIES_PER_TOPIC:
-            entries.popitem(last=False)
-        entries[node] = time.time() + self.registration_lifetime
-
-    def get_nodes(self, topic: bytes) -> Tuple[NodeAPI, ...]:
-        if topic not in self.topics:
-            return tuple()
-        else:
-            now = time.time()
-            entries = [(node, expiry) for node, expiry in self.topics[topic].items()
-                       if expiry > now]
-            self.topics[topic] = collections.OrderedDict(entries)
-            return tuple(node for node, _ in entries)
-
-    def use_ticket(self, node: NodeAPI, ticket_serial: int, topic: bytes) -> None:
-        ticket_info = self.node_tickets.get(node)
-        if ticket_info is None:
-            self.logger.debug("No ticket found for %s", node)
-            return
-
-        if ticket_serial != ticket_info.last_issued:
-            self.logger.debug("Wrong ticket for %s, expected %d, got %d", node,
-                              ticket_info.last_issued, ticket_serial)
-            return
-
-        ticket_info.last_used = ticket_serial
-        self.add_node(node, topic)
-
-    def issue_ticket(self, node: NodeAPI) -> int:
-        node_info = self.node_tickets.setdefault(node, NodeTicketInfo())
-        node_info.last_issued += 1
-        return node_info.last_issued
-
-
-class Ticket:
-
-    def __init__(self, node: NodeAPI, pong: bytes, topics: List[bytes],
-                 wait_periods: List[float]) -> None:
-        now = time.time()
-        self.issue_time = now
-        self.node = node
-        self.pong = pong
-        self.topics = topics
-        self.registration_times = [now + wait_period for wait_period in wait_periods]
-
-    def __repr__(self) -> str:
-        return f"Ticket({self.node}:{self.topics})"
 
 
 @to_list
