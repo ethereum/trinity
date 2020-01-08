@@ -26,9 +26,12 @@ from eth2.beacon.db.exceptions import FinalizedHeadNotFound
 from eth2.beacon.typing import (
     Slot,
 )
-from eth2.events import SyncRequest
+from eth2.configs import (
+    Eth2GenesisConfig,
+)
 
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
+from trinity.protocol.bcc_libp2p.exceptions import RequestFailure
 from trinity.protocol.bcc_libp2p.node import PeerPool, Peer
 from trinity.sync.beacon.constants import (
     MAX_BLOCKS_PER_REQUEST,
@@ -36,10 +39,7 @@ from trinity.sync.beacon.constants import (
 from trinity.sync.common.chain import (
     SyncBlockImporter,
 )
-from eth2.configs import (
-    Eth2GenesisConfig,
-)
-from trinity.protocol.bcc_libp2p.exceptions import RequestFailure
+from trinity.sync.beacon.events import SyncRequest
 
 from .exceptions import LeadingPeerNotFonud
 
