@@ -125,11 +125,6 @@ class EnrDbApi(ABC):
         ...
 
     @abstractmethod
-    async def remove(self, node_id: NodeID) -> None:
-        """Remove an ENR from the db."""
-        ...
-
-    @abstractmethod
     async def insert_or_update(self, enr: ENR) -> None:
         """Insert or update an ENR depending if it is already present already or not."""
         ...
