@@ -39,6 +39,11 @@ class BaseEnrDb(EnrDbApi):
                 f"identity scheme registry"
             )
 
+    async def insert_or_update(self, enr: ENR) -> None:
+        try:
+            await self.update(enr)
+        except KeyError:
+            await self.insert(enr)
 
 class MemoryEnrDb(BaseEnrDb):
 
@@ -85,12 +90,6 @@ class MemoryEnrDb(BaseEnrDb):
         self.logger.debug("Removing ENR of %s", encode_hex(node_id))
 
         await trio.sleep(0)  # add checkpoint to make this a proper async function
-
-    async def insert_or_update(self, enr: ENR) -> None:
-        try:
-            await self.update(enr)
-        except KeyError:
-            await self.insert(enr)
 
     async def get(self, node_id: NodeID) -> ENR:
         await trio.sleep(0)  # add checkpoint to make this a proper async function
