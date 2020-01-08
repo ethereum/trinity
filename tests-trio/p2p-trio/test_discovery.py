@@ -192,33 +192,6 @@ async def test_protocol_bootstrap():
 
 
 @pytest.mark.trio
-@pytest.mark.parametrize('echo', ['echo', b'echo'])
-async def test_wait_ping(nursery, echo):
-    discovery = MockDiscoveryService([])
-    node = NodeFactory()
-
-    # Schedule a call to discovery.recv_ping() simulating a ping from the node we expect.
-    expiration = _get_msg_expiration()
-    nursery.start_soon(discovery.recv_ping_v4, node, [None, None, None, expiration], b'')
-
-    got_ping = await discovery.wait_ping(node)
-
-    assert got_ping
-    # Ensure wait_ping() cleaned up after itself.
-    assert node not in discovery.ping_callbacks
-
-    # If we waited for a ping from a different node, wait_ping() would timeout and thus return
-    # false.
-    nursery.start_soon(discovery.recv_ping_v4, node, [None, None, None, expiration], b'')
-
-    node2 = NodeFactory()
-    got_ping = await discovery.wait_ping(node2)
-
-    assert not got_ping
-    assert node2 not in discovery.ping_callbacks
-
-
-@pytest.mark.trio
 async def test_wait_neighbours(nursery):
     service = MockDiscoveryService([])
     node = NodeFactory()
