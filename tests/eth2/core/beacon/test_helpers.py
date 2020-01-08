@@ -29,7 +29,14 @@ def get_pseudo_chain(length, genesis_block):
     block = genesis_block
     yield genesis_block
     for slot in range(1, length * 3):
-        block = genesis_block.mset("slot", slot, "parent_root", block.signing_root)
+        block = genesis_block.mset(
+            "slot",
+            slot,
+            "parent_root",
+            block.signing_root,
+            "state_root",
+            slot.to_bytes(32, "big"),
+        )
         yield block
 
 
