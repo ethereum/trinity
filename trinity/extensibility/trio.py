@@ -68,8 +68,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
         )
         with trio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signal_aiter:
             async with background_trio_service(event_bus_service):
-                await event_bus_service.wait_event_bus_available()
-                event_bus = event_bus_service.get_event_bus()
+                event_bus = await event_bus_service.get_event_bus()
                 async with trio.open_nursery() as nursery:
                     nursery.start_soon(cls.do_run, boot_info, event_bus)
                     async for sig in signal_aiter:

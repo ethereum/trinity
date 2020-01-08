@@ -6,9 +6,9 @@ from typing import Optional
 
 from asyncio_run_in_process import open_in_process
 from asyncio_run_in_process.typing import SubprocessKwargs
+from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
-from p2p.service import run_service
 
 from trinity._utils.logging import child_process_logging
 from trinity._utils.profiling import profiler
@@ -59,9 +59,8 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
                 boot_info.trinity_config,
                 endpoint_name,
             )
-            async with run_service(event_bus_service):
-                await event_bus_service.wait_event_bus_available()
-                event_bus = event_bus_service.get_event_bus()
+            async with background_asyncio_service(event_bus_service):
+                event_bus = await event_bus_service.get_event_bus()
 
                 try:
                     if boot_info.profile:
