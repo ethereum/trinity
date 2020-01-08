@@ -52,11 +52,6 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
             db: AtomicDatabaseAPI,
             peer_pool: ETHPeerPool,
             token: CancelToken = None) -> None:
-
-        # in case there is no token set, make sure this gets cancelled when the peer pool does
-        if token is None:
-            token = peer_pool.cancel_token
-
         # Init the superclass
         super().__init__(token=token)
 

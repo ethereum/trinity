@@ -20,6 +20,7 @@ from typing import (
 )
 import uuid
 
+from async_service import ServiceAPI
 from cancel_token import CancelToken
 
 from eth_utils import ExtendedDebugLogger
@@ -245,7 +246,7 @@ class TransportAPI(ABC):
         ...
 
     @abstractmethod
-    async def read(self, n: int, token: CancelToken) -> bytes:
+    async def read(self, n: int) -> bytes:
         ...
 
     @abstractmethod
@@ -253,7 +254,7 @@ class TransportAPI(ABC):
         ...
 
     @abstractmethod
-    async def recv(self, token: CancelToken) -> MessageAPI:
+    async def recv(self) -> MessageAPI:
         ...
 
     @abstractmethod
@@ -307,8 +308,6 @@ TProtocol = TypeVar('TProtocol', bound=ProtocolAPI)
 
 
 class MultiplexerAPI(ABC):
-    cancel_token: CancelToken
-
     #
     # Transport API
     #
@@ -517,7 +516,7 @@ class SubscriptionAPI(ContextManager['SubscriptionAPI']):
 HandlerFn = Callable[['ConnectionAPI', CommandAPI[Any]], Awaitable[Any]]
 
 
-class ConnectionAPI(AsyncioServiceAPI):
+class ConnectionAPI(ServiceAPI):
     protocol_receipts: Tuple[HandshakeReceiptAPI, ...]
 
     #
@@ -544,6 +543,15 @@ class ConnectionAPI(AsyncioServiceAPI):
     @abstractmethod
     def is_closing(self) -> bool:
         ...
+
+    @property
+    @abstractmethod
+    def is_alive(self) -> bool:
+        ...
+
+    @abstractmethod
+    def close(self) -> None:
+        pass
 
     #
     # Subscriptions/Handler API

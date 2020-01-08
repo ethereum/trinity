@@ -1,5 +1,4 @@
 import asyncio
-
 import pytest
 
 from p2p.disconnect import DisconnectReason
@@ -68,7 +67,11 @@ async def test_peer_pool_iter(request, event_loop):
         assert peer3 in peers
 
         peers = []
-        asyncio.ensure_future(peer2.disconnect(DisconnectReason.DISCONNECT_REQUESTED))
+
+        peer2.disconnect(DisconnectReason.DISCONNECT_REQUESTED)
+        # need to give the peer and pool a moment to process the disconnection.
+        await asyncio.sleep(0.01)
+
         async for peer in pool:
             peers.append(peer)
 

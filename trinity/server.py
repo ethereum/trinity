@@ -1,15 +1,17 @@
 from abc import abstractmethod
 import asyncio
+import logging
 from typing import (
     Generic,
     Tuple,
     Type,
     TypeVar,
 )
+
+from async_service import Service
 from lahja import EndpointAPI
 
 from eth_keys import datatypes
-from cancel_token import CancelToken, OperationCancelled
 from eth_typing import BlockNumber
 
 from eth.abc import AtomicDatabaseAPI, VirtualMachineAPI
@@ -22,7 +24,6 @@ from p2p.exceptions import (
     PeerConnectionLost,
 )
 from p2p.handshake import receive_dial_in, DevP2PHandshakeParams
-from p2p.service import BaseService
 
 from trinity._utils.version import construct_trinity_client_identifier
 from trinity.chains.base import AsyncChainAPI
@@ -48,8 +49,10 @@ COMMON_RECEIVE_HANDSHAKE_EXCEPTIONS = (
 )
 
 
-class BaseServer(BaseService, Generic[TPeerPool]):
+class BaseServer(Service, Generic[TPeerPool]):
     """Server listening for incoming connections"""
+    logger = logging.getLogger('trinity.server.BaseServer')
+
     _tcp_listener = None
     peer_pool: TPeerPool
 
@@ -63,9 +66,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
                  network_id: int,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  event_bus: EndpointAPI = None,
-                 token: CancelToken = None,
                  ) -> None:
-        super().__init__(token)
         # cross process event bus
         self.event_bus = event_bus
 
@@ -108,7 +109,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             self._tcp_listener.close()
             await self._tcp_listener.wait_closed()
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.info("Running server...")
         await self._start_tcp_listener()
         self.logger.info(
@@ -120,9 +121,9 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         self.logger.info('network: %s', self.network_id)
         self.logger.info('peers: max_peers=%s', self.max_peers)
 
-        self.run_daemon(self.peer_pool)
+        self.manager.run_daemon_child_service(self.peer_pool)
 
-        await self.cancel_token.wait()
+        await self.manager.wait_finished()
 
     async def _cleanup(self) -> None:
         self.logger.info("Closing server...")
@@ -145,8 +146,6 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         except asyncio.CancelledError:
             # This exception should just bubble.
             raise
-        except OperationCancelled:
-            pass
         except Exception:
             peername = writer.get_extra_info("peername")
             self.logger.exception("Unexpected error handling handshake with %s", peername)
@@ -161,7 +160,6 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             private_key=self.privkey,
             p2p_handshake_params=self.p2p_handshake_params,
             protocol_handshakers=handshakers,
-            token=self.cancel_token,
         )
 
         async with self.peer_pool.lock_node_for_handshake(connection.remote):
@@ -176,10 +174,10 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             peer = factory.create_peer(connection)
 
             if self.peer_pool.is_full:
-                await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
+                peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
                 return
             elif not self.peer_pool.is_valid_connection_candidate(peer.remote):
-                await peer.disconnect(DisconnectReason.USELESS_PEER)
+                peer.disconnect(DisconnectReason.USELESS_PEER)
                 return
 
             total_peers = len(self.peer_pool)
@@ -191,10 +189,10 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             ))
             if total_peers > 1 and inbound_peer_count / total_peers > DIAL_IN_OUT_RATIO:
                 # make sure to have at least 1/4 outbound connections
-                await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
+                peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
                 return
 
-            await self.peer_pool.start_peer(peer)
+            self.peer_pool.start_peer(peer)
 
 
 class FullServer(BaseServer[ETHPeerPool]):
@@ -212,7 +210,6 @@ class FullServer(BaseServer[ETHPeerPool]):
             privkey=self.privkey,
             max_peers=self.max_peers,
             context=context,
-            token=self.cancel_token,
             event_bus=self.event_bus
         )
 
@@ -232,6 +229,5 @@ class LightServer(BaseServer[LESPeerPool]):
             privkey=self.privkey,
             max_peers=self.max_peers,
             context=context,
-            token=self.cancel_token,
             event_bus=self.event_bus
         )

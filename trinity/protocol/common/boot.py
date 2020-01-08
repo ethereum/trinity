@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import cast, TYPE_CHECKING
 
 from eth_utils import ValidationError
@@ -20,14 +21,16 @@ if TYPE_CHECKING:
 
 
 class DAOCheckBootManager(BasePeerBootManager):
+    logger = logging.getLogger('trinity.protocol.common.DAOCheckBootManager')
+
     peer: 'BaseChainPeer'
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         try:
             await self.ensure_same_side_on_dao_fork()
         except DAOForkCheckFailure as err:
             self.logger.debug("DAO fork check with %s failed: %s", self.peer, err)
-            self.peer.disconnect_nowait(DisconnectReason.USELESS_PEER)
+            self.peer.disconnect(DisconnectReason.USELESS_PEER)
 
     async def ensure_same_side_on_dao_fork(self) -> None:
         """Ensure we're on the same side of the DAO fork as the given peer.

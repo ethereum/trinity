@@ -11,8 +11,6 @@ from typing import (
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
-
 from eth_typing import BlockNumber
 
 from eth_keys import keys
@@ -47,7 +45,6 @@ def ETHPeerPairFactory(*,
                        bob_remote: kademlia.Node = None,
                        bob_private_key: keys.PrivateKey = None,
                        bob_client_version: str = 'bob',
-                       cancel_token: CancelToken = None,
                        event_bus: EndpointAPI = None,
                        ) -> AsyncContextManager[Tuple[ETHPeer, ETHPeer]]:
     if alice_peer_context is None:
@@ -72,6 +69,5 @@ def ETHPeerPairFactory(*,
         bob_remote=bob_remote,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
-        cancel_token=cancel_token,
         event_bus=event_bus,
     ))

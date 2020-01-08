@@ -14,6 +14,8 @@ from typing import (
     Union,
 )
 
+from async_service import AsyncioManager
+
 from eth_typing import BlockNumber
 from eth_utils import DEBUG2_LEVEL_NUM
 
@@ -86,8 +88,10 @@ def _main() -> None:
         context=context,
     )
 
-    asyncio.ensure_future(peer_pool.run())
-    peer_pool.run_task(connect_to_peers_loop(peer_pool, nodes))
+    manager = AsyncioManager(peer_pool)
+    asyncio.ensure_future(manager.run())
+
+    asyncio.ensure_future(connect_to_peers_loop(peer_pool, nodes))
 
     async def request_stuff() -> None:
         # Request some stuff from ropsten's block 2440319
@@ -117,11 +121,12 @@ def _main() -> None:
 
     async def exit_on_sigint() -> None:
         await sigint_received.wait()
-        await peer_pool.cancel()
+        manager.cancel()
         loop.stop()
 
     asyncio.ensure_future(exit_on_sigint())
     asyncio.ensure_future(request_stuff())
+
     loop.set_debug(True)
     loop.run_forever()
     loop.close()

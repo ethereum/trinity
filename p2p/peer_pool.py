@@ -12,17 +12,15 @@ from typing import (
     Type,
 )
 
+from async_service import background_asyncio_service, Service
 from cached_property import cached_property
 
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
 from eth_keys import (
     datatypes,
 )
 from eth_utils import (
     clamp,
+    get_extended_debug_logger,
     humanize_seconds,
 )
 from eth_utils.toolz import (
@@ -34,7 +32,7 @@ from lahja import (
     EndpointAPI,
 )
 
-from p2p.abc import AsyncioServiceAPI, NodeAPI, SessionAPI
+from p2p.abc import NodeAPI, SessionAPI
 from p2p.constants import (
     DEFAULT_MAX_PEERS,
     DEFAULT_PEER_BOOT_TIMEOUT,
@@ -73,9 +71,6 @@ from p2p.disconnect import (
 from p2p.resource_lock import (
     ResourceLock,
 )
-from p2p.service import (
-    BaseService,
-)
 from p2p.token_bucket import TokenBucket
 from p2p.tracking.connection import (
     BaseConnectionTracker,
@@ -103,10 +98,12 @@ ALLOWED_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
 )) + COMMON_PEER_CONNECTION_EXCEPTIONS
 
 
-class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
+class BasePeerPool(Service, AsyncIterable[BasePeer]):
     """
     PeerPool maintains connections to up-to max_peers on a given network.
     """
+    logger = get_extended_debug_logger('p2p.peer_pool.PeerPool')
+
     _report_interval = 60
     _peer_boot_timeout = DEFAULT_PEER_BOOT_TIMEOUT
     _event_bus: EndpointAPI = None
@@ -115,11 +112,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                  privkey: datatypes.PrivateKey,
                  context: BasePeerContext,
                  max_peers: int = DEFAULT_MAX_PEERS,
-                 token: CancelToken = None,
                  event_bus: EndpointAPI = None,
                  ) -> None:
-        super().__init__(token)
-
         self.privkey = privkey
         self.max_peers = max_peers
         self.context = context
@@ -171,7 +165,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             connected_remotes = {
                 peer.remote for peer in self.connected_nodes.values()
             }
-            candidates = await self.wait(
+            candidates = await asyncio.wait_for(
                 backend.get_peer_candidates(
                     num_requested=available_slots,
                     connected_remotes=connected_remotes,
@@ -196,20 +190,18 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             capacity=MAX_SEQUENTIAL_PEER_CONNECT,
         )
 
-        while self.is_operational:
+        while self.manager.is_running:
             if self.is_full:
-                await self.sleep(PEER_CONNECT_INTERVAL)
+                await asyncio.sleep(PEER_CONNECT_INTERVAL)
                 continue
 
-            await self.wait(rate_limiter.take())
+            await rate_limiter.take()
 
             try:
                 await asyncio.gather(*(
                     self._add_peers_from_backend(backend)
                     for backend in self.peer_backends
                 ))
-            except OperationCancelled:
-                break
             except asyncio.CancelledError:
                 # no need to log this exception, this is expected
                 raise
@@ -232,7 +224,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             privkey=self.privkey,
             context=self.context,
             event_bus=self._event_bus,
-            token=self.cancel_token,
         )
 
     @property
@@ -260,33 +251,23 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         for peer in self.connected_nodes.values():
             peer.remove_subscriber(subscriber)
 
-    async def start_peer(self, peer: BasePeer) -> None:
-        self.run_child_service(peer.connection)
-        await self.wait(peer.connection.events.started.wait(), timeout=1)
+    def start_peer(self, peer: BasePeer) -> None:
+        self.manager.run_task(self._run_peer, peer)
 
-        self.run_child_service(peer)
-        await self.wait(peer.events.started.wait(), timeout=1)
-        await self.wait(peer.ready.wait(), timeout=1)
-        if peer.is_operational:
-            self._add_peer(peer, ())
-        else:
-            self.logger.debug("%s was cancelled immediately, not adding to pool", peer)
+    async def _run_peer(self, peer: BasePeer) -> None:
+        async with background_asyncio_service(peer.connection):
+            async with background_asyncio_service(peer) as manager:
+                await asyncio.wait_for(peer.ready.wait(), timeout=1)
 
-        try:
-            await self.wait(
-                peer.boot_manager.events.finished.wait(),
-                timeout=self._peer_boot_timeout
-            )
-        except asyncio.TimeoutError as err:
-            self.logger.debug('Timout waiting for peer to boot: %s', err)
-            await peer.disconnect(DisconnectReason.TIMEOUT)
-            return
-        except HandshakeFailure as err:
-            self.connection_tracker.record_failure(peer.remote, err)
-            raise
-        else:
-            if not peer.is_operational:
-                self.logger.debug('%s disconnected during boot-up, dropped from pool', peer)
+                if peer.is_alive:
+                    self._add_peer(peer, ())
+                    try:
+                        await manager.wait_finished()
+                    finally:
+                        self._remove_peer(peer)
+                else:
+                    self.logger.debug("%s was cancelled immediately, not adding to pool", peer)
+                    return
 
     def _add_peer(self,
                   peer: BasePeer,
@@ -298,34 +279,52 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         """
         self.logger.info('Adding %s to pool', peer)
         self.connected_nodes[peer.session] = peer
-        peer.add_finished_callback(self._peer_finished)
+
         for subscriber in self._subscribers:
             subscriber.register_peer(peer)
             peer.add_subscriber(subscriber)
             for msg in msgs:
                 subscriber.add_msg(msg)
 
-    async def _run(self) -> None:
-        # FIXME: PeerPool should probably no longer be a BaseService, but for now we're keeping it
-        # so in order to ensure we cancel all peers when we terminate.
+    def _remove_peer(self, peer: BasePeer) -> None:
+        """
+        Remove the given peer from our list of connected nodes.
+        This is passed as a callback to be called when a peer finishes.
+        """
+        if peer.session in self.connected_nodes:
+            self.logger.debug(
+                "Removing %s from pool: local_reason=%s remote_reason=%s",
+                peer,
+                peer.p2p_api.local_disconnect_reason,
+                peer.p2p_api.remote_disconnect_reason,
+            )
+            self.connected_nodes.pop(peer.session)
+        else:
+            self.logger.warning(
+                "%s finished but was not found in connected_nodes (%s)",
+                peer,
+                tuple(self.connected_nodes.values()),
+            )
+
+        for subscriber in self._subscribers:
+            subscriber.deregister_peer(peer)
+
+    async def run(self) -> None:
         if self.has_event_bus:
-            self.run_daemon_task(self.maybe_connect_more_peers())
+            self.manager.run_daemon_task(self.maybe_connect_more_peers)
 
-        self.run_daemon_task(self._periodically_report_stats())
-        await self.cancel_token.wait()
+        self.manager.run_daemon_task(self._periodically_report_stats)
+        try:
+            await self.manager.wait_finished()
+        finally:
+            self._stop_all_peers()
 
-    async def stop_all_peers(self) -> None:
+    def _stop_all_peers(self) -> None:
         self.logger.info("Stopping all peers ...")
         peers = self.connected_nodes.values()
-        disconnections = (
-            peer.disconnect(DisconnectReason.CLIENT_QUITTING)
-            for peer in peers
-            if peer.is_running
-        )
-        await asyncio.gather(*disconnections)
-
-    async def _cleanup(self) -> None:
-        await self.stop_all_peers()
+        for peer in peers:
+            if peer.is_alive:
+                peer.disconnect(DisconnectReason.CLIENT_QUITTING)
 
     async def connect(self, remote: NodeAPI) -> BasePeer:
         """
@@ -340,7 +339,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             raise IneligiblePeer(f"Already connected to {remote}")
 
         try:
-            should_connect = await self.wait(
+            should_connect = await asyncio.wait_for(
                 self.connection_tracker.should_connect_to(remote),
                 timeout=1,
             )
@@ -353,12 +352,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         try:
             self.logger.debug2("Connecting to %s...", remote)
-            return await self.wait(
+            return await asyncio.wait_for(
                 self.get_peer_factory().handshake(remote),
                 timeout=HANDSHAKE_TIMEOUT,
             )
-        except OperationCancelled:
-            # Pass it on to instruct our main loop to stop.
+        except asyncio.CancelledError:
+            # Reraise as this is an expected exception
             raise
         except BadAckMessage:
             # This is kept separate from the
@@ -389,7 +388,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         nodes_iter = iter(nodes)
 
         while True:
-            if self.is_full or not self.is_operational:
+            if self.is_full or not self.manager.is_running:
                 return
 
             # only attempt to connect to up to the maximum number of available
@@ -409,8 +408,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             )
             # Try to connect to the peers concurrently.
             await asyncio.gather(
-                *(self.connect_to_node(node) for node in batch),
-                loop=self.get_event_loop(),
+                *(self.connect_to_node(node) for node in batch)
             )
 
     def lock_node_for_handshake(self, node: NodeAPI) -> asyncio.Lock:
@@ -428,7 +426,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         shutting down, or one of the expected peer level exceptions is raised
         while connecting.
         """
-        if self.is_full or not self.is_operational:
+        if self.is_full or not self.manager.is_running:
             self.logger.warning("Asked to connect to node when either full or not operational")
             return
 
@@ -457,52 +455,28 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                     "Successfully connected to %s but peer pool is full.  Disconnecting.",
                     peer,
                 )
-                await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
+                peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
                 return
-            elif not self.is_operational:
+            elif not self.manager.is_running:
                 self.logger.debug(
                     "Successfully connected to %s but peer pool is closing.  Disconnecting.",
                     peer,
                 )
-                await peer.disconnect(DisconnectReason.CLIENT_QUITTING)
+                peer.disconnect(DisconnectReason.CLIENT_QUITTING)
                 return
             else:
-                await self.start_peer(peer)
-
-    def _peer_finished(self, peer: AsyncioServiceAPI) -> None:
-        """
-        Remove the given peer from our list of connected nodes.
-        This is passed as a callback to be called when a peer finishes.
-        """
-        peer = cast(BasePeer, peer)
-        if peer.session in self.connected_nodes:
-            self.logger.debug(
-                "Removing %s from pool: local_reason=%s remote_reason=%s",
-                peer,
-                peer.p2p_api.local_disconnect_reason,
-                peer.p2p_api.remote_disconnect_reason,
-            )
-            self.connected_nodes.pop(peer.session)
-        else:
-            self.logger.warning(
-                "%s finished but was not found in connected_nodes (%s)",
-                peer,
-                tuple(self.connected_nodes.values()),
-            )
-
-        for subscriber in self._subscribers:
-            subscriber.deregister_peer(peer)
+                self.start_peer(peer)
 
     async def __aiter__(self) -> AsyncIterator[BasePeer]:
         for peer in tuple(self.connected_nodes.values()):
             # Yield control to ensure we process any disconnection requests from peers. Otherwise
             # we could return peers that should have been disconnected already.
             await asyncio.sleep(0)
-            if peer.is_operational and not peer.is_closing:
+            if peer.is_alive and not peer.is_closing:
                 yield peer
 
     async def _periodically_report_stats(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             inbound_peers = len(
                 [peer for peer in self.connected_nodes.values() if peer.inbound])
             self.logger.info("Connected peers: %d inbound, %d outbound",
@@ -519,7 +493,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             # make a copy, because we might edit the original during iteration
             peers = tuple(self.connected_nodes.values())
             for peer in peers:
-                if not peer.is_running:
+                if not peer.is_alive:
                     self.logger.debug(
                         "%s is no longer alive but had not been removed from pool", peer)
                     continue
@@ -538,4 +512,4 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                 for line in peer.get_extra_stats():
                     self.logger.debug("    %s", line)
             self.logger.debug("== End peer details == ")
-            await self.sleep(self._report_interval)
+            await asyncio.sleep(self._report_interval)

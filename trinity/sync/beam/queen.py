@@ -90,7 +90,7 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
         """
         while self.is_operational:
             peer = await self.wait(self._waiting_peers.get_fastest())
-            if not peer.is_operational:
+            if not peer.is_alive:
                 # drop any peers that aren't alive anymore
                 self.logger.warning("Dropping %s from beam queue as no longer operational", peer)
                 if peer == self._queen_peer:

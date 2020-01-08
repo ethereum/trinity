@@ -6,7 +6,6 @@ from async_exit_stack import AsyncExitStack
 from async_service import background_asyncio_service
 
 from p2p.exceptions import PeerConnectionLost
-from p2p.service import run_service
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
@@ -69,10 +68,10 @@ async def test_proxy_peer_requests(request,
         )))
 
         client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(client_proxy_peer_pool))
+        await stack.enter_async_context(background_asyncio_service(client_proxy_peer_pool))
 
         proxy_peer_pool = ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(proxy_peer_pool))
+        await stack.enter_async_context(background_asyncio_service(proxy_peer_pool))
 
         proxy_peer = await client_proxy_peer_pool.ensure_proxy_peer(client_peer.session)
 
@@ -119,10 +118,10 @@ async def test_proxy_peer_requests_with_timeouts(request,
         ))
 
         client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(client_proxy_peer_pool))
+        await stack.enter_async_context(background_asyncio_service(client_proxy_peer_pool))
 
         server_proxy_peer_pool = ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(server_proxy_peer_pool))
+        await stack.enter_async_context(background_asyncio_service(server_proxy_peer_pool))
 
         proxy_peer = await client_proxy_peer_pool.ensure_proxy_peer(client_peer.session)
 
@@ -168,10 +167,10 @@ async def test_requests_when_peer_in_client_vanishs(request,
             AsyncChainDB(chaindb_20.db)
         )))
         client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(client_proxy_peer_pool))
+        await stack.enter_async_context(background_asyncio_service(client_proxy_peer_pool))
 
         server_proxy_peer_pool = ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(server_proxy_peer_pool))
+        await stack.enter_async_context(background_asyncio_service(server_proxy_peer_pool))
 
         proxy_peer = await client_proxy_peer_pool.ensure_proxy_peer(client_peer.session)
 

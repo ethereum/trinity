@@ -13,6 +13,7 @@ from typing import (
     Union,
 )
 
+from async_service import AsyncioManager
 from eth_typing import BlockNumber
 
 from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
@@ -105,8 +106,10 @@ def _test() -> None:
     else:
         nodes = DEFAULT_PREFERRED_NODES[chain_id]
 
-    asyncio.ensure_future(peer_pool.run())
-    peer_pool.run_task(connect_to_peers_loop(peer_pool, nodes))
+    manager = AsyncioManager(peer_pool)
+    asyncio.ensure_future(manager.run())
+
+    asyncio.ensure_future(connect_to_peers_loop(peer_pool, nodes))
     chain = chain_class(base_db)
     syncer: BaseService = None
     if args.light:
@@ -121,7 +124,7 @@ def _test() -> None:
 
     async def exit_on_sigint() -> None:
         await sigint_received.wait()
-        await peer_pool.cancel()
+        manager.cancel()
         await syncer.cancel()
         loop.stop()
 

@@ -1,9 +1,8 @@
 import asyncio
 import pytest
 
+from async_service import background_asyncio_service
 from eth_keys import keys
-
-from cancel_token import CancelToken
 
 from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER
 from eth.db.atomic import AtomicDB
@@ -12,7 +11,6 @@ from eth.db.chain import ChainDB
 from p2p.auth import HandshakeInitiator, _handshake
 from p2p.connection import Connection
 from p2p.handshake import negotiate_protocol_handshakes
-from p2p.service import run_service
 from p2p.tools.factories import (
     get_open_port,
     DevP2PHandshakeParamsFactory,
@@ -52,7 +50,6 @@ class ParagonServer(BaseServer):
         return ParagonPeerPool(
             privkey=self.privkey,
             context=ParagonContext(),
-            token=self.cancel_token,
             event_bus=self.event_bus,
         )
 
@@ -87,7 +84,7 @@ def receiver_remote():
 @pytest.fixture
 async def server(event_bus, receiver_remote):
     server = get_server(RECEIVER_PRIVKEY, receiver_remote.address, event_bus)
-    async with run_service(server):
+    async with background_asyncio_service(server):
         # wait for the tcp server to start listening
         for _ in range(50):
             if server._tcp_listener is not None and server._tcp_listener.is_serving():
@@ -98,6 +95,13 @@ async def server(event_bus, receiver_remote):
         yield server
 
 
+async def wait_num_connections(peer_pool, count):
+    while True:
+        await asyncio.sleep(0)
+        if len(peer_pool.connected_nodes) >= count:
+            break
+
+
 @pytest.mark.asyncio
 async def test_server_incoming_connection(monkeypatch,
                                           server,
@@ -105,8 +109,7 @@ async def test_server_incoming_connection(monkeypatch,
                                           receiver_remote,
                                           ):
     use_eip8 = False
-    token = CancelToken("initiator")
-    initiator = HandshakeInitiator(receiver_remote, INITIATOR_PRIVKEY, use_eip8, token)
+    initiator = HandshakeInitiator(receiver_remote, INITIATOR_PRIVKEY, use_eip8)
     initiator_remote = NodeFactory(
         pubkey=INITIATOR_PUBKEY,
         address__ip='127.0.0.1',
@@ -124,7 +127,7 @@ async def test_server_incoming_connection(monkeypatch,
         raise AssertionError("Unable to connect within 10 loops")
     # Send auth init message to the server, then read and decode auth ack
     aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
-        initiator, reader, writer, token)
+        initiator, reader, writer)
 
     transport = Transport(
         remote=receiver_remote,
@@ -140,7 +143,6 @@ async def test_server_incoming_connection(monkeypatch,
     factory = ParagonPeerFactory(
         initiator.privkey,
         context=ParagonContext(),
-        token=token,
     )
     handshakers = await factory.get_handshakers()
     devp2p_handshake_params = DevP2PHandshakeParamsFactory(
@@ -151,7 +153,6 @@ async def test_server_incoming_connection(monkeypatch,
         transport=transport,
         p2p_handshake_params=devp2p_handshake_params,
         protocol_handshakers=handshakers,
-        token=token,
     )
     connection = Connection(
         multiplexer=multiplexer,
@@ -161,11 +162,7 @@ async def test_server_incoming_connection(monkeypatch,
     )
     initiator_peer = factory.create_peer(connection=connection)
 
-    # wait for peer to be processed
-    for _ in range(100):
-        if len(server.peer_pool) > 0:
-            break
-        await asyncio.sleep(0)
+    await asyncio.wait_for(wait_num_connections(server.peer_pool, 1), timeout=2)
 
     assert len(server.peer_pool.connected_nodes) == 1
     receiver_peer = list(server.peer_pool.connected_nodes.values())[0]
@@ -180,7 +177,7 @@ async def test_server_incoming_connection(monkeypatch,
 async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remote):
     started_peers = []
 
-    async def mock_start_peer(peer):
+    def mock_start_peer(peer):
         nonlocal started_peers
         started_peers.append(peer)
 
@@ -191,18 +188,14 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remot
         context=ParagonContext(),
     )
     nodes = [receiver_remote]
-    asyncio.ensure_future(initiator_peer_pool.run(), loop=event_loop)
-    await initiator_peer_pool.events.started.wait()
-    await initiator_peer_pool.connect_to_nodes(nodes)
-    # Give the receiver_server a chance to ack the handshake.
-    await asyncio.sleep(0.2)
+    async with background_asyncio_service(initiator_peer_pool):
+        await initiator_peer_pool.connect_to_nodes(nodes)
 
-    assert len(started_peers) == 1
-    assert len(initiator_peer_pool.connected_nodes) == 1
+        # Give the receiver_server a chance to ack the handshake.
+        await asyncio.wait_for(wait_num_connections(initiator_peer_pool, 1), timeout=2)
 
-    # Stop our peer to make sure its pending asyncio tasks are cancelled.
-    await list(initiator_peer_pool.connected_nodes.values())[0].cancel()
-    await initiator_peer_pool.cancel()
+        assert len(started_peers) == 1
+        assert len(initiator_peer_pool.connected_nodes) == 1
 
 
 @pytest.mark.asyncio
@@ -213,24 +206,20 @@ async def test_peer_pool_answers_connect_commands(event_loop, event_bus, server,
         context=ParagonContext(),
         event_bus=event_bus,
     )
-    asyncio.ensure_future(initiator_peer_pool.run(), loop=event_loop)
-    await initiator_peer_pool.events.started.wait()
-    async with run_peer_pool_event_server(
-        event_bus,
-        initiator_peer_pool,
-    ):
+    async with background_asyncio_service(initiator_peer_pool):
+        async with run_peer_pool_event_server(
+            event_bus,
+            initiator_peer_pool,
+        ):
 
-        assert len(server.peer_pool.connected_nodes) == 0
+            assert len(server.peer_pool.connected_nodes) == 0
 
-        await event_bus.wait_until_any_endpoint_subscribed_to(ConnectToNodeCommand)
-        await event_bus.broadcast(
-            ConnectToNodeCommand(receiver_remote),
-            TO_NETWORKING_BROADCAST_CONFIG
-        )
+            await event_bus.wait_until_any_endpoint_subscribed_to(ConnectToNodeCommand)
+            await event_bus.broadcast(
+                ConnectToNodeCommand(receiver_remote),
+                TO_NETWORKING_BROADCAST_CONFIG
+            )
 
-        # This test was maybe 30% flaky at 0.1 sleep
-        await asyncio.sleep(0.2)
+            await asyncio.wait_for(wait_num_connections(server.peer_pool, 1), timeout=2)
 
-        assert len(server.peer_pool.connected_nodes) == 1
-
-        await initiator_peer_pool.cancel()
+            assert len(server.peer_pool.connected_nodes) == 1

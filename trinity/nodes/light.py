@@ -50,16 +50,15 @@ class LightNode(Node[LESPeer]):
         self._peer_chain = LightPeerChain(
             self.headerdb,
             cast(LESPeerPool, self.get_peer_pool()),
-            token=self.cancel_token,
         )
 
     @property
     def chain_class(self) -> Type[LightDispatchChain]:
         return self.chain_config.light_chain_class
 
-    async def _run(self) -> None:
-        self.run_daemon(self._peer_chain)
-        await super()._run()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self._peer_chain.run)
+        await super().run()
 
     def get_chain(self) -> LightDispatchChain:
         if self._chain is None:
@@ -77,7 +76,6 @@ class LightNode(Node[LESPeer]):
             self._event_server = LESPeerPoolEventServer(
                 self.event_bus,
                 self.get_peer_pool(),
-                self.cancel_token,
                 self._peer_chain
             )
         return self._event_server
@@ -93,7 +91,6 @@ class LightNode(Node[LESPeer]):
                 base_db=self._base_db,
                 network_id=self._network_id,
                 max_peers=self._max_peers,
-                token=self.cancel_token,
                 event_bus=self.event_bus,
             )
         return self._p2p_server

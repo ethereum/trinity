@@ -11,8 +11,6 @@ from typing import (
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
-
 from eth_typing import BlockNumber
 
 from eth_keys import keys
@@ -71,7 +69,6 @@ def LESV1PeerPairFactory(*,
                          bob_remote: kademlia.Node = None,
                          bob_private_key: keys.PrivateKey = None,
                          bob_client_version: str = 'bob',
-                         cancel_token: CancelToken = None,
                          event_bus: EndpointAPI = None,
                          ) -> AsyncContextManager[Tuple[LESV1Peer, LESV1Peer]]:
     if alice_peer_context is None:
@@ -95,7 +92,6 @@ def LESV1PeerPairFactory(*,
         bob_remote=bob_remote,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
-        cancel_token=cancel_token,
         event_bus=event_bus,
     ))
 
@@ -109,7 +105,6 @@ def LESV2PeerPairFactory(*,
                          bob_remote: kademlia.Node = None,
                          bob_private_key: keys.PrivateKey = None,
                          bob_client_version: str = 'bob',
-                         cancel_token: CancelToken = None,
                          event_bus: EndpointAPI = None,
                          ) -> AsyncContextManager[Tuple[LESPeer, LESPeer]]:
     if alice_peer_context is None:
@@ -133,6 +128,5 @@ def LESV2PeerPairFactory(*,
         bob_remote=bob_remote,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
-        cancel_token=cancel_token,
         event_bus=event_bus,
     ))

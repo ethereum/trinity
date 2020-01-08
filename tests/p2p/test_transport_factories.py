@@ -6,7 +6,6 @@ from rlp import sedes
 from p2p.tools.factories import (
     TransportPairFactory,
     MemoryTransportPairFactory,
-    CancelTokenFactory,
 )
 from p2p.commands import BaseCommand, RLPCodec
 
@@ -29,14 +28,13 @@ async def transport_pair(request):
 @pytest.mark.parametrize('snappy_support', (True, False))
 @pytest.mark.asyncio
 async def test_transport_pair_factories(transport_pair, snappy_support):
-    token = CancelTokenFactory()
     alice_transport, bob_transport = transport_pair
 
     done = asyncio.Event()
 
     async def manage_bob(expected):
         for value in expected:
-            msg = await bob_transport.recv(token)
+            msg = await bob_transport.recv()
             assert msg == value
         done.set()
 

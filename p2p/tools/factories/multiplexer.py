@@ -1,7 +1,5 @@
 from typing import Callable, Tuple, Type
 
-from cancel_token import CancelToken
-
 from eth_keys import keys
 
 from p2p.abc import MultiplexerAPI, NodeAPI, ProtocolAPI, TransportAPI
@@ -10,7 +8,6 @@ from p2p.multiplexer import Multiplexer
 from p2p.p2p_proto import BaseP2PProtocol, P2PProtocolV4, P2PProtocolV5
 from p2p.protocol import get_cmd_offsets
 
-from .cancel_token import CancelTokenFactory
 from .transport import MemoryTransportPairFactory
 
 
@@ -29,10 +26,7 @@ def MultiplexerPairFactory(*,
                            bob_remote: NodeAPI = None,
                            bob_private_key: keys.PrivateKey = None,
                            bob_p2p_version: int = DEVP2P_V5,
-                           cancel_token: CancelToken = None,
                            ) -> Tuple[MultiplexerAPI, MultiplexerAPI]:
-    if cancel_token is None:
-        cancel_token = CancelTokenFactory(name='multiplexer-factory')
     alice_transport, bob_transport = transport_factory(
         alice_remote=alice_remote,
         alice_private_key=alice_private_key,
@@ -66,7 +60,6 @@ def MultiplexerPairFactory(*,
         transport=alice_transport,
         base_protocol=alice_p2p_protocol,
         protocols=alice_protocols,
-        token=cancel_token,
     )
 
     bob_p2p_protocol = p2p_protocol_class(bob_transport, 0, snappy_support)
@@ -74,6 +67,5 @@ def MultiplexerPairFactory(*,
         transport=bob_transport,
         base_protocol=bob_p2p_protocol,
         protocols=bob_protocols,
-        token=cancel_token,
     )
     return alice_multiplexer, bob_multiplexer

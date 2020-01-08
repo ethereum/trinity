@@ -9,7 +9,6 @@ from eth._utils.address import (
 )
 
 from p2p.tools.factories import SessionFactory
-from p2p.service import run_service
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.components.builtin.tx_pool.pool import (
@@ -76,7 +75,7 @@ async def test_tx_propagation(event_bus,
         ))
 
         peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(peer_pool))
+        await stack.enter_async_context(background_asyncio_service(peer_pool))
 
         tx_pool = TxPool(event_bus, peer_pool, tx_validator)
         await stack.enter_async_context(background_asyncio_service(tx_pool))
@@ -160,7 +159,7 @@ async def test_does_not_propagate_invalid_tx(event_bus,
         ))
 
         peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(peer_pool))
+        await stack.enter_async_context(background_asyncio_service(peer_pool))
 
         tx_pool = TxPool(event_bus, peer_pool, tx_validator)
         await stack.enter_async_context(background_asyncio_service(tx_pool))

@@ -5,14 +5,12 @@ from typing import (
     TypeVar,
 )
 
+from async_service import Service, ServiceAPI
 from lahja import EndpointAPI
 
 from eth.abc import AtomicDatabaseAPI
 
 from p2p.peer_pool import BasePeerPool
-from p2p.service import (
-    BaseService,
-)
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.chains.full import FullChain
@@ -40,7 +38,7 @@ from .events import (
 TPeer = TypeVar('TPeer', bound=BasePeer)
 
 
-class Node(BaseService, Generic[TPeer]):
+class Node(Service, Generic[TPeer]):
     """
     Create usable nodes by adding subclasses that define the following
     unset attributes.
@@ -49,7 +47,6 @@ class Node(BaseService, Generic[TPeer]):
     _event_server: PeerPoolEventServer[TPeer] = None
 
     def __init__(self, event_bus: EndpointAPI, trinity_config: TrinityConfig) -> None:
-        super().__init__()
         self.trinity_config = trinity_config
         self._base_db = DBClient.connect(trinity_config.database_ipc_path)
         self._headerdb = AsyncHeaderDB(self._base_db)
@@ -60,7 +57,7 @@ class Node(BaseService, Generic[TPeer]):
         self.event_bus = event_bus
 
     async def handle_network_id_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(NetworkIdRequest)):
+        async for req in self.event_bus.stream(NetworkIdRequest):
             # We are listening for all `NetworkIdRequest` events but we ensure to only send a
             # `NetworkIdResponse` to the callsite that made the request.  We do that by
             # retrieving a `BroadcastConfig` from the request via the
@@ -108,7 +105,7 @@ class Node(BaseService, Generic[TPeer]):
         ...
 
     @abstractmethod
-    def get_p2p_server(self) -> BaseService:
+    def get_p2p_server(self) -> ServiceAPI:
         """
         This is the main service that will be run, when calling :meth:`run`.
         It's typically responsible for syncing the chain, with peer connections.
@@ -125,10 +122,10 @@ class Node(BaseService, Generic[TPeer]):
 
     async def _run(self) -> None:
         with self._base_db:
-            self.run_daemon_task(self.handle_network_id_requests())
-            self.run_daemon(self.get_p2p_server())
-            self.run_daemon(self.get_event_server())
-            await self.cancellation()
+            self.manager.run_daemon_task(self.handle_network_id_requests)
+            self.manager.run_daemon_child_service(self.get_p2p_server())
+            self.manager.run_daemon_child_service(self.get_event_server())
+            await self.manager.wait_finished()
 
     async def _cleanup(self) -> None:
         await self.event_bus.broadcast(ShutdownRequest("Node finished unexpectedly"))

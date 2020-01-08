@@ -3,7 +3,6 @@ import struct
 from typing import Tuple
 
 from cached_property import cached_property
-from cancel_token import CancelToken
 from eth_keys import datatypes
 from eth_utils import (
     get_extended_debug_logger,
@@ -63,29 +62,27 @@ class MemoryTransport(TransportAPI):
     def public_key(self) -> datatypes.PublicKey:
         return self._private_key.public_key
 
-    async def read(self, n: int, token: CancelToken) -> bytes:
+    async def read(self, n: int) -> bytes:
         self.logger.debug2("Waiting for %s bytes from %s", n, self.remote)
         try:
-            return await token.cancellable_wait(
-                self._reader.readexactly(n),
-            )
+            return await self._reader.readexactly(n)
         except CONNECTION_LOST_ERRORS as err:
             raise PeerConnectionLost from err
 
     def write(self, data: bytes) -> None:
         self._writer.write(data)
 
-    async def recv(self, token: CancelToken) -> MessageAPI:
+    async def recv(self) -> MessageAPI:
         self.read_state = TransportState.HEADER
         try:
-            encoded_sizes = await self.read(8, token)
+            encoded_sizes = await self.read(8)
         except asyncio.CancelledError:
             self.read_state = TransportState.IDLE
             raise
         header_size, body_size = struct.unpack('>II', encoded_sizes)
         self.read_state = TransportState.BODY
-        header = await self.read(header_size, token)
-        body = await self.read(body_size, token)
+        header = await self.read(header_size)
+        body = await self.read(body_size)
         self.read_state = TransportState.IDLE
         return Message(header, body)
 

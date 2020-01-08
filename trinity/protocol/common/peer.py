@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import logging
 import operator
 import random
 from typing import (
@@ -9,11 +10,10 @@ from typing import (
     Union,
 )
 
+from async_service import Service
 from cached_property import cached_property
 
 from lahja import EndpointAPI
-
-from cancel_token import CancelToken
 
 from eth_utils.toolz import (
     excepts,
@@ -36,7 +36,6 @@ from p2p.peer_backend import (
 from p2p.peer_pool import (
     BasePeerPool,
 )
-from p2p.service import BaseService
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
@@ -111,26 +110,25 @@ class BaseChainPeer(BasePeer):
             return NoopConnectionTracker()
 
 
-class BaseProxyPeer(BaseService):
+class BaseProxyPeer(Service):
     """
     Base class for peers that can be used from any process where the actual peer is not available.
     """
+    logger = logging.getLogger('trinity.protocol.common.ProxyPeer')
 
     def __init__(self,
                  session: SessionAPI,
-                 event_bus: EndpointAPI,
-                 token: CancelToken = None):
+                 event_bus: EndpointAPI):
 
         self.event_bus = event_bus
         self.session = session
-        super().__init__(token)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} {self.session}"
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.debug("Starting Proxy Peer %s", self)
-        await self.cancellation()
+        await self.manager.wait_finished()
 
     async def disconnect(self, reason: DisconnectReason) -> None:
         self.logger.debug("Forwarding `disconnect()` call from proxy to actual peer: %s", self)
@@ -138,7 +136,10 @@ class BaseProxyPeer(BaseService):
             DisconnectPeerEvent(self.session, reason),
             TO_NETWORKING_BROADCAST_CONFIG,
         )
-        await self.cancel()
+        await self.manager.stop()
+
+    def cancel(self) -> None:
+        self.manager.cancel()
 
 
 class BaseChainPeerFactory(BasePeerFactory):

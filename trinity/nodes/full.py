@@ -37,7 +37,7 @@ class FullNode(Node[ETHPeer]):
         """
         if self._event_server is None:
             self._event_server = ETHPeerPoolEventServer(
-                self.event_bus, self.get_peer_pool(), self.cancel_token)
+                self.event_bus, self.get_peer_pool())
         return self._event_server
 
     def get_p2p_server(self) -> FullServer:
@@ -51,7 +51,6 @@ class FullNode(Node[ETHPeer]):
                 base_db=self._base_db,
                 network_id=self._network_id,
                 max_peers=self._max_peers,
-                token=self.cancel_token,
                 event_bus=self.event_bus,
             )
         return self._p2p_server

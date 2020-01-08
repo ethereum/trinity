@@ -3,6 +3,7 @@ import asyncio
 from typing import Any, AsyncIterator, Dict, Iterable, Collection, Tuple, Type, Sequence
 
 from async_generator import asynccontextmanager
+from async_service import background_asyncio_service
 
 from cancel_token import CancelToken
 
@@ -15,7 +16,6 @@ from eth_utils import to_tuple
 
 from eth.constants import ZERO_HASH32
 
-from p2p.service import run_service
 from p2p.tools.factories import get_open_port, CancelTokenFactory
 
 from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_ROOT
@@ -123,7 +123,7 @@ async def ConnectionPairFactory(
         cancel_token=cancel_token, event_bus=alice_event_bus, **alice_kwargs
     )
     bob = NodeFactory(cancel_token=cancel_token, **bob_kwargs)
-    async with run_service(alice), run_service(bob):
+    async with background_asyncio_service(alice), background_asyncio_service(bob):
         await asyncio.sleep(0.01)
         await alice.host.connect(
             PeerInfo(peer_id=bob.peer_id, addrs=[bob.listen_maddr])
