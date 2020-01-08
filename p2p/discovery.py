@@ -158,11 +158,11 @@ class DiscoveryService(Service):
         self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
         self.pong_channels = ExpectedResponseChannels[Tuple[Hash32, int]]()
         self.neighbours_channels = ExpectedResponseChannels[List[NodeAPI]]()
+        self.ping_channels = ExpectedResponseChannels[None]()
         # FIXME: Use a persistent EnrDb implementation.
         self._enr_db = MemoryEnrDb(default_identity_scheme_registry)
         # FIXME: Use a concurrency-safe EnrDb implementation.
         self._enr_db_lock = trio.Lock()
-        self.ping_callbacks = CallbackManager()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
         if socket.family != trio.socket.AF_INET:
             raise ValueError("Invalid socket family")
@@ -248,12 +248,14 @@ class DiscoveryService(Service):
             self.routing.remove_node(node)
             return False
 
+        ping_send_chan, ping_recv_chan = trio.open_memory_channel[None](1)
         try:
             # Give the remote node a chance to ping us before we move on and
-            # start sending find_node requests. It is ok for wait_ping() to
-            # timeout and return false here as that just means the remote
-            # remembers us.
-            await self.wait_ping(node)
+            # start sending find_node requests. It is ok for us to timeout
+            # here as that just means the remote remembers us -- that's why we use
+            # move_on_after() instead of fail_after().
+            with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT):
+                await self.ping_channels.receive_one(node, ping_send_chan, ping_recv_chan)
         except AlreadyWaitingDiscoveryResponse:
             self.logger.debug("bonding failed, already waiting for ping")
             return False
@@ -314,27 +316,6 @@ class DiscoveryService(Service):
             await self._enr_db.insert_or_update(enr)
             return await self._enr_db.get(cast(NodeID, remote.id_bytes))
 
-    async def wait_ping(self, remote: NodeAPI) -> bool:
-        """Wait for a ping from the given remote.
-
-        This coroutine adds a callback to ping_callbacks and yields control until that callback is
-        called or a timeout (k_request_timeout) occurs. At that point it returns whether or not
-        a ping was received from the given node.
-        """
-        event = trio.Event()
-
-        with self.ping_callbacks.acquire(remote, event.set):
-            with trio.move_on_after(constants.KADEMLIA_REQUEST_TIMEOUT) as cancel_scope:
-                await event.wait()
-            if cancel_scope.cancelled_caught:
-                self.logger.debug2('timed out waiting for ping from %s', remote)
-                got_ping = False
-            else:
-                self.logger.debug2('got expected ping from %s', remote)
-                got_ping = True
-
-        return got_ping
-
     async def wait_neighbours(self, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
         """Wait for a neihgbours packet from the given node.
 
@@ -382,7 +363,7 @@ class DiscoveryService(Service):
             all_candidates = tuple(c for c in candidates if c not in nodes_seen)
             candidates = tuple(
                 c for c in all_candidates
-                if (not self.ping_callbacks.locked(c) and
+                if (not self.ping_channels.already_waiting_for(c) and
                     not self.pong_channels.already_waiting_for(c))
             )
             self.logger.debug2("got %s new candidates", len(candidates))
@@ -474,7 +455,7 @@ class DiscoveryService(Service):
             (self.bond, n)
             for n
             in self.bootstrap_nodes
-            if (not self.ping_callbacks.locked(n) and
+            if (not self.ping_channels.already_waiting_for(n) and
                 not self.pong_channels.already_waiting_for(n))
         )
         bonded = await trio_utils.gather(*bonding_queries)
@@ -573,7 +554,7 @@ class DiscoveryService(Service):
         self.logger.debug2('<<< ping(v4) from %s, enr_seq=%s', node, enr_seq)
         if self._is_msg_expired(expiration):
             return
-        self.process_ping(node, message_hash)
+        await self.process_ping(node, message_hash)
         await self.send_pong_v4(node, message_hash)
 
     async def recv_find_node_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
@@ -722,27 +703,30 @@ class DiscoveryService(Service):
             # This means the receiver has already closed, probably because it timed out.
             pass
 
-    def process_ping(self, remote: NodeAPI, hash_: Hash32) -> None:
+    async def process_ping(self, remote: NodeAPI, hash_: Hash32) -> None:
         """Process a received ping packet.
 
         A ping packet may come any time, unrequested, or may be prompted by us bond()ing with a
         new node. In the former case we'll just update the sender's entry in our routing table and
-        reply with a pong, whereas in the latter we'll also fire a callback from ping_callbacks.
+        reply with a pong, whereas in the latter we'll also send an empty msg on the appropriate
+        channel from ping_channels, to notify any coroutine waiting for a ping.
         """
         if remote == self.this_node:
             self.logger.info('Invariant: received ping from this_node: %s', remote)
             return
         else:
             self.update_routing_table(remote)
-        # Sometimes a ping will be sent to us as part of the bonding
-        # performed the first time we see a node, and it is in those cases that
-        # a callback will exist.
+
         try:
-            callback = self.ping_callbacks.get_callback(remote)
+            channel = self.ping_channels.get_channel(remote)
         except KeyError:
+            return
+
+        try:
+            await channel.send(None)
+        except trio.BrokenResourceError:
+            # This means the receiver has already closed, probably because it timed out.
             pass
-        else:
-            callback()
 
 
 class PreferredNodeDiscoveryService(DiscoveryService):
