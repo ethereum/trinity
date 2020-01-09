@@ -172,6 +172,36 @@ class IdentityScheme(ABC):
         ...
 
 
+def hkdf_expand_and_extract(secret: bytes,
+                            initiator_node_id: NodeID,
+                            recipient_node_id: NodeID,
+                            id_nonce: IDNonce,
+                            ) -> Tuple[bytes, bytes, bytes]:
+    info = b"".join((
+        HKDF_INFO,
+        initiator_node_id,
+        recipient_node_id,
+    ))
+
+    hkdf = HKDF(
+        algorithm=SHA256(),
+        length=3 * AES128_KEY_SIZE,
+        salt=id_nonce,
+        info=info,
+        backend=cryptography_default_backend(),
+    )
+    expanded_key = hkdf.derive(secret)
+
+    if len(expanded_key) != 3 * AES128_KEY_SIZE:
+        raise Exception("Invariant: Secret is expanded to three AES128 keys")
+
+    initiator_key = expanded_key[:AES128_KEY_SIZE]
+    recipient_key = expanded_key[AES128_KEY_SIZE:2 * AES128_KEY_SIZE]
+    auth_response_key = expanded_key[2 * AES128_KEY_SIZE:3 * AES128_KEY_SIZE]
+
+    return initiator_key, recipient_key, auth_response_key
+
+
 @default_identity_scheme_registry.register
 @discv4_identity_scheme_registry.register
 class V4IdentityScheme(IdentityScheme):
@@ -180,7 +210,6 @@ class V4IdentityScheme(IdentityScheme):
     public_key_enr_key = b"secp256k1"
 
     private_key_size = 32
-    cryptography_backend = cryptography_default_backend()
 
     #
     # ENR
@@ -253,27 +282,12 @@ class V4IdentityScheme(IdentityScheme):
         else:
             initiator_node_id, recipient_node_id = remote_node_id, local_node_id
 
-        info = b"".join((
-            HKDF_INFO,
+        initiator_key, recipient_key, auth_response_key = hkdf_expand_and_extract(
+            secret,
             initiator_node_id,
             recipient_node_id,
-        ))
-
-        hkdf = HKDF(
-            algorithm=SHA256(),
-            length=3 * AES128_KEY_SIZE,
-            salt=id_nonce,
-            info=info,
-            backend=cls.cryptography_backend,
+            id_nonce,
         )
-        expanded_key = hkdf.derive(secret)
-
-        if len(expanded_key) != 3 * AES128_KEY_SIZE:
-            raise Exception("Invariant: Secret is expanded to three AES128 keys")
-
-        initiator_key = expanded_key[:AES128_KEY_SIZE]
-        recipient_key = expanded_key[AES128_KEY_SIZE:2 * AES128_KEY_SIZE]
-        auth_response_key = expanded_key[2 * AES128_KEY_SIZE:3 * AES128_KEY_SIZE]
 
         if is_locally_initiated:
             encryption_key, decryption_key = initiator_key, recipient_key
