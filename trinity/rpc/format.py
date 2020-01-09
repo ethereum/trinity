@@ -3,7 +3,7 @@ from typing import (
     Any,
     Callable,
     Dict,
-    List,
+    Sequence,
     Union,
 )
 from eth_utils.toolz import (
@@ -35,6 +35,9 @@ from eth.constants import (
 
 from trinity.chains.base import AsyncChainAPI
 from trinity._utils.address import generate_contract_address
+
+
+ApiBlockResponse = Dict[str, Union[str, Sequence[str], Sequence[Dict[str, str]]]]
 
 
 def format_bloom(bloom: int) -> str:
@@ -114,6 +117,15 @@ def transaction_to_dict(transaction: SignedTransactionAPI) -> Dict[str, str]:
     }
 
 
+def block_transaction_to_dict(transaction: SignedTransactionAPI,
+                              header: BlockHeaderAPI) -> Dict[str, str]:
+    data = transaction_to_dict(transaction)
+    data['blockHash'] = encode_hex(header.hash)
+    data['blockNumber'] = hex(header.block_number)
+
+    return data
+
+
 hexstr_to_int = functools.partial(int, base=16)
 
 
@@ -163,11 +175,11 @@ def header_to_dict(header: BlockHeaderAPI) -> Dict[str, str]:
 
 def block_to_dict(block: BlockAPI,
                   chain: AsyncChainAPI,
-                  include_transactions: bool) -> Dict[str, Union[str, List[str]]]:
+                  include_transactions: bool) -> ApiBlockResponse:
 
     header_dict = header_to_dict(block.header)
 
-    block_dict: Dict[str, Union[str, List[str]]] = dict(
+    block_dict: ApiBlockResponse = dict(
         header_dict,
         totalDifficulty=hex(chain.get_score(block.hash)),
         uncles=[encode_hex(uncle.hash) for uncle in block.uncles],
@@ -175,8 +187,9 @@ def block_to_dict(block: BlockAPI,
     )
 
     if include_transactions:
-        # block_dict['transactions'] = map(transaction_to_dict, block.transactions)
-        raise NotImplementedError("Cannot return transaction object with block, yet")
+        block_dict['transactions'] = [
+            block_transaction_to_dict(tx, block.header) for tx in block.transactions
+        ]
     else:
         block_dict['transactions'] = [encode_hex(tx.hash) for tx in block.transactions]
 

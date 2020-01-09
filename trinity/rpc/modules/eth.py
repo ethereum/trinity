@@ -57,6 +57,7 @@ from trinity.constants import (
 )
 from trinity.exceptions import RpcError
 from trinity.rpc.format import (
+    ApiBlockResponse,
     block_to_dict,
     header_to_dict,
     format_params,
@@ -187,14 +188,14 @@ class Eth(Eth1ChainRPCModule):
     @format_params(decode_hex, identity)
     async def getBlockByHash(self,
                              block_hash: Hash32,
-                             include_transactions: bool) -> Dict[str, Union[str, List[str]]]:
+                             include_transactions: bool) -> ApiBlockResponse:
         block = await self.chain.coro_get_block_by_hash(block_hash)
         return block_to_dict(block, self.chain, include_transactions)
 
     @format_params(to_int_if_hex, identity)
     async def getBlockByNumber(self,
                                at_block: Union[str, int],
-                               include_transactions: bool) -> Dict[str, Union[str, List[str]]]:
+                               include_transactions: bool) -> ApiBlockResponse:
         block = await get_block_at_number(self.chain, at_block)
         return block_to_dict(block, self.chain, include_transactions)
 
