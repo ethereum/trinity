@@ -229,23 +229,25 @@ async def test_beam_syncer(
             import_server = BlockImportServer(
                 pausing_endpoint,
                 client_chain,
-                token=client.cancel_token,
             )
-            asyncio.ensure_future(import_server.run())
+            async with background_asyncio_service(import_server):
+                await pausing_endpoint.connect_to_endpoints(gatherer_config)
+                asyncio.ensure_future(client.run())
 
-            await pausing_endpoint.connect_to_endpoints(gatherer_config)
-            asyncio.ensure_future(client.run())
+                # We can sync at least 10 blocks in 1s at current speeds, (or
+                # reach the current one) Trying to keep the tests short-ish. A
+                # fuller test could always set the target header to the
+                # chaindb_churner canonical head, and increase the timeout
+                # significantly
+                target_block_number = min(beam_to_block + 10, 129)
+                target_head = chaindb_churner.get_canonical_block_header_by_number(
+                    target_block_number,
+                )
+                await wait_for_head(chaindb_fresh, target_head, sync_timeout=10)
+                assert target_head.state_root in chaindb_fresh.db
 
-            # We can sync at least 10 blocks in 1s at current speeds, (or reach the current one)
-            # Trying to keep the tests short-ish. A fuller test could always set the target header
-            #   to the chaindb_churner canonical head, and increase the timeout significantly
-            target_block_number = min(beam_to_block + 10, 129)
-            target_head = chaindb_churner.get_canonical_block_header_by_number(target_block_number)
-            await wait_for_head(chaindb_fresh, target_head, sync_timeout=10)
-            assert target_head.state_root in chaindb_fresh.db
-
-            # first stop the import server, so it doesn't hang waiting for state data
-            await import_server.cancel()
+            # The import server stops when the context block above exits
+            # ensureing that it doesn't hang waiting for state data
             await client.cancel()
 
 

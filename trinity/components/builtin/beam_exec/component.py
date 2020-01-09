@@ -1,8 +1,7 @@
 import asyncio
 
+from async_service import run_asyncio_service
 from lahja import EndpointAPI
-
-from p2p.service import run_service
 
 from trinity.boot_info import BootInfo
 from trinity.config import Eth1AppConfig
@@ -54,5 +53,4 @@ class BeamChainExecutionComponent(AsyncioIsolatedComponent):
 
             import_server = BlockImportServer(event_bus, beam_chain)
 
-            async with run_service(import_server):
-                await import_server.cancellation()
+            await run_asyncio_service(import_server)

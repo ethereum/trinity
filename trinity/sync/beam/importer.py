@@ -12,7 +12,7 @@ from typing import (
     cast,
 )
 
-from cancel_token import CancelToken
+from async_service import Service
 
 from eth.abc import (
     AtomicDatabaseAPI,
@@ -45,8 +45,6 @@ from eth_utils.toolz import (
 
 from lahja import EndpointAPI
 from lahja.common import BroadcastConfig
-
-from p2p.service import BaseService
 
 from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
@@ -407,19 +405,19 @@ def partial_import_block(beam_chain: BeamChain,
     return _import_block
 
 
-class BlockImportServer(BaseService):
+class BlockImportServer(Service):
+    logger = get_extended_debug_logger('trinity.sync.beam.BlockImportServer')
+
     def __init__(
             self,
             event_bus: EndpointAPI,
-            beam_chain: BeamChain,
-            token: CancelToken = None) -> None:
-        super().__init__(token=token)
+            beam_chain: BeamChain) -> None:
         self._event_bus = event_bus
         self._beam_chain = beam_chain
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.serve(self._event_bus, self._beam_chain))
-        await self.cancellation()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.serve, self._event_bus, self._beam_chain)
+        await self.manager.wait_finished()
 
     async def serve(
             self,
@@ -430,22 +428,23 @@ class BlockImportServer(BaseService):
         Reply with StatelessBlockImportDone when import is complete.
         """
 
-        async for event in self.wait_iter(event_bus.stream(DoStatelessBlockImport)):
+        loop = asyncio.get_event_loop()
+        async for event in event_bus.stream(DoStatelessBlockImport):
             # launch in new thread, so we don't block the event loop!
-            import_completion = self.get_event_loop().run_in_executor(
+            import_completion = loop.run_in_executor(
                 # Maybe build the pausing chain inside the new process?
                 None,
                 partial_import_block(beam_chain, event.block),
             )
 
-            # Intentionally don't use .wait() below, because we want to hang the service from
+            # Wrapped in `asyncio.shield` because we want to hang the service from
             #   shutting down until block import is complete.
             # In the tests, for example, we await cancel() this service, so that we know
             #   that the in-progress block is complete. Then below, we do not send back
             #   the import completion (so the import server won't get triggered again).
-            await import_completion
+            await asyncio.shield(import_completion)
 
-            if self.is_running:
+            if self.manager.is_running:
                 _broadcast_import_complete(
                     event_bus,
                     event.block,
@@ -533,14 +532,14 @@ def partial_speculative_execute(
     return _trigger_missing_state_downloads
 
 
-class BlockPreviewServer(BaseService):
+class BlockPreviewServer(Service):
+    logger = get_extended_debug_logger('trinity.sync.beam.BlockPreviewServer')
+
     def __init__(
             self,
             event_bus: EndpointAPI,
             beam_chain: BeamChain,
-            shard_num: int,
-            token: CancelToken = None) -> None:
-        super().__init__(token=token)
+            shard_num: int) -> None:
         self._event_bus = event_bus
         self._beam_chain = beam_chain
 
@@ -551,9 +550,9 @@ class BlockPreviewServer(BaseService):
         else:
             self._shard_num = shard_num
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.serve(self._event_bus, self._beam_chain))
-        await self.cancellation()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.serve, self._event_bus, self._beam_chain)
+        await self.manager.wait_finished()
 
     async def serve(
             self,
@@ -568,7 +567,7 @@ class BlockPreviewServer(BaseService):
             thread_name_prefix="trinity-spec-exec-",
         ) as speculative_thread_executor:
 
-            async for event in self.wait_iter(event_bus.stream(DoStatelessBlockPreview)):
+            async for event in event_bus.stream(DoStatelessBlockPreview):
                 if event.header.block_number % NUM_PREVIEW_SHARDS != self._shard_num:
                     continue
 
