@@ -65,7 +65,7 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
     [(100, 16, 10, 16)],
 )
 def test_get_state_by_slot(valid_chain, genesis_block, genesis_state, config, keymap):
-    # Fisrt, skip block and check if `get_state_by_slot` returns the expected state
+    # First, skip block and check if `get_state_by_slot` returns the expected state
     state_machine = valid_chain.get_state_machine(genesis_block.slot)
     state = valid_chain.get_head_state()
     block_skipped_slot = genesis_block.slot + 1

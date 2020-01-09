@@ -69,6 +69,20 @@ def _get_historical_root(
     return historical_roots[slot % slots_per_historical_root]
 
 
+def get_state_root_at_slot(
+    state: "BeaconState", slot: Slot, slots_per_historical_root: int
+) -> Hash32:
+    """
+    Return state root at recent ``slot``.
+    """
+    if slot == state.slot:
+        return state.hash_tree_root
+    else:
+        return _get_historical_root(
+            state.state_roots, state.slot, slot, slots_per_historical_root
+        )
+
+
 def get_block_root_at_slot(
     state: "BeaconState", slot: Slot, slots_per_historical_root: int
 ) -> SigningRoot:
