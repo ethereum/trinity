@@ -8,12 +8,14 @@ from hypothesis import (
 )
 
 from eth_utils import (
+    decode_hex,
     keccak,
     ValidationError,
 )
 
 from eth_keys.datatypes import (
     PrivateKey,
+    PublicKey,
     NonRecoverableSignature,
 )
 
@@ -334,4 +336,32 @@ def test_official_key_derivation(secret,
     assert derived_keys[0] == initiator_key
     assert derived_keys[1] == recipient_key
     assert derived_keys[2] == auth_response_key
->>>>>>> d39410a6... Use coincurve to perform discv5 ECDH
+
+
+@pytest.mark.parametrize(
+    ["id_nonce", "ephemeral_public_key", "local_secret_key", "id_nonce_signature"],
+    [
+        [
+            decode_hex("0xa77e3aa0c144ae7c0a3af73692b7d6e5b7a2fdc0eda16e8d5e6cb0d08e88dd04"),
+            decode_hex(
+                "0x9961e4c2356d61bedb83052c115d311acb3a96f5777296dcf297351130266231503061ac4aaee666"
+                "073d7e5bc2c80c3f5c5b500c1cb5fd0a76abbb6b675ad157"
+            ),
+            decode_hex("0xfb757dc581730490a1d7a00deea65e9b1936924caaea8f44d476014856b68736"),
+            decode_hex(
+                "0xc5036e702a79902ad8aa147dabfe3958b523fd6fa36cc78e2889b912d682d8d35fdea142e141f690"
+                "736d86f50b39746ba2d2fc510b46f82ee08f08fd55d133a4"
+            ),
+        ],
+    ],
+)
+def test_official_id_nonce_signature(id_nonce,
+                                     ephemeral_public_key,
+                                     local_secret_key,
+                                     id_nonce_signature):
+    created_signature = V4IdentityScheme.create_id_nonce_signature(
+        id_nonce=id_nonce,
+        ephemeral_public_key=ephemeral_public_key,
+        private_key=local_secret_key,
+    )
+    assert created_signature == id_nonce_signature

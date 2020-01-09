@@ -2,14 +2,19 @@ from hypothesis import (
     given,
 )
 
+import pytest
+
 import rlp
 
 from eth_utils import (
+    decode_hex,
     int_to_big_endian,
     is_list_like,
 )
 
 from p2p.discv5.packets import (
+    compute_encrypted_auth_response,
+    AuthHeader,
     AuthHeaderPacket,
     AuthTagPacket,
     WhoAreYouPacket,
@@ -18,6 +23,7 @@ from p2p.discv5.enr import (
     ENR,
 )
 from p2p.discv5.messages import (
+    default_message_type_registry,
     PingMessage,
 )
 from p2p.discv5.encryption import (
@@ -28,6 +34,9 @@ from p2p.discv5.constants import (
     AUTH_SCHEME_NAME,
     MAGIC_SIZE,
     ZERO_NONCE,
+)
+from p2p.discv5.identity_schemes import (
+    V4IdentityScheme,
 )
 
 from tests.p2p.discv5.strategies import (
@@ -217,3 +226,167 @@ def test_auth_tag_packet_preparation(tag, auth_tag, key):
     )
     assert decrypted_message[0] == message.message_type
     assert rlp.decode(decrypted_message[1:], PingMessage) == message
+
+
+@pytest.mark.parametrize(
+    [
+        "id_nonce",
+        "secret_key",
+        "enr",
+        "auth_response_key",
+        "ephemeral_public_key",
+        "auth_cipher_text",
+    ],
+    [
+        [
+            decode_hex("0xe551b1c44264ab92bc0b3c9b26293e1ba4fed9128f3c3645301e8e119f179c65"),
+            decode_hex("0x7e8107fe766b6d357205280acf65c24275129ca9e44c0fd00144ca50024a1ce7"),
+            None,
+            decode_hex("0x8c7caa563cebc5c06bb15fc1a2d426c3"),
+            decode_hex(
+                "0xb35608c01ee67edff2cffa424b219940a81cf2fb9b66068b1cf96862a17d353e22524fbdcdebc609"
+                "f85cbd58ebe7a872b01e24a3829b97dd5875e8ffbc4eea81"
+            ),
+            decode_hex(
+                "0x570fbf23885c674867ab00320294a41732891457969a0f14d11c995668858b2ad731aa7836888020"
+                "e2ccc6e0e5776d0d4bc4439161798565a4159aa8620992fb51dcb275c4f755c8b8030c82918898f1ac"
+                "387f606852"
+            ),
+        ],
+    ],
+)
+def test_official_auth_response_encryption(secret_key,
+                                           id_nonce,
+                                           enr,
+                                           auth_response_key,
+                                           ephemeral_public_key,
+                                           auth_cipher_text):
+    id_nonce_signature = V4IdentityScheme.create_id_nonce_signature(
+        id_nonce=id_nonce,
+        private_key=secret_key,
+        ephemeral_public_key=ephemeral_public_key,
+    )
+    assert compute_encrypted_auth_response(
+        auth_response_key=auth_response_key,
+        id_nonce_signature=id_nonce_signature,
+        enr=enr,
+    ) == auth_cipher_text
+
+
+@pytest.mark.parametrize(
+    [
+        "auth_tag",
+        "id_nonce",
+        "ephemeral_public_key",
+        "auth_cipher_text",
+        "auth_header_rlp",
+    ],
+    [
+        [
+            decode_hex("0x27b5af763c446acd2749fe8e"),
+            decode_hex("0xe551b1c44264ab92bc0b3c9b26293e1ba4fed9128f3c3645301e8e119f179c65"),
+            decode_hex(
+                "0xb35608c01ee67edff2cffa424b219940a81cf2fb9b66068b1cf96862a17d353e22524fbdcdebc609"
+                "f85cbd58ebe7a872b01e24a3829b97dd5875e8ffbc4eea81"
+            ),
+            decode_hex(
+                "0x570fbf23885c674867ab00320294a41732891457969a0f14d11c995668858b2ad731aa7836888020"
+                "e2ccc6e0e5776d0d4bc4439161798565a4159aa8620992fb51dcb275c4f755c8b8030c82918898f1ac"
+                "387f606852"
+            ),
+            decode_hex(
+                "0xf8cc8c27b5af763c446acd2749fe8ea0e551b1c44264ab92bc0b3c9b26293e1ba4fed9128f3c3645"
+                "301e8e119f179c658367636db840b35608c01ee67edff2cffa424b219940a81cf2fb9b66068b1cf968"
+                "62a17d353e22524fbdcdebc609f85cbd58ebe7a872b01e24a3829b97dd5875e8ffbc4eea81b856570f"
+                "bf23885c674867ab00320294a41732891457969a0f14d11c995668858b2ad731aa7836888020e2ccc6"
+                "e0e5776d0d4bc4439161798565a4159aa8620992fb51dcb275c4f755c8b8030c82918898f1ac387f60"
+                "6852"
+            ),
+        ],
+    ]
+)
+def test_official_auth_header_encoding(auth_tag,
+                                       id_nonce,
+                                       ephemeral_public_key,
+                                       auth_cipher_text,
+                                       auth_header_rlp):
+    header = AuthHeader(
+        auth_tag=auth_tag,
+        id_nonce=id_nonce,
+        auth_scheme_name=AUTH_SCHEME_NAME,
+        ephemeral_public_key=ephemeral_public_key,
+        encrypted_auth_response=auth_cipher_text,
+    )
+    assert rlp.encode(header) == auth_header_rlp
+
+
+@pytest.mark.parametrize(
+    [
+        "tag",
+        "auth_tag",
+        "id_nonce",
+        "encoded_message",
+        "local_private_key",
+        "auth_response_key",
+        "encryption_key",
+        "ephemeral_public_key",
+        "auth_message_rlp",
+    ],
+    [
+        [
+            decode_hex("0x93a7400fa0d6a694ebc24d5cf570f65d04215b6ac00757875e3f3a5f42107903"),
+            decode_hex("0x27b5af763c446acd2749fe8e"),
+            decode_hex("0xe551b1c44264ab92bc0b3c9b26293e1ba4fed9128f3c3645301e8e119f179c65"),
+            decode_hex("0x01c20101"),
+            decode_hex("0x7e8107fe766b6d357205280acf65c24275129ca9e44c0fd00144ca50024a1ce7"),
+            decode_hex("0x8c7caa563cebc5c06bb15fc1a2d426c3"),
+            decode_hex("0x9f2d77db7004bf8a1a85107ac686990b"),
+            decode_hex(
+                "0xb35608c01ee67edff2cffa424b219940a81cf2fb9b66068b1cf96862a17d353e22524fbdcdebc609"
+                "f85cbd58ebe7a872b01e24a3829b97dd5875e8ffbc4eea81"
+            ),
+            decode_hex(
+                "0x93a7400fa0d6a694ebc24d5cf570f65d04215b6ac00757875e3f3a5f42107903f8cc8c27b5af763c"
+                "446acd2749fe8ea0e551b1c44264ab92bc0b3c9b26293e1ba4fed9128f3c3645301e8e119f179c6583"
+                "67636db840b35608c01ee67edff2cffa424b219940a81cf2fb9b66068b1cf96862a17d353e22524fbd"
+                "cdebc609f85cbd58ebe7a872b01e24a3829b97dd5875e8ffbc4eea81b856570fbf23885c674867ab00"
+                "320294a41732891457969a0f14d11c995668858b2ad731aa7836888020e2ccc6e0e5776d0d4bc44391"
+                "61798565a4159aa8620992fb51dcb275c4f755c8b8030c82918898f1ac387f606852a5d12a2d94b8cc"
+                "b3ba55558229867dc13bfa3648"
+            )
+        ],
+    ],
+)
+def test_official_auth_header_packet_preparation(tag,
+                                                 auth_tag,
+                                                 id_nonce,
+                                                 encoded_message,
+                                                 local_private_key,
+                                                 auth_response_key,
+                                                 encryption_key,
+                                                 ephemeral_public_key,
+                                                 auth_message_rlp):
+    message_type_id = encoded_message[0]
+    message_type = default_message_type_registry[message_type_id]
+    message = rlp.decode(encoded_message[1:], message_type)
+    assert message.to_bytes() == encoded_message
+
+    id_nonce_signature = V4IdentityScheme.create_id_nonce_signature(
+        id_nonce=id_nonce,
+        ephemeral_public_key=ephemeral_public_key,
+        private_key=local_private_key,
+    )
+
+    packet = AuthHeaderPacket.prepare(
+        tag=tag,
+        auth_tag=auth_tag,
+        id_nonce=id_nonce,
+        message=message,
+        initiator_key=encryption_key,
+        id_nonce_signature=id_nonce_signature,
+        auth_response_key=auth_response_key,
+        enr=None,
+        ephemeral_public_key=ephemeral_public_key,
+    )
+    packet_wire_bytes = packet.to_wire_bytes()
+    assert packet_wire_bytes == auth_message_rlp
