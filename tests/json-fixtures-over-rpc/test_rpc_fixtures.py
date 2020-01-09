@@ -436,12 +436,24 @@ async def validate_block(rpc, block_fixture, at_block):
 
     await validate_transaction_count(rpc, block_fixture, at_block)
 
-    # TODO validate transaction bodies
     result, error = await call_rpc(rpc, rpc_method, [at_block, True])
     # assert error is None
-    # assert result['transactions'] == block_fixture['transactions']
 
+    validate_rpc_block_tx_vs_fixture(result['transactions'], block_fixture)
     await validate_uncles(rpc, block_fixture, at_block)
+
+
+def validate_rpc_block_tx_vs_fixture(transactions, block_fixture):
+
+    fixture_transactions = block_fixture['transactions']
+    fixture_header = fixture_block_in_rpc_format(block_fixture['blockHeader'])
+
+    for index, fixture_tx in enumerate(fixture_transactions):
+        result_tx = transactions[index]
+        result_tx_without_extra_fields = dissoc(result_tx, 'blockNumber', 'blockHash')
+        validate_rpc_transaction_vs_fixture(result_tx_without_extra_fields, fixture_tx)
+        assert result_tx['blockNumber'] == fixture_header['number']
+        assert result_tx['blockHash'] == fixture_header['hash']
 
 
 async def validate_last_block(rpc, block_fixture):

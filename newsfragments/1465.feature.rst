@@ -1,0 +1,1 @@
+Support ``include_transactions`` param in ``eth_getBlockBy*`` APIs
