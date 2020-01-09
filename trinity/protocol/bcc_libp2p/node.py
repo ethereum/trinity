@@ -44,7 +44,6 @@ from eth2.beacon.typing import (
     SigningRoot,
     SubnetId,
 )
-from eth2.events import SyncRequest
 
 from libp2p import (
     initialize_default_swarm,
@@ -102,6 +101,7 @@ import ssz
 from p2p.service import (
     BaseService,
 )
+from trinity.sync.beacon.events import SyncRequest
 
 from .configs import (
     GOSSIPSUB_PROTOCOL_ID,
