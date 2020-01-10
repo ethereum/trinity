@@ -15,7 +15,7 @@ from eth2.beacon.tools.builder.validator import (
     mk_key_pair_from_seed_index,
     sign_proof_of_possession,
 )
-from eth2.beacon.types.deposit_data import DepositData
+from eth2.beacon.types.deposit_data import DepositDataMessage, DepositData
 from eth2.beacon.typing import Gwei, Timestamp
 
 
@@ -247,13 +247,15 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                 # conflict with blocks in the future.
                 pubkey, privkey = mk_key_pair_from_seed_index(block_number * 10 + seed)
                 withdrawal_credentials = Hash32(b'\x12' * 32)
-                deposit_data = DepositData.create(
+                deposit_data_message = DepositDataMessage.create(
                     pubkey=pubkey,
                     withdrawal_credentials=withdrawal_credentials,
                     amount=amount,
                 )
-                signature = sign_proof_of_possession(deposit_data=deposit_data, privkey=privkey)
-                deposit_data = deposit_data.set("signature", signature)
+                signature = sign_proof_of_possession(
+                    deposit_data_message=deposit_data_message,
+                    privkey=privkey,
+                )
                 logs = logs + (
                     DepositLog(
                         block_hash=Hash32(block_hash),
