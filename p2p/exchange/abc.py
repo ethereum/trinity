@@ -8,14 +8,13 @@ from typing import (
     Generic,
     Iterable,
     Optional,
-    Tuple,
     Type,
     TYPE_CHECKING,
 )
 
+from async_service import ServiceAPI
 
 from p2p.abc import (
-    AsyncioServiceAPI,
     ConnectionAPI,
     ProtocolAPI,
 )
@@ -91,10 +90,8 @@ class PerformanceTrackerAPI(PerformanceAPI, Generic[TRequestCommand, TResult]):
         ...
 
 
-class ResponseCandidateStreamAPI(AsyncioServiceAPI, Generic[TRequestCommand, TResponseCommand]):
+class ResponseCandidateStreamAPI(ServiceAPI, Generic[TRequestCommand, TResponseCommand]):
     response_timeout: float
-
-    pending_request: Optional[Tuple[float, 'asyncio.Future[TResponseCommand]']]
 
     request_protocol_type: Type[ProtocolAPI]
     response_cmd_type: Type[TResponseCommand]
@@ -108,6 +105,11 @@ class ResponseCandidateStreamAPI(AsyncioServiceAPI, Generic[TRequestCommand, TRe
             request_protocol_type: Type[ProtocolAPI],
             response_cmd_type: Type[TResponseCommand]) -> None:
         ...
+
+    @property
+    @abstractmethod
+    def is_alive(self) -> bool:
+        pass
 
     @abstractmethod
     def payload_candidates(
@@ -136,10 +138,6 @@ class ResponseCandidateStreamAPI(AsyncioServiceAPI, Generic[TRequestCommand, TRe
     @property
     @abstractmethod
     def is_pending(self) -> bool:
-        ...
-
-    @abstractmethod
-    def __del__(self) -> None:
         ...
 
 

@@ -6,9 +6,9 @@ from typing import (
 )
 
 from async_generator import asynccontextmanager
+from async_service import background_asyncio_service
 
 from p2p.abc import ConnectionAPI
-from p2p.service import run_service
 
 from .abc import ExchangeAPI, NormalizerAPI, ValidatorAPI
 from .candidate_stream import ResponseCandidateStream
@@ -34,11 +34,11 @@ class BaseExchange(ExchangeAPI[TRequestCommand, TResponseCommand, TResult]):
             protocol,
             self.get_response_cmd_type(),
         )
-        self._manager = ExchangeManager(
-            connection,
-            response_stream,
-        )
-        async with run_service(response_stream):
+        async with background_asyncio_service(response_stream):
+            self._manager = ExchangeManager(
+                connection,
+                response_stream,
+            )
             yield
 
     async def get_result(
