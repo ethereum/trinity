@@ -12,11 +12,8 @@ from eth.chains.goerli import (
     GOERLI_GENESIS_HEADER,
 )
 from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER
-from eth.consensus import ConsensusContext
-from eth.db.chain import ChainDB
 from eth.db.atomic import AtomicDB
 from eth.rlp.headers import BlockHeader
-from eth.vm.chain_context import ChainContext
 from eth.vm.forks.homestead import HomesteadVM
 
 from trinity.config import (
@@ -31,16 +28,6 @@ from trinity._utils.eip1085 import (
     validate_raw_eip1085_genesis_config,
     extract_genesis_data,
 )
-
-
-@pytest.fixture
-def chaindb(base_db):
-    return ChainDB(base_db)
-
-
-@pytest.fixture
-def consensus_context(base_db):
-    return ConsensusContext(base_db)
 
 
 @pytest.fixture
@@ -81,9 +68,7 @@ def test_mainnet_eip1085_matches_mainnet_genesis_header(mainnet_genesis_config):
     assert actual_homestead_vm.get_dao_fork_block_number() == expected_homestead_vm.get_dao_fork_block_number()  # noqa: E501
 
 
-def test_mainnet_eip1085_rejects_etc_homestead_header(chaindb,
-                                                      consensus_context,
-                                                      mainnet_genesis_config):
+def test_mainnet_eip1085_rejects_etc_homestead_header(mainnet_genesis_config):
     PRE_FORK_HEADER = BlockHeader(
         difficulty=62382916183238,
         block_number=1919999,
@@ -141,20 +126,12 @@ def test_mainnet_eip1085_rejects_etc_homestead_header(chaindb,
     genesis_data = extract_genesis_data(mainnet_genesis_config)
     homestead_vm = dict(genesis_data.vm_configuration)[HOMESTEAD_MAINNET_BLOCK]
 
-    chain_context = ChainContext(1)
-    vm = homestead_vm(
-        header=PRE_FORK_HEADER,
-        chaindb=chaindb,
-        chain_context=chain_context,
-        consensus_context=consensus_context
-    )
-
     # The VM we derive from mainnet.json should validate the ETH header at the fork
-    vm.validate_header(ETH_HEADER_AT_FORK, PRE_FORK_HEADER, check_seal=True)
+    homestead_vm.validate_header(ETH_HEADER_AT_FORK, PRE_FORK_HEADER)
 
     # But it should reject the ETC header
     with pytest.raises(ValidationError, match='must have extra data 0x64616f2d686172642d666f726b'):
-        vm.validate_header(ETC_HEADER_AT_FORK, PRE_FORK_HEADER, check_seal=True)
+        homestead_vm.validate_header(ETC_HEADER_AT_FORK, PRE_FORK_HEADER)
 
 
 @pytest.fixture
