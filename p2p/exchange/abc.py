@@ -8,7 +8,6 @@ from typing import (
     Generic,
     Iterable,
     Optional,
-    Tuple,
     Type,
     TYPE_CHECKING,
 )
@@ -93,8 +92,6 @@ class PerformanceTrackerAPI(PerformanceAPI, Generic[TRequestCommand, TResult]):
 
 class ResponseCandidateStreamAPI(ServiceAPI, Generic[TRequestCommand, TResponseCommand]):
     response_timeout: float
-
-    pending_request: Optional[Tuple[float, 'asyncio.Queue[TResponseCommand]']]
 
     request_protocol_type: Type[ProtocolAPI]
     response_cmd_type: Type[TResponseCommand]

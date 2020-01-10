@@ -39,7 +39,7 @@ class ResponseCandidateStream(
 
     response_timeout: float = ROUND_TRIP_TIMEOUT
 
-    pending_request: Tuple[float, 'asyncio.Queue[TResponseCommand]'] = None
+    _pending_request: Tuple[float, 'asyncio.Queue[TResponseCommand]'] = None
 
     def __init__(
             self,
@@ -106,9 +106,9 @@ class ResponseCandidateStream(
         return self.response_cmd_type.__name__
 
     def complete_request(self) -> None:
-        if self.pending_request is None:
+        if self._pending_request is None:
             self.logger.warning("`complete_request` was called when there was no pending request")
-        self.pending_request = None
+        self._pending_request = None
 
     #
     # Service API
@@ -122,13 +122,13 @@ class ResponseCandidateStream(
             await self.manager.wait_finished()
 
     async def _handle_msg(self, connection: ConnectionAPI, cmd: TResponseCommand) -> None:
-        if self.pending_request is None:
+        if self._pending_request is None:
             self.logger.debug(
                 "Got unexpected %s payload from %s", self.response_cmd_name, self._connection
             )
             return
 
-        send_time, queue = self.pending_request
+        send_time, queue = self._pending_request
         self.last_response_time = time.perf_counter() - send_time
         queue.put_nowait(cmd)
 
@@ -143,9 +143,9 @@ class ResponseCandidateStream(
         self.request_protocol.send(request)
 
         queue: 'asyncio.Queue[TResponseCommand]' = asyncio.Queue()
-        self.pending_request = (time.perf_counter(), queue)
+        self._pending_request = (time.perf_counter(), queue)
         return queue
 
     @property
     def is_pending(self) -> bool:
-        return self.pending_request is not None
+        return self._pending_request is not None
