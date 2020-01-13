@@ -2,6 +2,7 @@ import functools
 from typing import (
     Any,
     Callable,
+    cast,
     Dict,
     Sequence,
     Union,
@@ -34,10 +35,14 @@ from eth.constants import (
 )
 
 from trinity.chains.base import AsyncChainAPI
+from trinity.rpc.typing import (
+    RpcBlockResponse,
+    RpcBlockTransactionResponse,
+    RpcHeaderResponse,
+    RpcReceiptResponse,
+    RpcTransactionResponse,
+)
 from trinity._utils.address import generate_contract_address
-
-
-ApiBlockResponse = Dict[str, Union[str, Sequence[str], Sequence[Dict[str, str]]]]
 
 
 def format_bloom(bloom: int) -> str:
@@ -50,7 +55,7 @@ def to_receipt_response(receipt: ReceiptAPI,
                         transaction: SignedTransactionAPI,
                         index: int,
                         header: BlockHeaderAPI,
-                        tx_gas_used: int) -> Dict[str, Any]:
+                        tx_gas_used: int) -> RpcReceiptResponse:
 
     if transaction.to == CREATE_CONTRACT_ADDRESS:
         contract_address = encode_hex(
@@ -97,7 +102,7 @@ def to_receipt_response(receipt: ReceiptAPI,
     }
 
 
-def transaction_to_dict(transaction: SignedTransactionAPI) -> Dict[str, str]:
+def transaction_to_dict(transaction: SignedTransactionAPI) -> RpcTransactionResponse:
     return {
         'hash': encode_hex(transaction.hash),
         'nonce': hex(transaction.nonce),
@@ -118,8 +123,8 @@ def transaction_to_dict(transaction: SignedTransactionAPI) -> Dict[str, str]:
 
 
 def block_transaction_to_dict(transaction: SignedTransactionAPI,
-                              header: BlockHeaderAPI) -> Dict[str, str]:
-    data = transaction_to_dict(transaction)
+                              header: BlockHeaderAPI) -> RpcBlockTransactionResponse:
+    data = cast(RpcBlockTransactionResponse, transaction_to_dict(transaction))
     data['blockHash'] = encode_hex(header.hash)
     data['blockNumber'] = hex(header.block_number)
 
@@ -151,8 +156,8 @@ def normalize_transaction_dict(transaction_dict: Dict[str, str]) -> Dict[str, An
     return merge(SAFE_TRANSACTION_DEFAULTS, normalized_dict)
 
 
-def header_to_dict(header: BlockHeaderAPI) -> Dict[str, str]:
-    header_dict = {
+def header_to_dict(header: BlockHeaderAPI) -> RpcHeaderResponse:
+    return {
         "difficulty": hex(header.difficulty),
         "extraData": encode_hex(header.extra_data),
         "gasLimit": hex(header.gas_limit),
@@ -170,30 +175,29 @@ def header_to_dict(header: BlockHeaderAPI) -> Dict[str, str]:
         "transactionsRoot": encode_hex(header.transaction_root),
         "miner": encode_hex(header.coinbase),
     }
-    return header_dict
 
 
 def block_to_dict(block: BlockAPI,
                   chain: AsyncChainAPI,
-                  include_transactions: bool) -> ApiBlockResponse:
+                  include_transactions: bool) -> RpcBlockResponse:
 
-    header_dict = header_to_dict(block.header)
-
-    block_dict: ApiBlockResponse = dict(
-        header_dict,
-        totalDifficulty=hex(chain.get_score(block.hash)),
-        uncles=[encode_hex(uncle.hash) for uncle in block.uncles],
-        size=hex(len(rlp.encode(block))),
-    )
+    # There doesn't seem to be a type safe way to initialize the RpcBlockResponse from
+    # a RpcHeaderResponse + the extra fields hence the cast here.
+    response = cast(RpcBlockResponse, header_to_dict(block.header))
 
     if include_transactions:
-        block_dict['transactions'] = [
+        txs: Union[Sequence[str], Sequence[RpcBlockTransactionResponse]] = [
             block_transaction_to_dict(tx, block.header) for tx in block.transactions
         ]
     else:
-        block_dict['transactions'] = [encode_hex(tx.hash) for tx in block.transactions]
+        txs = [encode_hex(tx.hash) for tx in block.transactions]
 
-    return block_dict
+    response['totalDifficulty'] = hex(chain.get_score(block.hash))
+    response['uncles'] = [encode_hex(uncle.hash) for uncle in block.uncles]
+    response['size'] = hex(len(rlp.encode(block)))
+    response['transactions'] = txs
+
+    return response
 
 
 def format_params(*formatters: Any) -> Callable[..., Any]:
