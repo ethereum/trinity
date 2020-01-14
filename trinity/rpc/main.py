@@ -124,6 +124,9 @@ class RPCServer:
             if request['method'] == 'evm_resetToGenesisFixture':
                 result = True
 
+        except TypeError as exc:
+            error = f"Invalid parameters. Check parameter count and types. {exc}"
+            return None, error
         except NotImplementedError as exc:
             error = "Method not implemented: %r %s" % (request['method'], exc)
             return None, error
