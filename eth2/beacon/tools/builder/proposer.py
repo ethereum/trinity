@@ -12,9 +12,9 @@ from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
+    BaseSignedBeaconBlock,
     BeaconBlockBody,
     SignedBeaconBlock,
-    BaseSignedBeaconBlock,
 )
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data

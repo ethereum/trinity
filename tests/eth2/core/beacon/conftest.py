@@ -30,8 +30,8 @@ from eth2.beacon.types.blocks import (
     BeaconBlock,
     BeaconBlockBody,
     BeaconBlockHeader,
-    SignedBeaconBlockHeader,
     SignedBeaconBlock,
+    SignedBeaconBlockHeader,
 )
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData

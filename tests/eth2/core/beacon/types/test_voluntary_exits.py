@@ -1,6 +1,6 @@
 import ssz
 
-from eth2.beacon.types.voluntary_exits import VoluntaryExit, SignedVoluntaryExit
+from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit, VoluntaryExit
 
 
 def test_defaults(sample_voluntary_exit_params, sample_signature):

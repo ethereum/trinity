@@ -1,7 +1,7 @@
+from eth2.beacon.constants import GENESIS_PARENT_ROOT
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
 from eth2.beacon.typing import FromBlockParams
-from eth2.beacon.constants import GENESIS_PARENT_ROOT
 
 
 def test_defaults(sample_beacon_block_params):

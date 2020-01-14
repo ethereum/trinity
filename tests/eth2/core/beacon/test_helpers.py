@@ -16,10 +16,10 @@ from eth2.beacon.helpers import (
     signature_domain_to_domain_type,
 )
 from eth2.beacon.signature_domain import SignatureDomain
+from eth2.beacon.types.blocks import SignedBeaconBlock
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
-from eth2.beacon.types.blocks import SignedBeaconBlock
 from eth2.beacon.typing import FromBlockParams
 
 
