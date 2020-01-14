@@ -151,9 +151,9 @@ def test_chaindb_get_canonical_block_root(chaindb, block, fork_choice_scoring):
     assert block_root == block.signing_root
 
 
-def test_chaindb_get_genesis_block_root(chaindb, genesis_block, fork_choice_scoring):
+def test_chaindb_get_signed_genesis_block_root(chaindb, genesis_block, fork_choice_scoring):
     chaindb.persist_block(genesis_block, genesis_block.__class__, fork_choice_scoring)
-    block_root = chaindb.get_genesis_block_root()
+    block_root = chaindb.get_signed_genesis_block_root()
     assert block_root == genesis_block.signing_root
 
 

@@ -54,7 +54,7 @@ class SerenityStateMachine(BeaconStateMachine):
             # fork choice context for this fork, which happens to be the genesis fork.
             # In this situation (possibly uniquely), we want to build a new
             # fork choice context from the genesis data.
-            genesis_root = self.chaindb.get_genesis_block_root()
+            genesis_root = self.chaindb.get_signed_genesis_block_root()
             genesis_block = self.chaindb.get_block_by_root(
                 genesis_root, self.block_class
             )

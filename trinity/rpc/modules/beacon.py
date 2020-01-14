@@ -60,5 +60,5 @@ class Beacon(BeaconChainRPCModule):
         """
         Return genesis ``HashTreeRoot`` in hex string.
         """
-        block_root = await self.chain.coro_get_genesis_block_root()
+        block_root = await self.chain.coro_get_signed_genesis_block_root()
         return encode_hex(block_root)

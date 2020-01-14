@@ -69,7 +69,7 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
-    def get_genesis_block_root(self) -> HashTreeRoot:
+    def get_signed_genesis_block_root(self) -> HashTreeRoot:
         ...
 
     @abstractmethod
@@ -265,7 +265,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         """
         return self._get_canonical_block_root(self.db, slot)
 
-    def get_genesis_block_root(self) -> HashTreeRoot:
+    def get_signed_genesis_block_root(self) -> HashTreeRoot:
         return self._get_canonical_block_root(self.db, self.genesis_config.GENESIS_SLOT)
 
     @staticmethod

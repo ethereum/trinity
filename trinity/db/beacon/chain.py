@@ -43,7 +43,7 @@ class BaseAsyncBeaconChainDB(BeaconChainDB):
         ...
 
     @abstractmethod
-    async def coro_get_genesis_block_root(self) -> HashTreeRoot:
+    async def coro_get_signed_genesis_block_root(self) -> HashTreeRoot:
         ...
 
     @abstractmethod
@@ -128,7 +128,7 @@ class BaseAsyncBeaconChainDB(BeaconChainDB):
 class AsyncBeaconChainDB(BaseAsyncBeaconChainDB):
     coro_persist_block = async_method(BaseAsyncBeaconChainDB.persist_block)
     coro_get_canonical_block_root = async_method(BaseAsyncBeaconChainDB.get_canonical_block_root)  # noqa: E501
-    coro_get_genesis_block_root = async_method(BaseAsyncBeaconChainDB.get_genesis_block_root)
+    coro_get_signed_genesis_block_root = async_method(BaseAsyncBeaconChainDB.get_signed_genesis_block_root)
     coro_get_canonical_block_by_slot = async_method(BaseAsyncBeaconChainDB.get_canonical_block_by_slot)  # noqa: E501
     coro_get_canonical_head = async_method(BaseAsyncBeaconChainDB.get_canonical_head)
     coro_get_canonical_head_root = async_method(BaseAsyncBeaconChainDB.get_canonical_head_root)  # noqa: E501
