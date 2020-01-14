@@ -12,6 +12,8 @@ from eth_hash.auto import keccak
 from eth_keys import keys
 
 from p2p.discovery import DiscoveryService
+from p2p.discv5.enr_db import MemoryEnrDb
+from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.kademlia import Address
 
 
@@ -42,7 +44,8 @@ async def _manually_driven_discovery(seed, socket, nursery):
         Address(*socket.getsockname()),
         bootstrap_nodes=[],
         event_bus=None,
-        socket=socket)
+        socket=socket,
+        enr_db=MemoryEnrDb(default_identity_scheme_registry))
     async with background_trio_service(discovery):
         # At this point we know the service has started (i.e. its run() method has been scheduled),
         # but maybe it hasn't had a chance to run yet, so we wait until the _local_enr is set to

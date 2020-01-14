@@ -44,6 +44,9 @@ def is_data_dir_initialized(trinity_config: TrinityConfig) -> bool:
     if not os.path.exists(trinity_config.ipc_dir):
         return False
 
+    if not os.path.exists(trinity_config.enr_db_dir):
+        return False
+
     if not trinity_config.logfile_path.parent.exists():
         return False
     elif not trinity_config.logfile_path.exists():
@@ -121,9 +124,10 @@ def initialize_data_dir(trinity_config: TrinityConfig) -> None:
             trinity_config.log_dir,
         )
 
-    # Initialize chain, pid and ipc directories
+    # Initialize chain, pid, ipc and enrdb directories
     os.makedirs(trinity_config.pid_dir, exist_ok=True)
     os.makedirs(trinity_config.ipc_dir, exist_ok=True)
+    os.makedirs(trinity_config.enr_db_dir, exist_ok=True)
 
     # Nodekey
     if trinity_config.nodekey is None:
