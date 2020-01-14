@@ -115,15 +115,11 @@ class AuthHeaderPacket(NamedTuple):
             encrypted_auth_response=encrypted_auth_response,
         )
 
-        authenticated_data = b"".join((
-            tag,
-            rlp.encode(auth_header),
-        ))
         encrypted_message = compute_encrypted_message(
             key=initiator_key,
             auth_tag=auth_tag,
             message=message,
-            authenticated_data=authenticated_data,
+            authenticated_data=tag,
         )
 
         return cls(
@@ -195,7 +191,7 @@ class AuthHeaderPacket(NamedTuple):
             key=key,
             auth_tag=self.auth_header.auth_tag,
             encrypted_message=self.encrypted_message,
-            authenticated_data=self.tag + rlp.encode(self.auth_header),
+            authenticated_data=self.tag,
             message_type_registry=message_type_registry,
         )
 

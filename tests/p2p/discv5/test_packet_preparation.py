@@ -104,10 +104,7 @@ def test_auth_header_preparation(tag,
         key=initiator_key,
         nonce=auth_tag,
         cipher_text=packet.encrypted_message,
-        authenticated_data=b"".join((
-            tag,
-            rlp.encode(packet.auth_header),
-        ))
+        authenticated_data=tag,
     )
     assert decrypted_message[0] == message.message_type
     assert rlp.decode(decrypted_message[1:], PingMessage) == message
