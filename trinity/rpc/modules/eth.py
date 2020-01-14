@@ -8,6 +8,7 @@ from typing import (
     cast,
     Dict,
     List,
+    NoReturn,
     Union,
 )
 from mypy_extensions import (
@@ -189,6 +190,17 @@ class Eth(Eth1ChainRPCModule):
         balance = state.get_balance(address)
 
         return hex(balance)
+
+    async def getWork(self) -> NoReturn:
+        raise NotImplementedError("Trinity does not support mining")
+
+    @format_params(decode_hex, decode_hex, decode_hex)
+    async def submitWork(self, nonce: bytes, pow_hash: Hash32, mix_digest: Hash32) -> NoReturn:
+        raise NotImplementedError("Trinity does not support mining")
+
+    @format_params(decode_hex, decode_hex)
+    async def submitHashrate(self, hashrate: Hash32, id: Hash32) -> NoReturn:
+        raise NotImplementedError("Trinity does not support mining")
 
     @format_params(decode_hex, identity)
     async def getBlockByHash(self,

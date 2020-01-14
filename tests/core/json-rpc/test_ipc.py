@@ -201,6 +201,37 @@ def uint256_to_bytes(uint):
             {'result': '0x0', 'id': 3, 'jsonrpc': '2.0'},
         ),
         (
+            build_request('eth_getWork'),
+            {
+                'error': 'Method not implemented: \'eth_getWork\' Trinity does not support mining',
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
+        ),
+        (
+            build_request('eth_submitWork', [
+                "0x0000000000000001",
+                "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+                "0xD1FE5700000000000000000000000000D1FE5700000000000000000000000000"
+            ]),
+            {
+                'error': 'Method not implemented: \'eth_submitWork\' Trinity does not support mining',  # noqa: E501
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
+        ),
+        (
+            build_request('eth_submitHashrate', [
+                "0x0000000000000000000000000000000000000000000000000000000000500000",
+                "0x59daa26581d0acd1fce254fb7e85952f4c09d0915afd33d3886cd914bc7d283c"
+            ]),
+            {
+                'error': 'Method not implemented: \'eth_submitHashrate\' Trinity does not support mining',  # noqa: E501
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
+        ),
+        (
             build_request('web3_clientVersion'),
             {'result': construct_trinity_client_identifier(), 'id': 3, 'jsonrpc': '2.0'},
         ),
