@@ -1,4 +1,5 @@
 import inspect
+from hashlib import sha256
 
 import pytest
 
@@ -17,6 +18,9 @@ from eth_keys.datatypes import (
 )
 
 from p2p.discv5 import identity_schemes as identity_schemes_module
+from p2p.discv5.constants import (
+    ID_NONCE_SIGNATURE_PREFIX,
+)
 from p2p.discv5.identity_schemes import (
     default_identity_scheme_registry,
     ecdh_agree,
@@ -167,28 +171,36 @@ def test_handshake_public_key_validation_invalid(public_key):
 @given(
     private_key=private_key_st,
     id_nonce=id_nonce_st,
+    ephemeral_key=private_key_st,
 )
-def test_id_nonce_signing(private_key, id_nonce):
+def test_id_nonce_signing(private_key, id_nonce, ephemeral_key):
+    ephemeral_public_key = PrivateKey(ephemeral_key).public_key.to_bytes()
     signature = V4IdentityScheme.create_id_nonce_signature(
         id_nonce=id_nonce,
         private_key=private_key,
+        ephemeral_public_key=ephemeral_public_key,
     )
     signature_object = NonRecoverableSignature(signature)
-    assert signature_object.verify_msg(id_nonce, PrivateKey(private_key).public_key)
+    message_hash = sha256(ID_NONCE_SIGNATURE_PREFIX + id_nonce + ephemeral_public_key).digest()
+    assert signature_object.verify_msg_hash(message_hash, PrivateKey(private_key).public_key)
 
 
 @given(
     private_key=private_key_st,
     id_nonce=id_nonce_st,
+    ephemeral_key=private_key_st,
 )
-def test_valid_id_nonce_signature_validation(private_key, id_nonce):
+def test_valid_id_nonce_signature_validation(private_key, id_nonce, ephemeral_key):
+    ephemeral_public_key = PrivateKey(ephemeral_key).public_key.to_bytes()
     signature = V4IdentityScheme.create_id_nonce_signature(
         id_nonce=id_nonce,
         private_key=private_key,
+        ephemeral_public_key=ephemeral_public_key,
     )
     public_key = PrivateKey(private_key).public_key.to_compressed_bytes()
     V4IdentityScheme.validate_id_nonce_signature(
         id_nonce=id_nonce,
+        ephemeral_public_key=ephemeral_public_key,
         signature=signature,
         public_key=public_key,
     )
@@ -197,20 +209,24 @@ def test_valid_id_nonce_signature_validation(private_key, id_nonce):
 def test_invalid_id_nonce_signature_validation():
     id_nonce = b"\xff" * 10
     private_key = b"\x11" * 32
+    ephemeral_public_key = b"\x22" * 64
     signature = V4IdentityScheme.create_id_nonce_signature(
         id_nonce=id_nonce,
+        ephemeral_public_key=ephemeral_public_key,
         private_key=private_key,
     )
 
     public_key = PrivateKey(private_key).public_key.to_compressed_bytes()
     different_public_key = PrivateKey(b"\x22" * 32).public_key.to_compressed_bytes()
     different_id_nonce = b"\x00" * 10
+    different_ephemeral_public_key = b"\x00" * 64
     assert different_public_key != public_key
     assert different_id_nonce != id_nonce
 
     with pytest.raises(ValidationError):
         V4IdentityScheme.validate_id_nonce_signature(
             id_nonce=id_nonce,
+            ephemeral_public_key=ephemeral_public_key,
             signature=signature,
             public_key=different_public_key,
         )
@@ -218,6 +234,15 @@ def test_invalid_id_nonce_signature_validation():
     with pytest.raises(ValidationError):
         V4IdentityScheme.validate_id_nonce_signature(
             id_nonce=different_id_nonce,
+            ephemeral_public_key=ephemeral_public_key,
+            signature=signature,
+            public_key=public_key,
+        )
+
+    with pytest.raises(ValidationError):
+        V4IdentityScheme.validate_id_nonce_signature(
+            id_nonce=id_nonce,
+            ephemeral_public_key=different_ephemeral_public_key,
             signature=signature,
             public_key=public_key,
         )
