@@ -24,7 +24,6 @@ from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.blocks import (
-    BeaconBlock,
     BeaconBlockBody,
     BeaconBlockHeader,
     SignedBeaconBlockHeader,
@@ -565,11 +564,6 @@ def sample_beacon_state_params(
         # Finality
         "finalized_checkpoint": Checkpoint.create(epoch=0, root=b"\x33" * 32),
     }
-
-
-@pytest.fixture()
-def sample_block(sample_beacon_block_params):
-    return BeaconBlock.create(**sample_beacon_block_params)
 
 
 @pytest.fixture()

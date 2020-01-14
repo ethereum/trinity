@@ -36,8 +36,8 @@ def test_block_body_empty(sample_attestation_params):
     assert not block_body.is_empty
 
 
-def test_block_root_and_block_header_root_equivalence(sample_block):
-    block = sample_block
+def test_block_root_and_block_header_root_equivalence():
+    block = BeaconBlock.create()
     header = block.header
 
     assert block.hash_tree_root == header.hash_tree_root
