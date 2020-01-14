@@ -194,11 +194,19 @@ def uint256_to_bytes(uint):
         ),
         (
             build_request('eth_coinbase'),
-            {'result': '0x0000000000000000000000000000000000000000', 'id': 3, 'jsonrpc': '2.0'},
+            {
+                'error': 'Method not implemented: \'eth_coinbase\' Trinity does not support mining',  # noqa: E501
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
         ),
         (
             build_request('eth_hashrate'),
-            {'result': '0x0', 'id': 3, 'jsonrpc': '2.0'},
+            {
+                'error': 'Method not implemented: \'eth_hashrate\' Trinity does not support mining',  # noqa: E501
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
         ),
         (
             build_request('eth_getWork'),

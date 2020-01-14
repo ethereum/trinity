@@ -167,9 +167,7 @@ class Eth(Eth1ChainRPCModule):
         return encode_hex(result)
 
     async def coinbase(self) -> str:
-        # Trinity doesn't support mining yet and hence coinbase_address is default (ZERO_ADDRESS)
-        coinbase_address = ZERO_ADDRESS
-        return encode_hex(coinbase_address)
+        raise NotImplementedError("Trinity does not support mining")
 
     @retryable(which_block_arg_name='at_block')
     @format_params(identity, to_int_if_hex)
@@ -350,9 +348,7 @@ class Eth(Eth1ChainRPCModule):
         return header_to_dict(uncle)
 
     async def hashrate(self) -> str:
-        # Trinity doesn't support mining yet and hence hashrate is default (0)
-        hashrate = 0
-        return hex(hashrate)
+        raise NotImplementedError("Trinity does not support mining")
 
     async def mining(self) -> bool:
         return False
