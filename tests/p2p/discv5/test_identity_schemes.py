@@ -19,6 +19,8 @@ from eth_keys.datatypes import (
 from p2p.discv5 import identity_schemes as identity_schemes_module
 from p2p.discv5.identity_schemes import (
     default_identity_scheme_registry,
+    ecdh_agree,
+    hkdf_expand_and_extract,
     IdentityScheme,
     V4IdentityScheme,
     V4CompatIdentityScheme,
@@ -256,3 +258,55 @@ def test_session_key_derivation(initiator_private_key, recipient_private_key, id
     assert initiator_session_keys.auth_response_key == recipient_session_keys.auth_response_key
     assert initiator_session_keys.encryption_key == recipient_session_keys.decryption_key
     assert initiator_session_keys.decryption_key == recipient_session_keys.encryption_key
+
+
+@pytest.mark.parametrize(["local_secret_key", "remote_public_key", "shared_secret_key"], [
+    [
+        decode_hex("0xfb757dc581730490a1d7a00deea65e9b1936924caaea8f44d476014856b68736"),
+        decode_hex(
+            "0x9961e4c2356d61bedb83052c115d311acb3a96f5777296dcf297351130266231503061ac4aaee666073d"
+            "7e5bc2c80c3f5c5b500c1cb5fd0a76abbb6b675ad157"
+        ),
+        decode_hex("0x033b11a2a1f214567e1537ce5e509ffd9b21373247f2a3ff6841f4976f53165e7e"),
+    ]
+])
+def test_official_key_agreement(local_secret_key, remote_public_key, shared_secret_key):
+    public_key_object = PublicKey(remote_public_key)
+    public_key_compressed = public_key_object.to_compressed_bytes()
+    assert ecdh_agree(local_secret_key, public_key_compressed) == shared_secret_key
+
+
+@pytest.mark.parametrize(
+    [
+        "secret",
+        "initiator_node_id",
+        "recipient_node_id",
+        "id_nonce",
+        "initiator_key",
+        "recipient_key",
+        "auth_response_key",
+    ],
+    [
+        [
+            decode_hex("0x02a77e3aa0c144ae7c0a3af73692b7d6e5b7a2fdc0eda16e8d5e6cb0d08e88dd04"),
+            decode_hex("0xa448f24c6d18e575453db13171562b71999873db5b286df957af199ec94617f7"),
+            decode_hex("0x885bba8dfeddd49855459df852ad5b63d13a3fae593f3f9fa7e317fd43651409"),
+            decode_hex("0x0101010101010101010101010101010101010101010101010101010101010101"),
+            decode_hex("0x238d8b50e4363cf603a48c6cc3542967"),
+            decode_hex("0xbebc0183484f7e7ca2ac32e3d72c8891"),
+            decode_hex("0xe987ad9e414d5b4f9bfe4ff1e52f2fae"),
+        ],
+    ],
+)
+def test_official_key_derivation(secret,
+                                 initiator_node_id,
+                                 recipient_node_id,
+                                 id_nonce,
+                                 initiator_key,
+                                 recipient_key,
+                                 auth_response_key):
+    derived_keys = hkdf_expand_and_extract(secret, initiator_node_id, recipient_node_id, id_nonce)
+    assert derived_keys[0] == initiator_key
+    assert derived_keys[1] == recipient_key
+    assert derived_keys[2] == auth_response_key
+>>>>>>> d39410a6... Use coincurve to perform discv5 ECDH

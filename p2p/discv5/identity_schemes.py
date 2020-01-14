@@ -5,6 +5,7 @@ from abc import (
 from collections import (
     UserDict,
 )
+import coincurve
 import secrets
 from typing import (
     Tuple,
@@ -30,10 +31,6 @@ from eth_utils import (
     encode_hex,
     keccak,
     ValidationError,
-)
-
-from p2p.ecies import (
-    ecdh_agree,
 )
 
 from p2p.discv5.typing import (
@@ -172,6 +169,20 @@ class IdentityScheme(ABC):
         ...
 
 
+def ecdh_agree(private_key: bytes, public_key: bytes) -> bytes:
+    """Perform the ECDH key agreement.
+
+    The public key is expected in compressed format and the resulting secret point will be
+    formatted as a 0x02 or 0x03 prefix (depending on the sign of the secret's y component)
+    followed by 32 bytes of the x component.
+    """
+    # We cannot use `cryptography.hazmat.primitives.asymmetric.ec.ECDH only gives us the x
+    # component of the shared secret point, but we need both x and y.
+    public_key_coincurve = coincurve.keys.PublicKey(public_key)
+    secret_coincurve = public_key_coincurve.multiply(private_key)
+    return secret_coincurve.format()
+
+
 def hkdf_expand_and_extract(secret: bytes,
                             initiator_node_id: NodeID,
                             recipient_node_id: NodeID,
@@ -273,9 +284,7 @@ class V4IdentityScheme(IdentityScheme):
                              id_nonce: IDNonce,
                              is_locally_initiated: bool
                              ) -> SessionKeys:
-        local_private_key_object = PrivateKey(local_private_key)
-        remote_public_key_object = PublicKey.from_compressed_bytes(remote_public_key)
-        secret = ecdh_agree(local_private_key_object, remote_public_key_object)
+        secret = ecdh_agree(local_private_key, remote_public_key)
 
         if is_locally_initiated:
             initiator_node_id, recipient_node_id = local_node_id, remote_node_id
