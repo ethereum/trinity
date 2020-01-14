@@ -237,8 +237,8 @@ SSZStaticHandlerType = Tuple[
     Type[AttestationHandler],
     Type[AttestationDataHandler],
     Type[AttesterSlashingHandler],
-    Type[BeaconBlockHandler],
-    Type[BeaconBlockBodyHandler],
+    # Type[BeaconBlockHandler],
+    # Type[BeaconBlockBodyHandler],
     Type[BeaconBlockHeaderHandler],
     Type[BeaconStateHandler],
     Type[CheckpointHandler],
@@ -251,7 +251,7 @@ SSZStaticHandlerType = Tuple[
     Type[PendingAttestationHandler],
     Type[ProposerSlashingHandler],
     Type[ValidatorHandler],
-    Type[VoluntaryExitHandler],
+    # Type[VoluntaryExitHandler],
 ]
 
 
@@ -262,8 +262,9 @@ class SSZStaticTestType(TestType[SSZStaticHandlerType]):
         AttestationHandler,
         AttestationDataHandler,
         AttesterSlashingHandler,
-        BeaconBlockHandler,
-        BeaconBlockBodyHandler,
+        # TODO: Add these back at v0.9.3
+        # BeaconBlockHandler,
+        # BeaconBlockBodyHandler,
         BeaconBlockHeaderHandler,
         BeaconStateHandler,
         CheckpointHandler,
@@ -276,5 +277,5 @@ class SSZStaticTestType(TestType[SSZStaticHandlerType]):
         PendingAttestationHandler,
         ProposerSlashingHandler,
         ValidatorHandler,
-        VoluntaryExitHandler,
+        # VoluntaryExitHandler,
     )
