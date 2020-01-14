@@ -2,3 +2,5 @@ Improve error message for when the parameters to JSON-RPC calls are invalid
 
 Improve error message for ``eth_getWork``, ``eth_submitWork`` and ``eth_submitHashrate``
 APIs which Trinity does not support as it generally does not support mining operations.
+
+Change ``eth_hashrate`` and ``eth_coinbase`` to also return errors instead of default values.
