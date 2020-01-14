@@ -50,6 +50,13 @@ def pid_dir(trinity_config):
 
 
 @pytest.fixture
+def enr_db_dir(trinity_config):
+    os.makedirs(trinity_config.enr_db_dir, exist_ok=True)
+    assert os.path.exists(trinity_config.enr_db_dir)
+    return trinity_config.enr_db_dir
+
+
+@pytest.fixture
 def nodekey(trinity_config, data_dir):
     with open(trinity_config.nodekey_path, 'wb') as nodekey_file:
         nodekey_file.write(b'\x01' * 32)
@@ -101,7 +108,7 @@ def test_not_initialized_without_pid_dir(
     assert not is_data_dir_initialized(trinity_config)
 
 
-def test_full_initialized_data_dir(
+def test_not_initialized_without_enr_db_dir(
         trinity_config,
         data_dir,
         nodekey,
@@ -109,6 +116,19 @@ def test_full_initialized_data_dir(
         logfile_path,
         ipc_dir,
         pid_dir):
+    assert not os.path.exists(trinity_config.enr_db_dir)
+    assert not is_data_dir_initialized(trinity_config)
+
+
+def test_full_initialized_data_dir(
+        trinity_config,
+        data_dir,
+        nodekey,
+        logfile_dir,
+        logfile_path,
+        ipc_dir,
+        pid_dir,
+        enr_db_dir):
     assert is_data_dir_initialized(trinity_config)
 
 
@@ -122,6 +142,7 @@ def test_full_initialized_data_dir_with_custom_nodekey():
     os.makedirs(trinity_config.logfile_path, exist_ok=True)
     os.makedirs(trinity_config.ipc_dir, exist_ok=True)
     os.makedirs(trinity_config.pid_dir, exist_ok=True)
+    os.makedirs(trinity_config.enr_db_dir, exist_ok=True)
     trinity_config.logfile_path.touch()
 
     assert trinity_config.nodekey_path is None

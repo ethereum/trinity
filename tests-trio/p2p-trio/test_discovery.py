@@ -22,7 +22,8 @@ from p2p.discv5.constants import (
     TCP_PORT_ENR_KEY,
     UDP_PORT_ENR_KEY,
 )
-from p2p.discv5.identity_schemes import V4IdentityScheme
+from p2p.discv5.enr_db import MemoryEnrDb
+from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
 from p2p.discovery import (
     CMD_FIND_NODE,
     CMD_NEIGHBOURS,
@@ -374,9 +375,10 @@ async def test_update_routing_table_triggers_bond_if_eviction_candidate(
 
     assert new_node not in discovery.routing
     # The update_routing_table() call above will have scheduled a future call to discovery.bond() so
-    # we need to yield here to give it a chance to run.
-    await trio.sleep(0.001)
-    assert bond_called
+    # we need to wait a bit here to give it a chance to run.
+    with trio.fail_after(0.5):
+        while not bond_called:
+            await trio.sleep(0.001)
 
 
 @pytest.mark.trio
@@ -420,8 +422,10 @@ class MockDiscoveryService(DiscoveryService):
     def __init__(self, bootnodes):
         privkey = keys.PrivateKey(keccak(b"seed"))
         self.messages = []
+        enr_db = MemoryEnrDb(default_identity_scheme_registry)
         socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
-        super().__init__(privkey, AddressFactory(), bootnodes, event_bus=None, socket=socket)
+        event_bus = None
+        super().__init__(privkey, AddressFactory(), bootnodes, event_bus, socket, enr_db)
 
     def send(self, node, msg_type, payload):
         # Overwrite our parent's send() to ensure no tests attempt to use us to go over the

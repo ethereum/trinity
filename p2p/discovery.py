@@ -71,9 +71,9 @@ from eth.constants import GENESIS_BLOCK_NUMBER
 
 from p2p import constants
 from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI
+from p2p.discv5.abc import EnrDbApi
 from p2p.discv5.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
-from p2p.discv5.enr_db import MemoryEnrDb
-from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
+from p2p.discv5.identity_schemes import V4IdentityScheme
 from p2p.discv5.constants import (
     IP_V4_ADDRESS_ENR_KEY,
     TCP_PORT_ENR_KEY,
@@ -151,6 +151,7 @@ class DiscoveryService(Service):
                  bootstrap_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
                  socket: trio.socket.SocketType,
+                 enr_db: EnrDbApi,
                  enr_field_providers: Sequence[ENR_FieldProvider] = tuple(),
                  ) -> None:
         self.privkey = privkey
@@ -164,8 +165,7 @@ class DiscoveryService(Service):
         self.neighbours_channels = ExpectedResponseChannels[List[NodeAPI]]()
         self.ping_channels = ExpectedResponseChannels[None]()
         self.enr_field_providers = enr_field_providers
-        # FIXME: Use a persistent EnrDb implementation.
-        self._enr_db = MemoryEnrDb(default_identity_scheme_registry)
+        self._enr_db = enr_db
         # FIXME: Use a concurrency-safe EnrDb implementation.
         self._enr_db_lock = trio.Lock()
         self._local_enr: ENR = None
@@ -872,9 +872,11 @@ class PreferredNodeDiscoveryService(DiscoveryService):
                  preferred_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
                  socket: trio.socket.SocketType,
+                 enr_db: EnrDbApi,
                  enr_field_providers: Optional[Sequence[ENR_FieldProvider]] = tuple()
                  ) -> None:
-        super().__init__(privkey, address, bootstrap_nodes, event_bus, socket, enr_field_providers)
+        super().__init__(
+            privkey, address, bootstrap_nodes, event_bus, socket, enr_db, enr_field_providers)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
         self._preferred_node_tracker = collections.defaultdict(lambda: 0)

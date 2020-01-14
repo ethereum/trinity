@@ -19,6 +19,8 @@ from eth.db.backends.memory import MemoryDB
 
 from p2p import kademlia
 from p2p.discovery import DiscoveryService, generate_eth_cap_enr_field
+from p2p.discv5.enr_db import FileEnrDb
+from p2p.discv5.identity_schemes import default_identity_scheme_registry
 
 from trinity.constants import (
     MAINNET_NETWORK_ID,
@@ -40,6 +42,7 @@ async def main() -> None:
         help="1 for mainnet, 3 for testnet"
     )
     parser.add_argument('-l', type=str, help="Log level", default="info")
+    parser.add_argument('-enrdb', type=str, help="Path to ENR database")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -50,6 +53,9 @@ async def main() -> None:
     else:
         log_level = getattr(logging, args.l.upper())
     logging.getLogger('p2p').setLevel(log_level)
+
+    enr_db_path = Path(args.enrdb)
+    enr_db_path.mkdir(exist_ok=True)
 
     network_cfg = PRECONFIGURED_NETWORKS[args.networkid]
     # Listen on a port other than 30303 so that we can test against a local geth instance
@@ -74,11 +80,12 @@ async def main() -> None:
     headerdb.persist_header(network_cfg.genesis_header)
     vm_config = network_cfg.vm_configuration
     enr_field_providers = (functools.partial(generate_eth_cap_enr_field, vm_config, headerdb),)
+    enr_db = FileEnrDb(default_identity_scheme_registry, enr_db_path)
     socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
     await socket.bind(('0.0.0.0', listen_port))
     async with TrioEndpoint.serve(networking_connection_config) as endpoint:
         service = DiscoveryService(
-            privkey, addr, bootstrap_nodes, endpoint, socket, enr_field_providers)
+            privkey, addr, bootstrap_nodes, endpoint, socket, enr_db, enr_field_providers)
         service.logger.info("Enode: %s", service.this_node.uri())
         async with background_trio_service(service):
             await service.manager.wait_finished()

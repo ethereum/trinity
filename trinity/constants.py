@@ -26,6 +26,7 @@ IPC_DIR = 'ipcs'
 LOG_DIR = 'logs'
 LOG_FILE = 'trinity.log'
 PID_DIR = 'pids'
+ENR_DB_DIR = 'enrs'
 
 # sync modes
 SYNC_FULL = 'full'
