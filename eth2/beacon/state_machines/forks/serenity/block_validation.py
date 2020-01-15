@@ -152,14 +152,14 @@ def validate_proposer_slashing(
 
     validate_block_header_signature(
         state=state,
-        header=proposer_slashing.header_1,
+        header=proposer_slashing.signed_header_1,
         pubkey=proposer.pubkey,
         slots_per_epoch=slots_per_epoch,
     )
 
     validate_block_header_signature(
         state=state,
-        header=proposer_slashing.header_2,
+        header=proposer_slashing.signed_header_2,
         pubkey=proposer.pubkey,
         slots_per_epoch=slots_per_epoch,
     )
@@ -168,8 +168,12 @@ def validate_proposer_slashing(
 def validate_proposer_slashing_epoch(
     proposer_slashing: ProposerSlashing, slots_per_epoch: int
 ) -> None:
-    epoch_1 = compute_epoch_at_slot(proposer_slashing.header_1.message.slot, slots_per_epoch)
-    epoch_2 = compute_epoch_at_slot(proposer_slashing.header_2.message.slot, slots_per_epoch)
+    epoch_1 = compute_epoch_at_slot(
+        proposer_slashing.signed_header_1.message.slot, slots_per_epoch
+    )
+    epoch_2 = compute_epoch_at_slot(
+        proposer_slashing.signed_header_2.message.slot, slots_per_epoch
+    )
 
     if epoch_1 != epoch_2:
         raise ValidationError(
@@ -179,11 +183,12 @@ def validate_proposer_slashing_epoch(
 
 
 def validate_proposer_slashing_headers(proposer_slashing: ProposerSlashing) -> None:
-    header_1 = proposer_slashing.header_1
-    header_2 = proposer_slashing.header_2
+    header_1 = proposer_slashing.signed_header_1
+    header_2 = proposer_slashing.signed_header_2
     if header_1 == header_2:
         raise ValidationError(
-            f"proposer_slashing.header_1 ({header_1}) == proposer_slashing.header_2 ({header_2})"
+            f"proposer_slashing.signed_header_1 ({header_1}) == "
+            f"proposer_slashing.signed_header_2 ({header_2})"
         )
 
 

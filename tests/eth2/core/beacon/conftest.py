@@ -467,8 +467,8 @@ def sample_proposer_slashing_params(sample_block_header_params, sample_signature
     )
     return {
         "proposer_index": 1,
-        "header_1": signed_block_header,
-        "header_2": signed_block_header,
+        "signed_header_1": signed_block_header,
+        "signed_header_2": signed_block_header,
     }
 
 

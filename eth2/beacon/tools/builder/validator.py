@@ -303,7 +303,9 @@ def create_mock_proposer_slashing_at_block(
     )
 
     return ProposerSlashing.create(
-        proposer_index=proposer_index, header_1=block_header_1, header_2=block_header_2
+        proposer_index=proposer_index,
+        signed_header_1=block_header_1,
+        signed_header_2=block_header_2,
     )
 
 
