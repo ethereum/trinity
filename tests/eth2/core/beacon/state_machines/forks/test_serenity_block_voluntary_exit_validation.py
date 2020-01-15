@@ -86,9 +86,10 @@ def test_validate_eligible_exit_epoch(
     )
 
     validator_index = 0
-    voluntary_exit = create_mock_voluntary_exit(
+    signed_voluntary_exit = create_mock_voluntary_exit(
         state, config, keymap, validator_index, exit_epoch=voluntary_exit_epoch
     )
+    voluntary_exit = signed_voluntary_exit.message
     if success:
         _validate_eligible_exit_epoch(
             voluntary_exit.epoch, state.current_epoch(slots_per_epoch)

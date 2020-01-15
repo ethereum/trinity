@@ -91,6 +91,8 @@ def test_proposer_slashing(test_case):
             test_case.execute()
 
 
+# TODO: Add this back at v0.9.3
+@pytest.mark.skip(reason="to be added back at v0.9.3")
 @pytest_from_eth2_fixture(
     {
         "config_types": (Minimal,),
