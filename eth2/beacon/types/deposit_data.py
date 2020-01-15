@@ -11,10 +11,10 @@ from eth2.beacon.typing import Gwei
 
 from .defaults import default_bls_pubkey, default_gwei
 
-TDepositDataMessage = TypeVar("TDepositDataMessage", bound="DepositDataMessage")
+TDepositMessage = TypeVar("TDepositMessage", bound="DepositMessage")
 
 
-class DepositDataMessage(HashableContainer):
+class DepositMessage(HashableContainer):
     fields = [
         ("pubkey", bytes48),
         ("withdrawal_credentials", bytes32),
@@ -23,11 +23,11 @@ class DepositDataMessage(HashableContainer):
 
     @classmethod
     def create(
-        cls: Type[TDepositDataMessage],
+        cls: Type[TDepositMessage],
         pubkey: BLSPubkey = default_bls_pubkey,
         withdrawal_credentials: Hash32 = ZERO_HASH32,
         amount: Gwei = default_gwei,
-    ) -> TDepositDataMessage:
+    ) -> TDepositMessage:
         return super().create(
             pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
         )

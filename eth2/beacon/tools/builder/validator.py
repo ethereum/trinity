@@ -33,7 +33,7 @@ from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.blocks import BeaconBlockHeader
 from eth2.beacon.types.checkpoints import Checkpoint
-from eth2.beacon.types.deposit_data import DepositData, DepositDataMessage
+from eth2.beacon.types.deposit_data import DepositData, DepositMessage
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
@@ -203,10 +203,10 @@ def aggregate_votes(
 # Signer
 #
 def sign_proof_of_possession(
-    deposit_data_message: DepositDataMessage, privkey: int
+    deposit_message: DepositMessage, privkey: int
 ) -> BLSSignature:
     return bls.sign(
-        message_hash=deposit_data_message.hash_tree_root,
+        message_hash=deposit_message.hash_tree_root,
         privkey=privkey,
         domain=compute_domain(SignatureDomain.DOMAIN_DEPOSIT),
     )
@@ -734,10 +734,10 @@ def create_mock_deposit_data(
     if amount is None:
         amount = config.MAX_EFFECTIVE_BALANCE
 
-    message = DepositDataMessage.create(
+    message = DepositMessage.create(
         pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
     )
-    signature = sign_proof_of_possession(deposit_data_message=message, privkey=privkey)
+    signature = sign_proof_of_possession(deposit_message=message, privkey=privkey)
     return DepositData.create(
         pubkey=pubkey,
         withdrawal_credentials=withdrawal_credentials,

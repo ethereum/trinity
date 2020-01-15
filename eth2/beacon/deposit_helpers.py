@@ -6,7 +6,7 @@ from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
 from eth2.beacon.epoch_processing_helpers import increase_balance
 from eth2.beacon.helpers import compute_domain
 from eth2.beacon.signature_domain import SignatureDomain
-from eth2.beacon.types.deposit_data import DepositDataMessage
+from eth2.beacon.types.deposit_data import DepositMessage
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
@@ -60,7 +60,7 @@ def process_deposit(
         # Note: The deposit contract does not check signatures.
         # Note: Deposits are valid across forks, thus the deposit domain
         # is retrieved directly from `compute_domain`.
-        deposit_message = DepositDataMessage.create(
+        deposit_message = DepositMessage.create(
             pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
         )
         is_valid_proof_of_possession = bls.verify(
