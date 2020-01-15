@@ -15,7 +15,6 @@ from eth_utils import (
 
 from eth_keys.datatypes import (
     PrivateKey,
-    PublicKey,
     NonRecoverableSignature,
 )
 

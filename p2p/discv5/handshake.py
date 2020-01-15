@@ -134,10 +134,11 @@ class HandshakeInitiator(BaseHandshakeParticipant):
             ephemeral_public_key,
         ) = self.identity_scheme.create_handshake_key_pair()
 
-        remote_public_key = PublicKey.from_compressed_bytes(self.remote_enr.public_key).to_bytes()
+        remote_public_key_object = PublicKey.from_compressed_bytes(self.remote_enr.public_key)
+        remote_public_key_uncompressed = remote_public_key_object.to_bytes()
         session_keys = self.identity_scheme.compute_session_keys(
             local_private_key=ephemeral_private_key,
-            remote_public_key=remote_public_key,
+            remote_public_key=remote_public_key_uncompressed,
             local_node_id=self.local_enr.node_id,
             remote_node_id=self.remote_node_id,
             id_nonce=who_are_you_packet.id_nonce,
