@@ -4,7 +4,10 @@ from eth2._utils.bls import bls
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.forks.serenity import SerenityStateMachine
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+    SerenitySignedBeaconBlock,
+)
 from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONFIG
 from eth2.beacon.tools.builder.initializer import create_mock_genesis
 from eth2.beacon.tools.builder.proposer import create_mock_block
@@ -39,11 +42,15 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
     for i in range(validator_count):
         assert genesis_state.validators[i].is_active(genesis_slot)
 
-    chaindb.persist_block(genesis_block, SerenityBeaconBlock, fork_choice_scoring)
+    chaindb.persist_block(
+        SerenitySignedBeaconBlock.create(message=genesis_block),
+        SerenitySignedBeaconBlock,
+        fork_choice_scoring,
+    )
     chaindb.persist_state(genesis_state)
 
     state = genesis_state
-    block = genesis_block
+    block = SerenitySignedBeaconBlock.create(message=genesis_block)
 
     chain_length = 4 * config.SLOTS_PER_EPOCH
     blocks = (block,)
@@ -62,7 +69,7 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
             state=state,
             config=config,
             state_machine=fixture_sm_class(chaindb),
-            block_class=SerenityBeaconBlock,
+            signed_block_class=SerenitySignedBeaconBlock,
             parent_block=block,
             keymap=keymap,
             slot=current_slot,
@@ -74,7 +81,7 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
         state, _ = sm.import_block(block, state)
 
         chaindb.persist_state(state)
-        chaindb.persist_block(block, SerenityBeaconBlock, fork_choice_scoring)
+        chaindb.persist_block(block, SerenitySignedBeaconBlock, fork_choice_scoring)
 
         blocks += (block,)
 

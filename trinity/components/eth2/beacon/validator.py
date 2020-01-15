@@ -453,7 +453,7 @@ class Validator(BaseService):
             state=state,
             config=state_machine.config,
             state_machine=state_machine,
-            block_class=SerenityBeaconBlock,  # TODO: Should get block class from slot
+            signed_block_class=SerenityBeaconBlock,  # TODO: Should get block class from slot
             parent_block=head_block,
             slot=slot,
             validator_index=proposer_index,

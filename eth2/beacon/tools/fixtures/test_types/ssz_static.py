@@ -22,7 +22,7 @@ from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
-from eth2.beacon.types.voluntary_exits import VoluntaryExit, SignedVoluntaryExit
+from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit, VoluntaryExit
 from eth2.configs import Eth2Config
 
 from . import TestType
