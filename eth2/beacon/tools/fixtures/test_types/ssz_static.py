@@ -10,10 +10,10 @@ from eth2.beacon.tools.fixtures.test_part import TestPart
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
-from eth2.beacon.types.block_headers import BeaconBlockHeader
-from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
+from eth2.beacon.types.block_headers import BeaconBlockHeader, SignedBeaconBlockHeader
+from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
-from eth2.beacon.types.deposit_data import DepositData
+from eth2.beacon.types.deposit_data import DepositData, DepositMessage
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.forks import Fork
@@ -22,7 +22,7 @@ from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
-from eth2.beacon.types.voluntary_exits import VoluntaryExit
+from eth2.beacon.types.voluntary_exits import VoluntaryExit, SignedVoluntaryExit
 from eth2.configs import Eth2Config
 
 from . import TestType
@@ -193,6 +193,11 @@ class DepositDataHandler(SSZHandler):
     object_type = DepositData
 
 
+class DepositMessageHandler(SSZHandler):
+    name = "DepositMessage"
+    object_type = DepositMessage
+
+
 class Eth1DataHandler(SSZHandler):
     name = "Eth1Data"
     object_type = Eth1Data
@@ -223,6 +228,21 @@ class ProposerSlashingHandler(SSZHandler):
     object_type = ProposerSlashing
 
 
+class SignedBeaconBlockHandler(SSZHandler):
+    name = "SignedBeaconBlock"
+    object_type = SignedBeaconBlock
+
+
+class SignedBeaconBlockHeaderHandler(SSZHandler):
+    name = "SignedBeaconBlockHeader"
+    object_type = SignedBeaconBlockHeader
+
+
+class SignedVoluntaryExitHandler(SSZHandler):
+    name = "SignedVoluntaryExit"
+    object_type = SignedVoluntaryExit
+
+
 class ValidatorHandler(SSZHandler):
     name = "Validator"
     object_type = Validator
@@ -244,12 +264,16 @@ SSZStaticHandlerType = Tuple[
     Type[CheckpointHandler],
     Type[DepositHandler],
     Type[DepositDataHandler],
+    Type[DepositMessageHandler],
     Type[Eth1DataHandler],
     Type[ForkHandler],
     Type[HistoricalBatchHandler],
     Type[IndexedAttestationHandler],
     Type[PendingAttestationHandler],
     Type[ProposerSlashingHandler],
+    Type[SignedBeaconBlockHandler],
+    Type[SignedBeaconBlockHeaderHandler],
+    Type[SignedVoluntaryExitHandler],
     Type[ValidatorHandler],
     Type[VoluntaryExitHandler],
 ]
@@ -269,12 +293,16 @@ class SSZStaticTestType(TestType[SSZStaticHandlerType]):
         CheckpointHandler,
         DepositHandler,
         DepositDataHandler,
+        DepositMessageHandler,
         Eth1DataHandler,
         ForkHandler,
         HistoricalBatchHandler,
         IndexedAttestationHandler,
         PendingAttestationHandler,
         ProposerSlashingHandler,
+        SignedBeaconBlockHandler,
+        SignedBeaconBlockHeaderHandler,
+        SignedVoluntaryExitHandler,
         ValidatorHandler,
         VoluntaryExitHandler,
     )
