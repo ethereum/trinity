@@ -363,8 +363,8 @@ class BeaconChain(BaseBeaconChain):
     def get_block_class(self, block_root: SigningRoot) -> Type[BaseSignedBeaconBlock]:
         slot = self.chaindb.get_slot_by_root(block_root)
         sm_class = self.get_state_machine_class_for_block_slot(slot)
-        block_class = sm_class.block_class
-        return block_class
+        signed_block_class = sm_class.signed_block_class
+        return signed_block_class
 
     def get_block_by_root(self, block_root: SigningRoot) -> BaseSignedBeaconBlock:
         """

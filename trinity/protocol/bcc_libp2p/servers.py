@@ -41,6 +41,7 @@ from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
     BeaconBlock,
     BaseSignedBeaconBlock,
+    SignedBeaconBlock,
 )
 from eth2.beacon.typing import (
     SigningRoot,
@@ -261,7 +262,7 @@ class BCCReceiveServer(BaseService):
         self._add_attestation(self.unaggregated_attestation_pool, attestation)
 
     async def _handle_beacon_block(self, msg: rpc_pb2.Message) -> None:
-        block = ssz.decode(msg.data, BeaconBlock)
+        block = ssz.decode(msg.data, SignedBeaconBlock)
         self._process_received_block(block)
 
     def _is_attestation_new(

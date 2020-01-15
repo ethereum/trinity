@@ -15,7 +15,7 @@ from eth.exceptions import BlockNotFound
 from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.chains.base import BaseBeaconChain
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
@@ -46,10 +46,10 @@ logger = logging.getLogger('trinity.components.eth2.beacon.TopicValidator')
 def get_beacon_block_validator(chain: BaseBeaconChain) -> Callable[..., bool]:
     def beacon_block_validator(msg_forwarder: ID, msg: rpc_pb2.Message) -> bool:
         try:
-            block = ssz.decode(msg.data, BeaconBlock)
+            block = ssz.decode(msg.data, SignedBeaconBlock)
         except (TypeError, ssz.DeserializationError) as error:
             logger.debug(
-                bold_red("Failed to deserialize BeaconBlock from %s, error=%s"),
+                bold_red("Failed to deserialize SignedBeaconBlock from %s, error=%s"),
                 encode_hex(msg.data),
                 str(error),
             )
