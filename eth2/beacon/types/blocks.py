@@ -245,6 +245,18 @@ class BaseSignedBeaconBlock(HashableContainer):
     def body(self):
         return self.message.body
 
+    def __str__(self) -> str:
+        return (
+            f"[hash_tree_root]={humanize_hash(self.message.hash_tree_root)},"
+            f" slot={self.message.slot},"
+            f" parent_root={humanize_hash(self.message.parent_root)},"
+            f" state_root={humanize_hash(self.message.state_root)},"
+            f" body=({self.message.body})"
+        )
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}: {str(self)}>"
+
 
 class SignedBeaconBlock(BaseSignedBeaconBlock):
     block_class = BeaconBlock
