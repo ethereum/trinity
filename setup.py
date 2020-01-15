@@ -53,6 +53,8 @@ deps = {
         "prometheus-client==0.7.1",
         "pymultihash>=0.8.2",
         "libp2p==0.1.4",
+        # The direct dependency resolves a version conflict between multiaddr and libp2p
+        "base58>=1.0.3,<2.0.0",
     ],
     'test': [
         "async-timeout>=3.0.1,<4",
