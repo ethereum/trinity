@@ -19,8 +19,8 @@ from p2p.service import (
 )
 
 from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
-    BeaconBlock,
+    BaseSignedBeaconBlock,
+    SignedBeaconBlock,
 )
 from eth2.beacon.db.exceptions import FinalizedHeadNotFound
 from eth2.beacon.typing import (
@@ -81,7 +81,7 @@ class BeaconChainSyncer(BaseService):
             else:
                 # sync peer selected successfully
                 await self.wait(self.sync())
-                new_head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
+                new_head = await self.chain_db.coro_get_canonical_head(SignedBeaconBlock)
                 self.logger.info(
                     "Sync with %s finished, new head: %s",
                     self.sync_peer,
@@ -95,7 +95,7 @@ class BeaconChainSyncer(BaseService):
             raise LeadingPeerNotFonud("Not connected to anyone")
 
         best_peer = self.peer_pool.get_best_head_slot_peer()
-        head = await self.chain_db.coro_get_canonical_head(BeaconBlock)
+        head = await self.chain_db.coro_get_canonical_head(SignedBeaconBlock)
 
         if best_peer.head_slot <= head.slot:
             raise LeadingPeerNotFonud("No peer is ahead of us")
@@ -105,7 +105,7 @@ class BeaconChainSyncer(BaseService):
     async def sync(self) -> None:
 
         try:
-            finalized_head = await self.chain_db.coro_get_finalized_head(BeaconBlock)
+            finalized_head = await self.chain_db.coro_get_finalized_head(SignedBeaconBlock)
             finalized_slot = finalized_head.slot
         # TODO(ralexstokes) look at better way to handle once we have fork choice in place
         except FinalizedHeadNotFound:
@@ -161,7 +161,7 @@ class BeaconChainSyncer(BaseService):
 
     async def request_batches(self,
                               start_slot: Slot,
-                              ) -> AsyncGenerator[Tuple[BaseBeaconBlock, ...], None]:
+                              ) -> AsyncGenerator[Tuple[BaseSignedBeaconBlock, ...], None]:
         slot = start_slot
         while True:
             self.logger.debug(
@@ -184,7 +184,7 @@ class BeaconChainSyncer(BaseService):
             if slot > self.sync_peer.head_slot:
                 break
 
-    async def validate_first_batch(self, batch: Tuple[BaseBeaconBlock, ...]) -> None:
+    async def validate_first_batch(self, batch: Tuple[BaseSignedBeaconBlock, ...]) -> None:
         try:
             first_block = batch[0]
         except IndexError:
@@ -198,9 +198,9 @@ class BeaconChainSyncer(BaseService):
 
         parent = await self.chain_db.coro_get_block_by_root(
             first_block.parent_root,
-            BeaconBlock,
+            SignedBeaconBlock,
         )
-        finalized_head = await self.chain_db.coro_get_finalized_head(BeaconBlock)
+        finalized_head = await self.chain_db.coro_get_finalized_head(SignedBeaconBlock)
 
         if parent.signing_root != finalized_head.signing_root:
             message = f"Peer has different block finalized at slot #{parent.slot}"
