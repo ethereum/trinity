@@ -1,8 +1,10 @@
-from typing import Tuple, Iterable, Dict
+
+from typing import Tuple, Iterable, Dict, Sequence
 
 from eth.constants import GENESIS_BLOCK_NUMBER
 from eth_typing import BlockNumber
 from eth_utils import encode_hex, to_dict
+
 from lahja import EndpointAPI
 
 from p2p.kademlia import Node
@@ -14,11 +16,14 @@ from trinity.config import TrinityConfig, Eth1AppConfig, Eth1ChainConfig
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.common.events import (
     ConnectToNodeCommand,
-    GetProtocolCapabilitiesRequest
+    GetConnectedPeersRequest,
+    GetProtocolCapabilitiesRequest,
+    PeerInfo,
 )
 from trinity.rpc.modules import Eth1ChainRPCModule
 from trinity.rpc.typing import RpcProtocolResponse, RpcNodeInfoResponse
 from trinity.server import BOUND_IP
+from trinity.rpc.typing import RpcPeerResponse
 from trinity._utils.version import construct_trinity_client_identifier
 
 
@@ -91,3 +96,26 @@ class Admin(Eth1ChainRPCModule):
             }
             for protocol, version in protocols
         }
+
+    def _format_peer(self, peer_info: PeerInfo) -> RpcPeerResponse:
+        session = peer_info.session
+        return {
+            'enode': session.remote.uri(),
+            'id': str(session.id),
+            'name': peer_info.client_version_string,
+            'caps': [f"{protocol}/{version}" for protocol, version in peer_info.capabilities],
+            'network': {
+                'localAddress': f"{BOUND_IP}:{self.trinity_config.port}",
+                'remoteAddress': f"{session.remote.address.ip}:{session.remote.address.tcp_port}",
+                'inbound': peer_info.inbound
+            }
+        }
+
+    async def peers(self) -> Sequence[RpcPeerResponse]:
+
+        response = await self.event_bus.request(GetConnectedPeersRequest())
+
+        return tuple(
+            self._format_peer(peer_info)
+            for peer_info in response.peers
+        )

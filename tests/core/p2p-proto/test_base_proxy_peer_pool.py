@@ -8,14 +8,13 @@ from p2p.service import run_service
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.common.events import (
     GetConnectedPeersRequest,
-    GetConnectedPeersResponse,
     PeerJoinedEvent,
     PeerLeftEvent,
 )
 from trinity.tools.event_bus import mock_request_response
 
 from trinity.protocol.eth.peer import ETHProxyPeerPool
-
+from trinity.tools.factories.events import GetConnectedPeersResponseFactory
 
 TEST_NODES = tuple(SessionFactory.create_batch(4))
 
@@ -28,8 +27,8 @@ async def test_can_instantiate_proxy_pool(event_bus):
 @pytest.mark.parametrize(
     "response, expected_count",
     (
-        (GetConnectedPeersResponse(tuple()), 0),
-        (GetConnectedPeersResponse(TEST_NODES), 4),
+        (GetConnectedPeersResponseFactory.from_sessions(tuple()), 0),
+        (GetConnectedPeersResponseFactory.from_sessions(TEST_NODES), 4),
     ),
 )
 @pytest.mark.asyncio
@@ -47,8 +46,8 @@ async def test_fetch_initial_peers(event_bus, response, expected_count):
 @pytest.mark.parametrize(
     "response, expected_count",
     (
-        (GetConnectedPeersResponse(tuple()), 0),
-        (GetConnectedPeersResponse(TEST_NODES), 4),
+        (GetConnectedPeersResponseFactory.from_sessions(tuple()), 0),
+        (GetConnectedPeersResponseFactory.from_sessions(TEST_NODES), 4),
     ),
 )
 @pytest.mark.asyncio
@@ -67,7 +66,7 @@ async def test_adds_new_peers(event_bus):
 
     do_mock = mock_request_response(
         GetConnectedPeersRequest,
-        GetConnectedPeersResponse((TEST_NODES[0],)),
+        GetConnectedPeersResponseFactory.from_sessions((TEST_NODES[0],)),
         event_bus,
     )
     async with do_mock:
@@ -87,7 +86,7 @@ async def test_adds_new_peers(event_bus):
 async def test_removes_peers(event_bus):
     do_mock = mock_request_response(
         GetConnectedPeersRequest,
-        GetConnectedPeersResponse(TEST_NODES[:2]),
+        GetConnectedPeersResponseFactory.from_sessions(TEST_NODES[:2]),
         event_bus,
     )
 

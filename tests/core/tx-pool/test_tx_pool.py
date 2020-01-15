@@ -20,7 +20,6 @@ from trinity.components.builtin.tx_pool.validators import (
 )
 from trinity.protocol.common.events import (
     GetConnectedPeersRequest,
-    GetConnectedPeersResponse,
 )
 from trinity.protocol.eth.commands import (
     Transactions
@@ -30,6 +29,7 @@ from trinity.protocol.eth.events import (
     SendTransactionsEvent,
 )
 from trinity.tools.event_bus import mock_request_response
+from trinity.tools.factories.events import GetConnectedPeersResponseFactory
 
 from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
@@ -71,7 +71,7 @@ async def test_tx_propagation(event_bus,
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(mock_request_response(
             GetConnectedPeersRequest,
-            GetConnectedPeersResponse(initial_two_peers),
+            GetConnectedPeersResponseFactory.from_sessions(initial_two_peers),
             event_bus,
         ))
 
@@ -155,7 +155,7 @@ async def test_does_not_propagate_invalid_tx(event_bus,
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(mock_request_response(
             GetConnectedPeersRequest,
-            GetConnectedPeersResponse(initial_two_peers),
+            GetConnectedPeersResponseFactory.from_sessions(initial_two_peers),
             event_bus,
         ))
 
