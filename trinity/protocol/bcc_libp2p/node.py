@@ -36,6 +36,8 @@ from eth2.beacon.types.attestations import (
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
     BeaconBlock,
+    BaseSignedBeaconBlock,
+    SignedBeaconBlock,
 )
 from eth2.beacon.typing import (
     Epoch,
@@ -196,7 +198,7 @@ class Peer:
 
     async def request_beacon_blocks_by_range(
         self, start_slot: Slot, count: int, step: int = 1
-    ) -> Tuple[BaseBeaconBlock, ...]:
+    ) -> Tuple[BaseSignedBeaconBlock, ...]:
         return await self.node.request_beacon_blocks_by_range(
             self._id,
             head_block_root=self.head_root,
@@ -207,7 +209,7 @@ class Peer:
 
     async def request_beacon_blocks_by_root(
         self, block_roots: Sequence[SigningRoot]
-    ) -> Tuple[BaseBeaconBlock, ...]:
+    ) -> Tuple[BaseSignedBeaconBlock, ...]:
         return await self.node.request_beacon_blocks_by_root(self._id, block_roots)
 
     def __repr__(self) -> str:
@@ -466,7 +468,7 @@ class Node(BaseService):
         else:
             self.logger.debug("Already disconnected from %s", peer_id)
 
-    async def broadcast_beacon_block(self, block: BaseBeaconBlock) -> None:
+    async def broadcast_beacon_block(self, block: BaseSignedBeaconBlock) -> None:
         await self._broadcast_data(PUBSUB_TOPIC_BEACON_BLOCK, ssz.encode(block))
 
     async def broadcast_attestation(self, attestation: Attestation) -> None:
@@ -693,7 +695,7 @@ class Node(BaseService):
         start_slot: Slot,
         count: int,
         step: int,
-    ) -> Tuple[BaseBeaconBlock, ...]:
+    ) -> Tuple[BaseSignedBeaconBlock, ...]:
         try:
             stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_RANGE_SSZ)
         except StreamFailure as error:
@@ -710,7 +712,7 @@ class Node(BaseService):
             await interaction.write_request(request)
             blocks = tuple([
                 block async for block in
-                interaction.read_chunk_response(BeaconBlock, count)
+                interaction.read_chunk_response(SignedBeaconBlock, count)
             ])
 
             return blocks
@@ -727,7 +729,7 @@ class Node(BaseService):
     async def request_beacon_blocks_by_root(
             self,
             peer_id: ID,
-            block_roots: Sequence[SigningRoot]) -> Tuple[BaseBeaconBlock, ...]:
+            block_roots: Sequence[SigningRoot]) -> Tuple[BaseSignedBeaconBlock, ...]:
         try:
             stream = await self.new_stream(peer_id, REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ)
         except StreamFailure as error:
@@ -739,7 +741,7 @@ class Node(BaseService):
             await interaction.write_request(request)
             blocks = tuple([
                 block async for block in
-                interaction.read_chunk_response(BeaconBlock, len(block_roots))
+                interaction.read_chunk_response(SignedBeaconBlock, len(block_roots))
             ])
 
             return blocks

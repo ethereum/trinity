@@ -228,9 +228,8 @@ class BeaconChain(BaseBeaconChain):
         sm_class = cls.get_state_machine_class_for_block_slot(genesis_block.slot)
         if type(genesis_block) != sm_class.signed_block_class:
             raise BlockClassError(
-                "Given genesis block class: {}, StateMachine.block_class: {}".format(
-                    type(genesis_block), sm_class.block_class
-                )
+                f"Given genesis block class: {type(genesis_block)}, "
+                f"StateMachine.signed_block_class: {sm_class.signed_block_class}"
             )
 
         chaindb = cls.get_chaindb_class()(db=base_db, genesis_config=genesis_config)

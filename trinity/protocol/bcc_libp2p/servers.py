@@ -40,6 +40,7 @@ from eth2.beacon.types.attestations import (
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
     BeaconBlock,
+    BaseSignedBeaconBlock,
 )
 from eth2.beacon.typing import (
     SigningRoot,
@@ -64,7 +65,7 @@ class OrphanBlockPool:
     Store the orphan blocks(the blocks who arrive before their parents).
     """
     # TODO: can probably use lru-cache or even database
-    _pool: Set[BaseBeaconBlock]
+    _pool: Set[BaseSignedBeaconBlock]
 
     def __init__(self) -> None:
         self._pool = set()
@@ -72,35 +73,35 @@ class OrphanBlockPool:
     def __len__(self) -> int:
         return len(self._pool)
 
-    def __contains__(self, block_or_block_root: Union[BaseBeaconBlock, SigningRoot]) -> bool:
+    def __contains__(self, block_or_block_root: Union[BaseSignedBeaconBlock, Hash32]) -> bool:
         block_root: SigningRoot
-        if isinstance(block_or_block_root, BaseBeaconBlock):
+        if isinstance(block_or_block_root, BaseSignedBeaconBlock):
             block_root = block_or_block_root.signing_root
         elif isinstance(block_or_block_root, bytes):
             block_root = block_or_block_root
         else:
-            raise TypeError("`block_or_block_root` should be `BaseBeaconBlock` or `SigningRoot`")
+            raise TypeError("`block_or_block_root` should be `BaseSignedBeaconBlock` or `SigningRoot`")
         try:
             self.get(block_root)
             return True
         except BlockNotFound:
             return False
 
-    def to_list(self) -> List[BaseBeaconBlock]:
+    def to_list(self) -> List[BaseSignedBeaconBlock]:
         return list(self._pool)
 
-    def get(self, block_root: SigningRoot) -> BaseBeaconBlock:
+    def get(self, block_root: SigningRoot) -> BaseSignedBeaconBlock:
         for block in self._pool:
             if block.signing_root == block_root:
                 return block
         raise BlockNotFound(f"No block with signing_root {block_root.hex()} is found")
 
-    def add(self, block: BaseBeaconBlock) -> None:
+    def add(self, block: BaseSignedBeaconBlock) -> None:
         if block in self._pool:
             return
         self._pool.add(block)
 
-    def pop_children(self, block_root: SigningRoot) -> Tuple[BaseBeaconBlock, ...]:
+    def pop_children(self, block_root: SigningRoot) -> Tuple[BaseSignedBeaconBlock, ...]:
         children = tuple(
             orphan_block
             for orphan_block in self._pool
@@ -281,7 +282,7 @@ class BCCReceiveServer(BaseService):
         # Add new attestation to attestation pool.
         attestation_pool.add(attestation)
 
-    def _process_received_block(self, block: BaseBeaconBlock) -> None:
+    def _process_received_block(self, block: BaseSignedBeaconBlock) -> None:
         # If the block is an orphan, put it to the orphan pool
         self.logger.debug(
             'Received block over gossip. slot=%d signing_root=%s',
@@ -359,7 +360,7 @@ class BCCReceiveServer(BaseService):
             return True
         return self._is_block_root_in_db(block_root=block_root)
 
-    def _is_block_seen(self, block: BaseBeaconBlock) -> bool:
+    def _is_block_seen(self, block: BaseSignedBeaconBlock) -> bool:
         return self._is_block_root_seen(block_root=block.signing_root)
 
     #

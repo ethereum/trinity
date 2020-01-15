@@ -1,15 +1,6 @@
 from eth2.beacon.tools.factories import BeaconChainFactory
 import asyncio
-from typing import (
-    Any,
-    AsyncIterator,
-    Dict,
-    Iterable,
-    Collection,
-    Tuple,
-    Type,
-    Sequence,
-)
+from typing import Any, AsyncIterator, Dict, Iterable, Collection, Tuple, Type, Sequence
 
 from async_generator import asynccontextmanager
 
@@ -18,21 +9,14 @@ from cancel_token import CancelToken
 from lahja import EndpointAPI
 from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.id import ID
-from libp2p.peer.peerinfo import (
-    PeerInfo,
-)
+from libp2p.peer.peerinfo import PeerInfo
 
 from eth_utils import to_tuple
 
-from eth.constants import (
-    ZERO_HASH32,
-)
+from eth.constants import ZERO_HASH32
 
 from p2p.service import run_service
-from p2p.tools.factories import (
-    get_open_port,
-    CancelTokenFactory,
-)
+from p2p.tools.factories import get_open_port, CancelTokenFactory
 
 from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_SIGNING_ROOT
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
@@ -41,12 +25,12 @@ from eth2.beacon.types.blocks import (
     BeaconBlock,
     BeaconBlockBody,
     BaseBeaconBlock,
+    BaseSignedBeaconBlock,
+    SignedBeaconBlock,
 )
 from eth2.beacon.state_machines.forks.serenity import SERENITY_CONFIG
 from eth2.beacon.typing import Slot
-from eth2.configs import (
-    Eth2GenesisConfig,
-)
+from eth2.configs import Eth2GenesisConfig
 from multiaddr import Multiaddr
 
 from trinity.db.beacon.chain import AsyncBeaconChainDB
@@ -55,14 +39,14 @@ from trinity.protocol.bcc_libp2p.node import Node, PeerPool, Peer
 from trinity.protocol.bcc_libp2p.servers import BCCReceiveServer
 from trinity.sync.beacon.chain import BeaconChainSyncer
 
-from .factories import (
-    AtomicDBFactory,
-)
+from .factories import AtomicDBFactory
 
 try:
     import factory
 except ImportError:
-    raise ImportError("The p2p.tools.factories module requires the `factory_boy` library.")
+    raise ImportError(
+        "The p2p.tools.factories module requires the `factory_boy` library."
+    )
 
 
 SERENITY_GENESIS_CONFIG = Eth2GenesisConfig(SERENITY_CONFIG)
@@ -92,15 +76,14 @@ class NodeFactory(factory.Factory):
 
     @classmethod
     def create_batch(cls, number: int) -> Tuple[Node, ...]:
-        return tuple(
-            cls() for _ in range(number)
-        )
+        return tuple(cls() for _ in range(number))
 
 
 class PeerFactory(factory.Factory):
     class Meta:
         model = Peer
-    _id = factory.Sequence(lambda n: ID(f'peer{n}'))
+
+    _id = factory.Sequence(lambda n: ID(f"peer{n}"))
     node = factory.SubFactory(NodeFactory)
     head_fork_version = None
     finalized_root = ZERO_HASH32
@@ -112,9 +95,9 @@ class PeerFactory(factory.Factory):
 @asynccontextmanager
 async def ConnectionPairFactory(
     alice_chaindb: AsyncBeaconChainDB = None,
-    alice_branch: Collection[BaseBeaconBlock] = None,
+    alice_branch: Collection[BaseSignedBeaconBlock] = None,
     bob_chaindb: AsyncBeaconChainDB = None,
-    bob_branch: Collection[BaseBeaconBlock] = None,
+    bob_branch: Collection[BaseSignedBeaconBlock] = None,
     genesis_state: BeaconState = None,
     alice_event_bus: EndpointAPI = None,
     cancel_token: CancelToken = None,
@@ -137,15 +120,14 @@ async def ConnectionPairFactory(
         alice_kwargs["chain__genesis_state"] = genesis_state
         bob_kwargs["chain__genesis_state"] = genesis_state
 
-    alice = NodeFactory(cancel_token=cancel_token, event_bus=alice_event_bus, **alice_kwargs)
+    alice = NodeFactory(
+        cancel_token=cancel_token, event_bus=alice_event_bus, **alice_kwargs
+    )
     bob = NodeFactory(cancel_token=cancel_token, **bob_kwargs)
     async with run_service(alice), run_service(bob):
         await asyncio.sleep(0.01)
         await alice.host.connect(
-            PeerInfo(
-                peer_id=bob.peer_id,
-                addrs=[bob.listen_maddr],
-            )
+            PeerInfo(peer_id=bob.peer_id, addrs=[bob.listen_maddr])
         )
         await asyncio.sleep(0.01)
         if handshake:
@@ -166,23 +148,36 @@ class BeaconBlockFactory(factory.Factory):
     slot = SERENITY_GENESIS_CONFIG.GENESIS_SLOT
     parent_root = ZERO_SIGNING_ROOT
     state_root = ZERO_HASH32
-    signature = EMPTY_SIGNATURE
     body = factory.SubFactory(BeaconBlockBodyFactory)
 
+
+class SignedBeaconBlockFactory(factory.Factory):
+    class Meta:
+        model = SignedBeaconBlock.create
+
+    message = factory.SubFactory(BeaconBlockFactory)
+    signature = EMPTY_SIGNATURE
+
     @classmethod
-    def _create(cls, model_class: Type[BeaconBlock], *args: Any, **kwargs: Any) -> BeaconBlock:
-        parent = kwargs.pop('parent', None)
+    def _create(
+        cls, model_class: Type[BaseSignedBeaconBlock], *args: Any, **kwargs: Any
+    ) -> BaseSignedBeaconBlock:
+        print(kwargs)
+        parent = kwargs.pop("parent", None)
         if parent is not None:
-            kwargs['parent_root'] = parent.signing_root
-            kwargs['slot'] = parent.slot + 1
+            return (
+                super()
+                ._create(model_class, *args, **kwargs)
+                .transform(("message", "parent_root"), parent.message.hash_tree_root)
+                .transform(("message", "slot"), parent.message.slot + 1)
+            )
         return super()._create(model_class, *args, **kwargs)
 
     @classmethod
     @to_tuple
-    def create_branch(cls,
-                      length: int,
-                      root: BeaconBlock = None,
-                      **kwargs: Any) -> Iterable[BeaconBlock]:
+    def create_branch(
+        cls, length: int, root: BaseSignedBeaconBlock = None, **kwargs: Any
+    ) -> Iterable[BaseSignedBeaconBlock]:
         if length == 0:
             return
 
@@ -199,17 +194,18 @@ class BeaconBlockFactory(factory.Factory):
 
     @classmethod
     @to_tuple
-    def create_branch_by_slots(cls,
-                               slots: Sequence[Slot],
-                               root: BeaconBlock = None,
-                               **kwargs: Any) -> Iterable[BeaconBlock]:
+    def create_branch_by_slots(
+        cls, slots: Sequence[Slot], root: BaseSignedBeaconBlock = None, **kwargs: Any
+    ) -> Iterable[BaseSignedBeaconBlock]:
         if root is None:
             root = cls()
 
-        parent = cls(parent_root=root.signing_root, slot=slots[0], **kwargs)
+        parent = cls(
+            message__parent_root=root.signing_root, message__slot=slots[0], **kwargs
+        )
         yield parent
         for slot in slots[1:]:
-            child = cls(parent_root=parent.signing_root, slot=slot)
+            child = cls(message__parent_root=parent.signing_root, message__slot=slot)
             yield child
             parent = child
 
@@ -247,12 +243,14 @@ class SimpleWriterBlockImporter:
         self._chain_db = chain_db
 
     def import_block(
-        self, block: BaseBeaconBlock
+        self, block: BaseSignedBeaconBlock
     ) -> Tuple[
-        BaseBeaconBlock, Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]
+        BaseSignedBeaconBlock,
+        Tuple[BaseSignedBeaconBlock, ...],
+        Tuple[BaseSignedBeaconBlock, ...],
     ]:
         new_blocks, old_blocks = self._chain_db.persist_block(
-            block, BeaconBlock, HigherSlotScoring()
+            block, SignedBeaconBlock, HigherSlotScoring()
         )
         return None, new_blocks, old_blocks
 
