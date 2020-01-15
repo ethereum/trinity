@@ -10,7 +10,7 @@ from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.tools.misc.ssz_vector import (
     override_lengths,
 )
-from eth2.beacon.types.blocks import BeaconBlock
+from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.tools.builder.initializer import create_mock_genesis
 
 from trinity.db.beacon.chain import AsyncBeaconChainDB
@@ -52,7 +52,11 @@ async def test_json_rpc_http_server(
         )
 
         chaindb.persist_state(genesis_state)
-        chaindb.persist_block(genesis_block, genesis_block.__class__, fork_choice_scoring)
+        chaindb.persist_block(
+            SignedBeaconBlock.create(message=genesis_block),
+            SignedBeaconBlock,
+            fork_choice_scoring
+        )
         try:
             rpc = RPCServer(initialize_beacon_modules(chaindb, event_bus), chaindb, event_bus)
             raw_server = await aiohttp_raw_server(RPCHandler.handle(rpc.execute))
