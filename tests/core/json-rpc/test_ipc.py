@@ -36,8 +36,13 @@ from trinity.sync.common.types import (
     SyncProgress
 )
 from trinity.tools.event_bus import mock_request_response
+from trinity.tools.factories import ETHPeerPairFactory
 
 from trinity._utils.version import construct_trinity_client_identifier
+
+
+from tests.core.integration_test_helpers import run_peer_pool_event_server
+from tests.core.peer_helpers import MockPeerPoolWithConnectedPeers
 
 
 def wait_for(path):
@@ -643,6 +648,53 @@ async def test_admin_addPeer_fires_message(
 
     event = await asyncio.wait_for(future, timeout=0.1, loop=event_loop)
     assert event.remote.uri() == enode
+
+
+@pytest.mark.asyncio
+async def test_admin_peers(
+        jsonrpc_ipc_pipe_path,
+        event_loop,
+        event_bus,
+        ipc_server):
+
+    async with ETHPeerPairFactory() as (alice, bob):
+        peer_pool = MockPeerPoolWithConnectedPeers([alice, bob], event_bus=event_bus)
+
+        async with run_peer_pool_event_server(event_bus, peer_pool):
+
+            request = build_request('admin_peers')
+
+            result = await get_ipc_response(
+                jsonrpc_ipc_pipe_path,
+                request,
+                event_loop,
+                event_bus
+            )
+
+            peers = result['result']
+            json_bob = peers[0]
+            json_alice = peers[1]
+
+            def to_remote_address(session):
+                return f"{session.remote.address.ip}:{session.remote.address.tcp_port}"
+
+            assert json_bob['caps'] == ['eth/63', 'eth/64']
+            assert json_bob['enode'] == alice.connection.session.remote.uri()
+            assert json_bob['id'] == str(alice.connection.session.id)
+            assert json_bob['name'] == 'bob'
+            bob_network = json_bob['network']
+            assert not bob_network['inbound']
+            assert bob_network['localAddress'] == '0.0.0.0:30303'
+            assert bob_network['remoteAddress'] == to_remote_address(alice.connection.session)
+
+            assert json_alice['caps'] == ['eth/63', 'eth/64']
+            assert json_alice['enode'] == bob.connection.session.remote.uri()
+            assert json_alice['id'] == str(bob.connection.session.id)
+            assert json_alice['name'] == 'alice'
+            alice_network = json_alice['network']
+            assert alice_network['inbound']
+            assert alice_network['localAddress'] == '0.0.0.0:30303'
+            assert alice_network['remoteAddress'] == to_remote_address(bob.connection.session)
 
 
 @pytest.fixture

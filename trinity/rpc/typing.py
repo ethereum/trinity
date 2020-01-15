@@ -30,6 +30,20 @@ class RpcNodeInfoResponse(TypedDict):
     protocols: Dict[str, RpcProtocolResponse]
 
 
+class RpcPeerNetworkResponse(TypedDict):
+    localAddress: str
+    remoteAddress: str
+    inbound: bool
+
+
+class RpcPeerResponse(TypedDict):
+    enode: str
+    id: str
+    name: str
+    caps: Sequence[str]
+    network: RpcPeerNetworkResponse
+
+
 RpcTransactionResponse = TypedDict('RpcTransactionResponse', {
     'hash': HexStr,
     'nonce': str,

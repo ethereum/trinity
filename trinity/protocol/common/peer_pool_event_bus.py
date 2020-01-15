@@ -45,7 +45,7 @@ from .events import (
     PeerCountResponse,
     PeerJoinedEvent,
     PeerLeftEvent,
-    ProtocolCapabilitiesResponse
+    ProtocolCapabilitiesResponse,
 )
 from .peer import BaseProxyPeer
 
@@ -157,7 +157,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
     async def handle_get_connected_peers_requests(self) -> None:
         async for req in self.event_bus.stream(GetConnectedPeersRequest):
             await self.event_bus.broadcast(
-                GetConnectedPeersResponse(tuple(self.peer_pool.connected_nodes.keys())),
+                GetConnectedPeersResponse.from_connected_nodes(self.peer_pool.connected_nodes),
                 req.broadcast_config()
             )
 
@@ -304,9 +304,9 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
         )
 
         return tuple([
-            await self.ensure_proxy_peer(session)
-            for session
-            in response.sessions
+            await self.ensure_proxy_peer(peer_info.session)
+            for peer_info
+            in response.peers
         ])
 
     async def get_peers(self) -> Tuple[TProxyPeer, ...]:

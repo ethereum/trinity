@@ -5,6 +5,8 @@ from typing import (
     Any,
     Tuple,
     Type,
+    NamedTuple,
+    Dict,
 )
 
 from lahja import (
@@ -14,6 +16,7 @@ from lahja import (
 
 from p2p.abc import CommandAPI, NodeAPI, SessionAPI
 from p2p.disconnect import DisconnectReason
+from p2p.peer import BasePeer
 from p2p.typing import Capabilities
 
 
@@ -69,10 +72,28 @@ class PeerLeftEvent(BaseEvent):
     session: SessionAPI
 
 
+class PeerInfo(NamedTuple):
+    session: SessionAPI
+    capabilities: Capabilities
+    client_version_string: str
+    inbound: bool
+
+
 @dataclass
 class GetConnectedPeersResponse(BaseEvent):
 
-    sessions: Tuple[SessionAPI, ...]
+    peers: Tuple[PeerInfo, ...]
+
+    @staticmethod
+    def from_connected_nodes(peers: Dict[SessionAPI, BasePeer]) -> 'GetConnectedPeersResponse':
+        return GetConnectedPeersResponse(tuple(
+            PeerInfo(
+                session=session,
+                capabilities=peer.connection.remote_capabilities,
+                client_version_string=peer.connection.safe_client_version_string,
+                inbound=peer.inbound
+            ) for session, peer in peers.items()
+        ))
 
 
 class GetConnectedPeersRequest(BaseRequestResponseEvent[GetConnectedPeersResponse]):
