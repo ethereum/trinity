@@ -1,17 +1,15 @@
 import asyncio
 import contextlib
+import logging
 import platform
 from typing import Iterator
 
 import websockets
 
+from async_service import ManagerAPI, Service
 from lahja import EndpointAPI
 
 from eth.abc import ChainAPI
-
-from p2p.service import (
-    BaseService,
-)
 
 from trinity.config import (
     Eth1AppConfig,
@@ -41,7 +39,9 @@ from trinity.protocol.common.events import (
 )
 
 
-class EthstatsService(BaseService):
+class EthstatsService(Service):
+    logger = logging.getLogger('trinity.components.ethstats.Service')
+
     def __init__(
         self,
         boot_info: BootInfo,
@@ -52,8 +52,6 @@ class EthstatsService(BaseService):
         node_contact: str,
         stats_interval: int,
     ) -> None:
-        super().__init__()
-
         self.boot_info = boot_info
         self.event_bus = event_bus
 
@@ -63,51 +61,50 @@ class EthstatsService(BaseService):
         self.node_contact = node_contact
         self.stats_interval = stats_interval
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         with self.get_chain() as chain:
             self.chain = chain
 
-            while self.is_operational:
+            while self.manager.is_running:
                 self.logger.info('Connecting to %s...', self.server_url)
+
                 async with websockets.connect(self.server_url) as websocket:
                     client: EthstatsClient = EthstatsClient(
                         websocket,
                         self.node_id,
-                        token=self.cancel_token,
                     )
 
-                    self.run_daemon_task(self.server_handler(client))
-                    self.run_daemon_task(self.statistics_handler(client))
+                    client_manager = self.manager.run_child_service(client)
 
-                    await client.run()
-                    if self.is_operational and not client.is_operational:
-                        self.logger.info('Connection to %s closed', self.server_url)
-                        self.logger.info('Reconnecting in 5s...')
-                        await self.sleep(5)
+                    self.manager.run_task(self.server_handler, client, client_manager)
+                    self.manager.run_task(self.statistics_handler, client, client_manager)
+
+                    await client_manager.wait_finished()
+
+                self.logger.info('Connection to %s closed', self.server_url)
+                self.logger.info('Reconnecting in 5s...')
+                await asyncio.sleep(5)
 
     # Wait for messages from server, respond when they arrive
-    async def server_handler(self, client: EthstatsClient) -> None:
-        while self.is_operational:
+    async def server_handler(self, client: EthstatsClient, manager: ManagerAPI) -> None:
+        while manager.is_running:
             message: EthstatsMessage = await client.recv()
 
             if message.command == 'node-pong':
                 await client.send_latency((timestamp_ms() - message.data['clientTime']) // 2)
-            elif message.command == 'history':
-                # TODO: send actual history
-                pass
             else:
-                self.logger.info('Server message received')
+                self.logger.debug('Unhandled message received: %s: %r', message.command, message)
 
     # Periodically send statistics and ping server to calculate latency
-    async def statistics_handler(self, client: EthstatsClient) -> None:
+    async def statistics_handler(self, client: EthstatsClient, manager: ManagerAPI) -> None:
         await client.send_hello(self.server_secret, self.get_node_info())
 
-        while self.is_operational:
+        while manager.is_running:
             await client.send_node_ping()
             await client.send_stats(await self.get_node_stats())
             await client.send_block(self.get_node_block())
 
-            await self.sleep(self.stats_interval)
+            await asyncio.sleep(self.stats_interval)
 
     def get_node_info(self) -> EthstatsData:
         """Getter for data that should be sent once, on start-up."""
@@ -139,7 +136,7 @@ class EthstatsService(BaseService):
     async def get_node_stats(self) -> EthstatsData:
         """Getter for data that should be sent periodically."""
         try:
-            peer_count = (await self.wait(
+            peer_count = (await asyncio.wait_for(
                 self.event_bus.request(
                     PeerCountRequest(),
                     TO_NETWORKING_BROADCAST_CONFIG,
