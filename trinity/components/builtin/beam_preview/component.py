@@ -1,8 +1,7 @@
 import asyncio
 
+from async_service import run_asyncio_service
 from lahja import EndpointAPI
-
-from p2p.service import run_service
 
 from trinity.boot_info import BootInfo
 from trinity.config import (
@@ -61,8 +60,7 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
 
             preview_server = BlockPreviewServer(event_bus, beam_chain, cls.shard_num)
 
-            async with run_service(preview_server):
-                await preview_server.cancellation()
+            await run_asyncio_service(preview_server)
 
 
 class BeamChainPreviewComponent0(BeamChainPreviewComponent):

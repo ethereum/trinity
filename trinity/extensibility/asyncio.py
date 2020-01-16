@@ -48,7 +48,6 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
                         proc.pid,
                     )
                     proc.send_signal(signal.SIGTERM)
-                    pass
                 finally:
                     raise err
 
