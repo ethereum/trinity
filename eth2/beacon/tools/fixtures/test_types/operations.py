@@ -123,8 +123,7 @@ class BlockHeaderHandler(OperationHandler):
         _cls, inputs: Tuple[BeaconState, BeaconBlock], config: Optional[Eth2Config]
     ) -> BeaconState:
         state, block = inputs
-        check_proposer_signature = True
-        return process_block_header(state, block, config, check_proposer_signature)
+        return process_block_header(state, block, config)
 
 
 class DepositHandler(OperationHandler):

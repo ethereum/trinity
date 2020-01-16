@@ -30,6 +30,10 @@ class SerenityStateTransition(BaseStateTransition):
         state = process_slots(state, target_slot, self.config)
 
         if signed_block:
-            state = process_block(state, signed_block, self.config, check_proposer_signature)
+            if check_proposer_signature:
+                validate_proposer_signature(
+                    state, signed_block, committee_config=CommitteeConfig(config)
+                )
+            state = process_block(state, signed_block.message, self.config)
 
         return state
