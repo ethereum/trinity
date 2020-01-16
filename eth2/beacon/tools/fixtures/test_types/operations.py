@@ -23,13 +23,13 @@ from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.types.voluntary_exits import VoluntaryExit
+from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
 from eth2.configs import Eth2Config
 
 from . import TestType
 
 Operation = Union[
-    ProposerSlashing, AttesterSlashing, Attestation, Deposit, VoluntaryExit
+    ProposerSlashing, AttesterSlashing, Attestation, Deposit, SignedVoluntaryExit
 ]
 OperationOrBlockHeader = Union[Operation, BeaconBlock]
 
@@ -141,7 +141,7 @@ class ProposerSlashingHandler(OperationHandler):
 
 class VoluntaryExitHandler(OperationHandler):
     name = "voluntary_exit"
-    operation_type = VoluntaryExit
+    operation_type = SignedVoluntaryExit
     processor = staticmethod(process_voluntary_exits)
     expected_exceptions = (IndexError,)
 
