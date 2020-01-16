@@ -36,7 +36,7 @@ from eth2.beacon.state_machines.base import (
     BaseBeaconStateMachine,
 )
 from eth2.beacon.state_machines.forks.serenity.blocks import (
-    SerenityBeaconBlock,
+    SerenitySignedBeaconBlock,
 )
 from eth2.beacon.tools.builder.aggregator import (
     get_aggregate_from_valid_committee_attestations,
@@ -223,7 +223,7 @@ class Validator(BaseService):
             ),
             state.slot,
             state.current_epoch(self.slots_per_epoch),
-            humanize_hash(head.state_root),
+            humanize_hash(head.message.state_root),
             state.finalized_checkpoint,
         )
         self.logger.debug(
@@ -453,7 +453,7 @@ class Validator(BaseService):
             state=state,
             config=state_machine.config,
             state_machine=state_machine,
-            signed_block_class=SerenityBeaconBlock,  # TODO: Should get block class from slot
+            signed_block_class=SerenitySignedBeaconBlock,  # TODO: Should get block class from slot
             parent_block=head_block,
             slot=slot,
             validator_index=proposer_index,

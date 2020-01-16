@@ -749,14 +749,17 @@ class BeaconChainConfig:
                          base_db: AtomicDatabaseAPI) -> 'BaseBeaconChain':
         chain_class = self.beacon_chain_class
         state = self.genesis_data.state
+        genesis_state_machine_class = chain_class.get_genesis_state_machine_class()
         block = get_genesis_block(
             genesis_state_root=state.hash_tree_root,
-            block_class=chain_class.get_genesis_state_machine_class().block_class,
+            block_class=genesis_state_machine_class.block_class,
         )
+        # ChainDB accept only signed block, so need to convert genesis block here.
+        signed_block = genesis_state_machine_class.signed_block_class.create(message=block)
         return chain_class.from_genesis(
             base_db=base_db,
             genesis_state=state,
-            genesis_block=block,
+            genesis_block=signed_block,
             genesis_config=self.genesis_config,
         )
 
