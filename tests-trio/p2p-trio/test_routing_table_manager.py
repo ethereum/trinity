@@ -30,7 +30,8 @@ from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
 )
 from p2p.discv5.routing_table import (
-    FlatRoutingTable,
+    compute_log_distance,
+    KademliaRoutingTable,
 )
 from p2p.discv5.routing_table_manager import (
     FindNodeHandlerService,
@@ -84,9 +85,9 @@ def remote_endpoint():
 
 
 @pytest.fixture
-def routing_table(remote_enr):
-    routing_table = FlatRoutingTable()
-    routing_table.add(remote_enr.node_id)
+def routing_table(local_enr, remote_enr):
+    routing_table = KademliaRoutingTable(local_enr.node_id, 16)
+    routing_table.update(remote_enr.node_id)
     return routing_table
 
 
@@ -189,9 +190,10 @@ async def test_ping_handler_updates_routing_table(ping_handler_service,
                                                   local_enr,
                                                   remote_enr,
                                                   routing_table):
-    other_node_id = NodeIDFactory()
-    routing_table.add(other_node_id)
-    assert routing_table.get_oldest_entry() == remote_enr.node_id
+    distance = compute_log_distance(remote_enr.node_id, local_enr.node_id)
+    other_node_id = NodeIDFactory.at_log_distance(local_enr.node_id, distance)
+    routing_table.update(other_node_id)
+    assert routing_table.get_nodes_at_log_distance(distance) == (other_node_id, remote_enr.node_id)
 
     ping = PingMessageFactory()
     incoming_message = IncomingMessageFactory(
@@ -201,7 +203,7 @@ async def test_ping_handler_updates_routing_table(ping_handler_service,
     await incoming_message_channels[0].send(incoming_message)
     await wait_all_tasks_blocked()
 
-    assert routing_table.get_oldest_entry() == other_node_id
+    assert routing_table.get_nodes_at_log_distance(distance) == (remote_enr.node_id, other_node_id)
 
 
 @pytest.mark.trio

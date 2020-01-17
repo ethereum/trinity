@@ -21,6 +21,9 @@ from eth_utils.toolz import (
 
 from lahja import EndpointAPI
 
+from p2p.discv5.constants import (
+    NUM_ROUTING_TABLE_BUCKETS,
+)
 from p2p.discv5.abc import (
     EnrDbApi,
 )
@@ -52,7 +55,7 @@ from p2p.discv5.packer import (
     Packer,
 )
 from p2p.discv5.routing_table import (
-    FlatRoutingTable,
+    KademliaRoutingTable,
 )
 from p2p.discv5.routing_table_manager import (
     RoutingTableManager,
@@ -154,7 +157,6 @@ class DiscV5Component(TrioIsolatedComponent):
         identity_scheme_registry = default_identity_scheme_registry
         message_type_registry = default_message_type_registry
 
-        routing_table = FlatRoutingTable()
         enr_dir = get_enr_dir(boot_info)
         enr_dir.mkdir(exist_ok=True)
         enr_db = FileEnrDb(default_identity_scheme_registry, enr_dir)
@@ -163,11 +165,13 @@ class DiscV5Component(TrioIsolatedComponent):
         local_enr = await get_local_enr(boot_info, enr_db, local_private_key)
         local_node_id = local_enr.node_id
 
+        routing_table = KademliaRoutingTable(local_node_id, NUM_ROUTING_TABLE_BUCKETS)
+
         await enr_db.insert_or_update(local_enr)
         for enr_repr in boot_info.args.discovery_boot_enrs or ():
             enr = ENR.from_repr(enr_repr)
             await enr_db.insert_or_update(enr)
-            routing_table.add(enr.node_id)
+            routing_table.update(enr.node_id)
 
         port = boot_info.args.discovery_port
 
