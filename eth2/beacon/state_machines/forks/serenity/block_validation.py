@@ -306,6 +306,17 @@ def _validate_eligible_target_epoch(
         )
 
 
+def _validate_slot_matches_target_epoch(
+    target_epoch: Epoch, attestation_slot: Slot, slots_per_epoch: int
+) -> None:
+    epoch = compute_epoch_at_slot(attestation_slot, slots_per_epoch)
+    if target_epoch != epoch:
+        raise ValidationError(
+            f"Attestation at slot {attestation_slot} (epoch {epoch}) must be in"
+            f" the same epoch with it's target epoch (epoch {target_epoch})"
+        )
+
+
 def validate_attestation_slot(
     attestation_slot: Slot,
     state_slot: Slot,
@@ -360,6 +371,9 @@ def _validate_attestation_data(
     )
 
     _validate_eligible_target_epoch(data.target.epoch, current_epoch, previous_epoch)
+    _validate_slot_matches_target_epoch(
+        data.target.epoch, attestation_slot, slots_per_epoch
+    )
     validate_attestation_slot(
         attestation_slot,
         state.slot,
