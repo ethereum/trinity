@@ -38,15 +38,15 @@ def test_distance(left_node_id, right_node_id, distance):
 
 
 @pytest.mark.parametrize(("left_node_id", "right_node_id", "log_distance"), (
-    (b"\x00\x00", b"\x00\x01", 0),
-    (b"\x00\x00", b"\x00\x02", 1),
-    (b"\x00\x00", b"\x00\x03", 1),
-    (b"\x00\x00", b"\x00\x04", 2),
-    (b"\x00\x00", b"\x00\x08", 3),
-    (b"\x00\x00", b"\x00\xff", 7),
-    (b"\x00\x00", b"\x01\x00", 8),
-    (b"\x00\x00", b"\xf0\x00", 15),
-    (b"\x00\x00", b"\xff\xff", 15),
+    (b"\x00\x00", b"\x00\x01", 1),
+    (b"\x00\x00", b"\x00\x02", 2),
+    (b"\x00\x00", b"\x00\x03", 2),
+    (b"\x00\x00", b"\x00\x04", 3),
+    (b"\x00\x00", b"\x00\x08", 4),
+    (b"\x00\x00", b"\x00\xff", 8),
+    (b"\x00\x00", b"\x01\x00", 9),
+    (b"\x00\x00", b"\xf0\x00", 16),
+    (b"\x00\x00", b"\xff\xff", 16),
 ))
 def test_log_distance(left_node_id, right_node_id, log_distance):
     assert compute_log_distance(left_node_id, right_node_id) == log_distance

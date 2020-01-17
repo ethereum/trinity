@@ -138,12 +138,12 @@ class NodeIDFactory(factory.Factory):
     def at_log_distance(cls, reference: NodeID, log_distance: int) -> NodeID:
         num_bits = len(reference) * 8
 
-        if log_distance >= num_bits:
-            raise ValueError("Log distance must be less than number of bits in the node id")
+        if log_distance > num_bits:
+            raise ValueError("Log distance must not be greater than number of bits in the node id")
         elif log_distance < 0:
             raise ValueError("Log distance cannot be negative")
 
-        num_common_bits = num_bits - log_distance - 1
+        num_common_bits = num_bits - log_distance
         flipped_bit_index = num_common_bits
         num_random_bits = num_bits - num_common_bits - 1
 
