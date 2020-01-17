@@ -1,8 +1,15 @@
 import logging
+import rlp
 import time
+from typing import (
+    Generator,
+    Sequence,
+    Tuple,
+)
 
 from eth_utils import (
     encode_hex,
+    to_tuple,
 )
 
 import trio
@@ -31,6 +38,7 @@ from p2p.discv5.channel_services import (
     OutgoingMessage,
 )
 from p2p.discv5.constants import (
+    NODES_MESSAGE_PAYLOAD_SIZE,
     REQUEST_RESPONSE_TIMEOUT,
     ROUTING_TABLE_PING_INTERVAL,
 )
@@ -52,6 +60,45 @@ from p2p.discv5.routing_table import (
 from p2p.discv5.typing import (
     NodeID,
 )
+
+
+@to_tuple
+def partition_enr_indices_by_size(enr_sizes: Sequence[int],
+                                  max_payload_size: int,
+                                  ) -> Generator[Tuple[int, ...], None, None]:
+    current_partition: Tuple[int, ...] = ()
+    current_partition_size = 0
+    for index, size in enumerate(enr_sizes):
+        if size > max_payload_size:
+            continue
+
+        if current_partition_size + size <= max_payload_size:
+            current_partition = current_partition + (index,)
+            current_partition_size += size
+        else:
+            yield current_partition
+            current_partition = (index,)
+            current_partition_size = size
+
+    if current_partition:
+        yield current_partition
+
+
+def partition_enrs(enrs: Sequence[ENR], max_payload_size: int) -> Tuple[Tuple[ENR, ...], ...]:
+    """Partition a list of ENRs to groups to be sent in separate NODES messages.
+
+    The goal is to send as few messages as possible, but each message must not exceed the maximum
+    allowed size.
+
+    If a single ENR exceeds the maximum payload size, it will be dropped.
+    """
+    serialized_enrs = tuple(rlp.encode(enr) for enr in enrs)
+    enr_sizes = tuple(len(serialized_enr) for serialized_enr in serialized_enrs)
+    partitioned_enr_indices = partition_enr_indices_by_size(enr_sizes, max_payload_size)
+    return tuple(
+        tuple(enrs[index] for index in indices)
+        for indices in partitioned_enr_indices
+    )
 
 
 class BaseRoutingTableManagerComponent(Service):
@@ -276,11 +323,7 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
                 if incoming_message.message.distance == 0:
                     await self.respond_with_local_enr(incoming_message)
                 else:
-                    self.logger.warning(
-                        "Received FindNode request for non-zero distance from %s which is not "
-                        "implemented yet",
-                        encode_hex(incoming_message.sender_node_id),
-                    )
+                    await self.respond_with_remote_enrs(incoming_message)
 
     async def respond_with_local_enr(self, incoming_message: IncomingMessage) -> None:
         """Send a Nodes message containing the local ENR in response to an incoming message."""
@@ -297,6 +340,36 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
             incoming_message.sender_endpoint,
         )
         await self.outgoing_message_send_channel.send(outgoing_message)
+
+    async def respond_with_remote_enrs(self, incoming_message: IncomingMessage) -> None:
+        """Send a Nodes message containing ENRs of peers at a given node distance."""
+        node_ids = self.routing_table.get_nodes_at_log_distance(incoming_message.message.distance)
+
+        enrs = []
+        for node_id in node_ids:
+            try:
+                enr = await self.enr_db.get(node_id)
+            except KeyError:
+                self.logger.warning("Missing ENR for node %s", encode_hex(node_id))
+            else:
+                enrs.append(enr)
+
+        enr_partitions = partition_enrs(enrs, NODES_MESSAGE_PAYLOAD_SIZE) or ((),)
+        self.logger.debug(
+            "Responding to %s with %d Nodes message containing %d ENRs at distance %d",
+            incoming_message.sender_endpoint,
+            len(enr_partitions),
+            len(enrs),
+            incoming_message.message.distance,
+        )
+        for partition in enr_partitions:
+            nodes_message = NodesMessage(
+                request_id=incoming_message.message.request_id,
+                total=len(enr_partitions),
+                enrs=partition,
+            )
+            outgoing_message = incoming_message.to_response(nodes_message)
+            await self.outgoing_message_send_channel.send(outgoing_message)
 
 
 class PingSenderService(BaseRoutingTableManagerComponent):

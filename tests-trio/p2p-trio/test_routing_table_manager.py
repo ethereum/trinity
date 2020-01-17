@@ -1,3 +1,12 @@
+from eth_utils.toolz import (
+    sliding_window,
+)
+
+from hypothesis import (
+    given,
+    strategies as st,
+)
+
 import pytest
 
 import pytest_trio
@@ -34,6 +43,7 @@ from p2p.discv5.routing_table import (
     KademliaRoutingTable,
 )
 from p2p.discv5.routing_table_manager import (
+    partition_enr_indices_by_size,
     FindNodeHandlerService,
     PingHandlerService,
     PingSenderService,
@@ -88,6 +98,16 @@ def remote_endpoint():
 def routing_table(local_enr, remote_enr):
     routing_table = KademliaRoutingTable(local_enr.node_id, 16)
     routing_table.update(remote_enr.node_id)
+    return routing_table
+
+
+@pytest_trio.trio_fixture
+async def filled_routing_table(routing_table, enr_db):
+    # add entries until the first bucket is full
+    while len(routing_table.get_nodes_at_log_distance(255)) < routing_table.bucket_size:
+        enr = ENRFactory()
+        routing_table.update(enr.node_id)
+        await enr_db.insert(enr)
     return routing_table
 
 
@@ -255,6 +275,83 @@ async def test_find_node_handler_sends_nodes(find_node_handler_service,
 
 
 @pytest.mark.trio
+async def test_find_node_handler_sends_remote_enrs(find_node_handler_service,
+                                                   incoming_message_channels,
+                                                   outgoing_message_channels,
+                                                   local_enr,
+                                                   remote_enr):
+    distance = compute_log_distance(local_enr.node_id, remote_enr.node_id)
+    find_node = FindNodeMessageFactory(distance=distance)
+    incoming_message = IncomingMessageFactory(message=find_node)
+    await incoming_message_channels[0].send(incoming_message)
+    await wait_all_tasks_blocked()
+
+    outgoing_message = outgoing_message_channels[1].receive_nowait()
+    assert isinstance(outgoing_message.message, NodesMessage)
+    assert outgoing_message.message.request_id == find_node.request_id
+    assert outgoing_message.message.total == 1
+    assert outgoing_message.message.enrs == (remote_enr,)
+
+
+@pytest.mark.trio
+async def test_find_node_handler_sends_many_remote_enrs(find_node_handler_service,
+                                                        incoming_message_channels,
+                                                        outgoing_message_channels,
+                                                        filled_routing_table,
+                                                        enr_db):
+    distance = 255
+    node_ids = filled_routing_table.get_nodes_at_log_distance(distance)
+    assert len(node_ids) == filled_routing_table.bucket_size
+    enrs = [await enr_db.get(node_id) for node_id in node_ids]
+
+    find_node = FindNodeMessageFactory(distance=distance)
+    incoming_message = IncomingMessageFactory(message=find_node)
+    await incoming_message_channels[0].send(incoming_message)
+
+    outgoing_messages = []
+    while True:
+        await wait_all_tasks_blocked()
+        try:
+            outgoing_messages.append(outgoing_message_channels[1].receive_nowait())
+        except trio.WouldBlock:
+            break
+
+    for outgoing_message in outgoing_messages:
+        assert isinstance(outgoing_message.message, NodesMessage)
+        assert outgoing_message.message.request_id == find_node.request_id
+        assert outgoing_message.message.total == len(outgoing_messages)
+        assert outgoing_message.message.enrs
+    sent_enrs = [
+        enr
+        for outgoing_message in outgoing_messages
+        for enr in outgoing_message.message.enrs
+    ]
+    assert sent_enrs == enrs
+
+
+@pytest.mark.trio
+async def test_find_node_handler_sends_empty(find_node_handler_service,
+                                             incoming_message_channels,
+                                             outgoing_message_channels,
+                                             routing_table,
+                                             enr_db):
+    distance = 5
+    assert len(routing_table.get_nodes_at_log_distance(distance)) == 0
+
+    find_node = FindNodeMessageFactory(distance=distance)
+    incoming_message = IncomingMessageFactory(message=find_node)
+    await incoming_message_channels[0].send(incoming_message)
+
+    await wait_all_tasks_blocked()
+    outgoing_message = outgoing_message_channels[1].receive_nowait()
+
+    assert isinstance(outgoing_message.message, NodesMessage)
+    assert outgoing_message.message.request_id == find_node.request_id
+    assert outgoing_message.message.total == 1
+    assert not outgoing_message.message.enrs
+
+
+@pytest.mark.trio
 async def test_send_ping(ping_sender_service,
                          routing_table,
                          incoming_message_channels,
@@ -304,3 +401,27 @@ async def test_send_endpoint_vote(ping_sender_service,
     endpoint_vote = endpoint_vote_channels[1].receive_nowait()
     assert endpoint_vote.endpoint == fake_local_endpoint
     assert endpoint_vote.node_id == incoming_message.sender_node_id
+
+
+@given(
+    sizes=st.lists(st.integers(min_value=1)),
+    max_size=st.integers(min_value=1),
+)
+def test_enr_partitioning(sizes, max_size):
+    partitions = partition_enr_indices_by_size(sizes, max_size)
+    indices = [index for partition in partitions for index in partition]
+    dropped_indices = tuple(index for index, size in enumerate(sizes) if size > max_size)
+
+    assert len(indices) == len(set(indices))
+    assert set(indices) == set(range(len(sizes))) - set(dropped_indices)
+    assert all(index1 < index2 for index1, index2 in sliding_window(2, indices))
+
+    partitioned_sizes = tuple(
+        tuple(sizes[index] for index in partition)
+        for partition in partitions
+    )
+    assert all(sum(partition) <= max_size for partition in partitioned_sizes)
+    assert all(
+        sum(partition) + next_partition[0] > max_size
+        for partition, next_partition in sliding_window(2, partitioned_sizes)
+    )
