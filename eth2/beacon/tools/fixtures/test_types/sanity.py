@@ -9,7 +9,7 @@ from eth2.beacon.state_machines.forks.serenity.state_transitions import (
 from eth2.beacon.tools.fixtures.conditions import validate_state
 from eth2.beacon.tools.fixtures.test_handler import TestHandler
 from eth2.beacon.tools.fixtures.test_part import TestPart
-from eth2.beacon.types.blocks import BeaconBlock
+from eth2.beacon.types.blocks import SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 from eth2.configs import Eth2Config
@@ -18,19 +18,19 @@ from . import TestType
 
 
 class BlocksHandler(
-    TestHandler[Tuple[BeaconState, Tuple[BeaconBlock, ...]], BeaconState]
+    TestHandler[Tuple[BeaconState, Tuple[SignedBeaconBlock, ...]], BeaconState]
 ):
     name = "blocks"
 
     @classmethod
     def parse_inputs(
         _cls, test_case_parts: Dict[str, TestPart], metadata: Dict[str, Any]
-    ) -> Tuple[BeaconState, Tuple[BeaconBlock, ...]]:
+    ) -> Tuple[BeaconState, Tuple[SignedBeaconBlock, ...]]:
         blocks_count = metadata["blocks_count"]
         return (
             test_case_parts["pre"].load(BeaconState),
             tuple(
-                test_case_parts[f"blocks_{i}"].load(BeaconBlock)
+                test_case_parts[f"blocks_{i}"].load(SignedBeaconBlock)
                 for i in range(blocks_count)
             ),
         )
@@ -46,14 +46,14 @@ class BlocksHandler(
     @classmethod
     def run_with(
         _cls,
-        inputs: Tuple[BeaconState, Tuple[BeaconBlock, ...]],
+        inputs: Tuple[BeaconState, Tuple[SignedBeaconBlock, ...]],
         config: Optional[Eth2Config],
     ) -> BeaconState:
         state, blocks = inputs
         state_transition = SerenityStateTransition(config)
         for block in blocks:
             state = state_transition.apply_state_transition(state, block)
-            if block.state_root != state.hash_tree_root:
+            if block.message.state_root != state.hash_tree_root:
                 raise ValidationError(
                     "block's state root did not match computed state root"
                 )
