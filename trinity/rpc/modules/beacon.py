@@ -9,7 +9,7 @@ from ssz.tools import (
 )
 
 from eth2.beacon.types.blocks import SignedBeaconBlock
-from eth2.beacon.typing import SigningRoot, Slot
+from eth2.beacon.typing import Root, Slot
 from trinity.rpc.format import (
     format_params,
     to_int_if_hex,
@@ -49,7 +49,7 @@ class Beacon(BeaconChainRPCModule):
         return to_formatted_dict(block, sedes=SignedBeaconBlock)
 
     @format_params(decode_hex)
-    async def getBlockByRoot(self, root: SigningRoot) -> Dict[Any, Any]:
+    async def getBlockByRoot(self, root: Root) -> Dict[Any, Any]:
         """
         Return the block of given root.
         """
@@ -58,7 +58,7 @@ class Beacon(BeaconChainRPCModule):
 
     async def getGenesisBlockRoot(self) -> str:
         """
-        Return genesis ``SigningRoot`` in hex string.
+        Return genesis ``Root`` in hex string.
         """
         block_root = await self.chain.coro_get_genesis_block_root()
         return encode_hex(block_root)

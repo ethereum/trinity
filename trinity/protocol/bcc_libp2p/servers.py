@@ -44,7 +44,7 @@ from eth2.beacon.types.blocks import (
     SignedBeaconBlock,
 )
 from eth2.beacon.typing import (
-    SigningRoot,
+    Root,
     SubnetId,
 )
 from eth2.beacon.typing import CommitteeIndex, Slot
@@ -74,14 +74,14 @@ class OrphanBlockPool:
     def __len__(self) -> int:
         return len(self._pool)
 
-    def __contains__(self, block_or_block_root: Union[BaseSignedBeaconBlock, Hash32]) -> bool:
-        block_root: SigningRoot
+    def __contains__(self, block_or_block_root: Union[BaseSignedBeaconBlock, Root]) -> bool:
+        block_root: Root
         if isinstance(block_or_block_root, BaseSignedBeaconBlock):
             block_root = block_or_block_root.signing_root
         elif isinstance(block_or_block_root, bytes):
             block_root = block_or_block_root
         else:
-            raise TypeError("`block_or_block_root` should be `BaseSignedBeaconBlock` or `SigningRoot`")
+            raise TypeError("`block_or_block_root` should be `BaseSignedBeaconBlock` or `Root`")
         try:
             self.get(block_root)
             return True
@@ -91,7 +91,7 @@ class OrphanBlockPool:
     def to_list(self) -> List[BaseSignedBeaconBlock]:
         return list(self._pool)
 
-    def get(self, block_root: SigningRoot) -> BaseSignedBeaconBlock:
+    def get(self, block_root: Root) -> BaseSignedBeaconBlock:
         for block in self._pool:
             if block.signing_root == block_root:
                 return block
@@ -102,7 +102,7 @@ class OrphanBlockPool:
             return
         self._pool.add(block)
 
-    def pop_children(self, block_root: SigningRoot) -> Tuple[BaseSignedBeaconBlock, ...]:
+    def pop_children(self, block_root: Root) -> Tuple[BaseSignedBeaconBlock, ...]:
         children = tuple(
             orphan_block
             for orphan_block in self._pool
@@ -313,12 +313,12 @@ class BCCReceiveServer(BaseService):
             # Remove attestations in block that are also in the attestation pool.
             self.unaggregated_attestation_pool.batch_remove(block.body.attestations)
 
-    def _try_import_orphan_blocks(self, parent_root: SigningRoot) -> None:
+    def _try_import_orphan_blocks(self, parent_root: Root) -> None:
         """
         Perform ``chain.import`` on the blocks in ``self.orphan_block_pool`` in breadth-first
         order, starting from the children of ``parent_root``.
         """
-        imported_roots: List[SigningRoot] = []
+        imported_roots: List[Root] = []
 
         imported_roots.append(parent_root)
         while len(imported_roots) != 0:
@@ -346,17 +346,17 @@ class BCCReceiveServer(BaseService):
                     # TODO: Possibly drop all of its descendants in `self.orphan_block_pool`?
                     self.logger.debug("Fail to import block=%s  reason=%s", block, error)
 
-    def _is_block_root_in_orphan_block_pool(self, block_root: SigningRoot) -> bool:
+    def _is_block_root_in_orphan_block_pool(self, block_root: Root) -> bool:
         return block_root in self.orphan_block_pool
 
-    def _is_block_root_in_db(self, block_root: SigningRoot) -> bool:
+    def _is_block_root_in_db(self, block_root: Root) -> bool:
         try:
             self.chain.get_block_by_root(block_root=block_root)
             return True
         except BlockNotFound:
             return False
 
-    def _is_block_root_seen(self, block_root: SigningRoot) -> bool:
+    def _is_block_root_seen(self, block_root: Root) -> bool:
         if self._is_block_root_in_orphan_block_pool(block_root=block_root):
             return True
         return self._is_block_root_in_db(block_root=block_root)

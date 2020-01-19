@@ -8,12 +8,8 @@ from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import List, bytes32, bytes96, uint64
 
-from eth2.beacon.constants import (
-    EMPTY_SIGNATURE,
-    GENESIS_PARENT_ROOT,
-    ZERO_SIGNING_ROOT,
-)
-from eth2.beacon.typing import FromBlockParams, HashTreeRoot, Slot
+from eth2.beacon.constants import EMPTY_SIGNATURE, GENESIS_PARENT_ROOT, ZERO_ROOT
+from eth2.beacon.typing import FromBlockParams, Root, Slot
 
 from .attestations import Attestation
 from .attester_slashings import AttesterSlashing
@@ -106,7 +102,7 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
         cls: Type[TBaseBeaconBlock],
         *,
         slot: Slot = default_slot,
-        parent_root: HashTreeRoot = ZERO_SIGNING_ROOT,
+        parent_root: Root = ZERO_ROOT,
         state_root: Hash32 = ZERO_HASH32,
         body: BeaconBlockBody = default_beacon_block_body,
     ) -> TBaseBeaconBlock:
@@ -141,9 +137,7 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
 
     @classmethod
     @abstractmethod
-    def from_root(
-        cls, root: HashTreeRoot, chaindb: "BaseBeaconChainDB"
-    ) -> "BaseBeaconBlock":
+    def from_root(cls, root: Root, chaindb: "BaseBeaconChainDB") -> "BaseBeaconBlock":
         """
         Return the block denoted by the given block root.
         """
@@ -153,7 +147,7 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
         return f"<{self.__class__.__name__}: {str(self)}>"
 
     @property
-    def signing_root(self):
+    def signing_root(self) -> Root:
         # Remove this soon
         return self.hash_tree_root
 
@@ -165,9 +159,7 @@ class BeaconBlock(BaseBeaconBlock):
     block_body_class = BeaconBlockBody
 
     @classmethod
-    def from_root(
-        cls, root: HashTreeRoot, chaindb: "BaseBeaconChainDB"
-    ) -> "BeaconBlock":
+    def from_root(cls, root: Root, chaindb: "BaseBeaconChainDB") -> "BeaconBlock":
         """
         Return the block denoted by the given block ``root``.
         """
@@ -226,11 +218,11 @@ class BaseSignedBeaconBlock(HashableContainer):
         )
 
     @property
-    def parent_root(self):
+    def parent_root(self) -> Root:
         return self.message.parent_root
 
     @property
-    def signing_root(self):
+    def signing_root(self) -> Root:
         return self.message.hash_tree_root
 
     @property
@@ -262,9 +254,7 @@ class SignedBeaconBlock(BaseSignedBeaconBlock):
     block_class = BeaconBlock
 
     @classmethod
-    def from_root(
-        cls, root: HashTreeRoot, chaindb: "BaseBeaconChainDB"
-    ) -> "SignedBeaconBlock":
+    def from_root(cls, root: Root, chaindb: "BaseBeaconChainDB") -> "SignedBeaconBlock":
         block = cls.block_class.from_root(root, chaindb)
         return cls.create(
             message=block,

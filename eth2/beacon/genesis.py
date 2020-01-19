@@ -7,7 +7,7 @@ from eth2.beacon.constants import (
     DEPOSIT_CONTRACT_TREE_DEPTH,
     SECONDS_PER_DAY,
     ZERO_HASH32,
-    ZERO_SIGNING_ROOT,
+    ZERO_ROOT,
 )
 from eth2.beacon.deposit_helpers import process_deposit
 from eth2.beacon.helpers import get_active_validator_indices
@@ -60,7 +60,7 @@ def initialize_beacon_state_from_eth1(
         latest_block_header=BeaconBlockHeader.create(
             body_root=BeaconBlockBody.create().hash_tree_root
         ),
-        block_roots=(ZERO_SIGNING_ROOT,) * config.SLOTS_PER_HISTORICAL_ROOT,
+        block_roots=(ZERO_ROOT,) * config.SLOTS_PER_HISTORICAL_ROOT,
         state_roots=(ZERO_HASH32,) * config.SLOTS_PER_HISTORICAL_ROOT,
         randao_mixes=(eth1_block_hash,) * config.EPOCHS_PER_HISTORICAL_VECTOR,
         slashings=(Gwei(0),) * config.EPOCHS_PER_SLASHINGS_VECTOR,

@@ -18,7 +18,7 @@ from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import HashTreeRoot, SigningRoot, Slot, Timestamp
+from eth2.beacon.typing import Root, Slot, Timestamp
 from eth2.configs import Eth2Config, Eth2GenesisConfig
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ class BaseBeaconChain(Configurable, ABC):
     # State API
     #
     @abstractmethod
-    def get_state_by_root(self, root: HashTreeRoot) -> BeaconState:
+    def get_state_by_root(self, root: Root) -> BeaconState:
         ...
 
     @abstractmethod
@@ -130,11 +130,11 @@ class BaseBeaconChain(Configurable, ABC):
     # Block API
     #
     @abstractmethod
-    def get_block_class(self, block_root: SigningRoot) -> Type[BaseSignedBeaconBlock]:
+    def get_block_class(self, block_root: Root) -> Type[BaseSignedBeaconBlock]:
         ...
 
     @abstractmethod
-    def get_block_by_root(self, block_root: SigningRoot) -> BaseSignedBeaconBlock:
+    def get_block_by_root(self, block_root: Root) -> BaseSignedBeaconBlock:
         ...
 
     @abstractmethod
@@ -142,7 +142,7 @@ class BaseBeaconChain(Configurable, ABC):
         ...
 
     @abstractmethod
-    def get_score(self, block_root: SigningRoot) -> BaseScore:
+    def get_score(self, block_root: Root) -> BaseScore:
         ...
 
     @abstractmethod
@@ -150,7 +150,7 @@ class BaseBeaconChain(Configurable, ABC):
         ...
 
     @abstractmethod
-    def get_canonical_block_root(self, slot: Slot) -> SigningRoot:
+    def get_canonical_block_root(self, slot: Slot) -> Root:
         ...
 
     @abstractmethod
@@ -165,11 +165,11 @@ class BaseBeaconChain(Configurable, ABC):
     # Attestation API
     #
     @abstractmethod
-    def get_attestation_by_root(self, attestation_root: HashTreeRoot) -> Attestation:
+    def get_attestation_by_root(self, attestation_root: Root) -> Attestation:
         ...
 
     @abstractmethod
-    def attestation_exists(self, attestation_root: HashTreeRoot) -> bool:
+    def attestation_exists(self, attestation_root: Root) -> bool:
         ...
 
 
@@ -306,7 +306,7 @@ class BeaconChain(BaseBeaconChain):
     #
     # State API
     #
-    def get_state_by_root(self, root: HashTreeRoot) -> BeaconState:
+    def get_state_by_root(self, root: Root) -> BeaconState:
         # TODO (hwwhww): using state class of head state for now, should be configurable if we have
         # more forks.
         head_state_slot = self.chaindb.get_head_state_slot()
@@ -360,13 +360,13 @@ class BeaconChain(BaseBeaconChain):
     #
     # Block API
     #
-    def get_block_class(self, block_root: SigningRoot) -> Type[BaseSignedBeaconBlock]:
+    def get_block_class(self, block_root: Root) -> Type[BaseSignedBeaconBlock]:
         slot = self.chaindb.get_slot_by_root(block_root)
         sm_class = self.get_state_machine_class_for_block_slot(slot)
         signed_block_class = sm_class.signed_block_class
         return signed_block_class
 
-    def get_block_by_root(self, block_root: SigningRoot) -> BaseSignedBeaconBlock:
+    def get_block_by_root(self, block_root: Root) -> BaseSignedBeaconBlock:
         """
         Return the requested block as specified by block hash.
 
@@ -388,7 +388,7 @@ class BeaconChain(BaseBeaconChain):
         block_class = self.get_block_class(block_root)
         return self.chaindb.get_block_by_root(block_root, block_class)
 
-    def get_score(self, block_root: SigningRoot) -> BaseScore:
+    def get_score(self, block_root: Root) -> BaseScore:
         """
         Return the score of the block with the given hash.
 
@@ -409,7 +409,7 @@ class BeaconChain(BaseBeaconChain):
         """
         return self.get_block_by_root(self.chaindb.get_canonical_block_root(slot))
 
-    def get_canonical_block_root(self, slot: Slot) -> SigningRoot:
+    def get_canonical_block_root(self, slot: Slot) -> Root:
         """
         Return the block hash with the given number in the canonical chain.
 
@@ -483,10 +483,10 @@ class BeaconChain(BaseBeaconChain):
     #
     # Attestation API
     #
-    def get_attestation_by_root(self, attestation_root: HashTreeRoot) -> Attestation:
+    def get_attestation_by_root(self, attestation_root: Root) -> Attestation:
         block_root, index = self.chaindb.get_attestation_key_by_root(attestation_root)
         block = self.get_block_by_root(block_root)
         return block.body.attestations[index]
 
-    def attestation_exists(self, attestation_root: HashTreeRoot) -> bool:
+    def attestation_exists(self, attestation_root: Root) -> bool:
         return self.chaindb.attestation_exists(attestation_root)

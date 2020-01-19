@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple, Type, cast
 
-from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import ValidationError
 import ssz
@@ -21,13 +20,14 @@ from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Epoch, Gwei, SigningRoot, Slot, Timestamp, ValidatorIndex
+from eth2.beacon.typing import Epoch, Gwei, Root, Slot, Timestamp, ValidatorIndex
+from eth2.beacon.constants import ZERO_ROOT
 from eth2.configs import CommitteeConfig, Eth2Config
 
 LMD_GHOST_SCORE_DATA_LENGTH = 2
 
 
-def score_block_by_root(root: SigningRoot) -> int:
+def score_block_by_root(root: Root) -> int:
     return int.from_bytes(root, byteorder="big")
 
 
@@ -64,7 +64,7 @@ class LMDGHOSTScore(BaseScore):
     def from_genesis(
         cls, genesis_state: BeaconState, genesis_block: BaseSignedBeaconBlock
     ) -> BaseScore:
-        score = (Gwei(0), score_block_by_root(SigningRoot(ZERO_HASH32)))
+        score = (Gwei(0), score_block_by_root(ZERO_ROOT))
         return cls(score)
 
 
@@ -80,7 +80,7 @@ def compute_slots_since_epoch_start(slot: Slot, slots_per_epoch: int) -> Slot:
 @dataclass(eq=True, frozen=True)
 class LatestMessage:
     epoch: Epoch
-    root: SigningRoot
+    root: Root
 
 
 @dataclass
@@ -90,7 +90,7 @@ class Context:
     justified_checkpoint: Checkpoint
     finalized_checkpoint: Checkpoint
     best_justified_checkpoint: Checkpoint
-    blocks: Dict[Hash32, BaseSignedBeaconBlock] = field(default_factory=dict)
+    blocks: Dict[Root, BaseSignedBeaconBlock] = field(default_factory=dict)
     block_states: Dict[Hash32, BeaconState] = field(default_factory=dict)
     checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
     latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
@@ -174,10 +174,10 @@ class Store:
             // self._config.SECONDS_PER_SLOT
         )
 
-    def _get_block_by_root(self, root: SigningRoot) -> BaseSignedBeaconBlock:
+    def _get_block_by_root(self, root: Root) -> BaseSignedBeaconBlock:
         return self._db.get_block_by_root(root, self._block_class)
 
-    def get_ancestor_root(self, root: SigningRoot, slot: Slot) -> Optional[Hash32]:
+    def get_ancestor_root(self, root: Root, slot: Slot) -> Optional[Root]:
         """
         Return the block root in the chain that is a
         predecessor of the block with ``root`` at the requested ``slot``.
@@ -196,7 +196,7 @@ class Store:
     def _latest_message_for_index(self, index: ValidatorIndex) -> LatestMessage:
         return self._context.latest_messages[index]
 
-    def get_latest_attesting_balance(self, root: SigningRoot) -> Gwei:
+    def get_latest_attesting_balance(self, root: Root) -> Gwei:
         state = self._get_checkpoint_state_for(self._context.justified_checkpoint)
         active_indices = get_active_validator_indices(
             state.validators, state.current_epoch(self.slots_per_epoch)
