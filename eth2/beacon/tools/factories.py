@@ -27,7 +27,7 @@ class BeaconChainFactory(factory.Factory):
 
     branch: Collection[BaseSignedBeaconBlock] = None
     genesis_state: BeaconState = None
-    genesis_block: SerenitySignedBeaconBlock = None
+    genesis_block: SerenityBeaconBlock = None
 
     class Meta:
         model = SkeletonLakeChain
@@ -76,7 +76,7 @@ class BeaconChainFactory(factory.Factory):
         chain = model_class.from_genesis(
             base_db=db,
             genesis_state=genesis_state,
-            genesis_block=SerenitySignedBeaconBlock.create(message=genesis_block),
+            genesis_block=genesis_block,
             genesis_config=genesis_config,
         )
 

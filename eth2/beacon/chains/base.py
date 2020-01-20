@@ -15,7 +15,7 @@ from eth2.beacon.fork_choice.constant import ConstantScoring
 from eth2.beacon.fork_choice.scoring import BaseScore
 from eth2.beacon.helpers import get_state_root_at_slot
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Root, Slot, Timestamp
@@ -60,7 +60,7 @@ class BaseBeaconChain(Configurable, ABC):
         cls,
         base_db: AtomicDatabaseAPI,
         genesis_state: BeaconState,
-        genesis_block: BaseSignedBeaconBlock,
+        genesis_block: BaseBeaconBlock,
         genesis_config: Eth2GenesisConfig,
     ) -> "BaseBeaconChain":
         ...
@@ -219,17 +219,17 @@ class BeaconChain(BaseBeaconChain):
         cls,
         base_db: AtomicDatabaseAPI,
         genesis_state: BeaconState,
-        genesis_block: BaseSignedBeaconBlock,
+        genesis_block: BaseBeaconBlock,
         genesis_config: Eth2GenesisConfig,
     ) -> "BaseBeaconChain":
         """
         Initialize the ``BeaconChain`` from a genesis state and block.
         """
         sm_class = cls.get_state_machine_class_for_block_slot(genesis_block.slot)
-        if type(genesis_block) != sm_class.signed_block_class:
+        if type(genesis_block) != sm_class.block_class:
             raise BlockClassError(
                 f"Given genesis block class: {type(genesis_block)}, "
-                f"StateMachine.signed_block_class: {sm_class.signed_block_class}"
+                f"StateMachine.block_class: {sm_class.block_class}"
             )
 
         chaindb = cls.get_chaindb_class()(db=base_db, genesis_config=genesis_config)
@@ -239,7 +239,11 @@ class BeaconChain(BaseBeaconChain):
         genesis_score_class = genesis_scoring_class.get_score_class()
         genesis_score = genesis_score_class.from_genesis(genesis_state, genesis_block)
         genesis_scoring = ConstantScoring(genesis_score)
-        chaindb.persist_block(genesis_block, genesis_block.__class__, genesis_scoring)
+        chaindb.persist_block(
+            sm_class.signed_block_class.create(message=genesis_block),
+            sm_class.signed_block_class,
+            genesis_scoring,
+        )
 
         return cls(base_db, genesis_config)
 
