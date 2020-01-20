@@ -63,7 +63,9 @@ SERVER_RUNNING = Log(name="server running", pattern="Running server", timeout=60
 START_SYNCING = Log(name="start syncing", pattern="their head slot", timeout=200)
 
 USE_FAKE_ETH1_DATA = False
-eth1_addr = '0x7B0d1830031bB521D9706083fd83F6d1Bb9da84d'
+pw_dir = 'eth2/beacon/scripts/pwd.txt'
+data_dir = 'eth2/beacon/scripts/testnet'
+eth1_addr = '0x422d30aC923C3924B61801fe1019eC53869aD1ac'
 
 
 class Eth1Client:
@@ -114,14 +116,14 @@ class Eth1Client:
         _cmds = [
             "geth",
             "--networkid 5566",
-            "--datadir eth2/beacon/scripts/testnet",
+            f"--datadir {data_dir}",
             f"--port {self.port}",
             "--rpc",
             "--rpcapi eth,web3,personal,net",
             f"--rpcport {self.rpcport}",
             "--nodiscover",
             f"--unlock {eth1_addr}",
-            "--password eth2/beacon/scripts/pwd.txt",
+            f"--password {pw_dir}",
             "--allow-insecure-unlock",
             "--mine",
         ]
@@ -443,6 +445,17 @@ async def main():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
+    # global variable `data_dir` is the path to eth1 chain data
+    # global variable `pw_dir` is the path to password of the geth account
+    # global variable `eth1_addr` is the account of eth1 chain miner
+
+    # Steps to set up eth1 chain with geth
+    # 1. create new account with `geth account new --datadir {data_dir}
+    # and replace `eth1_addr` with the account address you created
+    # and also replace the account in the bottom of genesis file, i.e., `poa_testnet.json`
+    # 2. store the password you input in step 1 into a file, e.g., pwd.txt`
+    # and update the path to password, i.e., `pw_dir`
+    # 3. init the chain with `geth init --datadir {data_dir} poa_testnet.json`
     if not USE_FAKE_ETH1_DATA:
         eth1_client_rpcport = 8444
         eth1_clinet = Eth1Client(
