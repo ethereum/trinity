@@ -34,7 +34,7 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
     assert valid_chain.get_canonical_head() == genesis_block
     # verify a special case (score(genesis) == 0)
     assert valid_chain.get_score(
-        genesis_block.signing_root
+        genesis_block.message.hash_tree_root
     ) == fork_choice_scoring.score(genesis_block.message)
 
     block = SerenitySignedBeaconBlock.from_parent(
@@ -46,13 +46,15 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
     state_machine = valid_chain.get_state_machine(block.slot)
     scoring = state_machine.get_fork_choice_scoring()
 
-    assert valid_chain.get_score(block.signing_root) == scoring.score(block.message)
+    assert valid_chain.get_score(block.message.hash_tree_root) == scoring.score(
+        block.message
+    )
     assert scoring.score(block.message) != 0
 
     canonical_block_1 = valid_chain.get_canonical_block_by_slot(genesis_block.slot + 1)
     assert canonical_block_1 == block
 
-    result_block = valid_chain.get_block_by_root(block.signing_root)
+    result_block = valid_chain.get_block_by_root(block.message.hash_tree_root)
     assert result_block == block
 
 
@@ -123,7 +125,9 @@ def test_import_blocks(valid_chain, genesis_block, genesis_state, config, keymap
         state = valid_chain.get_head_state()
 
         assert block == valid_chain.get_canonical_block_by_slot(block.slot)
-        assert block.signing_root == valid_chain.get_canonical_block_root(block.slot)
+        assert block.message.hash_tree_root == valid_chain.get_canonical_block_root(
+            block.slot
+        )
         blocks += (block,)
 
     assert valid_chain.get_canonical_head() != valid_chain_2.get_canonical_head()
@@ -174,7 +178,7 @@ def test_get_attestation_root(
         config=config,
         state_machine=state_machine,
         attestation_slot=genesis_block.slot,
-        beacon_block_root=genesis_block.signing_root,
+        beacon_block_root=genesis_block.message.hash_tree_root,
         keymap=keymap,
     )
     block = create_mock_block(

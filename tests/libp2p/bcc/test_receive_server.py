@@ -164,21 +164,21 @@ def test_orphan_block_pool():
     assert len(pool._pool) == 1
     # test: `__contains__`
     assert b1 in pool
-    assert b1.signing_root in pool
+    assert b1.message.hash_tree_root in pool
     print(b2 not in pool)
     assert b2 not in pool
-    assert b2.signing_root not in pool
+    assert b2.message.hash_tree_root not in pool
     # test: add: two blocks
     pool.add(b2)
     assert len(pool._pool) == 2
     # test: get
-    assert pool.get(b1.signing_root) == b1
-    assert pool.get(b2.signing_root) == b2
+    assert pool.get(b1.message.hash_tree_root) == b1
+    assert pool.get(b2.message.hash_tree_root) == b2
     # test: pop_children
-    b2_children = pool.pop_children(b2.signing_root)
+    b2_children = pool.pop_children(b2.message.hash_tree_root)
     assert len(b2_children) == 0
     assert len(pool._pool) == 2
-    b0_children = pool.pop_children(b0.signing_root)
+    b0_children = pool.pop_children(b0.message.hash_tree_root)
     assert len(b0_children) == 2 and (b1 in b0_children) and (b2 in b0_children)
     assert len(pool._pool) == 0
 
@@ -187,42 +187,46 @@ def test_orphan_block_pool():
 async def test_bcc_receive_server_try_import_orphan_blocks(receive_server):
     blocks = SignedBeaconBlockFactory.create_branch(4)
 
-    assert not receive_server._is_block_root_in_db(blocks[0].signing_root)
+    assert not receive_server._is_block_root_in_db(blocks[0].message.hash_tree_root)
     receive_server.chain.import_block(blocks[0])
-    assert receive_server._is_block_root_in_db(blocks[0].signing_root)
+    assert receive_server._is_block_root_in_db(blocks[0].message.hash_tree_root)
 
     # test: block without its parent in db should not be imported, and it should be put in the
     # `orphan_block_pool`.
     receive_server.orphan_block_pool.add(blocks[2])
     # test: No effect when calling `_try_import_orphan_blocks`
     # if the `parent_root` is not in db.
-    assert blocks[2].parent_root == blocks[1].signing_root
+    assert blocks[2].parent_root == blocks[1].message.hash_tree_root
     receive_server._try_import_orphan_blocks(blocks[2].parent_root)
     assert not receive_server._is_block_root_in_db(blocks[2].parent_root)
-    assert not receive_server._is_block_root_in_db(blocks[2].signing_root)
-    assert receive_server._is_block_root_in_orphan_block_pool(blocks[2].signing_root)
+    assert not receive_server._is_block_root_in_db(blocks[2].message.hash_tree_root)
+    assert receive_server._is_block_root_in_orphan_block_pool(
+        blocks[2].message.hash_tree_root
+    )
 
     receive_server.orphan_block_pool.add(blocks[3])
     # test: No effect when calling `_try_import_orphan_blocks` if `parent_root` is in the pool
     # but not in db.
-    assert blocks[3].parent_root == blocks[2].signing_root
-    receive_server._try_import_orphan_blocks(blocks[2].signing_root)
-    assert not receive_server._is_block_root_in_db(blocks[2].signing_root)
-    assert not receive_server._is_block_root_in_db(blocks[3].signing_root)
-    assert receive_server._is_block_root_in_orphan_block_pool(blocks[3].signing_root)
+    assert blocks[3].parent_root == blocks[2].message.hash_tree_root
+    receive_server._try_import_orphan_blocks(blocks[2].message.hash_tree_root)
+    assert not receive_server._is_block_root_in_db(blocks[2].message.hash_tree_root)
+    assert not receive_server._is_block_root_in_db(blocks[3].message.hash_tree_root)
+    assert receive_server._is_block_root_in_orphan_block_pool(
+        blocks[3].message.hash_tree_root
+    )
 
     # test: a successfully imported parent is present, its children should be processed
     # recursively.
     receive_server.chain.import_block(blocks[1])
-    receive_server._try_import_orphan_blocks(blocks[1].signing_root)
-    assert receive_server._is_block_root_in_db(blocks[1].signing_root)
-    assert receive_server._is_block_root_in_db(blocks[2].signing_root)
-    assert receive_server._is_block_root_in_db(blocks[3].signing_root)
+    receive_server._try_import_orphan_blocks(blocks[1].message.hash_tree_root)
+    assert receive_server._is_block_root_in_db(blocks[1].message.hash_tree_root)
+    assert receive_server._is_block_root_in_db(blocks[2].message.hash_tree_root)
+    assert receive_server._is_block_root_in_db(blocks[3].message.hash_tree_root)
     assert not receive_server._is_block_root_in_orphan_block_pool(
-        blocks[2].signing_root
+        blocks[2].message.hash_tree_root
     )
     assert not receive_server._is_block_root_in_orphan_block_pool(
-        blocks[3].signing_root
+        blocks[3].message.hash_tree_root
     )
 
 
@@ -233,7 +237,8 @@ async def test_bcc_receive_server_process_received_block(receive_server, monkeyp
     # test: if the block is an orphan, puts it in the orphan pool
     receive_server._process_received_block(block_orphan)
     assert (
-        receive_server.orphan_block_pool.get(block_orphan.signing_root) == block_orphan
+        receive_server.orphan_block_pool.get(block_orphan.message.hash_tree_root)
+        == block_orphan
     )
 
     # test: should returns `False` if `ValidationError` occurs.
@@ -245,7 +250,9 @@ async def test_bcc_receive_server_process_received_block(receive_server, monkeyp
             receive_server.chain, "import_block", import_block_raises_validation_error
         )
         receive_server._process_received_block(block_not_orphan)
-        assert not receive_server._is_block_root_in_db(block_not_orphan.signing_root)
+        assert not receive_server._is_block_root_in_db(
+            block_not_orphan.message.hash_tree_root
+        )
 
     # test: successfully imported the block, calls `self._try_import_orphan_blocks`
     event = asyncio.Event()
@@ -342,8 +349,8 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
         blocks[2].transform(("message", "state_root"), b"\x01" * 32),
         blocks[2].transform(("message", "state_root"), b"\x12" * 32),
     )
-    mock_peer_1_db = {block.signing_root: block for block in blocks[3:]}
-    mock_peer_2_db = {block.signing_root: block for block in blocks[:3]}
+    mock_peer_1_db = {block.message.hash_tree_root: block for block in blocks[3:]}
+    mock_peer_2_db = {block.message.hash_tree_root: block for block in blocks[:3]}
 
     receive_server.chain.import_block(blocks[0])
 
@@ -389,7 +396,7 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
         assert peer_2_called_event.is_set()
         # Check that all blocks are processed and no more orphan blocks
         for block in blocks + fork_blocks:
-            assert receive_server._is_block_root_in_db(block.signing_root)
+            assert receive_server._is_block_root_in_db(block.message.hash_tree_root)
 
 
 @pytest.mark.asyncio

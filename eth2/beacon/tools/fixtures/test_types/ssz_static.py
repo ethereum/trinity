@@ -95,7 +95,7 @@ class SSZHandler(TestHandler[InputType, OutputType]):
             test_case_parts["value"], cls.object_type
         )
         roots_yaml = test_case_parts["roots"].load_yaml()
-        roots = (roots_yaml["root"], roots_yaml.get("signing_root", None))
+        roots = (roots_yaml["root"], roots_yaml.get("message.hash_tree_root", None))
         return (
             serialized_ssz_object,
             ssz_object_from_yaml,
@@ -115,7 +115,7 @@ class SSZHandler(TestHandler[InputType, OutputType]):
             ssz.encode(deserialized_object, cls.object_type),
             (
                 ssz.get_hash_tree_root(ssz_object_from_yaml),
-                ssz_object_from_yaml.signing_root
+                ssz_object_from_yaml.message.hash_tree_root
                 if isinstance(ssz_object_from_yaml, SignedHashableContainer)
                 else None,
             ),
@@ -128,7 +128,7 @@ class SSZHandler(TestHandler[InputType, OutputType]):
           parsing YAML and SSZ serializing == input serialization
           deserializing the input serialization yields the object given by YAML
           deserializing and serializing the input yields the input (roundtrip)
-          the root and signing root match the given values
+          the roots match
         """
         object_serialization, deserialized_object, roundtrip_bytes, roots = output
         (

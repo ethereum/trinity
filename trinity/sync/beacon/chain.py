@@ -129,7 +129,7 @@ class BeaconChainSyncer(BaseService):
                     self.logger.debug("Invalid first batch: %s", error)
                     return
             else:
-                if batch[0].parent_root != last_block.signing_root:
+                if batch[0].parent_root != last_block.message.hash_tree_root:
                     self.logger.info("Received batch is not linked to previous one")
                     break
             last_block = batch[-1]
@@ -202,7 +202,7 @@ class BeaconChainSyncer(BaseService):
         )
         finalized_head = await self.chain_db.coro_get_finalized_head(SignedBeaconBlock)
 
-        if parent.signing_root != finalized_head.signing_root:
+        if parent.message.hash_tree_root != finalized_head.message.hash_tree_root:
             message = f"Peer has different block finalized at slot #{parent.slot}"
             self.logger.info(message)
             self.logger.info(

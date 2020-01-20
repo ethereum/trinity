@@ -378,7 +378,7 @@ class BeaconChain(BaseBeaconChain):
 
         Raise ``BlockNotFound`` if there's no block with the given hash in the db.
         """
-        validate_word(block_root, title="Block Signing Root")
+        validate_word(block_root, title="Block Root")
 
         block_class = self.get_block_class(block_root)
         return self.chaindb.get_block_by_root(block_root, block_class)
@@ -439,9 +439,9 @@ class BeaconChain(BaseBeaconChain):
         - a tuple of blocks which were canonical and now are no longer canonical.
         """
         self.logger.debug(
-            "attempting import of block with slot %s and signing_root %s",
+            "attempting import of block with slot %s and root %s",
             block.slot,
-            humanize_hash(block.signing_root),
+            humanize_hash(block.message.hash_tree_root),
         )
 
         try:
@@ -451,7 +451,7 @@ class BeaconChain(BaseBeaconChain):
                 "Attempt to import block #{}.  Cannot import block {} before importing "
                 "its parent block at {}".format(
                     block.slot,
-                    humanize_hash(block.signing_root),
+                    humanize_hash(block.message.hash_tree_root),
                     humanize_hash(block.parent_root),
                 )
             )
@@ -483,9 +483,9 @@ class BeaconChain(BaseBeaconChain):
             self.chaindb.update_head_state(state.slot, state.hash_tree_root)
 
         self.logger.debug(
-            "successfully imported block at slot %s with signing root %s",
+            "successfully imported block at slot %s with root %s",
             imported_block.slot,
-            humanize_hash(imported_block.signing_root),
+            humanize_hash(imported_block.message.hash_tree_root),
         )
 
         return imported_block, new_canonical_blocks, old_canonical_blocks

@@ -67,13 +67,18 @@ def test_chaindb_add_block_number_to_root_lookup(chaindb, block, fork_choice_sco
 
 def test_chaindb_persist_block_and_slot_to_root(chaindb, block, fork_choice_scoring):
     with pytest.raises(BlockNotFound):
-        chaindb.get_block_by_root(block.signing_root, block.__class__)
-    slot_to_root_key = SchemaV1.make_block_root_to_score_lookup_key(block.signing_root)
+        chaindb.get_block_by_root(block.message.hash_tree_root, block.__class__)
+    slot_to_root_key = SchemaV1.make_block_root_to_score_lookup_key(
+        block.message.hash_tree_root
+    )
     assert not chaindb.exists(slot_to_root_key)
 
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
 
-    assert chaindb.get_block_by_root(block.signing_root, block.__class__) == block
+    assert (
+        chaindb.get_block_by_root(block.message.hash_tree_root, block.__class__)
+        == block
+    )
     assert chaindb.exists(slot_to_root_key)
 
 
@@ -87,7 +92,9 @@ def test_chaindb_persist_block_and_unknown_parent(
 
 
 def test_chaindb_persist_block_and_block_to_root(chaindb, block, fork_choice_scoring):
-    block_to_root_key = SchemaV1.make_block_root_to_score_lookup_key(block.signing_root)
+    block_to_root_key = SchemaV1.make_block_root_to_score_lookup_key(
+        block.message.hash_tree_root
+    )
     assert not chaindb.exists(block_to_root_key)
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
     assert chaindb.exists(block_to_root_key)
@@ -99,7 +106,7 @@ def test_chaindb_get_score(
     chaindb.persist_block(genesis_block, genesis_block.__class__, fork_choice_scoring)
 
     genesis_score_key = SchemaV1.make_block_root_to_score_lookup_key(
-        genesis_block.signing_root
+        genesis_block.message.hash_tree_root
     )
     genesis_score_data = chaindb.db.get(genesis_score_key)
     genesis_score_class = fork_choice_scoring.get_score_class()
@@ -109,7 +116,7 @@ def test_chaindb_get_score(
 
     assert genesis_score == expected_genesis_score
     assert (
-        chaindb.get_score(genesis_block.signing_root, genesis_score_class)
+        chaindb.get_score(genesis_block.message.hash_tree_root, genesis_score_class)
         == expected_genesis_score
     )
 
@@ -117,13 +124,15 @@ def test_chaindb_get_score(
 
     chaindb.persist_block(block1, block1.__class__, fork_choice_scoring)
 
-    block1_score_key = SchemaV1.make_block_root_to_score_lookup_key(block1.signing_root)
+    block1_score_key = SchemaV1.make_block_root_to_score_lookup_key(
+        block1.message.hash_tree_root
+    )
     block1_score_data = chaindb.db.get(block1_score_key)
     block1_score = genesis_score_class.deserialize(block1_score_data)
     expected_block1_score = fork_choice_scoring.score(block1.message)
     assert block1_score == expected_block1_score
     assert (
-        chaindb.get_score(block1.signing_root, genesis_score_class)
+        chaindb.get_score(block1.message.hash_tree_root, genesis_score_class)
         == expected_block1_score
     )
 
@@ -134,27 +143,29 @@ def test_chaindb_set_score(chaindb, block, maximum_score_value):
     score = HigherSlotScore(score_data)
     chaindb.set_score(block, score)
 
-    block_score = chaindb.get_score(block.signing_root, HigherSlotScore)
+    block_score = chaindb.get_score(block.message.hash_tree_root, HigherSlotScore)
 
     assert block_score == score
 
 
 def test_chaindb_get_block_by_root(chaindb, block, fork_choice_scoring):
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
-    result_block = chaindb.get_block_by_root(block.signing_root, block.__class__)
+    result_block = chaindb.get_block_by_root(
+        block.message.hash_tree_root, block.__class__
+    )
     validate_ssz_equal(result_block, block)
 
 
 def test_chaindb_get_canonical_block_root(chaindb, block, fork_choice_scoring):
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
     block_root = chaindb.get_canonical_block_root(block.slot)
-    assert block_root == block.signing_root
+    assert block_root == block.message.hash_tree_root
 
 
 def test_chaindb_get_genesis_block_root(chaindb, genesis_block, fork_choice_scoring):
     chaindb.persist_block(genesis_block, genesis_block.__class__, fork_choice_scoring)
     block_root = chaindb.get_genesis_block_root()
-    assert block_root == genesis_block.signing_root
+    assert block_root == genesis_block.message.hash_tree_root
 
 
 def test_chaindb_get_head_state_slot_and_root(chaindb, state):
@@ -212,13 +223,14 @@ def test_chaindb_get_finalized_head(
     assert chaindb.get_justified_head(genesis_block.__class__) == genesis_block
 
     state_with_finalized_block = genesis_state.set(
-        "finalized_checkpoint", Checkpoint.create(root=block.signing_root)
+        "finalized_checkpoint", Checkpoint.create(root=block.message.hash_tree_root)
     )
     chaindb.persist_state(state_with_finalized_block)
     chaindb.persist_block(block, SignedBeaconBlock, fork_choice_scoring)
 
     assert (
-        chaindb.get_finalized_head(SignedBeaconBlock).signing_root == block.signing_root
+        chaindb.get_finalized_head(SignedBeaconBlock).message.hash_tree_root
+        == block.message.hash_tree_root
     )
     assert chaindb.get_justified_head(genesis_block.__class__) == genesis_block
 
@@ -240,7 +252,9 @@ def test_chaindb_get_justified_head(
     # test that there is only one justified head per epoch
     state_with_bad_epoch = genesis_state.set(
         "current_justified_checkpoint",
-        Checkpoint.create(root=block.signing_root, epoch=config.GENESIS_EPOCH),
+        Checkpoint.create(
+            root=block.message.hash_tree_root, epoch=config.GENESIS_EPOCH
+        ),
     )
     chaindb.persist_state(state_with_bad_epoch)
     chaindb.persist_block(block, SignedBeaconBlock, fork_choice_scoring)
@@ -251,13 +265,16 @@ def test_chaindb_get_justified_head(
     # test that the we can update justified head if we satisfy the invariants
     state_with_justified_block = genesis_state.set(
         "current_justified_checkpoint",
-        Checkpoint.create(root=block.signing_root, epoch=config.GENESIS_EPOCH + 1),
+        Checkpoint.create(
+            root=block.message.hash_tree_root, epoch=config.GENESIS_EPOCH + 1
+        ),
     )
     chaindb.persist_state(state_with_justified_block)
 
     assert chaindb.get_finalized_head(genesis_block.__class__) == genesis_block
     assert (
-        chaindb.get_justified_head(SignedBeaconBlock).signing_root == block.signing_root
+        chaindb.get_justified_head(SignedBeaconBlock).message.hash_tree_root
+        == block.message.hash_tree_root
     )
 
 
@@ -275,7 +292,7 @@ def test_chaindb_get_canonical_head(chaindb, block, fork_choice_scoring):
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
 
     canonical_head_root = chaindb.get_canonical_head_root()
-    assert canonical_head_root == block.signing_root
+    assert canonical_head_root == block.message.hash_tree_root
 
     result_block = chaindb.get_canonical_head(block.__class__)
     assert result_block == block
@@ -298,7 +315,7 @@ def test_chaindb_get_canonical_head(chaindb, block, fork_choice_scoring):
 def test_get_slot_by_root(chaindb, block, fork_choice_scoring):
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
     block_slot = block.slot
-    result_slot = chaindb.get_slot_by_root(block.signing_root)
+    result_slot = chaindb.get_slot_by_root(block.message.hash_tree_root)
     assert result_slot == block_slot
 
 
@@ -319,6 +336,6 @@ def test_chaindb_get_attestation_key_by_root(
         chaindb.get_attestation_key_by_root(attestation.hash_tree_root)
     chaindb.persist_block(block, block.__class__, fork_choice_scoring)
     assert chaindb.get_attestation_key_by_root(attestation.hash_tree_root) == (
-        block.signing_root,
+        block.message.hash_tree_root,
         0,
     )

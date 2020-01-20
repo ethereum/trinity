@@ -75,7 +75,7 @@ class OrphanBlockPool:
     def __contains__(self, block_or_block_root: Union[BaseSignedBeaconBlock, Root]) -> bool:
         block_root: Root
         if isinstance(block_or_block_root, BaseSignedBeaconBlock):
-            block_root = block_or_block_root.signing_root
+            block_root = block_or_block_root.message.hash_tree_root
         elif isinstance(block_or_block_root, bytes):
             block_root = block_or_block_root
         else:
@@ -91,9 +91,9 @@ class OrphanBlockPool:
 
     def get(self, block_root: Root) -> BaseSignedBeaconBlock:
         for block in self._pool:
-            if block.signing_root == block_root:
+            if block.message.hash_tree_root == block_root:
                 return block
-        raise BlockNotFound(f"No block with signing_root {block_root.hex()} is found")
+        raise BlockNotFound(f"No block with message.hash_tree_root {block_root.hex()} is found")
 
     def add(self, block: BaseSignedBeaconBlock) -> None:
         if block in self._pool:
@@ -215,7 +215,7 @@ class BCCReceiveServer(BaseService):
             # (whose parent block seemingly never going to show up)
             orphan_blocks = self.orphan_block_pool.to_list()
             parent_roots = set(block.parent_root for block in orphan_blocks)
-            block_roots = set(block.signing_root for block in orphan_blocks)
+            block_roots = set(block.message.hash_tree_root for block in orphan_blocks)
             # Remove dependent orphan blocks
             parent_roots.difference_update(block_roots)
             # Keep requesting parent blocks from all peers
@@ -227,12 +227,12 @@ class BCCReceiveServer(BaseService):
                 )
                 for block in blocks:
                     try:
-                        parent_roots.remove(block.signing_root)
+                        parent_roots.remove(block.message.hash_tree_root)
                     except ValueError:
                         self.logger.debug(
                             "peer=%s sent incorrect block=%s",
                             peer._id,
-                            encode_hex(block.signing_root),
+                            encode_hex(block.message.hash_tree_root),
                         )
                         # This should not happen if peers are returning correct blocks
                         continue
@@ -284,9 +284,9 @@ class BCCReceiveServer(BaseService):
     def _process_received_block(self, block: BaseSignedBeaconBlock) -> None:
         # If the block is an orphan, put it to the orphan pool
         self.logger.debug(
-            'Received block over gossip. slot=%d signing_root=%s',
+            'Received block over gossip. slot=%d message.hash_tree_root=%s',
             block.slot,
-            block.signing_root.hex(),
+            block.message.hash_tree_root.hex(),
         )
         if not self._is_block_root_in_db(block.parent_root):
             if block not in self.orphan_block_pool:
@@ -297,7 +297,7 @@ class BCCReceiveServer(BaseService):
             self.chain.import_block(block)
             self.logger.info(
                 "Successfully imported block=%s",
-                encode_hex(block.signing_root),
+                encode_hex(block.message.hash_tree_root),
             )
         # If the block is invalid, we should drop it.
         except ValidationError as error:
@@ -307,7 +307,7 @@ class BCCReceiveServer(BaseService):
             # Successfully imported the block. See if any blocks in `self.orphan_block_pool`
             # depend on it. If there are, try to import them.
             # TODO: should be done asynchronously?
-            self._try_import_orphan_blocks(block.signing_root)
+            self._try_import_orphan_blocks(block.message.hash_tree_root)
             # Remove attestations in block that are also in the attestation pool.
             self.unaggregated_attestation_pool.batch_remove(block.body.attestations)
 
@@ -337,9 +337,9 @@ class BCCReceiveServer(BaseService):
                     self.chain.import_block(block)
                     self.logger.info(
                         "Successfully imported block=%s",
-                        encode_hex(block.signing_root),
+                        encode_hex(block.message.hash_tree_root),
                     )
-                    imported_roots.append(block.signing_root)
+                    imported_roots.append(block.message.hash_tree_root)
                 except ValidationError as error:
                     # TODO: Possibly drop all of its descendants in `self.orphan_block_pool`?
                     self.logger.debug("Fail to import block=%s  reason=%s", block, error)
@@ -360,7 +360,7 @@ class BCCReceiveServer(BaseService):
         return self._is_block_root_in_db(block_root=block_root)
 
     def _is_block_seen(self, block: BaseSignedBeaconBlock) -> bool:
-        return self._is_block_root_seen(block_root=block.signing_root)
+        return self._is_block_root_seen(block_root=block.message.hash_tree_root)
 
     #
     # Exposed APIs for Validator
@@ -397,7 +397,7 @@ class BCCReceiveServer(BaseService):
         except BlockNotFound:
             return ()
 
-        beacon_block_root = block.signing_root
+        beacon_block_root = block.message.hash_tree_root
         return self.unaggregated_attestation_pool.get_acceptable_attestations(
             slot, committee_index, beacon_block_root
         )

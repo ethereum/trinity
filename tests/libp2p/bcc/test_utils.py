@@ -205,7 +205,9 @@ async def test_get_blocks_from_fork_chain_by_root(
     fork_chain_blocks = SignedBeaconBlockFactory.create_branch_by_slots(
         fork_chain_block_slots
     )
-    mock_root_to_block_db = {block.signing_root: block for block in fork_chain_blocks}
+    mock_root_to_block_db = {
+        block.message.hash_tree_root: block for block in fork_chain_blocks
+    }
 
     class Chain:
         def get_block_by_root(self, root):

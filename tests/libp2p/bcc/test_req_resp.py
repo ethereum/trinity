@@ -190,7 +190,9 @@ async def test_request_beacon_blocks_by_root(monkeypatch):
     async with ConnectionPairFactory() as (alice, bob):
 
         blocks = SignedBeaconBlockFactory.create_branch(5)
-        mock_root_to_block_db = {block.signing_root: block for block in blocks}
+        mock_root_to_block_db = {
+            block.message.hash_tree_root: block for block in blocks
+        }
 
         def get_block_by_root(root):
             validate_word(root)
@@ -202,11 +204,11 @@ async def test_request_beacon_blocks_by_root(monkeypatch):
         monkeypatch.setattr(bob.chain, "get_block_by_root", get_block_by_root)
 
         requesting_block_roots = [
-            blocks[0].signing_root,
+            blocks[0].message.hash_tree_root,
             b"\x12" * 32,  # Unknown block root
-            blocks[1].signing_root,
+            blocks[1].message.hash_tree_root,
             b"\x23" * 32,  # Unknown block root
-            blocks[3].signing_root,
+            blocks[3].message.hash_tree_root,
         ]
         requested_blocks = await alice.request_beacon_blocks_by_root(
             peer_id=bob.peer_id, block_roots=requesting_block_roots

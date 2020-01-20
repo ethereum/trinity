@@ -202,7 +202,7 @@ def run_validate_block_proposer_signature(
         validate_proposer_signature(future_state, block, CommitteeConfig(state_machine.config))
     except ValidationError as error:
         raise InvalidGossipMessage(
-            f"Failed to validate block={encode_hex(block.signing_root)}",
+            f"Failed to validate block={encode_hex(block.message.hash_tree_root)}",
             error,
         )
 

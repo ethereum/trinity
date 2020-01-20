@@ -176,7 +176,7 @@ def test_process_attestations(
         config=config,
         state_machine=fixture_sm_class(chaindb, genesis_fork_choice_context),
         attestation_slot=attestation_slot,
-        beacon_block_root=genesis_block.signing_root,
+        beacon_block_root=genesis_block.message.hash_tree_root,
         keymap=keymap,
         voted_attesters_ratio=1.0,
     )

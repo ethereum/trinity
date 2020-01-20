@@ -187,7 +187,7 @@ async def test_validator_propose_block_succeeds(event_loop, event_bus, monkeypat
     )
 
     # test: ensure the proposed block is saved to the chaindb
-    assert alice.chain.get_block_by_root(block.signing_root) == block
+    assert alice.chain.get_block_by_root(block.message.hash_tree_root) == block
 
     # test: ensure that the `canonical_head` changed after proposing
     new_head = alice.chain.get_canonical_head()
@@ -432,7 +432,7 @@ async def test_validator_attest(event_loop, event_bus, monkeypatch):
     assert len(attestations) >= 1
     attestation = attestations[0]
     assert attestation.data.slot == assignment.slot
-    assert attestation.data.beacon_block_root == head.signing_root
+    assert attestation.data.beacon_block_root == head.message.hash_tree_root
     assert attestation.data.index == assignment.committee_index
 
     # Advance the state and validate the attestation
@@ -479,7 +479,7 @@ async def test_validator_aggregate(event_loop, event_bus, monkeypatch):
     for aggregate_and_proof in aggregate_and_proofs:
         attestation = aggregate_and_proof.aggregate
         assert attestation.data.slot == assignment.slot
-        assert attestation.data.beacon_block_root == head.signing_root
+        assert attestation.data.beacon_block_root == head.message.hash_tree_root
         assert attestation.data.index == assignment.committee_index
 
         # Advance the state and validate the attestation
