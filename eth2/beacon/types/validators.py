@@ -1,4 +1,4 @@
-from typing import Type, TypeVar
+from typing import TYPE_CHECKING, Type, TypeVar
 
 from eth_typing import BLSPubkey, Hash32
 from eth_utils import humanize_hash
@@ -10,6 +10,9 @@ from eth2.beacon.typing import Epoch, Gwei
 from eth2.configs import Eth2Config
 
 from .defaults import default_bls_pubkey, default_epoch, default_gwei
+
+if TYPE_CHECKING:
+    from eth2.beacon.types.states import BeaconState  # noqa: F401
 
 
 def _round_down_to_previous_multiple(amount: int, increment: int) -> int:
@@ -88,6 +91,27 @@ class Validator(HashableContainer):
             self.activation_epoch <= epoch < self.withdrawable_epoch
         )
         return not_slashed and active_but_not_withdrawable
+
+    def is_eligible_for_activation_queue(self, config: Eth2Config) -> bool:
+        """
+        From `is_eligible_for_activation_queue` in the spec
+        """
+        return (
+            self.activation_eligibility_epoch == FAR_FUTURE_EPOCH
+            and self.effective_balance == config.MAX_EFFECTIVE_BALANCE
+        )
+
+    def is_eligible_for_activation(self, state: "BeaconState") -> bool:
+        """
+        Check if ``validator`` is eligible for activation.
+        From `is_eligible_for_activation` in the spec
+        """
+        return (
+            # Placement in queue is finalized
+            self.activation_eligibility_epoch <= state.finalized_checkpoint.epoch
+            # Has not yet been activated
+            and self.activation_epoch == FAR_FUTURE_EPOCH
+        )
 
     @classmethod
     def create_pending_validator(

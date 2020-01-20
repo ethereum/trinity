@@ -5,7 +5,7 @@ from eth_utils.toolz import curry
 from ssz.hashable_list import HashableList
 
 from eth2._utils.tuple import update_tuple_item, update_tuple_item_with_fn
-from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH, FAR_FUTURE_EPOCH
+from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH
 from eth2.beacon.epoch_processing_helpers import (
     compute_activation_exit_epoch,
     decrease_balance,
@@ -391,11 +391,8 @@ def _process_activation_eligibility_or_ejections(
 ) -> Validator:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
 
-    if (
-        validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
-        and validator.effective_balance == config.MAX_EFFECTIVE_BALANCE
-    ):
-        validator = validator.set("activation_eligibility_epoch", current_epoch)
+    if validator.is_eligible_for_activation_queue(config):
+        validator = validator.set("activation_eligibility_epoch", current_epoch + 1)
 
     if (
         validator.is_active(current_epoch)
@@ -410,15 +407,12 @@ def _process_activation_eligibility_or_ejections(
 def _update_validator_activation_epoch(
     state: BeaconState, config: Eth2Config, validator: Validator
 ) -> Validator:
-    if validator.activation_epoch == FAR_FUTURE_EPOCH:
-        return validator.set(
-            "activation_epoch",
-            compute_activation_exit_epoch(
-                state.current_epoch(config.SLOTS_PER_EPOCH), config.MAX_SEED_LOOKAHEAD
-            ),
-        )
-    else:
-        return validator
+    return validator.set(
+        "activation_epoch",
+        compute_activation_exit_epoch(
+            state.current_epoch(config.SLOTS_PER_EPOCH), config.MAX_SEED_LOOKAHEAD
+        ),
+    )
 
 
 def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconState:
@@ -429,19 +423,18 @@ def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconSt
         )
         new_validators = new_validators.set(index, new_validator)
 
-    activation_exit_epoch = compute_activation_exit_epoch(
-        state.finalized_checkpoint.epoch, config.MAX_SEED_LOOKAHEAD
-    )
+    # Queue validators eligible for activation and not yet dequeued for activation
     activation_queue = sorted(
         (
             index
             for index, validator in enumerate(new_validators)
-            if validator.activation_eligibility_epoch != FAR_FUTURE_EPOCH
-            and validator.activation_epoch >= activation_exit_epoch
+            if validator.is_eligible_for_activation(state)
         ),
-        key=lambda index: new_validators[index].activation_eligibility_epoch,
+        # Order by the sequence of activation_eligibility_epoch setting and then index
+        key=lambda index: (new_validators[index].activation_eligibility_epoch, index),
     )
 
+    # Dequeued validators for activation up to churn limit
     for index in activation_queue[: get_validator_churn_limit(state, config)]:
         new_validators = new_validators.transform(
             (index,), _update_validator_activation_epoch(state, config)
