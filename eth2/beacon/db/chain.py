@@ -507,7 +507,7 @@ class BeaconChainDB(BaseBeaconChainDB):
                 )
             )
 
-        score = first_scoring.score(first_block)
+        score = first_scoring.score(first_block.message)
 
         curr_block_head = first_block
         db.set(curr_block_head.signing_root, ssz.encode(curr_block_head))
@@ -538,7 +538,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             except StopIteration:
                 raise MissingForkChoiceScorings
 
-            score = next_scoring.score(curr_block_head)
+            score = next_scoring.score(curr_block_head.message)
             cls._set_block_score_to_db(db, curr_block_head, score)
 
         if no_canonical_head:

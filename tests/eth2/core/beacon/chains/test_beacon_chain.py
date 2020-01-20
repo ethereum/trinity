@@ -35,7 +35,7 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
     # verify a special case (score(genesis) == 0)
     assert valid_chain.get_score(
         genesis_block.signing_root
-    ) == fork_choice_scoring.score(genesis_block)
+    ) == fork_choice_scoring.score(genesis_block.message)
 
     block = SerenitySignedBeaconBlock.from_parent(genesis_block, FromBlockParams(slot=1))
     valid_chain.chaindb.persist_block(block, block.__class__, fork_choice_scoring)
@@ -44,8 +44,8 @@ def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
     state_machine = valid_chain.get_state_machine(block.slot)
     scoring = state_machine.get_fork_choice_scoring()
 
-    assert valid_chain.get_score(block.signing_root) == scoring.score(block)
-    assert scoring.score(block) != 0
+    assert valid_chain.get_score(block.signing_root) == scoring.score(block.message)
+    assert scoring.score(block.message) != 0
 
     canonical_block_1 = valid_chain.get_canonical_block_by_slot(genesis_block.slot + 1)
     assert canonical_block_1 == block

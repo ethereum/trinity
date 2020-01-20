@@ -105,7 +105,7 @@ def test_chaindb_get_score(
     genesis_score_class = fork_choice_scoring.get_score_class()
     genesis_score = genesis_score_class.deserialize(genesis_score_data)
 
-    expected_genesis_score = fork_choice_scoring.score(genesis_block)
+    expected_genesis_score = fork_choice_scoring.score(genesis_block.message)
 
     assert genesis_score == expected_genesis_score
     assert (
@@ -120,7 +120,7 @@ def test_chaindb_get_score(
     block1_score_key = SchemaV1.make_block_root_to_score_lookup_key(block1.signing_root)
     block1_score_data = chaindb.db.get(block1_score_key)
     block1_score = genesis_score_class.deserialize(block1_score_data)
-    expected_block1_score = fork_choice_scoring.score(block1)
+    expected_block1_score = fork_choice_scoring.score(block1.message)
     assert block1_score == expected_block1_score
     assert (
         chaindb.get_score(block1.signing_root, genesis_score_class)

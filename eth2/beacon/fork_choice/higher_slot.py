@@ -3,12 +3,12 @@ from typing import Any, Type
 import ssz
 
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
-from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 
 
-def _score_block_by_higher_slot(block: BaseSignedBeaconBlock) -> int:
-    return block.message.slot
+def _score_block_by_higher_slot(block: BaseBeaconBlock) -> int:
+    return block.slot
 
 
 class HigherSlotScore(BaseScore):

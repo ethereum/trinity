@@ -11,6 +11,6 @@ def test_higher_slot_fork_choice_scoring(slot):
     expected_score = HigherSlotScore(slot)
 
     scoring = HigherSlotScoring()
-    score = scoring.score(block)
+    score = scoring.score(block.message)
 
     assert score == expected_score

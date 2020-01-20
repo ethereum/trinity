@@ -38,7 +38,7 @@ def beacon_chain_with_block_validation(
     base_db, genesis_block, genesis_state, fixture_sm_class, config
 ):
     return _beacon_chain_with_block_validation(
-        base_db, genesis_block, genesis_state, fixture_sm_class, config
+        base_db, genesis_block.message, genesis_state, fixture_sm_class, config
     )
 
 

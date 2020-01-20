@@ -17,7 +17,7 @@ from eth2.beacon.helpers import (
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.serenity.slot_processing import process_slots
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, Root, Slot, Timestamp, ValidatorIndex
@@ -62,7 +62,7 @@ class LMDGHOSTScore(BaseScore):
 
     @classmethod
     def from_genesis(
-        cls, genesis_state: BeaconState, genesis_block: BaseSignedBeaconBlock
+        cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
     ) -> BaseScore:
         score = (Gwei(0), score_block_by_root(ZERO_ROOT))
         return cls(score)
@@ -419,7 +419,7 @@ class Store:
                     epoch=target.epoch, root=attestation.data.beacon_block_root
                 )
 
-    def scoring(self, block: BaseSignedBeaconBlock) -> LMDGHOSTScore:
+    def scoring(self, block: BaseBeaconBlock) -> LMDGHOSTScore:
         """
         Return the score of the target ``block`` according to the LMD GHOST algorithm,
         using the lexicographic ordering of the block root to break ties.
@@ -440,5 +440,5 @@ class LMDGHOSTScoring(BaseForkChoiceScoring):
     def get_score_class(cls) -> Type[BaseScore]:
         return LMDGHOSTScore
 
-    def score(self, block: BaseSignedBeaconBlock) -> BaseScore:
+    def score(self, block: BaseBeaconBlock) -> BaseScore:
         return self._store.scoring(block)
