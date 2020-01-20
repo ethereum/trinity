@@ -2,6 +2,7 @@
 
 import asyncio
 from collections import defaultdict
+import json
 import logging
 from pathlib import Path
 import signal
@@ -18,10 +19,26 @@ from typing import (
     Tuple,
 )
 
+import eth_utils
 from eth_utils import encode_hex, remove_0x_prefix
 from libp2p.crypto.secp256k1 import Secp256k1PrivateKey
 from libp2p.peer.id import ID
 from multiaddr import Multiaddr
+from ruamel.yaml import (
+    YAML,
+)
+from web3 import Web3
+from web3.middleware import geth_poa_middleware
+import ssz
+
+from eth2.beacon.constants import GWEI_PER_ETH
+from eth2.beacon.tools.builder.validator import (
+    mk_key_pair_from_seed_index,
+    sign_proof_of_possession,
+)
+from eth2.beacon.types.deposit_data import DepositData
+from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
+from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
 
 
 async def run(cmd):
@@ -45,6 +62,134 @@ class EventTimeOutError(Exception):
 SERVER_RUNNING = Log(name="server running", pattern="Running server", timeout=60)
 START_SYNCING = Log(name="start syncing", pattern="their head slot", timeout=200)
 
+USE_FAKE_ETH1_DATA = False
+eth1_addr = '0x7B0d1830031bB521D9706083fd83F6d1Bb9da84d'
+
+
+class Eth1Client:
+    name: str
+    port: int
+    rpcport: Optional[int]
+
+    start_time: float
+    proc: asyncio.subprocess.Process
+    # TODO: use CancelToken instead
+    tasks: List[asyncio.Task]
+    logs_expected: Dict[str, MutableSet[Log]]
+    has_log_happened: Dict[Log, bool]
+
+    dir_root: ClassVar[Path] = Path("/tmp/bbbb")
+    running_nodes: ClassVar[List] = []
+    logger: ClassVar[logging.Logger] = logging.getLogger(
+        "eth2.beacon.scripts.run_beacon_nodes.Eth1Client"
+    )
+
+    def __init__(
+        self,
+        name: str,
+        port: int,
+        start_time: float,
+        rpcport: Optional[int] = None,
+    ) -> None:
+        self.name = name
+        self.port = port
+        self.rpcport = rpcport
+
+        self.tasks = []
+        self.start_time = start_time
+        self.logs_expected = {}
+        self.logs_expected["stdout"] = set()
+        self.logs_expected["stderr"] = set()
+        self.has_log_happened = defaultdict(lambda: False)
+
+    def __repr__(self) -> str:
+        return f"<Eth1Client {self.logging_name} {self.proc}>"
+
+    @property
+    def logging_name(self) -> str:
+        return f"{self.name}"
+
+    @property
+    def cmd(self) -> str:
+        _cmds = [
+            "geth",
+            "--networkid 5566",
+            "--datadir eth2/beacon/scripts/testnet",
+            f"--port {self.port}",
+            "--rpc",
+            "--rpcapi eth,web3,personal,net",
+            f"--rpcport {self.rpcport}",
+            "--nodiscover",
+            f"--unlock {eth1_addr}",
+            "--password eth2/beacon/scripts/pwd.txt",
+            "--allow-insecure-unlock",
+            "--mine",
+        ]
+        _cmd = " ".join(_cmds)
+        return _cmd
+
+    def stop(self) -> None:
+        for task in self.tasks:
+            task.cancel()
+        self.proc.terminate()
+
+    @classmethod
+    def stop_all_nodes(cls) -> None:
+        for node in cls.running_nodes:
+            print(f"Stopping node={node}")
+            node.stop()
+
+    def add_log(self, from_stream: str, log: Log) -> None:
+        if from_stream not in ("stdout", "stderr"):
+            return
+        self.logs_expected[from_stream].add(log)
+
+    async def run(self) -> None:
+        print(f"Spinning up {self.name}")
+        self.proc = await run(self.cmd)
+        self.running_nodes.append(self)
+        self.tasks.append(
+            asyncio.ensure_future(self._print_logs("stdout", self.proc.stdout))
+        )
+        self.tasks.append(
+            asyncio.ensure_future(self._print_logs("stderr", self.proc.stderr))
+        )
+        try:
+            await self._log_monitor()
+        except EventTimeOutError as e:
+            self.logger.debug(e)
+            # FIXME: nasty
+            self.stop_all_nodes()
+            sys.exit(2)
+
+    async def _log_monitor(self) -> None:
+        while True:
+            for from_stream, logs in self.logs_expected.items():
+                for log in logs:
+                    current_time = time.monotonic()
+                    ellapsed_time = current_time - self.start_time
+                    if not self.has_log_happened[log] and (ellapsed_time > log.timeout):
+                        raise EventTimeOutError(
+                            f"{self.logging_name}: log {log.name!r} is time out, "
+                            f"which should have occurred in {from_stream}."
+                        )
+            await asyncio.sleep(0.1)
+
+    async def _print_logs(
+        self, from_stream: str, stream_reader: asyncio.StreamReader
+    ) -> None:
+        async for line_bytes in stream_reader:
+            line = line_bytes.decode("utf-8").replace("\n", "")
+            # TODO: Preprocessing
+            self._record_happening_logs(from_stream, line)
+            print(f"{self.logging_name}\t{line}")
+
+    def _record_happening_logs(self, from_stream: str, line: str) -> None:
+        for log in self.logs_expected[from_stream]:
+            if log.pattern in line:
+                self.logger.debug('log "log.name" occurred in %s', from_stream)
+                self.has_log_happened[log] = True
+
 
 class Node:
     name: str
@@ -54,6 +199,8 @@ class Node:
     rpcport: Optional[int]
     metrics_port: Optional[int]
     api_port: Optional[int]
+    eth1_monitor_config: Optional[str]
+    eth1_client_rpcport: Optional[int]
 
     start_time: float
     proc: asyncio.subprocess.Process
@@ -78,6 +225,8 @@ class Node:
         rpcport: Optional[int] = None,
         metrics_port: Optional[int] = None,
         api_port: Optional[int] = None,
+        eth1_monitor_config: Optional[str] = None,
+        eth1_client_rpcport: Optional[int] = None,
         preferred_nodes: Optional[Tuple["Node", ...]] = None,
     ) -> None:
         self.name = name
@@ -90,6 +239,8 @@ class Node:
         self.rpcport = rpcport
         self.metrics_port = metrics_port
         self.api_port = api_port
+        self.eth1_monitor_config = eth1_monitor_config
+        self.eth1_client_rpcport = eth1_client_rpcport
 
         self.tasks = []
         self.start_time = start_time
@@ -138,7 +289,17 @@ class Node:
             f"--metrics-port={self.metrics_port}",
             "--disable-discovery",
             "-l debug",
-            "--fake-eth1-data",
+        ]
+        if USE_FAKE_ETH1_DATA:
+            _cmds += [
+                "--fake-eth1-data",
+            ]
+        else:
+            _cmds += [
+                f"--eth1-monitor-config={self.eth1_monitor_config}",
+                f"--web3-http-endpoint=http://127.0.0.1:{str(self.eth1_client_rpcport)}",
+            ]
+        _cmds += [
             "interop",
             f"--validators={','.join(str(v) for v in self.validators)}",
             f"--start-time={self.start_time}",
@@ -210,6 +371,63 @@ class Node:
                 self.has_log_happened[log] = True
 
 
+def deposit(w3, deposit_contract, deposit_count):
+    pubkey, privkey = mk_key_pair_from_seed_index(deposit_count)
+    withdrawal_credentials = b'\x12' * 32
+    deposit_data_message = DepositData.create(
+        pubkey=pubkey,
+        withdrawal_credentials=withdrawal_credentials,
+        amount=32 * GWEI_PER_ETH,
+    )
+    signature = sign_proof_of_possession(
+        deposit_message=deposit_data_message,
+        privkey=privkey,
+    )
+    deposit_data_message = deposit_data_message.set("signature", signature)
+    deposit_input = (
+        deposit_data_message.pubkey,
+        deposit_data_message.withdrawal_credentials,
+        deposit_data_message.signature,
+        ssz.get_hash_tree_root(deposit_data_message),
+    )
+    tx_hash = deposit_contract.functions.deposit(*deposit_input).transact(
+        {
+            'from': w3.eth.accounts[0],
+            "value": deposit_data_message.amount * eth_utils.denoms.gwei,
+            "gas": 3000000,
+        }
+    )
+    tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
+    assert tx_receipt["status"]
+
+
+def deploy_contract(w3):
+    contract_json = json.loads(deposit_contract_json)
+    contract_bytecode = contract_json["bytecode"]
+    contract_abi = contract_json["abi"]
+    registration = w3.eth.contract(abi=contract_abi, bytecode=contract_bytecode)
+    tx_hash = registration.constructor().transact(
+        {
+            'from': w3.eth.accounts[0],
+            "gas": 4000000,
+        }
+    )
+    tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
+    assert tx_receipt["status"]
+    registration_deployed = w3.eth.contract(
+        address=tx_receipt.contractAddress, abi=contract_abi
+    )
+    return registration_deployed, tx_receipt["blockNumber"]
+
+
+async def generate_deposits(w3, deposit_contract, interval):
+    deposit_count = 0
+    while deposit_count < 1000:
+        deposit(w3, deposit_contract, deposit_count)
+        deposit_count += 1
+        await asyncio.sleep(interval)
+
+
 async def main():
     start_delay = 20
     start_time = int(time.time()) + start_delay
@@ -225,28 +443,78 @@ async def main():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    node_alice = Node(
-        name="alice",
-        node_privkey="6b94ffa2d9b8ee85afb9d7153c463ea22789d3bbc5d961cc4f63a41676883c19",
-        port=30304,
-        preferred_nodes=[],
-        validators=[0, 1, 2, 3, 4, 5, 6, 7],
-        rpcport=8555,
-        api_port=5555,
-        start_time=start_time,
-        metrics_port=9555,
-    )
-    node_bob = Node(
-        name="bob",
-        node_privkey="f5ad1c57b5a489fc8f21ad0e5a19c1f1a60b8ab357a2100ff7e75f3fa8a4fd2e",
-        port=30305,
-        preferred_nodes=[node_alice],
-        validators=[8, 9, 10, 11, 12, 13, 14, 15],
-        rpcport=8666,
-        api_port=5666,
-        start_time=start_time,
-        metrics_port=9666,
-    )
+    if not USE_FAKE_ETH1_DATA:
+        eth1_client_rpcport = 8444
+        eth1_clinet = Eth1Client(
+            name="alice",
+            port=30301,
+            rpcport=eth1_client_rpcport,
+            start_time=start_time,
+        )
+
+        asyncio.ensure_future(eth1_clinet.run())
+
+        # Wait for geth client to bootstrap
+        await asyncio.sleep(1)
+
+        w3 = Web3(Web3.HTTPProvider("http://127.0.0.1:" + str(eth1_client_rpcport)))
+
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
+        assert w3.isConnected()
+
+        deposit_contract, deployed_block_number = deploy_contract(w3)
+
+        # This is the block time set in genesis.json
+        BLOCK_TIME = 5
+        asyncio.ensure_future(generate_deposits(w3, deposit_contract, 2 * BLOCK_TIME))
+
+        eth1_monitor_config = {
+            "deposit_contract_abi": deposit_contract.abi,
+            "deposit_contract_address": deposit_contract.address,
+            "num_blocks_confirmed": 5,
+            "polling_period": 5,
+            "start_block_number": deployed_block_number,
+        }
+        yaml = YAML(typ='unsafe')
+        config_path = Node.dir_root / "eth1_monitor_config.yaml"
+        with open(config_path, 'w') as f:
+            yaml.dump(eth1_monitor_config, f)
+
+        # Wait for eth1 to progress further enough so
+        # the blocks requested by beacon node will be available.
+        await asyncio.sleep(2 * ETH1_FOLLOW_DISTANCE * BLOCK_TIME)
+
+    param_alice = {
+        "name": "alice",
+        "node_privkey": "6b94ffa2d9b8ee85afb9d7153c463ea22789d3bbc5d961cc4f63a41676883c19",
+        "port": 30304,
+        "preferred_nodes": [],
+        "validators": [0, 1, 2, 3, 4, 5, 6, 7],
+        "rpcport": 8555,
+        "api_port": 5555,
+        "start_time": start_time,
+        "metrics_port": 9555,
+    }
+    if not USE_FAKE_ETH1_DATA:
+        param_alice["eth1_client_rpcport"] = eth1_client_rpcport
+        param_alice["eth1_monitor_config"] = config_path
+    node_alice = Node(**param_alice)
+    param_bob = {
+        "name": "bob",
+        "node_privkey": "f5ad1c57b5a489fc8f21ad0e5a19c1f1a60b8ab357a2100ff7e75f3fa8a4fd2e",
+        "port": 30305,
+        "preferred_nodes": [node_alice],
+        "validators": [8, 9, 10, 11, 12, 13, 14, 15],
+        "rpcport": 8666,
+        "api_port": 5666,
+        "start_time": start_time,
+        "metrics_port": 9666,
+    }
+    if not USE_FAKE_ETH1_DATA:
+        param_alice["eth1_client_rpcport"] = eth1_client_rpcport
+        param_alice["eth1_monitor_config"] = config_path
+    node_bob = Node(**param_bob)
 
     asyncio.ensure_future(node_alice.run())
     await asyncio.sleep(30)
