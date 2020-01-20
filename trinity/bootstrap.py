@@ -15,6 +15,7 @@ from typing import (
 )
 
 from async_service import AsyncioManager
+from eth_utils import ValidationError
 
 from trinity.exceptions import (
     AmbigiousFileSystem,
@@ -205,7 +206,10 @@ def main_entry(trinity_boot: BootFn,
 
     # Let the components do runtime validation
     for component_cls in component_types:
-        component_cls.validate_cli(boot_info)
+        try:
+            component_cls.validate_cli(boot_info)
+        except ValidationError as exc:
+            parser.exit(message=str(exc))
 
     # Components can provide a subcommand with a `func` which does then control
     # the entire process from here.
