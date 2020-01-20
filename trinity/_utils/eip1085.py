@@ -1,5 +1,4 @@
 from enum import (
-    auto,
     Enum,
 )
 import json
@@ -102,9 +101,9 @@ class GenesisParams(NamedTuple):
 
 class MiningMethod(Enum):
 
-    NoProof = auto()
-    Ethash = auto()
-    Clique = auto()
+    NoProof = "noproof"
+    Ethash = "ethash"
+    Clique = "clique"
 
 
 class GenesisData(NamedTuple):
@@ -248,14 +247,10 @@ def extract_chain_id(genesis_config: RawEIP1085Dict) -> int:
 
 def extract_mining_method(genesis_config: RawEIP1085Dict) -> MiningMethod:
     miningMethod = genesis_config['params']['miningMethod']
-    if miningMethod.lower() == "clique":
-        return MiningMethod.Clique
-    elif miningMethod.lower() == "ethash":
-        return MiningMethod.Ethash
-    elif miningMethod.lower() == "noproof":
-        return MiningMethod.NoProof
-    else:
-        raise ValueError(f"Unsupported mining method: {miningMethod}")
+    try:
+        return MiningMethod(miningMethod.lower())
+    except TypeError:
+        raise ValidationError(f"Unsupported mining method: {miningMethod}")
 
 
 @to_dict
