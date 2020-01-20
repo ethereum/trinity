@@ -1,15 +1,24 @@
 import logging
+import itertools
+import math
 import rlp
+import secrets
 import time
 from typing import (
     Generator,
+    List,
+    Optional,
     Sequence,
+    Set,
     Tuple,
 )
 
 from eth_utils import (
     encode_hex,
     to_tuple,
+)
+from eth_utils.toolz import (
+    take,
 )
 
 import trio
@@ -38,8 +47,12 @@ from p2p.discv5.channel_services import (
     OutgoingMessage,
 )
 from p2p.discv5.constants import (
+    FIND_NODE_RESPONSE_TIMEOUT,
+    LOOKUP_RETRY_THRESHOLD,
+    LOOKUP_PARALLELIZATION_FACTOR,
     NODES_MESSAGE_PAYLOAD_SIZE,
     REQUEST_RESPONSE_TIMEOUT,
+    ROUTING_TABLE_LOOKUP_INTERVAL,
     ROUTING_TABLE_PING_INTERVAL,
 )
 from p2p.discv5.endpoint_tracker import (
@@ -55,10 +68,15 @@ from p2p.discv5.messages import (
     PongMessage,
 )
 from p2p.discv5.routing_table import (
+    compute_log_distance,
+    compute_distance,
     KademliaRoutingTable,
 )
 from p2p.discv5.typing import (
     NodeID,
+)
+from p2p.exceptions import (
+    UnexpectedMessage,
 )
 
 
@@ -443,6 +461,138 @@ class PingSenderService(BaseRoutingTableManagerComponent):
                 await self.maybe_request_remote_enr(incoming_message)
 
 
+class LookupService(BaseRoutingTableManagerComponent):
+    """Performs recursive lookups."""
+
+    logger = logging.getLogger("p2p.discv5.routing_table_manager.LookupService")
+
+    async def run(self) -> None:
+        async for _ in every(ROUTING_TABLE_LOOKUP_INTERVAL):
+            target = NodeID(secrets.token_bytes(32))
+            await self.lookup(target)
+
+    async def lookup(self, target: NodeID) -> None:
+        self.logger.info("Looking up %s", encode_hex(target))
+
+        queried_node_ids = set()
+        unresponsive_node_ids = set()
+        received_enrs: List[ENR] = []
+        received_node_ids: List[NodeID] = []
+
+        async def lookup_and_store_response(peer: NodeID) -> None:
+            enrs = await self.lookup_at_peer(peer, target)
+            queried_node_ids.add(peer)
+            if enrs is not None:
+                for enr in enrs:
+                    received_enrs.append(enr)
+                    received_node_ids.append(enr.node_id)
+                    await self.enr_db.insert_or_update(enr)
+            else:
+                unresponsive_node_ids.add(peer)
+
+        for lookup_round_counter in itertools.count():
+            candidates = iter_closest_nodes(target, self.routing_table, received_node_ids)
+            responsive_candidates = itertools.dropwhile(
+                lambda node: node in unresponsive_node_ids,
+                candidates,
+            )
+            closest_k_candidates = take(self.routing_table.bucket_size, responsive_candidates)
+            closest_k_unqueried_candidates = (
+                candidate
+                for candidate in closest_k_candidates
+                if candidate not in queried_node_ids
+            )
+            nodes_to_query = tuple(take(
+                LOOKUP_PARALLELIZATION_FACTOR,
+                closest_k_unqueried_candidates,
+            ))
+
+            if nodes_to_query:
+                self.logger.debug(
+                    "Starting lookup round %d for %s",
+                    lookup_round_counter + 1,
+                    encode_hex(target),
+                )
+                async with trio.open_nursery() as nursery:
+                    for peer in nodes_to_query:
+                        nursery.start_soon(lookup_and_store_response, peer)
+            else:
+                self.logger.debug(
+                    "Lookup for %s finished in %d rounds",
+                    encode_hex(target),
+                    lookup_round_counter,
+                )
+                break
+
+    async def lookup_at_peer(self, peer: NodeID, target: NodeID) -> Optional[Tuple[ENR, ...]]:
+        self.logger.debug("Looking up %s at node %s", encode_hex(target), encode_hex(peer))
+        distance = compute_log_distance(peer, target)
+        first_attempt = await self.request_nodes(peer, target, distance)
+        if first_attempt is None:
+            self.logger.debug("Lookup with node %s failed", encode_hex(peer))
+            return None
+        elif len(first_attempt) >= LOOKUP_RETRY_THRESHOLD:
+            self.logger.debug(
+                "Node %s responded with %d nodes with single attempt", encode_hex(peer),
+                len(first_attempt),
+            )
+            return first_attempt
+        else:
+            second_attempt = await self.request_nodes(peer, target, distance)
+            both_attempts = first_attempt + (second_attempt or ())
+            self.logger.debug(
+                "Node %s responded with %d nodes in two attempts", encode_hex(peer),
+                len(both_attempts),
+            )
+            return both_attempts
+
+    async def request_nodes(self,
+                            peer: NodeID,
+                            target: NodeID,
+                            distance: int,
+                            ) -> Optional[Tuple[ENR, ...]]:
+        """Send a FindNode request to the given peer and return the ENRs in the response.
+
+        If the peer does not respond or fails to respond properly, `None` is returned
+        indicating that retrying with a larger distance is futile.
+        """
+        request = FindNodeMessage(
+            request_id=self.message_dispatcher.get_free_request_id(peer),
+            distance=distance,
+        )
+        try:
+            with trio.fail_after(FIND_NODE_RESPONSE_TIMEOUT):
+                incoming_messages = await self.message_dispatcher.request_nodes(peer, request)
+        except ValueError as value_error:
+            self.logger.warning(
+                f"Failed to send FindNode to %s: %s",
+                encode_hex(peer),
+                value_error,
+            )
+            return None
+        except UnexpectedMessage as unexpected_message_error:
+            self.logger.warning(
+                f"Peer %s sent unexpected message to FindNode request: %s",
+                encode_hex(peer),
+                unexpected_message_error,
+            )
+            return None
+        except trio.TooSlowError:
+            self.logger.warning(
+                "Peer %s did not respond in time to FindNode request",
+                encode_hex(peer),
+            )
+            return None
+        else:
+            self.update_routing_table(peer)
+            enrs = tuple(
+                enr
+                for incoming_message in incoming_messages
+                for enr in incoming_message.message.enrs
+            )
+            return enrs
+
+
 class RoutingTableManager(Service):
     """Manages the routing table. The actual work is delegated to a few sub components."""
 
@@ -479,14 +629,48 @@ class RoutingTableManager(Service):
             endpoint_vote_send_channel=endpoint_vote_send_channel,
             **shared_component_kwargs,
         )
+        self.lookup_service = LookupService(**shared_component_kwargs)
 
     async def run(self) -> None:
         child_services = (
             self.ping_handler_service,
             self.find_node_handler_service,
             self.ping_sender_service,
+            self.lookup_service,
         )
         for child_service in child_services:
             self.manager.run_daemon_child_service(child_service)
 
         await self.manager.wait_finished()
+
+
+def iter_closest_nodes(target: NodeID,
+                       routing_table: KademliaRoutingTable,
+                       seen_nodes: Sequence[NodeID],
+                       ) -> Generator[NodeID, None, None]:
+    """Iterate over the nodes in the routing table as well as additional nodes in order of
+    distance to the target. Duplicates will only be yielded once.
+    """
+    def dist(node: NodeID) -> float:
+        if node is not None:
+            return compute_distance(target, node)
+        else:
+            return math.inf
+
+    yielded_nodes: Set[NodeID] = set()
+    routing_iter = routing_table.iter_nodes_around(target)
+    seen_iter = iter(sorted(seen_nodes, key=dist))
+    closest_routing = next(routing_iter, None)
+    closest_seen = next(seen_iter, None)
+
+    while not (closest_routing is None and closest_seen is None):
+        if dist(closest_routing) < dist(closest_seen):
+            node_to_yield = closest_routing
+            closest_routing = next(routing_iter, None)
+        else:
+            node_to_yield = closest_seen
+            closest_seen = next(seen_iter, None)
+
+        if node_to_yield not in yielded_nodes:
+            yielded_nodes.add(node_to_yield)
+            yield node_to_yield

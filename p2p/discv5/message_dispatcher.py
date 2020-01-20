@@ -5,6 +5,7 @@ from types import (
 )
 from typing import (
     AsyncIterator,
+    AsyncGenerator,
     Callable,
     Dict,
     Optional,
@@ -106,6 +107,9 @@ class ChannelHandlerSubscription(ChannelHandlerSubscriptionAPI[ChannelContentTyp
             raise StopAsyncIteration
 
 
+IncomingMessageSubscription = ChannelHandlerSubscription[IncomingMessage]
+
+
 class MessageDispatcher(Service, MessageDispatcherAPI):
     logger = logging.getLogger("p2p.discv5.message_dispatcher.MessageDispatcher")
 
@@ -192,7 +196,7 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
 
     def add_request_handler(self,
                             message_class: Type[BaseMessage],
-                            ) -> ChannelHandlerSubscription[IncomingMessage]:
+                            ) -> IncomingMessageSubscription:
         message_type = message_class.message_type
         if message_type in self.request_handler_send_channels:
             raise ValueError(f"Request handler for {message_class.__name__} is already added")
@@ -226,7 +230,7 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
     def add_response_handler(self,
                              remote_node_id: NodeID,
                              request_id: int,
-                             ) -> ChannelHandlerSubscription[IncomingMessage]:
+                             ) -> IncomingMessageSubscription:
         if (remote_node_id, request_id) in self.response_handler_send_channels:
             raise ValueError(
                 f"Response handler for node id {encode_hex(remote_node_id)} and request id "
@@ -289,7 +293,11 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
         return Endpoint(ip_address, udp_port)
 
     @asynccontextmanager
-    async def request_response_subscription(self, receiver_node_id, message, endpoint):
+    async def request_response_subscription(self,
+                                            receiver_node_id: NodeID,
+                                            message: BaseMessage,
+                                            endpoint: Optional[Endpoint] = None,
+                                            ) -> AsyncGenerator[IncomingMessageSubscription, None]:
         if endpoint is None:
             endpoint = await self.get_endpoint_from_enr_db(receiver_node_id)
 

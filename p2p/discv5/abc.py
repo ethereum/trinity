@@ -7,6 +7,7 @@ from typing import (
     AsyncIterable,
     Generic,
     Optional,
+    Tuple,
     Type,
     TypeVar,
 )
@@ -194,7 +195,7 @@ class MessageDispatcherAPI(ABC):
                             receiver_node_id: NodeID,
                             message: BaseMessage,
                             endpoint: Optional[Endpoint] = None,
-                            ) -> IncomingMessage:
+                            ) -> Tuple[IncomingMessage, ...]:
         """Send a request to the given peer and return the collection of Nodes responses.
 
         Similar to `request`, but waits for all Nodes messages sent in response. If a different
