@@ -264,6 +264,10 @@ class SyncerComponent(AsyncioIsolatedComponent):
         # this will trigger a ValidationError if the specified strategy isn't known.
         cls.get_active_strategy(boot_info)
 
+        # This will trigger a ValidationError if the loaded EIP1085 file
+        # has errors such as an unsupported mining method
+        boot_info.trinity_config.get_app_config(Eth1AppConfig).get_chain_config()
+
     @classmethod
     @to_tuple
     def extract_modes(cls) -> Iterable[str]:
