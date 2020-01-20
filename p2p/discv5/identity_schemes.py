@@ -81,6 +81,7 @@ class IdentitySchemeRegistry(IdentitySchemeRegistryBaseType):
 
 
 default_identity_scheme_registry = IdentitySchemeRegistry()
+discv4_identity_scheme_registry = IdentitySchemeRegistry()
 
 
 class IdentityScheme(ABC):
@@ -172,6 +173,7 @@ class IdentityScheme(ABC):
 
 
 @default_identity_scheme_registry.register
+@discv4_identity_scheme_registry.register
 class V4IdentityScheme(IdentityScheme):
 
     id = b"v4"
@@ -335,3 +337,27 @@ class V4IdentityScheme(IdentityScheme):
                 f"Signature {encode_hex(signature)} is not valid for message {encode_hex(message)} "
                 f"and public key {encode_hex(public_key)}"
             )
+
+
+@default_identity_scheme_registry.register
+@discv4_identity_scheme_registry.register
+class V4CompatIdentityScheme(V4IdentityScheme):
+    """
+    An identity scheme to be used for locally crafted ENRs representing remote nodes that don't
+    support the ENR extension.
+
+    ENRs using this identity scheme have a zero-length signature.
+    """
+
+    # The spec says all nodes should use the v4 id scheme, but the ENRs using this are forged
+    # and meant to be used only internally, so we use a different ID to be able to easily
+    # distinguish them.
+    id = b"v4-compat"
+
+    @classmethod
+    def validate_enr_signature(cls, enr: "ENR") -> None:
+        pass
+
+    @classmethod
+    def create_enr_signature(cls, enr: "BaseENR", private_key: bytes) -> bytes:
+        raise NotImplementedError()

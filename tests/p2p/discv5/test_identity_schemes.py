@@ -21,6 +21,7 @@ from p2p.discv5.identity_schemes import (
     default_identity_scheme_registry,
     IdentityScheme,
     V4IdentityScheme,
+    V4CompatIdentityScheme,
 )
 from p2p.discv5.enr import (
     UnsignedENR,
@@ -79,6 +80,34 @@ def test_enr_signature_validation():
     forged_enr = ENR(enr.sequence_number, dict(enr), b"\x00" * 64)
     with pytest.raises(ValidationError):
         V4IdentityScheme.validate_enr_signature(forged_enr)
+
+
+def test_enr_v4_compat_signature_validation():
+    private_key = PrivateKey(b"\x11" * 32)
+    enr = ENR(
+        0,
+        {
+            b"id": b"v4-compat",
+            b"secp256k1": private_key.public_key.to_compressed_bytes(),
+            b"key1": b"value1",
+        },
+        signature=b'')
+
+    V4CompatIdentityScheme.validate_enr_signature(enr)
+
+
+def test_enr_v4_compat_signing():
+    private_key = PrivateKey(b"\x11" * 32)
+    unsigned_enr = UnsignedENR(
+        0,
+        {
+            b"id": b"v4-compat",
+            b"secp256k1": private_key.public_key.to_compressed_bytes(),
+            b"key1": b"value1",
+        }
+    )
+    with pytest.raises(NotImplementedError):
+        V4CompatIdentityScheme.create_enr_signature(unsigned_enr, b'')
 
 
 def test_enr_public_key():
