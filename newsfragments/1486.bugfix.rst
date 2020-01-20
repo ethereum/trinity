@@ -1,0 +1,2 @@
+Ensure validation errors in components are properly handled
+during bootstrap.
