@@ -8,6 +8,7 @@ from eth_typing import Address, BLSPubkey, BLSSignature, BlockNumber, Hash32
 from eth_utils import encode_hex, event_abi_to_log_topic
 
 from web3 import Web3
+from web3.middleware import geth_poa_middleware
 
 from eth2.beacon.constants import GWEI_PER_ETH
 from eth2.beacon.tools.builder.validator import (
@@ -88,6 +89,7 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
         deposit_contract_abi: Dict[str, Any],
     ) -> None:
         self.w3 = w3
+        w3.middleware_onion.inject(geth_poa_middleware, layer=0)
         self._deposit_contract = self.w3.eth.contract(
             address=deposit_contract_address, abi=deposit_contract_abi
         )
