@@ -32,7 +32,7 @@ from eth2.beacon.fork_choice.lmd_ghost import (
 from eth2.beacon.helpers import compute_epoch_at_slot, compute_start_slot_at_epoch
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BeaconBlock
+from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 
 
@@ -184,7 +184,7 @@ def _mk_block_at_slot(block_template, slot):
     if slot in block_producer_cache:
         return block_producer_cache[slot]
     else:
-        block = block_template.set("slot", slot)
+        block = block_template.transform(["message", "slot"], slot)
         block_producer_cache[slot] = block
         return block
 
@@ -295,7 +295,7 @@ def test_store_get_latest_attestation(
     chain_db = None  # not relevant for this test
     context = Context.from_genesis(genesis_state, genesis_block)
     context.time = some_time
-    store = Store(chain_db, BeaconBlock, config, context)
+    store = Store(chain_db, SignedBeaconBlock, config, context)
 
     for attestations in (
         previous_epoch_attestations,
@@ -325,7 +325,7 @@ def test_store_get_latest_attestation(
 
 
 def _mk_block(block_params, slot, parent, block_offset):
-    return BeaconBlock.create(**block_params).mset(
+    block = BeaconBlock.create(**block_params).mset(
         "slot",
         slot,
         "parent_root",
@@ -334,6 +334,7 @@ def _mk_block(block_params, slot, parent, block_offset):
         "state_root",
         block_offset.to_bytes(32, byteorder="big"),
     )
+    return SignedBeaconBlock.create(message=block)
 
 
 def _build_block_tree(
@@ -545,7 +546,7 @@ def test_lmd_ghost_fork_choice_scoring(
     Given some blocks and some attestations, can we score them correctly?
     """
     chain_db = chaindb_at_genesis
-    root_block = chain_db.get_canonical_head(BeaconBlock)
+    root_block = chain_db.get_canonical_head(SignedBeaconBlock)
 
     some_epoch = 3
     some_slot_offset = 10
@@ -596,7 +597,7 @@ def test_lmd_ghost_fork_choice_scoring(
         attestation_pool.add(attestation)
 
     context = Context.from_genesis(genesis_state, genesis_block)
-    store = Store(chain_db, BeaconBlock, config, context)
+    store = Store(chain_db, SignedBeaconBlock, config, context)
 
     score_index = _build_score_index_from_decorated_block_tree(
         block_tree, store, state, config
@@ -604,7 +605,7 @@ def test_lmd_ghost_fork_choice_scoring(
 
     for block in _iter_block_tree_by_block(block_tree):
         # NOTE: we use the ``fork_choice_scoring`` fixture, it doesn't matter for this test
-        chain_db.persist_block(block, BeaconBlock, fork_choice_scoring)
+        chain_db.persist_block(block, SignedBeaconBlock, fork_choice_scoring)
 
     for block in _iter_block_tree_by_block(block_tree):
         score = store.scoring(block)

@@ -52,7 +52,7 @@ def _main():
 
     genesis_time = int(time.time())
     print(f"creating genesis at time {genesis_time}")
-    genesis_state = state.copy(genesis_time=genesis_time)
+    genesis_state = state.set("genesis_time", genesis_time)
     print(genesis_state.hash_tree_root.hex())
 
     genesis_file_path = RESOURCE_DIR / GENESIS_FILE

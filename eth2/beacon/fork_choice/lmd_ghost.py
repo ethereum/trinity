@@ -1,12 +1,12 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple, Type, cast
 
-from eth.constants import ZERO_HASH32
 from eth_typing import Hash32
 from eth_utils import ValidationError
 import ssz
 
 from eth2.beacon.attestation_helpers import validate_indexed_attestation
+from eth2.beacon.constants import ZERO_ROOT
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.epoch_processing_helpers import get_indexed_attestation
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
@@ -18,16 +18,16 @@ from eth2.beacon.helpers import (
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.serenity.slot_processing import process_slots
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Epoch, Gwei, SigningRoot, Slot, Timestamp, ValidatorIndex
+from eth2.beacon.typing import Epoch, Gwei, Root, Slot, Timestamp, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
 
 LMD_GHOST_SCORE_DATA_LENGTH = 2
 
 
-def score_block_by_root(root: SigningRoot) -> int:
+def score_block_by_root(root: Root) -> int:
     return int.from_bytes(root, byteorder="big")
 
 
@@ -64,7 +64,7 @@ class LMDGHOSTScore(BaseScore):
     def from_genesis(
         cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
     ) -> BaseScore:
-        score = (Gwei(0), score_block_by_root(SigningRoot(ZERO_HASH32)))
+        score = (Gwei(0), score_block_by_root(ZERO_ROOT))
         return cls(score)
 
 
@@ -80,7 +80,7 @@ def compute_slots_since_epoch_start(slot: Slot, slots_per_epoch: int) -> Slot:
 @dataclass(eq=True, frozen=True)
 class LatestMessage:
     epoch: Epoch
-    root: SigningRoot
+    root: Root
 
 
 @dataclass
@@ -90,7 +90,7 @@ class Context:
     justified_checkpoint: Checkpoint
     finalized_checkpoint: Checkpoint
     best_justified_checkpoint: Checkpoint
-    blocks: Dict[Hash32, BaseBeaconBlock] = field(default_factory=dict)
+    blocks: Dict[Root, BaseBeaconBlock] = field(default_factory=dict)
     block_states: Dict[Hash32, BeaconState] = field(default_factory=dict)
     checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
     latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
@@ -148,14 +148,14 @@ def _effective_balance_for_validator(
 
 class Store:
     _db: BaseBeaconChainDB
-    _block_class: Type[BaseBeaconBlock]
+    _block_class: Type[BaseSignedBeaconBlock]
     _config: Eth2Config
     _context: Context
 
     def __init__(
         self,
         chain_db: BaseBeaconChainDB,
-        block_class: Type[BaseBeaconBlock],
+        block_class: Type[BaseSignedBeaconBlock],
         config: Eth2Config,
         context: Context,
     ):
@@ -174,10 +174,10 @@ class Store:
             // self._config.SECONDS_PER_SLOT
         )
 
-    def _get_block_by_root(self, root: SigningRoot) -> BaseBeaconBlock:
-        return self._db.get_block_by_root(root, self._block_class)
+    def _get_block_by_root(self, root: Root) -> BaseBeaconBlock:
+        return self._db.get_block_by_root(root, self._block_class).message
 
-    def get_ancestor_root(self, root: SigningRoot, slot: Slot) -> Optional[Hash32]:
+    def get_ancestor_root(self, root: Root, slot: Slot) -> Optional[Root]:
         """
         Return the block root in the chain that is a
         predecessor of the block with ``root`` at the requested ``slot``.
@@ -196,7 +196,7 @@ class Store:
     def _latest_message_for_index(self, index: ValidatorIndex) -> LatestMessage:
         return self._context.latest_messages[index]
 
-    def get_latest_attesting_balance(self, root: SigningRoot) -> Gwei:
+    def get_latest_attesting_balance(self, root: Root) -> Gwei:
         state = self._get_checkpoint_state_for(self._context.justified_checkpoint)
         active_indices = get_active_validator_indices(
             state.validators, state.current_epoch(self.slots_per_epoch)
@@ -275,7 +275,7 @@ class Store:
 
     def on_block(
         self,
-        block: BaseBeaconBlock,
+        signed_block: BaseSignedBeaconBlock,
         post_state: BeaconState = None,
         state_machine: BaseBeaconStateMachine = None,
     ) -> None:
@@ -285,6 +285,7 @@ class Store:
         This handler requests the ``post_state`` of this block to avoid recomputing
         it if it is already known.
         """
+        block = signed_block.message
         # NOTE: this invariant should hold based on how we handle
         # block importing in the chain but we will sanity check for now
         assert block.parent_root in self._context.block_states
@@ -298,7 +299,7 @@ class Store:
             >= pre_state.genesis_time + block.slot * self._config.SECONDS_PER_SLOT
         )
 
-        root = block.signing_root
+        root = block.hash_tree_root
 
         self._context.blocks[root] = block
 
@@ -321,7 +322,7 @@ class Store:
         if not post_state:
             # NOTE: error to not provide a post_state and not provide a way to compute it
             assert state_machine is not None
-            post_state, _ = state_machine.import_block(block, pre_state)
+            post_state, _ = state_machine.import_block(signed_block, pre_state)
 
         self._context.block_states[root] = post_state
 

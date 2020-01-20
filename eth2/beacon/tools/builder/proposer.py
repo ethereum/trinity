@@ -10,7 +10,11 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockBody
+from eth2.beacon.types.blocks import (
+    BaseSignedBeaconBlock,
+    BeaconBlockBody,
+    SignedBeaconBlock,
+)
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
@@ -66,8 +70,8 @@ def create_block_on_state(
     state: BeaconState,
     config: Eth2Config,
     state_machine: BaseBeaconStateMachine,
-    block_class: Type[BaseBeaconBlock],
-    parent_block: BaseBeaconBlock,
+    signed_block_class: Type[BaseSignedBeaconBlock],
+    parent_block: BaseSignedBeaconBlock,
     slot: Slot,
     validator_index: ValidatorIndex,
     privkey: int,
@@ -75,14 +79,14 @@ def create_block_on_state(
     eth1_data: Eth1Data = None,
     deposits: Sequence[Deposit] = None,
     check_proposer_index: bool = True
-) -> BaseBeaconBlock:
+) -> SignedBeaconBlock:
     """
     Create a beacon block with the given parameters.
     """
     if check_proposer_index:
         validate_proposer_index(state, config, slot, validator_index)
 
-    block = block_class.from_parent(
+    signed_block = signed_block_class.from_parent(
         parent_block=parent_block, block_params=FromBlockParams(slot=slot)
     )
 
@@ -99,16 +103,16 @@ def create_block_on_state(
     if deposits is not None and len(deposits) > 0:
         body = body.set("deposits", deposits)
 
-    block = block.set("body", body)
+    signed_block = signed_block.transform(("message", "body"), body)
 
     # Apply state transition to get state root
-    state, block = state_machine.import_block(
-        block, state, check_proposer_signature=False
+    state, signed_block = state_machine.import_block(
+        signed_block, state, check_proposer_signature=False
     )
 
     # Sign
     signature = sign_transaction(
-        message_hash=block.signing_root,
+        message_hash=signed_block.message.hash_tree_root,
         privkey=privkey,
         state=state,
         slot=slot,
@@ -116,9 +120,9 @@ def create_block_on_state(
         slots_per_epoch=config.SLOTS_PER_EPOCH,
     )
 
-    block = block.set("signature", signature)
+    signed_block = signed_block.set("signature", signature)
 
-    return block
+    return signed_block
 
 
 def advance_to_slot(
@@ -135,12 +139,12 @@ def create_mock_block(
     state: BeaconState,
     config: Eth2Config,
     state_machine: BaseBeaconStateMachine,
-    block_class: Type[BaseBeaconBlock],
-    parent_block: BaseBeaconBlock,
+    signed_block_class: Type[BaseSignedBeaconBlock],
+    parent_block: BaseSignedBeaconBlock,
     keymap: Dict[BLSPubkey, int],
     slot: Slot = None,
     attestations: Sequence[Attestation] = ()
-) -> BaseBeaconBlock:
+) -> BaseSignedBeaconBlock:
     """
     Create a mocking block at ``slot`` with the given block parameters and ``keymap``.
 
@@ -155,7 +159,7 @@ def create_mock_block(
         state=future_state,
         config=config,
         state_machine=state_machine,
-        block_class=block_class,
+        signed_block_class=signed_block_class,
         parent_block=parent_block,
         slot=slot,
         validator_index=proposer_index,

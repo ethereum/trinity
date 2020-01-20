@@ -23,7 +23,7 @@ from trinity.protocol.bcc_libp2p.utils import (
     write_req,
     write_resp,
 )
-from trinity.tools.bcc_factories import BeaconBlockFactory
+from trinity.tools.bcc_factories import SignedBeaconBlockFactory
 
 
 def test_peer_id_from_pubkey():
@@ -169,7 +169,7 @@ async def test_write_resp_failure():
 async def test_get_blocks_from_canonical_chain_by_slot(
     db_block_slots, slot_of_requested_blocks, expected_block_slots
 ):
-    chain = BeaconBlockFactory.create_branch_by_slots(db_block_slots)
+    chain = SignedBeaconBlockFactory.create_branch_by_slots(db_block_slots)
     # Mock up block database
     mock_slot_to_block_db = {block.slot: block for block in chain}
 
@@ -202,7 +202,7 @@ async def test_get_blocks_from_canonical_chain_by_slot(
 async def test_get_blocks_from_fork_chain_by_root(
     fork_chain_block_slots, slot_of_requested_blocks, expected_block_slots
 ):
-    fork_chain_blocks = BeaconBlockFactory.create_branch_by_slots(
+    fork_chain_blocks = SignedBeaconBlockFactory.create_branch_by_slots(
         fork_chain_block_slots
     )
     mock_root_to_block_db = {block.signing_root: block for block in fork_chain_blocks}

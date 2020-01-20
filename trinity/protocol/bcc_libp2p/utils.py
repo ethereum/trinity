@@ -18,7 +18,7 @@ from eth2.beacon.chains.base import (
     BaseBeaconChain,
 )
 from eth2.beacon.constants import (
-    ZERO_SIGNING_ROOT,
+    ZERO_ROOT,
 )
 from eth2.beacon.helpers import (
     compute_start_slot_at_epoch,
@@ -143,7 +143,7 @@ async def validate_peer_status(chain: BaseBeaconChain, peer_status: Status) -> N
     # Edge case where nothing is finalized yet
     if (
         peer_status.finalized_epoch == 0 and
-        peer_status.finalized_root == ZERO_SIGNING_ROOT
+        peer_status.finalized_root == ZERO_ROOT
     ):
         return
 

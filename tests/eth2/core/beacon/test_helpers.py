@@ -16,9 +16,11 @@ from eth2.beacon.helpers import (
     signature_domain_to_domain_type,
 )
 from eth2.beacon.signature_domain import SignatureDomain
+from eth2.beacon.types.blocks import SignedBeaconBlock
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
+from eth2.beacon.typing import FromBlockParams
 
 
 @to_tuple
@@ -29,14 +31,7 @@ def get_pseudo_chain(length, genesis_block):
     block = genesis_block
     yield genesis_block
     for slot in range(1, length * 3):
-        block = genesis_block.mset(
-            "slot",
-            slot,
-            "parent_root",
-            block.signing_root,
-            "state_root",
-            slot.to_bytes(32, "big"),
-        )
+        block = SignedBeaconBlock.from_parent(block, FromBlockParams(slot=slot))
         yield block
 
 
@@ -52,11 +47,13 @@ def generate_mock_latest_historical_roots(
     chain_length = (current_slot // slots_per_epoch + 1) * slots_per_epoch
     blocks = get_pseudo_chain(chain_length, genesis_block)
     block_roots = [
-        block.signing_root for block in blocks[current_slot - filling : current_slot]
+        block.message.hash_tree_root
+        for block in blocks[current_slot - filling : current_slot]
     ] + [ZERO_HASH32 for _ in range(padding)]
 
     state_roots = [
-        block.state_root for block in blocks[current_slot - filling : current_slot]
+        block.message.state_root
+        for block in blocks[current_slot - filling : current_slot]
     ] + [ZERO_HASH32 for _ in range(padding)]
     return blocks, block_roots, state_roots
 
@@ -85,10 +82,10 @@ def test_get_block_root_at_slot(
     success,
     slots_per_epoch,
     slots_per_historical_root,
-    sample_block,
+    genesis_block,
 ):
     blocks, block_roots, _ = generate_mock_latest_historical_roots(
-        sample_block, current_slot, slots_per_epoch, slots_per_historical_root
+        genesis_block, current_slot, slots_per_epoch, slots_per_historical_root
     )
     state = BeaconState.create(**sample_beacon_state_params).mset(
         "slot", current_slot, "block_roots", block_roots
@@ -98,7 +95,7 @@ def test_get_block_root_at_slot(
         block_root = get_block_root_at_slot(
             state, target_slot, slots_per_historical_root
         )
-        assert block_root == blocks[target_slot].signing_root
+        assert block_root == blocks[target_slot].message.hash_tree_root
     else:
         with pytest.raises(ValidationError):
             get_block_root_at_slot(state, target_slot, slots_per_historical_root)
@@ -125,21 +122,23 @@ def test_get_state_root_at_slot(
     success,
     slots_per_epoch,
     slots_per_historical_root,
-    sample_block,
 ):
     blocks, _, state_roots = generate_mock_latest_historical_roots(
-        sample_block, current_slot, slots_per_epoch, slots_per_historical_root
+        SignedBeaconBlock.create(),
+        current_slot,
+        slots_per_epoch,
+        slots_per_historical_root,
     )
     state = BeaconState.create(**sample_beacon_state_params).mset(
         "slot", current_slot, "state_roots", state_roots
     )
-    blocks[current_slot].state_root = state.hash_tree_root
+    blocks[current_slot].message.state_root = state.hash_tree_root
 
     if success:
         state_root = get_state_root_at_slot(
             state, target_slot, slots_per_historical_root
         )
-        assert state_root == blocks[target_slot].state_root
+        assert state_root == blocks[target_slot].message.state_root
     else:
         with pytest.raises(ValidationError):
             get_state_root_at_slot(state, target_slot, slots_per_historical_root)

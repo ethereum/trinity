@@ -3,8 +3,6 @@ from eth.exceptions import BlockNotFound
 from eth.validation import validate_word
 import pytest
 
-from eth2.beacon.constants import EMPTY_SIGNATURE
-from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from trinity.protocol.bcc_libp2p import node
 from trinity.protocol.bcc_libp2p.configs import GoodbyeReasonCode, ResponseCode
 from trinity.protocol.bcc_libp2p.exceptions import HandshakeFailure, RequestFailure
@@ -12,7 +10,7 @@ from trinity.protocol.bcc_libp2p.messages import Status
 from trinity.protocol.bcc_libp2p.node import REQ_RESP_STATUS_SSZ
 from trinity.protocol.bcc_libp2p.utils import read_req, write_resp
 from trinity.tools.async_method import wait_until_true
-from trinity.tools.bcc_factories import ConnectionPairFactory
+from trinity.tools.bcc_factories import ConnectionPairFactory, SignedBeaconBlockFactory
 
 
 @pytest.mark.asyncio
@@ -102,13 +100,7 @@ async def test_request_beacon_blocks_by_range_invalid_request(monkeypatch):
 
         head_slot = 1
         request_head_block_root = b"\x56" * 32
-        head_block = BeaconBlock.create(
-            slot=head_slot,
-            parent_root=ZERO_HASH32,
-            state_root=ZERO_HASH32,
-            signature=EMPTY_SIGNATURE,
-            body=BeaconBlockBody.create(),
-        )
+        head_block = SignedBeaconBlockFactory(message__slot=head_slot)
 
         # TEST: Can not request blocks with `start_slot` greater than head block slot
         start_slot = 2
@@ -197,15 +189,7 @@ async def test_request_beacon_blocks_by_range_on_nonexist_chain(monkeypatch):
 async def test_request_beacon_blocks_by_root(monkeypatch):
     async with ConnectionPairFactory() as (alice, bob):
 
-        # Mock up block database
-        head_block = BeaconBlock.create(
-            slot=0,
-            parent_root=ZERO_HASH32,
-            state_root=ZERO_HASH32,
-            signature=EMPTY_SIGNATURE,
-            body=BeaconBlockBody.create(),
-        )
-        blocks = [head_block.set("slot", slot) for slot in range(5)]
+        blocks = SignedBeaconBlockFactory.create_branch(5)
         mock_root_to_block_db = {block.signing_root: block for block in blocks}
 
         def get_block_by_root(root):

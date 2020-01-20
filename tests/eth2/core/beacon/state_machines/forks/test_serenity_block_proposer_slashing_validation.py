@@ -35,10 +35,11 @@ def test_validate_proposer_slashing_epoch(genesis_state, keymap, config):
     # Valid
     validate_proposer_slashing_epoch(valid_proposer_slashing, config.SLOTS_PER_EPOCH)
 
-    header_1 = valid_proposer_slashing.header_1.set(
-        "slot", valid_proposer_slashing.header_2.slot + 2 * config.SLOTS_PER_EPOCH
+    invalid_proposer_slashing = valid_proposer_slashing.transform(
+        ("signed_header_1", "message", "slot"),
+        valid_proposer_slashing.signed_header_2.message.slot
+        + 2 * config.SLOTS_PER_EPOCH,
     )
-    invalid_proposer_slashing = valid_proposer_slashing.set("header_1", header_1)
 
     # Invalid
     with pytest.raises(ValidationError):
@@ -55,7 +56,7 @@ def test_validate_proposer_slashing_headers(genesis_state, keymap, config):
     validate_proposer_slashing_headers(valid_proposer_slashing)
 
     invalid_proposer_slashing = valid_proposer_slashing.set(
-        "header_1", valid_proposer_slashing.header_2
+        "signed_header_1", valid_proposer_slashing.signed_header_2
     )
 
     # Invalid
@@ -74,7 +75,7 @@ def test_validate_block_header_signature(
     # Valid
     validate_block_header_signature(
         state=state,
-        header=valid_proposer_slashing.header_1,
+        header=valid_proposer_slashing.signed_header_1,
         pubkey=proposer.pubkey,
         slots_per_epoch=slots_per_epoch,
     )
@@ -85,7 +86,7 @@ def test_validate_block_header_signature(
     with pytest.raises(ValidationError):
         validate_block_header_signature(
             state=state,
-            header=valid_proposer_slashing.header_1,
+            header=valid_proposer_slashing.signed_header_1,
             pubkey=wrong_proposer.pubkey,
             slots_per_epoch=slots_per_epoch,
         )

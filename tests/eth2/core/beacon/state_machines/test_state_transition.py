@@ -1,6 +1,6 @@
 import pytest
 
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenitySignedBeaconBlock
 from eth2.beacon.tools.builder.proposer import create_mock_block
 from eth2.beacon.types.historical_batch import HistoricalBatch
 
@@ -43,7 +43,7 @@ def test_per_slot_transition(
     fork_choice_scoring,
     keymap,
 ):
-    chaindb.persist_block(genesis_block, SerenityBeaconBlock, fork_choice_scoring)
+    chaindb.persist_block(genesis_block, SerenitySignedBeaconBlock, fork_choice_scoring)
     chaindb.persist_state(genesis_state)
 
     state = genesis_state
@@ -53,14 +53,14 @@ def test_per_slot_transition(
         state=state,
         config=config,
         state_machine=fixture_sm_class(chaindb),
-        block_class=SerenityBeaconBlock,
+        signed_block_class=SerenitySignedBeaconBlock,
         parent_block=genesis_block,
         keymap=keymap,
         slot=state_slot,
     )
 
     # Store in chaindb
-    chaindb.persist_block(block, SerenityBeaconBlock, fork_choice_scoring)
+    chaindb.persist_block(block, SerenitySignedBeaconBlock, fork_choice_scoring)
 
     # Get state machine instance
     sm = fixture_sm_class(chaindb)

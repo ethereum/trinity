@@ -9,13 +9,13 @@ import ssz
 
 from eth2.beacon.chains.testnet import SkeletonLakeChain
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import SerenitySignedBeaconBlock
 from eth2.beacon.state_machines.forks.skeleton_lake.config import (
     MINIMAL_SERENITY_CONFIG,
 )
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, SignedBeaconBlock
 from eth2.configs import Eth2GenesisConfig
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.protocol.bcc_libp2p.configs import (
@@ -29,9 +29,9 @@ from trinity.protocol.bcc_libp2p.servers import AttestationPool, OrphanBlockPool
 from trinity.tools.async_method import wait_until_true
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
-    BeaconBlockFactory,
     PeerFactory,
     ReceiveServerFactory,
+    SignedBeaconBlockFactory,
 )
 
 
@@ -60,8 +60,10 @@ class FakeChain(SkeletonLakeChain):
 async def get_fake_chain() -> FakeChain:
     genesis_config = Eth2GenesisConfig(MINIMAL_SERENITY_CONFIG)
     chain_db = AsyncBeaconChainDBFactory(genesis_config=genesis_config)
-    genesis_block = BeaconBlockFactory()
-    chain_db.persist_block(genesis_block, SerenityBeaconBlock, HigherSlotScoring())
+    genesis_block = SignedBeaconBlockFactory()
+    chain_db.persist_block(
+        genesis_block, SerenitySignedBeaconBlock, HigherSlotScoring()
+    )
     return FakeChain(base_db=chain_db.db, genesis_config=genesis_config)
 
 
@@ -150,9 +152,9 @@ def test_attestation_pool():
 
 def test_orphan_block_pool():
     pool = OrphanBlockPool()
-    b0 = BeaconBlockFactory()
-    b1 = BeaconBlockFactory(parent=b0)
-    b2 = BeaconBlockFactory(parent=b0, state_root=b"\x11" * 32)
+    b0 = SignedBeaconBlockFactory()
+    b1 = SignedBeaconBlockFactory(parent=b0)
+    b2 = SignedBeaconBlockFactory(parent=b0, message__state_root=b"\x11" * 32)
     # test: add
     pool.add(b1)
     assert b1 in pool._pool
@@ -163,6 +165,7 @@ def test_orphan_block_pool():
     # test: `__contains__`
     assert b1 in pool
     assert b1.signing_root in pool
+    print(b2 not in pool)
     assert b2 not in pool
     assert b2.signing_root not in pool
     # test: add: two blocks
@@ -182,7 +185,7 @@ def test_orphan_block_pool():
 
 @pytest.mark.asyncio
 async def test_bcc_receive_server_try_import_orphan_blocks(receive_server):
-    blocks = BeaconBlockFactory.create_branch(4)
+    blocks = SignedBeaconBlockFactory.create_branch(4)
 
     assert not receive_server._is_block_root_in_db(blocks[0].signing_root)
     receive_server.chain.import_block(blocks[0])
@@ -225,7 +228,7 @@ async def test_bcc_receive_server_try_import_orphan_blocks(receive_server):
 
 @pytest.mark.asyncio
 async def test_bcc_receive_server_process_received_block(receive_server, monkeypatch):
-    block_not_orphan, block_orphan = BeaconBlockFactory.create_branch(2)
+    block_not_orphan, block_orphan = SignedBeaconBlockFactory.create_branch(2)
 
     # test: if the block is an orphan, puts it in the orphan pool
     receive_server._process_received_block(block_orphan)
@@ -260,8 +263,8 @@ async def test_bcc_receive_server_process_received_block(receive_server, monkeyp
 
 @pytest.mark.asyncio
 async def test_bcc_receive_server_handle_beacon_blocks(receive_server):
-    block = BeaconBlockFactory(parent=receive_server.chain.get_canonical_head())
-    encoded_block = ssz.encode(block, BeaconBlock)
+    block = SignedBeaconBlockFactory(parent=receive_server.chain.get_canonical_head())
+    encoded_block = ssz.encode(block, SignedBeaconBlock)
     msg = rpc_pb2.Message(
         from_id=b"my_id",
         seqno=b"\x00" * 8,
@@ -301,9 +304,9 @@ async def test_bcc_receive_server_handle_beacon_attestations(receive_server):
     assert attestation in receive_server.unaggregated_attestation_pool
 
     # Put the attestation in the next block
-    block = BeaconBlockFactory(parent=receive_server.chain.get_canonical_head())
-    block = block.transform(["body", "attestations"], [attestation])
-    encoded_block = ssz.encode(block, BeaconBlock)
+    block = SignedBeaconBlockFactory(parent=receive_server.chain.get_canonical_head())
+    block = block.transform(("message", "body", "attestations"), (attestation,))
+    encoded_block = ssz.encode(block, SignedBeaconBlock)
     msg = rpc_pb2.Message(
         from_id=b"my_id",
         seqno=b"\x00" * 8,
@@ -334,10 +337,10 @@ async def test_bcc_receive_server_handle_orphan_block_loop(
     #
     # First iteration will request block 4 and block 2 and import block 2, block 3' and block 3'',
     # second iteration will request block 3 and import block 3, block 4 and block 5.
-    blocks = BeaconBlockFactory.create_branch(5)
+    blocks = SignedBeaconBlockFactory.create_branch(5)
     fork_blocks = (
-        blocks[2].set("state_root", b"\x01" * 32),
-        blocks[2].set("state_root", b"\x12" * 32),
+        blocks[2].transform(("message", "state_root"), b"\x01" * 32),
+        blocks[2].transform(("message", "state_root"), b"\x12" * 32),
     )
     mock_peer_1_db = {block.signing_root: block for block in blocks[3:]}
     mock_peer_2_db = {block.signing_root: block for block in blocks[:3]}

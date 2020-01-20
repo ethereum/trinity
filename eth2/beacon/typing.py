@@ -30,11 +30,7 @@ Version = NewType("Version", bytes)
 
 DomainType = NewType("DomainType", bytes)  # bytes of length 4
 
-# Use HashTreeRoot and SigningRoot for Merkle tree root of SignedSerializable
-# Merkle tree root with signature field included
-HashTreeRoot = NewType("HashTreeRoot", Hash32)
-# Merkle tree root with signature field excluded
-SigningRoot = NewType("SigningRoot", Hash32)
+Root = NewType("Root", Hash32)  # a Merkle root
 
 
 #

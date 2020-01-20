@@ -2,18 +2,18 @@ from typing import Callable, Dict, Generic, Iterable, Iterator, Tuple, TypeVar, 
 
 from typing_extensions import Protocol
 
-from eth2.beacon.typing import HashTreeRoot
+from eth2.beacon.typing import Root
 
 
 class Operation(Protocol):
-    hash_tree_root: HashTreeRoot
+    hash_tree_root: Root
 
 
 T = TypeVar("T", bound="Operation")
 
 
 class OperationPool(Generic[T]):
-    _pool_storage: Dict[HashTreeRoot, T]
+    _pool_storage: Dict[Root, T]
 
     def __init__(self) -> None:
         self._pool_storage = {}
@@ -21,10 +21,10 @@ class OperationPool(Generic[T]):
     def __len__(self) -> int:
         return len(self._pool_storage)
 
-    def __iter__(self) -> Iterator[Tuple[HashTreeRoot, T]]:
+    def __iter__(self) -> Iterator[Tuple[Root, T]]:
         return iter(self._pool_storage.items())
 
-    def __contains__(self, operation_or_root: Union[T, HashTreeRoot]) -> bool:
+    def __contains__(self, operation_or_root: Union[T, Root]) -> bool:
         if isinstance(operation_or_root, bytes):
             root = operation_or_root
         else:
@@ -32,7 +32,7 @@ class OperationPool(Generic[T]):
 
         return root in self._pool_storage
 
-    def get(self, hash_tree_root: HashTreeRoot) -> T:
+    def get(self, hash_tree_root: Root) -> T:
         return self._pool_storage[hash_tree_root]
 
     def get_all(self) -> Tuple[T, ...]:

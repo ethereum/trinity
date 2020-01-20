@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 from eth._utils.datatypes import Configurable
 
-from eth2.beacon.types.blocks import BaseBeaconBlock
+from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 from eth2.configs import Eth2Config
@@ -18,7 +18,7 @@ class BaseStateTransition(Configurable, ABC):
     def apply_state_transition(
         self,
         state: BeaconState,
-        block: BaseBeaconBlock = None,
+        signed_block: BaseSignedBeaconBlock = None,
         future_slot: Slot = None,
         check_proposer_signature: bool = True,
     ) -> BeaconState:

@@ -16,8 +16,8 @@ from eth2.beacon.typing import (
     default_slot,
     default_version,
 )
-from eth2.beacon.typing import SigningRoot, Slot, Epoch
-from eth2.beacon.constants import ZERO_SIGNING_ROOT
+from eth2.beacon.typing import Root, Slot, Epoch
+from eth2.beacon.constants import ZERO_ROOT
 from .configs import GoodbyeReasonCode
 
 
@@ -34,9 +34,9 @@ class Status(HashableContainer):
     def create(
         cls,
         head_fork_version: Version = default_version,
-        finalized_root: SigningRoot = ZERO_SIGNING_ROOT,
+        finalized_root: Root = ZERO_ROOT,
         finalized_epoch: Epoch = default_epoch,
-        head_root: SigningRoot = ZERO_SIGNING_ROOT,
+        head_root: Root = ZERO_ROOT,
         head_slot: Slot = default_slot,
     ) -> "Status":
         return super().create(
@@ -69,7 +69,7 @@ class BeaconBlocksByRangeRequest(HashableContainer):
     @classmethod
     def create(
         cls,
-        head_block_root: SigningRoot,
+        head_block_root: Root,
         start_slot: Slot,
         count: int,
         step: int,
@@ -88,5 +88,5 @@ class BeaconBlocksByRootRequest(HashableContainer):
     ]
 
     @classmethod
-    def create(cls, block_roots: Sequence[SigningRoot]) -> "BeaconBlocksByRootRequest":
+    def create(cls, block_roots: Sequence[Root]) -> "BeaconBlocksByRootRequest":
         return super().create(block_roots=block_roots)

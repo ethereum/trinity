@@ -22,13 +22,14 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockHeader
+from eth2.beacon.types.block_headers import SignedBeaconBlockHeader
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
-from eth2.beacon.typing import CommitteeIndex, Epoch, SigningRoot, Slot
+from eth2.beacon.typing import CommitteeIndex, Epoch, Root, Slot
 from eth2.configs import CommitteeConfig, Eth2Config
 
 
@@ -61,17 +62,17 @@ def validate_block_slot(state: BeaconState, block: BaseBeaconBlock) -> None:
 
 
 def validate_block_parent_root(state: BeaconState, block: BaseBeaconBlock) -> None:
-    expected_root = state.latest_block_header.signing_root
+    expected_root = state.latest_block_header.hash_tree_root
     parent_root = block.parent_root
     if parent_root != expected_root:
         raise ValidationError(
             f"block.parent_root ({encode_hex(parent_root)}) is not equal to "
-            f"state.latest_block_header.signing_root ({encode_hex(expected_root)}"
+            f"state.latest_block_header.hash_tree_root ({encode_hex(expected_root)}"
         )
 
 
 def validate_proposer_is_not_slashed(
-    state: BeaconState, block_root: SigningRoot, config: CommitteeConfig
+    state: BeaconState, block_root: Root, config: CommitteeConfig
 ) -> None:
     proposer_index = get_beacon_proposer_index(state, config)
     proposer = state.validators[proposer_index]
@@ -80,9 +81,11 @@ def validate_proposer_is_not_slashed(
 
 
 def validate_proposer_signature(
-    state: BeaconState, block: BaseBeaconBlock, committee_config: CommitteeConfig
+    state: BeaconState,
+    signed_block: BaseSignedBeaconBlock,
+    committee_config: CommitteeConfig,
 ) -> None:
-    message_hash = block.signing_root
+    message_hash = signed_block.message.hash_tree_root
 
     # Get the public key of proposer
     beacon_proposer_index = get_beacon_proposer_index(state, committee_config)
@@ -95,7 +98,7 @@ def validate_proposer_signature(
         bls.validate(
             pubkey=proposer_pubkey,
             message_hash=message_hash,
-            signature=block.signature,
+            signature=signed_block.signature,
             domain=domain,
         )
     except SignatureError as error:
@@ -151,14 +154,14 @@ def validate_proposer_slashing(
 
     validate_block_header_signature(
         state=state,
-        header=proposer_slashing.header_1,
+        header=proposer_slashing.signed_header_1,
         pubkey=proposer.pubkey,
         slots_per_epoch=slots_per_epoch,
     )
 
     validate_block_header_signature(
         state=state,
-        header=proposer_slashing.header_2,
+        header=proposer_slashing.signed_header_2,
         pubkey=proposer.pubkey,
         slots_per_epoch=slots_per_epoch,
     )
@@ -167,8 +170,12 @@ def validate_proposer_slashing(
 def validate_proposer_slashing_epoch(
     proposer_slashing: ProposerSlashing, slots_per_epoch: int
 ) -> None:
-    epoch_1 = compute_epoch_at_slot(proposer_slashing.header_1.slot, slots_per_epoch)
-    epoch_2 = compute_epoch_at_slot(proposer_slashing.header_2.slot, slots_per_epoch)
+    epoch_1 = compute_epoch_at_slot(
+        proposer_slashing.signed_header_1.message.slot, slots_per_epoch
+    )
+    epoch_2 = compute_epoch_at_slot(
+        proposer_slashing.signed_header_2.message.slot, slots_per_epoch
+    )
 
     if epoch_1 != epoch_2:
         raise ValidationError(
@@ -178,11 +185,12 @@ def validate_proposer_slashing_epoch(
 
 
 def validate_proposer_slashing_headers(proposer_slashing: ProposerSlashing) -> None:
-    header_1 = proposer_slashing.header_1
-    header_2 = proposer_slashing.header_2
+    header_1 = proposer_slashing.signed_header_1
+    header_2 = proposer_slashing.signed_header_2
     if header_1 == header_2:
         raise ValidationError(
-            f"proposer_slashing.header_1 ({header_1}) == proposer_slashing.header_2 ({header_2})"
+            f"proposer_slashing.signed_header_1 ({header_1}) == "
+            f"proposer_slashing.signed_header_2 ({header_2})"
         )
 
 
@@ -199,20 +207,20 @@ def validate_proposer_slashing_is_slashable(
 
 def validate_block_header_signature(
     state: BeaconState,
-    header: BeaconBlockHeader,
+    header: SignedBeaconBlockHeader,
     pubkey: BLSPubkey,
     slots_per_epoch: int,
 ) -> None:
     try:
         bls.validate(
             pubkey=pubkey,
-            message_hash=header.signing_root,
+            message_hash=header.message.hash_tree_root,
             signature=header.signature,
             domain=get_domain(
                 state,
                 SignatureDomain.DOMAIN_BEACON_PROPOSER,
                 slots_per_epoch,
-                compute_epoch_at_slot(header.slot, slots_per_epoch),
+                compute_epoch_at_slot(header.message.slot, slots_per_epoch),
             ),
         )
     except SignatureError as error:
@@ -300,6 +308,17 @@ def _validate_eligible_target_epoch(
         )
 
 
+def _validate_slot_matches_target_epoch(
+    target_epoch: Epoch, attestation_slot: Slot, slots_per_epoch: int
+) -> None:
+    epoch = compute_epoch_at_slot(attestation_slot, slots_per_epoch)
+    if target_epoch != epoch:
+        raise ValidationError(
+            f"Attestation at slot {attestation_slot} (epoch {epoch}) must be in"
+            f" the same epoch with it's target epoch (epoch {target_epoch})"
+        )
+
+
 def validate_attestation_slot(
     attestation_slot: Slot,
     state_slot: Slot,
@@ -354,6 +373,9 @@ def _validate_attestation_data(
     )
 
     _validate_eligible_target_epoch(data.target.epoch, current_epoch, previous_epoch)
+    _validate_slot_matches_target_epoch(
+        data.target.epoch, attestation_slot, slots_per_epoch
+    )
     validate_attestation_slot(
         attestation_slot,
         state.slot,

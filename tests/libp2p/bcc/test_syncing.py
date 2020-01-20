@@ -3,13 +3,11 @@ import asyncio
 from async_generator import asynccontextmanager
 import pytest
 
-from eth2.beacon.genesis import get_genesis_block
-from eth2.beacon.types.blocks import BeaconBlock
 from trinity.tools.bcc_factories import (
     AsyncBeaconChainDBFactory,
-    BeaconBlockFactory,
     BeaconChainSyncerFactory,
     ConnectionPairFactory,
+    SignedBeaconBlockFactory,
 )
 
 
@@ -70,11 +68,13 @@ def assert_synced(alice, bob, correct_branch):
 
 @pytest.mark.asyncio
 async def test_sync_from_genesis(request, event_loop, event_bus, genesis_state):
-    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
+    alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=0, root=genesis_block
     )
-    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+    bob_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=99, root=genesis_block
     )
 
@@ -86,11 +86,13 @@ async def test_sync_from_genesis(request, event_loop, event_bus, genesis_state):
 
 @pytest.mark.asyncio
 async def test_sync_from_old_head(request, event_loop, event_bus, genesis_state):
-    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
+    alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=49, root=genesis_block
     )
-    bob_branch = alice_branch + BeaconBlockFactory.create_branch(
+    bob_branch = alice_branch + SignedBeaconBlockFactory.create_branch(
         length=50, root=alice_branch[-1]
     )
     async with get_sync_setup(
@@ -101,12 +103,14 @@ async def test_sync_from_old_head(request, event_loop, event_bus, genesis_state)
 
 @pytest.mark.asyncio
 async def test_reorg_sync(request, event_loop, event_bus, genesis_state):
-    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
-        length=49, root=genesis_block, state_root=b"\x11" * 32
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
     )
-    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
-        length=99, root=genesis_block, state_root=b"\x22" * 32
+    alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
+        length=49, root=genesis_block, message__state_root=b"\x11" * 32
+    )
+    bob_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
+        length=99, root=genesis_block, message__state_root=b"\x22" * 32
     )
 
     async with get_sync_setup(
@@ -119,12 +123,14 @@ async def test_reorg_sync(request, event_loop, event_bus, genesis_state):
 async def test_sync_when_already_at_best_head(
     request, event_loop, event_bus, genesis_state
 ):
-    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
-        length=99, root=genesis_block, state_root=b"\x11" * 32
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
     )
-    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
-        length=50, root=genesis_block, state_root=b"\x22" * 32
+    alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
+        length=99, root=genesis_block, message__state_root=b"\x11" * 32
+    )
+    bob_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
+        length=50, root=genesis_block, message__state_root=b"\x22" * 32
     )
 
     async with get_sync_setup(
@@ -140,11 +146,13 @@ async def test_sync_when_already_at_best_head(
 
 @pytest.mark.asyncio
 async def test_sync_skipped_slots(request, event_loop, event_bus, genesis_state):
-    genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-    alice_branch = (genesis_block,) + BeaconBlockFactory.create_branch(
+    genesis_block = SignedBeaconBlockFactory(
+        message__state_root=genesis_state.hash_tree_root
+    )
+    alice_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch(
         length=0, root=genesis_block
     )
-    bob_branch = (genesis_block,) + BeaconBlockFactory.create_branch_by_slots(
+    bob_branch = (genesis_block,) + SignedBeaconBlockFactory.create_branch_by_slots(
         slots=tuple(range(4, 99)), root=genesis_block
     )
     assert bob_branch[0].slot == 0

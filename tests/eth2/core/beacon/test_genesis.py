@@ -1,7 +1,7 @@
 from eth.constants import ZERO_HASH32
 import pytest
 
-from eth2.beacon.constants import EMPTY_SIGNATURE, JUSTIFICATION_BITS_LENGTH
+from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH
 from eth2.beacon.genesis import (
     _genesis_time_from_eth1_timestamp,
     get_genesis_block,
@@ -22,7 +22,6 @@ def test_get_genesis_block():
     assert genesis_block.slot == genesis_slot
     assert genesis_block.parent_root == ZERO_HASH32
     assert genesis_block.state_root == genesis_state_root
-    assert genesis_block.signature == EMPTY_SIGNATURE
     assert genesis_block.body.is_empty
 
 

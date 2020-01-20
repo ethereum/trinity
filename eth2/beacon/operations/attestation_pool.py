@@ -6,7 +6,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_attestation_slot,
 )
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.typing import CommitteeIndex, SigningRoot, Slot
+from eth2.beacon.typing import CommitteeIndex, Root, Slot
 from eth2.configs import Eth2Config
 
 from .pool import OperationPool
@@ -40,10 +40,7 @@ class AttestationPool(OperationPool[Attestation]):
         )
 
     def get_acceptable_attestations(
-        self,
-        slot: Slot,
-        committee_index: CommitteeIndex,
-        beacon_block_root: SigningRoot,
+        self, slot: Slot, committee_index: CommitteeIndex, beacon_block_root: Root
     ) -> Tuple[Attestation, ...]:
         return tuple(
             filter(

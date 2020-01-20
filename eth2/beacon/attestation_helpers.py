@@ -52,7 +52,7 @@ def validate_indexed_attestation(
             f" but have {len(attesting_indices)} validators."
         )
 
-    if list(attesting_indices) != sorted(attesting_indices):
+    if list(attesting_indices) != sorted(set(attesting_indices)):
         raise ValidationError(
             f"Indices should be sorted; the attesting indices are not: {attesting_indices}."
         )

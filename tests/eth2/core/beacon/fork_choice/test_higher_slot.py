@@ -5,8 +5,8 @@ from eth2.beacon.types.blocks import BeaconBlock
 
 
 @pytest.mark.parametrize("slot", (i for i in range(10)))
-def test_higher_slot_fork_choice_scoring(sample_beacon_block_params, slot):
-    block = BeaconBlock.create(**sample_beacon_block_params).set("slot", slot)
+def test_higher_slot_fork_choice_scoring(slot):
+    block = BeaconBlock.create(slot=slot)
 
     expected_score = HigherSlotScore(slot)
 

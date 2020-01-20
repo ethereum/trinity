@@ -16,14 +16,22 @@ from eth2.beacon.fork_choice.lmd_ghost import Context as LMDGHOSTContext
 from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.operations.attestation_pool import AttestationPool
 from eth2.beacon.state_machines.forks.serenity import SerenityStateMachine
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
+from eth2.beacon.state_machines.forks.serenity.blocks import (
+    SerenityBeaconBlock,
+    SerenitySignedBeaconBlock,
+)
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.tools.builder.initializer import create_mock_validator
 from eth2.beacon.tools.builder.state import create_mock_genesis_state_from_validators
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
-from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, BeaconBlockHeader
+from eth2.beacon.types.blocks import (
+    BeaconBlockBody,
+    BeaconBlockHeader,
+    SignedBeaconBlock,
+    SignedBeaconBlockHeader,
+)
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.eth1_data import Eth1Data
@@ -451,17 +459,19 @@ def sample_block_header_params():
         "parent_root": b"\x22" * 32,
         "state_root": b"\x33" * 32,
         "body_root": b"\x43" * 32,
-        "signature": b"\x56" * 96,
     }
 
 
 @pytest.fixture
-def sample_proposer_slashing_params(sample_block_header_params):
+def sample_proposer_slashing_params(sample_block_header_params, sample_signature):
     block_header_data = BeaconBlockHeader.create(**sample_block_header_params)
+    signed_block_header = SignedBeaconBlockHeader.create(
+        message=block_header_data, signature=sample_signature
+    )
     return {
         "proposer_index": 1,
-        "header_1": block_header_data,
-        "header_2": block_header_data,
+        "signed_header_1": signed_block_header,
+        "signed_header_2": signed_block_header,
     }
 
 
@@ -508,15 +518,12 @@ def sample_beacon_block_body_params(sample_signature, sample_eth1_data_params):
 
 
 @pytest.fixture
-def sample_beacon_block_params(
-    sample_signature, sample_beacon_block_body_params, genesis_slot
-):
+def sample_beacon_block_params(sample_beacon_block_body_params, genesis_slot):
     return {
         "slot": genesis_slot + 10,
         "parent_root": ZERO_HASH32,
         "state_root": b"\x55" * 32,
         "body": BeaconBlockBody.create(**sample_beacon_block_body_params),
-        "signature": sample_signature,
     }
 
 
@@ -560,11 +567,6 @@ def sample_beacon_state_params(
         # Finality
         "finalized_checkpoint": Checkpoint.create(epoch=0, root=b"\x33" * 32),
     }
-
-
-@pytest.fixture()
-def sample_block(sample_beacon_block_params):
-    return SerenityBeaconBlock.create(**sample_beacon_block_params)
 
 
 @pytest.fixture()
@@ -625,8 +627,11 @@ def genesis_state(
 
 
 @pytest.fixture
-def genesis_block(genesis_state):
-    return get_genesis_block(genesis_state.hash_tree_root, SerenityBeaconBlock)
+def genesis_block(genesis_state, sample_signature):
+    return SerenitySignedBeaconBlock.create(
+        message=get_genesis_block(genesis_state.hash_tree_root, SerenityBeaconBlock),
+        signature=sample_signature,
+    )
 
 
 #
@@ -663,7 +668,7 @@ def chaindb(base_db, genesis_config):
 @pytest.fixture
 def chaindb_at_genesis(chaindb, genesis_state, genesis_block, fork_choice_scoring):
     chaindb.persist_state(genesis_state)
-    chaindb.persist_block(genesis_block, BeaconBlock, fork_choice_scoring)
+    chaindb.persist_block(genesis_block, SignedBeaconBlock, fork_choice_scoring)
     return chaindb
 
 

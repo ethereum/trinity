@@ -14,7 +14,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Timestamp
 
-from .blocks import SerenityBeaconBlock
+from .blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
 from .configs import SERENITY_CONFIG
 from .state_transitions import SerenityStateTransition
 from .states import SerenityBeaconState
@@ -27,6 +27,7 @@ class SerenityStateMachine(BeaconStateMachine):
 
     # classes
     block_class = SerenityBeaconBlock  # type: Type[BaseBeaconBlock]
+    signed_block_class = SerenitySignedBeaconBlock
     state_class = SerenityBeaconState  # type: Type[BeaconState]
     state_transition_class = SerenityStateTransition  # type: Type[BaseStateTransition]
     fork_choice_scoring_class = LMDGHOSTScoring  # type: Type[BaseForkChoiceScoring]
@@ -58,7 +59,7 @@ class SerenityStateMachine(BeaconStateMachine):
                 genesis_root, self.block_class
             )
             genesis_state = self.chaindb.get_state_by_root(
-                genesis_block.state_root, self.state_class
+                genesis_block.message.state_root, self.state_class
             )
             return LMDGHOSTContext.from_genesis(genesis_state, genesis_block)
         else:
