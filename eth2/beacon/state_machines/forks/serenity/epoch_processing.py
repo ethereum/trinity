@@ -387,9 +387,10 @@ def process_rewards_and_penalties(
 
 @curry
 def _process_activation_eligibility_or_ejections(
-    state: BeaconState, validator: Validator, config: Eth2Config
-) -> Validator:
+    state: BeaconState, index: ValidatorIndex, config: Eth2Config
+) -> BeaconState:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
+    validator = state.validators[index]
 
     if validator.is_eligible_for_activation_queue(config):
         validator = validator.set("activation_eligibility_epoch", current_epoch + 1)
@@ -400,7 +401,7 @@ def _process_activation_eligibility_or_ejections(
     ):
         validator = initiate_exit_for_validator(validator, state, config)
 
-    return validator
+    return state.transform(("validators", index), validator)
 
 
 @curry
@@ -416,31 +417,33 @@ def _update_validator_activation_epoch(
 
 
 def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconState:
-    new_validators = state.validators
-    for index, validator in enumerate(state.validators):
-        new_validator = _process_activation_eligibility_or_ejections(
-            state, validator, config
+    new_state = state
+    for index in range(len(state.validators)):
+        new_state = _process_activation_eligibility_or_ejections(
+            new_state, index, config
         )
-        new_validators = new_validators.set(index, new_validator)
 
     # Queue validators eligible for activation and not yet dequeued for activation
     activation_queue = sorted(
         (
             index
-            for index, validator in enumerate(new_validators)
+            for index, validator in enumerate(new_state.validators)
             if validator.is_eligible_for_activation(state)
         ),
         # Order by the sequence of activation_eligibility_epoch setting and then index
-        key=lambda index: (new_validators[index].activation_eligibility_epoch, index),
+        key=lambda index: (
+            new_state.validators[index].activation_eligibility_epoch,
+            index,
+        ),
     )
 
     # Dequeued validators for activation up to churn limit
     for index in activation_queue[: get_validator_churn_limit(state, config)]:
-        new_validators = new_validators.transform(
-            (index,), _update_validator_activation_epoch(state, config)
+        new_state = new_state.transform(
+            ("validators", index), _update_validator_activation_epoch(state, config)
         )
 
-    return state.set("validators", new_validators)
+    return new_state
 
 
 def _determine_slashing_penalty(
