@@ -90,20 +90,20 @@ class Context:
     justified_checkpoint: Checkpoint
     finalized_checkpoint: Checkpoint
     best_justified_checkpoint: Checkpoint
-    blocks: Dict[Root, BaseSignedBeaconBlock] = field(default_factory=dict)
+    blocks: Dict[Root, BaseBeaconBlock] = field(default_factory=dict)
     block_states: Dict[Hash32, BeaconState] = field(default_factory=dict)
     checkpoint_states: Dict[Checkpoint, BeaconState] = field(default_factory=dict)
     latest_messages: Dict[ValidatorIndex, LatestMessage] = field(default_factory=dict)
 
     @classmethod
     def from_genesis(
-        cls, genesis_state: BeaconState, genesis_block: BaseSignedBeaconBlock
+        cls, genesis_state: BeaconState, genesis_block: BaseBeaconBlock
     ) -> "Context":
         return cls.at_time(genesis_state.genesis_time, genesis_state, genesis_block)
 
     @classmethod
     def at_time(
-        cls, current_time: Timestamp, state: BeaconState, block: BaseSignedBeaconBlock
+        cls, current_time: Timestamp, state: BeaconState, block: BaseBeaconBlock
     ) -> "Context":
         """
         Return a ``Context`` based on the ``current_time`` and the latest known tip of
@@ -174,8 +174,8 @@ class Store:
             // self._config.SECONDS_PER_SLOT
         )
 
-    def _get_block_by_root(self, root: Root) -> BaseSignedBeaconBlock:
-        return self._db.get_block_by_root(root, self._block_class)
+    def _get_block_by_root(self, root: Root) -> BaseBeaconBlock:
+        return self._db.get_block_by_root(root, self._block_class).message
 
     def get_ancestor_root(self, root: Root, slot: Slot) -> Optional[Root]:
         """
@@ -275,7 +275,7 @@ class Store:
 
     def on_block(
         self,
-        block: BaseSignedBeaconBlock,
+        signed_block: BaseSignedBeaconBlock,
         post_state: BeaconState = None,
         state_machine: BaseBeaconStateMachine = None,
     ) -> None:
@@ -285,6 +285,7 @@ class Store:
         This handler requests the ``post_state`` of this block to avoid recomputing
         it if it is already known.
         """
+        block = signed_block.message
         # NOTE: this invariant should hold based on how we handle
         # block importing in the chain but we will sanity check for now
         assert block.parent_root in self._context.block_states
@@ -298,7 +299,7 @@ class Store:
             >= pre_state.genesis_time + block.slot * self._config.SECONDS_PER_SLOT
         )
 
-        root = block.signing_root
+        root = block.hash_tree_root
 
         self._context.blocks[root] = block
 
@@ -321,7 +322,7 @@ class Store:
         if not post_state:
             # NOTE: error to not provide a post_state and not provide a way to compute it
             assert state_machine is not None
-            post_state, _ = state_machine.import_block(block, pre_state)
+            post_state, _ = state_machine.import_block(signed_block, pre_state)
 
         self._context.block_states[root] = post_state
 
