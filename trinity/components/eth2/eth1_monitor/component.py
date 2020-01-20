@@ -49,6 +49,11 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         cls, arg_parser: ArgumentParser, subparser: _SubParsersAction
     ) -> None:
         arg_parser.add_argument(
+            "--eth1-monitor-config",
+            type=str,
+            help="path to eth1 monitor config file",
+        )
+        arg_parser.add_argument(
             "--fake-eth1-data",
             help="Use fake Eth1 data provider",
             action="store_true",
@@ -77,9 +82,12 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         base_db = DBClient.connect(trinity_config.database_ipc_path)
 
         # Load the config from eth1_monitor_config
-        eth1_monitor_config = load_yaml_at(
-            trinity_config.trinity_root_dir / ETH1_MONITOR_CONFIG
-        )
+        if boot_info.args.eth1_monitor_config:
+            eth1_monitor_config = load_yaml_at(Path(boot_info.args.eth1_monitor_config))
+        else:
+            eth1_monitor_config = load_yaml_at(
+                trinity_config.trinity_root_dir / ETH1_MONITOR_CONFIG
+            )
         (deposit_contract_abi,) = eth1_monitor_config["deposit_contract_abi"],
         deposit_contract_address = eth1_monitor_config["deposit_contract_address"]
         (num_blocks_confirmed,) = eth1_monitor_config["num_blocks_confirmed"],
@@ -133,7 +141,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
 
             w3: Web3 = Web3(provider=provider)
             if not w3.isConnected():
-                raise
+                raise Exception("No web3 provider")
 
             eth1_data_provider = Web3Eth1DataProvider(
                 w3=w3,
