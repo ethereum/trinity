@@ -41,3 +41,5 @@ HANDSHAKE_TIMEOUT = 1  # timeout for performing a handshake
 ROUTING_TABLE_PING_INTERVAL = 5  # interval of outgoing pings sent to maintain the routing table
 
 NUM_ROUTING_TABLE_BUCKETS = 256  # number of buckets in the routing table
+
+MAX_NODES_MESSAGE_TOTAL = 8  # max allowed total value for nodes messages

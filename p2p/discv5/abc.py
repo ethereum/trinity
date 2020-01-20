@@ -190,6 +190,20 @@ class MessageDispatcherAPI(ABC):
         ...
 
     @abstractmethod
+    async def request_nodes(self,
+                            receiver_node_id: NodeID,
+                            message: BaseMessage,
+                            endpoint: Optional[Endpoint] = None,
+                            ) -> IncomingMessage:
+        """Send a request to the given peer and return the collection of Nodes responses.
+
+        Similar to `request`, but waits for all Nodes messages sent in response. If a different
+        message type is received or the messages are in some other way invalid, an
+        `UnexpectedMessage` error is thrown.
+        """
+        ...
+
+    @abstractmethod
     def add_request_handler(self,
                             message_class: Type[BaseMessage],
                             ) -> ChannelHandlerSubscriptionAPI[IncomingMessage]:

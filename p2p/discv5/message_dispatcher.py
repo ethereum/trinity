@@ -13,6 +13,8 @@ from typing import (
     TypeVar,
 )
 
+from async_generator import asynccontextmanager
+
 import trio
 from trio.abc import (
     ReceiveChannel,
@@ -28,6 +30,9 @@ from eth_utils import (
 
 from async_service import Service
 
+from p2p.exceptions import (
+    UnexpectedMessage,
+)
 from p2p.discv5.channel_services import (
     Endpoint,
     IncomingMessage,
@@ -42,10 +47,12 @@ from p2p.discv5.constants import (
     IP_V4_ADDRESS_ENR_KEY,
     MAX_REQUEST_ID,
     MAX_REQUEST_ID_ATTEMPTS,
+    MAX_NODES_MESSAGE_TOTAL,
     UDP_PORT_ENR_KEY,
 )
 from p2p.discv5.messages import (
     BaseMessage,
+    NodesMessage,
 )
 from p2p.discv5.typing import (
     NodeID,
@@ -281,11 +288,8 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
 
         return Endpoint(ip_address, udp_port)
 
-    async def request(self,
-                      receiver_node_id: NodeID,
-                      message: BaseMessage,
-                      endpoint: Optional[Endpoint] = None,
-                      ) -> IncomingMessage:
+    @asynccontextmanager
+    async def request_response_subscription(self, receiver_node_id, message, endpoint):
         if endpoint is None:
             endpoint = await self.get_endpoint_from_enr_db(receiver_node_id)
 
@@ -311,12 +315,78 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
                 message.request_id,
             )
             await self.outgoing_message_send_channel.send(outgoing_message)
+            yield response_subscription
+
+    async def request(self,
+                      receiver_node_id: NodeID,
+                      message: BaseMessage,
+                      endpoint: Optional[Endpoint] = None,
+                      ) -> IncomingMessage:
+        async with self.request_response_subscription(
+            receiver_node_id,
+            message,
+            endpoint,
+        ) as response_subscription:
             response = await response_subscription.receive()
             self.logger.debug(
-                "Received %s from %s with request id %d as response to %s",
+                "Received %s from %s with request id %d",
                 response,
                 encode_hex(receiver_node_id),
                 message.request_id,
-                outgoing_message,
             )
             return response
+
+    async def request_nodes(self,
+                            receiver_node_id: NodeID,
+                            message: BaseMessage,
+                            endpoint: Optional[Endpoint] = None,
+                            ) -> Tuple[IncomingMessage, ...]:
+        async with self.request_response_subscription(
+            receiver_node_id,
+            message,
+            endpoint,
+        ) as response_subscription:
+            first_response = await response_subscription.receive()
+            self.logger.debug(
+                "Received %s from %s with request id %d",
+                first_response,
+                encode_hex(receiver_node_id),
+                message.request_id,
+            )
+            if not isinstance(first_response.message, NodesMessage):
+                raise UnexpectedMessage(
+                    f"Peer {encode_hex(receiver_node_id)} responded with "
+                    f"{first_response.message.__class__.__name__} instead of Nodes message"
+                )
+
+            total = first_response.message.total
+            if total > MAX_NODES_MESSAGE_TOTAL:
+                raise UnexpectedMessage(
+                    f"Peer {encode_hex(receiver_node_id)} sent nodes message with a total value of "
+                    f"{total} which is too big"
+                )
+            self.logger.debug(
+                "Received nodes response %d of %d from %s with request id %d",
+                1,
+                total,
+                encode_hex(receiver_node_id),
+                message.request_id,
+            )
+
+            responses = [first_response]
+            for response_index in range(1, total):
+                next_response = await response_subscription.receive()
+                if not isinstance(first_response.message, NodesMessage):
+                    raise UnexpectedMessage(
+                        f"Peer {encode_hex(receiver_node_id)} responded with "
+                        f"{next_response.message.__class__.__name__} instead of Nodes message"
+                    )
+                responses.append(next_response)
+                self.logger.debug(
+                    "Received nodes response %d of %d from %s with request id %d",
+                    response_index + 1,
+                    total,
+                    encode_hex(receiver_node_id),
+                    message.request_id,
+                )
+            return tuple(responses)

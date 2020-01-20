@@ -24,6 +24,8 @@ from p2p.discv5.identity_schemes import (
 )
 from p2p.discv5.messages import (
     PingMessage,
+    NodesMessage,
+    FindNodeMessage,
 )
 from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
@@ -182,3 +184,48 @@ async def test_request(message_dispatcher,
         endpoint=remote_endpoint,
     )
     assert received_response_with_explicit_endpoint == received_response
+
+
+@pytest.mark.trio
+async def test_request_nodes(message_dispatcher,
+                             remote_enr,
+                             remote_endpoint,
+                             incoming_message_channels,
+                             outgoing_message_channels,
+                             nursery):
+    request_id = message_dispatcher.get_free_request_id(remote_enr.node_id)
+    request = FindNodeMessage(
+        request_id=request_id,
+        distance=3,
+    )
+    enrs_per_message = [[ENRFactory() for _ in range(2)] for _ in range(3)]
+    response_messages = [
+        NodesMessage(
+            request_id=request_id,
+            total=len(enrs_per_message),
+            enrs=enrs)
+        for enrs in enrs_per_message
+    ]
+
+    async def handle_request_on_remote():
+        async for outgoing_message in outgoing_message_channels[1]:
+            assert outgoing_message.message == request
+            assert outgoing_message.receiver_endpoint == remote_endpoint
+            assert outgoing_message.receiver_node_id == remote_enr.node_id
+
+            for response in response_messages:
+                await incoming_message_channels[0].send(IncomingMessage(
+                    message=response,
+                    sender_endpoint=remote_endpoint,
+                    sender_node_id=remote_enr.node_id,
+                ))
+
+    nursery.start_soon(handle_request_on_remote)
+
+    with trio.fail_after(3):
+        received_responses = await message_dispatcher.request_nodes(remote_enr.node_id, request)
+    assert len(received_responses) == len(response_messages)
+    for received_response, expected_response_message in zip(received_responses, response_messages):
+        assert received_response.sender_endpoint == remote_endpoint
+        assert received_response.sender_node_id == remote_enr.node_id
+        assert received_response.message == expected_response_message
