@@ -26,7 +26,7 @@ class Beacon(BeaconChainRPCModule):
         block = await self.chain.coro_get_canonical_head(SignedBeaconBlock)
         return dict(
             slot=block.slot,
-            block_root=encode_hex(block.signing_root),
+            block_root=encode_hex(block.message.hash_tree_root),
             state_root=encode_hex(block.message.state_root),
         )
 

@@ -200,11 +200,11 @@ class SignedBeaconBlockFactory(factory.Factory):
             root = cls()
 
         parent = cls(
-            message__parent_root=root.signing_root, message__slot=slots[0], **kwargs
+            message__parent_root=root.message.hash_tree_root, message__slot=slots[0], **kwargs
         )
         yield parent
         for slot in slots[1:]:
-            child = cls(message__parent_root=parent.signing_root, message__slot=slot)
+            child = cls(message__parent_root=parent.message.hash_tree_root, message__slot=slot)
             yield child
             parent = child
 

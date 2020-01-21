@@ -76,7 +76,7 @@ async def test_json_rpc_http_server(
             assert response_data['id'] == request_id
             result = response_data['result']
             assert result['slot'] == 0
-            assert decode_hex(result['block_root']) == genesis_block.signing_root
+            assert decode_hex(result['block_root']) == genesis_block.hash_tree_root
             assert decode_hex(result['state_root']) == genesis_state.hash_tree_root
         except KeyboardInterrupt:
             pass

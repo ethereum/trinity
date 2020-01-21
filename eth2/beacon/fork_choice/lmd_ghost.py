@@ -110,7 +110,7 @@ class Context:
         the chain at that point in time.
         """
         assert state.slot == block.slot
-        root = block.signing_root
+        root = block.message.hash_tree_root
         justified_checkpoint = state.current_justified_checkpoint
         finalized_checkpoint = state.finalized_checkpoint
         return Context(
@@ -310,7 +310,7 @@ class Store:
         )
         if not is_ancestor_of_finalized_block:
             raise ValidationError(
-                f"block with signing root {root.hex()} is not a descendant of the finalized"
+                f"block with root {root.hex()} is not a descendant of the finalized"
                 f" checkpoint with root {finalized_ancestor.hex()}"
             )
 
@@ -425,7 +425,7 @@ class Store:
         Return the score of the target ``block`` according to the LMD GHOST algorithm,
         using the lexicographic ordering of the block root to break ties.
         """
-        root = block.signing_root
+        root = block.message.hash_tree_root
 
         attestation_score = self.get_latest_attesting_balance(root)
         block_root_score = score_block_by_root(root)

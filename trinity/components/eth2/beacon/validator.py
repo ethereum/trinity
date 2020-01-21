@@ -606,7 +606,7 @@ class Validator(BaseService):
                 state_machine.config,
                 state_machine,
                 slot,
-                head.signing_root,
+                head.message.hash_tree_root,
                 attesting_validator_privkeys,
                 committee,
                 committee_index,

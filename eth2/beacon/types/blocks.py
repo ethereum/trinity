@@ -143,11 +143,6 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}: {str(self)}>"
 
-    @property
-    def signing_root(self) -> Root:
-        # Remove this soon
-        return self.hash_tree_root
-
 
 TBeaconBlock = TypeVar("TBeaconBlock", bound="BeaconBlock")
 
@@ -212,10 +207,6 @@ class BaseSignedBeaconBlock(HashableContainer):
     @property
     def parent_root(self) -> Root:
         return self.message.parent_root
-
-    @property
-    def signing_root(self) -> Root:
-        return self.message.hash_tree_root
 
     @property
     def is_genesis(self) -> bool:

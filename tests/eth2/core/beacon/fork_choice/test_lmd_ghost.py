@@ -54,7 +54,7 @@ def _mk_attestation_inputs_in_epoch(epoch, block_producer, state, config):
             continue
 
         block = block_producer(slot)
-        root = block.signing_root
+        root = block.message.hash_tree_root
         attestation_data = AttestationData.create(
             slot=slot,
             index=committee_index,
@@ -111,7 +111,7 @@ def _find_collision(state, config, validator_index, epoch, block_producer):
         if validator_index in committee:
             # TODO(ralexstokes) refactor w/ tools/builder
             block = block_producer(slot)
-            root = block.signing_root
+            root = block.message.hash_tree_root
             attestation_data = AttestationData.create(
                 slot=slot,
                 index=committee_index,
@@ -308,8 +308,8 @@ def test_store_get_latest_attestation(
             # internals of ``on_attestation`` to shortcut constructing the complete network
             # state needed to test the function of the ``Store``.
             block = block_producer(attestation.data.slot)
-            context.blocks[block.signing_root] = block
-            context.block_states[block.signing_root] = genesis_state
+            context.blocks[block.message.hash_tree_root] = block
+            context.block_states[block.message.hash_tree_root] = genesis_state
 
             store.on_attestation(attestation, validate_signature=False)
 
@@ -329,7 +329,7 @@ def _mk_block(block_params, slot, parent, block_offset):
         "slot",
         slot,
         "parent_root",
-        parent.signing_root,
+        parent.message.hash_tree_root,
         # mix in something unique
         "state_root",
         block_offset.to_bytes(32, byteorder="big"),
@@ -443,7 +443,7 @@ def _mk_attestation_for_block_with_committee(block, committee, committee_index, 
         data=AttestationData.create(
             slot=block.slot,
             index=committee_index,
-            beacon_block_root=block.signing_root,
+            beacon_block_root=block.message.hash_tree_root,
             target=Checkpoint.create(
                 epoch=compute_epoch_at_slot(block.slot, config.SLOTS_PER_EPOCH)
             ),
@@ -473,14 +473,14 @@ def _score_block(block, store, state, config):
                 for validator_index, target in store._context.latest_messages
                 if store.get_ancestor(target.root, block.slot) == block
             ),
-            score_block_by_root(block.signing_root),
+            score_block_by_root(block.message.hash_tree_root),
         )
     )
 
 
 def _build_score_index_from_decorated_block_tree(block_tree, store, state, config):
     return {
-        block.signing_root: _score_block(block, store, state, config)
+        block.message.hash_tree_root: _score_block(block, store, state, config)
         for block in _iter_block_tree_by_block(block_tree)
     }
 
@@ -556,7 +556,7 @@ def test_lmd_ghost_fork_choice_scoring(
         compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
         + some_slot_offset,
         "current_justified_checkpoint",
-        Checkpoint.create(epoch=some_epoch, root=root_block.signing_root),
+        Checkpoint.create(epoch=some_epoch, root=root_block.message.hash_tree_root),
     )
     assert some_epoch >= state.current_justified_checkpoint.epoch
 
@@ -609,5 +609,5 @@ def test_lmd_ghost_fork_choice_scoring(
 
     for block in _iter_block_tree_by_block(block_tree):
         score = store.scoring(block)
-        expected_score = score_index[block.signing_root]
+        expected_score = score_index[block.message.hash_tree_root]
         assert score == expected_score

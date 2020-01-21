@@ -92,7 +92,7 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
             config=config,
             state_machine=fixture_sm_class(chaindb),
             attestation_slot=attestation_slot,
-            beacon_block_root=block.signing_root,
+            beacon_block_root=block.message.hash_tree_root,
             keymap=keymap,
             voted_attesters_ratio=1.0,
         )

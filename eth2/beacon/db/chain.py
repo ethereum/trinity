@@ -268,11 +268,11 @@ class BeaconChainDB(BaseBeaconChainDB):
     def _get_canonical_block_root(db: DatabaseAPI, slot: Slot) -> Root:
         slot_to_root_key = SchemaV1.make_block_slot_to_root_lookup_key(slot)
         try:
-            signing_root = db[slot_to_root_key]
+            root = db[slot_to_root_key]
         except KeyError:
             raise BlockNotFound("No canonical block for block slot #{0}".format(slot))
         else:
-            return cast(Root, signing_root)
+            return cast(Root, root)
 
     def get_canonical_block_by_slot(
         self, slot: Slot, block_class: Type[BaseBeaconBlock]
@@ -384,7 +384,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             block_ssz = db[block_root]
         except KeyError:
             raise BlockNotFound(
-                "No block with signing root {0} found".format(encode_hex(block_root))
+                "No block with root {0} found".format(encode_hex(block_root))
             )
 
         block = ssz.decode(block_ssz, block_class)
@@ -406,7 +406,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             encoded_slot = db[SchemaV1.make_block_root_to_slot_lookup_key(block_root)]
         except KeyError:
             raise BlockNotFound(
-                "No block with signing root {0} found".format(encode_hex(block_root))
+                "No block with root {0} found".format(encode_hex(block_root))
             )
         return Slot(ssz.decode(encoded_slot, sedes=ssz.sedes.uint64))
 
@@ -421,7 +421,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             encoded_score = db[SchemaV1.make_block_root_to_score_lookup_key(block_root)]
         except KeyError:
             raise BlockNotFound(
-                "No block with signing root {0} found".format(encode_hex(block_root))
+                "No block with root {0} found".format(encode_hex(block_root))
             )
         return cast(BaseScore, score_class.deserialize(encoded_score))
 
@@ -462,7 +462,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         # patch up the fork choice logic.
         # We will decide the score serialization is fixed for now.
         db.set(
-            SchemaV1.make_block_root_to_score_lookup_key(block.signing_root),
+            SchemaV1.make_block_root_to_score_lookup_key(block.message.hash_tree_root),
             score.serialize(),
         )
         return score
@@ -502,7 +502,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         if not is_genesis and not cls._block_exists(db, first_block.parent_root):
             raise ParentNotFound(
                 "Cannot persist block ({}) with unknown parent ({})".format(
-                    encode_hex(first_block.signing_root),
+                    encode_hex(first_block.message.hash_tree_root),
                     encode_hex(first_block.parent_root),
                 )
             )
@@ -510,7 +510,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         score = first_scoring.score(first_block.message)
 
         curr_block_head = first_block
-        db.set(curr_block_head.signing_root, ssz.encode(curr_block_head))
+        db.set(curr_block_head.message.hash_tree_root, ssz.encode(curr_block_head))
         cls._add_block_root_to_slot_lookup(db, curr_block_head)
         cls._set_block_score_to_db(db, curr_block_head, score)
         cls._add_attestations_root_to_block_lookup(db, curr_block_head)
@@ -518,17 +518,17 @@ class BeaconChainDB(BaseBeaconChainDB):
         orig_blocks_seq = concat([(first_block,), blocks_iterator])
 
         for parent, child in sliding_window(2, orig_blocks_seq):
-            if parent.signing_root != child.parent_root:
+            if parent.message.hash_tree_root != child.parent_root:
                 raise ValidationError(
                     "Non-contiguous chain. Expected {} to have {} as parent but was {}".format(
-                        encode_hex(child.signing_root),
-                        encode_hex(parent.signing_root),
+                        encode_hex(child.message.hash_tree_root),
+                        encode_hex(parent.message.hash_tree_root),
                         encode_hex(child.parent_root),
                     )
                 )
 
             curr_block_head = child
-            db.set(curr_block_head.signing_root, ssz.encode(curr_block_head))
+            db.set(curr_block_head.message.hash_tree_root, ssz.encode(curr_block_head))
             cls._add_block_root_to_slot_lookup(db, curr_block_head)
             cls._add_attestations_root_to_block_lookup(db, curr_block_head)
 
@@ -543,12 +543,12 @@ class BeaconChainDB(BaseBeaconChainDB):
 
         if no_canonical_head:
             return cls._set_as_canonical_chain_head(
-                db, curr_block_head.signing_root, block_class
+                db, curr_block_head.message.hash_tree_root, block_class
             )
 
         if score > head_score:
             return cls._set_as_canonical_chain_head(
-                db, curr_block_head.signing_root, block_class
+                db, curr_block_head.message.hash_tree_root, block_class
             )
         else:
             return tuple(), tuple()
@@ -591,7 +591,9 @@ class BeaconChainDB(BaseBeaconChainDB):
         for block in new_canonical_blocks:
             cls._add_block_slot_to_root_lookup(db, block)
 
-        db.set(SchemaV1.make_canonical_head_root_lookup_key(), block.signing_root)
+        db.set(
+            SchemaV1.make_canonical_head_root_lookup_key(), block.message.hash_tree_root
+        )
 
         return new_canonical_blocks, tuple(old_canonical_blocks)
 
@@ -618,7 +620,7 @@ class BeaconChainDB(BaseBeaconChainDB):
                 # This just means the block is not on the canonical chain.
                 pass
             else:
-                if orig.signing_root == block.signing_root:
+                if orig.message.hash_tree_root == block.message.hash_tree_root:
                     # Found the common ancestor, stop.
                     break
 
@@ -637,7 +639,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         block slot.
         """
         block_slot_to_root_key = SchemaV1.make_block_slot_to_root_lookup_key(block.slot)
-        db.set(block_slot_to_root_key, block.signing_root)
+        db.set(block_slot_to_root_key, block.message.hash_tree_root)
 
     @staticmethod
     def _add_block_root_to_slot_lookup(db: DatabaseAPI, block: BaseBeaconBlock) -> None:
@@ -646,7 +648,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         block root.
         """
         block_root_to_slot_key = SchemaV1.make_block_root_to_slot_lookup_key(
-            block.signing_root
+            block.message.hash_tree_root
         )
         db.set(block_root_to_slot_key, ssz.encode(block.slot, sedes=ssz.sedes.uint64))
 
@@ -822,7 +824,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         handling to mark the genesis block's root and the genesis epoch as
         finalized and justified.
         """
-        genesis_root = genesis_block.signing_root
+        genesis_root = genesis_block.message.hash_tree_root
         self._update_finalized_head(genesis_root)
         self._update_justified_head(genesis_root, self.genesis_config.GENESIS_EPOCH)
 
@@ -856,7 +858,7 @@ class BeaconChainDB(BaseBeaconChainDB):
     def _add_attestations_root_to_block_lookup(
         db: DatabaseAPI, block: BaseBeaconBlock
     ) -> None:
-        root = block.signing_root
+        root = block.message.hash_tree_root
         for index, attestation in enumerate(block.body.attestations):
             attestation_key = AttestationKey(root, index)
             db.set(

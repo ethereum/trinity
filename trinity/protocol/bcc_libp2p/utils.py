@@ -120,7 +120,7 @@ def get_my_status(chain: BaseBeaconChain) -> Status:
         head_fork_version=state.fork.current_version,
         finalized_root=finalized_checkpoint.root,
         finalized_epoch=finalized_checkpoint.epoch,
-        head_root=head.signing_root,
+        head_root=head.message.hash_tree_root,
         head_slot=head.slot,
     )
 
