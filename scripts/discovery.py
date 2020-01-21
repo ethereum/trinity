@@ -86,7 +86,6 @@ async def main() -> None:
     async with TrioEndpoint.serve(networking_connection_config) as endpoint:
         service = DiscoveryService(
             privkey, addr, bootstrap_nodes, endpoint, socket, enr_db, enr_field_providers)
-        service.logger.info("Enode: %s", service.this_node.uri())
         async with background_trio_service(service):
             await service.manager.wait_finished()
 

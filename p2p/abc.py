@@ -26,6 +26,7 @@ from eth_utils import ExtendedDebugLogger
 
 from eth_keys import keys
 
+from p2p.discv5.enr import ENR
 from p2p.typing import (
     Capabilities,
     Capability,
@@ -49,7 +50,7 @@ class AddressAPI(ABC):
     tcp_port: int
 
     @abstractmethod
-    def __init__(self, ip: str, udp_port: int, tcp_port: int = 0) -> None:
+    def __init__(self, ip: str, udp_port: int, tcp_port: int) -> None:
         ...
 
     @property
@@ -109,12 +110,28 @@ class NodeAPI(ABC):
     id_bytes: bytes
 
     @abstractmethod
-    def __init__(self, pubkey: keys.PublicKey, address: AddressAPI) -> None:
+    def __init__(self, enr: ENR) -> None:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def from_pubkey_and_addr(
+            cls: Type[TNode], pubkey: keys.PublicKey, address: AddressAPI) -> TNode:
         ...
 
     @classmethod
     @abstractmethod
     def from_uri(cls: Type[TNode], uri: str) -> TNode:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def from_enode_uri(cls: Type[TNode], uri: str) -> TNode:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def from_enr_repr(cls: Type[TNode], uri: str) -> TNode:
         ...
 
     @abstractmethod

@@ -1,6 +1,7 @@
 import bisect
 from functools import total_ordering
 import ipaddress
+import itertools
 import logging
 import operator
 import random
@@ -36,6 +37,13 @@ from eth_hash.auto import keccak
 
 from p2p.abc import AddressAPI, NodeAPI
 from p2p import constants
+from p2p.discv5.enr import ENR, IDENTITY_SCHEME_ENR_KEY
+from p2p.discv5.constants import (
+    IP_V4_ADDRESS_ENR_KEY,
+    TCP_PORT_ENR_KEY,
+    UDP_PORT_ENR_KEY,
+)
+from p2p.discv5.identity_schemes import V4CompatIdentityScheme
 from p2p.validation import validate_enode_uri
 
 
@@ -53,8 +61,7 @@ TAddress = TypeVar('TAddress', bound=AddressAPI)
 
 class Address(AddressAPI):
 
-    def __init__(self, ip: str, udp_port: int, tcp_port: int = 0) -> None:
-        tcp_port = tcp_port or udp_port
+    def __init__(self, ip: str, udp_port: int, tcp_port: int) -> None:
         self.udp_port = udp_port
         self.tcp_port = tcp_port
         self._ip = ipaddress.ip_address(ip)
@@ -107,18 +114,60 @@ TNode = TypeVar('TNode', bound=NodeAPI)
 @total_ordering
 class Node(NodeAPI):
 
-    def __init__(self, pubkey: datatypes.PublicKey, address: AddressAPI) -> None:
-        self.pubkey = pubkey
-        self.address = address
-        self.id_bytes = keccak(pubkey.to_bytes())
+    def __init__(self, enr: ENR) -> None:
+        self._init(enr)
+
+    def _init(self, enr: ENR) -> None:
+        self.address = Address(
+            enr[IP_V4_ADDRESS_ENR_KEY],
+            udp_port=enr[UDP_PORT_ENR_KEY],
+            tcp_port=enr[TCP_PORT_ENR_KEY])
+        self.pubkey = keys.PublicKey.from_compressed_bytes(enr.public_key)
+        self.id_bytes = keccak(self.pubkey.to_bytes())
         self.id = big_endian_to_int(self.id_bytes)
+        self._enr = enr
+
+    @classmethod
+    def from_pubkey_and_addr(
+            cls: Type[TNode], pubkey: datatypes.PublicKey, address: AddressAPI) -> TNode:
+        enr = ENR(
+            0,
+            {
+                IDENTITY_SCHEME_ENR_KEY: V4CompatIdentityScheme.id,
+                V4CompatIdentityScheme.public_key_enr_key: pubkey.to_compressed_bytes(),
+                IP_V4_ADDRESS_ENR_KEY: address.ip_packed,
+                UDP_PORT_ENR_KEY: address.udp_port,
+                TCP_PORT_ENR_KEY: address.tcp_port,
+            },
+            signature=b''
+        )
+        return cls(enr)
 
     @classmethod
     def from_uri(cls: Type[TNode], uri: str) -> TNode:
+        if uri.startswith("enr:"):
+            return cls.from_enr_repr(uri)
+        else:
+            return cls.from_enode_uri(uri)
+
+    @classmethod
+    def from_enr_repr(cls: Type[TNode], uri: str) -> TNode:
+        return cls(ENR.from_repr(uri))
+
+    @classmethod
+    def from_enode_uri(cls: Type[TNode], uri: str) -> TNode:
         validate_enode_uri(uri)  # Be no more permissive than the validation
         parsed = urlparse.urlparse(uri)
         pubkey = keys.PublicKey(decode_hex(parsed.username))
-        return cls(pubkey, Address(parsed.hostname, parsed.port))
+        return cls.from_pubkey_and_addr(pubkey, Address(parsed.hostname, parsed.port, parsed.port))
+
+    @property
+    def enr(self) -> ENR:
+        return self._enr
+
+    @enr.setter
+    def enr(self, enr: ENR) -> None:
+        self._init(enr)
 
     def uri(self) -> str:
         hexstring = self.pubkey.to_hex()
@@ -151,12 +200,10 @@ class Node(NodeAPI):
         return hash(self.pubkey)
 
     def __getstate__(self) -> Dict[Any, Any]:
-        return {'enode': self.uri()}
+        return {'enr': repr(self.enr)}
 
     def __setstate__(self, state: Dict[Any, Any]) -> None:
-        enode = state.pop('enode')
-        node = self.from_uri(enode)
-        self.__dict__.update(node.__dict__)
+        self.enr = ENR.from_repr(state.pop('enr'))
 
 
 @total_ordering
@@ -205,8 +252,8 @@ class KBucket(Sized):
             replacement_node = self.replacement_cache.pop()
             self.nodes.append(replacement_node)
 
-    def in_range(self, node: NodeAPI) -> bool:
-        return self.start <= node.id <= self.end
+    def in_range(self, node_id: int) -> bool:
+        return self.start <= node_id <= self.end
 
     @property
     def is_full(self) -> bool:
@@ -259,9 +306,9 @@ class KBucket(Sized):
 class RoutingTable:
     logger = logging.getLogger("p2p.kademlia.RoutingTable")
 
-    def __init__(self, node: NodeAPI) -> None:
+    def __init__(self, node_id: int) -> None:
         self._initialized_at = time.monotonic()
-        self.this_node = node
+        self.this_node_id = node_id
         self.buckets = [KBucket(0, constants.KADEMLIA_MAX_NODE_ID)]
 
     def get_random_nodes(self, count: int) -> Iterator[NodeAPI]:
@@ -303,19 +350,19 @@ class RoutingTable:
         return [b for b in self.buckets if not b.is_full]
 
     def remove_node(self, node: NodeAPI) -> None:
-        binary_get_bucket_for_node(self.buckets, node).remove_node(node)
+        binary_get_bucket_for_node(self.buckets, node.id).remove_node(node)
 
     def add_node(self, node: NodeAPI) -> NodeAPI:
-        if node == self.this_node:
+        if node.id == self.this_node_id:
             raise ValueError("Cannot add this_node to routing table")
-        bucket = binary_get_bucket_for_node(self.buckets, node)
+        bucket = binary_get_bucket_for_node(self.buckets, node.id)
         eviction_candidate = bucket.add(node)
         if eviction_candidate is not None:  # bucket is full
             # Split if the bucket has the local node in its range or if the depth is not congruent
             # to 0 mod KADEMLIA_BITS_PER_HOP
             depth = _compute_shared_prefix_bits(bucket.nodes)
             should_split = any((
-                bucket.in_range(self.this_node),
+                bucket.in_range(self.this_node_id),
                 (depth % constants.KADEMLIA_BITS_PER_HOP != 0 and depth != constants.KADEMLIA_ID_SIZE),  # noqa: E501
             ))
             if should_split:
@@ -325,14 +372,21 @@ class RoutingTable:
             return eviction_candidate
         return None  # successfully added to not full bucket
 
-    def get_bucket_for_node(self, node: NodeAPI) -> KBucket:
-        return binary_get_bucket_for_node(self.buckets, node)
+    def get_node(self, node_id: int) -> NodeAPI:
+        bucket = binary_get_bucket_for_node(self.buckets, node_id)
+        for node in itertools.chain(bucket.nodes, bucket.replacement_cache):
+            if node.id == node_id:
+                return node
+        raise KeyError("Node {node_id} is not in routing table")
+
+    def get_bucket_for_node(self, node_id: int) -> KBucket:
+        return binary_get_bucket_for_node(self.buckets, node_id)
 
     def buckets_by_distance_to(self, id: int) -> List[KBucket]:
         return sorted(self.buckets, key=operator.methodcaller('distance_to', id))
 
     def __contains__(self, node: NodeAPI) -> bool:
-        return node in self.get_bucket_for_node(node)
+        return node in self.get_bucket_for_node(node.id)
 
     def __len__(self) -> int:
         return sum(len(b) for b in self.buckets)
@@ -373,17 +427,17 @@ def check_relayed_addr(sender: AddressAPI, addr: AddressAPI) -> bool:
     return True
 
 
-def binary_get_bucket_for_node(buckets: List[KBucket], node: NodeAPI) -> KBucket:
-    """Given a list of ordered buckets, returns the bucket for a given node."""
+def binary_get_bucket_for_node(buckets: List[KBucket], node_id: int) -> KBucket:
+    """Given a list of ordered buckets, returns the bucket for a given node ID."""
     bucket_ends = [bucket.end for bucket in buckets]
-    bucket_position = bisect.bisect_left(bucket_ends, node.id)
+    bucket_position = bisect.bisect_left(bucket_ends, node_id)
     # Prevents edge cases where bisect_left returns an out of range index
     try:
         bucket = buckets[bucket_position]
-        assert bucket.start <= node.id <= bucket.end
+        assert bucket.start <= node_id <= bucket.end
         return bucket
     except (IndexError, AssertionError):
-        raise ValueError(f"No bucket found for node with id {node.id}")
+        raise ValueError(f"No bucket found for node with id {node_id}")
 
 
 def _compute_shared_prefix_bits(nodes: List[NodeAPI]) -> int:

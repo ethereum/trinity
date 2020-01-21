@@ -203,11 +203,11 @@ class Transport(TransportAPI):
             )
 
         ip, socket, *_ = peername
-        remote_address = Address(ip, socket)
+        remote_address = Address(ip, socket, socket)
 
         cls.logger.debug("Receiving auth handshake from %s", remote_address)
 
-        initiator_remote = Node(initiator_pubkey, remote_address)
+        initiator_remote = Node.from_pubkey_and_addr(initiator_pubkey, remote_address)
 
         responder = HandshakeResponder(initiator_remote, private_key, got_eip8, token)
 

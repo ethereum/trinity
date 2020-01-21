@@ -9,9 +9,10 @@ from .discovery import (  # noqa: F401
     AuthHeaderPacketFactory,
     AuthTagPacketFactory,
     EndpointFactory,
+    ENRFactory,
     WhoAreYouPacketFactory,
 )
-from .kademlia import AddressFactory, NodeFactory  # noqa: F401
+from .kademlia import AddressFactory, IPAddressFactory, NodeFactory  # noqa: F401
 from .keys import (  # noqa: F401
     PrivateKeyFactory,
     PublicKeyFactory,

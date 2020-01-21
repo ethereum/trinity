@@ -155,11 +155,8 @@ class DiscoveryService(Service):
                  enr_field_providers: Sequence[ENR_FieldProvider] = tuple(),
                  ) -> None:
         self.privkey = privkey
-        self.address = address
         self.bootstrap_nodes = bootstrap_nodes
         self._event_bus = event_bus
-        self.this_node = Node(self.pubkey, address)
-        self.routing = RoutingTable(self.this_node)
         self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
         self.pong_channels = ExpectedResponseChannels[Tuple[Hash32, int]]()
         self.neighbours_channels = ExpectedResponseChannels[List[NodeAPI]]()
@@ -168,7 +165,6 @@ class DiscoveryService(Service):
         self._enr_db = enr_db
         # FIXME: Use a concurrency-safe EnrDb implementation.
         self._enr_db_lock = trio.Lock()
-        self._local_enr: ENR = None
         self._local_enr_next_refresh: float = time.monotonic()
         self._local_enr_lock = trio.Lock()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
@@ -179,6 +175,28 @@ class DiscoveryService(Service):
         self.socket = socket
         self.pending_enrs_producer, self.pending_enrs_consumer = trio.open_memory_channel[
             Tuple[NodeAPI, int]](self._max_pending_enrs)
+
+        # This is a stub Node instance (which will have an ENR with sequence number 0) that will
+        # be replaced in _init(). We could defer its creation until _init() is called by run(),
+        # but doing this here simplifies things as we don't have to store the Address in another
+        # instance attribute.
+        self.this_node = Node.from_pubkey_and_addr(self.pubkey, address)
+        self.routing = RoutingTable(self.this_node.id)
+
+    async def _init(self) -> None:
+        async with self._enr_db_lock:
+            try:
+                enr = await self._enr_db.get(NodeID(self.this_node.id_bytes))
+            except KeyError:
+                # Either we have a fresh DB or our private key has changed, so create a new ENR
+                # with sequence number 1.
+                enr = await self._generate_local_enr(sequence_number=1)
+                await self._enr_db.insert(enr)
+
+        self.this_node = Node(enr)
+        # This is a no-op when we generate a fresh ENR above, but we need to run this without
+        # acquiring self._enr_db_lock, so we run it here for simplicity.
+        await self._maybe_update_local_enr()
 
     async def consume_datagrams(self) -> None:
         while self.manager.is_running:
@@ -205,7 +223,8 @@ class DiscoveryService(Service):
             )
 
     async def run(self) -> None:
-        await self.load_local_enr()
+        await self._init()
+        self.logger.info("Running on %s", self.this_node.uri())
         self.run_daemons_and_bootstrap()
         await self.manager.wait_finished()
 
@@ -244,7 +263,7 @@ class DiscoveryService(Service):
         try:
             await self.get_enr(node)
         except CouldNotRetrieveENR as e:
-            self.logger.info("Failed to retrieve ENR for %s: %s", node, e)
+            self.logger.debug("Failed to retrieve ENR for %s: %s", node, e)
 
     async def report_stats(self) -> None:
         async for _ in trio_utils.every(self._refresh_interval):
@@ -353,9 +372,9 @@ class DiscoveryService(Service):
         kv_pairs = {
             IDENTITY_SCHEME_ENR_KEY: V4IdentityScheme.id,
             V4IdentityScheme.public_key_enr_key: self.pubkey.to_compressed_bytes(),
-            IP_V4_ADDRESS_ENR_KEY: self.address.ip_packed,
-            UDP_PORT_ENR_KEY: self.address.udp_port,
-            TCP_PORT_ENR_KEY: self.address.tcp_port,
+            IP_V4_ADDRESS_ENR_KEY: self.this_node.address.ip_packed,
+            UDP_PORT_ENR_KEY: self.this_node.address.udp_port,
+            TCP_PORT_ENR_KEY: self.this_node.address.tcp_port,
         }
         for field_provider in self.enr_field_providers:
             key, value = await field_provider()
@@ -366,62 +385,43 @@ class DiscoveryService(Service):
         unsigned_enr = UnsignedENR(sequence_number, kv_pairs)
         return unsigned_enr.to_signed_enr(self.privkey.to_bytes())
 
-    async def load_local_enr(self) -> ENR:
-        """
-        Load our own ENR from the database, or create a new one if none exists.
-        """
-        async with self._enr_db_lock:
-            try:
-                self._local_enr = await self._enr_db.get(NodeID(self.this_node.id_bytes))
-            except KeyError:
-                self._local_enr = await self._generate_local_enr(sequence_number=1)
-                await self._enr_db.insert(self._local_enr)
-        return self._local_enr
-
     async def get_local_enr(self) -> ENR:
         """
         Get our own ENR.
 
-        If the cached version of our ENR (self._local_enr) has been updated less than
+        If the cached version of our ENR (self.this_node.enr) has been updated less than
         self._local_enr_next_refresh seconds ago, return it. Otherwise we generate a fresh ENR
         (with our current sequence number), compare it to the current one and then either:
 
           1. Return the current one if they're identical
-          2. Create a new ENR with a new sequence number (current + 1), assign that to
-              self._local_enr and return it
+          2. Create a new ENR with a new sequence number (current + 1), update self.this_node with
+             it and return it.
         """
-        # Most times self._get_local_enr() will return self._local_enr immediately but if multiple
-        # coroutines call us and end up trying to update our local ENR we'd have plenty of race
-        # conditions, so use a lock here.
-        async with self._local_enr_lock:
-            return await self._get_local_enr()
+        if self._local_enr_next_refresh <= time.monotonic():
+            async with self._local_enr_lock:
+                await self._maybe_update_local_enr()
 
-    async def _get_local_enr(self) -> ENR:
-        if self._local_enr is None:
-            raise AssertionError("Local ENR must be loaded on startup")
+        return self.this_node.enr
 
-        if self._local_enr_next_refresh > time.monotonic():
-            return self._local_enr
-
+    async def _maybe_update_local_enr(self) -> None:
         self._local_enr_next_refresh = time.monotonic() + self._local_enr_refresh_interval
 
         # Re-generate our ENR from scratch and compare it to the current one to see if we
         # must create a new one with a higher sequence number.
-        current_enr = await self._generate_local_enr(self._local_enr.sequence_number)
-        if current_enr == self._local_enr:
-            return self._local_enr
+        current_enr = await self._generate_local_enr(self.this_node.enr.sequence_number)
+        if current_enr == self.this_node.enr:
+            return
 
         # Either our node's details (e.g. IP address) or one of our ENR fields have changed, so
         # generate a new one with a higher sequence number.
-        self._local_enr = await self._generate_local_enr(self._local_enr.sequence_number + 1)
+        enr = await self._generate_local_enr(self.this_node.enr.sequence_number + 1)
+        self.this_node.enr = enr
         self.logger.info(
             "Node details changed, generated new local ENR with sequence number %d",
-            self._local_enr.sequence_number)
+            enr.sequence_number)
 
         async with self._enr_db_lock:
-            await self._enr_db.update(self._local_enr)
-
-        return self._local_enr
+            await self._enr_db.update(enr)
 
     async def get_local_enr_seq(self) -> int:
         enr = await self.get_local_enr()
@@ -595,7 +595,7 @@ class DiscoveryService(Service):
     async def consume_datagram(self) -> None:
         datagram, (ip_address, port) = await self.socket.recvfrom(
             constants.DISCOVERY_DATAGRAM_BUFFER_SIZE)
-        address = Address(ip_address, port)
+        address = Address(ip_address, port, port)
         self.logger.debug2("Received datagram from %s", address)
         self.manager.run_task(self.receive, address, datagram)
 
@@ -612,7 +612,16 @@ class DiscoveryService(Service):
             self.logger.warning("Ignoring uknown msg type: %s; payload=%s", cmd_id, payload)
             return
         self.logger.debug2("Received %s with payload: %s", cmd.name, payload)
-        node = Node(remote_pubkey, address)
+        try:
+            node = self.routing.get_node(node_id_from_pubkey(remote_pubkey))
+        except KeyError:
+            node = Node.from_pubkey_and_addr(remote_pubkey, address)
+        else:
+            if node.address != address:
+                # If this node's address changed since we last heard from it we create a new
+                # instance as that will end up replacing the old one when we move it to the front
+                # of the bucket (which is done every time we receive a msg from a node).
+                node = Node.from_pubkey_and_addr(remote_pubkey, address)
         handler = self._get_handler(cmd)
         await handler(node, payload, message_hash)
 
@@ -639,7 +648,7 @@ class DiscoveryService(Service):
         self.logger.debug2('<<< pong (v4) from %s (token == %s)', node, encode_hex(token))
         await self.process_pong_v4(node, token, enr_seq)
 
-    async def recv_neighbours_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
+    async def recv_neighbours_v4(self, remote: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The neighbours payload should have 2 elements: nodes, expiration
         if len(payload) < 2:
             self.logger.warning('Ignoring NEIGHBOURS msg with invalid payload: %s', payload)
@@ -647,10 +656,20 @@ class DiscoveryService(Service):
         nodes, expiration = payload[:2]
         if self._is_msg_expired(expiration):
             return
-        neighbours = _extract_nodes_from_payload(node.address, nodes, self.logger)
-        self.logger.debug2('<<< neighbours from %s: %s', node, neighbours)
+        neighbours = []
+        # If any of the nodes we received are already in our routing table, use them instead as
+        # we may have bonded and then won't have to do so again.
+        for node in _extract_nodes_from_payload(remote.address, nodes, self.logger):
+            try:
+                existing_node = self.routing.get_node(node_id_from_pubkey(node.pubkey))
+                if existing_node.address == node.address:
+                    node = existing_node
+            except KeyError:
+                pass
+            neighbours.append(node)
+        self.logger.debug2('<<< neighbours from %s: %s', remote, neighbours)
         try:
-            channel = self.neighbours_channels.get_channel(node)
+            channel = self.neighbours_channels.get_channel(remote)
         except KeyError:
             self.logger.debug(f'unexpected neighbours from {node}, probably came too late')
             return
@@ -755,8 +774,8 @@ class DiscoveryService(Service):
         version = rlp.sedes.big_endian_int.serialize(PROTO_VERSION)
         expiration = _get_msg_expiration()
         local_enr_seq = await self.get_local_enr_seq()
-        payload = (version, self.address.to_endpoint(), node.address.to_endpoint(), expiration,
-                   int_to_big_endian(local_enr_seq))
+        payload = (version, self.this_node.address.to_endpoint(), node.address.to_endpoint(),
+                   expiration, int_to_big_endian(local_enr_seq))
         message = self.send(node, CMD_PING, payload)
         # Return the msg hash, which is used as a token to identify pongs.
         token = Hash32(message[:MAC_SIZE])
@@ -1016,7 +1035,7 @@ def _extract_nodes_from_payload(
         ip, udp_port, tcp_port, node_id = item
         address = Address.from_endpoint(ip, udp_port, tcp_port)
         if check_relayed_addr(sender, address):
-            yield Node(keys.PublicKey(node_id), address)
+            yield Node.from_pubkey_and_addr(keys.PublicKey(node_id), address)
         else:
             logger.debug("Skipping invalid address %s relayed by %s", address, sender)
 
@@ -1155,3 +1174,7 @@ async def generate_eth_cap_enr_field(
     genesis_hash = await headerdb.coro_get_canonical_block_hash(GENESIS_BLOCK_NUMBER)
     forkid = make_forkid(genesis_hash, head.block_number, vm_config)
     return (b'eth', (forkid,))
+
+
+def node_id_from_pubkey(pubkey: keys.PublicKey) -> int:
+    return big_endian_to_int(keccak(pubkey.to_bytes()))
