@@ -44,7 +44,7 @@ async def test_handshake():
     # TODO: this test should be re-written to not depend on functionality in the `ETHPeer` class.
     cancel_token = CancelToken("test_handshake")
     use_eip8 = False
-    initiator_remote = kademlia.Node(
+    initiator_remote = kademlia.Node.from_pubkey_and_addr(
         keys.PrivateKey(test_values['receiver_private_key']).public_key,
         kademlia.Address('0.0.0.0', 0, 0))
     initiator = HandshakeInitiator(
@@ -54,7 +54,7 @@ async def test_handshake():
         cancel_token)
     initiator.ephemeral_privkey = keys.PrivateKey(test_values['initiator_ephemeral_private_key'])
 
-    responder_remote = kademlia.Node(
+    responder_remote = kademlia.Node.from_pubkey_and_addr(
         keys.PrivateKey(test_values['initiator_private_key']).public_key,
         kademlia.Address('0.0.0.0', 0, 0))
     responder = HandshakeResponder(
@@ -192,7 +192,7 @@ async def test_handshake():
 async def test_handshake_eip8():
     cancel_token = CancelToken("test_handshake_eip8")
     use_eip8 = True
-    initiator_remote = kademlia.Node(
+    initiator_remote = kademlia.Node.from_pubkey_and_addr(
         keys.PrivateKey(eip8_values['receiver_private_key']).public_key,
         kademlia.Address('0.0.0.0', 0, 0))
     initiator = HandshakeInitiator(
@@ -202,7 +202,7 @@ async def test_handshake_eip8():
         cancel_token)
     initiator.ephemeral_privkey = keys.PrivateKey(eip8_values['initiator_ephemeral_private_key'])
 
-    responder_remote = kademlia.Node(
+    responder_remote = kademlia.Node.from_pubkey_and_addr(
         keys.PrivateKey(eip8_values['initiator_private_key']).public_key,
         kademlia.Address('0.0.0.0', 0, 0))
     responder = HandshakeResponder(

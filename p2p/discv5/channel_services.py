@@ -153,7 +153,7 @@ async def PacketDecoder(manager: ManagerAPI,
                     f"Successfully decoded {packet.__class__.__name__} from {endpoint}"
                 )
             except ValidationError:
-                logger.warn(f"Failed to decode a packet from {endpoint}", exc_info=True)
+                logger.warning(f"Failed to decode a packet from {endpoint}", exc_info=True)
             else:
                 await incoming_packet_send_channel.send(IncomingPacket(packet, endpoint))
 

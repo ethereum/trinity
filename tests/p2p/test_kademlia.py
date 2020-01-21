@@ -1,7 +1,16 @@
+import socket
+
 import pytest
+
+from eth_hash.auto import keccak
 
 from p2p import kademlia
 from p2p.constants import KADEMLIA_ID_SIZE, KADEMLIA_MAX_NODE_ID
+from p2p.discv5.constants import (
+    IP_V4_ADDRESS_ENR_KEY,
+    TCP_PORT_ENR_KEY,
+    UDP_PORT_ENR_KEY,
+)
 from p2p.kademlia import (
     Address,
     KBucket,
@@ -11,11 +20,14 @@ from p2p.kademlia import (
     check_relayed_addr,
 )
 from p2p.tools.factories import (
+    ENRFactory,
+    IPAddressFactory,
     NodeFactory,
+    PrivateKeyFactory,
 )
 
 
-def test_node_from_uri():
+def test_node_from_enode_uri():
     pubkey = 'a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c'  # noqa: E501
     ip = '52.16.188.185'
     port = 30303
@@ -26,8 +38,57 @@ def test_node_from_uri():
     assert node.pubkey.to_hex() == '0x' + pubkey
 
 
+def test_node_from_enr_uri():
+    privkey = PrivateKeyFactory()
+    ip = socket.inet_aton(IPAddressFactory.generate())
+    udp_port = tcp_port = 30303
+    enr = ENRFactory(
+        private_key=privkey.to_bytes(),
+        custom_kv_pairs={
+            IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port, TCP_PORT_ENR_KEY: tcp_port})
+
+    node = Node.from_uri(repr(enr))
+
+    assert node.id_bytes == keccak(privkey.public_key.to_bytes())
+    assert node.address.ip_packed == ip
+    assert node.address.tcp_port == tcp_port
+    assert node.address.udp_port == udp_port
+
+
+def test_node_enr_property():
+    privkey = PrivateKeyFactory()
+    ip = socket.inet_aton(IPAddressFactory.generate())
+    udp_port = tcp_port = 30303
+    enr = ENRFactory(
+        private_key=privkey.to_bytes(),
+        custom_kv_pairs={
+            IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port, TCP_PORT_ENR_KEY: tcp_port})
+
+    node = Node(enr)
+
+    assert node.id_bytes == keccak(privkey.public_key.to_bytes())
+    assert node.address.ip_packed == ip
+    assert node.address.tcp_port == tcp_port
+    assert node.address.udp_port == udp_port
+
+    ip = socket.inet_aton(IPAddressFactory.generate())
+    udp_port = tcp_port = 30304
+    enr2 = ENRFactory(
+        private_key=privkey.to_bytes(),
+        custom_kv_pairs={
+            IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port, TCP_PORT_ENR_KEY: tcp_port})
+
+    # If we update our Node's enr, the node's attributes will be changed to reflect that.
+    node.enr = enr2
+
+    assert node.id_bytes == keccak(privkey.public_key.to_bytes())
+    assert node.address.ip_packed == ip
+    assert node.address.tcp_port == tcp_port
+    assert node.address.udp_port == udp_port
+
+
 def test_routingtable_split_bucket():
-    table = RoutingTable(NodeFactory())
+    table = RoutingTable(NodeFactory().id)
     assert len(table.buckets) == 1
     old_bucket = table.buckets[0]
     table.split_bucket(0)
@@ -36,7 +97,7 @@ def test_routingtable_split_bucket():
 
 
 def test_routingtable_add_node():
-    table = RoutingTable(NodeFactory())
+    table = RoutingTable(NodeFactory().id)
     for i in range(table.buckets[0].size):
         # As long as the bucket is not full, the new node is added to the bucket and None is
         # returned.
@@ -49,7 +110,7 @@ def test_routingtable_add_node():
 
 
 def test_routingtable_remove_node():
-    table = RoutingTable(NodeFactory())
+    table = RoutingTable(NodeFactory().id)
     node1 = NodeFactory()
     assert table.add_node(node1) is None
     assert node1 in table
@@ -60,13 +121,13 @@ def test_routingtable_remove_node():
 
 
 def test_routingtable_add_node_error():
-    table = RoutingTable(NodeFactory())
+    table = RoutingTable(NodeFactory().id)
     with pytest.raises(ValueError):
         table.add_node(NodeFactory.with_nodeid(KADEMLIA_MAX_NODE_ID + 1))
 
 
 def test_routingtable_neighbours():
-    table = RoutingTable(NodeFactory())
+    table = RoutingTable(NodeFactory().id)
     for i in range(1000):
         assert table.add_node(NodeFactory()) is None
         assert i == len(table) - 1
@@ -83,7 +144,7 @@ def test_routingtable_neighbours():
 
 
 def test_routingtable_get_random_nodes():
-    table = RoutingTable(NodeFactory())
+    table = RoutingTable(NodeFactory().id)
     for _ in range(100):
         assert table.add_node(NodeFactory()) is None
 
@@ -226,9 +287,8 @@ def test_bucket_ordering():
     )
 )
 def test_binary_get_bucket_for_node_error(bucket_list, node_id):
-    node = NodeFactory.with_nodeid(nodeid=node_id)
     with pytest.raises(ValueError):
-        binary_get_bucket_for_node(bucket_list, node)
+        binary_get_bucket_for_node(bucket_list, node_id)
 
 
 @pytest.mark.parametrize(
@@ -247,8 +307,7 @@ def test_binary_get_bucket_for_node_error(bucket_list, node_id):
     )
 )
 def test_binary_get_bucket_for_node(bucket_list, node_id, correct_position):
-    node = NodeFactory.with_nodeid(nodeid=node_id)
-    assert binary_get_bucket_for_node(bucket_list, node) == bucket_list[correct_position]
+    assert binary_get_bucket_for_node(bucket_list, node_id) == bucket_list[correct_position]
 
 
 def test_compute_shared_prefix_bits():
@@ -269,19 +328,19 @@ def test_compute_shared_prefix_bits():
 
 
 def test_check_relayed_addr():
-    public_host = Address('8.8.8.8', 80)
-    local_host = Address('127.0.0.1', 80)
+    public_host = Address('8.8.8.8', 80, 80)
+    local_host = Address('127.0.0.1', 80, 80)
     assert check_relayed_addr(local_host, local_host)
     assert not check_relayed_addr(public_host, local_host)
 
-    private = Address('192.168.1.1', 80)
+    private = Address('192.168.1.1', 80, 80)
     assert check_relayed_addr(private, private)
     assert not check_relayed_addr(public_host, private)
 
-    reserved = Address('240.0.0.1', 80)
+    reserved = Address('240.0.0.1', 80, 80)
     assert not check_relayed_addr(local_host, reserved)
     assert not check_relayed_addr(public_host, reserved)
 
-    unspecified = Address('0.0.0.0', 80)
+    unspecified = Address('0.0.0.0', 80, 80)
     assert not check_relayed_addr(local_host, unspecified)
     assert not check_relayed_addr(public_host, unspecified)

@@ -9,13 +9,15 @@ from .keys import PublicKeyFactory
 from .socket import get_open_port
 
 
+IPAddressFactory = factory.Faker("ipv4")
+
+
 class AddressFactory(factory.Factory):
     class Meta:
         model = Address
 
-    ip = factory.Sequence(lambda n: f'10.{(n // 65536) % 256}.{(n // 256) % 256}.{n % 256}')
-    udp_port = factory.LazyFunction(get_open_port)
-    tcp_port = 0
+    ip = IPAddressFactory
+    udp_port = tcp_port = factory.LazyFunction(get_open_port)
 
     @classmethod
     def localhost(cls, *args: Any, **kwargs: Any) -> AddressAPI:
@@ -24,7 +26,7 @@ class AddressFactory(factory.Factory):
 
 class NodeFactory(factory.Factory):
     class Meta:
-        model = Node
+        model = Node.from_pubkey_and_addr
 
     pubkey = factory.LazyFunction(PublicKeyFactory)
     address = factory.SubFactory(AddressFactory)

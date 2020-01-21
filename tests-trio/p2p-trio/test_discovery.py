@@ -124,9 +124,9 @@ async def test_get_local_enr(manually_driven_discovery):
 async def test_local_enr_on_startup(manually_driven_discovery):
     discovery = manually_driven_discovery
 
-    validate_node_enr(discovery.this_node, discovery._local_enr, sequence_number=1)
+    validate_node_enr(discovery.this_node, discovery.this_node.enr, sequence_number=1)
     # Our local ENR will also be stored in our DB.
-    assert discovery._local_enr == await discovery._enr_db.get(discovery.this_node.id_bytes)
+    assert discovery.this_node.enr == await discovery._enr_db.get(discovery.this_node.id_bytes)
 
 
 @pytest.mark.trio

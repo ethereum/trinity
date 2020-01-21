@@ -39,20 +39,19 @@ async def socket_pair():
 
 @asynccontextmanager
 async def _manually_driven_discovery(seed, socket, nursery):
+    ip, port = socket.getsockname()
     discovery = ManuallyDrivenDiscoveryService(
         keys.PrivateKey(keccak(seed)),
-        Address(*socket.getsockname()),
+        Address(ip, port, port),
         bootstrap_nodes=[],
         event_bus=None,
         socket=socket,
         enr_db=MemoryEnrDb(default_identity_scheme_registry))
     async with background_trio_service(discovery):
-        # At this point we know the service has started (i.e. its run() method has been scheduled),
-        # but maybe it hasn't had a chance to run yet, so we wait until the _local_enr is set to
-        # ensure run() has actually executed.
-        with trio.fail_after(1):
-            while discovery._local_enr is None:
-                await trio.hazmat.checkpoint()
+        # Wait until we're fully initialized (i.e. until the ENR stub created in the constructor
+        # is replaced with the real one).
+        while discovery.this_node.enr.sequence_number == 0:
+            await trio.hazmat.checkpoint()
         yield discovery
 
 
