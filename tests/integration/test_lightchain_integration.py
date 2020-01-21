@@ -143,7 +143,7 @@ async def test_lightchain_integration(
         geth_process):
     """Test LightChainSyncer/LightPeerChain against a running geth instance.
 
-    In order to run this manually, you can use `tox -e py36-lightchain_integration` or:
+    In order to run this manually, you can use `tox -e py37-lightchain_integration` or:
 
         pytest --integration --capture=no tests/integration/test_lightchain_integration.py
 
