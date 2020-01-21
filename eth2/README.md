@@ -33,13 +33,13 @@ Recently, EF Research team is collaborating with Python team to implement [the E
 
 1. **Phase 0 Milestone 1, [M1]: MVP testnet**
 	* see: https://github.com/ethereum/trinity/issues/136
-2. Supporting cross-client common tests: [eth2.0-tests](https://github.com/ethereum/eth2.0-tests)
+2. Supporting cross-client common tests: [eth2.0-spec-tests](https://github.com/ethereum/eth2.0-spec-tests)
 3. Verifying [the spec](https://github.com/ethereum/eth2.0-specs) logic (Research team, WIP [Spec January Release Milestone](https://github.com/ethereum/eth2.0-specs/milestone/1))
 
 ## Mid-term goals
 
 1. **Phase 0 Milestone 2, [M2]: March release - the "fully-reflecting-phase-0-spec" testnet**
-2. Maintaining [eth2.0-tests](https://github.com/ethereum/eth2.0-tests)
+2. Maintaining [eth2.0-spec-tests](https://github.com/ethereum/eth2.0-spec-tests)
 
 ## Long-term goals
 
