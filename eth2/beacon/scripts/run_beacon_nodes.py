@@ -24,12 +24,10 @@ from eth_utils import encode_hex, remove_0x_prefix
 from libp2p.crypto.secp256k1 import Secp256k1PrivateKey
 from libp2p.peer.id import ID
 from multiaddr import Multiaddr
-from ruamel.yaml import (
-    YAML,
-)
+from ruamel.yaml import YAML
+import ssz
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
-import ssz
 
 from eth2.beacon.constants import GWEI_PER_ETH
 from eth2.beacon.tools.builder.validator import (
@@ -37,8 +35,8 @@ from eth2.beacon.tools.builder.validator import (
     sign_proof_of_possession,
 )
 from eth2.beacon.types.deposit_data import DepositData
-from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
+from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 
 
 async def run(cmd):
@@ -63,9 +61,10 @@ SERVER_RUNNING = Log(name="server running", pattern="Running server", timeout=60
 START_SYNCING = Log(name="start syncing", pattern="their head slot", timeout=200)
 
 USE_FAKE_ETH1_DATA = False
-pw_dir = 'eth2/beacon/scripts/pwd.txt'
-data_dir = 'eth2/beacon/scripts/testnet'
-eth1_addr = '0x422d30aC923C3924B61801fe1019eC53869aD1ac'
+genesis_dir = "eth2/beacon/scripts/poa_testnet.json"
+pw_dir = "eth2/beacon/scripts/pwd.txt"
+data_dir = "eth2/beacon/scripts/testnet"
+eth1_addr = "0x1d9960C6535Ca1A032922d3F20fF44B2d18B0c37"
 
 
 class Eth1Client:
@@ -87,11 +86,7 @@ class Eth1Client:
     )
 
     def __init__(
-        self,
-        name: str,
-        port: int,
-        start_time: float,
-        rpcport: Optional[int] = None,
+        self, name: str, port: int, start_time: float, rpcport: Optional[int] = None
     ) -> None:
         self.name = name
         self.port = port
@@ -293,9 +288,7 @@ class Node:
             "-l debug",
         ]
         if USE_FAKE_ETH1_DATA:
-            _cmds += [
-                "--fake-eth1-data",
-            ]
+            _cmds += ["--fake-eth1-data"]
         else:
             _cmds += [
                 f"--eth1-monitor-config={self.eth1_monitor_config}",
@@ -375,15 +368,14 @@ class Node:
 
 def deposit(w3, deposit_contract, deposit_count):
     pubkey, privkey = mk_key_pair_from_seed_index(deposit_count)
-    withdrawal_credentials = b'\x12' * 32
+    withdrawal_credentials = b"\x12" * 32
     deposit_data_message = DepositData.create(
         pubkey=pubkey,
         withdrawal_credentials=withdrawal_credentials,
         amount=32 * GWEI_PER_ETH,
     )
     signature = sign_proof_of_possession(
-        deposit_message=deposit_data_message,
-        privkey=privkey,
+        deposit_message=deposit_data_message, privkey=privkey
     )
     deposit_data_message = deposit_data_message.set("signature", signature)
     deposit_input = (
@@ -394,7 +386,7 @@ def deposit(w3, deposit_contract, deposit_count):
     )
     tx_hash = deposit_contract.functions.deposit(*deposit_input).transact(
         {
-            'from': w3.eth.accounts[0],
+            "from": w3.eth.accounts[0],
             "value": deposit_data_message.amount * eth_utils.denoms.gwei,
             "gas": 3000000,
         }
@@ -409,10 +401,7 @@ def deploy_contract(w3):
     contract_abi = contract_json["abi"]
     registration = w3.eth.contract(abi=contract_abi, bytecode=contract_bytecode)
     tx_hash = registration.constructor().transact(
-        {
-            'from': w3.eth.accounts[0],
-            "gas": 4000000,
-        }
+        {"from": w3.eth.accounts[0], "gas": 4000000}
     )
     tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
     assert tx_receipt["status"]
@@ -445,24 +434,17 @@ async def main():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
+    # global variable `genesis_dir` is the path to genesis file
     # global variable `data_dir` is the path to eth1 chain data
     # global variable `pw_dir` is the path to password of the geth account
     # global variable `eth1_addr` is the account of eth1 chain miner
 
     # Steps to set up eth1 chain with geth
-    # 1. create new account with `geth account new --datadir {data_dir}
-    # and replace `eth1_addr` with the account address you created
-    # and also replace the account in the bottom of genesis file, i.e., `poa_testnet.json`
-    # 2. store the password you input in step 1 into a file, e.g., pwd.txt`
-    # and update the path to password, i.e., `pw_dir`
-    # 3. init the chain with `geth init --datadir {data_dir} poa_testnet.json`
+    # 1. init the chain with `geth init --datadir {data_dir} {genesis_dir}`
     if not USE_FAKE_ETH1_DATA:
         eth1_client_rpcport = 8444
         eth1_clinet = Eth1Client(
-            name="alice",
-            port=30301,
-            rpcport=eth1_client_rpcport,
-            start_time=start_time,
+            name="alice", port=30301, rpcport=eth1_client_rpcport, start_time=start_time
         )
 
         asyncio.ensure_future(eth1_clinet.run())
@@ -489,9 +471,9 @@ async def main():
             "polling_period": 5,
             "start_block_number": deployed_block_number,
         }
-        yaml = YAML(typ='unsafe')
+        yaml = YAML(typ="unsafe")
         config_path = Node.dir_root / "eth1_monitor_config.yaml"
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             yaml.dump(eth1_monitor_config, f)
 
         # Wait for eth1 to progress further enough so
