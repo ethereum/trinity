@@ -125,7 +125,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
 
         with chain_for_config(trinity_config, event_bus) as chain:
             if trinity_config.has_app_config(Eth1AppConfig):
-                modules = initialize_eth1_modules(chain, event_bus)
+                modules = initialize_eth1_modules(chain, event_bus, trinity_config)
             elif trinity_config.has_app_config(BeaconAppConfig):
                 modules = initialize_beacon_modules(chain, event_bus)
             else:

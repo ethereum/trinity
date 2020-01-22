@@ -259,6 +259,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             token=self.cancel_token,
         )
 
+    async def get_protocol_capabilities(self) -> Tuple[Tuple[str, int], ...]:
+        return tuple(
+            (handshaker.protocol_class.name, handshaker.protocol_class.version)
+            for handshaker in await self.get_peer_factory().get_handshakers()
+        )
+
     @property
     def is_full(self) -> bool:
         return len(self) >= self.max_peers

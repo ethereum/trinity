@@ -70,6 +70,10 @@ class AsyncChainAPI(ChainAPI):
         ...
 
     @abstractmethod
+    async def coro_get_score(self, block_hash: Hash32) -> int:
+        ...
+
+    @abstractmethod
     async def coro_get_canonical_transaction_index(
             self,
             transaction_hash: Hash32) -> Tuple[BlockNumber, int]:

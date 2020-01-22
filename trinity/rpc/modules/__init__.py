@@ -10,6 +10,7 @@ from eth_utils import (
 )
 
 from trinity.chains.base import AsyncChainAPI
+from trinity.config import TrinityConfig
 
 from .main import (  # noqa: F401
     BaseRPCModule,
@@ -29,12 +30,13 @@ from .web3 import Web3  # noqa: F401
 
 @to_tuple
 def initialize_eth1_modules(chain: AsyncChainAPI,
-                            event_bus: EndpointAPI) -> Iterable[BaseRPCModule]:
+                            event_bus: EndpointAPI,
+                            trinity_config: TrinityConfig) -> Iterable[BaseRPCModule]:
     yield Eth(chain, event_bus)
     yield EVM(chain, event_bus)
     yield Net(event_bus)
     yield Web3()
-    yield Admin(event_bus)
+    yield Admin(chain, event_bus, trinity_config)
 
 
 @to_tuple

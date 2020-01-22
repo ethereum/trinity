@@ -131,10 +131,10 @@ async def test_expected_logs_for_light_mode(command):
 
 
 @pytest.mark.parametrize(
-    'command, expected_network_id, expected_genesis_hash',
+    'command, expected_network_id, expected_genesis_hash, expected_chain_id',
     (
-        (('trinity', '--log-level=DEBUG'), 1, MAINNET_GENESIS_HASH),
-        (('trinity', '--ropsten', '--log-level=DEBUG'), 3, ROPSTEN_GENESIS_HASH),
+        (('trinity', '--log-level=DEBUG'), 1, MAINNET_GENESIS_HASH, 1),
+        (('trinity', '--ropsten', '--log-level=DEBUG'), 3, ROPSTEN_GENESIS_HASH, 3),
         (
             (
                 'trinity',
@@ -145,13 +145,16 @@ async def test_expected_logs_for_light_mode(command):
                 '--network-id=4711',
                 '--disable-tx-pool',
                 '--log-level=DEBUG',
-            ), 4711, '0x065fd78e53dcef113bf9d7732dac7c5132dcf85c9588a454d832722ceb097422'),
+            ),
+            4711, '0x065fd78e53dcef113bf9d7732dac7c5132dcf85c9588a454d832722ceb097422', 3735928559
+        ),
     )
 )
 @pytest.mark.asyncio
 async def test_web3_commands_via_attached_console(command,
                                                   expected_network_id,
                                                   expected_genesis_hash,
+                                                  expected_chain_id,
                                                   xdg_trinity_root,
                                                   unused_tcp_port):
 
@@ -181,15 +184,32 @@ async def test_web3_commands_via_attached_console(command,
         attached_trinity = pexpect.spawn(
             'trinity', attach_cmd, logfile=sys.stdout, encoding="utf-8")
         try:
-            attached_trinity.expect("An instance of Web3 connected to the running chain")
+            attached_trinity.expect_exact("An instance of Web3 connected to the running chain")
             attached_trinity.sendline("w3.net.version")
-            attached_trinity.expect(f"'{expected_network_id}'")
+            attached_trinity.expect_exact(f"'{expected_network_id}'")
             attached_trinity.sendline("w3")
-            attached_trinity.expect("web3.main.Web3")
+            attached_trinity.expect_exact("web3.main.Web3")
             attached_trinity.sendline("w3.eth.getBlock(0).number")
-            attached_trinity.expect(str(GENESIS_BLOCK_NUMBER))
+            attached_trinity.expect_exact(str(GENESIS_BLOCK_NUMBER))
             attached_trinity.sendline("w3.eth.getBlock(0).hash")
-            attached_trinity.expect(expected_genesis_hash)
+            attached_trinity.expect_exact(expected_genesis_hash)
+            # The following verifies the admin_nodeInfo API but doesn't check the exact return
+            # value of every property. Some values are non deterministic such as the current head
+            # which might vary depending on how fast the node starts syncing.
+            attached_trinity.sendline("w3.geth.admin.node_info()")
+            attached_trinity.expect_exact("'enode': 'enode://")
+            attached_trinity.expect_exact("'ip': '::'")
+            attached_trinity.expect_exact("'listenAddr': '[::]")
+            attached_trinity.expect_exact("'name': 'Trinity/")
+            attached_trinity.expect_exact("'ports': AttributeDict({")
+            attached_trinity.expect_exact("'protocols': AttributeDict({'eth': AttributeDict({'version': 'eth/63'")  # noqa: E501
+            attached_trinity.expect_exact("'difficulty': ")
+            attached_trinity.expect_exact(f"'genesis': '{expected_genesis_hash}'")
+            attached_trinity.expect_exact("'head': '0x")
+            attached_trinity.expect_exact(f"'network': {expected_network_id}")
+            attached_trinity.expect_exact("'config': AttributeDict({")
+            attached_trinity.expect_exact(f"'chainId': {expected_chain_id}")
+
         except pexpect.TIMEOUT:
             raise Exception("Trinity attach timeout")
         finally:
