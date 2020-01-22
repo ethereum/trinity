@@ -49,7 +49,7 @@ def post_method(
 ) -> Callable[[TBaseResource, web.Request], Any]:
     async def wrapper(self: TBaseResource, request: web.Request) -> Any:
         if request.method != "POST":
-            raise APIServerError(f"Wrong HTTP method, should be GET, got {request.method}")
+            raise APIServerError(f"Wrong HTTP method, should be POST, got {request.method}")
         return await func(self, request)
 
     return wrapper

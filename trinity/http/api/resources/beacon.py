@@ -38,12 +38,10 @@ class Beacon(BaseResource):
         if 'slot' in request.query:
             slot = Slot(int(request.query['slot']))
             state = self.chain.get_state_by_slot(slot)
-            state_class = self.chain.get_state_machine(slot).state_class
         elif 'root' in request.query:
             root = cast(HashTreeRoot, decode_hex(request.query['root']))
             state = self.chain.get_state_by_root(root)
-            state_class = self.chain.get_head_state().__class__  # TODO: It's a simple workaround
         else:
             raise APIServerError(f"Wrong querystring: {request.query}")
 
-        return to_formatted_dict(state, sedes=state_class)
+        return to_formatted_dict(state)

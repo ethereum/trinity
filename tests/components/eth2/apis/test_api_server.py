@@ -108,6 +108,7 @@ async def test_restful_http_server(
         print('[ERROR]:', response.reason)
         raise
 
+    # The server may return 200 or 202 or others. 200 and 202 are both success.
     if str(status_code).startswith('2'):
         response_data = await response.json()
         print(f'[SUCCESS]: {request_path}: \t {response_data}\n')
