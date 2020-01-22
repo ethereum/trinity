@@ -5,7 +5,7 @@ from eth_utils.toolz import curry
 from ssz.hashable_list import HashableList
 
 from eth2._utils.tuple import update_tuple_item, update_tuple_item_with_fn
-from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH, FAR_FUTURE_EPOCH
+from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH
 from eth2.beacon.epoch_processing_helpers import (
     compute_activation_exit_epoch,
     decrease_balance,
@@ -387,15 +387,13 @@ def process_rewards_and_penalties(
 
 @curry
 def _process_activation_eligibility_or_ejections(
-    state: BeaconState, validator: Validator, config: Eth2Config
-) -> Validator:
+    state: BeaconState, index: ValidatorIndex, config: Eth2Config
+) -> BeaconState:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
+    validator = state.validators[index]
 
-    if (
-        validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
-        and validator.effective_balance == config.MAX_EFFECTIVE_BALANCE
-    ):
-        validator = validator.set("activation_eligibility_epoch", current_epoch)
+    if validator.is_eligible_for_activation_queue(config):
+        validator = validator.set("activation_eligibility_epoch", current_epoch + 1)
 
     if (
         validator.is_active(current_epoch)
@@ -403,51 +401,49 @@ def _process_activation_eligibility_or_ejections(
     ):
         validator = initiate_exit_for_validator(validator, state, config)
 
-    return validator
+    return state.transform(("validators", index), validator)
 
 
 @curry
 def _update_validator_activation_epoch(
     state: BeaconState, config: Eth2Config, validator: Validator
 ) -> Validator:
-    if validator.activation_epoch == FAR_FUTURE_EPOCH:
-        return validator.set(
-            "activation_epoch",
-            compute_activation_exit_epoch(
-                state.current_epoch(config.SLOTS_PER_EPOCH), config.MAX_SEED_LOOKAHEAD
-            ),
-        )
-    else:
-        return validator
+    return validator.set(
+        "activation_epoch",
+        compute_activation_exit_epoch(
+            state.current_epoch(config.SLOTS_PER_EPOCH), config.MAX_SEED_LOOKAHEAD
+        ),
+    )
 
 
 def process_registry_updates(state: BeaconState, config: Eth2Config) -> BeaconState:
-    new_validators = state.validators
-    for index, validator in enumerate(state.validators):
-        new_validator = _process_activation_eligibility_or_ejections(
-            state, validator, config
+    new_state = state
+    for index in range(len(state.validators)):
+        new_state = _process_activation_eligibility_or_ejections(
+            new_state, index, config
         )
-        new_validators = new_validators.set(index, new_validator)
 
-    activation_exit_epoch = compute_activation_exit_epoch(
-        state.finalized_checkpoint.epoch, config.MAX_SEED_LOOKAHEAD
-    )
+    # Queue validators eligible for activation and not yet dequeued for activation
     activation_queue = sorted(
         (
             index
-            for index, validator in enumerate(new_validators)
-            if validator.activation_eligibility_epoch != FAR_FUTURE_EPOCH
-            and validator.activation_epoch >= activation_exit_epoch
+            for index, validator in enumerate(new_state.validators)
+            if validator.is_eligible_for_activation(state)
         ),
-        key=lambda index: new_validators[index].activation_eligibility_epoch,
+        # Order by the sequence of activation_eligibility_epoch setting and then index
+        key=lambda index: (
+            new_state.validators[index].activation_eligibility_epoch,
+            index,
+        ),
     )
 
+    # Dequeued validators for activation up to churn limit
     for index in activation_queue[: get_validator_churn_limit(state, config)]:
-        new_validators = new_validators.transform(
-            (index,), _update_validator_activation_epoch(state, config)
+        new_state = new_state.transform(
+            ("validators", index), _update_validator_activation_epoch(state, config)
         )
 
-    return state.set("validators", new_validators)
+    return new_state
 
 
 def _determine_slashing_penalty(

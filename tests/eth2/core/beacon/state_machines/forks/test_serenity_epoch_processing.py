@@ -305,14 +305,18 @@ def test_get_attestation_deltas(
 def test_process_registry_updates(
     validator_count, genesis_state, config, slots_per_epoch
 ):
-    activation_index = len(genesis_state.validators)
+    eligible_index = len(genesis_state.validators)
+    activation_index = len(genesis_state.validators) + 1
     exiting_index = len(genesis_state.validators) - 1
 
-    activating_validator = Validator.create_pending_validator(
+    eligible_validator = Validator.create_pending_validator(
         pubkey=b"\x10" * 48,
         withdrawal_credentials=b"\x11" * 32,
         amount=Gwei(32 * GWEI_PER_ETH),
         config=config,
+    )
+    activating_validator = eligible_validator.set(
+        "activation_eligibility_epoch", genesis_state.finalized_checkpoint.epoch
     )
 
     state = genesis_state.mset(
@@ -323,25 +327,36 @@ def test_process_registry_updates(
                 "effective_balance", config.EJECTION_BALANCE - 1
             ),
         )
-        + (activating_validator,),
+        + (eligible_validator, activating_validator),
         "balances",
-        genesis_state.balances + (config.MAX_EFFECTIVE_BALANCE,),
+        genesis_state.balances
+        + (config.MAX_EFFECTIVE_BALANCE, config.MAX_EFFECTIVE_BALANCE),
     )
 
     # handles activations
     post_state = process_registry_updates(state, config)
 
+    # Check if the eligible_validator is eligible
+    pre_eligible_validator = state.validators[eligible_index]
+    post_eligible_validator = post_state.validators[eligible_index]
+    assert pre_eligible_validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
+    assert pre_eligible_validator.activation_epoch == FAR_FUTURE_EPOCH
+    assert (
+        post_eligible_validator.activation_eligibility_epoch
+        == state.current_epoch(slots_per_epoch) + 1
+    )
+
     # Check if the activating_validator is activated
     pre_activation_validator = state.validators[activation_index]
     post_activation_validator = post_state.validators[activation_index]
-    assert pre_activation_validator.activation_eligibility_epoch == FAR_FUTURE_EPOCH
     assert pre_activation_validator.activation_epoch == FAR_FUTURE_EPOCH
     assert post_activation_validator.activation_eligibility_epoch != FAR_FUTURE_EPOCH
     activation_epoch = compute_activation_exit_epoch(
         state.current_epoch(config.SLOTS_PER_EPOCH), config.MAX_SEED_LOOKAHEAD
     )
     assert post_activation_validator.is_active(activation_epoch)
-    # Check if the activating_validator is exited
+
+    # Check if the exiting_validator is exited
     pre_exiting_validator = state.validators[exiting_index]
     post_exiting_validator = post_state.validators[exiting_index]
     assert pre_exiting_validator.exit_epoch == FAR_FUTURE_EPOCH
