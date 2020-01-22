@@ -439,6 +439,7 @@ async def main():
     # global variable `pw_dir` is the path to password of the geth account
     # global variable `eth1_addr` is the account of eth1 chain miner
 
+    # geth version used: 1.9.9-stable
     # Steps to set up eth1 chain with geth
     # 1. init the chain with `geth init --datadir {data_dir} {genesis_dir}`
     if not USE_FAKE_ETH1_DATA:
