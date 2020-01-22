@@ -5,6 +5,10 @@ from typing import (
     TYPE_CHECKING,
 )
 
+from eth_typing import (
+    Hash32,
+)
+
 if TYPE_CHECKING:
     from p2p.discv5.enr import (  # noqa: F401
         ENR,
@@ -23,6 +27,8 @@ IDNonce = NewType("IDNonce", bytes)
 Tag = NewType("Tag", bytes)
 
 NodeID = NewType("NodeID", bytes)
+
+Topic = NewType("Topic", Hash32)
 
 
 class SessionKeys(NamedTuple):
