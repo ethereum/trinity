@@ -40,10 +40,12 @@ from .events import (
     DisconnectPeerEvent,
     GetConnectedPeersRequest,
     GetConnectedPeersResponse,
+    GetProtocolCapabilitiesRequest,
     PeerCountRequest,
     PeerCountResponse,
     PeerJoinedEvent,
     PeerLeftEvent,
+    ProtocolCapabilitiesResponse
 )
 from .peer import BaseProxyPeer
 
@@ -88,6 +90,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
         self.manager.run_daemon_task(self.handle_connect_to_node_requests)
         self.manager.run_daemon_task(self.handle_native_peer_messages)
         self.manager.run_daemon_task(self.handle_get_connected_peers_requests)
+        self.manager.run_daemon_task(self.handle_protocol_capabilities_requests)
 
         await self.manager.wait_finished()
 
@@ -155,6 +158,14 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
         async for req in self.event_bus.stream(GetConnectedPeersRequest):
             await self.event_bus.broadcast(
                 GetConnectedPeersResponse(tuple(self.peer_pool.connected_nodes.keys())),
+                req.broadcast_config()
+            )
+
+    async def handle_protocol_capabilities_requests(self) -> None:
+        async for req in self.event_bus.stream(GetProtocolCapabilitiesRequest):
+            protocols = await self.peer_pool.get_protocol_capabilities()
+            await self.event_bus.broadcast(
+                ProtocolCapabilitiesResponse(protocols),
                 req.broadcast_config()
             )
 

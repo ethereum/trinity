@@ -46,6 +46,7 @@ from eth._utils.padding import (
 from trinity.chains.full import (
     FullChain,
 )
+from trinity.config import TrinityConfig
 from trinity.rpc import RPCServer
 from trinity.rpc.format import (
     empty_to_0x,
@@ -508,7 +509,8 @@ class MainnetFullChain(FullChain):
 
 async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
     chain = MainnetFullChain(None)
-    rpc = RPCServer(initialize_eth1_modules(chain, event_bus), chain, event_bus)
+    trinity_config = TrinityConfig(app_identifier="eth1", network_id=1)
+    rpc = RPCServer(initialize_eth1_modules(chain, event_bus, trinity_config), chain, event_bus)
 
     setup_result, setup_error = await call_rpc(rpc, 'evm_resetToGenesisFixture', [chain_fixture])
     # We need to advance the event loop for modules to be able to pickup the new chain

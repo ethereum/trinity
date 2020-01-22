@@ -14,6 +14,7 @@ from lahja import (
 
 from p2p.abc import CommandAPI, NodeAPI, SessionAPI
 from p2p.disconnect import DisconnectReason
+from p2p.typing import Capabilities
 
 
 @dataclass
@@ -90,3 +91,16 @@ class PeerPoolMessageEvent(BaseEvent):
     """
     session: SessionAPI
     command: CommandAPI[Any]
+
+
+@dataclass
+class ProtocolCapabilitiesResponse(BaseEvent):
+
+    capabilities: Capabilities
+
+
+class GetProtocolCapabilitiesRequest(BaseRequestResponseEvent[ProtocolCapabilitiesResponse]):
+
+    @staticmethod
+    def expected_response_type() -> Type[ProtocolCapabilitiesResponse]:
+        return ProtocolCapabilitiesResponse

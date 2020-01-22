@@ -116,6 +116,8 @@ class LightDispatchChain(AsyncChainAPI, Chain):
     def get_score(self, block_hash: Hash32) -> int:
         return self._headerdb.get_score(block_hash)
 
+    coro_get_score = async_method(Chain.get_score)
+
     #
     # Block API
     #

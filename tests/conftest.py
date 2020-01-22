@@ -279,8 +279,9 @@ async def ipc_server(
     This fixture runs a single RPC server over IPC over
     the course of all tests. It yields the IPC server only for monkeypatching purposes
     """
+    trinity_config = TrinityConfig(app_identifier="eth1", network_id=1)
     rpc = RPCServer(
-        initialize_eth1_modules(chain_with_block_validation, event_bus),
+        initialize_eth1_modules(chain_with_block_validation, event_bus, trinity_config),
         chain_with_block_validation,
         event_bus,
     )
