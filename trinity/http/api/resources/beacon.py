@@ -1,12 +1,11 @@
 from typing import Any, Dict, cast
 from aiohttp import web
 
-from eth_typing import Hash32
 from eth_utils import decode_hex
 from ssz.tools import to_formatted_dict
 
 from eth2.beacon.types.blocks import BeaconBlock
-from eth2.beacon.typing import HashTreeRoot, SigningRoot, Slot
+from eth2.beacon.typing import Root, Slot
 from trinity.http.api.resources.base import BaseResource, get_method
 from trinity.http.exceptions import APIServerError
 
@@ -28,7 +27,7 @@ class Beacon(BaseResource):
             slot = Slot(int(request.query['slot']))
             block = self.chain.get_canonical_block_by_slot(slot)
         elif 'root' in request.query:
-            root = SigningRoot(Hash32(decode_hex(request.query['root'])))
+            root = cast(Root, decode_hex(request.query['root']))
             block = self.chain.get_block_by_root(root)
 
         return to_formatted_dict(block, sedes=BeaconBlock)
@@ -39,7 +38,7 @@ class Beacon(BaseResource):
             slot = Slot(int(request.query['slot']))
             state = self.chain.get_state_by_slot(slot)
         elif 'root' in request.query:
-            root = cast(HashTreeRoot, decode_hex(request.query['root']))
+            root = cast(Root, decode_hex(request.query['root']))
             state = self.chain.get_state_by_root(root)
         else:
             raise APIServerError(f"Wrong querystring: {request.query}")

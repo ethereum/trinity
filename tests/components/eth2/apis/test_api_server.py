@@ -81,7 +81,7 @@ sample_attestation = Attestation.create()
         (GET_METHOD, 'beacon', 'head', '', 200),
         (GET_METHOD, 'beacon', 'block?slot=0', '', 200),
         (GET_METHOD, 'beacon', 'state?slot=4', '', 200),
-        (GET_METHOD, 'beacon', 'state?root=0x4e7d5ecf3ee3336b46e9c095a280c18045e81b377020fe0792cef436012d611b', '', 200),  # noqa: E501
+        (GET_METHOD, 'beacon', 'state?root=0xfab1a3f24addbe938e29030d1f756a50b381ac71e00f3120e4937d35f2689e3d', '', 200),  # noqa: E501
     )
 )
 @pytest.mark.asyncio
