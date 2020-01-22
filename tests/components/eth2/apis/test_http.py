@@ -13,6 +13,7 @@ from eth2.beacon.tools.misc.ssz_vector import (
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.tools.builder.initializer import create_mock_genesis
 
+
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient, DBManager
 from trinity.http.handlers.rpc_handler import RPCHandler
