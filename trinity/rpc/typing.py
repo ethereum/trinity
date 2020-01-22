@@ -1,9 +1,32 @@
 from typing import (
     Sequence,
     Union,
-)
+    Dict)
 from eth_typing import HexStr
 from typing_extensions import TypedDict
+
+
+class RpcProtocolResponse(TypedDict):
+    version: str
+    difficulty: int
+    genesis: str
+    head: str
+    network: int
+    config: Dict[str, int]
+
+
+class RpcPortsResponse(TypedDict):
+    discovery: int
+    listener: int
+
+
+class RpcNodeInfoResponse(TypedDict):
+    enode: str
+    ip: str
+    listenAddr: str
+    name: str
+    ports: RpcPortsResponse
+    protocols: Dict[str, RpcProtocolResponse]
 
 
 RpcTransactionResponse = TypedDict('RpcTransactionResponse', {

@@ -37,10 +37,12 @@ from .events import (
     DisconnectPeerEvent,
     GetConnectedPeersRequest,
     GetConnectedPeersResponse,
+    GetSupportedProtocolsRequest,
     PeerCountRequest,
     PeerCountResponse,
     PeerJoinedEvent,
     PeerLeftEvent,
+    SupportedProtocolsResponse
 )
 from .peer import BaseProxyPeer
 
@@ -88,6 +90,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         self.run_daemon_task(self.handle_connect_to_node_requests())
         self.run_daemon_task(self.handle_native_peer_messages())
         self.run_daemon_task(self.handle_get_connected_peers_requests())
+        self.run_daemon_task(self.handle_supported_protocols_requests())
 
         await self.cancellation()
 
@@ -155,6 +158,14 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         async for req in self.wait_iter(self.event_bus.stream(GetConnectedPeersRequest)):
             await self.event_bus.broadcast(
                 GetConnectedPeersResponse(tuple(self.peer_pool.connected_nodes.keys())),
+                req.broadcast_config()
+            )
+
+    async def handle_supported_protocols_requests(self) -> None:
+        async for req in self.wait_iter(self.event_bus.stream(GetSupportedProtocolsRequest)):
+            protocols = await self.peer_pool.get_supported_protocols()
+            await self.event_bus.broadcast(
+                SupportedProtocolsResponse(protocols),
                 req.broadcast_config()
             )
 

@@ -90,3 +90,16 @@ class PeerPoolMessageEvent(BaseEvent):
     """
     session: SessionAPI
     command: CommandAPI[Any]
+
+
+@dataclass
+class SupportedProtocolsResponse(BaseEvent):
+
+    protocols: Tuple[Tuple[str, int], ...]
+
+
+class GetSupportedProtocolsRequest(BaseRequestResponseEvent[SupportedProtocolsResponse]):
+
+    @staticmethod
+    def expected_response_type() -> Type[SupportedProtocolsResponse]:
+        return SupportedProtocolsResponse

@@ -24,6 +24,7 @@ class AsyncChainMixin(AsyncChainAPI):
     coro_get_canonical_transaction_index = async_method(Chain.get_canonical_transaction_index)
     coro_get_canonical_transaction = async_method(Chain.get_canonical_transaction)
     coro_get_canonical_transaction_by_index = async_method(Chain.get_canonical_transaction_by_index)
+    coro_get_score = async_method(Chain.get_score)
     coro_get_transaction_receipt = async_method(Chain.get_transaction_receipt)
     coro_get_transaction_receipt_by_index = async_method(Chain.get_transaction_receipt_by_index)
     coro_import_block = async_method(Chain.import_block)

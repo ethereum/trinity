@@ -131,10 +131,10 @@ async def test_expected_logs_for_light_mode(command):
 
 
 @pytest.mark.parametrize(
-    'command, expected_network_id, expected_genesis_hash',
+    'command, expected_network_id, expected_genesis_hash, expected_chain_id',
     (
-        (('trinity', '--log-level=DEBUG'), 1, MAINNET_GENESIS_HASH),
-        (('trinity', '--ropsten', '--log-level=DEBUG'), 3, ROPSTEN_GENESIS_HASH),
+        (('trinity', '--log-level=DEBUG'), 1, MAINNET_GENESIS_HASH, 1),
+        (('trinity', '--ropsten', '--log-level=DEBUG'), 3, ROPSTEN_GENESIS_HASH, 3),
         (
             (
                 'trinity',
@@ -145,13 +145,16 @@ async def test_expected_logs_for_light_mode(command):
                 '--network-id=4711',
                 '--disable-tx-pool',
                 '--log-level=DEBUG',
-            ), 4711, '0x065fd78e53dcef113bf9d7732dac7c5132dcf85c9588a454d832722ceb097422'),
+            ),
+            4711, '0x065fd78e53dcef113bf9d7732dac7c5132dcf85c9588a454d832722ceb097422', 3735928559
+        ),
     )
 )
 @pytest.mark.asyncio
 async def test_web3_commands_via_attached_console(command,
                                                   expected_network_id,
                                                   expected_genesis_hash,
+                                                  expected_chain_id,
                                                   xdg_trinity_root,
                                                   unused_tcp_port):
 
@@ -190,6 +193,12 @@ async def test_web3_commands_via_attached_console(command,
             attached_trinity.expect(str(GENESIS_BLOCK_NUMBER))
             attached_trinity.sendline("w3.eth.getBlock(0).hash")
             attached_trinity.expect(expected_genesis_hash)
+            # The following verifies only a tiny subset of the node_info response. Making assertions
+            # regarding the full response is difficult with this test. This mainly exists here to
+            # ensure the API responds *at all* and contains *something* we would expect.
+            attached_trinity.sendline("w3.geth.admin.node_info()")
+            attached_trinity.expect(f"chainId': {expected_chain_id}")
+
         except pexpect.TIMEOUT:
             raise Exception("Trinity attach timeout")
         finally:
