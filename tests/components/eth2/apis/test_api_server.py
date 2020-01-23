@@ -5,6 +5,7 @@ from aiohttp.test_utils import (
     RawTestServer,
     TestClient,
 )
+from eth_utils import encode_hex
 
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock
@@ -81,7 +82,7 @@ sample_attestation = Attestation.create()
         (GET_METHOD, 'beacon', 'head', '', 200),
         (GET_METHOD, 'beacon', 'block?slot=0', '', 200),
         (GET_METHOD, 'beacon', 'state?slot=4', '', 200),
-        (GET_METHOD, 'beacon', 'state?root=0xfab1a3f24addbe938e29030d1f756a50b381ac71e00f3120e4937d35f2689e3d', '', 200),  # noqa: E501
+        (GET_METHOD, 'beacon', 'state?root=AVAILABLE_STATE_ROOT', '', 200),
     )
 )
 @pytest.mark.asyncio
@@ -99,6 +100,10 @@ async def test_restful_http_server(
     chain,
     libp2p_node,
 ):
+    if "AVAILABLE_STATE_ROOT" in object:
+        state_root = encode_hex(chain.get_head_state().hash_tree_root)
+        object = object.replace("AVAILABLE_STATE_ROOT", state_root)
+
     request_path = resource + '/' + object
     response = await http_client.request(method, request_path, json=json_data)
 
