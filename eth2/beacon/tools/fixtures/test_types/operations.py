@@ -103,7 +103,6 @@ class AttestationHandler(OperationHandler):
     name = "attestation"
     operation_type = Attestation
     processor = staticmethod(process_attestations)
-    expected_exceptions = (IndexError,)
 
 
 class AttesterSlashingHandler(OperationHandler):
@@ -136,14 +135,12 @@ class ProposerSlashingHandler(OperationHandler):
     name = "proposer_slashing"
     operation_type = ProposerSlashing
     processor = staticmethod(process_proposer_slashings)
-    expected_exceptions = (IndexError,)
 
 
 class VoluntaryExitHandler(OperationHandler):
     name = "voluntary_exit"
     operation_type = SignedVoluntaryExit
     processor = staticmethod(process_voluntary_exits)
-    expected_exceptions = (IndexError,)
 
 
 OperationsHandlerType = Tuple[

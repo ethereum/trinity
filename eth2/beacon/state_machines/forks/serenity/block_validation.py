@@ -29,7 +29,7 @@ from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
-from eth2.beacon.typing import CommitteeIndex, Epoch, Root, Slot
+from eth2.beacon.typing import CommitteeIndex, Epoch, Root, Slot, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
 
 
@@ -144,7 +144,9 @@ def validate_proposer_slashing(
     Validate the given ``proposer_slashing``.
     Raise ``ValidationError`` if it's invalid.
     """
-    proposer = state.validators[proposer_slashing.proposer_index]
+    proposer = _get_validator_by_index(
+        state.validators, proposer_slashing.proposer_index
+    )
 
     validate_proposer_slashing_epoch(proposer_slashing, slots_per_epoch)
 
@@ -486,7 +488,11 @@ def validate_voluntary_exit(
     persistent_committee_period: int,
 ) -> None:
     voluntary_exit = signed_voluntary_exit.message
-    validator = state.validators[voluntary_exit.validator_index]
+
+    validator = _get_validator_by_index(
+        state.validators, voluntary_exit.validator_index
+    )
+
     current_epoch = state.current_epoch(slots_per_epoch)
 
     _validate_validator_is_active(validator, current_epoch)
@@ -498,3 +504,18 @@ def validate_voluntary_exit(
     _validate_voluntary_exit_signature(
         state, signed_voluntary_exit, validator, slots_per_epoch
     )
+
+
+def _get_validator_by_index(
+    validators: Sequence[Validator], index: ValidatorIndex
+) -> Validator:
+    """
+    Return validators[index] but raise ValidationError if index is out of range.
+    Use this helper when the index can't be trusted.
+    """
+    try:
+        return validators[index]
+    except IndexError:
+        raise ValidationError(
+            f"Validator index ({index}) out of range ({len(validators)} validators)"
+        )
