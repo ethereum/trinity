@@ -75,6 +75,8 @@ def validate_proposer_is_not_slashed(
     state: BeaconState, block_root: Root, config: CommitteeConfig
 ) -> None:
     proposer_index = get_beacon_proposer_index(state, config)
+    # NOTE: an IndexError should not occur here as get_beacon_proposer_index
+    # should return a valid index (provided a valid state)
     proposer = state.validators[proposer_index]
     if proposer.slashed:
         raise ValidationError(f"Proposer for block {encode_hex(block_root)} is slashed")
@@ -89,6 +91,8 @@ def validate_proposer_signature(
 
     # Get the public key of proposer
     beacon_proposer_index = get_beacon_proposer_index(state, committee_config)
+    # NOTE: an IndexError should not occur here as get_beacon_proposer_index
+    # should return a valid index (provided a valid state)
     proposer_pubkey = state.validators[beacon_proposer_index].pubkey
     domain = get_domain(
         state, SignatureDomain.DOMAIN_BEACON_PROPOSER, committee_config.SLOTS_PER_EPOCH
@@ -118,6 +122,8 @@ def validate_randao_reveal(
     randao_reveal: Hash32,
     slots_per_epoch: int,
 ) -> None:
+    # NOTE: an IndexError should not occur here provided proposer_index
+    # is the result of a call to get_beacon_proposer_index()
     proposer = state.validators[proposer_index]
     proposer_pubkey = proposer.pubkey
     message_hash = ssz.get_hash_tree_root(epoch, sedes=ssz.sedes.uint64)
@@ -144,7 +150,13 @@ def validate_proposer_slashing(
     Validate the given ``proposer_slashing``.
     Raise ``ValidationError`` if it's invalid.
     """
-    proposer = state.validators[proposer_slashing.proposer_index]
+    try:
+        proposer = state.validators[proposer_slashing.proposer_index]
+    except IndexError as error:
+        raise ValidationError(
+            f"Invalid ProposerSlashing index, proposer_index={proposer_slashing.proposer_index}",
+            error,
+        ) from error
 
     validate_proposer_slashing_epoch(proposer_slashing, slots_per_epoch)
 
@@ -486,7 +498,13 @@ def validate_voluntary_exit(
     persistent_committee_period: int,
 ) -> None:
     voluntary_exit = signed_voluntary_exit.message
-    validator = state.validators[voluntary_exit.validator_index]
+    try:
+        validator = state.validators[voluntary_exit.validator_index]
+    except IndexError as error:
+        raise ValidationError(
+            f"Invalid VoluntaryExit index, validator_index={voluntary_exit.validator_index}",
+            error,
+        ) from error
     current_epoch = state.current_epoch(slots_per_epoch)
 
     _validate_validator_is_active(validator, current_epoch)
