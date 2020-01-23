@@ -30,10 +30,6 @@ def test_slots(test_case):
     }
 )
 def test_blocks(test_case):
-    # TODO: Remove when upgrading to 0.9.4.
-    # See https://github.com/ethereum/eth2.0-specs/pull/1544
-    if test_case.name in ("invalid_state_root", "zero_block_sig", "invalid_block_sig"):
-        pytest.skip("Missing pre state in this case")
     if test_case.valid():
         test_case.execute()
     else:
