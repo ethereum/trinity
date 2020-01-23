@@ -1,5 +1,4 @@
 import os
-from typing import Type
 
 from eth.abc import (
     AtomicDatabaseAPI,
@@ -15,10 +14,6 @@ from trinity.config import (
     Eth1AppConfig,
     Eth1ChainConfig,
     TrinityConfig,
-)
-
-from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
 )
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from trinity.exceptions import (
@@ -74,10 +69,9 @@ def is_database_initialized(chaindb: ChainDatabaseAPI) -> bool:
         return True
 
 
-def is_beacon_database_initialized(chaindb: BaseBeaconChainDB,
-                                   block_class: Type[BaseBeaconBlock]) -> bool:
+def is_beacon_database_initialized(chaindb: BaseBeaconChainDB) -> bool:
     try:
-        chaindb.get_canonical_head(block_class)
+        chaindb.get_canonical_head_root()
     except CanonicalHeadNotFound:
         # empty chain database
         return False
@@ -147,10 +141,9 @@ def initialize_database(chain_config: Eth1ChainConfig,
 
 def initialize_beacon_database(chain_config: BeaconChainConfig,
                                chaindb: BaseBeaconChainDB,
-                               base_db: AtomicDatabaseAPI,
-                               block_class: Type[BaseBeaconBlock]) -> None:
+                               base_db: AtomicDatabaseAPI) -> None:
     try:
-        chaindb.get_canonical_head(block_class)
+        chaindb.get_canonical_head_root()
     except CanonicalHeadNotFound:
         chain_config.initialize_chain(base_db)
 

@@ -13,7 +13,6 @@ from eth.db.backends.level import (
 )
 
 from eth2.beacon.db.chain import BeaconChainDB
-from eth2.beacon.types.blocks import BeaconBlock
 
 from trinity.bootstrap import (
     main_entry,
@@ -96,8 +95,8 @@ def run_database_process(boot_info: BootInfo, db_class: Type[LevelDB]) -> None:
             base_db = db_class(db_path=app_config.database_dir)
             chaindb = BeaconChainDB(base_db, chain_config.genesis_config)
 
-            if not is_beacon_database_initialized(chaindb, BeaconBlock):
-                initialize_beacon_database(chain_config, chaindb, base_db, BeaconBlock)
+            if not is_beacon_database_initialized(chaindb):
+                initialize_beacon_database(chain_config, chaindb, base_db)
 
             manager = DBManager(base_db)
             with manager.run(trinity_config.database_ipc_path):
