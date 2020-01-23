@@ -298,10 +298,13 @@ class DiscoveryService(Service):
         Bonding consists of pinging the node, waiting for a pong and maybe a ping as well.
         It is necessary to do this at least once before we send find_node requests to a node.
         """
-        if node in self.routing:
-            return True
-        elif node == self.this_node:
+        if node == self.this_node:
+            # FIXME: We should be able to get rid of this check, but for now issue a warning.
+            self.logger.warning("Attempted to bond with self; this shouldn't happen")
             return False
+
+        if node.is_bond_valid:
+            return True
 
         token = await self.send_ping_v4(node)
         send_chan, recv_chan = trio.open_memory_channel[Tuple[Hash32, int]](1)
@@ -646,6 +649,7 @@ class DiscoveryService(Service):
         if self._is_msg_expired(expiration):
             return
         self.logger.debug2('<<< pong (v4) from %s (token == %s)', node, encode_hex(token))
+        node.last_pong = time.monotonic()
         await self.process_pong_v4(node, token, enr_seq)
 
     async def recv_neighbours_v4(self, remote: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
@@ -708,11 +712,9 @@ class DiscoveryService(Service):
         self.logger.debug2('<<< find_node from %s', node)
         if self._is_msg_expired(expiration):
             return
-        if node not in self.routing:
-            # FIXME: This is not correct; a node we've bonded before may have become unavailable
-            # and thus removed from self.routing, but once it's back online we should accept
-            # find_nodes from them.
-            self.logger.debug('Ignoring find_node request from unknown node %s', node)
+        if not node.is_bond_valid:
+            self.logger.debug(
+                "Ignoring find_node request from node (%s) we haven't bonded with", node)
             return
         self.update_routing_table(node)
         found = self.routing.neighbours(big_endian_to_int(node_id))
@@ -727,11 +729,8 @@ class DiscoveryService(Service):
         expiration = payload[0]
         if self._is_msg_expired(expiration):
             return
-        # XXX: Maybe reconsider this and accept all ENR requests until we have a persistent
-        # routing store of nodes we've bonded with? Otherwise if a node request our ENR across a
-        # restart, we'll not reply to them.
-        if node not in self.routing:
-            self.logger.info('Ignoring ENR_REQUEST from unknown node %s', node)
+        if not node.is_bond_valid:
+            self.logger.debug("Ignoring ENR_REQUEST from node (%s) we haven't bonded with", node)
             return
         enr = await self.get_local_enr()
         self.logger.debug("Sending local ENR to %s: %s", node, enr)

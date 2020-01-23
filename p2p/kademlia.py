@@ -125,6 +125,7 @@ class Node(NodeAPI):
         self.pubkey = keys.PublicKey.from_compressed_bytes(enr.public_key)
         self.id_bytes = keccak(self.pubkey.to_bytes())
         self.id = big_endian_to_int(self.id_bytes)
+        self.last_pong = None
         self._enr = enr
 
     @classmethod
@@ -168,6 +169,13 @@ class Node(NodeAPI):
     @enr.setter
     def enr(self, enr: ENR) -> None:
         self._init(enr)
+
+    @property
+    def is_bond_valid(self) -> bool:
+        return (
+            self.last_pong is not None and
+            self.last_pong > time.monotonic() - constants.KADEMLIA_BOND_EXPIRATION
+        )
 
     def uri(self) -> str:
         hexstring = self.pubkey.to_hex()
