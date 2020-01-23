@@ -181,6 +181,7 @@ KADEMLIA_ID_SIZE = 256
 # Maximum node `id` for a kademlia node
 KADEMLIA_MAX_NODE_ID = (2 ** KADEMLIA_ID_SIZE) - 1
 
+KADEMLIA_BOND_EXPIRATION = 24 * 60
 
 # Reserved command length for the base `p2p` protocol
 # - https://github.com/ethereum/devp2p/blob/master/rlpx.md#message-id-based-multiplexing

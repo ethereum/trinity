@@ -153,7 +153,9 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
     # request.
+    alice.this_node.last_pong = time.monotonic()
     bob.update_routing_table(alice.this_node)
+    bob.this_node.last_pong = time.monotonic()
     alice.update_routing_table(bob.this_node)
 
     enr = None
@@ -199,6 +201,7 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
     alice.recv_neighbours_v4 = recv_neighbours
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
+    alice.this_node.last_pong = time.monotonic()
     bob.update_routing_table(alice.this_node)
 
     alice.send_find_node_v4(bob.this_node, alice.this_node.id)
@@ -296,6 +299,7 @@ async def test_bond(nursery, monkeypatch):
     bonded = await discovery.bond(node)
 
     assert bonded
+    assert node.is_bond_valid
 
     # Upon successfully bonding, retrieval of the remote's ENR will be scheduled.
     with trio.fail_after(1):
@@ -315,8 +319,10 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
     # request.
-    bob.update_routing_table(alice.this_node)
+    bob.this_node.last_pong = time.monotonic()
     alice.update_routing_table(bob.this_node)
+    alice.this_node.last_pong = time.monotonic()
+    bob.update_routing_table(alice.this_node)
 
     # This task will run in a loop consuming from the pending_enrs_consumer channel and requesting
     # ENRs.

@@ -108,6 +108,7 @@ class NodeAPI(ABC):
     address: AddressAPI
     id: int
     id_bytes: bytes
+    last_pong: float
 
     @abstractmethod
     def __init__(self, enr: ENR) -> None:
@@ -140,6 +141,11 @@ class NodeAPI(ABC):
 
     @abstractmethod
     def distance_to(self, id: int) -> int:
+        ...
+
+    @property
+    @abstractmethod
+    def is_bond_valid(self) -> bool:
         ...
 
     # mypy doesn't have support for @total_ordering
