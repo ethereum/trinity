@@ -429,7 +429,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         while connecting.
         """
         if self.is_full or not self.is_operational:
+            self.logger.warning("Asked to connect to node when either full or not operational")
             return
+
+        if self._handshake_locks.is_locked(node):
+            self.logger.info(
+                "Asked to connect to node when handshake lock is already locked, will wait")
 
         async with self.lock_node_for_handshake(node):
             if self.is_connected_to_node(node):

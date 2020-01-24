@@ -88,11 +88,11 @@ def receiver_remote():
 async def server(event_bus, receiver_remote):
     server = get_server(RECEIVER_PRIVKEY, receiver_remote.address, event_bus)
     async with run_service(server):
-        # wait for the tcp server to be present
+        # wait for the tcp server to start listening
         for _ in range(50):
-            if hasattr(server, '_tcp_listener'):
+            if server._tcp_listener is not None and server._tcp_listener.is_serving():
                 break
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
         else:
             raise AssertionError("Never got listener")
         yield server
