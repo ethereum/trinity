@@ -103,7 +103,6 @@ class AttestationHandler(OperationHandler):
     name = "attestation"
     operation_type = Attestation
     processor = staticmethod(process_attestations)
-    expected_exceptions = (IndexError,)
 
 
 class AttesterSlashingHandler(OperationHandler):
