@@ -29,7 +29,7 @@ from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
-from eth2.beacon.typing import CommitteeIndex, Epoch, Root, Slot
+from eth2.beacon.typing import CommitteeIndex, Epoch, Root, Slot, ValidatorIndex
 from eth2.configs import CommitteeConfig, Eth2Config
 
 
@@ -150,13 +150,9 @@ def validate_proposer_slashing(
     Validate the given ``proposer_slashing``.
     Raise ``ValidationError`` if it's invalid.
     """
-    try:
-        proposer = state.validators[proposer_slashing.proposer_index]
-    except IndexError as error:
-        raise ValidationError(
-            f"Invalid ProposerSlashing index, proposer_index={proposer_slashing.proposer_index}",
-            error,
-        ) from error
+    proposer = _get_validator_by_index(
+        state.validators, proposer_slashing.proposer_index
+    )
 
     validate_proposer_slashing_epoch(proposer_slashing, slots_per_epoch)
 
@@ -491,6 +487,21 @@ def _validate_voluntary_exit_signature(
         )
 
 
+def _get_validator_by_index(
+    validators: Sequence[Validator], index: ValidatorIndex
+) -> Validator:
+    """
+    Return validators[index] but raise ValidationError if index is out of range.
+    Use this helper when the index can't be trusted.
+    """
+    try:
+        return validators[index]
+    except IndexError:
+        raise ValidationError(
+            f"Validator index ({index}) out of range ({len(validators)} validators)"
+        )
+
+
 def validate_voluntary_exit(
     state: BeaconState,
     signed_voluntary_exit: SignedVoluntaryExit,
@@ -498,13 +509,9 @@ def validate_voluntary_exit(
     persistent_committee_period: int,
 ) -> None:
     voluntary_exit = signed_voluntary_exit.message
-    try:
-        validator = state.validators[voluntary_exit.validator_index]
-    except IndexError as error:
-        raise ValidationError(
-            f"Invalid VoluntaryExit index, validator_index={voluntary_exit.validator_index}",
-            error,
-        ) from error
+    validator = _get_validator_by_index(
+        state.validators, voluntary_exit.validator_index
+    )
     current_epoch = state.current_epoch(slots_per_epoch)
 
     _validate_validator_is_active(validator, current_epoch)
