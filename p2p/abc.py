@@ -27,6 +27,7 @@ from eth_utils import ExtendedDebugLogger
 from eth_keys import keys
 
 from p2p.discv5.enr import ENR
+from p2p.discv5.typing import NodeID
 from p2p.typing import (
     Capabilities,
     Capability,
@@ -104,10 +105,10 @@ TNode = TypeVar('TNode', bound='NodeAPI')
 
 
 class NodeAPI(ABC):
+    _id_int: int
     pubkey: keys.PublicKey
     address: AddressAPI
-    id: int
-    id_bytes: bytes
+    id: NodeID
     last_pong: float
 
     @abstractmethod

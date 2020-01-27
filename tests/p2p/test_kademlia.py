@@ -49,7 +49,7 @@ def test_node_from_enr_uri():
 
     node = Node.from_uri(repr(enr))
 
-    assert node.id_bytes == keccak(privkey.public_key.to_bytes())
+    assert node.id == keccak(privkey.public_key.to_bytes())
     assert node.address.ip_packed == ip
     assert node.address.tcp_port == tcp_port
     assert node.address.udp_port == udp_port
@@ -66,7 +66,7 @@ def test_node_enr_property():
 
     node = Node(enr)
 
-    assert node.id_bytes == keccak(privkey.public_key.to_bytes())
+    assert node.id == keccak(privkey.public_key.to_bytes())
     assert node.address.ip_packed == ip
     assert node.address.tcp_port == tcp_port
     assert node.address.udp_port == udp_port
@@ -81,7 +81,7 @@ def test_node_enr_property():
     # If we update our Node's enr, the node's attributes will be changed to reflect that.
     node.enr = enr2
 
-    assert node.id_bytes == keccak(privkey.public_key.to_bytes())
+    assert node.id == keccak(privkey.public_key.to_bytes())
     assert node.address.ip_packed == ip
     assert node.address.tcp_port == tcp_port
     assert node.address.udp_port == udp_port
@@ -134,12 +134,12 @@ def test_routingtable_neighbours():
 
     for _ in range(100):
         node = NodeFactory()
-        nearest_bucket = table.buckets_by_distance_to(node.id)[0]
+        nearest_bucket = table.buckets_by_distance_to(node._id_int)[0]
         if not nearest_bucket.nodes:
             continue
         # Change nodeid to something that is in this bucket's range.
         node_a = nearest_bucket.nodes[0]
-        node_b = NodeFactory.with_nodeid(node_a.id + 1)
+        node_b = NodeFactory.with_nodeid(node_a._id_int + 1)
         assert node_a == table.neighbours(node_b.id)[0]
 
 
@@ -245,9 +245,9 @@ def test_kbucket_split():
         # Set the IDs of half the nodes below the midpoint, so when we split we should end up with
         # two buckets containing k/2 nodes.
         if i % 2 == 0:
-            node.id = bucket.midpoint + i
+            node._id_int = bucket.midpoint + i
         else:
-            node.id = bucket.midpoint - i
+            node._id_int = bucket.midpoint - i
         bucket.add(node)
     assert bucket.is_full
     bucket1, bucket2 = bucket.split()
@@ -318,12 +318,12 @@ def test_compute_shared_prefix_bits():
     # Otherwise the depth is the number of leading bits (in the left-padded binary representation)
     # shared by all node IDs.
     nodes.append(NodeFactory())
-    nodes[0].id = int('0b1', 2)
-    nodes[1].id = int('0b0', 2)
+    nodes[0]._id_int = int('0b1', 2)
+    nodes[1]._id_int = int('0b0', 2)
     assert kademlia._compute_shared_prefix_bits(nodes) == KADEMLIA_ID_SIZE - 1
 
-    nodes[0].id = int('0b010', 2)
-    nodes[1].id = int('0b110', 2)
+    nodes[0]._id_int = int('0b010', 2)
+    nodes[1]._id_int = int('0b110', 2)
     assert kademlia._compute_shared_prefix_bits(nodes) == KADEMLIA_ID_SIZE - 3
 
 

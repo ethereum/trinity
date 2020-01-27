@@ -7,6 +7,7 @@ More information at https://github.com/ethereum/devp2p/blob/master/rlpx.md#node-
 """
 import collections
 import random
+import secrets
 import time
 from typing import (
     Any,
@@ -186,7 +187,7 @@ class DiscoveryService(Service):
     async def _init(self) -> None:
         async with self._enr_db_lock:
             try:
-                enr = await self._enr_db.get(NodeID(self.this_node.id_bytes))
+                enr = await self._enr_db.get(self.this_node.id)
             except KeyError:
                 # Either we have a fresh DB or our private key has changed, so create a new ENR
                 # with sequence number 1.
@@ -252,7 +253,7 @@ class DiscoveryService(Service):
         # problem as this is only triggered once we successfully bonded with a peer.
         async with self._enr_db_lock:
             try:
-                enr = await self._enr_db.get(NodeID(node.id_bytes))
+                enr = await self._enr_db.get(node.id)
             except KeyError:
                 pass
             else:
@@ -439,7 +440,7 @@ class DiscoveryService(Service):
         self.logger.debug2("Got ENR with seq-id %s for %s", enr.sequence_number, remote)
         async with self._enr_db_lock:
             await self._enr_db.insert_or_update(enr)
-            return await self._enr_db.get(NodeID(remote.id_bytes))
+            return await self._enr_db.get(remote.id)
 
     async def wait_neighbours(self, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
         """Wait for a neihgbours packet from the given node.
@@ -467,20 +468,23 @@ class DiscoveryService(Service):
                 f'{remote}, got only {len(neighbours)}')
         return tuple(n for n in neighbours if n != self.this_node)
 
-    def _send_find_node(self, node: NodeAPI, target_node_id: int) -> None:
-        self.send_find_node_v4(node, target_node_id)
-
-    async def lookup(self, node_id: int) -> Tuple[NodeAPI, ...]:
+    async def lookup(self, target_key: bytes) -> Tuple[NodeAPI, ...]:
         """Lookup performs a network search for nodes close to the given target.
 
-        It approaches the target by querying nodes that are closer to it on each iteration.  The
-        given target does not need to be an actual node identifier.
+        It approaches the target by querying nodes that are closer to it on each iteration. The
+        given target must be 64-bytes long (the uncompressed bytes representation of a public
+        key).
         """
+        if len(target_key) != constants.KADEMLIA_PUBLIC_KEY_SIZE // 8:
+            raise ValueError(f"Invalid lookup target ({target_key!r}). Length is not 64")
+        # This is the node ID of the given target, which we use to select the peers close to it
+        # and ask them about the target itself.
+        target_id = NodeID(keccak(target_key))
         nodes_asked: Set[NodeAPI] = set()
         nodes_seen: Set[NodeAPI] = set()
 
-        async def _find_node(node_id: int, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
-            self._send_find_node(remote, node_id)
+        async def _find_node(target: bytes, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
+            self.send_find_node_v4(remote, target)
             candidates = await self.wait_neighbours(remote)
             if not candidates:
                 self.logger.debug("got no candidates from %s, returning", remote)
@@ -501,16 +505,16 @@ class DiscoveryService(Service):
 
         def _exclude_if_asked(nodes: Iterable[NodeAPI]) -> List[NodeAPI]:
             nodes_to_ask = list(set(nodes).difference(nodes_asked))
-            return sort_by_distance(nodes_to_ask, node_id)[:constants.KADEMLIA_FIND_CONCURRENCY]
+            return sort_by_distance(nodes_to_ask, target_id)[:constants.KADEMLIA_FIND_CONCURRENCY]
 
-        closest = self.routing.neighbours(node_id)
+        closest = self.routing.neighbours(target_id)
         self.logger.debug("starting lookup; initial neighbours: %s", closest)
         nodes_to_ask = _exclude_if_asked(closest)
         while nodes_to_ask:
             self.logger.debug2("node lookup; querying %s", nodes_to_ask)
             nodes_asked.update(nodes_to_ask)
             next_find_node_queries = (
-                (_find_node, node_id, n)
+                (_find_node, target_key, n)
                 for n
                 in nodes_to_ask
                 if not self.neighbours_channels.already_waiting_for(n)
@@ -520,16 +524,19 @@ class DiscoveryService(Service):
                 closest.extend(candidates)
             # Need to sort again and pick just the closest k nodes to ensure we converge.
             closest = sort_by_distance(
-                eth_utils.toolz.unique(closest), node_id)[:constants.KADEMLIA_BUCKET_SIZE]
+                eth_utils.toolz.unique(closest), target_id)[:constants.KADEMLIA_BUCKET_SIZE]
             nodes_to_ask = _exclude_if_asked(closest)
 
-        self.logger.debug(
-            "lookup finished for target %s; closest neighbours: %s", to_hex(node_id), closest
+        self.logger.info(
+            "lookup finished for target %s; closest neighbours: %s", to_hex(target_id), closest
         )
         return tuple(closest)
 
     async def lookup_random(self) -> Tuple[NodeAPI, ...]:
-        return await self.lookup(random.randint(0, constants.KADEMLIA_MAX_NODE_ID))
+        target_key = int_to_big_endian(
+            secrets.randbits(constants.KADEMLIA_PUBLIC_KEY_SIZE)
+        ).rjust(constants.KADEMLIA_PUBLIC_KEY_SIZE // 8, b'\x00')
+        return await self.lookup(target_key)
 
     def get_random_bootnode(self) -> Iterator[NodeAPI]:
         if self.bootstrap_nodes:
@@ -665,7 +672,7 @@ class DiscoveryService(Service):
         # we may have bonded and then won't have to do so again.
         for node in _extract_nodes_from_payload(remote.address, nodes, self.logger):
             try:
-                existing_node = self.routing.get_node(node_id_from_pubkey(node.pubkey))
+                existing_node = self.routing.get_node(node.id)
                 if existing_node.address == node.address:
                     node = existing_node
             except KeyError:
@@ -708,7 +715,7 @@ class DiscoveryService(Service):
         if len(payload) < 2:
             self.logger.warning('Ignoring FIND_NODE msg with invalid payload: %s', payload)
             return
-        node_id, expiration = payload[:2]
+        target, expiration = payload[:2]
         self.logger.debug2('<<< find_node from %s', node)
         if self._is_msg_expired(expiration):
             return
@@ -716,8 +723,9 @@ class DiscoveryService(Service):
             self.logger.debug(
                 "Ignoring find_node request from node (%s) we haven't bonded with", node)
             return
+        target_id = NodeID(keccak(target))
         self.update_routing_table(node)
-        found = self.routing.neighbours(big_endian_to_int(node_id))
+        found = self.routing.neighbours(target_id)
         self.send_neighbours_v4(node, found)
 
     async def recv_enr_request(
@@ -786,12 +794,12 @@ class DiscoveryService(Service):
         self.parity_pong_tokens[parity_token] = token
         return token
 
-    def send_find_node_v4(self, node: NodeAPI, target_node_id: int) -> None:
+    def send_find_node_v4(self, node: NodeAPI, target_key: bytes) -> None:
+        if len(target_key) != constants.KADEMLIA_PUBLIC_KEY_SIZE // 8:
+            raise ValueError(f"Invalid FIND_NODE target ({target_key!r}). Length is not 64")
         expiration = _get_msg_expiration()
-        node_id = int_to_big_endian(
-            target_node_id).rjust(constants.KADEMLIA_PUBLIC_KEY_SIZE // 8, b'\0')
         self.logger.debug2('>>> find_node to %s', node)
-        self.send(node, CMD_FIND_NODE, (node_id, expiration))
+        self.send(node, CMD_FIND_NODE, (target_key, expiration))
 
     async def send_pong_v4(self, node: NodeAPI, token: Hash32) -> None:
         expiration = _get_msg_expiration()
@@ -1175,5 +1183,5 @@ async def generate_eth_cap_enr_field(
     return (b'eth', (forkid,))
 
 
-def node_id_from_pubkey(pubkey: keys.PublicKey) -> int:
-    return big_endian_to_int(keccak(pubkey.to_bytes()))
+def node_id_from_pubkey(pubkey: keys.PublicKey) -> NodeID:
+    return keccak(pubkey.to_bytes())

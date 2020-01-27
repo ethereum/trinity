@@ -44,6 +44,7 @@ from p2p.discv5.constants import (
     UDP_PORT_ENR_KEY,
 )
 from p2p.discv5.identity_schemes import V4CompatIdentityScheme
+from p2p.discv5.typing import NodeID
 from p2p.validation import validate_enode_uri
 
 
@@ -123,8 +124,8 @@ class Node(NodeAPI):
             udp_port=enr[UDP_PORT_ENR_KEY],
             tcp_port=enr[TCP_PORT_ENR_KEY])
         self.pubkey = keys.PublicKey.from_compressed_bytes(enr.public_key)
-        self.id_bytes = keccak(self.pubkey.to_bytes())
-        self.id = big_endian_to_int(self.id_bytes)
+        self.id = NodeID(keccak(self.pubkey.to_bytes()))
+        self._id_int = big_endian_to_int(self.id)
         self.last_pong = None
         self._enr = enr
 
@@ -189,12 +190,12 @@ class Node(NodeAPI):
         return f"<Node({self.pubkey.to_hex()}@{self.address.ip}:{self.address.tcp_port})>"
 
     def distance_to(self, id: int) -> int:
-        return self.id ^ id
+        return self._id_int ^ id
 
     def __lt__(self, other: Any) -> bool:
         if not isinstance(other, self.__class__):
             return super().__lt__(other)
-        return self.id < other.id
+        return self._id_int < other._id_int
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, self.__class__):
@@ -245,10 +246,10 @@ class KBucket(Sized):
         lower = KBucket(self.start, splitid)
         upper = KBucket(splitid + 1, self.end)
         for node in self.nodes:
-            bucket = lower if node.id <= splitid else upper
+            bucket = lower if node._id_int <= splitid else upper
             bucket.add(node)
         for node in self.replacement_cache:
-            bucket = lower if node.id <= splitid else upper
+            bucket = lower if node._id_int <= splitid else upper
             bucket.replacement_cache.append(node)
         return lower, upper
 
@@ -314,9 +315,9 @@ class KBucket(Sized):
 class RoutingTable:
     logger = logging.getLogger("p2p.kademlia.RoutingTable")
 
-    def __init__(self, node_id: int) -> None:
+    def __init__(self, node_id: NodeID) -> None:
         self._initialized_at = time.monotonic()
-        self.this_node_id = node_id
+        self.this_node_id_int = big_endian_to_int(node_id)
         self.buckets = [KBucket(0, constants.KADEMLIA_MAX_NODE_ID)]
 
     def get_random_nodes(self, count: int) -> Iterator[NodeAPI]:
@@ -358,19 +359,19 @@ class RoutingTable:
         return [b for b in self.buckets if not b.is_full]
 
     def remove_node(self, node: NodeAPI) -> None:
-        binary_get_bucket_for_node(self.buckets, node.id).remove_node(node)
+        binary_get_bucket_for_node(self.buckets, node._id_int).remove_node(node)
 
     def add_node(self, node: NodeAPI) -> NodeAPI:
-        if node.id == self.this_node_id:
+        if node._id_int == self.this_node_id_int:
             raise ValueError("Cannot add this_node to routing table")
-        bucket = binary_get_bucket_for_node(self.buckets, node.id)
+        bucket = binary_get_bucket_for_node(self.buckets, node._id_int)
         eviction_candidate = bucket.add(node)
         if eviction_candidate is not None:  # bucket is full
             # Split if the bucket has the local node in its range or if the depth is not congruent
             # to 0 mod KADEMLIA_BITS_PER_HOP
             depth = _compute_shared_prefix_bits(bucket.nodes)
             should_split = any((
-                bucket.in_range(self.this_node_id),
+                bucket.in_range(self.this_node_id_int),
                 (depth % constants.KADEMLIA_BITS_PER_HOP != 0 and depth != constants.KADEMLIA_ID_SIZE),  # noqa: E501
             ))
             if should_split:
@@ -380,8 +381,9 @@ class RoutingTable:
             return eviction_candidate
         return None  # successfully added to not full bucket
 
-    def get_node(self, node_id: int) -> NodeAPI:
-        bucket = binary_get_bucket_for_node(self.buckets, node_id)
+    def get_node(self, node_id: NodeID) -> NodeAPI:
+        id_int = big_endian_to_int(node_id)
+        bucket = binary_get_bucket_for_node(self.buckets, id_int)
         for node in itertools.chain(bucket.nodes, bucket.replacement_cache):
             if node.id == node_id:
                 return node
@@ -394,7 +396,7 @@ class RoutingTable:
         return sorted(self.buckets, key=operator.methodcaller('distance_to', id))
 
     def __contains__(self, node: NodeAPI) -> bool:
-        return node in self.get_bucket_for_node(node.id)
+        return node in self.get_bucket_for_node(node._id_int)
 
     def __len__(self) -> int:
         return sum(len(b) for b in self.buckets)
@@ -404,13 +406,14 @@ class RoutingTable:
             for n in b.nodes:
                 yield n
 
-    def neighbours(self, node_id: int, k: int = constants.KADEMLIA_BUCKET_SIZE) -> List[NodeAPI]:
+    def neighbours(self, node_id: NodeID, k: int = constants.KADEMLIA_BUCKET_SIZE) -> List[NodeAPI]:
         """Return up to k neighbours of the given node."""
+        id_int = big_endian_to_int(node_id)
         nodes = []
         # Sorting by bucket.midpoint does not work in edge cases, so build a short list of k * 2
         # nodes and sort it by distance_to.
-        for bucket in self.buckets_by_distance_to(node_id):
-            for n in bucket.nodes_by_distance_to(node_id):
+        for bucket in self.buckets_by_distance_to(id_int):
+            for n in bucket.nodes_by_distance_to(id_int):
                 if n.id is not node_id:
                     nodes.append(n)
                     if len(nodes) == k * 2:
@@ -457,7 +460,7 @@ def _compute_shared_prefix_bits(nodes: List[NodeAPI]) -> int:
     if len(nodes) < 2:
         return constants.KADEMLIA_ID_SIZE
 
-    bits = [to_binary(n.id) for n in nodes]
+    bits = [to_binary(n._id_int) for n in nodes]
     for i in range(1, constants.KADEMLIA_ID_SIZE + 1):
         if len(set(b[:i] for b in bits)) != 1:
             return i - 1
@@ -466,5 +469,6 @@ def _compute_shared_prefix_bits(nodes: List[NodeAPI]) -> int:
     raise AssertionError("Unable to calculate number of shared prefix bits")
 
 
-def sort_by_distance(nodes: Iterable[NodeAPI], target_id: int) -> List[NodeAPI]:
-    return sorted(nodes, key=operator.methodcaller('distance_to', target_id))
+def sort_by_distance(nodes: Iterable[NodeAPI], target_id: NodeID) -> List[NodeAPI]:
+    target_id_int = big_endian_to_int(target_id)
+    return sorted(nodes, key=operator.methodcaller('distance_to', target_id_int))
