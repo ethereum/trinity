@@ -1,7 +1,11 @@
 import datetime
+import functools
 
 import pytest
 
+from eth_utils import to_hex
+
+from p2p.peer_pool import skip_candidate_if_on_list
 from p2p.tools.factories import NodeFactory
 
 from trinity.components.builtin.network_db.connection.tracker import (
@@ -32,27 +36,28 @@ SIMPLE_META = TRACK_ARGS[2:]
 @pytest.mark.parametrize('is_outbound', (True, False))
 def test_track_peer_connection_persists(remote, is_outbound):
     tracker = MemoryEth1PeerTracker()
-    assert not tracker._remote_exists(remote.uri())
+    assert not tracker._remote_exists(remote.id)
     tracker.track_peer_connection(remote, is_outbound, *TRACK_ARGS[1:])
-    assert tracker._remote_exists(remote.uri())
+    assert tracker._remote_exists(remote.id)
 
-    node = tracker._get_remote(remote.uri())
-    assert node.uri == remote.uri()
-    assert node.is_outbound is is_outbound
+    record = tracker._get_remote(remote.id)
+    assert record.node_id == to_hex(remote.id)
+    assert record.enr == repr(remote.enr)
+    assert record.is_outbound is is_outbound
 
 
 @pytest.mark.parametrize('is_outbound', (True, False))
 def test_track_peer_connection_does_not_clobber_existing_record(remote, is_outbound):
     tracker = MemoryEth1PeerTracker()
-    assert not tracker._remote_exists(remote.uri())
+    assert not tracker._remote_exists(remote.id)
     tracker.track_peer_connection(remote, is_outbound, *TRACK_ARGS[1:])
 
-    original = tracker._get_remote(remote.uri())
+    original = tracker._get_remote(remote.id)
     assert original.is_outbound is is_outbound
 
     tracker.track_peer_connection(remote, not is_outbound, *TRACK_ARGS[1:])
 
-    updated = tracker._get_remote(remote.uri())
+    updated = tracker._get_remote(remote.id)
     assert updated.is_outbound is is_outbound
 
 
@@ -60,7 +65,7 @@ def test_track_peer_connection_metadata(remote, caplog):
     tracker = MemoryEth1PeerTracker()
     tracker.track_peer_connection(remote, *TRACK_ARGS)
 
-    node = tracker._get_remote(remote.uri())
+    node = tracker._get_remote(remote.id)
     assert node.genesis_hash == ZERO_HASH_HEX
     assert node.protocol == 'eth'
     assert node.protocol_version == 61
@@ -71,7 +76,7 @@ def test_track_peer_connection_metadata_updates(remote, caplog):
     tracker = MemoryEth1PeerTracker()
     tracker.track_peer_connection(remote, *TRACK_ARGS)
 
-    node = tracker._get_remote(remote.uri())
+    node = tracker._get_remote(remote.id)
     assert node.genesis_hash == ZERO_HASH_HEX
     assert node.protocol == 'eth'
     assert node.protocol_version == 61
@@ -79,7 +84,7 @@ def test_track_peer_connection_metadata_updates(remote, caplog):
 
     tracker.track_peer_connection(remote, True, None, ZERO_ONE_HASH, 'les', 60, 2)
 
-    updated_node = tracker._get_remote(remote.uri())
+    updated_node = tracker._get_remote(remote.id)
     assert updated_node.genesis_hash == ZERO_ONE_HASH_HEX
     assert updated_node.protocol == 'les'
     assert updated_node.protocol_version == 60
@@ -91,7 +96,7 @@ def test_track_peer_connection_tracks_last_connected(remote, caplog):
     now = datetime.datetime.utcnow()
     tracker.track_peer_connection(remote, True, now, *SIMPLE_META)
 
-    node = tracker._get_remote(remote.uri())
+    node = tracker._get_remote(remote.id)
     assert node.last_connected_at == now
 
 
@@ -100,11 +105,11 @@ def test_track_peer_connection_maintains_last_connected(remote, caplog):
     now = datetime.datetime.utcnow()
     tracker.track_peer_connection(remote, True, now, *SIMPLE_META)
 
-    node = tracker._get_remote(remote.uri())
+    node = tracker._get_remote(remote.id)
     assert node.last_connected_at == now
 
     tracker.track_peer_connection(remote, True, None, *SIMPLE_META)
-    updated_node = tracker._get_remote(remote.uri())
+    updated_node = tracker._get_remote(remote.id)
     assert updated_node.last_connected_at == now
 
 
@@ -113,12 +118,12 @@ def test_track_peer_connection_updates_last_connected(remote, caplog):
     now = datetime.datetime.utcnow()
     tracker.track_peer_connection(remote, True, now, *SIMPLE_META)
 
-    node = tracker._get_remote(remote.uri())
+    node = tracker._get_remote(remote.id)
     assert node.last_connected_at == now
 
     later = now + datetime.timedelta(seconds=300)
     tracker.track_peer_connection(remote, True, later, *SIMPLE_META)
-    updated_node = tracker._get_remote(remote.uri())
+    updated_node = tracker._get_remote(remote.id)
     assert updated_node.last_connected_at == later
 
 
@@ -142,11 +147,9 @@ async def do_tracker_peer_query_test(tracker_params,
         expires_at = datetime.datetime.utcnow() + datetime.timedelta(seconds=delta_seconds)
         blacklist_tracker._create_record(remote, expires_at, 'test')
 
+    should_skip = functools.partial(skip_candidate_if_on_list, connected_remotes or set())
     candidates = tuple(
-        await tracker.get_peer_candidates(
-            num_requested=10,
-            connected_remotes=connected_remotes or set(),
-        )
+        await tracker.get_peer_candidates(max_candidates=10, should_skip_fn=should_skip)
     )
     just_good_remotes = tuple(r[0] for r in good_remotes)
     just_bad_remotes = tuple(r[0] for r in bad_remotes)
@@ -351,5 +354,5 @@ async def test_getting_peer_candidates_excludes_already_connected():
         bad_remotes=(
             (remote_a, True, SIMPLE_META),
         ),
-        connected_remotes=(remote_a,),
+        connected_remotes=(remote_a.id,),
     )

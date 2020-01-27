@@ -29,7 +29,7 @@ async def test_records_failures():
     connection_tracker.record_failure(node, HandshakeFailure())
 
     assert await connection_tracker.should_connect_to(node) is False
-    assert connection_tracker._record_exists(node.uri())
+    assert connection_tracker._record_exists(node.id)
 
 
 @pytest.mark.asyncio
@@ -76,9 +76,22 @@ async def test_timeout_works():
     connection_tracker.record_failure(node, HandshakeFailure())
     assert await connection_tracker.should_connect_to(node) is False
 
-    record = connection_tracker._get_record(node.uri())
+    record = connection_tracker._get_record(node.id)
     record.expires_at -= datetime.timedelta(seconds=120)
     connection_tracker.session.add(record)
     connection_tracker.session.commit()
 
     assert await connection_tracker.should_connect_to(node) is True
+
+
+@pytest.mark.asyncio
+async def test_get_blacklisted():
+    node1, node2 = NodeFactory(), NodeFactory()
+    connection_tracker = MemoryConnectionTracker()
+
+    connection_tracker.record_blacklist(node1, timeout_seconds=10, reason='')
+    connection_tracker.record_blacklist(node2, timeout_seconds=0, reason='')
+
+    blacklisted_ids = await connection_tracker.get_blacklisted()
+
+    assert blacklisted_ids == tuple([node1.id])

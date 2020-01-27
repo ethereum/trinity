@@ -7,6 +7,8 @@ from p2p.tracking.connection import BaseConnectionTracker
 
 from .events import (
     BlacklistEvent,
+    GetBlacklistedPeersRequest,
+    GetBlacklistedPeersResponse,
     ShouldConnectToPeerRequest,
     ShouldConnectToPeerResponse,
 )
@@ -34,6 +36,15 @@ class ConnectionTrackerServer(Service):
                 req.broadcast_config()
             )
 
+    async def handle_get_blacklisted_requests(self) -> None:
+        async for req in self.event_bus.stream(GetBlacklistedPeersRequest):
+            self.logger.debug2('Received get_blacklisted request')
+            blacklisted = await self.tracker.get_blacklisted()
+            await self.event_bus.broadcast(
+                GetBlacklistedPeersResponse(blacklisted),
+                req.broadcast_config()
+            )
+
     async def handle_blacklist_command(self) -> None:
         async for command in self.event_bus.stream(BlacklistEvent):
             self.logger.debug2(
@@ -58,6 +69,10 @@ class ConnectionTrackerServer(Service):
         self.manager.run_daemon_task(
             self.handle_blacklist_command,
             name='ConnectionTrackerServer.handle_blacklist_command',
+        )
+        self.manager.run_daemon_task(
+            self.handle_get_blacklisted_requests,
+            name='ConnectionTrackerServer.handle_get_blacklisted_requests,',
         )
 
         await self.manager.wait_finished()

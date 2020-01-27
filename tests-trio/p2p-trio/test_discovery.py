@@ -228,6 +228,48 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
 
 @pytest.mark.trio
+async def test_get_peer_candidates(manually_driven_discovery, monkeypatch):
+    total_nodes = 10
+    nodes = NodeFactory.create_batch(total_nodes)
+    discovery = manually_driven_discovery
+    for node in nodes:
+        discovery.routing.add_node(node)
+
+    discovery._random_lookup_calls = 0
+
+    async def mock_lookup_random():
+        discovery._random_lookup_calls += 1
+
+    monkeypatch.setattr(discovery, 'lookup_random', mock_lookup_random)
+
+    def should_skip(skip_list, candidate):
+        return candidate in skip_list
+
+    candidates = discovery.get_peer_candidates(functools.partial(should_skip, tuple()), total_nodes)
+    assert sorted(candidates) == sorted(nodes)
+
+    candidates = discovery.get_peer_candidates(
+        functools.partial(should_skip, tuple()), total_nodes + 10)
+    assert sorted(candidates) == sorted(nodes)
+    # When we don't have enough candidates, a random lookup should be triggered.
+    with trio.fail_after(0.5):
+        while discovery._random_lookup_calls != 1:
+            await trio.sleep(0.01)
+
+    candidates = discovery.get_peer_candidates(
+        functools.partial(should_skip, tuple()), total_nodes - 1)
+    assert len(candidates) == total_nodes - 1
+
+    skip_list = (nodes[0], nodes[5], nodes[8])
+    candidates = discovery.get_peer_candidates(
+        functools.partial(should_skip, skip_list), total_nodes)
+    assert sorted(candidates) == sorted(set(nodes).difference(skip_list))
+    with trio.fail_after(0.5):
+        while discovery._random_lookup_calls != 2:
+            await trio.sleep(0.01)
+
+
+@pytest.mark.trio
 async def test_protocol_bootstrap():
     node1, node2 = NodeFactory.create_batch(2)
     discovery = MockDiscoveryService([node1, node2])

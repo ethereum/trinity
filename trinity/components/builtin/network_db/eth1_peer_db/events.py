@@ -2,11 +2,10 @@ from dataclasses import (
     dataclass,
 )
 import datetime
-from typing import Optional, Set, Type, Tuple
+from typing import Optional
 
 from lahja import (
     BaseEvent,
-    BaseRequestResponseEvent,
 )
 
 from eth_typing import Hash32
@@ -28,20 +27,3 @@ class TrackPeerEvent(BasePeerDBEvent):
     protocol: str
     protocol_version: int
     network_id: int
-
-
-@dataclass
-class GetPeerCandidatesResponse(BasePeerDBEvent):
-
-    candidates: Tuple[NodeAPI, ...]
-
-
-@dataclass
-class GetPeerCandidatesRequest(BaseRequestResponseEvent[GetPeerCandidatesResponse]):
-
-    num_requested: int
-    connected_remotes: Set[NodeAPI]
-
-    @staticmethod
-    def expected_response_type() -> Type[GetPeerCandidatesResponse]:
-        return GetPeerCandidatesResponse

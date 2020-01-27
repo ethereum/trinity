@@ -2,10 +2,12 @@ from abc import ABC, abstractmethod
 import logging
 from typing import (
     Dict,
+    Tuple,
     Type,
 )
 
 from p2p.abc import NodeAPI
+from p2p.discv5.typing import NodeID
 from p2p.exceptions import (
     BaseP2PError,
     HandshakeFailure,
@@ -55,6 +57,10 @@ class BaseConnectionTracker(ABC):
     async def should_connect_to(self, remote: NodeAPI) -> bool:
         ...
 
+    @abstractmethod
+    async def get_blacklisted(self) -> Tuple[NodeID, ...]:
+        ...
+
 
 class NoopConnectionTracker(BaseConnectionTracker):
     def record_blacklist(self, remote: NodeAPI, timeout_seconds: int, reason: str) -> None:
@@ -62,3 +68,6 @@ class NoopConnectionTracker(BaseConnectionTracker):
 
     async def should_connect_to(self, remote: NodeAPI) -> bool:
         return True
+
+    async def get_blacklisted(self) -> Tuple[NodeID, ...]:
+        return tuple()

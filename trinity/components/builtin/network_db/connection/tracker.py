@@ -1,6 +1,7 @@
 import datetime
 import math
 from pathlib import Path
+from typing import Tuple
 
 from sqlalchemy import (
     Column,
@@ -20,30 +21,32 @@ from lahja import (
     EndpointAPI,
 )
 
-from eth_utils import humanize_seconds
+from eth_utils import humanize_seconds, to_bytes, to_hex
 
 from p2p.abc import NodeAPI
+from p2p.discv5.typing import NodeID
 from p2p.tracking.connection import BaseConnectionTracker
 
 from trinity.constants import (
     NETWORKDB_EVENTBUS_ENDPOINT,
 )
-
 from trinity.db.orm import (
     Base,
     get_tracking_database,
 )
 from .events import (
     BlacklistEvent,
+    GetBlacklistedPeersRequest,
     ShouldConnectToPeerRequest,
 )
 
 
 class BlacklistRecord(Base):
-    __tablename__ = 'blacklist_records'
+    __tablename__ = 'blacklist_recordsv'
 
     id = Column(Integer, primary_key=True)
-    uri = Column(String, unique=True, nullable=False, index=True)
+    # The hex-encoded NodeID, with the 0x prefix
+    node_id = Column(String, unique=True, nullable=False, index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     reason = Column(String, nullable=False)
     error_count = Column(Integer, default=1, nullable=False)
@@ -67,7 +70,7 @@ class SQLiteConnectionTracker(BaseConnectionTracker):
     #
     def record_blacklist(self, remote: NodeAPI, timeout_seconds: int, reason: str) -> None:
         try:
-            record = self._get_record(remote.uri())
+            record = self._get_record(remote.id)
         except NoResultFound:
             expires_at = datetime.datetime.utcnow() + datetime.timedelta(seconds=timeout_seconds)
             self._create_record(remote, expires_at, reason)
@@ -80,7 +83,7 @@ class SQLiteConnectionTracker(BaseConnectionTracker):
 
     async def should_connect_to(self, remote: NodeAPI) -> bool:
         try:
-            record = self._get_record(remote.uri())
+            record = self._get_record(remote.id)
         except NoResultFound:
             return True
 
@@ -97,25 +100,32 @@ class SQLiteConnectionTracker(BaseConnectionTracker):
 
         return True
 
+    async def get_blacklisted(self) -> Tuple[NodeID, ...]:
+        now = datetime.datetime.utcnow()
+        # mypy doesn't know about the type of the `query()` function
+        records = self.session.query(BlacklistRecord).filter(  # type: ignore
+            BlacklistRecord.expires_at > now
+        )
+        return tuple(NodeID(to_bytes(hexstr=record.node_id)) for record in records)
+
     #
     # Helpers
     #
-    def _get_record(self, uri: str) -> BlacklistRecord:
-        # mypy doesn't know about the type of the `commit()` function
-        return self.session.query(BlacklistRecord).filter_by(uri=uri).one()  # type: ignore
+    def _get_record(self, node_id: NodeID) -> BlacklistRecord:
+        # mypy doesn't know about the type of the `query()` function
+        return self.session.query(BlacklistRecord).filter_by(  # type: ignore
+            node_id=to_hex(node_id)).one()
 
-    def _record_exists(self, uri: str) -> bool:
+    def _record_exists(self, node_id: NodeID) -> bool:
         try:
-            self._get_record(uri)
+            self._get_record(node_id)
         except NoResultFound:
             return False
         else:
             return True
 
     def _create_record(self, remote: NodeAPI, expires_at: datetime.datetime, reason: str) -> None:
-        uri = remote.uri()
-
-        record = BlacklistRecord(uri=uri, expires_at=expires_at, reason=reason)
+        record = BlacklistRecord(node_id=to_hex(remote.id), expires_at=expires_at, reason=reason)
         self.session.add(record)
         # mypy doesn't know about the type of the `commit()` function
         self.session.commit()  # type: ignore
@@ -129,8 +139,7 @@ class SQLiteConnectionTracker(BaseConnectionTracker):
         )
 
     def _update_record(self, remote: NodeAPI, expires_at: datetime.datetime, reason: str) -> None:
-        uri = remote.uri()
-        record = self._get_record(uri)
+        record = self._get_record(remote.id)
 
         if expires_at > record.expires_at:
             # only update expiration if it is further in the future than the existing expiration
@@ -173,9 +182,14 @@ class ConnectionTrackerClient(BaseConnectionTracker):
             self.config,
         )
 
+    # XXX: Should I get rid of this?
     async def should_connect_to(self, remote: NodeAPI) -> bool:
         response = await self.event_bus.request(
             ShouldConnectToPeerRequest(remote),
             self.config
         )
         return response.should_connect
+
+    async def get_blacklisted(self) -> Tuple[NodeID, ...]:
+        response = await self.event_bus.request(GetBlacklistedPeersRequest(), self.config)
+        return response.peers

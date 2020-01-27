@@ -1,10 +1,13 @@
 from abc import abstractmethod
 import asyncio
+import functools
 import operator
 from typing import (
     AsyncIterator,
     AsyncIterable,
+    Callable,
     cast,
+    Container,
     Dict,
     Iterator,
     List,
@@ -45,6 +48,7 @@ from p2p.constants import (
     PEER_CONNECT_INTERVAL,
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
+from p2p.discv5.typing import NodeID
 from p2p.exceptions import (
     BaseP2PError,
     IneligiblePeer,
@@ -164,23 +168,42 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             self.logger.warning("No event bus configured for peer pool.")
             return ()
 
-    async def _add_peers_from_backend(self, backend: BasePeerBackend) -> None:
-        available_slots = self.max_peers - len(self)
+    @property
+    def available_slots(self) -> int:
+        return self.max_peers - len(self)
+
+    async def _add_peers_from_backend(
+            self,
+            backend: BasePeerBackend,
+            should_skip_fn_node: Callable[[Tuple[NodeID, ...], NodeAPI], bool]
+    ) -> int:
+
+        connected_node_ids = {peer.remote.id for peer in self.connected_nodes.values()}
+        # Only ask for random bootnodes if we're not connected to any peers.
+        if isinstance(backend, BootnodesPeerBackend) and len(connected_node_ids) > 0:
+            return 0
 
         try:
-            connected_remotes = {
-                peer.remote for peer in self.connected_nodes.values()
-            }
+            blacklisted_node_ids = await self.wait(
+                self.connection_tracker.get_blacklisted(),
+                timeout=1)
+        except asyncio.TimeoutError:
+            self.logger.warning("ConnectionTracker.get_blacklisted() request timed out.")
+            return 0
+
+        skip_list = connected_node_ids.union(blacklisted_node_ids)
+        should_skip_fn = functools.partial(should_skip_fn_node, skip_list)
+        try:
             candidates = await self.wait(
                 backend.get_peer_candidates(
-                    num_requested=available_slots,
-                    connected_remotes=connected_remotes,
+                    max_candidates=self.available_slots,
+                    should_skip_fn=should_skip_fn,
                 ),
                 timeout=REQUEST_PEER_CANDIDATE_TIMEOUT,
             )
         except asyncio.TimeoutError:
             self.logger.warning("PeerCandidateRequest timed out to backend %s", backend)
-            return
+            return 0
         else:
             self.logger.debug2(
                 "Got candidates from backend %s (%s)",
@@ -189,6 +212,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             )
             if candidates:
                 await self.connect_to_nodes(iter(candidates))
+            return len(candidates)
 
     async def maybe_connect_more_peers(self) -> None:
         rate_limiter = TokenBucket(
@@ -205,7 +229,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
             try:
                 await asyncio.gather(*(
-                    self._add_peers_from_backend(backend)
+                    self._add_peers_from_backend(backend, skip_candidate_if_on_list)
                     for backend in self.peer_backends
                 ))
             except OperationCancelled:
@@ -336,20 +360,9 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             self.logger.warning("Tried to connect to %s without acquiring lock first!", remote)
 
         if any(peer.remote == remote for peer in self.connected_nodes.values()):
-            self.logger.debug2("Skipping %s; already connected to it", remote)
+            self.logger.warning(
+                "Attempted to connect to peer we are already connected to: %s", remote)
             raise IneligiblePeer(f"Already connected to {remote}")
-
-        try:
-            should_connect = await self.wait(
-                self.connection_tracker.should_connect_to(remote),
-                timeout=1,
-            )
-        except asyncio.TimeoutError:
-            self.logger.warning("ConnectionTracker.should_connect_to request timed out.")
-            raise
-
-        if not should_connect:
-            raise IneligiblePeer(f"Peer database rejected peer candidate: {remote}")
 
         try:
             self.logger.debug2("Connecting to %s...", remote)
@@ -394,8 +407,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
             # only attempt to connect to up to the maximum number of available
             # peer slots that are open.
-            available_peer_slots = self.max_peers - len(self)
-            batch_size = clamp(1, 10, available_peer_slots)
+            batch_size = clamp(1, 10, self.available_slots)
             batch = tuple(take(batch_size, nodes_iter))
 
             # There are no more *known* nodes to connect to.
@@ -405,7 +417,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             self.logger.debug(
                 'Initiating %d peer connection attempts with %d open peer slots',
                 len(batch),
-                available_peer_slots,
+                self.available_slots,
             )
             # Try to connect to the peers concurrently.
             await asyncio.gather(
@@ -539,3 +551,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                     self.logger.debug("    %s", line)
             self.logger.debug("== End peer details == ")
             await self.sleep(self._report_interval)
+
+
+def skip_candidate_if_on_list(skip_list: Container[NodeID], candidate: NodeAPI) -> bool:
+    return candidate.id in skip_list

@@ -4,13 +4,13 @@ from lahja import EndpointAPI
 
 from async_service import Service
 
+from p2p.events import PeerCandidatesRequest, PeerCandidatesResponse
+
 from .tracker import (
     BaseEth1PeerTracker,
 )
 from .events import (
     TrackPeerEvent,
-    GetPeerCandidatesRequest,
-    GetPeerCandidatesResponse,
 )
 
 
@@ -39,13 +39,13 @@ class PeerDBServer(Service):
             )
 
     async def handle_get_peer_candidates_request(self) -> None:
-        async for req in self.event_bus.stream(GetPeerCandidatesRequest):
+        async for req in self.event_bus.stream(PeerCandidatesRequest):
             candidates = tuple(await self.tracker.get_peer_candidates(
-                req.num_requested,
-                req.connected_remotes,
+                req.max_candidates,
+                req.should_skip_fn,
             ))
             await self.event_bus.broadcast(
-                GetPeerCandidatesResponse(candidates),
+                PeerCandidatesResponse(candidates),
                 req.broadcast_config(),
             )
 

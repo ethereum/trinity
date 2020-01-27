@@ -3,11 +3,11 @@ import datetime
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     cast,
     FrozenSet,
     Iterable,
     Optional,
-    Set,
     Type,
     Tuple,
 )
@@ -35,10 +35,13 @@ from eth_typing import Hash32
 from eth_utils import (
     humanize_seconds,
     get_extended_debug_logger,
+    to_hex,
     to_tuple,
 )
 
 from p2p.abc import CommandAPI, NodeAPI
+from p2p.discv5.typing import NodeID
+from p2p.events import PeerCandidatesRequest
 from p2p.kademlia import Node
 from p2p.peer_backend import BasePeerBackend
 from p2p.peer import (
@@ -59,7 +62,6 @@ from trinity.components.builtin.network_db.connection.tracker import (
 
 from .events import (
     TrackPeerEvent,
-    GetPeerCandidatesRequest,
 )
 
 
@@ -68,7 +70,9 @@ class Remote(Base):
 
     id = Column(Integer, primary_key=True)
 
-    uri = Column(String, unique=True, nullable=False, index=True)
+    # The hex-encoded NodeID, with the 0x prefix
+    node_id = Column(String, unique=True, nullable=False, index=True)
+    enr = Column(String, unique=True, nullable=False, index=False)
     is_outbound = Column(Boolean, nullable=False, index=True)
 
     created_at = Column(DateTime(timezone=True), nullable=False)
@@ -83,7 +87,7 @@ class Remote(Base):
 
     blacklist = relationship(
         "BlacklistRecord",
-        primaryjoin="Remote.uri==foreign(BlacklistRecord.uri)",
+        primaryjoin="Remote.node_id==foreign(BlacklistRecord.node_id)",
         uselist=False,
     )
 
@@ -173,8 +177,8 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
 
     @abstractmethod
     async def get_peer_candidates(self,
-                                  num_requested: int,
-                                  connected_remotes: Set[NodeAPI]) -> Tuple[NodeAPI, ...]:
+                                  max_candidates: int,
+                                  should_skip_fn: Callable[[NodeAPI], bool]) -> Tuple[NodeAPI, ...]:
         ...
 
 
@@ -190,8 +194,8 @@ class NoopEth1PeerTracker(BaseEth1PeerTracker):
         pass
 
     async def get_peer_candidates(self,
-                                  num_requested: int,
-                                  connected_remotes: Set[NodeAPI]) -> Tuple[NodeAPI, ...]:
+                                  max_candidates: int,
+                                  should_skip_fn: Callable[[NodeAPI], bool]) -> Tuple[NodeAPI, ...]:
         return ()
 
 
@@ -222,12 +226,12 @@ class SQLiteEth1PeerTracker(BaseEth1PeerTracker):
                               protocol: str,
                               protocol_version: int,
                               network_id: int) -> None:
-        uri = remote.uri()
+        enr = repr(remote.enr)
         now = datetime.datetime.utcnow()
 
-        if self._remote_exists(uri):
+        if self._remote_exists(remote.id):
             self.logger.debug2("Updated ETH1 peer record: %s", remote)
-            record = self._get_remote(uri)
+            record = self._get_remote(remote.id)
 
             record.updated_at = now
 
@@ -241,7 +245,8 @@ class SQLiteEth1PeerTracker(BaseEth1PeerTracker):
         else:
             self.logger.debug2("New ETH1 peer record: %s", remote)
             record = Remote(
-                uri=uri,
+                node_id=to_hex(remote.id),
+                enr=enr,
                 is_outbound=is_outbound,
                 created_at=now,
                 updated_at=now,
@@ -278,29 +283,28 @@ class SQLiteEth1PeerTracker(BaseEth1PeerTracker):
             yield Remote.genesis_hash == self.genesis_hash
 
     def _get_peer_candidates(self,
-                             num_requested: int,
-                             connected_remotes: Set[NodeAPI]) -> Iterable[NodeAPI]:
+                             max_candidates: int,
+                             should_skip_fn: Callable[[NodeAPI], bool]) -> Iterable[NodeAPI]:
         """
-        Return up to `num_requested` candidates sourced from peers whe have
+        Return up to `max_candidates` candidates sourced from peers whe have
         historically connected to which match the following criteria:
 
         * Matches all of: network_id, protocol, genesis_hash, protocol_version
         * Either has no blacklist record or existing blacklist record is expired.
         * Not in the set of remotes we are already connected to.
         """
-        connected_uris = set(remote.uri() for remote in connected_remotes)
         now = datetime.datetime.utcnow()
         metadata_filters = self._get_candidate_filter_query()
 
         # Query the database for peers that match our criteria.
         candidates = self.session.query(Remote).outerjoin(  # type: ignore
-            # Join against the blacklist records with matching node URI
+            # Join against the blacklist records with matching node ID
             Remote.blacklist,
         ).filter(
+            # XXX: This is no longer necessary as the should_skip_fn() function now takes care of
+            # skipping blacklisted peers, but not sure we want to get rid of this?
             # Either they have no blacklist record or the record is expired.
             ((Remote.blacklist == None) | (BlacklistRecord.expires_at <= now)),  # noqa: E711
-            # We are not currently connected to them
-            ~Remote.uri.in_(connected_uris),  # type: ignore
             # They match our filters for network metadata
             *metadata_filters,
         ).order_by(
@@ -311,21 +315,23 @@ class SQLiteEth1PeerTracker(BaseEth1PeerTracker):
         # Return them as an iterator to allow the consuming process to
         # determine how many records it wants to fetch.
         for candidate in candidates:
-            yield Node.from_uri(candidate.uri)
+            node = Node.from_enr_repr(candidate.enr)
+            if not should_skip_fn(node):
+                yield node
 
     async def get_peer_candidates(self,
-                                  num_requested: int,
-                                  connected_remotes: Set[NodeAPI]) -> Tuple[NodeAPI, ...]:
+                                  max_candidates: int,
+                                  should_skip_fn: Callable[[NodeAPI], bool]) -> Tuple[NodeAPI, ...]:
         # For now we fully evaluate the response in order to print debug
         # statistics.  Once this API is no longer experimental, this should be
-        # adjusted to only consume a maximum of `num_requested` from the
+        # adjusted to only consume a maximum of `max_candidates` from the
         # returned iterable.
-        all_candidates = tuple(self._get_peer_candidates(num_requested, connected_remotes))
-        candidates = all_candidates[:num_requested]
+        all_candidates = tuple(self._get_peer_candidates(max_candidates, should_skip_fn))
+        candidates = all_candidates[:max_candidates]
         total_in_database = self.session.query(Remote).count()  # type: ignore
         self.logger.debug(
             "Eth1 Peer Candidate Request: req=%d  ret=%d  avail=%d  total=%d",
-            num_requested,
+            max_candidates,
             len(candidates),
             len(all_candidates),
             total_in_database,
@@ -335,12 +341,12 @@ class SQLiteEth1PeerTracker(BaseEth1PeerTracker):
     #
     # Helpers
     #
-    def _get_remote(self, uri: str) -> Remote:
-        return self.session.query(Remote).filter_by(uri=uri).one()  # type: ignore
+    def _get_remote(self, node_id: NodeID) -> Remote:
+        return self.session.query(Remote).filter_by(node_id=to_hex(node_id)).one()  # type: ignore
 
-    def _remote_exists(self, uri: str) -> bool:
+    def _remote_exists(self, node_id: NodeID) -> bool:
         try:
-            self._get_remote(uri)
+            self._get_remote(node_id)
         except NoResultFound:
             return False
         else:
@@ -389,10 +395,10 @@ class EventBusEth1PeerTracker(BaseEth1PeerTracker):
         )
 
     async def get_peer_candidates(self,
-                                  num_requested: int,
-                                  connected_remotes: Set[NodeAPI]) -> Tuple[NodeAPI, ...]:
+                                  max_candidates: int,
+                                  should_skip_fn: Callable[[NodeAPI], bool]) -> Tuple[NodeAPI, ...]:
         response = await self.event_bus.request(
-            GetPeerCandidatesRequest(num_requested, connected_remotes),
+            PeerCandidatesRequest(max_candidates, should_skip_fn),
             self.config,
         )
         return response.candidates
