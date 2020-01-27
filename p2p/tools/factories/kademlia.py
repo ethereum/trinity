@@ -2,6 +2,8 @@ from typing import Any
 
 import factory
 
+from eth_utils import int_to_big_endian
+
 from p2p.abc import AddressAPI, NodeAPI
 from p2p.kademlia import Node, Address
 
@@ -34,5 +36,6 @@ class NodeFactory(factory.Factory):
     @classmethod
     def with_nodeid(cls, nodeid: int, *args: Any, **kwargs: Any) -> NodeAPI:
         node = cls(*args, **kwargs)
-        node.id = nodeid
+        node._id_int = nodeid
+        node.id = int_to_big_endian(nodeid)
         return node

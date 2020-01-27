@@ -114,7 +114,7 @@ async def test_get_local_enr(manually_driven_discovery):
     validate_node_enr(discovery.this_node, enr, sequence_number=2)
 
     # The new ENR will also be stored in our DB.
-    assert enr == await discovery._enr_db.get(discovery.this_node.id_bytes)
+    assert enr == await discovery._enr_db.get(discovery.this_node.id)
 
     # And the next refresh time will be updated.
     assert discovery._local_enr_next_refresh > time.monotonic()
@@ -126,7 +126,7 @@ async def test_local_enr_on_startup(manually_driven_discovery):
 
     validate_node_enr(discovery.this_node, discovery.this_node.enr, sequence_number=1)
     # Our local ENR will also be stored in our DB.
-    assert discovery.this_node.enr == await discovery._enr_db.get(discovery.this_node.id_bytes)
+    assert discovery.this_node.enr == await discovery._enr_db.get(discovery.this_node.id)
 
 
 @pytest.mark.trio
@@ -204,7 +204,7 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
     alice.this_node.last_pong = time.monotonic()
     bob.update_routing_table(alice.this_node)
 
-    alice.send_find_node_v4(bob.this_node, alice.this_node.id)
+    alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
 
     with trio.fail_after(1):
         await bob.consume_datagram()
@@ -341,10 +341,10 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
         # it in our DB.
         while True:
             await trio.sleep(0.1)
-            if await alice._enr_db.contains(bob.this_node.id_bytes):
+            if await alice._enr_db.contains(bob.this_node.id):
                 break
 
-    enr = await alice._enr_db.get(bob.this_node.id_bytes)
+    enr = await alice._enr_db.get(bob.this_node.id)
     assert enr is not None
     assert enr == await bob.get_local_enr()
 
