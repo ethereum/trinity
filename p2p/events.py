@@ -2,6 +2,7 @@ from dataclasses import (
     dataclass,
 )
 from typing import (
+    Callable,
     Tuple,
     Type,
 )
@@ -24,10 +25,11 @@ class PeerCandidatesResponse(BaseDiscoveryServiceResponse):
     candidates: Tuple[NodeAPI, ...]
 
 
-@dataclass
 class PeerCandidatesRequest(BaseRequestResponseEvent[PeerCandidatesResponse]):
 
-    max_candidates: int
+    def __init__(self, max_candidates: int, should_skip_fn: Callable[[NodeAPI], bool]) -> None:
+        self.max_candidates = max_candidates
+        self.should_skip_fn = should_skip_fn
 
     @staticmethod
     def expected_response_type() -> Type[PeerCandidatesResponse]:

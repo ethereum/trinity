@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import (
-    Set,
+    Callable,
     Tuple,
 )
 
@@ -20,8 +20,8 @@ from p2p.events import (
 class BasePeerBackend(ABC):
     @abstractmethod
     async def get_peer_candidates(self,
-                                  num_requested: int,
-                                  connected_remotes: Set[NodeAPI]) -> Tuple[NodeAPI, ...]:
+                                  max_candidates: int,
+                                  should_skip_fn: Callable[[NodeAPI], bool]) -> Tuple[NodeAPI, ...]:
         ...
 
 
@@ -33,18 +33,14 @@ class DiscoveryPeerBackend(BasePeerBackend):
         self.event_bus = event_bus
 
     async def get_peer_candidates(self,
-                                  num_requested: int,
-                                  connected_remotes: Set[NodeAPI]) -> Tuple[NodeAPI, ...]:
+                                  max_candidates: int,
+                                  should_skip_fn: Callable[[NodeAPI], bool]) -> Tuple[NodeAPI, ...]:
         await self.event_bus.wait_until_any_endpoint_subscribed_to(PeerCandidatesRequest)
         response = await self.event_bus.request(
-            PeerCandidatesRequest(num_requested),
+            PeerCandidatesRequest(max_candidates, should_skip_fn),
             TO_DISCOVERY_BROADCAST_CONFIG,
         )
-        return tuple(
-            candidate
-            for candidate in response.candidates
-            if candidate not in connected_remotes
-        )
+        return response.candidates
 
 
 class BootnodesPeerBackend(BasePeerBackend):
@@ -52,19 +48,11 @@ class BootnodesPeerBackend(BasePeerBackend):
         self.event_bus = event_bus
 
     async def get_peer_candidates(self,
-                                  num_requested: int,
-                                  connected_remotes: Set[NodeAPI]) -> Tuple[NodeAPI, ...]:
-        if len(connected_remotes) == 0:
-            await self.event_bus.wait_until_any_endpoint_subscribed_to(RandomBootnodeRequest)
-            response = await self.event_bus.request(
-                RandomBootnodeRequest(),
-                TO_DISCOVERY_BROADCAST_CONFIG
-            )
-
-            return tuple(
-                candidate
-                for candidate in response.candidates
-                if candidate not in connected_remotes
-            )
-        else:
-            return ()
+                                  max_candidates: int,
+                                  should_skip_fn: Callable[[NodeAPI], bool]) -> Tuple[NodeAPI, ...]:
+        await self.event_bus.wait_until_any_endpoint_subscribed_to(RandomBootnodeRequest)
+        response = await self.event_bus.request(
+            RandomBootnodeRequest(),
+            TO_DISCOVERY_BROADCAST_CONFIG
+        )
+        return response.candidates

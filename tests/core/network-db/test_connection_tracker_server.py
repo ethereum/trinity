@@ -48,3 +48,9 @@ async def test_connection_tracker_server_and_client(event_loop, event_bus):
 
         assert await bus_tracker.should_connect_to(remote_b) is False
         assert await tracker.should_connect_to(remote_b) is False
+
+        bus_blacklisted_ids = await bus_tracker.get_blacklisted()
+        blacklisted_ids = await tracker.get_blacklisted()
+        assert bus_blacklisted_ids == blacklisted_ids
+
+        assert sorted(blacklisted_ids) == sorted([remote_a.id, remote_b.id])

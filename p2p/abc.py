@@ -136,6 +136,18 @@ class NodeAPI(ABC):
     def from_enr_repr(cls: Type[TNode], uri: str) -> TNode:
         ...
 
+    @property
+    @abstractmethod
+    def enr(self) -> ENR:
+        ...
+
+    @enr.setter
+    def enr(self, enr: ENR) -> None:
+        # See: https://github.com/python/mypy/issues/4165
+        # Since we can't also decorate this with abstract method we want to be
+        # sure that the setter doesn't actually get used as a noop.
+        raise NotImplementedError()
+
     @abstractmethod
     def uri(self) -> str:
         ...

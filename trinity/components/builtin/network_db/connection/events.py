@@ -1,7 +1,7 @@
 from dataclasses import (
     dataclass,
 )
-from typing import Type
+from typing import Tuple, Type
 
 from lahja import (
     BaseEvent,
@@ -9,6 +9,7 @@ from lahja import (
 )
 
 from p2p.abc import NodeAPI
+from p2p.discv5.typing import NodeID
 
 
 class BaseConnectionTrackerEvent(BaseEvent):
@@ -37,3 +38,17 @@ class ShouldConnectToPeerRequest(BaseRequestResponseEvent[ShouldConnectToPeerRes
     @staticmethod
     def expected_response_type() -> Type[ShouldConnectToPeerResponse]:
         return ShouldConnectToPeerResponse
+
+
+@dataclass
+class GetBlacklistedPeersResponse(BaseConnectionTrackerEvent):
+
+    peers: Tuple[NodeID, ...]
+
+
+@dataclass
+class GetBlacklistedPeersRequest(BaseRequestResponseEvent[GetBlacklistedPeersResponse]):
+
+    @staticmethod
+    def expected_response_type() -> Type[GetBlacklistedPeersResponse]:
+        return GetBlacklistedPeersResponse

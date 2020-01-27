@@ -168,6 +168,7 @@ class DiscoveryService(Service):
         self._enr_db_lock = trio.Lock()
         self._local_enr_next_refresh: float = time.monotonic()
         self._local_enr_lock = trio.Lock()
+        self._lookup_lock = trio.Lock()
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
         if socket.family != trio.socket.AF_INET:
             raise ValueError("Invalid socket family")
@@ -203,12 +204,34 @@ class DiscoveryService(Service):
         while self.manager.is_running:
             await self.consume_datagram()
 
+    def get_peer_candidates(
+        self, should_skip_fn: Callable[[NodeAPI], bool], max_candidates: int,
+    ) -> Tuple[NodeAPI, ...]:
+        total_nodes = len(self.routing)
+        candidates = []
+        for candidate in self.get_nodes_to_connect(total_nodes):
+            if should_skip_fn(candidate):
+                continue
+            candidates.append(candidate)
+            if len(candidates) == max_candidates:
+                break
+        else:
+            self.logger.info(
+                "Not enough nodes in routing table passed PeerCandidatesRequest's "
+                "filter, triggering a random lookup in the background.")
+            if self._lookup_lock.locked():
+                self.logger.info(
+                    "Not performing random lookup as there is one in progress already")
+            else:
+                self.manager.run_task(self.lookup_random)
+        return tuple(candidates)
+
     async def handle_get_peer_candidates_requests(self) -> None:
         async for event in self._event_bus.stream(PeerCandidatesRequest):
-            nodes = tuple(self.get_nodes_to_connect(event.max_candidates))
-            self.logger.debug2("Broadcasting peer candidates (%s)", nodes)
+            candidates = self.get_peer_candidates(event.should_skip_fn, event.max_candidates)
+            self.logger.debug2("Broadcasting peer candidates (%s)", candidates)
             await self._event_bus.broadcast(
-                event.expected_response_type()(nodes),
+                event.expected_response_type()(candidates),
                 event.broadcast_config()
             )
 
@@ -232,15 +255,10 @@ class DiscoveryService(Service):
     def run_daemons_and_bootstrap(self) -> None:
         self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
-        self.manager.run_daemon_task(self.periodically_refresh)
         self.manager.run_daemon_task(self.report_stats)
         self.manager.run_daemon_task(self.fetch_enrs)
         self.manager.run_daemon_task(self.consume_datagrams)
         self.manager.run_task(self.bootstrap)
-
-    async def periodically_refresh(self) -> None:
-        async for _ in trio_utils.every(self._refresh_interval):
-            await self.lookup_random()
 
     async def fetch_enrs(self) -> None:
         async with self.pending_enrs_consumer:
@@ -475,8 +493,13 @@ class DiscoveryService(Service):
         given target must be 64-bytes long (the uncompressed bytes representation of a public
         key).
         """
+        async with self._lookup_lock:
+            return await self._lookup(target_key)
+
+    async def _lookup(self, target_key: bytes) -> Tuple[NodeAPI, ...]:
         if len(target_key) != constants.KADEMLIA_PUBLIC_KEY_SIZE // 8:
             raise ValueError(f"Invalid lookup target ({target_key!r}). Length is not 64")
+
         # This is the node ID of the given target, which we use to select the peers close to it
         # and ask them about the target itself.
         target_id = NodeID(keccak(target_key))
