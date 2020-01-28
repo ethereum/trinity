@@ -5,6 +5,7 @@ from abc import (
 from collections import (
     UserDict,
 )
+import coincurve
 import secrets
 from typing import (
     Tuple,
@@ -15,6 +16,8 @@ from typing import (
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.backends import default_backend as cryptography_default_backend
+
+from hashlib import sha256
 
 from eth_keys.datatypes import (
     PrivateKey,
@@ -32,10 +35,6 @@ from eth_utils import (
     ValidationError,
 )
 
-from p2p.ecies import (
-    ecdh_agree,
-)
-
 from p2p.discv5.typing import (
     AES128Key,
     IDNonce,
@@ -45,6 +44,7 @@ from p2p.discv5.typing import (
 from p2p.discv5.constants import (
     AES128_KEY_SIZE,
     HKDF_INFO,
+    ID_NONCE_SIGNATURE_PREFIX,
 )
 
 
@@ -155,6 +155,7 @@ class IdentityScheme(ABC):
     def create_id_nonce_signature(cls,
                                   *,
                                   id_nonce: IDNonce,
+                                  ephemeral_public_key: bytes,
                                   private_key: bytes,
                                   ) -> bytes:
         """Sign an id nonce received during handshake."""
@@ -165,11 +166,56 @@ class IdentityScheme(ABC):
     def validate_id_nonce_signature(cls,
                                     *,
                                     id_nonce: IDNonce,
+                                    ephemeral_public_key: bytes,
                                     signature: bytes,
                                     public_key: bytes,
                                     ) -> None:
         """Validate the id nonce signature received from a peer."""
         ...
+
+
+def ecdh_agree(private_key: bytes, public_key: bytes) -> bytes:
+    """Perform the ECDH key agreement.
+
+    The public key is expected in compressed format and the resulting secret point will be
+    formatted as a 0x02 or 0x03 prefix (depending on the sign of the secret's y component)
+    followed by 32 bytes of the x component.
+    """
+    # We cannot use `cryptography.hazmat.primitives.asymmetric.ec.ECDH only gives us the x
+    # component of the shared secret point, but we need both x and y.
+    public_key_coincurve = coincurve.keys.PublicKey(public_key)
+    secret_coincurve = public_key_coincurve.multiply(private_key)
+    return secret_coincurve.format()
+
+
+def hkdf_expand_and_extract(secret: bytes,
+                            initiator_node_id: NodeID,
+                            recipient_node_id: NodeID,
+                            id_nonce: IDNonce,
+                            ) -> Tuple[bytes, bytes, bytes]:
+    info = b"".join((
+        HKDF_INFO,
+        initiator_node_id,
+        recipient_node_id,
+    ))
+
+    hkdf = HKDF(
+        algorithm=SHA256(),
+        length=3 * AES128_KEY_SIZE,
+        salt=id_nonce,
+        info=info,
+        backend=cryptography_default_backend(),
+    )
+    expanded_key = hkdf.derive(secret)
+
+    if len(expanded_key) != 3 * AES128_KEY_SIZE:
+        raise Exception("Invariant: Secret is expanded to three AES128 keys")
+
+    initiator_key = expanded_key[:AES128_KEY_SIZE]
+    recipient_key = expanded_key[AES128_KEY_SIZE:2 * AES128_KEY_SIZE]
+    auth_response_key = expanded_key[2 * AES128_KEY_SIZE:3 * AES128_KEY_SIZE]
+
+    return initiator_key, recipient_key, auth_response_key
 
 
 @default_identity_scheme_registry.register
@@ -180,7 +226,6 @@ class V4IdentityScheme(IdentityScheme):
     public_key_enr_key = b"secp256k1"
 
     private_key_size = 32
-    cryptography_backend = cryptography_default_backend()
 
     #
     # ENR
@@ -202,8 +247,9 @@ class V4IdentityScheme(IdentityScheme):
 
     @classmethod
     def validate_enr_signature(cls, enr: "ENR") -> None:
+        message_hash = keccak(enr.get_signing_message())
         cls.validate_signature(
-            message=enr.get_signing_message(),
+            message_hash=message_hash,
             signature=enr.signature,
             public_key=enr.public_key,
         )
@@ -244,36 +290,19 @@ class V4IdentityScheme(IdentityScheme):
                              id_nonce: IDNonce,
                              is_locally_initiated: bool
                              ) -> SessionKeys:
-        local_private_key_object = PrivateKey(local_private_key)
-        remote_public_key_object = PublicKey.from_compressed_bytes(remote_public_key)
-        secret = ecdh_agree(local_private_key_object, remote_public_key_object)
+        secret = ecdh_agree(local_private_key, remote_public_key)
 
         if is_locally_initiated:
             initiator_node_id, recipient_node_id = local_node_id, remote_node_id
         else:
             initiator_node_id, recipient_node_id = remote_node_id, local_node_id
 
-        info = b"".join((
-            HKDF_INFO,
+        initiator_key, recipient_key, auth_response_key = hkdf_expand_and_extract(
+            secret,
             initiator_node_id,
             recipient_node_id,
-        ))
-
-        hkdf = HKDF(
-            algorithm=SHA256(),
-            length=3 * AES128_KEY_SIZE,
-            salt=id_nonce,
-            info=info,
-            backend=cls.cryptography_backend,
+            id_nonce,
         )
-        expanded_key = hkdf.derive(secret)
-
-        if len(expanded_key) != 3 * AES128_KEY_SIZE:
-            raise Exception("Invariant: Secret is expanded to three AES128 keys")
-
-        initiator_key = expanded_key[:AES128_KEY_SIZE]
-        recipient_key = expanded_key[AES128_KEY_SIZE:2 * AES128_KEY_SIZE]
-        auth_response_key = expanded_key[2 * AES128_KEY_SIZE:3 * AES128_KEY_SIZE]
 
         if is_locally_initiated:
             encryption_key, decryption_key = initiator_key, recipient_key
@@ -290,21 +319,31 @@ class V4IdentityScheme(IdentityScheme):
     def create_id_nonce_signature(cls,
                                   *,
                                   id_nonce: IDNonce,
+                                  ephemeral_public_key: bytes,
                                   private_key: bytes,
                                   ) -> bytes:
         private_key_object = PrivateKey(private_key)
-        signature = private_key_object.sign_msg_non_recoverable(id_nonce)
+        signature_input = cls.create_id_nonce_signature_input(
+            id_nonce=id_nonce,
+            ephemeral_public_key=ephemeral_public_key,
+        )
+        signature = private_key_object.sign_msg_hash_non_recoverable(signature_input)
         return bytes(signature)
 
     @classmethod
     def validate_id_nonce_signature(cls,
                                     *,
                                     id_nonce: IDNonce,
+                                    ephemeral_public_key: bytes,
                                     signature: bytes,
                                     public_key: bytes,
                                     ) -> None:
+        signature_input = cls.create_id_nonce_signature_input(
+            id_nonce=id_nonce,
+            ephemeral_public_key=ephemeral_public_key,
+        )
         cls.validate_signature(
-            message=id_nonce,
+            message_hash=signature_input,
             signature=signature,
             public_key=public_key,
         )
@@ -322,7 +361,12 @@ class V4IdentityScheme(IdentityScheme):
             ) from error
 
     @classmethod
-    def validate_signature(cls, *, message: bytes, signature: bytes, public_key: bytes) -> None:
+    def validate_signature(cls,
+                           *,
+                           message_hash: bytes,
+                           signature: bytes,
+                           public_key: bytes,
+                           ) -> None:
         public_key_object = PublicKey.from_compressed_bytes(public_key)
 
         try:
@@ -330,13 +374,26 @@ class V4IdentityScheme(IdentityScheme):
         except BadSignature:
             is_valid = False
         else:
-            is_valid = signature_object.verify_msg(message, public_key_object)
+            is_valid = signature_object.verify_msg_hash(message_hash, public_key_object)
 
         if not is_valid:
             raise ValidationError(
-                f"Signature {encode_hex(signature)} is not valid for message {encode_hex(message)} "
-                f"and public key {encode_hex(public_key)}"
+                f"Signature {encode_hex(signature)} is not valid for message hash "
+                f"{encode_hex(message_hash)} and public key {encode_hex(public_key)}"
             )
+
+    @classmethod
+    def create_id_nonce_signature_input(cls,
+                                        *,
+                                        id_nonce: IDNonce,
+                                        ephemeral_public_key: bytes,
+                                        ) -> bytes:
+        preimage = b"".join((
+            ID_NONCE_SIGNATURE_PREFIX,
+            id_nonce,
+            ephemeral_public_key,
+        ))
+        return sha256(preimage).digest()
 
 
 @default_identity_scheme_registry.register

@@ -26,6 +26,7 @@ TCP_PORT_ENR_KEY = b"tcp"
 
 WHO_ARE_YOU_MAGIC_SUFFIX = b"WHOAREYOU"
 HKDF_INFO = b"discovery v5 key agreement"
+ID_NONCE_SIGNATURE_PREFIX = b"discovery-id-nonce"
 
 MAX_REQUEST_ID = 2**32 - 1  # highest request id used for outgoing requests
 MAX_REQUEST_ID_ATTEMPTS = 100  # number of attempts we take to guess a available request id

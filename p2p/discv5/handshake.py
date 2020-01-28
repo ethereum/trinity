@@ -144,6 +144,7 @@ class HandshakeInitiator(BaseHandshakeParticipant):
         # prepare response packet
         id_nonce_signature = self.identity_scheme.create_id_nonce_signature(
             id_nonce=who_are_you_packet.id_nonce,
+            ephemeral_public_key=ephemeral_public_key,
             private_key=self.local_private_key,
         )
 
@@ -312,6 +313,7 @@ class HandshakeRecipient(BaseHandshakeParticipant):
             self.identity_scheme.validate_id_nonce_signature(
                 signature=id_nonce_signature,
                 id_nonce=id_nonce,
+                ephemeral_public_key=auth_header_packet.auth_header.ephemeral_public_key,
                 public_key=current_remote_enr.public_key,
             )
         except ValidationError as error:
