@@ -366,6 +366,15 @@ class Node:
                 self.has_log_happened[log] = True
 
 
+async def init_eth1_chain():
+    import shutil
+    chain_data_dir = Path(data_dir, 'geth')
+    if chain_data_dir.exists():
+        shutil.rmtree(chain_data_dir)
+    proc = await run(f"geth init --datadir {data_dir} {genesis_dir}")
+    await proc.wait()
+
+
 def deposit(w3, deposit_contract, deposit_count):
     pubkey, privkey = mk_key_pair_from_seed_index(deposit_count)
     withdrawal_credentials = b"\x12" * 32
@@ -420,8 +429,7 @@ async def generate_deposits(w3, deposit_contract, interval):
 
 
 async def main():
-    start_delay = 20
-    start_time = int(time.time()) + start_delay
+    eth1_start_time = int(time.time())
 
     proc = await run(f"rm -rf {Node.dir_root}")
     await proc.wait()
@@ -440,12 +448,12 @@ async def main():
     # global variable `eth1_addr` is the account of eth1 chain miner
 
     # geth version used: 1.9.9-stable
-    # Steps to set up eth1 chain with geth
-    # 1. init the chain with `geth init --datadir {data_dir} {genesis_dir}`
     if not USE_FAKE_ETH1_DATA:
+        await init_eth1_chain()
+
         eth1_client_rpcport = 8444
         eth1_clinet = Eth1Client(
-            name="alice", port=30301, rpcport=eth1_client_rpcport, start_time=start_time
+            name="alice", port=30301, rpcport=eth1_client_rpcport, start_time=eth1_start_time
         )
 
         asyncio.ensure_future(eth1_clinet.run())
@@ -460,9 +468,10 @@ async def main():
         assert w3.isConnected()
 
         deposit_contract, deployed_block_number = deploy_contract(w3)
+        print(deposit_contract.address, deployed_block_number)
 
         # This is the block time set in genesis.json
-        BLOCK_TIME = 5
+        BLOCK_TIME = 3
         asyncio.ensure_future(generate_deposits(w3, deposit_contract, 2 * BLOCK_TIME))
 
         eth1_monitor_config = {
@@ -480,6 +489,9 @@ async def main():
         # Wait for eth1 to progress further enough so
         # the blocks requested by beacon node will be available.
         await asyncio.sleep(2 * ETH1_FOLLOW_DISTANCE * BLOCK_TIME)
+
+    start_delay = 20
+    start_time = int(time.time()) + start_delay
 
     param_alice = {
         "name": "alice",
@@ -508,8 +520,8 @@ async def main():
         "metrics_port": 9666,
     }
     if not USE_FAKE_ETH1_DATA:
-        param_alice["eth1_client_rpcport"] = eth1_client_rpcport
-        param_alice["eth1_monitor_config"] = config_path
+        param_bob["eth1_client_rpcport"] = eth1_client_rpcport
+        param_bob["eth1_monitor_config"] = config_path
     node_bob = Node(**param_bob)
 
     asyncio.ensure_future(node_alice.run())
