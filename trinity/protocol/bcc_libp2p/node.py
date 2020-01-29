@@ -154,6 +154,14 @@ from .utils import (
 )
 from async_generator import asynccontextmanager
 
+from trinity.components.eth2.metrics.events import (
+    Libp2pPeersRequest,
+    Libp2pPeersResponse,
+)
+from trinity.http.api.events import (
+    Libp2pPeerIDRequest,
+    Libp2pPeerIDResponse,
+)
 
 logger = logging.getLogger('trinity.protocol.bcc_libp2p')
 
@@ -342,6 +350,11 @@ class Node(BaseService):
     async def _run(self) -> None:
         self.logger.info("libp2p node %s is up", self.listen_maddr)
         self.run_daemon_task(self.update_status())
+
+        # Metrics and HTTP APIs
+        self.run_daemon_task(self.handle_libp2p_peers_requests())
+        self.run_daemon_task(self.handle_libp2p_peer_id_requests())
+
         await self.cancellation()
 
     async def start(self) -> None:
@@ -749,3 +762,21 @@ class Node(BaseService):
             for peer_id in self.handshaked_peers.peer_ids:
                 asyncio.ensure_future(self.request_status(peer_id))
             await asyncio.sleep(NEXT_UPDATE_INTERVAL)
+
+    #
+    # Metrics and APIs
+    #
+    async def handle_libp2p_peers_requests(self) -> None:
+        async for req in self.wait_iter(self._event_bus.stream(Libp2pPeersRequest)):
+            peers = tuple(self.handshaked_peers.peer_ids)
+            await self._event_bus.broadcast(
+                Libp2pPeersResponse(peers),
+                req.broadcast_config(),
+            )
+
+    async def handle_libp2p_peer_id_requests(self) -> None:
+        async for req in self.wait_iter(self._event_bus.stream(Libp2pPeerIDRequest)):
+            await self._event_bus.broadcast(
+                Libp2pPeerIDResponse(self.peer_id),
+                req.broadcast_config(),
+            )

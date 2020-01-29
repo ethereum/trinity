@@ -151,6 +151,26 @@ class BeaconBlock(BaseBeaconBlock):
     block_body_class = BeaconBlockBody
 
     @classmethod
+    def from_parent(
+        cls: Type[TBeaconBlock],
+        parent_block: "BaseBeaconBlock",
+        block_params: FromBlockParams,
+    ) -> TBeaconBlock:
+
+        if block_params.slot is None:
+            slot = parent_block.slot + 1
+        else:
+            slot = block_params.slot
+
+        block = cls.create(
+            slot=slot,
+            parent_root=parent_block.hash_tree_root,
+            state_root=parent_block.state_root,
+            body=cls.block_body_class.create(),
+        )
+        return block
+
+    @classmethod
     def from_root(cls, root: Root, chaindb: "BaseBeaconChainDB") -> "BeaconBlock":
         """
         Return the block denoted by the given block ``root``.
@@ -249,17 +269,7 @@ class SignedBeaconBlock(BaseSignedBeaconBlock):
         block_params: FromBlockParams,
     ) -> TSignedBeaconBlock:
 
-        if block_params.slot is None:
-            slot = parent_block.message.slot + 1
-        else:
-            slot = block_params.slot
-
-        block = cls.block_class.create(
-            slot=slot,
-            parent_root=parent_block.message.hash_tree_root,
-            state_root=parent_block.message.state_root,
-            body=cls.block_class.block_body_class.create(),
-        )
+        block = cls.block_class.from_parent(parent_block.message, block_params)
         return cls.create(message=block, signature=EMPTY_SIGNATURE)
 
     @classmethod

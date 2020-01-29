@@ -19,7 +19,7 @@ from eth2.beacon.typing import Timestamp
 from trinity.boot_info import BootInfo
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import FakeEth1DataProvider
-from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
+from trinity.components.eth2.beacon.base_validator import ETH1_FOLLOW_DISTANCE
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
 from trinity.events import ShutdownRequest
