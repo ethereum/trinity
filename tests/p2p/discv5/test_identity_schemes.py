@@ -15,7 +15,6 @@ from eth_utils import (
 
 from eth_keys.datatypes import (
     PrivateKey,
-    PublicKey,
     NonRecoverableSignature,
 )
 
@@ -147,13 +146,14 @@ def test_enr_node_id():
 
 def test_handshake_key_generation():
     private_key, public_key = V4IdentityScheme.create_handshake_key_pair()
-    V4IdentityScheme.validate_public_key(public_key)
-    assert PrivateKey(private_key).public_key.to_compressed_bytes() == public_key
+    V4IdentityScheme.validate_uncompressed_public_key(public_key)
+    V4IdentityScheme.validate_handshake_public_key(public_key)
+    assert PrivateKey(private_key).public_key.to_bytes() == public_key
 
 
 @pytest.mark.parametrize("public_key", (
-    PrivateKey(b"\x01" * 32).public_key.to_compressed_bytes(),
-    PrivateKey(b"\x02" * 32).public_key.to_compressed_bytes(),
+    b"\x01" * 64,
+    b"\x02" * 64,
 ))
 def test_handshake_public_key_validation_valid(public_key):
     V4IdentityScheme.validate_handshake_public_key(public_key)
@@ -161,9 +161,11 @@ def test_handshake_public_key_validation_valid(public_key):
 
 @pytest.mark.parametrize("public_key", (
     b"",
-    b"\x01" * 33,
+    b"\x02" * 31,
     b"\x02" * 32,
-    b"\x02" * 34,
+    b"\x02" * 33,
+    b"\x02" * 63,
+    b"\x02" * 65,
 ))
 def test_handshake_public_key_validation_invalid(public_key):
     with pytest.raises(ValidationError):
@@ -259,8 +261,8 @@ def test_session_key_derivation(initiator_private_key, recipient_private_key, id
     initiator_private_key_object = PrivateKey(initiator_private_key)
     recipient_private_key_object = PrivateKey(recipient_private_key)
 
-    initiator_public_key = initiator_private_key_object.public_key.to_compressed_bytes()
-    recipient_public_key = recipient_private_key_object.public_key.to_compressed_bytes()
+    initiator_public_key = initiator_private_key_object.public_key.to_bytes()
+    recipient_public_key = recipient_private_key_object.public_key.to_bytes()
 
     initiator_node_id = keccak(initiator_private_key_object.public_key.to_bytes())
     recipient_node_id = keccak(recipient_private_key_object.public_key.to_bytes())
@@ -298,9 +300,7 @@ def test_session_key_derivation(initiator_private_key, recipient_private_key, id
     ]
 ])
 def test_official_key_agreement(local_secret_key, remote_public_key, shared_secret_key):
-    public_key_object = PublicKey(remote_public_key)
-    public_key_compressed = public_key_object.to_compressed_bytes()
-    assert ecdh_agree(local_secret_key, public_key_compressed) == shared_secret_key
+    assert ecdh_agree(local_secret_key, remote_public_key) == shared_secret_key
 
 
 @pytest.mark.parametrize(

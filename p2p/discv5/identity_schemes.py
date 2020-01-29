@@ -177,13 +177,15 @@ class IdentityScheme(ABC):
 def ecdh_agree(private_key: bytes, public_key: bytes) -> bytes:
     """Perform the ECDH key agreement.
 
-    The public key is expected in compressed format and the resulting secret point will be
+    The public key is expected in uncompressed format and the resulting secret point will be
     formatted as a 0x02 or 0x03 prefix (depending on the sign of the secret's y component)
     followed by 32 bytes of the x component.
     """
     # We cannot use `cryptography.hazmat.primitives.asymmetric.ec.ECDH only gives us the x
     # component of the shared secret point, but we need both x and y.
-    public_key_coincurve = coincurve.keys.PublicKey(public_key)
+    public_key_eth_keys = PublicKey(public_key)
+    public_key_compressed = public_key_eth_keys.to_compressed_bytes()
+    public_key_coincurve = coincurve.keys.PublicKey(public_key_compressed)
     secret_coincurve = public_key_coincurve.multiply(private_key)
     return secret_coincurve.format()
 
@@ -243,7 +245,7 @@ class V4IdentityScheme(IdentityScheme):
             raise ValidationError(f"ENR is missing required key {cls.public_key_enr_key!r}")
 
         public_key = cls.extract_public_key(enr)
-        cls.validate_public_key(public_key)
+        cls.validate_compressed_public_key(public_key)
 
     @classmethod
     def validate_enr_signature(cls, enr: "ENR") -> None:
@@ -273,12 +275,12 @@ class V4IdentityScheme(IdentityScheme):
     @classmethod
     def create_handshake_key_pair(cls) -> Tuple[bytes, bytes]:
         private_key = secrets.token_bytes(cls.private_key_size)
-        public_key = PrivateKey(private_key).public_key.to_compressed_bytes()
+        public_key = PrivateKey(private_key).public_key.to_bytes()
         return private_key, public_key
 
     @classmethod
     def validate_handshake_public_key(cls, public_key: bytes) -> None:
-        cls.validate_public_key(public_key)
+        cls.validate_uncompressed_public_key(public_key)
 
     @classmethod
     def compute_session_keys(cls,
@@ -352,12 +354,21 @@ class V4IdentityScheme(IdentityScheme):
     # Helpers
     #
     @classmethod
-    def validate_public_key(cls, public_key: bytes) -> None:
+    def validate_compressed_public_key(cls, public_key: bytes) -> None:
         try:
             PublicKey.from_compressed_bytes(public_key)
         except (EthKeysValidationError, ValueError) as error:
             raise ValidationError(
-                f"Public key {encode_hex(public_key)} is invalid: {error}"
+                f"Public key {encode_hex(public_key)} is invalid compressed public key: {error}"
+            ) from error
+
+    @classmethod
+    def validate_uncompressed_public_key(cls, public_key: bytes) -> None:
+        try:
+            PublicKey(public_key)
+        except EthKeysValidationError as error:
+            raise ValidationError(
+                f"Public key {encode_hex(public_key)} is invalid uncompressed public key: {error}"
             ) from error
 
     @classmethod
