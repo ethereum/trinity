@@ -106,10 +106,17 @@ TNode = TypeVar('TNode', bound='NodeAPI')
 
 
 class NodeAPI(ABC):
-    _id_int: int
-    pubkey: keys.PublicKey
-    address: AddressAPI
-    id: NodeID
+    """
+    A node in the Ethereum P2P network.
+
+    Its state is stored in an ENR instance, which is exposed as a read-only attribute like all
+    other attributes that are derived from the ENR.
+
+    When we get a new ENR version for a given NodeID, a new NodeAPI instance must be created.
+    """
+    # FIXME: For now this is a writable property, which is not a big deal as it is not persisted,
+    # but once we start persisting that info we should probably remove the property and always
+    # look it up from the DB.
     last_pong: float
 
     @abstractmethod
@@ -135,6 +142,21 @@ class NodeAPI(ABC):
     @classmethod
     @abstractmethod
     def from_enr_repr(cls: Type[TNode], uri: str) -> TNode:
+        ...
+
+    @property
+    @abstractmethod
+    def pubkey(self) -> keys.PublicKey:
+        ...
+
+    @property
+    @abstractmethod
+    def address(self) -> AddressAPI:
+        ...
+
+    @property
+    @abstractmethod
+    def id(self) -> NodeID:
         ...
 
     @property

@@ -123,18 +123,30 @@ class Node(NodeAPI):
             ip = enr[IP_V4_ADDRESS_ENR_KEY]
             udp_port = enr[UDP_PORT_ENR_KEY]
         except KeyError:
-            self.address = None
+            self._address = None
         else:
             tcp_port = enr.get(TCP_PORT_ENR_KEY, udp_port)
-            self.address = Address(ip, udp_port, tcp_port)
+            self._address = Address(ip, udp_port, tcp_port)
         # FIXME: ENRs may use different pubkey formats and this would break, so instead of storing
         # a PublicKey with a certain format here we should simply use the APIs in the
         # ENR.identity_scheme for the crypto related operations.
-        self.pubkey = keys.PublicKey.from_compressed_bytes(enr.public_key)
-        self.id = NodeID(keccak(self.pubkey.to_bytes()))
+        self._pubkey = keys.PublicKey.from_compressed_bytes(enr.public_key)
+        self._id = NodeID(keccak(self.pubkey.to_bytes()))
         self._id_int = big_endian_to_int(self.id)
-        self.last_pong = None
         self._enr = enr
+        self.last_pong = None
+
+    @property
+    def id(self) -> NodeID:
+        return self._id
+
+    @property
+    def pubkey(self) -> keys.PublicKey:
+        return self._pubkey
+
+    @property
+    def address(self) -> Address:
+        return self._address
 
     @classmethod
     def from_pubkey_and_addr(
@@ -249,10 +261,12 @@ class KBucket(Sized):
         lower = KBucket(self.start, splitid)
         upper = KBucket(splitid + 1, self.end)
         for node in self.nodes:
-            bucket = lower if node._id_int <= splitid else upper
+            node_id_int = node._id_int  # type: ignore
+            bucket = lower if node_id_int <= splitid else upper
             bucket.add(node)
         for node in self.replacement_cache:
-            bucket = lower if node._id_int <= splitid else upper
+            node_id_int = node._id_int  # type: ignore
+            bucket = lower if node_id_int <= splitid else upper
             bucket.replacement_cache.append(node)
         return lower, upper
 
@@ -362,12 +376,14 @@ class RoutingTable:
         return [b for b in self.buckets if not b.is_full]
 
     def remove_node(self, node: NodeAPI) -> None:
-        binary_get_bucket_for_node(self.buckets, node._id_int).remove_node(node)
+        node_id_int = node._id_int  # type: ignore
+        binary_get_bucket_for_node(self.buckets, node_id_int).remove_node(node)
 
     def add_node(self, node: NodeAPI) -> NodeAPI:
-        if node._id_int == self.this_node_id_int:
+        node_id_int = node._id_int  # type: ignore
+        if node_id_int == self.this_node_id_int:
             raise ValueError("Cannot add this_node to routing table")
-        bucket = binary_get_bucket_for_node(self.buckets, node._id_int)
+        bucket = binary_get_bucket_for_node(self.buckets, node_id_int)
         eviction_candidate = bucket.add(node)
         if eviction_candidate is not None:  # bucket is full
             # Split if the bucket has the local node in its range or if the depth is not congruent
@@ -399,7 +415,8 @@ class RoutingTable:
         return sorted(self.buckets, key=operator.methodcaller('distance_to', id))
 
     def __contains__(self, node: NodeAPI) -> bool:
-        return node in self.get_bucket_for_node(node._id_int)
+        node_id_int = node._id_int  # type: ignore
+        return node in self.get_bucket_for_node(node_id_int)
 
     def __len__(self) -> int:
         return sum(len(b) for b in self.buckets)
@@ -463,7 +480,10 @@ def _compute_shared_prefix_bits(nodes: List[NodeAPI]) -> int:
     if len(nodes) < 2:
         return constants.KADEMLIA_ID_SIZE
 
-    bits = [to_binary(n._id_int) for n in nodes]
+    bits = [
+        to_binary(n._id_int)  # type: ignore
+        for n in nodes
+    ]
     for i in range(1, constants.KADEMLIA_ID_SIZE + 1):
         if len(set(b[:i] for b in bits)) != 1:
             return i - 1
