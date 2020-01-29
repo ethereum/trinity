@@ -37,5 +37,5 @@ class NodeFactory(factory.Factory):
     def with_nodeid(cls, nodeid: int, *args: Any, **kwargs: Any) -> NodeAPI:
         node = cls(*args, **kwargs)
         node._id_int = nodeid
-        node.id = int_to_big_endian(nodeid)
+        node._id = int_to_big_endian(nodeid)
         return node
