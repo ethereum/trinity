@@ -12,6 +12,7 @@ from typing import (
     TypeVar,
 )
 
+from p2p.abc import NodeAPI
 from p2p.discv5.enr import (
     ENR,
 )
@@ -105,7 +106,7 @@ class HandshakeParticipantAPI(ABC):
         ...
 
 
-class EnrDbApi(ABC):
+class NodeDBAPI(ABC):
     @abstractmethod
     def __init__(self, identity_scheme_registry: IdentitySchemeRegistry):
         ...
@@ -116,28 +117,28 @@ class EnrDbApi(ABC):
         ...
 
     @abstractmethod
-    async def insert(self, enr: ENR) -> None:
-        """Insert an ENR into the database."""
+    async def insert(self, node: NodeAPI) -> None:
+        """Insert a Node into the database."""
         ...
 
     @abstractmethod
-    async def update(self, enr: ENR) -> None:
-        """Update an existing ENR if the sequence number is greater."""
+    async def update(self, node: NodeAPI) -> None:
+        """Update an existing Node if the sequence number is greater."""
         ...
 
     @abstractmethod
-    async def insert_or_update(self, enr: ENR) -> None:
-        """Insert or update an ENR depending if it is already present already or not."""
+    async def insert_or_update(self, node: NodeAPI) -> None:
+        """Insert or update a Node depending if it is already present already or not."""
         ...
 
     @abstractmethod
-    async def get(self, node_id: NodeID) -> ENR:
-        """Get an ENR by its node id."""
+    async def get(self, node_id: NodeID) -> NodeAPI:
+        """Get a Node by its node id."""
         ...
 
     @abstractmethod
     async def contains(self, node_id: NodeID) -> bool:
-        """Check if the db contains an ENR with the given node id."""
+        """Check if the db contains a Node with the given node id."""
         ...
 
     @abstractmethod

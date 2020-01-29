@@ -29,7 +29,7 @@ from p2p.discovery import (
     PreferredNodeDiscoveryService,
     StaticDiscoveryService,
 )
-from p2p.discv5.enr_db import FileEnrDb
+from p2p.discv5.enr_db import FileNodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.kademlia import (
     Address,
@@ -86,7 +86,7 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             eth_cap_provider = functools.partial(generate_eth_cap_enr_field, vm_config, headerdb)
             external_ip = "0.0.0.0"
             socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
-            enr_db = FileEnrDb(default_identity_scheme_registry, config.enr_db_dir)
+            node_db = FileNodeDB(default_identity_scheme_registry, config.node_db_dir)
             await socket.bind((external_ip, config.port))
             discovery_service = PreferredNodeDiscoveryService(
                 config.nodekey,
@@ -95,7 +95,7 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
                 config.preferred_nodes,
                 event_bus,
                 socket,
-                enr_db,
+                node_db,
                 (eth_cap_provider,),
             )
 

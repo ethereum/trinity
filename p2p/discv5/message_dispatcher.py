@@ -41,7 +41,7 @@ from p2p.discv5.channel_services import (
 )
 from p2p.discv5.abc import (
     ChannelHandlerSubscriptionAPI,
-    EnrDbApi,
+    NodeDBAPI,
     MessageDispatcherAPI,
 )
 from p2p.discv5.constants import (
@@ -114,11 +114,11 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
     logger = logging.getLogger("p2p.discv5.message_dispatcher.MessageDispatcher")
 
     def __init__(self,
-                 enr_db: EnrDbApi,
+                 node_db: NodeDBAPI,
                  incoming_message_receive_channel: ReceiveChannel[IncomingMessage],
                  outgoing_message_send_channel: SendChannel[OutgoingMessage],
                  ) -> None:
-        self.enr_db = enr_db
+        self.node_db = node_db
 
         self.incoming_message_receive_channel = incoming_message_receive_channel
         self.outgoing_message_send_channel = outgoing_message_send_channel
@@ -270,21 +270,21 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
             remove_fn=remove,
         )
 
-    async def get_endpoint_from_enr_db(self, receiver_node_id: NodeID) -> Endpoint:
+    async def get_endpoint_from_node_db(self, receiver_node_id: NodeID) -> Endpoint:
         try:
-            enr = await self.enr_db.get(receiver_node_id)
+            node = await self.node_db.get(receiver_node_id)
         except KeyError:
             raise ValueError(f"No ENR for peer {encode_hex(receiver_node_id)} known")
 
         try:
-            ip_address = enr[IP_V4_ADDRESS_ENR_KEY]
+            ip_address = node.enr[IP_V4_ADDRESS_ENR_KEY]
         except KeyError:
             raise ValueError(
                 f"ENR for peer {encode_hex(receiver_node_id)} does not contain an IP address"
             )
 
         try:
-            udp_port = enr[UDP_PORT_ENR_KEY]
+            udp_port = node.enr[UDP_PORT_ENR_KEY]
         except KeyError:
             raise ValueError(
                 f"ENR for peer {encode_hex(receiver_node_id)} does not contain a UDP port"
@@ -299,7 +299,7 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
                                             endpoint: Optional[Endpoint] = None,
                                             ) -> AsyncGenerator[IncomingMessageSubscription, None]:
         if endpoint is None:
-            endpoint = await self.get_endpoint_from_enr_db(receiver_node_id)
+            endpoint = await self.get_endpoint_from_node_db(receiver_node_id)
 
         response_channels: Tuple[
             SendChannel[IncomingMessage],

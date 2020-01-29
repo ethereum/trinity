@@ -22,7 +22,7 @@ from p2p.discv5.constants import (
     TCP_PORT_ENR_KEY,
     UDP_PORT_ENR_KEY,
 )
-from p2p.discv5.enr_db import MemoryEnrDb
+from p2p.discv5.enr_db import MemoryNodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
 from p2p.discovery import (
     CMD_FIND_NODE,
@@ -115,7 +115,8 @@ async def test_get_local_enr(manually_driven_discovery):
     validate_node_enr(discovery.this_node, enr, sequence_number=2)
 
     # The new ENR will also be stored in our DB.
-    assert enr == await discovery._enr_db.get(discovery.this_node.id)
+    our_node = await discovery.node_db.get(discovery.this_node.id)
+    assert enr == our_node.enr
 
     # And the next refresh time will be updated.
     assert discovery._local_enr_next_refresh > time.monotonic()
@@ -127,7 +128,8 @@ async def test_local_enr_on_startup(manually_driven_discovery):
 
     validate_node_enr(discovery.this_node, discovery.this_node.enr, sequence_number=1)
     # Our local ENR will also be stored in our DB.
-    assert discovery.this_node.enr == await discovery._enr_db.get(discovery.this_node.id)
+    our_node = await discovery.node_db.get(discovery.this_node.id)
+    assert discovery.this_node.enr == our_node.enr
 
 
 @pytest.mark.trio
@@ -390,12 +392,12 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
         # it in our DB.
         while True:
             await trio.sleep(0.1)
-            if await alice._enr_db.contains(bob.this_node.id):
+            if await alice.node_db.contains(bob.this_node.id):
                 break
 
-    enr = await alice._enr_db.get(bob.this_node.id)
-    assert enr is not None
-    assert enr == await bob.get_local_enr()
+    bob_node = await alice.node_db.get(bob.this_node.id)
+    assert bob_node.enr is not None
+    assert bob_node.enr == await bob.get_local_enr()
 
 
 @pytest.mark.trio
@@ -477,10 +479,10 @@ class MockDiscoveryService(DiscoveryService):
     def __init__(self, bootnodes):
         privkey = keys.PrivateKey(keccak(b"seed"))
         self.messages = []
-        enr_db = MemoryEnrDb(default_identity_scheme_registry)
+        node_db = MemoryNodeDB(default_identity_scheme_registry)
         socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
         event_bus = None
-        super().__init__(privkey, AddressFactory(), bootnodes, event_bus, socket, enr_db)
+        super().__init__(privkey, AddressFactory(), bootnodes, event_bus, socket, node_db)
 
     def send(self, node, msg_type, payload):
         # Overwrite our parent's send() to ensure no tests attempt to use us to go over the

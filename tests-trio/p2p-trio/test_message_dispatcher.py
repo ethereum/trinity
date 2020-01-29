@@ -6,6 +6,8 @@ import trio
 
 from async_service import background_trio_service
 
+from p2p.kademlia import Node
+
 from p2p.tools.factories.discovery import (
     EndpointFactory,
     ENRFactory,
@@ -15,7 +17,7 @@ from p2p.tools.factories.keys import (
     PrivateKeyFactory,
 )
 
-from p2p.discv5.enr_db import MemoryEnrDb
+from p2p.discv5.enr_db import MemoryNodeDB
 from p2p.discv5.channel_services import (
     IncomingMessage,
 )
@@ -75,10 +77,10 @@ def remote_enr(remote_private_key, remote_endpoint):
 
 
 @pytest_trio.trio_fixture
-async def enr_db(enr, remote_enr):
-    db = MemoryEnrDb(default_identity_scheme_registry)
-    await db.insert(enr)
-    await db.insert(remote_enr)
+async def node_db(enr, remote_enr):
+    db = MemoryNodeDB(default_identity_scheme_registry)
+    await db.insert(Node(enr))
+    await db.insert(Node(remote_enr))
     return db
 
 
@@ -93,9 +95,9 @@ def outgoing_message_channels():
 
 
 @pytest_trio.trio_fixture
-async def message_dispatcher(enr_db, incoming_message_channels, outgoing_message_channels):
+async def message_dispatcher(node_db, incoming_message_channels, outgoing_message_channels):
     message_dispatcher = MessageDispatcher(
-        enr_db=enr_db,
+        node_db=node_db,
         incoming_message_receive_channel=incoming_message_channels[1],
         outgoing_message_send_channel=outgoing_message_channels[0],
     )

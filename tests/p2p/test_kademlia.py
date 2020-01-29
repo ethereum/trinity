@@ -55,31 +55,15 @@ def test_node_from_enr_uri():
     assert node.address.udp_port == udp_port
 
 
-def test_node_enr_property():
+def test_node_constructor():
     privkey = PrivateKeyFactory()
     ip = socket.inet_aton(IPAddressFactory.generate())
     udp_port = tcp_port = 30303
     enr = ENRFactory(
         private_key=privkey.to_bytes(),
-        custom_kv_pairs={
-            IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port, TCP_PORT_ENR_KEY: tcp_port})
+        custom_kv_pairs={IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port})
 
     node = Node(enr)
-
-    assert node.id == keccak(privkey.public_key.to_bytes())
-    assert node.address.ip_packed == ip
-    assert node.address.tcp_port == tcp_port
-    assert node.address.udp_port == udp_port
-
-    ip = socket.inet_aton(IPAddressFactory.generate())
-    udp_port = tcp_port = 30304
-    enr2 = ENRFactory(
-        private_key=privkey.to_bytes(),
-        custom_kv_pairs={
-            IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port, TCP_PORT_ENR_KEY: tcp_port})
-
-    # If we update our Node's enr, the node's attributes will be changed to reflect that.
-    node.enr = enr2
 
     assert node.id == keccak(privkey.public_key.to_bytes())
     assert node.address.ip_packed == ip

@@ -12,7 +12,7 @@ from eth_hash.auto import keccak
 from eth_keys import keys
 
 from p2p.discovery import DiscoveryService
-from p2p.discv5.enr_db import MemoryEnrDb
+from p2p.discv5.enr_db import MemoryNodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.kademlia import Address
 
@@ -46,7 +46,7 @@ async def _manually_driven_discovery(seed, socket, nursery):
         bootstrap_nodes=[],
         event_bus=None,
         socket=socket,
-        enr_db=MemoryEnrDb(default_identity_scheme_registry))
+        node_db=MemoryNodeDB(default_identity_scheme_registry))
     async with background_trio_service(discovery):
         # Wait until we're fully initialized (i.e. until the ENR stub created in the constructor
         # is replaced with the real one).

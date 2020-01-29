@@ -25,7 +25,7 @@ from p2p.discv5.constants import (
     NUM_ROUTING_TABLE_BUCKETS,
 )
 from p2p.discv5.abc import (
-    EnrDbApi,
+    NodeDBAPI,
 )
 from p2p.discv5.channel_services import (
     DatagramReceiver,
@@ -45,7 +45,7 @@ from p2p.discv5.endpoint_tracker import (
 )
 from p2p.discv5.enr import ENR
 from p2p.discv5.enr import UnsignedENR
-from p2p.discv5.enr_db import FileEnrDb
+from p2p.discv5.enr_db import FileNodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
@@ -61,23 +61,25 @@ from p2p.discv5.routing_table_manager import (
     RoutingTableManager,
 )
 
+from p2p.kademlia import Node
+
 from trinity.boot_info import BootInfo
 from trinity.extensibility import TrioIsolatedComponent
 
 import trio
 
 
-DEFAULT_ENR_DIR_NAME = "enrs"
+DEFAULT_NODEDB_DIR_NAME = "nodes"
 
 
 logger = logging.getLogger(__name__)
 
 
-def get_enr_dir(boot_info: BootInfo) -> pathlib.Path:
-    if boot_info.args.enr_dir is None:
-        return boot_info.trinity_config.data_dir / DEFAULT_ENR_DIR_NAME
+def get_nodedb_dir(boot_info: BootInfo) -> pathlib.Path:
+    if boot_info.args.nodedb_dir is None:
+        return boot_info.trinity_config.data_dir / DEFAULT_NODEDB_DIR_NAME
     else:
-        return pathlib.Path(boot_info.args.enr_dir)
+        return pathlib.Path(boot_info.args.nodedb_dir)
 
 
 def get_local_private_key(boot_info: BootInfo) -> PrivateKey:
@@ -90,7 +92,7 @@ def get_local_private_key(boot_info: BootInfo) -> PrivateKey:
 
 
 async def get_local_enr(boot_info: BootInfo,
-                        enr_db: EnrDbApi,
+                        node_db: NodeDBAPI,
                         local_private_key: PrivateKey,
                         ) -> ENR:
     minimal_enr = UnsignedENR(
@@ -105,11 +107,12 @@ async def get_local_enr(boot_info: BootInfo,
     node_id = minimal_enr.node_id
 
     try:
-        base_enr = await enr_db.get(node_id)
+        base_node = await node_db.get(node_id)
     except KeyError:
-        logger.info(f"No ENR for {encode_hex(node_id)} found, creating new one")
+        logger.info(f"No Node for {encode_hex(node_id)} found, creating new one")
         return minimal_enr
     else:
+        base_enr = base_node.enr
         if any(base_enr[key] != value for key, value in minimal_enr.items()):
             logger.debug(f"Updating local ENR")
             return UnsignedENR(
@@ -157,20 +160,20 @@ class DiscV5Component(TrioIsolatedComponent):
         identity_scheme_registry = default_identity_scheme_registry
         message_type_registry = default_message_type_registry
 
-        enr_dir = get_enr_dir(boot_info)
-        enr_dir.mkdir(exist_ok=True)
-        enr_db = FileEnrDb(default_identity_scheme_registry, enr_dir)
+        nodedb_dir = get_nodedb_dir(boot_info)
+        nodedb_dir.mkdir(exist_ok=True)
+        node_db = FileNodeDB(default_identity_scheme_registry, nodedb_dir)
 
         local_private_key = get_local_private_key(boot_info)
-        local_enr = await get_local_enr(boot_info, enr_db, local_private_key)
+        local_enr = await get_local_enr(boot_info, node_db, local_private_key)
         local_node_id = local_enr.node_id
 
         routing_table = KademliaRoutingTable(local_node_id, NUM_ROUTING_TABLE_BUCKETS)
 
-        await enr_db.insert_or_update(local_enr)
+        await node_db.insert_or_update(Node(local_enr))
         for enr_repr in boot_info.args.discovery_boot_enrs or ():
             enr = ENR.from_repr(enr_repr)
-            await enr_db.insert_or_update(enr)
+            await node_db.insert_or_update(Node(enr))
             routing_table.update(enr.node_id)
 
         port = boot_info.args.discovery_port
@@ -209,7 +212,7 @@ class DiscV5Component(TrioIsolatedComponent):
         packer = Packer(
             local_private_key=local_private_key.to_bytes(),
             local_node_id=local_node_id,
-            enr_db=enr_db,
+            node_db=node_db,
             message_type_registry=message_type_registry,
             incoming_packet_receive_channel=incoming_packet_channels[1],
             incoming_message_send_channel=incoming_message_channels[0],
@@ -218,7 +221,7 @@ class DiscV5Component(TrioIsolatedComponent):
         )
 
         message_dispatcher = MessageDispatcher(
-            enr_db=enr_db,
+            node_db=node_db,
             incoming_message_receive_channel=incoming_message_channels[1],
             outgoing_message_send_channel=outgoing_message_channels[0],
         )
@@ -226,7 +229,7 @@ class DiscV5Component(TrioIsolatedComponent):
         endpoint_tracker = EndpointTracker(
             local_private_key=local_private_key.to_bytes(),
             local_node_id=local_node_id,
-            enr_db=enr_db,
+            node_db=node_db,
             identity_scheme_registry=identity_scheme_registry,
             vote_receive_channel=endpoint_vote_channels[1],
         )
@@ -235,7 +238,7 @@ class DiscV5Component(TrioIsolatedComponent):
             local_node_id=local_node_id,
             routing_table=routing_table,
             message_dispatcher=message_dispatcher,
-            enr_db=enr_db,
+            node_db=node_db,
             outgoing_message_send_channel=outgoing_message_channels[0],
             endpoint_vote_send_channel=endpoint_vote_channels[0],
         )

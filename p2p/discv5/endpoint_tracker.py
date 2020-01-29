@@ -19,7 +19,7 @@ from async_service import (
 )
 
 from p2p.discv5.abc import (
-    EnrDbApi,
+    NodeDBAPI,
 )
 from p2p.discv5.channel_services import (
     Endpoint,
@@ -37,6 +37,7 @@ from p2p.discv5.identity_schemes import (
 from p2p.discv5.typing import (
     NodeID,
 )
+from p2p.kademlia import Node
 
 
 class EndpointVote(NamedTuple):
@@ -52,13 +53,13 @@ class EndpointTracker(Service):
     def __init__(self,
                  local_private_key: bytes,
                  local_node_id: NodeID,
-                 enr_db: EnrDbApi,
+                 node_db: NodeDBAPI,
                  identity_scheme_registry: IdentitySchemeRegistry,
                  vote_receive_channel: ReceiveChannel[EndpointVote],
                  ) -> None:
         self.local_private_key = local_private_key
         self.local_node_id = local_node_id
-        self.enr_db = enr_db
+        self.node_db = node_db
         self.identity_scheme_registry = identity_scheme_registry
 
         self.vote_receive_channel = vote_receive_channel
@@ -75,7 +76,8 @@ class EndpointTracker(Service):
             encode_hex(vote.node_id),
         )
 
-        current_enr = await self.enr_db.get(self.local_node_id)
+        current_node = await self.node_db.get(self.local_node_id)
+        current_enr = current_node.enr
 
         # TODO: majority voting, discard old votes
         are_endpoint_keys_present = (
@@ -105,4 +107,4 @@ class EndpointTracker(Service):
                 vote.endpoint,
                 signed_enr.sequence_number,
             )
-            await self.enr_db.update(signed_enr)
+            await self.node_db.update(Node(signed_enr))
