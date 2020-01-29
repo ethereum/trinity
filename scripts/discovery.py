@@ -20,7 +20,7 @@ from eth.db.backends.memory import MemoryDB
 
 from p2p import kademlia
 from p2p.discovery import DiscoveryService
-from p2p.discv5.enr_db import FileEnrDb
+from p2p.discv5.enr_db import FileNodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.discv5.typing import NodeID
 from p2p.forkid import extract_fork_blocks
@@ -47,7 +47,7 @@ async def main() -> None:
         help="1 for mainnet, 3 for testnet"
     )
     parser.add_argument('-l', type=str, help="Log level", default="info")
-    parser.add_argument('-enrdb', type=str, help="Path to ENR database")
+    parser.add_argument('-nodedb', type=str, help="Path to Node database")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -60,8 +60,8 @@ async def main() -> None:
     logger = logging.getLogger('p2p')
     logger.setLevel(log_level)
 
-    enr_db_path = Path(args.enrdb)
-    enr_db_path.mkdir(exist_ok=True)
+    node_db_path = Path(args.nodedb)
+    node_db_path.mkdir(exist_ok=True)
 
     network_cfg = PRECONFIGURED_NETWORKS[args.networkid]
     # Listen on a port other than 30303 so that we can test against a local geth instance
@@ -87,14 +87,14 @@ async def main() -> None:
     vm_config = network_cfg.vm_configuration
     fork_blocks = extract_fork_blocks(vm_config)
     enr_field_providers = (functools.partial(generate_eth_cap_enr_field, vm_config, headerdb),)
-    enr_db = FileEnrDb(default_identity_scheme_registry, enr_db_path)
+    node_db = FileNodeDB(default_identity_scheme_registry, node_db_path)
     socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
     await socket.bind(('0.0.0.0', listen_port))
     MAX_PEERS = 60
     skip_list: Set[NodeID] = set()
     async with TrioEndpoint.serve(networking_connection_config) as endpoint:
         service = DiscoveryService(
-            privkey, addr, bootstrap_nodes, endpoint, socket, enr_db, enr_field_providers)
+            privkey, addr, bootstrap_nodes, endpoint, socket, node_db, enr_field_providers)
         async with background_trio_service(service):
             # Loop forever, querying DiscoveryService for connection candidates with a ForkID that
             # matches our network_cfg parameters.

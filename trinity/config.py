@@ -99,10 +99,10 @@ from trinity._utils.xdg import (
 from trinity.constants import (
     ASSETS_DIR,
     DEFAULT_PREFERRED_NODES,
-    ENR_DB_DIR,
     IPC_DIR,
     LOG_DIR,
     LOG_FILE,
+    NODE_DB_DIR,
     PID_DIR,
     SYNC_LIGHT,
 )
@@ -426,11 +426,11 @@ class TrinityConfig:
         return get_database_socket_path(self.ipc_dir)
 
     @property
-    def enr_db_dir(self) -> Path:
+    def node_db_dir(self) -> Path:
         """
-        Return the directory for the ENR database.
+        Return the directory for the Node database.
         """
-        return self.with_app_suffix(self.data_dir / ENR_DB_DIR)
+        return self.with_app_suffix(self.data_dir / NODE_DB_DIR)
 
     @property
     def logging_ipc_path(self) -> Path:

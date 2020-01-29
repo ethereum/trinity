@@ -66,7 +66,7 @@ from async_service import Service
 
 from p2p import constants
 from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI
-from p2p.discv5.abc import EnrDbApi
+from p2p.discv5.abc import NodeDBAPI
 from p2p.discv5.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
 from p2p.discv5.identity_schemes import V4IdentityScheme
 from p2p.discv5.constants import (
@@ -142,7 +142,7 @@ class DiscoveryService(Service):
                  bootstrap_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
                  socket: trio.socket.SocketType,
-                 enr_db: EnrDbApi,
+                 node_db: NodeDBAPI,
                  enr_field_providers: Sequence[ENR_FieldProvider] = tuple(),
                  ) -> None:
         self.privkey = privkey
@@ -153,9 +153,9 @@ class DiscoveryService(Service):
         self.neighbours_channels = ExpectedResponseChannels[List[NodeAPI]]()
         self.ping_channels = ExpectedResponseChannels[None]()
         self.enr_field_providers = enr_field_providers
-        self._enr_db = enr_db
-        # FIXME: Use a concurrency-safe EnrDb implementation.
-        self._enr_db_lock = trio.Lock()
+        self.node_db = node_db
+        # FIXME: Use a concurrency-safe NodeDB implementation.
+        self._node_db_lock = trio.Lock()
         self._local_enr_next_refresh: float = time.monotonic()
         self._local_enr_lock = trio.Lock()
         self._lookup_lock = trio.Lock()
@@ -172,22 +172,23 @@ class DiscoveryService(Service):
         # be replaced in _init(). We could defer its creation until _init() is called by run(),
         # but doing this here simplifies things as we don't have to store the Address in another
         # instance attribute.
-        self.this_node = Node.from_pubkey_and_addr(self.pubkey, address)
+        self.this_node: NodeAPI = Node.from_pubkey_and_addr(self.pubkey, address)
         self.routing = RoutingTable(self.this_node.id)
 
     async def _init(self) -> None:
-        async with self._enr_db_lock:
+        async with self._node_db_lock:
             try:
-                enr = await self._enr_db.get(self.this_node.id)
+                node = await self.node_db.get(self.this_node.id)
             except KeyError:
                 # Either we have a fresh DB or our private key has changed, so create a new ENR
                 # with sequence number 1.
                 enr = await self._generate_local_enr(sequence_number=1)
-                await self._enr_db.insert(enr)
+                node = Node(enr)
+                await self.node_db.insert(node)
 
-        self.this_node = Node(enr)
+        self.this_node = node
         # This is a no-op when we generate a fresh ENR above, but we need to run this without
-        # acquiring self._enr_db_lock, so we run it here for simplicity.
+        # acquiring self._node_db_lock, so we run it here for simplicity.
         await self._maybe_update_local_enr()
 
     async def consume_datagrams(self) -> None:
@@ -259,13 +260,13 @@ class DiscoveryService(Service):
     async def _ensure_enr(self, node: NodeAPI, enr_seq: int) -> None:
         # TODO: Check that we've recently bonded with the remote. For now it shouldn't be a
         # problem as this is only triggered once we successfully bonded with a peer.
-        async with self._enr_db_lock:
+        async with self._node_db_lock:
             try:
-                enr = await self._enr_db.get(node.id)
+                node = await self.node_db.get(node.id)
             except KeyError:
                 pass
             else:
-                if enr.sequence_number >= enr_seq:
+                if node.enr.sequence_number >= enr_seq:
                     self.logger.debug2("Already got latest ENR for %s", node)
                     return
 
@@ -285,7 +286,7 @@ class DiscoveryService(Service):
                 "Routing table has %s nodes in %s buckets (%s of which are full), and %s nodes "
                 "are in the replacement cache", total_nodes, len(self.routing.buckets),
                 len(full_buckets), nodes_in_replacement_cache)
-            self.logger.debug("ENR DB has a total of %s entries", len(self._enr_db))
+            self.logger.debug("Node DB has a total of %s entries", len(self.node_db))
             self.logger.debug("===========================================================")
 
     def update_routing_table(self, node: NodeAPI) -> None:
@@ -427,28 +428,29 @@ class DiscoveryService(Service):
         # Either our node's details (e.g. IP address) or one of our ENR fields have changed, so
         # generate a new one with a higher sequence number.
         enr = await self._generate_local_enr(self.this_node.enr.sequence_number + 1)
-        self.this_node.enr = enr
+        self.this_node = Node(enr)
         self.logger.info(
             "Node details changed, generated new local ENR with sequence number %d",
             enr.sequence_number)
 
-        async with self._enr_db_lock:
-            await self._enr_db.update(enr)
+        async with self._node_db_lock:
+            await self.node_db.update(self.this_node)
 
     async def get_local_enr_seq(self) -> int:
         enr = await self.get_local_enr()
         return enr.sequence_number
 
-    async def get_enr(self, remote: NodeAPI) -> ENR:
+    async def get_enr(self, remote: NodeAPI) -> NodeAPI:
         """Get the most recent ENR for the given node and update our local DB if necessary.
 
         Raises CouldNotRetrieveENR if we can't get a ENR from the remote node.
         """
         enr = await self.request_enr(remote)
+        remote = Node(enr)
         self.logger.debug2("Got ENR with seq-id %s for %s", enr.sequence_number, remote)
-        async with self._enr_db_lock:
-            await self._enr_db.insert_or_update(enr)
-            return await self._enr_db.get(remote.id)
+        async with self._node_db_lock:
+            await self.node_db.insert_or_update(remote)
+            return remote
 
     async def wait_neighbours(self, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
         """Wait for a neihgbours packet from the given node.
@@ -635,11 +637,9 @@ class DiscoveryService(Service):
             # This means we still haven't received an ENR for the node, so try to look up an
             # existing one from our DB.
             try:
-                enr = await self._enr_db.get(node_id)
+                node = await self.node_db.get(node_id)
             except KeyError:
                 pass
-            else:
-                node = Node(enr)
         return node
 
     async def receive(self, address: AddressAPI, message: bytes) -> None:
@@ -684,7 +684,6 @@ class DiscoveryService(Service):
         if self._is_msg_expired(expiration):
             return
         self.logger.debug2('<<< pong (v4) from %s (token == %s)', node, encode_hex(token))
-        node.last_pong = time.monotonic()
         await self.process_pong_v4(node, token, enr_seq)
 
     async def recv_neighbours_v4(self, remote: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
@@ -793,9 +792,8 @@ class DiscoveryService(Service):
         self.logger.debug(
             "Received ENR %s (%s) with expected response token: %s",
             enr, enr.items(), encode_hex(token))
-        # Update the Node's ENR and ensure our RT has its latest version.
-        node.enr = enr
-        self.update_routing_table(node)
+        # Update our RT with the node's new version.
+        self.update_routing_table(Node(enr))
         try:
             await channel.send((enr, token))
         except trio.BrokenResourceError:
@@ -878,6 +876,10 @@ class DiscoveryService(Service):
             self.logger.debug(f'Unexpected pong from {remote} with token {encode_hex(token)}')
             return
 
+        remote.last_pong = time.monotonic()
+        async with self._node_db_lock:
+            await self.node_db.insert_or_update(remote)
+
         try:
             await channel.send((token, enr_seq))
         except trio.BrokenResourceError:
@@ -929,11 +931,11 @@ class PreferredNodeDiscoveryService(DiscoveryService):
                  preferred_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
                  socket: trio.socket.SocketType,
-                 enr_db: EnrDbApi,
+                 node_db: NodeDBAPI,
                  enr_field_providers: Optional[Sequence[ENR_FieldProvider]] = tuple()
                  ) -> None:
         super().__init__(
-            privkey, address, bootstrap_nodes, event_bus, socket, enr_db, enr_field_providers)
+            privkey, address, bootstrap_nodes, event_bus, socket, node_db, enr_field_providers)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
         self._preferred_node_tracker = collections.defaultdict(lambda: 0)

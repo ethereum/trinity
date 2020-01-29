@@ -25,7 +25,7 @@ from async_service import (
 )
 
 from p2p.discv5.abc import (
-    EnrDbApi,
+    NodeDBAPI,
     HandshakeParticipantAPI,
 )
 from p2p.discv5.channel_services import (
@@ -67,6 +67,7 @@ from p2p.exceptions import (
     DecryptionError,
     HandshakeFailure,
 )
+from p2p.kademlia import Node
 
 
 class PeerPacker(Service):
@@ -77,7 +78,7 @@ class PeerPacker(Service):
                  local_private_key: bytes,
                  local_node_id: NodeID,
                  remote_node_id: NodeID,
-                 enr_db: EnrDbApi,
+                 node_db: NodeDBAPI,
                  message_type_registry: MessageTypeRegistry,
                  incoming_packet_receive_channel: ReceiveChannel[IncomingPacket],
                  incoming_message_send_channel: SendChannel[IncomingMessage],
@@ -87,7 +88,7 @@ class PeerPacker(Service):
         self.local_private_key = local_private_key
         self.local_node_id = local_node_id
         self.remote_node_id = remote_node_id
-        self.enr_db = enr_db
+        self.node_db = node_db
         self.message_type_registry = message_type_registry
 
         self.incoming_packet_receive_channel = incoming_packet_receive_channel
@@ -156,11 +157,11 @@ class PeerPacker(Service):
 
         if isinstance(incoming_packet.packet, AuthTagPacket):
             try:
-                remote_enr = await self.enr_db.get(self.remote_node_id)
+                remote_node = await self.node_db.get(self.remote_node_id)
             except KeyError:
-                remote_enr = None
+                remote_node = None
             try:
-                local_enr = await self.enr_db.get(self.local_node_id)
+                local_node = await self.node_db.get(self.local_node_id)
             except KeyError:
                 raise ValueError(
                     f"Unable to find local ENR in DB by node id {encode_hex(self.local_node_id)}"
@@ -169,8 +170,8 @@ class PeerPacker(Service):
             self.logger.debug("Received %s as handshake initiation", incoming_packet)
             self.start_handshake_as_recipient(
                 auth_tag=incoming_packet.packet.auth_tag,
-                local_enr=local_enr,
-                remote_enr=remote_enr,
+                local_enr=local_node.enr,
+                remote_enr=remote_node.enr,
             )
             self.logger.debug("Responding with WhoAreYou packet")
             await self.send_first_handshake_packet(incoming_packet.sender_endpoint)
@@ -216,8 +217,9 @@ class PeerPacker(Service):
                 )
 
             if handshake_result.enr is not None:
-                self.logger.debug("Updating ENR in DB with %r", handshake_result.enr)
-                await self.enr_db.insert_or_update(handshake_result.enr)
+                node = Node(handshake_result.enr)
+                self.logger.debug("Updating Node in DB with %r", node)
+                await self.node_db.insert_or_update(node)
 
             if handshake_result.auth_header_packet is not None:
                 outgoing_packet = OutgoingPacket(
@@ -288,13 +290,13 @@ class PeerPacker(Service):
             raise ValueError("Can only handle message pre handshake")
 
         try:
-            local_enr = await self.enr_db.get(self.local_node_id)
+            local_node = await self.node_db.get(self.local_node_id)
         except KeyError:
             raise ValueError(
                 f"Unable to find local ENR in DB by node id {encode_hex(self.local_node_id)}"
             )
         try:
-            remote_enr = await self.enr_db.get(self.remote_node_id)
+            remote_node = await self.node_db.get(self.remote_node_id)
         except KeyError:
             self.logger.warning(
                 "Unable to initiate handshake with %s as their ENR is not present in the DB",
@@ -304,8 +306,8 @@ class PeerPacker(Service):
 
         self.logger.info("Initiating handshake to send %s", outgoing_message)
         self.start_handshake_as_initiator(
-            local_enr=local_enr,
-            remote_enr=remote_enr,
+            local_enr=local_node.enr,
+            remote_enr=remote_node.enr,
             message=outgoing_message.message,
         )
         self.logger.debug("Sending initiating packet")
@@ -461,7 +463,7 @@ class Packer(Service):
     def __init__(self,
                  local_private_key: bytes,
                  local_node_id: NodeID,
-                 enr_db: EnrDbApi,
+                 node_db: NodeDBAPI,
                  message_type_registry: MessageTypeRegistry,
                  incoming_packet_receive_channel: ReceiveChannel[IncomingPacket],
                  incoming_message_send_channel: SendChannel[IncomingMessage],
@@ -470,7 +472,7 @@ class Packer(Service):
                  ) -> None:
         self.local_private_key = local_private_key
         self.local_node_id = local_node_id
-        self.enr_db = enr_db
+        self.node_db = node_db
         self.message_type_registry = message_type_registry
 
         self.incoming_packet_receive_channel = incoming_packet_receive_channel
@@ -592,7 +594,7 @@ class Packer(Service):
             local_private_key=self.local_private_key,
             local_node_id=self.local_node_id,
             remote_node_id=remote_node_id,
-            enr_db=self.enr_db,
+            node_db=self.node_db,
             message_type_registry=self.message_type_registry,
             incoming_packet_receive_channel=incoming_packet_channels[1],
             # These channels are the standard `trio.abc.XXXChannel` interfaces.

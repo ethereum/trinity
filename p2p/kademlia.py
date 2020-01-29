@@ -119,10 +119,17 @@ class Node(NodeAPI):
         self._init(enr)
 
     def _init(self, enr: ENR) -> None:
-        self.address = Address(
-            enr[IP_V4_ADDRESS_ENR_KEY],
-            udp_port=enr[UDP_PORT_ENR_KEY],
-            tcp_port=enr[TCP_PORT_ENR_KEY])
+        try:
+            ip = enr[IP_V4_ADDRESS_ENR_KEY]
+            udp_port = enr[UDP_PORT_ENR_KEY]
+        except KeyError:
+            self.address = None
+        else:
+            tcp_port = enr.get(TCP_PORT_ENR_KEY, udp_port)
+            self.address = Address(ip, udp_port, tcp_port)
+        # FIXME: ENRs may use different pubkey formats and this would break, so instead of storing
+        # a PublicKey with a certain format here we should simply use the APIs in the
+        # ENR.identity_scheme for the crypto related operations.
         self.pubkey = keys.PublicKey.from_compressed_bytes(enr.public_key)
         self.id = NodeID(keccak(self.pubkey.to_bytes()))
         self._id_int = big_endian_to_int(self.id)
@@ -167,10 +174,6 @@ class Node(NodeAPI):
     def enr(self) -> ENR:
         return self._enr
 
-    @enr.setter
-    def enr(self, enr: ENR) -> None:
-        self._init(enr)
-
     @property
     def is_bond_valid(self) -> bool:
         return (
@@ -212,7 +215,7 @@ class Node(NodeAPI):
         return {'enr': repr(self.enr)}
 
     def __setstate__(self, state: Dict[Any, Any]) -> None:
-        self.enr = ENR.from_repr(state.pop('enr'))
+        self._init(ENR.from_repr(state.pop('enr')))
 
 
 @total_ordering
