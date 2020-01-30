@@ -242,9 +242,9 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
         ),
         (   # Enable DEBUG2 logs for everything except discovery which is reduced to ERROR logs
             ('trinity', '-l=DEBUG2', '-l', 'p2p.discovery=ERROR'),
-            {'Started main process', 'ConnectionTrackerServer  Running task <coroutine object'},
+            {'Started main process', '<Manager[ConnectionTrackerServer] SRcfe>: running root task run[daemon=False]'},  # noqa: E501
             {'>>> ping'},
-            {'Started main process', 'ConnectionTrackerServer  Running task <coroutine object'},
+            {'Started main process', '<Manager[ConnectionTrackerServer] SRcfe>: running root task run[daemon=False]'},  # noqa: E501
             {'>>> ping'},
         ),
         pytest.param(
