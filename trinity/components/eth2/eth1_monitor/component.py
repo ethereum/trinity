@@ -22,7 +22,7 @@ from trinity.components.eth2.eth1_monitor.eth1_data_provider import (
     FakeEth1DataProvider,
     Web3Eth1DataProvider,
 )
-from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
+from trinity.components.eth2.beacon.base_validator import ETH1_FOLLOW_DISTANCE
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
 from trinity.events import ShutdownRequest
