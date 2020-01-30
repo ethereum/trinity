@@ -59,7 +59,7 @@ ImportAttestationFn = Callable[[Attestation, bool], None]
 
 
 # FIXME: Read this from validator config
-ETH1_FOLLOW_DISTANCE = 16
+ETH1_FOLLOW_DISTANCE = 5
 
 
 class BaseValidator(BaseService):

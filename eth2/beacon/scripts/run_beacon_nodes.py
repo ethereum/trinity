@@ -35,7 +35,7 @@ from eth2.beacon.tools.builder.validator import (
     sign_proof_of_possession,
 )
 from eth2.beacon.types.deposit_data import DepositData
-from trinity.components.eth2.beacon.validator import ETH1_FOLLOW_DISTANCE
+from trinity.components.eth2.beacon.base_validator import ETH1_FOLLOW_DISTANCE
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 
 
@@ -368,7 +368,8 @@ class Node:
 
 async def init_eth1_chain():
     import shutil
-    chain_data_dir = Path(data_dir, 'geth')
+
+    chain_data_dir = Path(data_dir, "geth")
     if chain_data_dir.exists():
         shutil.rmtree(chain_data_dir)
     proc = await run(f"geth init --datadir {data_dir} {genesis_dir}")
@@ -453,7 +454,10 @@ async def main():
 
         eth1_client_rpcport = 8444
         eth1_clinet = Eth1Client(
-            name="alice", port=30301, rpcport=eth1_client_rpcport, start_time=eth1_start_time
+            name="alice",
+            port=30301,
+            rpcport=eth1_client_rpcport,
+            start_time=eth1_start_time,
         )
 
         asyncio.ensure_future(eth1_clinet.run())
