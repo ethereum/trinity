@@ -219,14 +219,8 @@ async def packer(enr_db,
         outgoing_message_receive_channel=outgoing_message_channels[1],
         outgoing_packet_send_channel=outgoing_packet_channels[0],
     )
-    try:
-        async with background_trio_service(packer):
-            yield packer
-    except trio.BrokenResourceError:
-        # TODO: This hack fixes flakyness in some tests.  This try/except
-        # should be dropped once the main issue has been addressed.
-        # ISSUE LINK: https://github.com/ethereum/trinity/issues/1517
-        pass
+    async with background_trio_service(packer):
+        yield packer
 
 
 @pytest_trio.trio_fixture
