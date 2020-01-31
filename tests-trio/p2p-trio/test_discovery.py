@@ -36,6 +36,7 @@ from p2p.discovery import (
     _pack_v4,
     _unpack_v4,
 )
+from p2p.kademlia import Node
 from p2p.tools.factories import (
     AddressFactory,
     NodeFactory,
@@ -155,15 +156,21 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     # request.
     alice.this_node.last_pong = time.monotonic()
     bob.update_routing_table(alice.this_node)
-    bob.this_node.last_pong = time.monotonic()
-    alice.update_routing_table(bob.this_node)
+
+    # Add a copy of Bob's node with a stub ENR to alice's RT as later we're going to check that it
+    # gets updated with the received ENR.
+    bobs_node_with_stub_enr = Node.from_pubkey_and_addr(
+        bob.this_node.pubkey, bob.this_node.address)
+    bobs_node_with_stub_enr.last_pong = time.monotonic()
+    alice.update_routing_table(bobs_node_with_stub_enr)
+    assert alice.routing.get_node(bobs_node_with_stub_enr.id).enr.sequence_number == 0
 
     enr = None
     got_enr = trio.Event()
 
     async def get_enr():
         nonlocal enr
-        enr = await alice.request_enr(bob.this_node)
+        enr = await alice.request_enr(bobs_node_with_stub_enr)
         got_enr.set()
 
     # Start a task in the background that requests an ENR to bob and then waits for it.
@@ -181,6 +188,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
         await got_enr.wait()
 
     validate_node_enr(bob.this_node, enr, sequence_number=1)
+    assert alice.routing.get_node(bob.this_node.id).enr == enr
 
 
 @pytest.mark.trio
@@ -193,11 +201,9 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
     # Collect all neighbours packets received by alice in a list for later inspection.
     received_neighbours = []
-    got_neighbours = trio.Event()
 
     async def recv_neighbours(node, payload, hash_):
         received_neighbours.append((node, payload))
-        got_neighbours.set()
 
     alice.recv_neighbours_v4 = recv_neighbours
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
@@ -212,11 +218,12 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
         # across two packets since a single one would be bigger than protocol's byte limit.
         await alice.consume_datagram()
         await alice.consume_datagram()
-        await got_neighbours.wait()
+        # Bob should have sent two neighbours packets in order to keep the total packet size
+        # under the 1280 bytes limit. However, the two consume_datagram() calls above will have
+        # spawned background tasks so we take a few short naps here to wait for them to complete.
+        while len(received_neighbours) != 2:
+            await trio.sleep(0.01)
 
-    # Bob should have sent two neighbours packets in order to keep the total packet size under the
-    # 1280 bytes limit.
-    assert len(received_neighbours) == 2
     packet1, packet2 = received_neighbours
     neighbours = []
     for packet in [packet1, packet2]:

@@ -5,7 +5,6 @@ import pytest
 
 from eth_utils import to_hex
 
-from p2p.peer_pool import skip_candidate_if_on_list
 from p2p.tools.factories import NodeFactory
 
 from trinity.components.builtin.network_db.connection.tracker import (
@@ -14,6 +13,7 @@ from trinity.components.builtin.network_db.connection.tracker import (
 from trinity.components.builtin.network_db.eth1_peer_db.tracker import (
     MemoryEth1PeerTracker,
 )
+from trinity.protocol.common.peer import skip_candidate_if_on_list
 
 
 @pytest.fixture

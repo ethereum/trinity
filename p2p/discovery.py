@@ -632,6 +632,26 @@ class DiscoveryService(Service):
         self.logger.debug2("Received datagram from %s", address)
         self.manager.run_task(self.receive, address, datagram)
 
+    async def _lookup_node_from_db(self, node_id: NodeID) -> NodeAPI:
+        # XXX: This is meant to be a temporary helper while we have NodeAPI instances in the RT
+        # and ENRs in the DB. Soon we'll store NodeAPI instances in the DB and this may become
+        # uneccesary as we'll have to do just a simple DB lookup.
+        try:
+            node = self.routing.get_node(node_id)
+        except KeyError:
+            node = None
+
+        if node is None or node.enr.sequence_number == 0:
+            # This means we still haven't received an ENR for the node, so try to look up an
+            # existing one from our DB.
+            try:
+                enr = await self._enr_db.get(node_id)
+            except KeyError:
+                pass
+            else:
+                node = Node(enr)
+        return node
+
     async def receive(self, address: AddressAPI, message: bytes) -> None:
         try:
             remote_pubkey, cmd_id, payload, message_hash = _unpack_v4(message)
@@ -644,17 +664,12 @@ class DiscoveryService(Service):
         except KeyError:
             self.logger.warning("Ignoring uknown msg type: %s; payload=%s", cmd_id, payload)
             return
-        self.logger.debug2("Received %s with payload: %s", cmd.name, payload)
-        try:
-            node = self.routing.get_node(node_id_from_pubkey(remote_pubkey))
-        except KeyError:
+
+        node = await self._lookup_node_from_db(node_id_from_pubkey(remote_pubkey))
+        if node is None or node.address != address:
             node = Node.from_pubkey_and_addr(remote_pubkey, address)
-        else:
-            if node.address != address:
-                # If this node's address changed since we last heard from it we create a new
-                # instance as that will end up replacing the old one when we move it to the front
-                # of the bucket (which is done every time we receive a msg from a node).
-                node = Node.from_pubkey_and_addr(remote_pubkey, address)
+
+        self.logger.debug2("Received %s from %s with payload: %s", cmd.name, node, payload)
         handler = self._get_handler(cmd)
         await handler(node, payload, message_hash)
 
@@ -788,6 +803,9 @@ class DiscoveryService(Service):
         self.logger.debug(
             "Received ENR %s (%s) with expected response token: %s",
             enr, enr.items(), encode_hex(token))
+        # Update the Node's ENR and ensure our RT has its latest version.
+        node.enr = enr
+        self.update_routing_table(node)
         try:
             await channel.send((enr, token))
         except trio.BrokenResourceError:

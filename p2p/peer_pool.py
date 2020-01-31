@@ -8,7 +8,6 @@ from typing import (
     AsyncIterable,
     Callable,
     cast,
-    Container,
     Dict,
     Iterator,
     List,
@@ -45,8 +44,6 @@ from p2p.constants import (
     DISCOVERY_EVENTBUS_ENDPOINT,
     HANDSHAKE_TIMEOUT,
     MAX_CONCURRENT_CONNECTION_ATTEMPTS,
-    MAX_SEQUENTIAL_PEER_CONNECT,
-    PEER_CONNECT_INTERVAL,
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
 from p2p.discv5.typing import NodeID
@@ -81,7 +78,6 @@ from p2p.resource_lock import (
 from p2p.service import (
     BaseService,
 )
-from p2p.token_bucket import TokenBucket
 from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
@@ -217,35 +213,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                 await self.connect_to_nodes(iter(candidates))
             return len(candidates)
 
-    async def maybe_connect_more_peers(self) -> None:
-        rate_limiter = TokenBucket(
-            rate=1 / PEER_CONNECT_INTERVAL,
-            capacity=MAX_SEQUENTIAL_PEER_CONNECT,
-        )
-
-        while self.is_operational:
-            if self.is_full:
-                await self.sleep(PEER_CONNECT_INTERVAL)
-                continue
-
-            await self.wait(rate_limiter.take())
-
-            try:
-                await asyncio.gather(*(
-                    self._add_peers_from_backend(backend, skip_candidate_if_on_list)
-                    for backend in self.peer_backends
-                ))
-            except OperationCancelled:
-                break
-            except asyncio.CancelledError:
-                # no need to log this exception, this is expected
-                raise
-            except Exception:
-                self.logger.exception("unexpected error during peer connection")
-                # Continue trying to connect to peers, even if there was a
-                # surprising failure during one of the attempts.
-                continue
-
     def __len__(self) -> int:
         return len(self.connected_nodes)
 
@@ -337,6 +304,10 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             peer.add_subscriber(subscriber)
             for msg in msgs:
                 subscriber.add_msg(msg)
+
+    @abstractmethod
+    async def maybe_connect_more_peers(self) -> None:
+        ...
 
     async def _run(self) -> None:
         # FIXME: PeerPool should probably no longer be a BaseService, but for now we're keeping it
@@ -560,7 +531,3 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                     self.logger.debug("    %s", line)
             self.logger.debug("== End peer details == ")
             await self.sleep(self._report_interval)
-
-
-def skip_candidate_if_on_list(skip_list: Container[NodeID], candidate: NodeAPI) -> bool:
-    return candidate.id in skip_list

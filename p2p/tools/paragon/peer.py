@@ -67,6 +67,9 @@ class ParagonPeerPool(BasePeerPool):
     peer_factory_class = ParagonPeerFactory
     context: ParagonContext
 
+    async def maybe_connect_more_peers(self) -> None:
+        await self.cancellation()
+
 
 class ParagonMockPeerPoolWithConnectedPeers(ParagonPeerPool):
     def __init__(self, peers: Iterable[ParagonPeer]) -> None:
