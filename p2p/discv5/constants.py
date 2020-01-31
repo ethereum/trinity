@@ -1,3 +1,6 @@
+from p2p.constants import (
+    DISCOVERY_MAX_PACKET_SIZE,
+)
 from p2p.discv5.typing import (
     Nonce,
 )
@@ -9,6 +12,8 @@ TAG_SIZE = 32  # size of the tag packet prefix
 MAGIC_SIZE = 32  # size of the magic hash in the who are you packet
 ID_NONCE_SIZE = 32  # size of the id nonce in who are you and auth tag packets
 RANDOM_ENCRYPTED_DATA_SIZE = 12  # size of random data we send to initiate a handshake
+# safe upper bound on the size of the ENR list in a nodes message
+NODES_MESSAGE_PAYLOAD_SIZE = DISCOVERY_MAX_PACKET_SIZE - 200
 
 ZERO_NONCE = Nonce(b"\x00" * NONCE_SIZE)  # nonce used for the auth header packet
 AUTH_RESPONSE_VERSION = 5  # version number used in auth response

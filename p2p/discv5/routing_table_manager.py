@@ -1,8 +1,15 @@
 import logging
+import rlp
 import time
+from typing import (
+    Generator,
+    Sequence,
+    Tuple,
+)
 
 from eth_utils import (
     encode_hex,
+    to_tuple,
 )
 
 import trio
@@ -31,6 +38,7 @@ from p2p.discv5.channel_services import (
     OutgoingMessage,
 )
 from p2p.discv5.constants import (
+    NODES_MESSAGE_PAYLOAD_SIZE,
     REQUEST_RESPONSE_TIMEOUT,
     ROUTING_TABLE_PING_INTERVAL,
 )
@@ -47,11 +55,50 @@ from p2p.discv5.messages import (
     PongMessage,
 )
 from p2p.discv5.routing_table import (
-    FlatRoutingTable,
+    KademliaRoutingTable,
 )
 from p2p.discv5.typing import (
     NodeID,
 )
+
+
+@to_tuple
+def partition_enr_indices_by_size(enr_sizes: Sequence[int],
+                                  max_payload_size: int,
+                                  ) -> Generator[Tuple[int, ...], None, None]:
+    current_partition: Tuple[int, ...] = ()
+    current_partition_size = 0
+    for index, size in enumerate(enr_sizes):
+        if size > max_payload_size:
+            continue
+
+        if current_partition_size + size <= max_payload_size:
+            current_partition = current_partition + (index,)
+            current_partition_size += size
+        else:
+            yield current_partition
+            current_partition = (index,)
+            current_partition_size = size
+
+    if current_partition:
+        yield current_partition
+
+
+def partition_enrs(enrs: Sequence[ENR], max_payload_size: int) -> Tuple[Tuple[ENR, ...], ...]:
+    """Partition a list of ENRs to groups to be sent in separate NODES messages.
+
+    The goal is to send as few messages as possible, but each message must not exceed the maximum
+    allowed size.
+
+    If a single ENR exceeds the maximum payload size, it will be dropped.
+    """
+    serialized_enrs = tuple(rlp.encode(enr) for enr in enrs)
+    enr_sizes = tuple(len(serialized_enr) for serialized_enr in serialized_enrs)
+    partitioned_enr_indices = partition_enr_indices_by_size(enr_sizes, max_payload_size)
+    return tuple(
+        tuple(enrs[index] for index in indices)
+        for indices in partitioned_enr_indices
+    )
 
 
 class BaseRoutingTableManagerComponent(Service):
@@ -61,7 +108,7 @@ class BaseRoutingTableManagerComponent(Service):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  ) -> None:
@@ -76,7 +123,7 @@ class BaseRoutingTableManagerComponent(Service):
         This method should be called, whenever we receive a message from them.
         """
         self.logger.debug("Updating %s in routing table", encode_hex(node_id))
-        self.routing_table.add_or_update(node_id)
+        self.routing_table.update(node_id)
 
     async def get_local_enr(self) -> ENR:
         """Get the local enr from the ENR DB."""
@@ -202,7 +249,7 @@ class PingHandlerService(BaseRoutingTableManagerComponent):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  outgoing_message_send_channel: SendChannel[OutgoingMessage]
@@ -253,7 +300,7 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  outgoing_message_send_channel: SendChannel[OutgoingMessage]
@@ -276,11 +323,7 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
                 if incoming_message.message.distance == 0:
                     await self.respond_with_local_enr(incoming_message)
                 else:
-                    self.logger.warning(
-                        "Received FindNode request for non-zero distance from %s which is not "
-                        "implemented yet",
-                        encode_hex(incoming_message.sender_node_id),
-                    )
+                    await self.respond_with_remote_enrs(incoming_message)
 
     async def respond_with_local_enr(self, incoming_message: IncomingMessage) -> None:
         """Send a Nodes message containing the local ENR in response to an incoming message."""
@@ -298,6 +341,36 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
         )
         await self.outgoing_message_send_channel.send(outgoing_message)
 
+    async def respond_with_remote_enrs(self, incoming_message: IncomingMessage) -> None:
+        """Send a Nodes message containing ENRs of peers at a given node distance."""
+        node_ids = self.routing_table.get_nodes_at_log_distance(incoming_message.message.distance)
+
+        enrs = []
+        for node_id in node_ids:
+            try:
+                enr = await self.enr_db.get(node_id)
+            except KeyError:
+                self.logger.warning("Missing ENR for node %s", encode_hex(node_id))
+            else:
+                enrs.append(enr)
+
+        enr_partitions = partition_enrs(enrs, NODES_MESSAGE_PAYLOAD_SIZE) or ((),)
+        self.logger.debug(
+            "Responding to %s with %d Nodes message containing %d ENRs at distance %d",
+            incoming_message.sender_endpoint,
+            len(enr_partitions),
+            len(enrs),
+            incoming_message.message.distance,
+        )
+        for partition in enr_partitions:
+            nodes_message = NodesMessage(
+                request_id=incoming_message.message.request_id,
+                total=len(enr_partitions),
+                enrs=partition,
+            )
+            outgoing_message = incoming_message.to_response(nodes_message)
+            await self.outgoing_message_send_channel.send(outgoing_message)
+
 
 class PingSenderService(BaseRoutingTableManagerComponent):
     """Regularly sends pings to peers to check if they are still alive or not."""
@@ -306,7 +379,7 @@ class PingSenderService(BaseRoutingTableManagerComponent):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  endpoint_vote_send_channel: SendChannel[EndpointVote]
@@ -316,8 +389,10 @@ class PingSenderService(BaseRoutingTableManagerComponent):
 
     async def run(self) -> None:
         async for _ in every(ROUTING_TABLE_PING_INTERVAL):  # noqa: F841
-            if len(self.routing_table) > 0:
-                node_id = self.routing_table.get_oldest_entry()
+            if not self.routing_table.is_empty:
+                log_distance = self.routing_table.get_least_recently_updated_log_distance()
+                candidates = self.routing_table.get_nodes_at_log_distance(log_distance)
+                node_id = candidates[-1]
                 self.logger.debug("Pinging %s", encode_hex(node_id))
                 await self.ping(node_id)
             else:
@@ -373,7 +448,7 @@ class RoutingTableManager(Service):
 
     def __init__(self,
                  local_node_id: NodeID,
-                 routing_table: FlatRoutingTable,
+                 routing_table: KademliaRoutingTable,
                  message_dispatcher: MessageDispatcherAPI,
                  enr_db: EnrDbApi,
                  outgoing_message_send_channel: SendChannel[OutgoingMessage],
@@ -381,7 +456,7 @@ class RoutingTableManager(Service):
                  ) -> None:
         SharedComponentKwargType = TypedDict("SharedComponentKwargType", {
             "local_node_id": NodeID,
-            "routing_table": FlatRoutingTable,
+            "routing_table": KademliaRoutingTable,
             "message_dispatcher": MessageDispatcherAPI,
             "enr_db": EnrDbApi,
         })

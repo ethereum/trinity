@@ -85,7 +85,7 @@ def compute_log_distance(left_node_id: NodeID, right_node_id: NodeID) -> int:
     if left_node_id == right_node_id:
         raise ValueError("Cannot compute log distance between identical nodes")
     distance = compute_distance(left_node_id, right_node_id)
-    return distance.bit_length() - 1
+    return distance.bit_length()
 
 
 class KademliaRoutingTable:
@@ -107,7 +107,7 @@ class KademliaRoutingTable:
     def get_index_bucket_and_replacement_cache(self,
                                                node_id: NodeID,
                                                ) -> Tuple[int, Deque[NodeID], Deque[NodeID]]:
-        index = compute_log_distance(self.center_node_id, node_id)
+        index = compute_log_distance(self.center_node_id, node_id) - 1
         bucket = self.buckets[index]
         replacement_cache = self.replacement_caches[index]
         return index, bucket, replacement_cache
@@ -231,11 +231,13 @@ class KademliaRoutingTable:
 
     def get_nodes_at_log_distance(self, log_distance: int) -> Tuple[NodeID, ...]:
         """Get all nodes in the routing table at the given log distance to the center."""
-        if log_distance < 0:
-            raise ValueError("Log distance must not be negative")
-        elif log_distance >= len(self.buckets):
-            raise ValueError(f"Log distance must be smaller than {len(self.buckets)}")
-        return tuple(self.buckets[log_distance])
+        if log_distance <= 0:
+            raise ValueError(f"Log distance must be positive, got {log_distance}")
+        elif log_distance > len(self.buckets):
+            raise ValueError(
+                f"Log distance must not be greater than {len(self.buckets)}, got {log_distance}"
+            )
+        return tuple(self.buckets[log_distance - 1])
 
     @property
     def is_empty(self) -> bool:
@@ -251,7 +253,7 @@ class KademliaRoutingTable:
         except IndexError:
             raise ValueError("Routing table is empty")
         else:
-            return bucket_index
+            return bucket_index + 1
 
     def iter_nodes_around(self, reference_node_id: NodeID) -> Generator[NodeID, None, None]:
         """Iterate over all nodes in the routing table ordered by distance to a given reference."""
