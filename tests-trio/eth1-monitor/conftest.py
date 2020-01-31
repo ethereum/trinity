@@ -28,7 +28,7 @@ from trinity.tools.factories.db import AtomicDBFactory
 # Ref: https://github.com/ethereum/eth2.0-specs/blob/dev/deposit_contract/tests/contracts/conftest.py  # noqa: E501
 
 
-@pytest.fixture("session")
+@pytest.fixture(scope="session")
 def contract_json():
     return json.loads(deposit_contract_json)
 
