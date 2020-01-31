@@ -7,6 +7,7 @@ from typing import (
     AsyncIterable,
     Generic,
     Optional,
+    Tuple,
     Type,
     TypeVar,
 )
@@ -186,6 +187,20 @@ class MessageDispatcherAPI(ABC):
 
         If no endpoint is given, it will be queried from the ENR DB, raising a ValueError if it is
         not present.
+        """
+        ...
+
+    @abstractmethod
+    async def request_nodes(self,
+                            receiver_node_id: NodeID,
+                            message: BaseMessage,
+                            endpoint: Optional[Endpoint] = None,
+                            ) -> Tuple[IncomingMessage, ...]:
+        """Send a request to the given peer and return the collection of Nodes responses.
+
+        Similar to `request`, but waits for all Nodes messages sent in response. If a different
+        message type is received or the messages are in some other way invalid, an
+        `UnexpectedMessage` error is thrown.
         """
         ...
 

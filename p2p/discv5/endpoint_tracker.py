@@ -83,7 +83,7 @@ class EndpointTracker(Service):
             UDP_PORT_ENR_KEY in current_enr
         )
         enr_needs_update = not are_endpoint_keys_present or (
-            vote.endpoint.ip_address != current_enr[IP_V4_ADDRESS_ENR_KEY] and
+            vote.endpoint.ip_address != current_enr[IP_V4_ADDRESS_ENR_KEY] or
             vote.endpoint.port != current_enr[UDP_PORT_ENR_KEY]
         )
         if enr_needs_update:

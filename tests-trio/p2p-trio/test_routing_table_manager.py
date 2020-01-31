@@ -39,10 +39,12 @@ from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
 )
 from p2p.discv5.routing_table import (
+    compute_distance,
     compute_log_distance,
     KademliaRoutingTable,
 )
 from p2p.discv5.routing_table_manager import (
+    iter_closest_nodes,
     partition_enr_indices_by_size,
     FindNodeHandlerService,
     PingHandlerService,
@@ -95,10 +97,15 @@ def remote_endpoint():
 
 
 @pytest.fixture
-def routing_table(local_enr, remote_enr):
+def empty_routing_table(local_enr):
     routing_table = KademliaRoutingTable(local_enr.node_id, 16)
-    routing_table.update(remote_enr.node_id)
     return routing_table
+
+
+@pytest.fixture
+def routing_table(empty_routing_table, remote_enr):
+    empty_routing_table.update(remote_enr.node_id)
+    return empty_routing_table
 
 
 @pytest_trio.trio_fixture
@@ -425,3 +432,39 @@ def test_enr_partitioning(sizes, max_size):
         sum(partition) + next_partition[0] > max_size
         for partition, next_partition in sliding_window(2, partitioned_sizes)
     )
+
+
+def test_closest_nodes_empty(empty_routing_table):
+    target = NodeIDFactory()
+    assert list(iter_closest_nodes(target, empty_routing_table, [])) == []
+
+
+def test_closest_nodes_only_routing(empty_routing_table):
+    target = NodeIDFactory()
+    nodes = [NodeIDFactory() for _ in range(10)]
+    for node in nodes:
+        empty_routing_table.update(node)
+
+    closest_nodes = list(iter_closest_nodes(target, empty_routing_table, []))
+    assert closest_nodes == sorted(nodes, key=lambda node: compute_distance(target, node))
+
+
+def test_closest_nodes_only_additional(empty_routing_table):
+    target = NodeIDFactory()
+    nodes = [NodeIDFactory() for _ in range(10)]
+    closest_nodes = list(iter_closest_nodes(target, empty_routing_table, nodes))
+    assert closest_nodes == sorted(nodes, key=lambda node: compute_distance(target, node))
+
+
+def test_lookup_generator_mixed(empty_routing_table):
+    target = NodeIDFactory()
+    nodes = sorted(
+        [NodeIDFactory() for _ in range(10)],
+        key=lambda node: compute_distance(node, target)
+    )
+    nodes_in_routing_table = nodes[:3] + nodes[6:8]
+    nodes_in_additional = nodes[3:6] + nodes[8:]
+    for node in nodes_in_routing_table:
+        empty_routing_table.update(node)
+    closest_nodes = list(iter_closest_nodes(target, empty_routing_table, nodes_in_additional))
+    assert closest_nodes == nodes
