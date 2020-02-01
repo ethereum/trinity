@@ -511,7 +511,13 @@ class Packer(Service):
                         incoming_packet,
                         managed_peer_packer.peer_packer,
                     )
-                    await managed_peer_packer.incoming_packet_send_channel.send(incoming_packet)
+                    try:
+                        await managed_peer_packer.incoming_packet_send_channel.send(incoming_packet)
+                    except trio.BrokenResourceError:
+                        self.logger.warning(
+                            "Dropping packet as channel to %s is closed" %
+                            managed_peer_packer.peer_packer
+                        )
 
             elif isinstance(incoming_packet.packet, AuthTagPacket):
                 tag = incoming_packet.packet.tag
@@ -532,7 +538,13 @@ class Packer(Service):
                     incoming_packet,
                     encode_hex(remote_node_id),
                 )
-                await managed_peer_packer.incoming_packet_send_channel.send(incoming_packet)
+                try:
+                    await managed_peer_packer.incoming_packet_send_channel.send(incoming_packet)
+                except trio.BrokenResourceError:
+                    self.logger.warning(
+                        "Dropping packet as channel to %s is closed" %
+                        managed_peer_packer.peer_packer
+                    )
 
             else:
                 self.logger.warning("Dropping unprompted handshake packet %s", incoming_packet)
