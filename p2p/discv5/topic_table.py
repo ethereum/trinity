@@ -48,7 +48,6 @@ class TopicTable:
 
         The result will be ordered from newest to oldest entry.
         """
-        # reverse queue so that old entries come first
         return tuple(ad.enr for ad in self.topic_queues[topic])
 
     def get_wait_time(self, topic: Topic) -> float:
