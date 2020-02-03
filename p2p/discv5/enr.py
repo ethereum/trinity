@@ -369,6 +369,13 @@ class ENR(BaseENR, ENRSedes):
             unpadded_base64_rlp.decode("ASCII"),
         ))
 
+    @property
+    def fork_id(self) -> ForkID:
+        eth_cap = self._kv_pairs.get(b'eth', None)
+        if eth_cap is not None:
+            return eth_cap[0]
+        return None
+
 
 IDENTITY_SCHEME_ENR_KEY = b"id"
 
