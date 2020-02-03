@@ -218,6 +218,11 @@ class BasePeer(BaseService):
         if subscriber in self._subscribers:
             self._subscribers.remove(subscriber)
 
+    def cancel_nowait(self):
+        if self.connection.remote.address.ip == '127.0.0.1':
+            self.logger.warning("Closing local peer %s", self, stack_info=True)
+        return super().cancel_nowait()
+
     async def _cleanup(self) -> None:
         if self.connection.is_operational:
             # the connection might be closed from when its cancel token triggers

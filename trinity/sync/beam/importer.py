@@ -539,6 +539,10 @@ class BlockImportServer(Service):
                     event.block,
                     exc
                 )
+            except ValidationError:
+                #TODO emit some new InvalidBlockError event?
+                import rlp
+                beam_chain.chaindb.db[b'bad-block:'+event.block.hash] = rlp.encode(event.block)
             else:
                 if self.manager.is_running:
                     _broadcast_import_complete(

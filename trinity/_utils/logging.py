@@ -74,6 +74,8 @@ class IPCHandler(logging.Handler):
             msg_data = pickle.dumps(self.prepare(record))
             msg_length_data = len(msg_data).to_bytes(4, 'big')
             self._socket.sendall(msg_length_data + msg_data)
+        except BrokenPipeError:
+            print("Failed to write log:", msg_data, file=sys.stderr)
         except Exception:
             self.handleError(record)
 
