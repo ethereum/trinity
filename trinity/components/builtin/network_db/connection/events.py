@@ -25,22 +25,6 @@ class BlacklistEvent(BaseConnectionTrackerEvent):
 
 
 @dataclass
-class ShouldConnectToPeerResponse(BaseConnectionTrackerEvent):
-
-    should_connect: bool
-
-
-@dataclass
-class ShouldConnectToPeerRequest(BaseRequestResponseEvent[ShouldConnectToPeerResponse]):
-
-    remote: NodeAPI
-
-    @staticmethod
-    def expected_response_type() -> Type[ShouldConnectToPeerResponse]:
-        return ShouldConnectToPeerResponse
-
-
-@dataclass
 class GetBlacklistedPeersResponse(BaseConnectionTrackerEvent):
 
     peers: Tuple[NodeID, ...]

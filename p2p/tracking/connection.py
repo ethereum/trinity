@@ -54,10 +54,6 @@ class BaseConnectionTracker(ABC):
         ...
 
     @abstractmethod
-    async def should_connect_to(self, remote: NodeAPI) -> bool:
-        ...
-
-    @abstractmethod
     async def get_blacklisted(self) -> Tuple[NodeID, ...]:
         ...
 
@@ -65,9 +61,6 @@ class BaseConnectionTracker(ABC):
 class NoopConnectionTracker(BaseConnectionTracker):
     def record_blacklist(self, remote: NodeAPI, timeout_seconds: int, reason: str) -> None:
         pass
-
-    async def should_connect_to(self, remote: NodeAPI) -> bool:
-        return True
 
     async def get_blacklisted(self) -> Tuple[NodeID, ...]:
         return tuple()

@@ -9,15 +9,13 @@ from .events import (
     BlacklistEvent,
     GetBlacklistedPeersRequest,
     GetBlacklistedPeersResponse,
-    ShouldConnectToPeerRequest,
-    ShouldConnectToPeerResponse,
 )
 
 
 class ConnectionTrackerServer(Service):
     """
     Server to handle the event bus communication for BlacklistEvent and
-    ShouldConnectToPeerRequest/Response events
+    GetBlacklistedPeersRequest/Response events
     """
     logger = get_extended_debug_logger('trinity.components.network_db.ConnectionTrackerServer')
 
@@ -26,15 +24,6 @@ class ConnectionTrackerServer(Service):
                  tracker: BaseConnectionTracker) -> None:
         self.tracker = tracker
         self.event_bus = event_bus
-
-    async def handle_should_connect_to_requests(self) -> None:
-        async for req in self.event_bus.stream(ShouldConnectToPeerRequest):
-            self.logger.debug2('Received should connect to request: %s', req.remote)
-            should_connect = await self.tracker.should_connect_to(req.remote)
-            await self.event_bus.broadcast(
-                ShouldConnectToPeerResponse(should_connect),
-                req.broadcast_config()
-            )
 
     async def handle_get_blacklisted_requests(self) -> None:
         async for req in self.event_bus.stream(GetBlacklistedPeersRequest):
@@ -62,10 +51,6 @@ class ConnectionTrackerServer(Service):
     async def run(self) -> None:
         self.logger.debug("Running ConnectionTrackerServer")
 
-        self.manager.run_daemon_task(
-            self.handle_should_connect_to_requests,
-            name='ConnectionTrackerServer.handle_should_connect_to_requests',
-        )
         self.manager.run_daemon_task(
             self.handle_blacklist_command,
             name='ConnectionTrackerServer.handle_blacklist_command',
