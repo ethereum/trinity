@@ -1,4 +1,3 @@
-import datetime
 from pathlib import Path
 
 import pytest
@@ -24,11 +23,13 @@ async def test_records_failures():
     connection_tracker = MemoryConnectionTracker()
 
     node = NodeFactory()
-    assert await connection_tracker.should_connect_to(node) is True
+    blacklisted_ids = await connection_tracker.get_blacklisted()
+    assert node.id not in blacklisted_ids
 
     connection_tracker.record_failure(node, HandshakeFailure())
 
-    assert await connection_tracker.should_connect_to(node) is False
+    blacklisted_ids = await connection_tracker.get_blacklisted()
+    assert node.id in blacklisted_ids
     assert connection_tracker._record_exists(node.id)
 
 
@@ -37,16 +38,21 @@ async def test_memory_does_not_persist():
     node = NodeFactory()
 
     connection_tracker_a = MemoryConnectionTracker()
-    assert await connection_tracker_a.should_connect_to(node) is True
+    blacklisted_ids = await connection_tracker_a.get_blacklisted()
+    assert node.id not in blacklisted_ids
     connection_tracker_a.record_failure(node, HandshakeFailure())
-    assert await connection_tracker_a.should_connect_to(node) is False
+    blacklisted_ids = await connection_tracker_a.get_blacklisted()
+    assert node.id in blacklisted_ids
 
     # open a second instance
     connection_tracker_b = MemoryConnectionTracker()
 
     # the second instance has no memory of the failure
-    assert await connection_tracker_b.should_connect_to(node) is True
-    assert await connection_tracker_a.should_connect_to(node) is False
+    tracker_b_blacklisted_ids = await connection_tracker_b.get_blacklisted()
+    assert node.id not in tracker_b_blacklisted_ids
+
+    tracker_a_blacklisted_ids = await connection_tracker_a.get_blacklisted()
+    assert node.id in tracker_a_blacklisted_ids
 
 
 @pytest.mark.asyncio
@@ -55,33 +61,18 @@ async def test_sql_does_persist(tmpdir):
     node = NodeFactory()
 
     connection_tracker_a = SQLiteConnectionTracker(get_tracking_database(db_path))
-    assert await connection_tracker_a.should_connect_to(node) is True
+    blacklisted_ids = await connection_tracker_a.get_blacklisted()
+    assert node.id not in blacklisted_ids
     connection_tracker_a.record_failure(node, HandshakeFailure())
-    assert await connection_tracker_a.should_connect_to(node) is False
+    blacklisted_ids = await connection_tracker_a.get_blacklisted()
+    assert node.id in blacklisted_ids
     del connection_tracker_a
 
     # open a second instance
     connection_tracker_b = SQLiteConnectionTracker(get_tracking_database(db_path))
+    blacklisted_ids = await connection_tracker_b.get_blacklisted()
     # the second instance remembers the failure
-    assert await connection_tracker_b.should_connect_to(node) is False
-
-
-@pytest.mark.asyncio
-async def test_timeout_works():
-    node = NodeFactory()
-
-    connection_tracker = MemoryConnectionTracker()
-    assert await connection_tracker.should_connect_to(node) is True
-
-    connection_tracker.record_failure(node, HandshakeFailure())
-    assert await connection_tracker.should_connect_to(node) is False
-
-    record = connection_tracker._get_record(node.id)
-    record.expires_at -= datetime.timedelta(seconds=120)
-    connection_tracker.session.add(record)
-    connection_tracker.session.commit()
-
-    assert await connection_tracker.should_connect_to(node) is True
+    assert node.id in blacklisted_ids
 
 
 @pytest.mark.asyncio

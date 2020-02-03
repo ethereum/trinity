@@ -37,7 +37,6 @@ from trinity.db.orm import (
 from .events import (
     BlacklistEvent,
     GetBlacklistedPeersRequest,
-    ShouldConnectToPeerRequest,
 )
 
 
@@ -80,25 +79,6 @@ class SQLiteConnectionTracker(BaseConnectionTracker):
                 record.error_count + 1,
             )
             self._update_record(remote, scaled_expires_at, reason)
-
-    async def should_connect_to(self, remote: NodeAPI) -> bool:
-        try:
-            record = self._get_record(remote.id)
-        except NoResultFound:
-            return True
-
-        now = datetime.datetime.utcnow()
-        if now < record.expires_at:
-            delta = record.expires_at - now
-            self.logger.debug(
-                'skipping %s, it failed because "%s" and is not usable for %s',
-                remote,
-                record.reason,
-                humanize_seconds(delta.total_seconds()),
-            )
-            return False
-
-        return True
 
     async def get_blacklisted(self) -> Tuple[NodeID, ...]:
         now = datetime.datetime.utcnow()
@@ -181,14 +161,6 @@ class ConnectionTrackerClient(BaseConnectionTracker):
             BlacklistEvent(remote, timeout_seconds, reason=reason),
             self.config,
         )
-
-    # XXX: Should I get rid of this?
-    async def should_connect_to(self, remote: NodeAPI) -> bool:
-        response = await self.event_bus.request(
-            ShouldConnectToPeerRequest(remote),
-            self.config
-        )
-        return response.should_connect
 
     async def get_blacklisted(self) -> Tuple[NodeID, ...]:
         response = await self.event_bus.request(GetBlacklistedPeersRequest(), self.config)
