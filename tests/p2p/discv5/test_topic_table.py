@@ -104,7 +104,7 @@ def test_registration(topic_table, max_queue_size, max_total_size, target_ad_lif
     assert len(topic_table.get_enrs_for_topic(topic)) == max_queue_size
     assert topic_table.get_enrs_for_topic(topic)[0] == enr
 
-    while not topic_table.is_table_full():
+    while not topic_table.is_full():
         topic_table.register(TopicFactory(), ENRFactory(), 0)
     with pytest.raises(ValueError):
         topic_table.register(TopicFactory(), ENRFactory(), 0)
