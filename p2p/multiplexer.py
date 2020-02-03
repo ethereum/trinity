@@ -101,7 +101,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
     _transport: TransportAPI
     _msg_counts: DefaultDict[Type[CommandAPI[Any]], int]
 
-    _protocol_locks: ResourceLock
+    _protocol_locks: ResourceLock[Type[ProtocolAPI]]
     _protocol_queues: Dict[Type[ProtocolAPI], 'asyncio.Queue[CommandAPI[Any]]']
 
     def __init__(self,
