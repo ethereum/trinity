@@ -60,6 +60,7 @@ from p2p.discv5.routing_table import (
 )
 from p2p.discv5.typing import (
     NodeID,
+    Topic,
 )
 
 
@@ -258,3 +259,11 @@ class HandshakeRecipientFactory(factory.Factory):
 
     class Params:
         remote_private_key = factory.Faker("binary", length=V4IdentityScheme.private_key_size)
+
+
+class TopicFactory(factory.Factory):
+    class Meta:
+        model = Topic
+        inline_args = ("topic",)
+
+    topic = factory.Faker("binary", length=32)
