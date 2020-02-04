@@ -88,7 +88,7 @@ from p2p.events import (
     PeerCandidatesResponse,
 )
 from p2p.exceptions import AlreadyWaitingDiscoveryResponse, CouldNotRetrieveENR, NoEligibleNodes
-from p2p.forkid import ForkID, make_forkid
+from p2p import forkid
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
 from p2p import trio_utils
 
@@ -1199,11 +1199,12 @@ class ExpectedResponseChannels(Generic[TMsg]):
 async def generate_eth_cap_enr_field(
         vm_config: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...],
         headerdb: 'BaseAsyncHeaderDB',
-) -> Tuple[Literal[b'eth'], Tuple[ForkID]]:
+) -> Tuple[Literal[b'eth'], Tuple[forkid.ForkID]]:
     head = await headerdb.coro_get_canonical_head()
     genesis_hash = await headerdb.coro_get_canonical_block_hash(GENESIS_BLOCK_NUMBER)
-    forkid = make_forkid(genesis_hash, head.block_number, vm_config)
-    return (b'eth', (forkid,))
+    fork_blocks = forkid.extract_fork_blocks(vm_config)
+    our_forkid = forkid.make_forkid(genesis_hash, head.block_number, fork_blocks)
+    return (b'eth', (our_forkid,))
 
 
 def node_id_from_pubkey(pubkey: keys.PublicKey) -> NodeID:

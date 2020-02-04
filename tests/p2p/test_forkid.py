@@ -10,12 +10,17 @@ from eth.chains.mainnet import MAINNET_VM_CONFIGURATION
 from eth.chains.ropsten import ROPSTEN_VM_CONFIGURATION
 
 from p2p.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
-from p2p.forkid import ForkID, make_forkid, validate_forkid
+from p2p.forkid import extract_fork_blocks, ForkID, make_forkid, validate_forkid
 
 MAINNET_GENESIS_HASH = to_bytes(
     hexstr='0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3')
 ROPSTEN_GENESIS_HASH = to_bytes(
     hexstr='0x41941023680923e0fe4d74a34bdac8141f2540e3ae90623718e47d66d1ca4a2d')
+
+
+def test_extract_fork_blocks():
+    fork_blocks = extract_fork_blocks(MAINNET_VM_CONFIGURATION)
+    assert fork_blocks == (1150000, 1920000, 2463000, 2675000, 4370000, 7280000, 9069000, 9200000)
 
 
 @pytest.mark.parametrize(
@@ -73,7 +78,8 @@ def test_ropsten_forkids(head, expected_forkid):
 
 
 def _test_make_forkid(vm_config, genesis_hash, head, expected_forkid):
-    forkid = make_forkid(genesis_hash, head, vm_config)
+    fork_blocks = extract_fork_blocks(vm_config)
+    forkid = make_forkid(genesis_hash, head, fork_blocks)
     assert forkid.hash == expected_forkid.hash
     assert forkid.next == expected_forkid.next
 
@@ -170,12 +176,12 @@ def test_forkid():
     ]
 )
 def test_forkid_validation(local_head, remote_forkid, expected_error):
+    fork_blocks = extract_fork_blocks(MAINNET_VM_CONFIGURATION)
     if expected_error:
         with pytest.raises(expected_error):
-            validate_forkid(
-                remote_forkid, MAINNET_GENESIS_HASH, local_head, MAINNET_VM_CONFIGURATION)
+            validate_forkid(remote_forkid, MAINNET_GENESIS_HASH, local_head, fork_blocks)
     else:
-        validate_forkid(remote_forkid, MAINNET_GENESIS_HASH, local_head, MAINNET_VM_CONFIGURATION)
+        validate_forkid(remote_forkid, MAINNET_GENESIS_HASH, local_head, fork_blocks)
 
 
 @pytest.mark.parametrize(
