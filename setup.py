@@ -12,7 +12,7 @@ deps = {
     'p2p': [
         "async-exit-stack==1.0.1",
         "async-generator==1.10",
-        "async-service==0.1.0a6",
+        "async-service==0.1.0a7",
         "asyncio-cancel-token>=0.2,<0.3",
         "async_lru>=0.1.0,<1.0.0",
         "cached-property>=1.5.1,<2",
