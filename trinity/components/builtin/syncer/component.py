@@ -15,6 +15,7 @@ from typing import (
     Type,
 )
 
+from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
 from cancel_token import CancelToken
@@ -23,8 +24,6 @@ from eth_utils import (
     to_tuple,
     ValidationError,
 )
-
-from p2p.service import run_service
 
 from trinity.boot_info import BootInfo
 from trinity.config import (
@@ -308,9 +307,9 @@ class SyncerComponent(AsyncioIsolatedComponent):
         node = NodeClass(event_bus, trinity_config)
         strategy = cls.get_active_strategy(boot_info)
 
-        async with run_service(node):
+        async with background_asyncio_service(node) as manager:
             await cls.launch_sync(node, strategy, boot_info, event_bus)
-            await node.cancellation()
+            await manager.wait_finished()
 
     @classmethod
     async def launch_sync(cls,
@@ -318,7 +317,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
                           strategy: BaseSyncStrategy,
                           boot_info: BootInfo,
                           event_bus: EndpointAPI) -> None:
-        await node.events.started.wait()
+        await node.get_manager().wait_started()
         await strategy.sync(
             boot_info.args,
             cls.logger,
@@ -326,7 +325,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
             node.base_db,
             node.get_peer_pool(),
             event_bus,
-            node.cancel_token
+            node.master_cancel_token
         )
 
         if strategy.shutdown_node_on_halt:
