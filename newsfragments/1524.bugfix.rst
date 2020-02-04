@@ -1,0 +1,2 @@
+:cls:`~p2p.exceptions.PeerConnectionLost` was escaping during a ``highest_td_peer`` call, and
+crashing whatever called it. The exception is now caught.
