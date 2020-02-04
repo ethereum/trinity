@@ -31,7 +31,7 @@ class ForkID(rlp.Serializable):
 
 
 @to_tuple
-def _extract_fork_blocks(
+def extract_fork_blocks(
         vm_configuration: Tuple[
             Tuple[BlockNumber, Type[VirtualMachineAPI]], ...]
 ) -> Iterator[BlockNumber]:
@@ -46,9 +46,8 @@ def _extract_fork_blocks(
 def make_forkid(
         genesis_hash: Hash32,
         current_head: BlockNumber,
-        vm_config: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...]
+        fork_blocks: Tuple[BlockNumber, ...],
 ) -> ForkID:
-    fork_blocks = _extract_fork_blocks(vm_config)
     pre_hash_bytes = bytes(genesis_hash)
     next_fork = 0
     for block_number in fork_blocks:
@@ -65,7 +64,8 @@ def validate_forkid(
         forkid: ForkID,
         genesis_hash: Hash32,
         head: BlockNumber,
-        vm_config: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...]) -> None:
+        fork_blocks: Tuple[BlockNumber, ...],
+) -> None:
     """
     Validate the given ForkID against our current state.
 
@@ -73,14 +73,14 @@ def validate_forkid(
       https://github.com/ethereum/EIPs/blob/master/EIPS/eip-2124.md#validation-rules
     """
 
-    fork_blocks = list(_extract_fork_blocks(vm_config))
+    fork_blocks_list = list(fork_blocks)
     checksums = [binascii.crc32(genesis_hash)]
-    for block_number in fork_blocks:
+    for block_number in fork_blocks_list:
         block_number_as_bytes = block_number.to_bytes(8, 'big')
         checksums.append(binascii.crc32(block_number_as_bytes, checksums[-1]))
 
-    fork_blocks.append(BlockNumber(sys.maxsize))
-    for i, block_number in enumerate(fork_blocks):
+    fork_blocks_list.append(BlockNumber(sys.maxsize))
+    for i, block_number in enumerate(fork_blocks_list):
         if head > block_number:
             # Our head is beyound this fork, so continue. We have a dummy fork block as the last
             # item in fork_blocks to ensure this check fails eventually.
@@ -98,7 +98,7 @@ def validate_forkid(
 
         # We're in different forks currently, check if the remote checksum is a subset of our
         # local forks (rule #2).
-        for b, checksum in itertools.zip_longest(fork_blocks[:i], checksums[:i]):
+        for b, checksum in itertools.zip_longest(fork_blocks_list[:i], checksums[:i]):
             if _crc_to_bytes(checksum) == forkid.hash:
                 # Remote checksum is a subset, validate based on the announced next fork
                 if b != forkid.next:
