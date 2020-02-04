@@ -1,6 +1,7 @@
 from typing import Any, NamedTuple, NewType, Sequence, Tuple
 
 from eth_typing import Hash32
+from typing_extensions import Protocol
 
 Slot = NewType("Slot", int)  # uint64
 Epoch = NewType("Epoch", int)  # uint64
@@ -63,3 +64,7 @@ default_timestamp = Timestamp(0)
 default_second = Second(0)
 default_bitfield = Bitfield(tuple())
 default_version = Version(b"\x00" * 4)
+
+
+class Operation(Protocol):
+    hash_tree_root: Root
