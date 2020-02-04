@@ -550,7 +550,7 @@ class DiscoveryService(Service):
                 eth_utils.toolz.unique(closest), target_id)[:constants.KADEMLIA_BUCKET_SIZE]
             nodes_to_ask = _exclude_if_asked(closest)
 
-        self.logger.info(
+        self.logger.debug(
             "lookup finished for target %s; closest neighbours: %s", to_hex(target_id), closest
         )
         return tuple(closest)
