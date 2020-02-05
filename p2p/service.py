@@ -14,6 +14,7 @@ from typing import (
 )
 from weakref import WeakSet
 
+from async_service import Service, ServiceAPI
 from async_generator import asynccontextmanager
 
 from cancel_token import CancelToken, OperationCancelled
@@ -388,6 +389,9 @@ class BaseService(CancellableMixin, AsyncioServiceAPI):
         """
         pass
 
+    def as_new_service(self) -> ServiceAPI:
+        return WrappedLegacyService(self)
+
 
 def service_timeout(timeout: int) -> Callable[..., Any]:
     """
@@ -436,3 +440,12 @@ async def run_service(service: TService) -> AsyncIterator[TService]:
                 await task
             except asyncio.CancelledError:
                 pass
+
+
+class WrappedLegacyService(Service):
+    def __init__(self, service: AsyncioServiceAPI) -> None:
+        self._service = service
+
+    async def run(self) -> None:
+        async with run_service(self._service):
+            await self._service.cancellation()

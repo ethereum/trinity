@@ -20,6 +20,7 @@ from typing import (
 )
 import uuid
 
+from async_service import ServiceAPI
 from cancel_token import CancelToken
 
 from eth_utils import ExtendedDebugLogger
@@ -411,6 +412,10 @@ class AsyncioServiceAPI(ABC):
     events: ServiceEventsAPI
     cancel_token: CancelToken
 
+    @abstractmethod
+    def as_new_service(self) -> ServiceAPI:
+        ...
+
     @property
     @abstractmethod
     def logger(self) -> ExtendedDebugLogger:
@@ -443,6 +448,10 @@ class AsyncioServiceAPI(ABC):
 
     @abstractmethod
     async def cancel(self) -> None:
+        ...
+
+    @abstractmethod
+    async def cancellation(self) -> None:
         ...
 
     @abstractmethod
