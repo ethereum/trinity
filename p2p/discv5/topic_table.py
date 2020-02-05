@@ -52,28 +52,32 @@ class TopicTable:
         """
         return tuple(ad.enr for ad in self.topic_queues[topic])
 
-    def get_wait_time(self, topic: Topic) -> float:
+    def get_wait_time(self, topic: Topic, current_time: float) -> float:
         """Return the time at which the next ad for a given topic can be added."""
         is_table_full = self.is_full()
         is_queue_full = self.is_queue_full(topic)
 
         if not is_queue_full and not is_table_full:
-            return -math.inf
+            return 0
 
         if is_queue_full:
             queue = self.topic_queues[topic]
-            wait_time_queue = queue[-1].registration_time + self.target_ad_lifetime
+            oldest_registration_time_queue = queue[-1].registration_time
         else:
-            wait_time_queue = -math.inf
+            oldest_registration_time_queue = -math.inf
 
         if is_table_full:
             oldest_ads = [queue[-1] for queue in self.topic_queues.values() if queue]
             oldest_reg_time = min(ad.registration_time for ad in oldest_ads)
-            wait_time_table = oldest_reg_time + self.target_ad_lifetime
+            oldest_registration_time_table = oldest_reg_time
         else:
-            wait_time_table = -math.inf
+            oldest_registration_time_table = -math.inf
 
-        return max(wait_time_queue, wait_time_table)
+        next_registration_time = max(
+            oldest_registration_time_queue,
+            oldest_registration_time_table,
+        ) + self.target_ad_lifetime
+        return max(next_registration_time - current_time, 0)
 
     def register(self, topic: Topic, enr: ENR, current_time: float) -> None:
         """Register a new ad.
@@ -84,7 +88,7 @@ class TopicTable:
         """
         queue = self.topic_queues[topic]
 
-        wait_time = self.get_wait_time(topic) - current_time
+        wait_time = self.get_wait_time(topic, current_time)
         if wait_time > 0:
             raise ValueError(f"Topic queue or table is full (time to wait: {wait_time})")
 

@@ -61,13 +61,13 @@ def test_wait_time_full_table(topic_table, target_ad_lifetime):
     reg_time = 0
     oldest_table_eol = reg_time + target_ad_lifetime
     while not topic_table.is_full():
-        assert topic_table.get_wait_time(TopicFactory()) == -math.inf
+        assert topic_table.get_wait_time(TopicFactory(), 0) == 0
         topic_table.register(TopicFactory(), ENRFactory(), reg_time)
         reg_time += 1
 
-    assert topic_table.get_wait_time(TopicFactory()) == oldest_table_eol
+    assert topic_table.get_wait_time(TopicFactory(), 0) == oldest_table_eol
     topic_table.register(TopicFactory(), ENRFactory(), reg_time)
-    assert topic_table.get_wait_time(TopicFactory()) == oldest_table_eol + 1
+    assert topic_table.get_wait_time(TopicFactory(), 0) == oldest_table_eol + 1
 
 
 def test_wait_time_full_queue(topic_table, max_total_size, target_ad_lifetime):
@@ -77,16 +77,16 @@ def test_wait_time_full_queue(topic_table, max_total_size, target_ad_lifetime):
     reg_time = 0
     oldest_queue_eol = reg_time + target_ad_lifetime
     while not topic_table.is_queue_full(topic):
-        assert topic_table.get_wait_time(topic) == -math.inf
-        assert topic_table.get_wait_time(different_topic) == -math.inf
+        assert topic_table.get_wait_time(topic, 0) == 0
+        assert topic_table.get_wait_time(different_topic, 0) == 0
         topic_table.register(topic, ENRFactory(), reg_time)
         reg_time += 1
 
-    assert topic_table.get_wait_time(topic) == oldest_queue_eol
-    assert topic_table.get_wait_time(different_topic) == -math.inf
+    assert topic_table.get_wait_time(topic, 0) == oldest_queue_eol
+    assert topic_table.get_wait_time(different_topic, 0) == 0
     topic_table.register(topic, ENRFactory(), reg_time)
-    assert topic_table.get_wait_time(topic) == oldest_queue_eol + 1
-    assert topic_table.get_wait_time(different_topic) == -math.inf
+    assert topic_table.get_wait_time(topic, 0) == oldest_queue_eol + 1
+    assert topic_table.get_wait_time(different_topic, 0) == 0
 
 
 def test_wait_time_full_queue_and_table(topic_table, max_queue_size, target_ad_lifetime):
@@ -104,8 +104,8 @@ def test_wait_time_full_queue_and_table(topic_table, max_queue_size, target_ad_l
         topic_table.register(TopicFactory(), ENRFactory(), reg_time)
         reg_time += 1
 
-    assert topic_table.get_wait_time(topic) == oldest_queue_eol
-    assert topic_table.get_wait_time(TopicFactory()) == oldest_queue_eol
+    assert topic_table.get_wait_time(topic, 0) == oldest_queue_eol
+    assert topic_table.get_wait_time(TopicFactory(), 0) == oldest_queue_eol
 
     # refill queue
     oldest_queue_eol = reg_time + target_ad_lifetime
@@ -113,8 +113,8 @@ def test_wait_time_full_queue_and_table(topic_table, max_queue_size, target_ad_l
         topic_table.register(topic, ENRFactory(), reg_time)
         reg_time += 1
 
-    assert topic_table.get_wait_time(topic) == oldest_queue_eol
-    assert topic_table.get_wait_time(TopicFactory()) == oldest_table_eol
+    assert topic_table.get_wait_time(topic, 0) == oldest_queue_eol
+    assert topic_table.get_wait_time(TopicFactory(), 0) == oldest_table_eol
 
 
 def test_registration_single_queue(topic_table, max_queue_size):
@@ -139,7 +139,7 @@ def test_registration_single_queue(topic_table, max_queue_size):
 
     enrs_before = topic_table.get_enrs_for_topic(topic)
     new_enr = ENRFactory()
-    topic_table.register(topic, new_enr, topic_table.get_wait_time(topic))
+    topic_table.register(topic, new_enr, topic_table.get_wait_time(topic, 0))
     enrs_after = topic_table.get_enrs_for_topic(topic)
     assert enrs_after == (new_enr,) + enrs_before[:-1]
 
@@ -162,18 +162,18 @@ def test_registration_two_queues(topic_table, max_queue_size):
     with pytest.raises(ValueError):
         topic_table.register(topic2, ENRFactory(), 1)
     with pytest.raises(ValueError):
-        topic_table.register(topic2, ENRFactory(), topic_table.get_wait_time(topic1))
+        topic_table.register(topic2, ENRFactory(), topic_table.get_wait_time(topic1, 0))
 
     enrs_topic1_before = topic_table.get_enrs_for_topic(topic1)
     enrs_topic2_before = topic_table.get_enrs_for_topic(topic2)
     new_enr_topic1 = ENRFactory()
     new_enr_topic2 = ENRFactory()
 
-    topic_table.register(topic1, new_enr_topic1, topic_table.get_wait_time(topic1))
-    topic_table.register(topic2, new_enr_topic2, topic_table.get_wait_time(topic2))
+    topic_table.register(topic1, new_enr_topic1, topic_table.get_wait_time(topic1, 0))
+    topic_table.register(topic2, new_enr_topic2, topic_table.get_wait_time(topic2, 0))
 
     enrs_topic1_after = topic_table.get_enrs_for_topic(topic1)
-    enrs_topic2_after = topic_table.get_enrs_for_topic(topic1)
+    enrs_topic2_after = topic_table.get_enrs_for_topic(topic2)
     assert enrs_topic1_after == (new_enr_topic1,) + enrs_topic1_before[:-1]
     assert enrs_topic2_after == (new_enr_topic2,) + enrs_topic2_before[:-1]
 
@@ -185,15 +185,15 @@ def test_registration_full_table(topic_table, max_queue_size, max_total_size):
 
     with pytest.raises(ValueError):
         topic_table.register(TopicFactory(), ENRFactory(), 0)
-    wait_time = topic_table.get_wait_time(TopicFactory())
+    wait_time = topic_table.get_wait_time(TopicFactory(), 0)
     topic_table.register(TopicFactory(), ENRFactory(), wait_time)
 
     topic = TopicFactory()
     assert not topic_table.is_queue_full(topic)
     while not topic_table.is_queue_full(topic):
-        topic_table.register(topic, ENRFactory(), topic_table.get_wait_time(topic))
+        topic_table.register(topic, ENRFactory(), topic_table.get_wait_time(topic, 0))
 
     with pytest.raises(ValueError):
         topic_table.register(TopicFactory(), ENRFactory(), 0)
-    wait_time = topic_table.get_wait_time(TopicFactory())
+    wait_time = topic_table.get_wait_time(TopicFactory(), 0)
     topic_table.register(TopicFactory(), ENRFactory(), wait_time)
