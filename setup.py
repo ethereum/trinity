@@ -122,7 +122,7 @@ deps = {
         "ssz==0.2.3",
     ],
     'eth2-extra': [
-        "milagro-bls-binding==0.1.3",
+        "milagro-bls-binding==0.2.0",
     ],
     'eth2-lint': [
         "black==19.3b0",
