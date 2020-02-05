@@ -2,7 +2,6 @@ from enum import Enum
 from typing import Any, Dict, Optional
 
 from eth2._utils.bls import bls
-from eth2._utils.bls.backends import MilagroBackend
 from eth2.beacon.tools.fixtures.test_part import TestPart
 from eth2.configs import Eth2Config
 
