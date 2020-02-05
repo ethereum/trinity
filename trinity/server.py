@@ -1,11 +1,14 @@
 from abc import abstractmethod
 import asyncio
+import logging
 from typing import (
     Generic,
     Tuple,
     Type,
     TypeVar,
 )
+
+from async_service import Service
 from lahja import EndpointAPI
 
 from eth_keys import datatypes
@@ -22,7 +25,6 @@ from p2p.exceptions import (
     PeerConnectionLost,
 )
 from p2p.handshake import receive_dial_in, DevP2PHandshakeParams
-from p2p.service import BaseService
 
 from trinity._utils.version import construct_trinity_client_identifier
 from trinity.chains.base import AsyncChainAPI
@@ -48,8 +50,10 @@ COMMON_RECEIVE_HANDSHAKE_EXCEPTIONS = (
 )
 
 
-class BaseServer(BaseService, Generic[TPeerPool]):
+class BaseServer(Service, Generic[TPeerPool]):
     """Server listening for incoming connections"""
+    logger = logging.getLogger('trinity.server.Server')
+
     _tcp_listener = None
     peer_pool: TPeerPool
 
@@ -63,9 +67,10 @@ class BaseServer(BaseService, Generic[TPeerPool]):
                  network_id: int,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  event_bus: EndpointAPI = None,
-                 token: CancelToken = None,
                  ) -> None:
-        super().__init__(token)
+        # TODO: remove when peer pool no longer needs a token
+        self._legacy_cancel_token = CancelToken(type(self).__name__)
+
         # cross process event bus
         self.event_bus = event_bus
 
@@ -108,7 +113,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             self._tcp_listener.close()
             await self._tcp_listener.wait_closed()
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.info("Running server...")
         await self._start_tcp_listener()
         self.logger.info(
@@ -120,13 +125,14 @@ class BaseServer(BaseService, Generic[TPeerPool]):
         self.logger.info('network: %s', self.network_id)
         self.logger.info('peers: max_peers=%s', self.max_peers)
 
-        self.run_daemon(self.peer_pool)
+        self.manager.run_daemon_child_service(self.peer_pool.as_new_service())
 
-        await self.cancel_token.wait()
-
-    async def _cleanup(self) -> None:
-        self.logger.info("Closing server...")
-        await self._close_tcp_listener()
+        try:
+            await self.manager.wait_finished()
+        finally:
+            self._legacy_cancel_token.trigger()
+            self.logger.info("Closing server...")
+            await self._close_tcp_listener()
 
     async def receive_handshake(
             self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
@@ -161,7 +167,7 @@ class BaseServer(BaseService, Generic[TPeerPool]):
             private_key=self.privkey,
             p2p_handshake_params=self.p2p_handshake_params,
             protocol_handshakers=handshakers,
-            token=self.cancel_token,
+            token=self._legacy_cancel_token,
         )
 
         async with self.peer_pool.lock_node_for_handshake(connection.remote):
@@ -212,7 +218,7 @@ class FullServer(BaseServer[ETHPeerPool]):
             privkey=self.privkey,
             max_peers=self.max_peers,
             context=context,
-            token=self.cancel_token,
+            token=self._legacy_cancel_token,
             event_bus=self.event_bus
         )
 
@@ -232,6 +238,6 @@ class LightServer(BaseServer[LESPeerPool]):
             privkey=self.privkey,
             max_peers=self.max_peers,
             context=context,
-            token=self.cancel_token,
+            token=self._legacy_cancel_token,
             event_bus=self.event_bus
         )

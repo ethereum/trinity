@@ -5,13 +5,12 @@ from typing import (
     TypeVar,
 )
 
-from async_service import Service
+from async_service import Service, ServiceAPI
 from cancel_token import CancelToken
 from lahja import EndpointAPI
 
 from eth.abc import AtomicDatabaseAPI
 
-from p2p.abc import AsyncioServiceAPI
 from p2p.peer_pool import BasePeerPool
 
 from trinity.chains.base import AsyncChainAPI
@@ -57,6 +56,8 @@ class Node(Service, Generic[TPeer]):
         self._network_id = trinity_config.network_id
 
         self.event_bus = event_bus
+
+        # TODO: remove once no longer used/needed
         self.master_cancel_token = CancelToken(type(self).__name__)
 
     async def handle_network_id_requests(self) -> None:
@@ -108,7 +109,7 @@ class Node(Service, Generic[TPeer]):
         ...
 
     @abstractmethod
-    def get_p2p_server(self) -> AsyncioServiceAPI:
+    def get_p2p_server(self) -> ServiceAPI:
         """
         This is the main service that will be run, when calling :meth:`run`.
         It's typically responsible for syncing the chain, with peer connections.
@@ -126,7 +127,7 @@ class Node(Service, Generic[TPeer]):
     async def run(self) -> None:
         with self._base_db:
             self.manager.run_daemon_task(self.handle_network_id_requests)
-            self.manager.run_daemon_child_service(self.get_p2p_server().as_new_service())
+            self.manager.run_daemon_child_service(self.get_p2p_server())
             self.manager.run_daemon_child_service(self.get_event_server())
             try:
                 await self.manager.wait_finished()

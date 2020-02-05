@@ -1,6 +1,7 @@
 import asyncio
 import pytest
 
+from async_service import background_asyncio_service
 from eth_keys import keys
 
 from cancel_token import CancelToken
@@ -12,7 +13,6 @@ from eth.db.chain import ChainDB
 from p2p.auth import HandshakeInitiator, _handshake
 from p2p.connection import Connection
 from p2p.handshake import negotiate_protocol_handshakes
-from p2p.service import run_service
 from p2p.tools.factories import (
     get_open_port,
     DevP2PHandshakeParamsFactory,
@@ -52,7 +52,7 @@ class ParagonServer(BaseServer):
         return ParagonPeerPool(
             privkey=self.privkey,
             context=ParagonContext(),
-            token=self.cancel_token,
+            token=self._legacy_cancel_token,
             event_bus=self.event_bus,
         )
 
@@ -87,7 +87,7 @@ def receiver_remote():
 @pytest.fixture
 async def server(event_bus, receiver_remote):
     server = get_server(RECEIVER_PRIVKEY, receiver_remote.address, event_bus)
-    async with run_service(server):
+    async with background_asyncio_service(server):
         # wait for the tcp server to start listening
         for _ in range(50):
             if server._tcp_listener is not None and server._tcp_listener.is_serving():
