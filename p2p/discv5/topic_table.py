@@ -39,6 +39,7 @@ class TopicTable:
         """Return the total number of ads in the table across all queues."""
         return self.total_size
 
+    @property
     def is_full(self) -> bool:
         return len(self) >= self.max_total_size
 
@@ -54,7 +55,7 @@ class TopicTable:
 
     def get_wait_time(self, topic: Topic, current_time: float) -> float:
         """Return the time at which the next ad for a given topic can be added."""
-        is_table_full = self.is_full()
+        is_table_full = self.is_full
         is_queue_full = self.is_queue_full(topic)
 
         if not is_queue_full and not is_table_full:
@@ -98,7 +99,7 @@ class TopicTable:
                 f"Topic queue already contains entry for node {encode_hex(enr.node_id)}"
             )
 
-        if self.is_full():
+        if self.is_full:
             queues = [queue for queue in self.topic_queues.values() if queue]
             queue_with_oldest_ad = min(
                 queues,

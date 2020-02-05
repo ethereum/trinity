@@ -1,5 +1,3 @@
-import math
-
 import pytest
 
 from p2p.discv5.topic_table import TopicTable
@@ -60,7 +58,7 @@ def test_wait_time_full_table(topic_table, target_ad_lifetime):
     # fill one queue
     reg_time = 0
     oldest_table_eol = reg_time + target_ad_lifetime
-    while not topic_table.is_full():
+    while not topic_table.is_full:
         assert topic_table.get_wait_time(TopicFactory(), 0) == 0
         topic_table.register(TopicFactory(), ENRFactory(), reg_time)
         reg_time += 1
@@ -100,7 +98,7 @@ def test_wait_time_full_queue_and_table(topic_table, max_queue_size, target_ad_l
 
     # fill the rest of the table
     oldest_table_eol = reg_time + target_ad_lifetime
-    while not topic_table.is_full():
+    while not topic_table.is_full:
         topic_table.register(TopicFactory(), ENRFactory(), reg_time)
         reg_time += 1
 
@@ -181,7 +179,7 @@ def test_registration_two_queues(topic_table, max_queue_size):
 def test_registration_full_table(topic_table, max_queue_size, max_total_size):
     for _ in range(max_total_size):
         topic_table.register(TopicFactory(), ENRFactory(), 0)
-    assert topic_table.is_full()
+    assert topic_table.is_full
 
     with pytest.raises(ValueError):
         topic_table.register(TopicFactory(), ENRFactory(), 0)
