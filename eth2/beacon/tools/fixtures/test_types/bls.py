@@ -120,6 +120,38 @@ class AggregateVerifyHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
         assert output == expected_output
 
 
+class FastAggregateVerifyHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
+    name = "fast_aggregate_verify"
+
+    @classmethod
+    def parse_inputs(
+        _cls, test_case_parts: Dict[str, TestPart], metadata: Dict[str, Any]
+    ) -> SequenceOfBLSSignature:
+        test_case_data = test_case_parts["data"].load()
+        pubkeys = (decode_hex(item) for item in test_case_data["input"]["pubkeys"])
+        message = decode_hex(test_case_data["input"]["message"])
+        signature = decode_hex(test_case_data["input"]["signature"])
+        return pubkeys, message, signature
+
+    @staticmethod
+    def parse_outputs(test_case_parts: Dict[str, TestPart]) -> BLSSignature:
+        test_case_data = test_case_parts["data"].load()
+        return test_case_data["output"]
+
+    @classmethod
+    def run_with(
+        _cls, inputs: SequenceOfBLSSignature, _config: Optional[Eth2Config]
+    ) -> BLSSignature:
+
+        pubkeys, message, signature = inputs
+
+        return bls.FastAggregateVerify(list(pubkeys), message, signature)
+
+    @staticmethod
+    def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
+        assert output == expected_output
+
+
 class SignHandler(TestHandler[SignatureDescriptor, BLSSignature]):
     name = "sign"
 
@@ -140,7 +172,36 @@ class SignHandler(TestHandler[SignatureDescriptor, BLSSignature]):
         _cls, inputs: SignatureDescriptor, _config: Optional[Eth2Config]
     ) -> BLSSignature:
 
-        return bls.Sign(inputs["privkey"].rjust(48, b"\x00"), cast(Hash32, inputs["message"]))
+        return bls.Sign(
+            inputs["privkey"].rjust(48, b"\x00"), cast(Hash32, inputs["message"])
+        )
+
+    @staticmethod
+    def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
+        assert output == expected_output
+
+
+class VerifyHandler(TestHandler[SignatureDescriptor, BLSSignature]):
+    name = "verify"
+
+    @classmethod
+    def parse_inputs(
+        _cls, test_case_parts: Dict[str, TestPart], metadata: Dict[str, Any]
+    ) -> SignatureDescriptor:
+        test_case_data = test_case_parts["data"].load()
+        return {k: decode_hex(v) for k, v in test_case_data["input"].items()}
+
+    @staticmethod
+    def parse_outputs(test_case_parts: Dict[str, TestPart]) -> BLSSignature:
+        test_case_data = test_case_parts["data"].load()
+        return test_case_data["output"]
+
+    @classmethod
+    def run_with(
+        _cls, inputs: SignatureDescriptor, _config: Optional[Eth2Config]
+    ) -> BLSSignature:
+
+        return bls.Verify(inputs["pubkey"], inputs["message"], inputs["signature"])
 
     @staticmethod
     def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
@@ -153,4 +214,11 @@ BLSHandlerType = Tuple[Type[AggregateHandler], Type[SignHandler]]
 class BLSTestType(TestType[BLSHandlerType]):
     name = "bls"
 
-    handlers = (AggregateHandler, AggregateVerifyHandler, SignHandler)
+    handlers = (
+        AggregateHandler,
+        AggregateVerifyHandler,
+        FastAggregateVerifyHandler,
+        SignHandler,
+        VerifyHandler,
+    )
+
