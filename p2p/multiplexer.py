@@ -37,7 +37,6 @@ from p2p.exceptions import (
     UnknownProtocolCommand,
 )
 from p2p.p2p_proto import BaseP2PProtocol
-from p2p.resource_lock import ResourceLock
 from p2p.transport_state import TransportState
 
 
@@ -101,7 +100,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
     _transport: TransportAPI
     _msg_counts: DefaultDict[Type[CommandAPI[Any]], int]
 
-    _protocol_locks: ResourceLock[Type[ProtocolAPI]]
+    _protocol_locks: Dict[Type[ProtocolAPI], asyncio.Lock]
     _protocol_queues: Dict[Type[ProtocolAPI], 'asyncio.Queue[CommandAPI[Any]]']
 
     def __init__(self,
@@ -134,7 +133,11 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
 
         # Lock management on a per-protocol basis to ensure we only have one
         # stream consumer for each protocol.
-        self._protocol_locks = ResourceLock()
+        self._protocol_locks = {
+            type(protocol): asyncio.Lock()
+            for protocol
+            in self.get_protocols()
+        }
 
         # Each protocol gets a queue where messages for the individual protocol
         # are placed when streamed from the transport
@@ -264,7 +267,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         if not self.has_protocol(protocol_class):
             raise UnknownProtocol(f"Unknown protocol '{protocol_class}'")
 
-        if self._protocol_locks.is_locked(protocol_class):
+        if self._protocol_locks[protocol_class].locked():
             raise Exception(f"Streaming lock for {protocol_class} is not free.")
         elif not self._multiplex_lock.locked():
             raise Exception("Not multiplexed.")
@@ -288,7 +291,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         """
         Stream the messages for the specified protocol.
         """
-        async with self._protocol_locks.lock(protocol_class):
+        async with self._protocol_locks[protocol_class]:
             msg_queue = self._protocol_queues[protocol_class]
             if not hasattr(self, '_multiplex_token'):
                 raise Exception("Multiplexer is not multiplexed")
@@ -303,7 +306,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                     # don't have to worry about this blocking other processes.
                     yield msg_queue.get_nowait()
                 except asyncio.QueueEmpty:
-                    yield await self.wait(msg_queue.get(), token=token)
+                    yield await msg_queue.get()
 
     #
     # Message reading and streaming API
