@@ -127,9 +127,9 @@ class Node(Service, Generic[TPeer]):
         with self._base_db:
             self.manager.run_daemon_task(self.handle_network_id_requests)
             self.manager.run_daemon_child_service(self.get_p2p_server().as_new_service())
-            self.manager.run_daemon_child_service(self.get_event_server().as_new_service())
+            self.manager.run_daemon_child_service(self.get_event_server())
             try:
                 await self.manager.wait_finished()
             finally:
                 self.master_cancel_token.trigger()
-                await self.event_bus.broadcast(ShutdownRequest("Node finished unexpectedly"))
+                await self.event_bus.broadcast(ShutdownRequest("Node exiting. Triggering shutdown"))

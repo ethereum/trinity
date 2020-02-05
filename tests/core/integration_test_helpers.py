@@ -101,7 +101,6 @@ async def run_peer_pool_event_server(event_bus, peer_pool, handler_type=None):
     event_server = handler_type(
         event_bus,
         peer_pool,
-        peer_pool.cancel_token
     )
     async with background_asyncio_service(event_server):
         yield event_server
