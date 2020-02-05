@@ -25,6 +25,7 @@ from p2p.disconnect import DisconnectReason
 from p2p.exceptions import (
     NoConnectedPeers,
     PeerConnectionLost,
+    UnknownAPI,
 )
 from p2p.peer import (
     BasePeer,
@@ -158,7 +159,7 @@ class BaseChainPeerPool(BasePeerPool):
             raise NoConnectedPeers("No connected peers")
 
         td_getter = excepts(
-            PeerConnectionLost,
+            (PeerConnectionLost, UnknownAPI),
             operator.attrgetter('head_info.head_td'),
             lambda _: 0,
         )
