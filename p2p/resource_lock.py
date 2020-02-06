@@ -3,7 +3,10 @@ from collections import defaultdict
 from collections.abc import Hashable
 from typing import AsyncIterator, DefaultDict, Dict, Generic, TypeVar
 
-from async_generator import asynccontextmanager
+try:
+    from contextlib import asynccontextmanager
+except ImportError:
+    from async_generator import asynccontextmanager
 
 
 TResource = TypeVar('TResource', bound=Hashable)
