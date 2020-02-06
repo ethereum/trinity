@@ -8,13 +8,22 @@ from argparse import (
 )
 import asyncio
 import logging
-from typing import AsyncIterator
+from typing import AsyncIterator, Iterable, Type, TYPE_CHECKING, Union
 
 from async_generator import asynccontextmanager
 
+from lahja import AsyncioEndpoint, ConnectionConfig, TrioEndpoint
+
 from trinity._utils.os import friendly_filename_or_url
 from trinity.boot_info import BootInfo
+from trinity.cli_parser import parser, subparser
+from trinity.config import BaseAppConfig, Eth1AppConfig, TrinityConfig
+from trinity.constants import APP_IDENTIFIER_ETH1, SYNC_FULL
+from trinity.initialization import initialize_data_dir, is_data_dir_initialized
 
+if TYPE_CHECKING:
+    from trinity.extensibility.trio import TrioIsolatedComponent  # noqa: F401
+    from trinity.extensibility.asyncio import AsyncioIsolatedComponent  # noqa: F401
 
 logger = logging.getLogger('trinity.extensibility.component')
 
@@ -94,7 +103,7 @@ class BaseIsolatedComponent(BaseComponent):
     endpoint_name: str = None
 
     @classmethod
-    def _get_endpoint_name(cls) -> str:
+    def get_endpoint_name(cls) -> str:
         if cls.endpoint_name is None:
             return friendly_filename_or_url(cls.name)
         else:
@@ -119,3 +128,57 @@ async def run_component(component: ComponentAPI) -> AsyncIterator[None]:
             pass
 
         logger.debug("Stopped component: %s", component.name)
+
+
+async def run_standalone_component(
+    component: Union[Type['TrioIsolatedComponent'], Type['AsyncioIsolatedComponent']],
+    endpoint_type: Union[Type[TrioEndpoint], Type[AsyncioEndpoint]],
+    app_identifier: str,
+    app_config_types: Iterable[Type[BaseAppConfig]],
+) -> None:
+
+    # Require a root dir to be specified as we don't want to mess with the default one.
+    for action in parser._actions:
+        if action.dest == 'trinity_root_dir':
+            action.required = True
+            break
+
+    component.configure_parser(parser, subparser)
+    args = parser.parse_args()
+    # FIXME: Figure out a way to avoid having to set this.
+    args.sync_mode = SYNC_FULL
+
+    logging.basicConfig(
+        level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
+    for name, level in args.log_levels.items():
+        logging.getLogger(name).setLevel(level)
+
+    trinity_config = TrinityConfig.from_parser_args(args, app_identifier, app_config_types)
+    trinity_config.trinity_root_dir.mkdir(exist_ok=True)
+    if not is_data_dir_initialized(trinity_config):
+        initialize_data_dir(trinity_config)
+    boot_info = BootInfo(
+        args=args,
+        trinity_config=trinity_config,
+        child_process_log_level=None,
+        logger_levels=None,
+        profile=False,
+    )
+    conn_config = ConnectionConfig.from_name(component.get_endpoint_name(), trinity_config.ipc_dir)
+
+    async with endpoint_type.serve(conn_config) as endpoint:
+        await component.do_run(boot_info, endpoint)
+
+
+async def run_standalone_eth1_component(
+    component: Union[Type['TrioIsolatedComponent'], Type['AsyncioIsolatedComponent']],
+) -> None:
+    from trinity.extensibility.trio import TrioIsolatedComponent  # noqa: F811
+    from trinity.extensibility.asyncio import AsyncioIsolatedComponent  # noqa: F811
+    if issubclass(component, TrioIsolatedComponent):
+        endpoint_type: Union[Type[TrioEndpoint], Type[AsyncioEndpoint]] = TrioEndpoint
+    elif issubclass(component, AsyncioIsolatedComponent):
+        endpoint_type = AsyncioEndpoint
+    else:
+        raise ValueError("Unknown component type: %s", type(component))
+    await run_standalone_component(component, endpoint_type, APP_IDENTIFIER_ETH1, (Eth1AppConfig,))

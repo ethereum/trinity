@@ -348,8 +348,8 @@ class DBClient(BaseAtomicDB):
         self._socket.close()
 
     @classmethod
-    def connect(cls, path: pathlib.Path) -> "DBClient":
-        wait_for_ipc(path)
+    def connect(cls, path: pathlib.Path, timeout: int = 5) -> "DBClient":
+        wait_for_ipc(path, timeout)
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         cls.logger.debug("Opened connection to %s: %s", path, s)
         s.connect(str(path))
@@ -408,3 +408,58 @@ class AtomicBatch(BaseDB):
         self._track_diff = None
         self._db = None
         return diff
+
+
+def _run() -> None:
+    from eth.db.backends.level import LevelDB
+    from eth.db.chain import ChainDB
+    from trinity.cli_parser import parser
+    from trinity.config import Eth1AppConfig, TrinityConfig
+    from trinity.constants import APP_IDENTIFIER_ETH1
+    from trinity.initialization import (
+        initialize_data_dir,
+        is_data_dir_initialized,
+        is_database_initialized,
+        initialize_database,
+        ensure_eth1_dirs,
+    )
+
+    # Require a root dir to be specified as we don't want to mess with the default one.
+    for action in parser._actions:
+        if action.dest == 'trinity_root_dir':
+            action.required = True
+            break
+
+    args = parser.parse_args()
+    # FIXME: Figure out a way to avoid having to set this.
+    args.sync_mode = "full"
+    logging.basicConfig(
+        level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
+    for name, level in args.log_levels.items():
+        logging.getLogger(name).setLevel(level)
+    trinity_config = TrinityConfig.from_parser_args(args, APP_IDENTIFIER_ETH1, (Eth1AppConfig,))
+    trinity_config.trinity_root_dir.mkdir(exist_ok=True)
+    if not is_data_dir_initialized(trinity_config):
+        initialize_data_dir(trinity_config)
+
+    with trinity_config.process_id_file('database'):
+        app_config = trinity_config.get_app_config(Eth1AppConfig)
+        ensure_eth1_dirs(app_config)
+
+        base_db = LevelDB(db_path=app_config.database_dir)
+        chaindb = ChainDB(base_db)
+
+        if not is_database_initialized(chaindb):
+            chain_config = app_config.get_chain_config()
+            initialize_database(chain_config, chaindb, base_db)
+
+        manager = DBManager(base_db)
+        with manager.run(trinity_config.database_ipc_path):
+            try:
+                manager.wait_stopped()
+            except KeyboardInterrupt:
+                pass
+
+
+if __name__ == "__main__":
+    _run()

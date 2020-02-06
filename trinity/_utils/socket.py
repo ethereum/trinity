@@ -104,7 +104,7 @@ class IPCSocketServer(ABC):
                 ipc_path.unlink()
 
     def serve(self, ipc_path: pathlib.Path) -> None:
-        self.logger.debug("Starting %s server over IPC socket: %s", self, ipc_path)
+        self.logger.info("Starting %s server over IPC socket: %s", self, ipc_path)
 
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             # background task to close the socket.
