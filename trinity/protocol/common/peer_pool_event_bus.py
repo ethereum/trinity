@@ -1,6 +1,7 @@
 from abc import (
     abstractmethod,
 )
+import asyncio
 from typing import (
     Any,
     AsyncIterator,
@@ -14,7 +15,9 @@ from typing import (
     TypeVar,
 )
 
+from async_service import Service
 from cancel_token import CancelToken
+from eth_utils import get_extended_debug_logger
 
 from lahja import (
     BaseEvent,
@@ -50,7 +53,7 @@ TEvent = TypeVar('TEvent', bound=BaseEvent)
 TRequest = TypeVar('TRequest', bound=BaseRequestResponseEvent[Any])
 
 
-class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
+class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
     """
     Base class to create a bridge between the ``PeerPool`` and the event bus so that peer
     messages become available to external processes (e.g. isolated components). In the opposite
@@ -60,6 +63,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
     This class bridges all common APIs but protocol specific communication can be enabled through
     subclasses that add more handlers.
     """
+    logger = get_extended_debug_logger('trinity.protocol.common.PeerPoolEventServer')
 
     msg_queue_maxsize: int = 2000
 
@@ -67,15 +71,11 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
 
     def __init__(self,
                  event_bus: EndpointAPI,
-                 peer_pool: BasePeerPool,
-                 token: CancelToken = None) -> None:
-        super().__init__(token)
+                 peer_pool: BasePeerPool) -> None:
         self.peer_pool = peer_pool
         self.event_bus = event_bus
 
-    async def _run(self) -> None:
-        self.logger.debug("Running %s", self.__class__.__name__)
-
+    async def run(self) -> None:
         self.run_daemon_event(
             DisconnectPeerEvent,
             lambda event: self.try_with_session(
@@ -84,12 +84,12 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
             )
         )
 
-        self.run_daemon_task(self.handle_peer_count_requests())
-        self.run_daemon_task(self.handle_connect_to_node_requests())
-        self.run_daemon_task(self.handle_native_peer_messages())
-        self.run_daemon_task(self.handle_get_connected_peers_requests())
+        self.manager.run_daemon_task(self.handle_peer_count_requests)
+        self.manager.run_daemon_task(self.handle_connect_to_node_requests)
+        self.manager.run_daemon_task(self.handle_native_peer_messages)
+        self.manager.run_daemon_task(self.handle_get_connected_peers_requests)
 
-        await self.cancellation()
+        await self.manager.wait_finished()
 
     def run_daemon_event(self,
                          event_type: Type[TEvent],
@@ -97,7 +97,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         """
         Register a handler to be run every time that an event of type ``event_type`` appears.
         """
-        self.run_daemon_task(self.handle_stream(event_type, event_handler_fn))
+        self.manager.run_daemon_task(self.handle_stream, event_type, event_handler_fn)
 
     def run_daemon_request(
             self,
@@ -106,7 +106,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         """
         Register a handler to be run every time that an request of type ``event_type`` appears.
         """
-        self.run_daemon_task(self.handle_request_stream(event_type, event_handler_fn))
+        self.manager.run_daemon_task(self.handle_request_stream, event_type, event_handler_fn)
 
     @abstractmethod
     async def handle_native_peer_message(self,
@@ -140,19 +140,19 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
                 return cast(TPeer, peer)
 
     async def handle_connect_to_node_requests(self) -> None:
-        async for command in self.wait_iter(self.event_bus.stream(ConnectToNodeCommand)):
+        async for command in self.event_bus.stream(ConnectToNodeCommand):
             self.logger.debug('Received request to connect to %s', command.remote)
-            self.run_task(self.peer_pool.connect_to_node(command.remote))
+            self.manager.run_task(self.peer_pool.connect_to_node, command.remote)
 
     async def handle_peer_count_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(PeerCountRequest)):
+        async for req in self.event_bus.stream(PeerCountRequest):
             await self.event_bus.broadcast(
                 PeerCountResponse(len(self.peer_pool)),
                 req.broadcast_config()
             )
 
     async def handle_get_connected_peers_requests(self) -> None:
-        async for req in self.wait_iter(self.event_bus.stream(GetConnectedPeersRequest)):
+        async for req in self.event_bus.stream(GetConnectedPeersRequest):
             await self.event_bus.broadcast(
                 GetConnectedPeersResponse(tuple(self.peer_pool.connected_nodes.keys())),
                 req.broadcast_config()
@@ -166,7 +166,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         because there is no obvious place to forward the exception.
         """
 
-        async for event in self.wait_iter(self.event_bus.stream(event_type)):
+        async for event in self.event_bus.stream(event_type):
             try:
                 await event_handler_fn(event)
             except Exception as exc:
@@ -183,7 +183,7 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
         Handlers may raise exceptions, which will be wrapped and sent in response.
         """
 
-        async for event in self.wait_iter(self.event_bus.stream(event_type)):
+        async for event in self.event_bus.stream(event_type):
             try:
                 self.logger.debug2("Replaying %s request on actual peer", event_type)
                 val = await event_handler_fn(event)
@@ -215,12 +215,12 @@ class PeerPoolEventServer(BaseService, PeerSubscriber, Generic[TPeer]):
                                     timeout: float,
                                     fn: Callable[[TPeer], Any]) -> Any:
         peer = self.get_peer(session)
-        return await self.wait(fn(peer), timeout=timeout)
+        return await asyncio.wait_for(fn(peer), timeout=timeout)
 
     async def handle_native_peer_messages(self) -> None:
         with self.subscribe(self.peer_pool):
-            while self.is_operational:
-                peer, cmd = await self.wait(self.msg_queue.get())
+            while self.manager.is_running:
+                peer, cmd = await self.msg_queue.get()
                 await self.handle_native_peer_message(peer.session, cmd)
 
     def register_peer(self, peer: BasePeer) -> None:

@@ -8,7 +8,6 @@ from typing import (
 
 from cached_property import cached_property
 
-from cancel_token import CancelToken
 from eth.rlp.accounts import Account
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
@@ -162,14 +161,13 @@ class LESPeerPoolEventServer(PeerPoolEventServer[LESPeer]):
     def __init__(self,
                  event_bus: EndpointAPI,
                  peer_pool: BasePeerPool,
-                 token: CancelToken = None,
                  chain: 'BaseLightPeerChain' = None) -> None:
-        super().__init__(event_bus, peer_pool, token)
+        super().__init__(event_bus, peer_pool)
         self.chain = chain
 
     subscription_msg_types = frozenset({GetBlockHeaders})
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
 
         self.run_daemon_event(
             SendBlockHeadersEvent,
@@ -191,7 +189,7 @@ class LESPeerPoolEventServer(PeerPoolEventServer[LESPeer]):
         self.run_daemon_request(GetAccountRequest, self.handle_get_account_requests)
         self.run_daemon_request(GetContractCodeRequest, self.handle_get_contract_code_requests)
 
-        await super()._run()
+        await super().run()
 
     async def handle_get_blockheader_by_hash_requests(
             self,

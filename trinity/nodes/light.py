@@ -77,7 +77,6 @@ class LightNode(Node[LESPeer]):
             self._event_server = LESPeerPoolEventServer(
                 self.event_bus,
                 self.get_peer_pool(),
-                self.master_cancel_token,
                 self._peer_chain
             )
         return self._event_server
