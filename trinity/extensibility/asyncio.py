@@ -54,7 +54,7 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
     @classmethod
     async def _do_run(cls, boot_info: BootInfo) -> None:
         with child_process_logging(boot_info):
-            endpoint_name = cls._get_endpoint_name()
+            endpoint_name = cls.get_endpoint_name()
             event_bus_service = AsyncioEventBusService(
                 boot_info.trinity_config,
                 endpoint_name,
@@ -64,7 +64,7 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
 
                 try:
                     if boot_info.profile:
-                        with profiler(f'profile_{cls._get_endpoint_name}'):
+                        with profiler(f'profile_{cls.get_endpoint_name()}'):
                             await cls.do_run(boot_info, event_bus)
                     else:
                         await cls.do_run(boot_info, event_bus)

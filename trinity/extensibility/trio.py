@@ -11,7 +11,6 @@ from lahja import EndpointAPI
 from trinity._utils.ipc import kill_process_gracefully
 from trinity._utils.logging import child_process_logging
 from trinity._utils.mp import ctx
-from trinity._utils.os import friendly_filename_or_url
 from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
 
@@ -51,20 +50,16 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
     def run_process(cls, boot_info: BootInfo) -> None:
         with child_process_logging(boot_info):
             if boot_info.profile:
-                with profiler(f'profile_{cls._get_endpoint_name}'):
+                with profiler(f'profile_{cls.get_endpoint_name()}'):
                     trio.run(cls._do_run, boot_info)
             else:
                 trio.run(cls._do_run, boot_info)
 
     @classmethod
     async def _do_run(cls, boot_info: BootInfo) -> None:
-        if cls.endpoint_name is None:
-            endpoint_name = friendly_filename_or_url(cls.name)
-        else:
-            endpoint_name = cls.endpoint_name
         event_bus_service = TrioEventBusService(
             boot_info.trinity_config,
-            endpoint_name,
+            cls.get_endpoint_name(),
         )
         with trio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signal_aiter:
             async with background_trio_service(event_bus_service):

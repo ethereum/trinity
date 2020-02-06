@@ -33,7 +33,6 @@ from eth_utils.toolz import (
     take,
 )
 from lahja import (
-    BroadcastConfig,
     EndpointAPI,
 )
 
@@ -41,7 +40,6 @@ from p2p.abc import AsyncioServiceAPI, NodeAPI, SessionAPI
 from p2p.constants import (
     DEFAULT_MAX_PEERS,
     DEFAULT_PEER_BOOT_TIMEOUT,
-    DISCOVERY_EVENTBUS_ENDPOINT,
     HANDSHAKE_TIMEOUT,
     MAX_CONCURRENT_CONNECTION_ATTEMPTS,
     REQUEST_PEER_CANDIDATE_TIMEOUT,
@@ -82,9 +80,6 @@ from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
 )
-
-
-TO_DISCOVERY_BROADCAST_CONFIG = BroadcastConfig(filter_endpoint=DISCOVERY_EVENTBUS_ENDPOINT)
 
 
 COMMON_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (

@@ -4,6 +4,7 @@ from trinity.extensibility.asyncio import (  # noqa: F401
 from trinity.extensibility.component import (  # noqa: F401
     Application,
     BaseComponentAPI,
+    BaseIsolatedComponent,
     ComponentAPI,
     run_component,
 )
