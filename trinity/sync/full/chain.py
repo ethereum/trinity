@@ -161,6 +161,14 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         # header isn't in the database yet, so must be looked up here.
         self._block_hash_to_state_root: Dict[Hash32, Hash32] = {}
 
+        # Keep track of some statistics, which is useful for deciding if syncing has stalled
+
+        # What is the largest block number reported by a header? (before importing the block)
+        self._highest_header_number = 0
+
+        # What is the most recently imported block number? (after importing the block)
+        self._latest_block_number = 0
+
     async def _run(self) -> None:
         with self.subscribe(self._peer_pool):
             await self.cancellation()
@@ -244,6 +252,9 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
 
             if not new_headers:
                 continue
+            else:
+                header_numbers = [header.block_number for header in new_headers]
+                self._highest_header_number = max(self._highest_header_number, *header_numbers)
 
             yield new_headers
 
@@ -1142,14 +1153,27 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
 
             await self._import_block(block)
 
+    def get_block_count_lag(self) -> int:
+        if self._latest_block_number == 0:
+            return 0
+        else:
+            return self._highest_header_number - self._latest_block_number
+
     async def _import_block(self, block: BlockAPI) -> None:
         timer = Timer()
+
+        # Log the latest import block so that we can accurately report lag
+        self._latest_block_number = block.number
+
         _, new_canonical_blocks, old_canonical_blocks = await self.wait(
             self._block_importer.import_block(block)
         )
-        # how much is the imported block's header behind the current time?
+
+        # How much is the imported block's header behind the current time?
         lag = time.time() - block.header.timestamp
         humanized_lag = humanize_seconds(lag)
+
+        blocks_behind = self.get_block_count_lag()
 
         if new_canonical_blocks == (block,):
             # simple import of a single new block.
@@ -1161,30 +1185,33 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
             else:
                 log_fn = self.logger.debug
             log_fn(
-                "Imported block %d (%d txs) in %.2f seconds, with %s lag",
+                "Imported block %d (%d txs) in %.2f seconds, lagging %d blocks | %s",
                 block.number,
                 len(block.transactions),
                 timer.elapsed,
+                blocks_behind,
                 humanized_lag,
             )
         elif not new_canonical_blocks:
             # imported block from a fork.
             self.logger.info(
-                "Imported non-canonical block %d (%d txs) in %.2f seconds, with %s lag",
+                "Imported non-canonical block %d (%d txs) in %.2f seconds, lagging %d blocks | %s",
                 block.number,
                 len(block.transactions),
                 timer.elapsed,
+                blocks_behind,
                 humanized_lag,
             )
         elif old_canonical_blocks:
             self.logger.info(
                 "Chain Reorganization: Imported block %d (%d txs) in %.2f seconds, "
-                "%d blocks discarded and %d new canonical blocks added, with %s lag",
+                "%d blocks discarded and %d new canonical blocks added, lagging %d blocks | %s",
                 block.number,
                 len(block.transactions),
                 timer.elapsed,
                 len(old_canonical_blocks),
                 len(new_canonical_blocks),
+                blocks_behind,
                 humanized_lag,
             )
         else:

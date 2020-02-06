@@ -37,16 +37,17 @@ class SyncingRequest(BaseRequestResponseEvent[SyncingResponse]):
 
 
 @dataclass
-class MissingAccountCollected(BaseEvent):
+class MissingAccountResult(BaseEvent):
     """
     Response to :cls:`CollectMissingAccount`, emitted only after the account has
     been downloaded from a peer, and can be retrieved in the database.
     """
-    num_nodes_collected: int
+    num_nodes_collected: int = 0
+    is_retry_acceptable: bool = True
 
 
 @dataclass
-class CollectMissingAccount(BaseRequestResponseEvent[MissingAccountCollected]):
+class CollectMissingAccount(BaseRequestResponseEvent[MissingAccountResult]):
     """
     Beam Sync has been paused because the given address and/or missing_node_hash
     is missing from the state DB, at the given state root hash.
@@ -55,45 +56,49 @@ class CollectMissingAccount(BaseRequestResponseEvent[MissingAccountCollected]):
     address_hash: Hash32
     state_root_hash: Hash32
     urgent: bool
+    block_number: int
 
     @staticmethod
-    def expected_response_type() -> Type[MissingAccountCollected]:
-        return MissingAccountCollected
+    def expected_response_type() -> Type[MissingAccountResult]:
+        return MissingAccountResult
 
 
-class MissingBytecodeCollected(BaseEvent):
+@dataclass
+class MissingBytecodeResult(BaseEvent):
     """
     Response to :cls:`CollectMissingBytecode`, emitted only after the bytecode has
     been downloaded from a peer, and can be retrieved in the database.
     """
-    pass
+    is_retry_acceptable: bool = True
 
 
 @dataclass
-class CollectMissingBytecode(BaseRequestResponseEvent[MissingBytecodeCollected]):
+class CollectMissingBytecode(BaseRequestResponseEvent[MissingBytecodeResult]):
     """
     Beam Sync has been paused because the given bytecode
     is missing from the state DB, at the given state root hash.
     """
     bytecode_hash: Hash32
     urgent: bool
+    block_number: int
 
     @staticmethod
-    def expected_response_type() -> Type[MissingBytecodeCollected]:
-        return MissingBytecodeCollected
+    def expected_response_type() -> Type[MissingBytecodeResult]:
+        return MissingBytecodeResult
 
 
 @dataclass
-class MissingStorageCollected(BaseEvent):
+class MissingStorageResult(BaseEvent):
     """
     Response to :cls:`CollectMissingStorage`, emitted only after the storage value has
     been downloaded from a peer, and can be retrieved in the database.
     """
-    num_nodes_collected: int
+    num_nodes_collected: int = 0
+    is_retry_acceptable: bool = True
 
 
 @dataclass
-class CollectMissingStorage(BaseRequestResponseEvent[MissingStorageCollected]):
+class CollectMissingStorage(BaseRequestResponseEvent[MissingStorageResult]):
     """
     Beam Sync has been paused because the given storage key and/or missing_node_hash
     is missing from the state DB, at the given state root hash.
@@ -104,10 +109,11 @@ class CollectMissingStorage(BaseRequestResponseEvent[MissingStorageCollected]):
     storage_root_hash: Hash32
     account_address: Address
     urgent: bool
+    block_number: int
 
     @staticmethod
-    def expected_response_type() -> Type[MissingStorageCollected]:
-        return MissingStorageCollected
+    def expected_response_type() -> Type[MissingStorageResult]:
+        return MissingStorageResult
 
 
 @dataclass
