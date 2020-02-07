@@ -3,6 +3,7 @@ import asyncio
 import functools
 import operator
 from typing import (
+    AsyncContextManager,
     AsyncIterator,
     AsyncIterable,
     Callable,
@@ -114,6 +115,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     _report_interval = 60
     _peer_boot_timeout = DEFAULT_PEER_BOOT_TIMEOUT
     _event_bus: EndpointAPI = None
+
+    _handshake_locks: ResourceLock[NodeAPI]
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
@@ -431,7 +434,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                 loop=self.get_event_loop(),
             )
 
-    def lock_node_for_handshake(self, node: NodeAPI) -> asyncio.Lock:
+    def lock_node_for_handshake(self, node: NodeAPI) -> AsyncContextManager[None]:
         return self._handshake_locks.lock(node)
 
     def is_connected_to_node(self, node: NodeAPI) -> bool:
