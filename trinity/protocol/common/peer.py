@@ -38,11 +38,9 @@ from p2p.constants import (
 from p2p.disconnect import DisconnectReason
 from p2p.discv5.typing import NodeID
 from p2p.exceptions import (
-    BaseForkIDValidationError,
     NoConnectedPeers,
     PeerConnectionLost,
 )
-from p2p import forkid
 from p2p.peer import (
     BasePeer,
     BasePeerFactory,
@@ -61,9 +59,15 @@ from p2p.tracking.connection import (
 )
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
+from trinity.exceptions import BaseForkIDValidationError
 from trinity.protocol.common.abc import ChainInfoAPI, HeadInfoAPI
 from trinity.protocol.common.api import ChainInfo, HeadInfo
 from trinity.protocol.eth.api import ETHAPI
+from trinity.protocol.eth.forkid import (
+    extract_fork_blocks,
+    extract_forkid,
+    validate_forkid,
+)
 from trinity.protocol.les.api import LESV1API, LESV2API
 from trinity.protocol.les.proto import LESProtocolV1, LESProtocolV2
 
@@ -193,7 +197,7 @@ class BaseChainPeerPool(BasePeerPool):
             if last_candidates_count >= self.available_slots:
                 head = await self.get_chain_head()
                 genesis_hash = await self.get_genesis_hash()
-                fork_blocks = forkid.extract_fork_blocks(self.vm_configuration)
+                fork_blocks = extract_fork_blocks(self.vm_configuration)
                 should_skip = functools.partial(
                     skip_candidate_if_on_list_or_fork_mismatch,
                     genesis_hash,
@@ -292,12 +296,13 @@ def skip_candidate_if_on_list_or_fork_mismatch(
 
     # For now we accept candidates which don't specify a ForkID in their ENR, but we may want to
     # change that if we realize we're getting too many chain-mismatch errors when connecting.
-    if candidate.enr.fork_id is None:
+    candidate_forkid = extract_forkid(candidate.enr)
+    if candidate_forkid is None:
         p2p_logger.debug("Accepting connection candidate (%s) with no ForkID", candidate)
         return False
 
     try:
-        forkid.validate_forkid(candidate.enr.fork_id, genesis_hash, head, fork_blocks)
+        validate_forkid(candidate_forkid, genesis_hash, head, fork_blocks)
     except BaseForkIDValidationError as e:
         p2p_logger.debug("Skipping forkid-incompatible connection candidate (%s): %s", candidate, e)
         return True

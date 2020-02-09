@@ -13,7 +13,9 @@ from eth_typing import BlockNumber, Hash32
 
 from eth_utils import encode_hex, to_tuple
 
-from p2p.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
+from p2p.discv5.enr import ENR
+
+from trinity.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
 
 
 class ForkID(rlp.Serializable):
@@ -117,6 +119,14 @@ def validate_forkid(
 
     # Something is very wrong if we get here, but better to accept than reject.
     logging.getLogger('p2p').error("Impossible forkid validation for %s", forkid)
+
+
+def extract_forkid(enr: ENR) -> ForkID:
+    eth_cap = enr.get(b'eth', None)
+    if eth_cap is not None:
+        [forkid] = rlp.sedes.List([ForkID]).deserialize(eth_cap)
+        return forkid
+    return None
 
 
 def _crc_to_bytes(crc: int) -> bytes:

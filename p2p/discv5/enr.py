@@ -25,7 +25,6 @@ from rlp.sedes import (
     big_endian_int,
     binary,
     Binary,
-    List,
     raw,
 )
 
@@ -52,7 +51,6 @@ from p2p.discv5.constants import (
     IP_V4_SIZE,
     IP_V6_SIZE,
 )
-from p2p.forkid import ForkID
 
 
 class ENRContentSedes:
@@ -369,13 +367,6 @@ class ENR(BaseENR, ENRSedes):
             unpadded_base64_rlp.decode("ASCII"),
         ))
 
-    @property
-    def fork_id(self) -> ForkID:
-        eth_cap = self._kv_pairs.get(b'eth', None)
-        if eth_cap is not None:
-            return eth_cap[0]
-        return None
-
 
 IDENTITY_SCHEME_ENR_KEY = b"id"
 
@@ -388,9 +379,6 @@ ENR_KEY_SEDES_MAPPING = {
     b"ip6": Binary.fixed_length(IP_V6_SIZE),
     b"tcp6": big_endian_int,
     b"udp6": big_endian_int,
-    # For now this key is used only for ForkIDs (https://eips.ethereum.org/EIPS/eip-2124) but it
-    # is represented as a List because more stuff (e.g. network-id) may be added in the future.
-    b"eth": List([ForkID]),
 }
 
 # Must use raw for values with an unknown key as they may be lists or individual values.

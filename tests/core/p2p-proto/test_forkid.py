@@ -9,8 +9,17 @@ from eth_utils import to_bytes
 from eth.chains.mainnet import MAINNET_VM_CONFIGURATION
 from eth.chains.ropsten import ROPSTEN_VM_CONFIGURATION
 
-from p2p.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
-from p2p.forkid import extract_fork_blocks, ForkID, make_forkid, validate_forkid
+from p2p.discv5.enr import ENR
+
+from trinity.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
+from trinity.protocol.eth.forkid import (
+    extract_fork_blocks,
+    extract_forkid,
+    ForkID,
+    make_forkid,
+    validate_forkid,
+)
+
 
 MAINNET_GENESIS_HASH = to_bytes(
     hexstr='0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3')
@@ -195,3 +204,11 @@ def test_forkid_validation(local_head, remote_forkid, expected_error):
 def test_rlp_encoding(forkid, expected_rlp):
     assert rlp.encode(forkid) == expected_rlp
     assert rlp.decode(expected_rlp, sedes=ForkID) == forkid
+
+
+def test_extract_forkid():
+    enr = ENR.from_repr(
+        "enr:-Jq4QO5zEyIBU5lSa9iaen0A2xUB5_IVrCi1DbyASTTnLV5RJan6aGPr8kU0p0MYKU5YezZgdSUE"
+        "-GOBEio6Ultyf1Aog2V0aMrJhGN2AZCDGfCggmlkgnY0gmlwhF4_wLuJc2VjcDI1NmsxoQOt7cA_B_Kg"
+        "nQ5RmwyA6ji8M1Y0jfINItRGbOOwy7XgbIN0Y3CCdl-DdWRwgnZf")
+    assert extract_forkid(enr) == ForkID(hash=to_bytes(hexstr='0x63760190'), next=1700000)

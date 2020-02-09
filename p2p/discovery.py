@@ -24,11 +24,8 @@ from typing import (
     Sequence,
     Set,
     Tuple,
-    Type,
     TypeVar,
-    TYPE_CHECKING,
 )
-from typing_extensions import Literal
 
 from async_generator import aclosing
 
@@ -47,7 +44,7 @@ from lahja import (
 import rlp
 from rlp.exceptions import DeserializationError
 
-from eth_typing import BlockNumber, Hash32
+from eth_typing import Hash32
 
 from eth_utils import (
     encode_hex,
@@ -67,9 +64,6 @@ from eth_hash.auto import keccak
 
 from async_service import Service
 
-from eth.abc import VirtualMachineAPI
-from eth.constants import GENESIS_BLOCK_NUMBER
-
 from p2p import constants
 from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI
 from p2p.discv5.abc import EnrDbApi
@@ -88,12 +82,8 @@ from p2p.events import (
     PeerCandidatesResponse,
 )
 from p2p.exceptions import AlreadyWaitingDiscoveryResponse, CouldNotRetrieveENR, NoEligibleNodes
-from p2p import forkid
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
 from p2p import trio_utils
-
-if TYPE_CHECKING:
-    from trinity.db.eth1.header import BaseAsyncHeaderDB
 
 
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
@@ -1212,17 +1202,6 @@ class ExpectedResponseChannels(Generic[TMsg]):
                     yield await recv_chan.receive()
         finally:
             self._channels.pop(remote, None)
-
-
-async def generate_eth_cap_enr_field(
-        vm_config: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...],
-        headerdb: 'BaseAsyncHeaderDB',
-) -> Tuple[Literal[b'eth'], Tuple[forkid.ForkID]]:
-    head = await headerdb.coro_get_canonical_head()
-    genesis_hash = await headerdb.coro_get_canonical_block_hash(GENESIS_BLOCK_NUMBER)
-    fork_blocks = forkid.extract_fork_blocks(vm_config)
-    our_forkid = forkid.make_forkid(genesis_hash, head.block_number, fork_blocks)
-    return (b'eth', (our_forkid,))
 
 
 def node_id_from_pubkey(pubkey: keys.PublicKey) -> NodeID:

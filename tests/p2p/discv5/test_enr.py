@@ -6,7 +6,6 @@ import rlp
 
 from eth_utils import (
     decode_hex,
-    to_bytes,
     ValidationError,
 )
 from eth_utils.toolz import (
@@ -24,7 +23,6 @@ from p2p.discv5.identity_schemes import (
     V4IdentityScheme,
     IdentitySchemeRegistry,
 )
-from p2p.forkid import ForkID
 
 
 # Source: https://github.com/fjl/EIPs/blob/0acb5939555cbd0efcdd04da0d3acb0cc81d049a/EIPS/eip-778.md
@@ -62,7 +60,7 @@ REAL_LIFE_TEST_DATA = {
     "identity_scheme": V4IdentityScheme,
     "sequence_number": 40,
     "kv_pairs": {
-        b"eth": (ForkID(hash=to_bytes(hexstr='0x63760190'), next=1700000), ),
+        b"eth": [[b'cv\x01\x90', b'\x19\xf0\xa0']],
         b"id": b"v4",
         b"ip": decode_hex("5e3fc0bb"),
         b"secp256k1": decode_hex(
@@ -395,7 +393,6 @@ def test_official_test_vector():
     assert enr.node_id == OFFICIAL_TEST_DATA["node_id"]
     assert enr.identity_scheme is OFFICIAL_TEST_DATA["identity_scheme"]
     assert repr(enr) == OFFICIAL_TEST_DATA["repr"]
-    assert enr.fork_id is None
 
     unsigned_enr = UnsignedENR(enr.sequence_number, dict(enr))
     reconstructed_enr = unsigned_enr.to_signed_enr(OFFICIAL_TEST_DATA["private_key"])
@@ -411,4 +408,3 @@ def test_real_life_test_vector():
     assert enr.identity_scheme is REAL_LIFE_TEST_DATA["identity_scheme"]
     assert dict(enr) == REAL_LIFE_TEST_DATA["kv_pairs"]
     assert repr(enr) == REAL_LIFE_TEST_DATA["repr"]
-    assert enr.fork_id == ForkID(hash=to_bytes(hexstr='0x63760190'), next=1700000)

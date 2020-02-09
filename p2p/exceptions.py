@@ -206,30 +206,6 @@ class UnknownAPI(BaseP2PError):
     pass
 
 
-class BaseForkIDValidationError(BaseP2PError):
-    """
-    Base class for all ForkID validation errors.
-
-    """
-    pass
-
-
-class RemoteChainIsStale(BaseForkIDValidationError):
-    """
-    Raised when a remote fork ID is a subset of our already applied forks, but the announced next
-    fork block is not on our already passed chain.
-    """
-    pass
-
-
-class LocalChainIncompatibleOrStale(BaseForkIDValidationError):
-    """
-    Raised when a remote fork ID does not match any local checksum variation, signalling that the
-    two chains have diverged in the past at some point (possibly at genesis).
-    """
-    pass
-
-
 class CouldNotRetrieveENR(BaseP2PError):
     """
     Raised when we cannot get an ENR from a remote node.
