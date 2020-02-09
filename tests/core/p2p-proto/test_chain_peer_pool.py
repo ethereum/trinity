@@ -4,18 +4,20 @@ import socket
 
 import pytest
 
+from rlp import sedes
+
 from eth.chains.mainnet import MAINNET_GENESIS_HEADER, MAINNET_VM_CONFIGURATION
 from eth.chains.ropsten import ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
 
-from p2p import forkid
 from p2p.discv5.constants import IP_V4_ADDRESS_ENR_KEY, TCP_PORT_ENR_KEY, UDP_PORT_ENR_KEY
 from p2p.discv5.typing import NodeID
-from p2p.exceptions import BaseForkIDValidationError
 from p2p.kademlia import Node
 from p2p.tools.factories.discovery import ENRFactory
 from p2p.tools.factories.kademlia import IPAddressFactory, NodeFactory
 
+from trinity.exceptions import BaseForkIDValidationError
 from trinity.protocol.common.peer import skip_candidate_if_on_list_or_fork_mismatch
+from trinity.protocol.eth import forkid
 
 
 def test_skip_candidate_if_on_list_or_fork_mismatch_is_pickleable():
@@ -40,7 +42,7 @@ def _make_node_with_enr_and_forkid(genesis_hash, head, vm_config):
     udp_port = 30304
     enr = ENRFactory(
         custom_kv_pairs={
-            b'eth': (node_forkid,),
+            b'eth': sedes.List([forkid.ForkID]).serialize([node_forkid]),
             IP_V4_ADDRESS_ENR_KEY: ip,
             UDP_PORT_ENR_KEY: udp_port,
             TCP_PORT_ENR_KEY: udp_port,
@@ -62,7 +64,7 @@ def test_skip_candidate_if_on_list_or_fork_mismatch():
         MAINNET_GENESIS_HEADER.hash, MAINNET_GENESIS_HEADER.block_number, MAINNET_VM_CONFIGURATION)
     # Ensure compatible_node's forkid is compatible with our current chain state.
     forkid.validate_forkid(
-        compatible_node.enr.fork_id,
+        forkid.extract_forkid(compatible_node.enr),
         MAINNET_GENESIS_HEADER.hash,
         MAINNET_GENESIS_HEADER.block_number,
         mainnet_fork_blocks,
@@ -74,7 +76,7 @@ def test_skip_candidate_if_on_list_or_fork_mismatch():
     assert functools.partial(should_skip_fn, skip_list)(no_forkid_nodes[1]) is True
 
     # It returns False for candidates with no fork-id that are not on the skip list.
-    assert no_forkid_nodes[0].enr.fork_id is None
+    assert forkid.extract_forkid(no_forkid_nodes[0].enr) is None
     assert functools.partial(should_skip_fn, skip_list)(no_forkid_nodes[0]) is False
 
     # It returns False for candidates with compatible fork-ids that are not on the skip list
@@ -85,7 +87,7 @@ def test_skip_candidate_if_on_list_or_fork_mismatch():
         ROPSTEN_GENESIS_HEADER.hash, ROPSTEN_GENESIS_HEADER.block_number, ROPSTEN_VM_CONFIGURATION)
     with pytest.raises(BaseForkIDValidationError):
         forkid.validate_forkid(
-            incompatible_node.enr.fork_id,
+            forkid.extract_forkid(incompatible_node.enr),
             MAINNET_GENESIS_HEADER.hash,
             MAINNET_GENESIS_HEADER.block_number,
             mainnet_fork_blocks,

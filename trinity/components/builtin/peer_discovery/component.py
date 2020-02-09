@@ -3,18 +3,29 @@ from argparse import (
     _SubParsersAction,
 )
 import functools
+from typing import (
+    Tuple,
+    Type,
+)
+from typing_extensions import Literal
 
 import trio
+
+from rlp import sedes
 
 import async_service
 
 from lahja import EndpointAPI
 
+from eth_typing import BlockNumber
+
+from eth.abc import VirtualMachineAPI
+from eth.constants import GENESIS_BLOCK_NUMBER
+
 from p2p.constants import (
     DISCOVERY_EVENTBUS_ENDPOINT,
 )
 from p2p.discovery import (
-    generate_eth_cap_enr_field,
     PreferredNodeDiscoveryService,
     StaticDiscoveryService,
 )
@@ -26,12 +37,14 @@ from p2p.kademlia import (
 
 from trinity.boot_info import BootInfo
 from trinity.config import Eth1AppConfig
+from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.db.manager import DBClient
 from trinity.db.eth1.header import TrioHeaderDB
 from trinity.events import ShutdownRequest
 from trinity.extensibility import (
     TrioIsolatedComponent,
 )
+from trinity.protocol.eth import forkid
 
 
 class PeerDiscoveryComponent(TrioIsolatedComponent):
@@ -92,3 +105,14 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
         except Exception:
             await event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
             raise
+
+
+async def generate_eth_cap_enr_field(
+        vm_config: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...],
+        headerdb: BaseAsyncHeaderDB,
+) -> Tuple[Literal[b'eth'], Tuple[bytes, bytes]]:
+    head = await headerdb.coro_get_canonical_head()
+    genesis_hash = await headerdb.coro_get_canonical_block_hash(GENESIS_BLOCK_NUMBER)
+    fork_blocks = forkid.extract_fork_blocks(vm_config)
+    our_forkid = forkid.make_forkid(genesis_hash, head.block_number, fork_blocks)
+    return (b'eth', sedes.List([forkid.ForkID]).serialize([our_forkid]))

@@ -19,12 +19,13 @@ from eth.db.atomic import AtomicDB
 from eth.db.backends.memory import MemoryDB
 
 from p2p import kademlia
-from p2p.discovery import DiscoveryService, generate_eth_cap_enr_field
+from p2p.discovery import DiscoveryService
 from p2p.discv5.enr_db import FileEnrDb
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.discv5.typing import NodeID
 from p2p.forkid import extract_fork_blocks
 
+from trinity.components.builtin.peer_discovery.component import generate_eth_cap_enr_field
 from trinity.constants import (
     MAINNET_NETWORK_ID,
     NETWORKING_EVENTBUS_ENDPOINT,
@@ -32,7 +33,7 @@ from trinity.constants import (
 )
 from trinity.db.eth1.header import TrioHeaderDB
 from trinity.network_configurations import PRECONFIGURED_NETWORKS
-from trinity.protocol.common.peer import skip_candidate_if_on_list_or_fork_mismatch
+from trinity.protocol.common.peer import extract_forkid, skip_candidate_if_on_list_or_fork_mismatch
 
 
 async def main() -> None:
@@ -116,7 +117,7 @@ async def main() -> None:
                 candidates = service.get_peer_candidates(should_skip, MAX_PEERS)
                 missing_forkid = [
                     candidate.id for candidate in candidates
-                    if candidate.enr.fork_id is None
+                    if extract_forkid(candidate.enr) is None
                 ]
                 logger.info(
                     "Got %d connection candidates, %d of those with a matching ForkID",
