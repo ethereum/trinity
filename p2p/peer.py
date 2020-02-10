@@ -474,7 +474,7 @@ class BasePeerFactory(ABC):
         self.event_bus = event_bus
 
     @abstractmethod
-    async def get_handshakers(self) -> Tuple[HandshakerAPI, ...]:
+    async def get_handshakers(self) -> Tuple[HandshakerAPI[ProtocolAPI], ...]:
         ...
 
     async def handshake(self, remote: NodeAPI) -> BasePeer:

@@ -121,7 +121,7 @@ class ETHProxyPeer(BaseProxyPeer):
 class ETHPeerFactory(BaseChainPeerFactory):
     peer_class = ETHPeer
 
-    async def get_handshakers(self) -> Tuple[HandshakerAPI, ...]:
+    async def get_handshakers(self) -> Tuple[HandshakerAPI[Any], ...]:
         headerdb = self.context.headerdb
         wait = self.cancel_token.cancellable_wait
 

@@ -483,15 +483,15 @@ class HandshakeReceiptAPI(ABC):
 THandshakeReceipt = TypeVar('THandshakeReceipt', bound=HandshakeReceiptAPI)
 
 
-class HandshakerAPI(ABC):
+class HandshakerAPI(ABC, Generic[TProtocol]):
     logger: ExtendedDebugLogger
 
-    protocol_class: Type[ProtocolAPI]
+    protocol_class: Type[TProtocol]
 
     @abstractmethod
     async def do_handshake(self,
                            multiplexer: MultiplexerAPI,
-                           protocol: ProtocolAPI) -> HandshakeReceiptAPI:
+                           protocol: TProtocol) -> HandshakeReceiptAPI:
         """
         Perform the actual handshake for the protocol.
         """
