@@ -202,7 +202,7 @@ async def test_web3_commands_via_attached_console(command,
             attached_trinity.expect_exact("'listenAddr': '[::]")
             attached_trinity.expect_exact("'name': 'Trinity/")
             attached_trinity.expect_exact("'ports': AttributeDict({")
-            attached_trinity.expect_exact("'protocols': AttributeDict({'eth': AttributeDict({'version': 'eth/63'")  # noqa: E501
+            attached_trinity.expect_exact("'protocols': AttributeDict({'eth': AttributeDict({'version': 'eth/64'")  # noqa: E501
             attached_trinity.expect_exact("'difficulty': ")
             attached_trinity.expect_exact(f"'genesis': '{expected_genesis_hash}'")
             attached_trinity.expect_exact("'head': '0x")

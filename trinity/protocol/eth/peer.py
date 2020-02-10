@@ -37,8 +37,9 @@ from trinity.protocol.common.typing import (
     ReceiptsBundles,
     NodeDataBundles,
 )
+from . import forkid
 
-from .api import ETHAPI
+from .api import ETHV63API, ETHAPI, AnyETHAPI
 from .commands import (
     GetBlockHeaders,
     GetBlockBodies,
@@ -66,24 +67,29 @@ from .events import (
     NewBlockHashesEvent,
     TransactionsEvent,
 )
-from .payloads import StatusPayload
-from .proto import ETHProtocolV63
+from .payloads import StatusV63Payload, StatusPayload
+from .proto import ETHProtocolV63, ETHProtocol
 from .proxy import ProxyETHAPI
-from .handshaker import ETHHandshaker
+from .handshaker import ETHV63Handshaker, ETHHandshaker
 
 
 class ETHPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    supported_sub_protocols = (ETHProtocolV63,)
-    sub_proto: ETHProtocolV63 = None
+    supported_sub_protocols = (ETHProtocolV63, ETHProtocol)
+    sub_proto: ETHProtocol = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
-        return super().get_behaviors() + (ETHAPI().as_behavior(),)
+        return super().get_behaviors() + (ETHV63API().as_behavior(), ETHAPI().as_behavior())
 
     @cached_property
-    def eth_api(self) -> ETHAPI:
-        return self.connection.get_logic(ETHAPI.name, ETHAPI)
+    def eth_api(self) -> AnyETHAPI:
+        if self.connection.has_protocol(ETHProtocolV63):
+            return self.connection.get_logic(ETHV63API.name, ETHV63API)
+        elif self.connection.has_protocol(ETHProtocol):
+            return self.connection.get_logic(ETHAPI.name, ETHAPI)
+        else:
+            raise Exception("Unreachable code")
 
     def get_extra_stats(self) -> Tuple[str, ...]:
         basic_stats = super().get_extra_stats()
@@ -94,7 +100,7 @@ class ETHPeer(BaseChainPeer):
 class ETHProxyPeer(BaseProxyPeer):
     """
     A ``ETHPeer`` that can be used from any process instead of the actual peer pool peer.
-    Any action performed on the ``BCCProxyPeer`` is delegated to the actual peer in the pool.
+    Any action performed on the ``ETHProxyPeer`` is delegated to the actual peer in the pool.
     This does not yet mimic all APIs of the real peer.
     """
 
@@ -131,15 +137,29 @@ class ETHPeerFactory(BaseChainPeerFactory):
             headerdb.coro_get_canonical_block_hash(BlockNumber(GENESIS_BLOCK_NUMBER))
         )
 
-        handshake_params = StatusPayload(
+        handshake_v63_params = StatusV63Payload(
             head_hash=head.hash,
             total_difficulty=total_difficulty,
             genesis_hash=genesis_hash,
             network_id=self.context.network_id,
             version=ETHProtocolV63.version,
         )
+
+        fork_blocks = forkid.extract_fork_blocks(self.context.vm_configuration)
+        our_forkid = forkid.make_forkid(genesis_hash, head.block_number, fork_blocks)
+
+        handshake_params = StatusPayload(
+            head_hash=head.hash,
+            total_difficulty=total_difficulty,
+            genesis_hash=genesis_hash,
+            network_id=self.context.network_id,
+            version=ETHProtocol.version,
+            fork_id=our_forkid
+        )
+
         return (
-            ETHHandshaker(handshake_params),
+            ETHV63Handshaker(handshake_v63_params),
+            ETHHandshaker(handshake_params, head.block_number, fork_blocks),
         )
 
 

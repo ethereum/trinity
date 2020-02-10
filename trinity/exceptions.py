@@ -77,6 +77,16 @@ class WrongNetworkFailure(HandshakeFailure):
 register_error(WrongNetworkFailure, BLACKLIST_SECONDS_WRONG_NETWORK_OR_GENESIS)
 
 
+class WrongForkIDFailure(HandshakeFailure):
+    """
+    Disconnected from the peer because it has an incompatible ForkID
+    """
+    pass
+
+
+register_error(WrongForkIDFailure, BLACKLIST_SECONDS_WRONG_NETWORK_OR_GENESIS)
+
+
 class WrongGenesisFailure(HandshakeFailure):
     """
     Disconnected from the peer because it has a different genesis than we do

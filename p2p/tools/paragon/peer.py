@@ -10,7 +10,7 @@ from p2p.abc import HandshakerAPI, MultiplexerAPI
 from p2p.handshake import Handshaker
 from p2p.receipt import HandshakeReceipt
 
-from p2p.abc import BehaviorAPI, ProtocolAPI
+from p2p.abc import BehaviorAPI
 from p2p.constants import DEVP2P_V5
 from p2p.peer import (
     BasePeer,

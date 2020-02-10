@@ -18,13 +18,34 @@ from p2p.commands import BaseCommand, RLPCodec
 from trinity.protocol.common.payloads import BlockHeadersQuery
 from trinity.rlp.block_body import BlockBody
 from trinity.rlp.sedes import HashOrNumber, hash_sedes
+from .forkid import ForkID
 
 from .payloads import (
-    StatusPayload,
+    StatusV63Payload,
     NewBlockHash,
     BlockFields,
     NewBlockPayload,
+    StatusPayload,
 )
+
+
+STATUS_V63_STRUCTURE = sedes.List((
+    sedes.big_endian_int,
+    sedes.big_endian_int,
+    sedes.big_endian_int,
+    hash_sedes,
+    hash_sedes,
+))
+
+
+class StatusV63(BaseCommand[StatusV63Payload]):
+    protocol_command_id = 0
+    serialization_codec: RLPCodec[StatusV63Payload] = RLPCodec(
+        sedes=STATUS_V63_STRUCTURE,
+        process_inbound_payload_fn=compose(
+            lambda args: StatusV63Payload(*args),
+        ),
+    )
 
 
 STATUS_STRUCTURE = sedes.List((
@@ -33,6 +54,7 @@ STATUS_STRUCTURE = sedes.List((
     sedes.big_endian_int,
     hash_sedes,
     hash_sedes,
+    ForkID
 ))
 
 

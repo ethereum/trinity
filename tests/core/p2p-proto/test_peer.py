@@ -5,7 +5,7 @@ import pytest
 from p2p.disconnect import DisconnectReason
 
 from trinity.protocol.eth.peer import ETHPeer
-from trinity.protocol.eth.proto import ETHProtocolV63
+from trinity.protocol.eth.proto import ETHProtocol, ETHProtocolV63
 from trinity.protocol.les.peer import LESPeer
 from trinity.protocol.les.proto import (
     LESProtocolV1,
@@ -21,6 +21,7 @@ from trinity.tools.factories import (
 from tests.core.peer_helpers import (
     MockPeerPoolWithConnectedPeers,
 )
+from trinity.tools.factories.eth.proto import ETHV63PeerPairFactory
 
 
 @pytest.mark.asyncio
@@ -44,13 +45,23 @@ async def test_LES_v2_peers():
 
 
 @pytest.mark.asyncio
-async def test_ETH_peers():
-    async with ETHPeerPairFactory() as (alice, bob):
+async def test_ETH_v63_peers():
+    async with ETHV63PeerPairFactory() as (alice, bob):
         assert isinstance(alice, ETHPeer)
         assert isinstance(bob, ETHPeer)
 
         assert isinstance(alice.sub_proto, ETHProtocolV63)
         assert isinstance(bob.sub_proto, ETHProtocolV63)
+
+
+@pytest.mark.asyncio
+async def test_ETH_peers():
+    async with ETHPeerPairFactory() as (alice, bob):
+        assert isinstance(alice, ETHPeer)
+        assert isinstance(bob, ETHPeer)
+
+        assert isinstance(alice.sub_proto, ETHProtocol)
+        assert isinstance(bob.sub_proto, ETHProtocol)
 
 
 @pytest.mark.asyncio
