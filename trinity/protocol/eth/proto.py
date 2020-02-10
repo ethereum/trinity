@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from .peer import ETHPeer  # noqa: F401
 
 
-class ETHProtocol(BaseProtocol):
+class ETHProtocolV63(BaseProtocol):
     name = 'eth'
     version = 63
     commands = (
