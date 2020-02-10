@@ -1,6 +1,7 @@
 from typing import (
     Iterable,
     Tuple,
+    Any,
 )
 
 from cached_property import cached_property
@@ -46,12 +47,12 @@ class ParagonContext(BasePeerContext):
         super().__init__(client_version_string, listen_port, p2p_version)
 
 
-class ParagonHandshaker(Handshaker):
+class ParagonHandshaker(Handshaker[ParagonProtocol]):
     protocol_class = ParagonProtocol
 
     async def do_handshake(self,
                            multiplexer: MultiplexerAPI,
-                           protocol: ProtocolAPI) -> HandshakeReceipt:
+                           protocol: ParagonProtocol) -> HandshakeReceipt:
         return HandshakeReceipt(protocol)
 
 
@@ -59,7 +60,7 @@ class ParagonPeerFactory(BasePeerFactory):
     peer_class = ParagonPeer
     context: ParagonContext
 
-    async def get_handshakers(self) -> Tuple[HandshakerAPI, ...]:
+    async def get_handshakers(self) -> Tuple[HandshakerAPI[Any], ...]:
         return (ParagonHandshaker(),)
 
 

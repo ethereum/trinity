@@ -28,6 +28,8 @@ from p2p.abc import (
     MultiplexerAPI,
     NodeAPI,
     TransportAPI,
+    TProtocol,
+    ProtocolAPI,
 )
 from p2p.connection import Connection
 from p2p.constants import DEVP2P_V5
@@ -58,7 +60,7 @@ from p2p.typing import (
 )
 
 
-class Handshaker(HandshakerAPI):
+class Handshaker(HandshakerAPI[TProtocol]):
     """
     Base class that handles the handshake for a given protocol.  The primary
     justification for this class's existence is to house parameters that are
@@ -179,7 +181,7 @@ async def _do_p2p_handshake(transport: TransportAPI,
 
 async def negotiate_protocol_handshakes(transport: TransportAPI,
                                         p2p_handshake_params: DevP2PHandshakeParams,
-                                        protocol_handshakers: Sequence[HandshakerAPI],
+                                        protocol_handshakers: Sequence[HandshakerAPI[ProtocolAPI]],
                                         token: CancelToken,
                                         ) -> Tuple[MultiplexerAPI, DevP2PReceipt, Tuple[HandshakeReceiptAPI, ...]]:  # noqa: E501
     """
@@ -294,7 +296,7 @@ async def negotiate_protocol_handshakes(transport: TransportAPI,
 async def dial_out(remote: NodeAPI,
                    private_key: keys.PrivateKey,
                    p2p_handshake_params: DevP2PHandshakeParams,
-                   protocol_handshakers: Sequence[HandshakerAPI],
+                   protocol_handshakers: Sequence[HandshakerAPI[ProtocolAPI]],
                    token: CancelToken) -> ConnectionAPI:
     """
     Perform the auth and P2P handshakes with the given remote.
@@ -345,7 +347,7 @@ async def receive_dial_in(reader: asyncio.StreamReader,
                           writer: asyncio.StreamWriter,
                           private_key: keys.PrivateKey,
                           p2p_handshake_params: DevP2PHandshakeParams,
-                          protocol_handshakers: Sequence[HandshakerAPI],
+                          protocol_handshakers: Sequence[HandshakerAPI[ProtocolAPI]],
                           token: CancelToken) -> Connection:
     transport = await Transport.receive_connection(
         reader=reader,

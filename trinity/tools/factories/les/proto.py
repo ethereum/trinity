@@ -7,6 +7,7 @@ from typing import (
     cast,
     AsyncContextManager,
     Tuple,
+    Any,
 )
 
 from lahja import EndpointAPI
@@ -54,7 +55,7 @@ class LESV1Peer(LESPeer):
 class LESV1PeerFactory(LESPeerFactory):
     peer_class = LESV1Peer
 
-    async def get_handshakers(self) -> Tuple[HandshakerAPI, ...]:
+    async def get_handshakers(self) -> Tuple[HandshakerAPI[Any], ...]:
         return tuple(filter(
             # mypy doesn't know these have a `handshake_params` property
             lambda handshaker: handshaker.handshake_params.version == 1,  # type: ignore
