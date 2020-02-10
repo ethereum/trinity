@@ -10,28 +10,34 @@ from eth.tools.builder.chain import (
     latest_mainnet_at,
     mine_block,
 )
+from eth.vm.forks import MuirGlacierVM, PetersburgVM
 
 from trinity._utils.assertions import assert_type_equality
 from trinity.db.eth1.header import AsyncHeaderDB
-from trinity.protocol.eth.api import ETHAPI
+from trinity.exceptions import WrongForkIDFailure
+from trinity.protocol.eth.api import ETHAPI, ETHV63API
 from trinity.protocol.eth.commands import (
     GetBlockHeaders,
     GetNodeData,
     NewBlock,
     Status,
+    StatusV63,
 )
-from trinity.protocol.eth.handshaker import ETHHandshakeReceipt
+from trinity.protocol.eth.handshaker import ETHHandshakeReceipt, ETHV63HandshakeReceipt
+from trinity.protocol.eth.proto import ETHProtocolV63, ETHProtocol
 
 from trinity.tools.factories.common import (
     BlockHeadersQueryFactory,
 )
 from trinity.tools.factories.eth import (
     StatusPayloadFactory,
+    StatusV63PayloadFactory,
 )
 from trinity.tools.factories import (
     BlockHashFactory,
     ChainContextFactory,
     ETHPeerPairFactory,
+    ETHV63PeerPairFactory,
 )
 
 
@@ -60,8 +66,23 @@ def alice_chain(bob_chain):
 
 
 @pytest.fixture
-async def alice_and_bob(alice_chain, bob_chain):
-    pair_factory = ETHPeerPairFactory(
+def alice_chain_on_fork(bob_chain):
+    bob_genesis = bob_chain.headerdb.get_canonical_block_header_by_number(0)
+
+    chain = build(
+        MiningChain,
+        latest_mainnet_at(0),
+        disable_pow_check(),
+        genesis(params={"timestamp": bob_genesis.timestamp}),
+        mine_block(),
+    )
+
+    return chain
+
+
+@pytest.fixture(params=(ETHV63PeerPairFactory, ETHPeerPairFactory))
+async def alice_and_bob(alice_chain, bob_chain, request):
+    pair_factory = request.param(
         alice_client_version='alice',
         alice_peer_context=ChainContextFactory(headerdb=AsyncHeaderDB(alice_chain.headerdb.db)),
         bob_client_version='bob',
@@ -83,14 +104,48 @@ def bob(alice_and_bob):
     return bob
 
 
+@pytest.fixture
+def protocol_specific_classes(alice):
+    if alice.connection.has_protocol(ETHProtocolV63):
+        return ETHV63API, ETHV63HandshakeReceipt, StatusV63, StatusV63PayloadFactory
+    elif alice.connection.has_protocol(ETHProtocol):
+        return ETHAPI, ETHHandshakeReceipt, Status, StatusPayloadFactory
+    else:
+        raise Exception("No ETH protocol found")
+
+
+@pytest.fixture
+def ETHAPI_class(protocol_specific_classes):
+    api_class, _, _, _ = protocol_specific_classes
+    return api_class
+
+
+@pytest.fixture
+def ETHHandshakeReceipt_class(protocol_specific_classes):
+    _, receipt_class, _, _ = protocol_specific_classes
+    return receipt_class
+
+
+@pytest.fixture
+def Status_class(protocol_specific_classes):
+    _, _, status_class, _ = protocol_specific_classes
+    return status_class
+
+
+@pytest.fixture
+def StatusPayloadFactory_class(protocol_specific_classes):
+    _, _, _, status_payload_factory_class = protocol_specific_classes
+    return status_payload_factory_class
+
+
 @pytest.mark.asyncio
-async def test_eth_api_properties(alice):
-    assert alice.connection.has_logic(ETHAPI.name)
-    eth_api = alice.connection.get_logic(ETHAPI.name, ETHAPI)
+async def test_eth_api_properties(alice, ETHAPI_class, ETHHandshakeReceipt_class):
+    assert alice.connection.has_logic(ETHAPI_class.name)
+    eth_api = alice.connection.get_logic(ETHAPI_class.name, ETHAPI_class)
 
     assert eth_api is alice.eth_api
 
-    eth_receipt = alice.connection.get_receipt_by_type(ETHHandshakeReceipt)
+    eth_receipt = alice.connection.get_receipt_by_type(ETHHandshakeReceipt_class)
 
     assert eth_api.network_id == eth_receipt.network_id
     assert eth_api.genesis_hash == eth_receipt.genesis_hash
@@ -101,7 +156,7 @@ async def test_eth_api_properties(alice):
 
 
 @pytest.mark.asyncio
-async def test_eth_api_head_info_updates_with_newblock(alice, bob, bob_chain):
+async def test_eth_api_head_info_updates_with_newblock(alice, bob, bob_chain, ETHAPI_class):
     # mine two blocks on bob's chain
     bob_chain = build(
         bob_chain,
@@ -118,8 +173,8 @@ async def test_eth_api_head_info_updates_with_newblock(alice, bob, bob_chain):
 
     bob_genesis = bob_chain.headerdb.get_canonical_block_header_by_number(0)
 
-    bob_eth_api = bob.connection.get_logic(ETHAPI.name, ETHAPI)
-    alice_eth_api = alice.connection.get_logic(ETHAPI.name, ETHAPI)
+    bob_eth_api = bob.connection.get_logic(ETHAPI_class.name, ETHAPI_class)
+    alice_eth_api = alice.connection.get_logic(ETHAPI_class.name, ETHAPI_class)
 
     assert alice_eth_api.head_info.head_hash == bob_genesis.hash
     assert alice_eth_api.head_info.head_td == bob_genesis.difficulty
@@ -143,19 +198,19 @@ async def test_eth_api_head_info_updates_with_newblock(alice, bob, bob_chain):
 
 
 @pytest.mark.asyncio
-async def test_eth_api_send_status(alice, bob):
-    payload = StatusPayloadFactory()
+async def test_eth_api_send_status(alice, bob, StatusPayloadFactory_class, Status_class):
+    payload = StatusPayloadFactory_class()
 
     command_fut = asyncio.Future()
 
     async def _handle_cmd(connection, cmd):
         command_fut.set_result(cmd)
 
-    bob.connection.add_command_handler(Status, _handle_cmd)
+    bob.connection.add_command_handler(Status_class, _handle_cmd)
     alice.eth_api.send_status(payload)
 
     result = await asyncio.wait_for(command_fut, timeout=1)
-    assert isinstance(result, Status)
+    assert isinstance(result, Status_class)
     assert_type_equality(payload, result.payload)
 
 
@@ -196,3 +251,22 @@ async def test_eth_api_send_get_block_headers(alice, bob):
     result = await asyncio.wait_for(command_fut, timeout=1)
     assert isinstance(result, GetBlockHeaders)
     assert_type_equality(payload, result.payload)
+
+
+@pytest.mark.asyncio
+async def test_handshake_with_incompatible_fork_id(alice_chain, bob_chain):
+
+    alice_chain = build(
+        alice_chain,
+        mine_block()
+    )
+
+    pair_factory = ETHPeerPairFactory(
+        alice_peer_context=ChainContextFactory(
+            headerdb=AsyncHeaderDB(alice_chain.headerdb.db),
+            vm_configuration=((1, PetersburgVM), (2, MuirGlacierVM))
+        ),
+    )
+    with pytest.raises(WrongForkIDFailure):
+        async with pair_factory as (alice, bob):
+            pass

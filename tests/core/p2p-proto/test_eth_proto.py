@@ -16,6 +16,7 @@ from trinity.protocol.eth.commands import (
     Receipts,
     Status,
     Transactions,
+    StatusV63,
 )
 
 from trinity.tools.factories import (
@@ -32,12 +33,14 @@ from trinity.tools.factories.eth import (
     NewBlockHashFactory,
     NewBlockPayloadFactory,
     StatusPayloadFactory,
+    StatusV63PayloadFactory,
 )
 
 
 @pytest.mark.parametrize(
     'command_type,payload',
     (
+        (StatusV63, StatusV63PayloadFactory()),
         (Status, StatusPayloadFactory()),
         (NewBlockHashes, tuple(NewBlockHashFactory.create_batch(2))),
         (Transactions, tuple(BaseTransactionFieldsFactory.create_batch(2))),

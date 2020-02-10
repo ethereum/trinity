@@ -1,0 +1,2 @@
+Implement the ``eth/64`` networking protocol according to
+`EIP 2124 <https://eips.ethereum.org/EIPS/eip-2124>`_

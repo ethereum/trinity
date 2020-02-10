@@ -63,12 +63,13 @@ from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.exceptions import BaseForkIDValidationError
 from trinity.protocol.common.abc import ChainInfoAPI, HeadInfoAPI
 from trinity.protocol.common.api import ChainInfo, HeadInfo
-from trinity.protocol.eth.api import ETHAPI
+from trinity.protocol.eth.api import ETHV63API, ETHAPI
 from trinity.protocol.eth.forkid import (
     extract_fork_blocks,
     extract_forkid,
     validate_forkid,
 )
+from trinity.protocol.eth.proto import ETHProtocol, ETHProtocolV63
 from trinity.protocol.les.api import LESV1API, LESV2API
 from trinity.protocol.les.proto import LESProtocolV1, LESProtocolV2
 
@@ -94,9 +95,14 @@ class BaseChainPeer(BasePeer):
     context: ChainContext
 
     @cached_property
-    def chain_api(self) -> Union[ETHAPI, LESV1API, LESV2API]:
+    def chain_api(self) -> Union[ETHAPI, ETHV63API, LESV1API, LESV2API]:
         if self.connection.has_logic(ETHAPI.name):
-            return self.connection.get_logic(ETHAPI.name, ETHAPI)
+            if self.connection.has_protocol(ETHProtocol):
+                return self.connection.get_logic(ETHAPI.name, ETHAPI)
+            elif self.connection.has_protocol(ETHProtocolV63):
+                return self.connection.get_logic(ETHV63API.name, ETHV63API)
+            else:
+                raise Exception("Should be unreachable")
         elif self.connection.has_logic(LESV1API.name):
             if self.connection.has_protocol(LESProtocolV2):
                 return self.connection.get_logic(LESV2API.name, LESV2API)

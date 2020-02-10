@@ -1,26 +1,38 @@
+from typing import Union, TypeVar, Generic, Tuple
+
 from cached_property import cached_property
 
-from eth_typing import Hash32
+from eth_typing import Hash32, BlockNumber
 from eth_utils import encode_hex
 
-from p2p.abc import MultiplexerAPI
+from p2p.abc import MultiplexerAPI, ProtocolAPI, NodeAPI
 from p2p.exceptions import (
     HandshakeFailure,
 )
 from p2p.handshake import Handshaker
 from p2p.receipt import HandshakeReceipt
 
-from trinity.exceptions import WrongGenesisFailure, WrongNetworkFailure
+from trinity.exceptions import (
+    WrongForkIDFailure,
+    WrongGenesisFailure,
+    WrongNetworkFailure,
+    BaseForkIDValidationError,
+)
 
-from .commands import Status
-from .payloads import StatusPayload
-from .proto import ETHProtocolV63
+
+from .commands import StatusV63, Status
+from .forkid import ForkID, validate_forkid
+from .payloads import StatusV63Payload, StatusPayload
+from .proto import ETHProtocolV63, ETHProtocol
 
 
-class ETHHandshakeReceipt(HandshakeReceipt):
-    handshake_params: StatusPayload
+THandshakeParams = TypeVar("THandshakeParams", bound=Union[StatusPayload, StatusV63Payload])
 
-    def __init__(self, protocol: ETHProtocolV63, handshake_params: StatusPayload) -> None:
+
+class BaseETHHandshakeReceipt(HandshakeReceipt, Generic[THandshakeParams]):
+    handshake_params: THandshakeParams
+
+    def __init__(self, protocol: ProtocolAPI, handshake_params: THandshakeParams) -> None:
         super().__init__(protocol)
         self.handshake_params = handshake_params
 
@@ -45,48 +57,110 @@ class ETHHandshakeReceipt(HandshakeReceipt):
         return self.handshake_params.version
 
 
-class ETHHandshaker(Handshaker[ETHProtocol]):
-    protocol_class = ETHProtocolV63
-    handshake_params: StatusPayload
+class ETHV63HandshakeReceipt(BaseETHHandshakeReceipt[StatusV63Payload]):
+    pass
 
-    def __init__(self, handshake_params: StatusPayload) -> None:
+
+class ETHHandshakeReceipt(BaseETHHandshakeReceipt[StatusPayload]):
+
+    @cached_property
+    def fork_id(self) -> ForkID:
+        return self.handshake_params.fork_id
+
+
+def validate_base_receipt(remote: NodeAPI,
+                          receipt: Union[ETHV63HandshakeReceipt, ETHHandshakeReceipt],
+                          handshake_params: Union[StatusV63Payload, StatusPayload]) -> None:
+    if receipt.handshake_params.network_id != handshake_params.network_id:
+        raise WrongNetworkFailure(
+            f"{remote} network "
+            f"({receipt.handshake_params.network_id}) does not match ours "
+            f"({handshake_params.network_id}), disconnecting"
+        )
+
+    if receipt.handshake_params.genesis_hash != handshake_params.genesis_hash:
+        raise WrongGenesisFailure(
+            f"{remote} genesis "
+            f"({encode_hex(receipt.handshake_params.genesis_hash)}) does "
+            f"not match ours ({encode_hex(handshake_params.genesis_hash)}), "
+            f"disconnecting"
+        )
+
+
+class ETHV63Handshaker(Handshaker[ETHProtocolV63]):
+    protocol_class = ETHProtocolV63
+
+    def __init__(self, handshake_params: StatusV63Payload) -> None:
         self.handshake_params = handshake_params
 
     async def do_handshake(self,
                            multiplexer: MultiplexerAPI,
-                           protocol: ETHProtocol) -> ETHHandshakeReceipt:
-        """Perform the handshake for the sub-protocol agreed with the remote peer.
-
-        Raises HandshakeFailure if the handshake is not successful.
+                           protocol: ETHProtocolV63) -> ETHV63HandshakeReceipt:
         """
+        Perform the handshake for the sub-protocol agreed with the remote peer.
+
+        Raise HandshakeFailure if the handshake is not successful.
+        """
+
+        protocol.send(StatusV63(self.handshake_params))
+
+        async for cmd in multiplexer.stream_protocol_messages(protocol):
+            if not isinstance(cmd, StatusV63):
+                raise HandshakeFailure(f"Expected a ETH Status msg, got {cmd}, disconnecting")
+
+            receipt = ETHV63HandshakeReceipt(protocol, cmd.payload)
+
+            validate_base_receipt(multiplexer.remote, receipt, self.handshake_params)
+
+            break
+        else:
+            raise HandshakeFailure("Message stream exited before finishing handshake")
+
+        return receipt
+
+
+class ETHHandshaker(Handshaker[ETHProtocol]):
+    protocol_class = ETHProtocol
+
+    def __init__(self,
+                 handshake_params: StatusPayload,
+                 head_number: BlockNumber,
+                 fork_blocks: Tuple[BlockNumber, ...]) -> None:
+        self.handshake_params = handshake_params
+        self.head_number = head_number
+        self.fork_blocks = fork_blocks
+
+    async def do_handshake(self,
+                           multiplexer: MultiplexerAPI,
+                           protocol: ETHProtocol) -> ETHHandshakeReceipt:
+        """
+        Perform the handshake for the sub-protocol agreed with the remote peer.
+
+        Raise HandshakeFailure if the handshake is not successful.
+        """
+
         protocol.send(Status(self.handshake_params))
 
         async for cmd in multiplexer.stream_protocol_messages(protocol):
             if not isinstance(cmd, Status):
                 raise HandshakeFailure(f"Expected a ETH Status msg, got {cmd}, disconnecting")
 
-            remote_params = StatusPayload(
-                version=cmd.payload.version,
-                network_id=cmd.payload.network_id,
-                total_difficulty=cmd.payload.total_difficulty,
-                head_hash=cmd.payload.head_hash,
-                genesis_hash=cmd.payload.genesis_hash,
-            )
-            receipt = ETHHandshakeReceipt(protocol, remote_params)
+            receipt = ETHHandshakeReceipt(protocol, cmd.payload)
 
-            if receipt.handshake_params.network_id != self.handshake_params.network_id:
-                raise WrongNetworkFailure(
-                    f"{multiplexer.remote} network "
-                    f"({receipt.handshake_params.network_id}) does not match ours "
-                    f"({self.handshake_params.network_id}), disconnecting"
+            validate_base_receipt(multiplexer.remote, receipt, self.handshake_params)
+
+            try:
+                validate_forkid(
+                    receipt.fork_id,
+                    self.handshake_params.genesis_hash,
+                    self.head_number,
+                    self.fork_blocks,
                 )
-
-            if receipt.handshake_params.genesis_hash != self.handshake_params.genesis_hash:
-                raise WrongGenesisFailure(
-                    f"{multiplexer.remote} genesis "
-                    f"({encode_hex(receipt.handshake_params.genesis_hash)}) does "
-                    f"not match ours ({encode_hex(self.handshake_params.genesis_hash)}), "
-                    f"disconnecting"
+            except BaseForkIDValidationError as exc:
+                raise WrongForkIDFailure(
+                    f"{multiplexer.remote} forkid "
+                    f"({receipt.handshake_params.fork_id}) is incompatible to ours ({exc})"
+                    f"({self.handshake_params.fork_id}), disconnecting"
                 )
 
             break

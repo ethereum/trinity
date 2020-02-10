@@ -1,4 +1,5 @@
-from typing import Any, Sequence, Tuple, Union
+from abc import abstractmethod
+from typing import Any, Sequence, Tuple, Union, Generic, Type, TypeVar
 
 from cached_property import cached_property
 
@@ -11,7 +12,7 @@ from eth.abc import (
     SignedTransactionAPI,
 )
 
-from p2p.abc import ConnectionAPI
+from p2p.abc import ConnectionAPI, ProtocolAPI
 from p2p.exchange import ExchangeAPI, ExchangeLogic
 from p2p.logic import Application, CommandHandler
 from p2p.qualifiers import HasProtocol
@@ -29,9 +30,9 @@ from trinity.protocol.eth.commands import (
     NewBlockHashes,
     NodeData,
     Receipts,
-    Status,
+    StatusV63,
     Transactions,
-)
+    Status)
 from trinity.rlp.block_body import BlockBody
 
 from .exchanges import (
@@ -40,22 +41,27 @@ from .exchanges import (
     GetNodeDataExchange,
     GetReceiptsExchange,
 )
-from .handshaker import ETHHandshakeReceipt
+from .handshaker import ETHV63HandshakeReceipt, ETHHandshakeReceipt, BaseETHHandshakeReceipt
 from .payloads import (
     BlockFields,
     NewBlockHash,
     NewBlockPayload,
+    StatusV63Payload,
     StatusPayload,
 )
-from .proto import ETHProtocolV63
+from .proto import ETHProtocolV63, ETHProtocol
+
+THandshakeReceipt = TypeVar("THandshakeReceipt", bound=BaseETHHandshakeReceipt[Any])
 
 
-class HeadInfoTracker(CommandHandler[NewBlock], HeadInfoAPI):
+class BaseHeadInfoTracker(CommandHandler[NewBlock], HeadInfoAPI, Generic[THandshakeReceipt]):
     command_type = NewBlock
 
     _head_td: int = None
     _head_hash: Hash32 = None
     _head_number: BlockNumber = None
+
+    _receipt_type: Type[THandshakeReceipt]
 
     async def handle(self, connection: ConnectionAPI, cmd: NewBlock) -> None:
         header = cmd.payload.block.header
@@ -70,8 +76,8 @@ class HeadInfoTracker(CommandHandler[NewBlock], HeadInfoAPI):
     # HeadInfoAPI
     #
     @cached_property
-    def _eth_receipt(self) -> ETHHandshakeReceipt:
-        return self.connection.get_receipt_by_type(ETHHandshakeReceipt)
+    def _eth_receipt(self) -> THandshakeReceipt:
+        return self.connection.get_receipt_by_type(self._receipt_type)
 
     @property
     def head_td(self) -> int:
@@ -93,11 +99,19 @@ class HeadInfoTracker(CommandHandler[NewBlock], HeadInfoAPI):
         return self._head_number
 
 
-class ETHAPI(Application):
-    name = 'eth'
-    qualifier = HasProtocol(ETHProtocolV63)
+class ETHV63HeadInfoTracker(BaseHeadInfoTracker[ETHV63HandshakeReceipt]):
 
-    head_info: HeadInfoTracker
+    _receipt_type = ETHV63HandshakeReceipt
+
+
+class ETHHeadInfoTracker(BaseHeadInfoTracker[ETHHandshakeReceipt]):
+
+    _receipt_type = ETHHandshakeReceipt
+
+
+class BaseETHAPI(Application):
+    name = 'eth'
+    head_info_tracker_cls = BaseHeadInfoTracker[THandshakeReceipt]
 
     get_block_bodies: GetBlockBodiesExchange
     get_block_headers: GetBlockHeadersExchange
@@ -105,7 +119,7 @@ class ETHAPI(Application):
     get_receipts: GetReceiptsExchange
 
     def __init__(self) -> None:
-        self.head_info = HeadInfoTracker()
+        self.head_info = self.head_info_tracker_cls()
         self.add_child_behavior(self.head_info.as_behavior())
 
         # Request/Response API
@@ -118,6 +132,16 @@ class ETHAPI(Application):
         self.add_child_behavior(ExchangeLogic(self.get_block_headers).as_behavior())
         self.add_child_behavior(ExchangeLogic(self.get_node_data).as_behavior())
         self.add_child_behavior(ExchangeLogic(self.get_receipts).as_behavior())
+
+    @property
+    @abstractmethod
+    def protocol(self) -> ProtocolAPI:
+        ...
+
+    @property
+    @abstractmethod
+    def receipt(self) -> BaseETHHandshakeReceipt[Any]:
+        ...
 
     @cached_property
     def exchanges(self) -> Tuple[ExchangeAPI[Any, Any, Any], ...]:
@@ -135,23 +159,12 @@ class ETHAPI(Application):
         )
 
     @cached_property
-    def protocol(self) -> ETHProtocolV63:
-        return self.connection.get_protocol_by_type(ETHProtocolV63)
-
-    @cached_property
-    def receipt(self) -> ETHHandshakeReceipt:
-        return self.connection.get_receipt_by_type(ETHHandshakeReceipt)
-
-    @cached_property
     def network_id(self) -> int:
         return self.receipt.network_id
 
     @cached_property
     def genesis_hash(self) -> Hash32:
         return self.receipt.genesis_hash
-
-    def send_status(self, payload: StatusPayload) -> None:
-        self.protocol.send(Status(payload))
 
     def send_get_node_data(self, node_hashes: Sequence[Hash32]) -> None:
         self.protocol.send(GetNodeData(tuple(node_hashes)))
@@ -204,3 +217,38 @@ class ETHAPI(Application):
         block_fields = BlockFields(block.header, block.transactions, block.uncles)
         payload = NewBlockPayload(block_fields, total_difficulty)
         self.protocol.send(NewBlock(payload))
+
+
+class ETHV63API(BaseETHAPI):
+    qualifier = HasProtocol(ETHProtocolV63)
+    head_info_tracker_cls = ETHV63HeadInfoTracker
+
+    @cached_property
+    def protocol(self) -> ETHProtocolV63:
+        return self.connection.get_protocol_by_type(ETHProtocolV63)
+
+    @cached_property
+    def receipt(self) -> ETHV63HandshakeReceipt:
+        return self.connection.get_receipt_by_type(ETHV63HandshakeReceipt)
+
+    def send_status(self, payload: StatusV63Payload) -> None:
+        self.protocol.send(StatusV63(payload))
+
+
+class ETHAPI(BaseETHAPI):
+    qualifier = HasProtocol(ETHProtocol)
+    head_info_tracker_cls = ETHHeadInfoTracker
+
+    @cached_property
+    def protocol(self) -> ETHProtocol:
+        return self.connection.get_protocol_by_type(ETHProtocol)
+
+    @cached_property
+    def receipt(self) -> ETHHandshakeReceipt:
+        return self.connection.get_receipt_by_type(ETHHandshakeReceipt)
+
+    def send_status(self, payload: StatusPayload) -> None:
+        self.protocol.send(Status(payload))
+
+
+AnyETHAPI = Union[ETHV63API, ETHAPI]
