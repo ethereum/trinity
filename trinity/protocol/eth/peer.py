@@ -67,7 +67,7 @@ from .events import (
     TransactionsEvent,
 )
 from .payloads import StatusPayload
-from .proto import ETHProtocol
+from .proto import ETHProtocolV63
 from .proxy import ProxyETHAPI
 from .handshaker import ETHHandshaker
 
@@ -75,8 +75,8 @@ from .handshaker import ETHHandshaker
 class ETHPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    supported_sub_protocols = (ETHProtocol,)
-    sub_proto: ETHProtocol = None
+    supported_sub_protocols = (ETHProtocolV63,)
+    sub_proto: ETHProtocolV63 = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
         return super().get_behaviors() + (ETHAPI().as_behavior(),)
@@ -136,7 +136,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
             total_difficulty=total_difficulty,
             genesis_hash=genesis_hash,
             network_id=self.context.network_id,
-            version=ETHProtocol.version,
+            version=ETHProtocolV63.version,
         )
         return (
             ETHHandshaker(handshake_params),

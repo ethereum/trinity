@@ -18,7 +18,7 @@ from trinity.protocol.eth.payloads import (
     NewBlockPayload,
     BlockFields,
 )
-from trinity.protocol.eth.proto import ETHProtocol
+from trinity.protocol.eth.proto import ETHProtocolV63
 
 from trinity.tools.factories.block_hash import BlockHashFactory
 from trinity.tools.factories.headers import BlockHeaderFactory
@@ -29,7 +29,7 @@ class StatusPayloadFactory(factory.Factory):
     class Meta:
         model = StatusPayload
 
-    version = ETHProtocol.version
+    version = ETHProtocolV63.version
     network_id = MAINNET_NETWORK_ID
     total_difficulty = 1
     head_hash = factory.SubFactory(BlockHashFactory)

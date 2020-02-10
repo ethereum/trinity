@@ -47,7 +47,7 @@ from .payloads import (
     NewBlockPayload,
     StatusPayload,
 )
-from .proto import ETHProtocol
+from .proto import ETHProtocolV63
 
 
 class HeadInfoTracker(CommandHandler[NewBlock], HeadInfoAPI):
@@ -95,7 +95,7 @@ class HeadInfoTracker(CommandHandler[NewBlock], HeadInfoAPI):
 
 class ETHAPI(Application):
     name = 'eth'
-    qualifier = HasProtocol(ETHProtocol)
+    qualifier = HasProtocol(ETHProtocolV63)
 
     head_info: HeadInfoTracker
 
@@ -135,8 +135,8 @@ class ETHAPI(Application):
         )
 
     @cached_property
-    def protocol(self) -> ETHProtocol:
-        return self.connection.get_protocol_by_type(ETHProtocol)
+    def protocol(self) -> ETHProtocolV63:
+        return self.connection.get_protocol_by_type(ETHProtocolV63)
 
     @cached_property
     def receipt(self) -> ETHHandshakeReceipt:

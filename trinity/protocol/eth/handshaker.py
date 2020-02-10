@@ -14,13 +14,13 @@ from trinity.exceptions import WrongGenesisFailure, WrongNetworkFailure
 
 from .commands import Status
 from .payloads import StatusPayload
-from .proto import ETHProtocol
+from .proto import ETHProtocolV63
 
 
 class ETHHandshakeReceipt(HandshakeReceipt):
     handshake_params: StatusPayload
 
-    def __init__(self, protocol: ETHProtocol, handshake_params: StatusPayload) -> None:
+    def __init__(self, protocol: ETHProtocolV63, handshake_params: StatusPayload) -> None:
         super().__init__(protocol)
         self.handshake_params = handshake_params
 
@@ -46,7 +46,7 @@ class ETHHandshakeReceipt(HandshakeReceipt):
 
 
 class ETHHandshaker(Handshaker[ETHProtocol]):
-    protocol_class = ETHProtocol
+    protocol_class = ETHProtocolV63
     handshake_params: StatusPayload
 
     def __init__(self, handshake_params: StatusPayload) -> None:
