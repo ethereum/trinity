@@ -1,5 +1,6 @@
 import collections
 import math
+import operator
 from typing import (
     DefaultDict,
     Deque,
@@ -10,6 +11,7 @@ from typing import (
 from eth_utils import (
     encode_hex,
 )
+from eth_utils import toolz
 
 from p2p.discv5.enr import ENR
 from p2p.discv5.typing import (
@@ -37,7 +39,8 @@ class TopicTable:
         """Return the total number of ads in the table across all queues."""
         return self.total_size
 
-    def is_table_full(self) -> bool:
+    @property
+    def is_full(self) -> bool:
         return len(self) >= self.max_total_size
 
     def is_queue_full(self, topic: Topic) -> bool:
@@ -48,21 +51,34 @@ class TopicTable:
 
         The result will be ordered from newest to oldest entry.
         """
-        # reverse queue so that old entries come first
         return tuple(ad.enr for ad in self.topic_queues[topic])
 
-    def get_wait_time(self, topic: Topic) -> float:
+    def get_wait_time(self, topic: Topic, current_time: float) -> float:
         """Return the time at which the next ad for a given topic can be added."""
-        if self.is_table_full():
-            oldest_ads = [queue[-1] for queue in self.topic_queues.values()]
-            oldest_ad_reg_time = max(ad.registration_time for ad in oldest_ads)
-        elif self.is_queue_full(topic):
-            queue = self.topic_queues[topic]
-            oldest_ad_reg_time = queue[-1].registration_time
-        else:
-            oldest_ad_reg_time = -math.inf
+        is_table_full = self.is_full
+        is_queue_full = self.is_queue_full(topic)
 
-        return oldest_ad_reg_time + self.target_ad_lifetime
+        if not is_queue_full and not is_table_full:
+            return 0
+
+        if is_queue_full:
+            queue = self.topic_queues[topic]
+            oldest_registration_time_queue = queue[-1].registration_time
+        else:
+            oldest_registration_time_queue = -math.inf
+
+        if is_table_full:
+            oldest_ads = [queue[-1] for queue in self.topic_queues.values() if queue]
+            oldest_reg_time = min(ad.registration_time for ad in oldest_ads)
+            oldest_registration_time_table = oldest_reg_time
+        else:
+            oldest_registration_time_table = -math.inf
+
+        next_registration_time = max(
+            oldest_registration_time_queue,
+            oldest_registration_time_table,
+        ) + self.target_ad_lifetime
+        return max(next_registration_time - current_time, 0)
 
     def register(self, topic: Topic, enr: ENR, current_time: float) -> None:
         """Register a new ad.
@@ -73,18 +89,27 @@ class TopicTable:
         """
         queue = self.topic_queues[topic]
 
-        if len(self) >= self.max_total_size:
-            raise ValueError("Topic table is full")
-
-        wait_time = self.get_wait_time(topic) - current_time
+        wait_time = self.get_wait_time(topic, current_time)
         if wait_time > 0:
-            raise ValueError(f"Topic queue is full (time to wait: {wait_time})")
+            raise ValueError(f"Topic queue or table is full (time to wait: {wait_time})")
 
         present_node_ids = tuple(entry.node_id for entry in self.get_enrs_for_topic(topic))
         if enr.node_id in present_node_ids[:self.max_queue_size - 1]:
             raise ValueError(
                 f"Topic queue already contains entry for node {encode_hex(enr.node_id)}"
             )
+
+        if self.is_full:
+            queues = [queue for queue in self.topic_queues.values() if queue]
+            queue_with_oldest_ad = min(
+                queues,
+                key=toolz.compose(
+                    operator.attrgetter("registration_time"),
+                    operator.itemgetter(-1),
+                )
+            )
+            queue_with_oldest_ad.pop()
+            self.total_size -= 1
 
         self.total_size -= len(queue)
         queue.appendleft(Ad(enr=enr, registration_time=current_time))
