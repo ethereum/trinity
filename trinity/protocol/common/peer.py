@@ -41,6 +41,7 @@ from p2p.exceptions import (
     BaseForkIDValidationError,
     NoConnectedPeers,
     PeerConnectionLost,
+    UnknownAPI,
 )
 from p2p import forkid
 from p2p.peer import (
@@ -242,7 +243,7 @@ class BaseChainPeerPool(BasePeerPool):
             raise NoConnectedPeers("No connected peers")
 
         td_getter = excepts(
-            PeerConnectionLost,
+            (PeerConnectionLost, UnknownAPI),
             operator.attrgetter('head_info.head_td'),
             lambda _: 0,
         )
