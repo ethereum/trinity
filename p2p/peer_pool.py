@@ -520,8 +520,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                     "client_version_string='%s'",
                     peer.p2p_api.safe_client_version_string,
                 )
-                if not hasattr(peer, "eth_api"):
-                    self.logger.warning("Huh? %s doesn't have an eth API", peer)
                 for line in peer.get_extra_stats():
                     self.logger.debug("    %s", line)
             self.logger.debug("== End peer details == ")
