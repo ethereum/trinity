@@ -396,6 +396,21 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
             *self._protocols,
             token=token,
         ), token=token)
+        try:
+            await self._handle_commands(msg_stream, stop)
+        except asyncio.TimeoutError as exc:
+            self.logger.warning(
+                "Timed out waiting for command from %s, Stop: %r, exiting...",
+                self,
+                stop.is_set(),
+            )
+            self.logger.debug("Timeout %r: %s", self, exc, exc_info=True)
+
+    async def _handle_commands(
+            self,
+            msg_stream: AsyncIterator[Tuple[ProtocolAPI, CommandAPI[Any]]],
+            stop: asyncio.Event) -> None:
+
         async for protocol, cmd in msg_stream:
             # track total number of messages received for each command type.
             self._msg_counts[type(cmd)] += 1
