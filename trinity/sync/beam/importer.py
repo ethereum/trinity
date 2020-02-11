@@ -469,19 +469,36 @@ def partial_trigger_missing_state_downloads(
 
         # this won't actually save the results, but all we need to do is generate the trie requests
         t = Timer()
-        vm.apply_all_transactions(transactions, unused_header)
-        vm.state.make_state_root()
-        preview_time = t.elapsed
+        try:
+            vm.apply_all_transactions(transactions, unused_header)
+        except ValidationError as exc:
+            preview_time = t.elapsed
+            vm.logger.debug(
+                "Preview of all %d transactions %s failed for %s after %.1fs: %s",
+                len(transactions),
+                transactions,
+                header,
+                preview_time,
+                exc,
+            )
+        except OSError:
+            vm.logger.info("Got OSError while Beam Sync previewed execution of %s", header)
+        except BrokenPipeError:
+            vm.logger.info("Got BrokenPipeError while Beam Sync previewed execution of %s", header)
+            vm.logger.debug("BrokenPipeError trace for %s", header, exc_info=True)
+        else:
+            vm.state.make_state_root()
+            preview_time = t.elapsed
 
-        beam_stats = vm.get_beam_stats()
-        vm.logger.debug(
-            "Previewed %d transactions for %s in %.1f s, %%exec %.0f, stats: %s",
-            len(transactions),
-            header,
-            preview_time,
-            100 * (preview_time - beam_stats.data_pause_time) / preview_time,
-            beam_stats,
-        )
+            beam_stats = vm.get_beam_stats()
+            vm.logger.debug(
+                "Previewed %d transactions for %s in %.1f s, %%exec %.0f, stats: %s",
+                len(transactions),
+                header,
+                preview_time,
+                100 * (preview_time - beam_stats.data_pause_time) / preview_time,
+                beam_stats,
+            )
 
     return _trigger_missing_state_downloads
 
@@ -512,9 +529,10 @@ def partial_speculative_execute(
                 preview_time,
                 exc,
             )
+        except OSError:
+            vm.logger.debug("Got OSError while Beam Sync speculatively executed %s", header)
         except BrokenPipeError:
-            vm.logger.info("Got BrokenPipeError while Beam Sync speculatively executed %s", header)
-            vm.logger.debug("BrokenPipeError trace for %s", header, exc_info=True)
+            vm.logger.debug("Got BrokenPipeError while Beam Sync speculatively executed %s", header)
         else:
             preview_time = t.elapsed
 
