@@ -196,13 +196,33 @@ class Node(NodeAPI):
     def uri(self) -> str:
         hexstring = self.pubkey.to_hex()
         hexstring = remove_0x_prefix(hexstring)
-        return f'enode://{hexstring}@{self.address.ip}:{self.address.tcp_port}'
+
+        if self.address is not None:
+            ip = self.address.ip
+            tcp_port = self.address.tcp_port
+        else:
+            ip = None
+            tcp_port = None
+
+        return f'enode://{hexstring}@{ip}:{tcp_port}'
 
     def __str__(self) -> str:
-        return f"<Node({self.pubkey.to_hex()[:8]}@{self.address.ip})>"
+        if self.address is not None:
+            ip = self.address.ip
+        else:
+            ip = None
+
+        return f"<Node({self.pubkey.to_hex()[:8]}@{ip})>"
 
     def __repr__(self) -> str:
-        return f"<Node({self.pubkey.to_hex()}@{self.address.ip}:{self.address.tcp_port})>"
+        if self.address is not None:
+            ip = self.address.ip
+            tcp_port = self.address.tcp_port
+        else:
+            ip = None
+            tcp_port = None
+
+        return f"<Node({self.pubkey.to_hex()}@{ip}:{tcp_port})>"
 
     def distance_to(self, id: int) -> int:
         return self._id_int ^ id
