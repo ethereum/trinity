@@ -734,15 +734,15 @@ class MissingDataEventHandler(BaseService):
 
     async def _provide_missing_account_tries(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(CollectMissingAccount)):
-            self.run_task(self._serve_account(event))
+            self.run_task(self.wait(self._serve_account(event)))
 
     async def _provide_missing_bytecode(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(CollectMissingBytecode)):
-            self.run_task(self._serve_bytecode(event))
+            self.run_task(self.wait(self._serve_bytecode(event)))
 
     async def _provide_missing_storage(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(CollectMissingStorage)):
-            self.run_task(self._serve_storage(event))
+            self.run_task(self.wait(self._serve_storage(event)))
 
     async def _serve_account(self, event: CollectMissingAccount) -> None:
         _, num_nodes_collected = await self._state_downloader.download_account(

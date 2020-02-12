@@ -51,7 +51,7 @@ from eth.exceptions import HeaderNotFound
 
 from p2p.abc import CommandAPI
 from p2p.disconnect import DisconnectReason
-from p2p.exceptions import BaseP2PError, PeerConnectionLost
+from p2p.exceptions import BaseP2PError, PeerConnectionLost, UnknownAPI
 from p2p.peer import BasePeer, PeerSubscriber
 from p2p.service import BaseService
 from p2p.stats.ema import EMA
@@ -410,6 +410,12 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
             return tuple()
         except PeerConnectionLost:
             self.logger.debug("Peer went away, cancelling the block body request and moving on...")
+            return tuple()
+        except UnknownAPI as exc:
+            self.logger.debug(
+                "Peer was missing API, cancelling the block body request and moving on... %r",
+                exc,
+            )
             return tuple()
         except Exception:
             self.logger.exception("Unknown error when getting block bodies from %s", peer)

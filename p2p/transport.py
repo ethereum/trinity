@@ -46,6 +46,7 @@ from p2p.exceptions import (
     DecryptionError,
     MalformedMessage,
     PeerConnectionLost,
+    CorruptTransport,
     UnreachablePeer,
 )
 from p2p.kademlia import Address, Node
@@ -272,7 +273,7 @@ class Transport(TransportAPI):
                 self,
                 self.read_state.name,
             )
-            raise Exception(f"Corrupted transport: {self} - state={self.read_state.name}")
+            raise CorruptTransport(f"Corrupted transport: {self} - state={self.read_state.name}")
 
         # Set status to indicate we are waiting to read the message header
         self.read_state = TransportState.HEADER
