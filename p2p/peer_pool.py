@@ -53,6 +53,7 @@ from p2p.exceptions import (
     MalformedMessage,
     NoMatchingPeerCapabilities,
     PeerConnectionLost,
+    UnknownAPI,
     UnreachablePeer,
 )
 from p2p.peer import (
@@ -520,7 +521,11 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                     "client_version_string='%s'",
                     peer.p2p_api.safe_client_version_string,
                 )
-                for line in peer.get_extra_stats():
-                    self.logger.debug("    %s", line)
+                try:
+                    for line in peer.get_extra_stats():
+                        self.logger.debug("    %s", line)
+                except (UnknownAPI, PeerConnectionLost) as exc:
+                    self.logger.debug("    Failure during stats lookup: %r", exc)
+
             self.logger.debug("== End peer details == ")
             await self.sleep(self._report_interval)
