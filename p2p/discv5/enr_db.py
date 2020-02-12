@@ -1,6 +1,5 @@
 import binascii
 from collections import defaultdict
-import logging
 import operator
 import pathlib
 import re
@@ -16,7 +15,10 @@ import rlp
 
 import trio
 
-from eth_utils import encode_hex
+from eth_utils import (
+    encode_hex,
+    get_extended_debug_logger,
+)
 
 from p2p.abc import NodeAPI
 from p2p.discv5.abc import NodeDBAPI
@@ -32,7 +34,7 @@ ACCEPTABLE_LOAD_TIME = 1.0
 class BaseNodeDB(NodeDBAPI):
 
     def __init__(self, identity_scheme_registry: IdentitySchemeRegistry):
-        self.logger = logging.getLogger(".".join((
+        self.logger = get_extended_debug_logger(".".join((
             self.__module__,
             self.__class__.__name__,
         )))
@@ -149,7 +151,7 @@ class FileNodeDB(BaseNodeDB):
         if await self.contains(node.id):
             raise ValueError("Node with node id %s already exists", encode_hex(node.id))
         else:
-            self.logger.debug(
+            self.logger.debug2(
                 "Inserting new Node of %s with sequence number %d",
                 encode_hex(node.id),
                 node.enr.sequence_number,
@@ -162,7 +164,7 @@ class FileNodeDB(BaseNodeDB):
 
         existing_node = await self.get(node.id)
         if existing_node.enr.sequence_number < node.enr.sequence_number:
-            self.logger.debug(
+            self.logger.debug2(
                 "Updating Node of %s from sequence number %d to %d",
                 encode_hex(node.id),
                 existing_node.enr.sequence_number,
