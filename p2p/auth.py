@@ -16,6 +16,7 @@ from eth_keys import (
 )
 
 from eth_hash.auto import keccak
+from eth_utils import ValidationError
 
 from cancel_token import CancelToken
 
@@ -119,6 +120,11 @@ class HandshakeBase:
     def __init__(
             self, remote: NodeAPI, privkey: datatypes.PrivateKey,
             use_eip8: bool, token: CancelToken) -> None:
+        if remote is None:
+            raise ValidationError("Cannot create handshake with None remote")
+        elif remote.address is None:
+            raise ValidationError("Cannot create handshake with remote address=None")
+
         self.remote = remote
         self.privkey = privkey
         self.ephemeral_privkey = ecies.generate_privkey()
