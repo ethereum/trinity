@@ -159,6 +159,7 @@ class DiscoveryService(Service):
         self._local_enr_next_refresh: float = time.monotonic()
         self._local_enr_lock = trio.Lock()
         self._lookup_lock = trio.Lock()
+        self.pong_times: Dict[NodeID, float] = {}
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
         if socket.family != trio.socket.AF_INET:
             raise ValueError("Invalid socket family")
@@ -166,7 +167,7 @@ class DiscoveryService(Service):
             raise ValueError("Invalid socket type")
         self.socket = socket
         self.pending_enrs_producer, self.pending_enrs_consumer = trio.open_memory_channel[
-            Tuple[NodeAPI, int]](self._max_pending_enrs)
+            Tuple[NodeID, int]](self._max_pending_enrs)
 
         # This is a stub Node instance (which will have an ENR with sequence number 0) that will
         # be replaced in _init(). We could defer its creation until _init() is called by run(),
@@ -190,6 +191,13 @@ class DiscoveryService(Service):
         # This is a no-op when we generate a fresh ENR above, but we need to run this without
         # acquiring self._node_db_lock, so we run it here for simplicity.
         await self._maybe_update_local_enr()
+
+    def is_bond_valid_with(self, node_id: NodeID) -> bool:
+        try:
+            pong_time = self.pong_times[node_id]
+        except KeyError:
+            return False
+        return pong_time > (time.monotonic() - constants.KADEMLIA_BOND_EXPIRATION)
 
     async def consume_datagrams(self) -> None:
         while self.manager.is_running:
@@ -253,25 +261,28 @@ class DiscoveryService(Service):
 
     async def fetch_enrs(self) -> None:
         async with self.pending_enrs_consumer:
-            async for (remote, enr_seq) in self.pending_enrs_consumer:
-                self.logger.debug2("Received request to fetch ENR for %s", remote)
-                self.manager.run_task(self._ensure_enr, remote, enr_seq)
+            async for (remote_id, enr_seq) in self.pending_enrs_consumer:
+                self.logger.debug2("Received request to fetch ENR for %s", encode_hex(remote_id))
+                self.manager.run_task(self._ensure_enr, remote_id, enr_seq)
 
-    async def _ensure_enr(self, node: NodeAPI, enr_seq: int) -> None:
-        # TODO: Check that we've recently bonded with the remote. For now it shouldn't be a
-        # problem as this is only triggered once we successfully bonded with a peer.
-        async with self._node_db_lock:
-            try:
-                node = await self.node_db.get(node.id)
-            except KeyError:
-                pass
-            else:
-                if node.enr.sequence_number >= enr_seq:
-                    self.logger.debug2("Already got latest ENR for %s", node)
-                    return
+    async def _ensure_enr(self, node_id: NodeID, enr_seq: int) -> None:
+        if not self.is_bond_valid_with(node_id):
+            self.logger.debug("No valid bond with %s, cannot fetch its ENR", encode_hex(node_id))
+            return
 
         try:
-            await self.get_enr(node)
+            node = await self.node_db.get(node_id)
+        except KeyError:
+            self.logger.warning(
+                "Attempted to fetch ENR for Node (%s) not in our DB", encode_hex(node_id))
+            return
+
+        if node.enr.sequence_number >= enr_seq:
+            self.logger.debug("Already got latest ENR for %s", node)
+            return
+
+        try:
+            await self.request_enr(node)
         except CouldNotRetrieveENR as e:
             self.logger.debug("Failed to retrieve ENR for %s: %s", node, e)
 
@@ -289,8 +300,15 @@ class DiscoveryService(Service):
             self.logger.debug("Node DB has a total of %s entries", len(self.node_db))
             self.logger.debug("===========================================================")
 
-    def update_routing_table(self, node: NodeAPI) -> None:
-        """Update the routing table entry for the given node."""
+    async def update_routing_table(self, node: NodeAPI) -> None:
+        """Update the routing table entry for the given node.
+
+        Also stores it in our NodeDB.
+        """
+        if not self.is_bond_valid_with(node.id):
+            # TODO: Maybe this should raise an exception, but for now just log it as a warning.
+            self.logger.warning("Attempted to add node to RT when we haven't bonded before")
+
         eviction_candidate = self.routing.add_node(node)
         if eviction_candidate:
             # This means we couldn't add the node because its bucket is full, so schedule a bond()
@@ -302,18 +320,22 @@ class DiscoveryService(Service):
                 "Checking if %s is still responding, will evict if not", node, eviction_candidate)
             self.manager.run_task(self.bond, eviction_candidate)
 
+        async with self._node_db_lock:
+            await self.node_db.insert_or_update(node)
+
     async def bond(self, node: NodeAPI) -> bool:
         """Bond with the given node.
 
         Bonding consists of pinging the node, waiting for a pong and maybe a ping as well.
         It is necessary to do this at least once before we send find_node requests to a node.
         """
-        if node == self.this_node:
+        if node.id == self.this_node.id:
             # FIXME: We should be able to get rid of this check, but for now issue a warning.
             self.logger.warning("Attempted to bond with self; this shouldn't happen")
             return False
 
-        if node.is_bond_valid:
+        if self.is_bond_valid_with(node.id):
+            self.logger.debug("Bond with %s is still valid, not doing it again", node)
             return True
 
         token = await self.send_ping_v4(node)
@@ -349,19 +371,25 @@ class DiscoveryService(Service):
             return False
 
         self.logger.debug("bonding completed successfully with %s", node)
-        self.update_routing_table(node)
         if enr_seq is not None:
-            self.schedule_enr_retrieval(node, enr_seq)
+            self.schedule_enr_retrieval(node.id, enr_seq)
         return True
 
-    def schedule_enr_retrieval(self, node: NodeAPI, enr_seq: int) -> None:
-        self.logger.debug("scheduling ENR retrieval from %s", node)
+    def schedule_enr_retrieval(self, node_id: NodeID, enr_seq: int) -> None:
+        self.logger.debug("scheduling ENR retrieval from %s", encode_hex(node_id))
         try:
-            self.pending_enrs_producer.send_nowait((node, enr_seq))
+            self.pending_enrs_producer.send_nowait((node_id, enr_seq))
         except trio.WouldBlock:
             self.logger.warning("Failed to schedule ENR retrieval; channel buffer is full")
 
     async def request_enr(self, remote: NodeAPI) -> ENR:
+        """Get the most recent ENR for the given node and update our local DB and routing table.
+
+        The updating of the DB and RT happens in the handler called when we receive an ENR
+        response, so that the new ENR is stored even if we give up waiting.
+
+        Raises CouldNotRetrieveENR if we can't get a ENR from the remote node.
+        """
         # No need to use a timeout because bond() takes care of that internally.
         await self.bond(remote)
         token = self.send_enr_request(remote)
@@ -439,18 +467,6 @@ class DiscoveryService(Service):
     async def get_local_enr_seq(self) -> int:
         enr = await self.get_local_enr()
         return enr.sequence_number
-
-    async def get_enr(self, remote: NodeAPI) -> NodeAPI:
-        """Get the most recent ENR for the given node and update our local DB if necessary.
-
-        Raises CouldNotRetrieveENR if we can't get a ENR from the remote node.
-        """
-        enr = await self.request_enr(remote)
-        remote = Node(enr)
-        self.logger.debug2("Got ENR with seq-id %s for %s", enr.sequence_number, remote)
-        async with self._node_db_lock:
-            await self.node_db.insert_or_update(remote)
-            return remote
 
     async def wait_neighbours(self, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
         """Wait for a neihgbours packet from the given node.
@@ -624,24 +640,6 @@ class DiscoveryService(Service):
         self.logger.debug2("Received datagram from %s", address)
         self.manager.run_task(self.receive, address, datagram)
 
-    async def _lookup_node_from_db(self, node_id: NodeID) -> NodeAPI:
-        # XXX: This is meant to be a temporary helper while we have NodeAPI instances in the RT
-        # and ENRs in the DB. Soon we'll store NodeAPI instances in the DB and this may become
-        # uneccesary as we'll have to do just a simple DB lookup.
-        try:
-            node = self.routing.get_node(node_id)
-        except KeyError:
-            node = None
-
-        if node is None or node.enr.sequence_number == 0:
-            # This means we still haven't received an ENR for the node, so try to look up an
-            # existing one from our DB.
-            try:
-                node = await self.node_db.get(node_id)
-            except KeyError:
-                pass
-        return node
-
     async def receive(self, address: AddressAPI, message: bytes) -> None:
         try:
             remote_pubkey, cmd_id, payload, message_hash = _unpack_v4(message)
@@ -655,8 +653,13 @@ class DiscoveryService(Service):
             self.logger.warning("Ignoring uknown msg type: %s; payload=%s", cmd_id, payload)
             return
 
-        node = await self._lookup_node_from_db(node_id_from_pubkey(remote_pubkey))
-        if node is None or node.address != address:
+        try:
+            node = await self.node_db.get(node_id_from_pubkey(remote_pubkey))
+        except KeyError:
+            node = None
+        # If we don't have an entry for the sender's NodeID in our DB, or if the one we do is
+        # incomplete (i.e. without an Address), create a new one.
+        if node is None or node.address is None or node.address != address:
             node = Node.from_pubkey_and_addr(remote_pubkey, address)
 
         self.logger.debug2("Received %s from %s with payload: %s", cmd.name, node, payload)
@@ -694,22 +697,12 @@ class DiscoveryService(Service):
         nodes, expiration = payload[:2]
         if self._is_msg_expired(expiration):
             return
-        neighbours = []
-        # If any of the nodes we received are already in our routing table, use them instead as
-        # we may have bonded and then won't have to do so again.
-        for node in _extract_nodes_from_payload(remote.address, nodes, self.logger):
-            try:
-                existing_node = self.routing.get_node(node.id)
-                if existing_node.address == node.address:
-                    node = existing_node
-            except KeyError:
-                pass
-            neighbours.append(node)
+        neighbours = _extract_nodes_from_payload(remote.address, nodes, self.logger)
         self.logger.debug2('<<< neighbours from %s: %s', remote, neighbours)
         try:
             channel = self.neighbours_channels.get_channel(remote)
         except KeyError:
-            self.logger.debug(f'unexpected neighbours from {node}, probably came too late')
+            self.logger.debug(f'unexpected neighbours from {remote}, probably came too late')
             return
 
         try:
@@ -719,7 +712,19 @@ class DiscoveryService(Service):
             pass
 
     async def recv_ping_v4(
-            self, node: NodeAPI, payload: Sequence[Any], message_hash: Hash32) -> None:
+            self, remote: NodeAPI, payload: Sequence[Any], message_hash: Hash32) -> None:
+        """Process a received ping packet.
+
+        A ping packet may come any time, unrequested, or may be prompted by us bond()ing with a
+        new node. In the former case we'll just reply with a pong, whereas in the latter we'll
+        also send an empty msg on the appropriate channel from ping_channels, to notify any
+        coroutine waiting for that ping.
+
+        Also, if we have no valid bond with the given remote, we'll trigger one in the background.
+        """
+        if remote.id == self.this_node.id:
+            self.logger.info('Invariant: received ping from this_node: %s', remote)
+            return
         # The ping payload should have at least 4 elements: [version, from, to, expiration], with
         # an optional 5th element for the node's ENR sequence number.
         if len(payload) < 4:
@@ -731,11 +736,33 @@ class DiscoveryService(Service):
         else:
             _, _, _, expiration, enr_seq = payload[:5]
             enr_seq = big_endian_to_int(enr_seq)
-        self.logger.debug2('<<< ping(v4) from %s, enr_seq=%s', node, enr_seq)
+        self.logger.debug2('<<< ping(v4) from %s, enr_seq=%s', remote, enr_seq)
         if self._is_msg_expired(expiration):
             return
-        await self.process_ping(node, message_hash)
-        await self.send_pong_v4(node, message_hash)
+
+        try:
+            channel = self.ping_channels.get_channel(remote)
+        except KeyError:
+            pass
+        else:
+            try:
+                await channel.send(None)
+            except trio.BrokenResourceError:
+                # This means the receiver has already closed, probably because it timed out.
+                pass
+
+        await self.send_pong_v4(remote, message_hash)
+
+        # The spec says this about received pings:
+        #   When a ping packet is received, the recipient should reply with a Pong packet.
+        #   It may also consider the sender for addition into the local table
+        # However, since we trigger a bond (see below) if we get a ping from a Node we haven't
+        # heard about before, we let that happen when the bond is completed.
+
+        # If no communication with the sender has occurred within the last 12h, a ping
+        # should be sent in addition to pong in order to receive an endpoint proof.
+        if not self.is_bond_valid_with(remote.id):
+            self.manager.run_task(self.bond, remote)
 
     async def recv_find_node_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The find_node payload should have 2 elements: node_id, expiration
@@ -746,12 +773,11 @@ class DiscoveryService(Service):
         self.logger.debug2('<<< find_node from %s', node)
         if self._is_msg_expired(expiration):
             return
-        if not node.is_bond_valid:
+        if not self.is_bond_valid_with(node.id):
             self.logger.debug(
                 "Ignoring find_node request from node (%s) we haven't bonded with", node)
             return
         target_id = NodeID(keccak(target))
-        self.update_routing_table(node)
         found = self.routing.neighbours(target_id)
         self.send_neighbours_v4(node, found)
 
@@ -764,7 +790,7 @@ class DiscoveryService(Service):
         expiration = payload[0]
         if self._is_msg_expired(expiration):
             return
-        if not node.is_bond_valid:
+        if not self.is_bond_valid_with(node.id):
             self.logger.debug("Ignoring ENR_REQUEST from node (%s) we haven't bonded with", node)
             return
         enr = await self.get_local_enr()
@@ -792,8 +818,9 @@ class DiscoveryService(Service):
         self.logger.debug(
             "Received ENR %s (%s) with expected response token: %s",
             enr, enr.items(), encode_hex(token))
-        # Update our RT with the node's new version.
-        self.update_routing_table(Node(enr))
+        # Insert/update the new ENR/Node in our DB and routing table as soon as we receive it, as
+        # we want that to happen even if the original requestor (request_enr()) gives up waiting.
+        await self.update_routing_table(Node(enr))
         try:
             await channel.send((enr, token))
         except trio.BrokenResourceError:
@@ -876,37 +903,13 @@ class DiscoveryService(Service):
             self.logger.debug(f'Unexpected pong from {remote} with token {encode_hex(token)}')
             return
 
-        remote.last_pong = time.monotonic()
-        async with self._node_db_lock:
-            await self.node_db.insert_or_update(remote)
+        self.pong_times[remote.id] = time.monotonic()
+        # Insert/update the Node in our DB and routing table as soon as we receive the pong, as
+        # we want that to happen even if the original requestor (bond()) gives up waiting.
+        await self.update_routing_table(remote)
 
         try:
             await channel.send((token, enr_seq))
-        except trio.BrokenResourceError:
-            # This means the receiver has already closed, probably because it timed out.
-            pass
-
-    async def process_ping(self, remote: NodeAPI, hash_: Hash32) -> None:
-        """Process a received ping packet.
-
-        A ping packet may come any time, unrequested, or may be prompted by us bond()ing with a
-        new node. In the former case we'll just update the sender's entry in our routing table and
-        reply with a pong, whereas in the latter we'll also send an empty msg on the appropriate
-        channel from ping_channels, to notify any coroutine waiting for a ping.
-        """
-        if remote == self.this_node:
-            self.logger.info('Invariant: received ping from this_node: %s', remote)
-            return
-        else:
-            self.update_routing_table(remote)
-
-        try:
-            channel = self.ping_channels.get_channel(remote)
-        except KeyError:
-            return
-
-        try:
-            await channel.send(None)
         except trio.BrokenResourceError:
             # This means the receiver has already closed, probably because it timed out.
             pass

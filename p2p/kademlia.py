@@ -134,7 +134,6 @@ class Node(NodeAPI):
         self._id = NodeID(keccak(self.pubkey.to_bytes()))
         self._id_int = big_endian_to_int(self.id)
         self._enr = enr
-        self.last_pong = None
 
     @property
     def id(self) -> NodeID:
@@ -185,13 +184,6 @@ class Node(NodeAPI):
     @property
     def enr(self) -> ENR:
         return self._enr
-
-    @property
-    def is_bond_valid(self) -> bool:
-        return (
-            self.last_pong is not None and
-            self.last_pong > time.monotonic() - constants.KADEMLIA_BOND_EXPIRATION
-        )
 
     def uri(self) -> str:
         hexstring = self.pubkey.to_hex()

@@ -156,15 +156,14 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
     # request.
-    alice.this_node.last_pong = time.monotonic()
-    bob.update_routing_table(alice.this_node)
+    bob.pong_times[alice.this_node.id] = time.monotonic()
 
     # Add a copy of Bob's node with a stub ENR to alice's RT as later we're going to check that it
     # gets updated with the received ENR.
     bobs_node_with_stub_enr = Node.from_pubkey_and_addr(
         bob.this_node.pubkey, bob.this_node.address)
-    bobs_node_with_stub_enr.last_pong = time.monotonic()
-    alice.update_routing_table(bobs_node_with_stub_enr)
+    await alice.update_routing_table(bobs_node_with_stub_enr)
+    alice.pong_times[bob.this_node.id] = time.monotonic()
     assert alice.routing.get_node(bobs_node_with_stub_enr.id).enr.sequence_number == 0
 
     enr = None
@@ -199,7 +198,7 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
     # Add some nodes to bob's routing table so that it has something to use when replying to
     # alice's find_node.
     for _ in range(constants.KADEMLIA_BUCKET_SIZE * 2):
-        bob.update_routing_table(NodeFactory())
+        await bob.update_routing_table(NodeFactory())
 
     # Collect all neighbours packets received by alice in a list for later inspection.
     received_neighbours = []
@@ -209,8 +208,7 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
     alice.recv_neighbours_v4 = recv_neighbours
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
-    alice.this_node.last_pong = time.monotonic()
-    bob.update_routing_table(alice.this_node)
+    bob.pong_times[alice.this_node.id] = time.monotonic()
 
     alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
 
@@ -350,12 +348,12 @@ async def test_bond(nursery, monkeypatch):
     bonded = await discovery.bond(node)
 
     assert bonded
-    assert node.is_bond_valid
+    assert discovery.is_bond_valid_with(node.id)
 
     # Upon successfully bonding, retrieval of the remote's ENR will be scheduled.
     with trio.fail_after(1):
-        scheduled_enr_node, scheduled_enr_seq = await discovery.pending_enrs_consumer.receive()
-    assert scheduled_enr_node == node
+        scheduled_enr_node_id, scheduled_enr_seq = await discovery.pending_enrs_consumer.receive()
+    assert scheduled_enr_node_id == node.id
     assert scheduled_enr_seq == enr_seq
 
     # If we try to bond with any other nodes we'll timeout and bond() will return False.
@@ -370,20 +368,25 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
     # request.
-    bob.this_node.last_pong = time.monotonic()
-    alice.update_routing_table(bob.this_node)
-    alice.this_node.last_pong = time.monotonic()
-    bob.update_routing_table(alice.this_node)
+    alice.pong_times[bob.this_node.id] = time.monotonic()
+    bob.pong_times[alice.this_node.id] = time.monotonic()
+
+    # Also add bob's node to alice's DB as when scheduling an ENR retrieval we only get the node ID
+    # and need to look it up in the DB.
+    await alice.update_routing_table(bob.this_node)
 
     # This task will run in a loop consuming from the pending_enrs_consumer channel and requesting
     # ENRs.
     alice.manager.run_task(alice.fetch_enrs)
 
-    enr_seq = 1
     with trio.fail_after(1):
+        # Generate a new ENR for bob, because the old one alice already got when we manually added
+        # bob's node to her DB above.
+        bobs_new_enr = await bob._generate_local_enr(bob.this_node.enr.sequence_number + 1)
+        bob.this_node = Node(bobs_new_enr)
         # This feeds a request to retrieve Bob's ENR to fetch_enrs(), which spawns a background
         # task to do it.
-        await alice.pending_enrs_producer.send((bob.this_node, enr_seq))
+        await alice.pending_enrs_producer.send((bob.this_node.id, bobs_new_enr.sequence_number))
         # bob cosumes the ENR_REQUEST and replies with its own ENR
         await bob.consume_datagram()
         # alice consumes the ENR_RESPONSE, feeding the ENR to the background task started above.
@@ -405,7 +408,7 @@ async def test_update_routing_table():
     discovery = MockDiscoveryService([])
     node = NodeFactory()
 
-    assert discovery.update_routing_table(node) is None
+    await discovery.update_routing_table(node)
 
     assert node in discovery.routing
 
@@ -428,7 +431,7 @@ async def test_update_routing_table_triggers_bond_if_eviction_candidate(
     # node for an eviction check.
     monkeypatch.setattr(discovery.routing, 'add_node', lambda n: old_node)
 
-    discovery.update_routing_table(new_node)
+    await discovery.update_routing_table(new_node)
 
     assert new_node not in discovery.routing
     # The update_routing_table() call above will have scheduled a future call to discovery.bond() so

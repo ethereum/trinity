@@ -114,10 +114,6 @@ class NodeAPI(ABC):
 
     When we get a new ENR version for a given NodeID, a new NodeAPI instance must be created.
     """
-    # FIXME: For now this is a writable property, which is not a big deal as it is not persisted,
-    # but once we start persisting that info we should probably remove the property and always
-    # look it up from the DB.
-    last_pong: float
 
     @abstractmethod
     def __init__(self, enr: ENR) -> None:
@@ -170,11 +166,6 @@ class NodeAPI(ABC):
 
     @abstractmethod
     def distance_to(self, id: int) -> int:
-        ...
-
-    @property
-    @abstractmethod
-    def is_bond_valid(self) -> bool:
         ...
 
     # mypy doesn't have support for @total_ordering
