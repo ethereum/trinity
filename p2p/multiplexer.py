@@ -33,6 +33,7 @@ from p2p.abc import (
 )
 from p2p.cancellable import CancellableMixin
 from p2p.exceptions import (
+    CorruptTransport,
     UnknownProtocol,
     UnknownProtocolCommand,
 )
@@ -365,6 +366,9 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                         await asyncio.wait_for(fut, timeout=1)
                     except asyncio.TimeoutError:
                         pass
+                    except CorruptTransport as exc:
+                        self.logger.error("Corrupted transport found in %s: %r", self, exc)
+                        self.logger.debug("Corrupted transport trace in %s", self, exc_info=True)
 
                 # After giving the transport an opportunity to shutdown
                 # cleanly, we issue a hard shutdown, first via cancellation and
