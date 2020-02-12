@@ -4,6 +4,10 @@ from typing import Any, FrozenSet, Optional, Type
 from cancel_token import CancelToken, OperationCancelled
 
 from p2p.abc import CommandAPI
+from p2p.exceptions import (
+    PeerConnectionLost,
+    UnknownAPI,
+)
 from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
 from p2p.service import BaseService
@@ -139,10 +143,28 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
         elif peer == self._queen_peer:
             # nothing to do, peer is already the queen
             return None
-        elif _peer_sort_key(peer) < _peer_sort_key(self._queen_peer):
-            old_queen, self._queen_peer = self._queen_peer, peer
-            self._waiting_peers.put_nowait(old_queen)
-            return old_queen
         else:
-            # nothing to do, peer is slower than the queen
-            return None
+            try:
+                new_peer_quality = _peer_sort_key(peer)
+            except (UnknownAPI, PeerConnectionLost) as exc:
+                self.logger.debug("Ignoring %s, because we can't get speed stats: %r", peer, exc)
+                return None
+
+            try:
+                old_queen_quality = _peer_sort_key(self._queen_peer)
+                force_drop_queen = False
+            except (UnknownAPI, PeerConnectionLost) as exc:
+                self.logger.debug(
+                    "Dropping queen %s, because we can't get speed stats: %r",
+                    self._queen_peer,
+                    exc,
+                )
+                force_drop_queen = True
+
+            if force_drop_queen or new_peer_quality < old_queen_quality:
+                old_queen, self._queen_peer = self._queen_peer, peer
+                self._waiting_peers.put_nowait(old_queen)
+                return old_queen
+            else:
+                # nothing to do, peer is slower than the queen
+                return None
