@@ -206,9 +206,8 @@ class DiscoveryService(Service):
     def get_peer_candidates(
         self, should_skip_fn: Callable[[NodeAPI], bool], max_candidates: int,
     ) -> Tuple[NodeAPI, ...]:
-        total_nodes = len(self.routing)
         candidates = []
-        for candidate in self.get_nodes_to_connect(total_nodes):
+        for candidate in self.iter_nodes():
             if should_skip_fn(candidate):
                 continue
             candidates.append(candidate)
@@ -579,8 +578,8 @@ class DiscoveryService(Service):
         else:
             self.logger.warning('No bootnodes available')
 
-    def get_nodes_to_connect(self, count: int) -> Iterator[NodeAPI]:
-        return self.routing.get_random_nodes(count)
+    def iter_nodes(self) -> Iterator[NodeAPI]:
+        return self.routing.iter_random()
 
     @property
     def pubkey(self) -> datatypes.PublicKey:
@@ -979,17 +978,15 @@ class PreferredNodeDiscoveryService(DiscoveryService):
         except NoEligibleNodes:
             yield from super().get_random_bootnode()
 
-    def get_nodes_to_connect(self, count: int) -> Iterator[NodeAPI]:
+    def iter_nodes(self) -> Iterator[NodeAPI]:
         """
-        Return up to `count` nodes, preferring nodes from the preferred list.
+        Iterate over available nodes, preferring nodes from the preferred list.
         """
-        preferred_nodes = self._get_eligible_preferred_nodes()[:count]
-        for node in preferred_nodes:
+        for node in self._get_eligible_preferred_nodes():
             self._preferred_node_tracker[node] = time.time()
             yield node
 
-        num_nodes_needed = max(0, count - len(preferred_nodes))
-        yield from super().get_nodes_to_connect(num_nodes_needed)
+        yield from super().iter_nodes()
 
 
 class StaticDiscoveryService(Service):
