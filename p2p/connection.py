@@ -123,7 +123,13 @@ class Connection(ConnectionAPI, BaseService):
                 self.remote,
                 err,
             )
-            self.get_base_protocol().send(Disconnect(DisconnectReason.BAD_PROTOCOL))
+            try:
+                self.get_base_protocol().send(Disconnect(DisconnectReason.BAD_PROTOCOL))
+            except PeerConnectionLost:
+                self.logger.debug(
+                    "%s went away while trying to disconnect for MalformedMessage",
+                    self,
+                )
             pass
 
     async def _cleanup(self) -> None:
