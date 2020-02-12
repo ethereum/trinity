@@ -127,20 +127,30 @@ def test_routingtable_neighbours():
         assert node_a == table.neighbours(node_b.id)[0]
 
 
-def test_routingtable_get_random_nodes():
+def test_routingtable_iter_random():
     table = RoutingTable(NodeFactory().id)
+    nodes_in_insertion_order = []
+    # Use a relatively high number of nodes here otherwise we could have two consecutive calls
+    # yielding nodes in the same order.
     for _ in range(100):
-        assert table.add_node(NodeFactory()) is None
+        node = NodeFactory()
+        assert table.add_node(node) is None
+        nodes_in_insertion_order.append(node)
 
-    nodes = list(table.get_random_nodes(50))
-    assert len(nodes) == 50
-    assert len(set(nodes)) == 50
+    nodes_in_iteration_order = [node for node in table.iter_random()]
 
-    # If we ask for more nodes than what the routing table contains, we'll get only what the
-    # routing table contains, without duplicates.
-    nodes = list(table.get_random_nodes(200))
-    assert len(nodes) == 100
-    assert len(set(nodes)) == 100
+    # We iterate over all nodes
+    assert len(nodes_in_iteration_order) == len(table) == len(nodes_in_insertion_order)
+    # No repeated nodes are returned
+    assert len(set(nodes_in_iteration_order)) == len(nodes_in_iteration_order)
+    # The order in which we iterate is not the same as the one in which nodes were inserted.
+    assert nodes_in_iteration_order != nodes_in_insertion_order
+
+    second_iteration_order = [node for node in table.iter_random()]
+
+    # Multiple calls should yield the same nodes, but in a different order.
+    assert set(nodes_in_iteration_order) == set(second_iteration_order)
+    assert nodes_in_iteration_order != second_iteration_order
 
 
 def test_kbucket_add():

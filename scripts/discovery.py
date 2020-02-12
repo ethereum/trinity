@@ -59,7 +59,7 @@ async def main() -> None:
                 fork_blocks,
                 skip_list,
             )
-            with trio.fail_after(2):
+            with trio.fail_after(1):
                 response = await client.request(PeerCandidatesRequest(MAX_PEERS, should_skip))
             candidates = response.candidates
             missing_forkid = [

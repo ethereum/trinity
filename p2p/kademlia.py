@@ -349,28 +349,14 @@ class RoutingTable:
         self.this_node_id_int = big_endian_to_int(node_id)
         self.buckets = [KBucket(0, constants.KADEMLIA_MAX_NODE_ID)]
 
-    def get_random_nodes(self, count: int) -> Iterator[NodeAPI]:
-        if count > len(self):
-            if time.monotonic() - self._initialized_at > 30:
-                self.logger.warning(
-                    "Cannot get %d nodes as RoutingTable contains only %d nodes",
-                    count,
-                    len(self),
-                )
-            count = len(self)
-        seen: List[NodeAPI] = []
-        # This is a rather inneficient way of randomizing nodes from all buckets, but even if we
-        # iterate over all nodes in the routing table, the time it takes would still be
-        # insignificant compared to the time it takes for the network roundtrips when connecting
-        # to nodes.
-        while len(seen) < count:
-            bucket = random.choice(self.buckets)
-            if not bucket.nodes:
-                continue
-            node = random.choice(bucket.nodes)
-            if node not in seen:
-                yield node
-                seen.append(node)
+    def iter_random(self) -> Iterator[NodeAPI]:
+        # Create a new list with all available nodes as buckets can mutate while we're iterating.
+        # This shouldn't use a significant amount of memory as the new list will keep just
+        # references to the existing Node instances.
+        nodes = list(itertools.chain(*[bucket.nodes for bucket in self.buckets]))
+        random.shuffle(nodes)
+        for node in nodes:
+            yield node
 
     def split_bucket(self, index: int) -> None:
         bucket = self.buckets[index]
