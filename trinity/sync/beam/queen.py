@@ -97,7 +97,7 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
             peer = await self.wait(self._waiting_peers.get_fastest())
             if not peer.is_operational:
                 # drop any peers that aren't alive anymore
-                self.logger.warning("Dropping %s from beam queue as no longer operational", peer)
+                self.logger.info("Dropping %s from beam peers, as no longer active", peer)
                 if peer == self._queen_peer:
                     self._queen_peer = None
                 continue
@@ -108,11 +108,17 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
                 self.logger.debug("Switching queen peer from %s to %s", old_queen, peer)
                 continue
 
-            if peer.eth_api.get_node_data.is_requesting:
-                # skip the peer if there's an active request
-                self.logger.debug("Queen Queuer is skipping active peer %s", peer)
-                self.call_later(10, self._waiting_peers.put_nowait, peer)
-                continue
+            try:
+                peer_is_requesting_nodes = peer.eth_api.get_node_data.is_requesting
+            except PeerConnectionLost:
+                self.logger.debug("QueenQueuer is skipping disconnecting peer %s", peer)
+                # Don't bother re-adding to _waiting_peers, since the peer is disconnected
+            else:
+                if peer_is_requesting_nodes:
+                    # skip the peer if there's an active request
+                    self.logger.debug("QueenQueuer is skipping active peer %s", peer)
+                    self.call_later(10, self._waiting_peers.put_nowait, peer)
+                    continue
 
             return peer
         raise OperationCancelled("Service ended before a queen peer could be elected")

@@ -1,0 +1,3 @@
+Catch a :cls:`~p2p.exceptions.PeerConnectionLost` raised when: disconnecting from a peer for sending
+a malformed message, and another one when finding the fastest peer. Reject handshake attempts when
+the IP address is unknown. Catch a :cls:`~p2p.exceptions.CorruptTransport`, raised during multiplex.

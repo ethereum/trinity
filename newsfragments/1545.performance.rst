@@ -1,0 +1,2 @@
+Exit a bit more quickly from Beam Sync, by cancelling any hanging requests for state data. This
+prevents a 5 second wait and timeout in the :cls:`~p2p.service.BaseService`.

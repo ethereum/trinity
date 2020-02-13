@@ -367,8 +367,8 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                     except asyncio.TimeoutError:
                         pass
                     except CorruptTransport as exc:
-                        self.logger.error("Corrupted transport found in %s: %r", self, exc)
-                        self.logger.debug("Corrupted transport trace in %s", self, exc_info=True)
+                        self.logger.error("Corrupt transport, waiting on body %s: %r", self, exc)
+                        self.logger.debug("Corrupt transport, body trace: %s", self, exc_info=True)
 
                 # After giving the transport an opportunity to shutdown
                 # cleanly, we issue a hard shutdown, first via cancellation and
@@ -409,6 +409,9 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                 stop.is_set(),
             )
             self.logger.debug("Timeout %r: %s", self, exc, exc_info=True)
+        except CorruptTransport as exc:
+            self.logger.error("Corrupt transport, while multiplexing %s: %r", self, exc)
+            self.logger.debug("Corrupt transport, multiplexing trace: %s", self, exc_info=True)
 
     async def _handle_commands(
             self,
