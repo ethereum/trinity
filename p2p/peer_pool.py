@@ -170,7 +170,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
     async def _add_peers_from_backend(
             self,
             backend: BasePeerBackend,
-            should_skip_fn_node: Callable[[Tuple[NodeID, ...], NodeAPI], bool]
+            should_skip_fn: Callable[[Tuple[NodeID, ...], NodeAPI], bool]
     ) -> int:
 
         connected_node_ids = {peer.remote.id for peer in self.connected_nodes.values()}
@@ -187,7 +187,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             return 0
 
         skip_list = connected_node_ids.union(blacklisted_node_ids)
-        should_skip_fn = functools.partial(should_skip_fn_node, skip_list)
+        should_skip_fn = functools.partial(should_skip_fn, skip_list)
         try:
             candidates = await self.wait(
                 backend.get_peer_candidates(
