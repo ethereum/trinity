@@ -137,6 +137,11 @@ class NodeDBAPI(ABC):
         ...
 
     @abstractmethod
+    async def remove(self, node_id: NodeID) -> None:
+        """Remove the node with the given ID."""
+        ...
+
+    @abstractmethod
     async def contains(self, node_id: NodeID) -> bool:
         """Check if the db contains a Node with the given node id."""
         ...
