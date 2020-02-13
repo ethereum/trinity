@@ -1,7 +1,13 @@
 import logging
 from typing import (
+    DefaultDict,
+    Dict,
+    Generator,
     NamedTuple,
+    Optional,
 )
+import collections
+import operator
 
 from trio.abc import (
     ReceiveChannel,
@@ -9,6 +15,7 @@ from trio.abc import (
 
 from eth_utils import (
     encode_hex,
+    to_tuple,
 )
 from eth_utils.toolz import (
     merge,
@@ -44,6 +51,57 @@ class EndpointVote(NamedTuple):
     endpoint: Endpoint
     node_id: NodeID
     timestamp: float
+
+
+class EndpointVoteBallotBox:
+    def __init__(self, quorum: int, majority_fraction: float, expiry_time: float) -> None:
+        self.quorum = quorum
+        self.majority_fraction = majority_fraction
+        self.expiry_time = expiry_time
+
+        self.votes_by_sender: Dict[NodeID, EndpointVote] = {}
+        self.num_votes_by_endpoint: DefaultDict[Endpoint, int] = collections.defaultdict(int)
+        self.num_total_votes = 0
+
+    def add_vote(self, vote: EndpointVote) -> None:
+        try:
+            self.remove_vote_by_node_id(vote.node_id)
+        except KeyError:
+            pass
+        self.votes_by_sender[vote.node_id] = vote
+        self.num_votes_by_endpoint[vote.endpoint] += 1
+        self.num_total_votes += 1
+
+    def remove_vote_by_node_id(self, node_id: NodeID) -> None:
+        removed_vote = self.votes_by_sender.pop(node_id)
+        endpoint = removed_vote.endpoint
+        self.num_votes_by_endpoint[endpoint] -= 1
+        self.num_total_votes -= 1
+        # prevent num_votes_by_endpoint from growing over time
+        if self.num_votes_by_endpoint[endpoint] <= 0:
+            self.num_votes_by_endpoint.pop(endpoint)
+
+    @to_tuple
+    def get_expired_votes(self, current_time: float) -> Generator[EndpointVote, None, None]:
+        for vote in self.votes_by_sender.values():
+            if vote.timestamp <= current_time - self.expiry_time:
+                yield vote
+
+    def remove_expired_votes(self, current_time: float) -> None:
+        votes_to_remove = self.get_expired_votes(current_time)
+        for vote in votes_to_remove:
+            self.remove_vote_by_node_id(vote.node_id)
+
+    @property
+    def result(self) -> Optional[Endpoint]:
+        if self.num_total_votes < self.quorum:
+            return None  # quorum not reached
+
+        vote, num_votes = max(self.num_votes_by_endpoint.items(), key=operator.itemgetter(1))
+        if num_votes / self.num_total_votes < self.majority_fraction:
+            return None  # majority not big enough
+
+        return vote
 
 
 class EndpointTracker(Service):
