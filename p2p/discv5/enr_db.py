@@ -163,11 +163,14 @@ class FileNodeDB(BaseNodeDB):
         self.validate_identity_scheme(node.enr)
 
         existing_node = await self.get(node.id)
-        if existing_node.enr.sequence_number < node.enr.sequence_number:
+        existing_seq = existing_node.enr.sequence_number
+        # If our existing seq number is 0, it means this is a stub ENR we create for v4 Nodes that
+        # don't support the ENR extension, and in that case we *must* always update them.
+        if existing_seq == 0 or existing_seq < node.enr.sequence_number:
             self.logger.debug2(
                 "Updating Node of %s from sequence number %d to %d",
                 encode_hex(node.id),
-                existing_node.enr.sequence_number,
+                existing_seq,
                 node.enr.sequence_number,
             )
             self.nodes[node.id][node.enr.sequence_number] = node
@@ -178,7 +181,7 @@ class FileNodeDB(BaseNodeDB):
                 "one %d",
                 encode_hex(node.id),
                 node.enr.sequence_number,
-                existing_node.enr.sequence_number,
+                existing_seq,
             )
 
     async def get(self, node_id: NodeID) -> NodeAPI:
@@ -222,11 +225,14 @@ class MemoryNodeDB(BaseNodeDB):
     async def update(self, node: NodeAPI) -> None:
         self.validate_identity_scheme(node.enr)
         existing_node = await self.get(node.id)
-        if existing_node.enr.sequence_number < node.enr.sequence_number:
+        existing_seq = existing_node.enr.sequence_number
+        # If our existing seq number is 0, it means this is a stub ENR we create for v4 Nodes that
+        # don't support the ENR extension, and in that case we *must* always update them.
+        if existing_seq == 0 or existing_seq < node.enr.sequence_number:
             self.logger.debug(
                 "Updating Node of %s from sequence number %d to %d",
                 encode_hex(node.id),
-                existing_node.enr.sequence_number,
+                existing_seq,
                 node.enr.sequence_number,
             )
             self.key_value_storage[node.id] = node
@@ -236,7 +242,7 @@ class MemoryNodeDB(BaseNodeDB):
                 "one %d",
                 encode_hex(node.id),
                 node.enr.sequence_number,
-                existing_node.enr.sequence_number,
+                existing_seq,
             )
 
     async def remove(self, node_id: NodeID) -> None:

@@ -1,7 +1,9 @@
 import pathlib
+import socket
 
 import pytest
 
+from p2p.discv5.constants import IP_V4_ADDRESS_ENR_KEY
 from p2p.discv5.enr_db import (
     FileNodeDB,
     MemoryNodeDB,
@@ -18,6 +20,7 @@ from p2p.kademlia import Node
 from p2p.tools.factories.discovery import (
     ENRFactory,
 )
+from p2p.tools.factories.kademlia import IPAddressFactory
 from p2p.tools.factories.keys import (
     PrivateKeyFactory,
 )
@@ -81,6 +84,47 @@ async def test_update(db):
     await db.update(Node(updated_enr))
     db_updated_node = await db.get(node.id)
     assert db_updated_node.enr == updated_enr
+
+
+@pytest.mark.trio
+async def test_update_with_stub_enr(db):
+    # Not all nodes support the ENR extension in discv4, so internally we store an ENR with
+    # sequence_number 0 for those. Normally, the update() method is a no-op when we pass it an ENR
+    # with a sequence number that is not higher than the latest ENR we have for that node, but for
+    # those stub ENRs we need update() to always override the current one with whatever it's
+    # given.
+    private_key = PrivateKeyFactory().to_bytes()
+    enr = ENRFactory(
+        private_key=private_key,
+        sequence_number=0,
+        custom_kv_pairs={
+            IP_V4_ADDRESS_ENR_KEY: socket.inet_aton(IPAddressFactory.generate()),
+        },
+        signature=b''
+    )
+    node = Node(enr)
+    await db.insert(node)
+
+    await db.update(node)
+    db_node = await db.get(node.id)
+    assert db_node.enr == enr
+
+    new_enr = ENRFactory(
+        private_key=private_key,
+        sequence_number=0,
+        custom_kv_pairs={
+            IP_V4_ADDRESS_ENR_KEY: socket.inet_aton(IPAddressFactory.generate()),
+        },
+        signature=b''
+    )
+    assert new_enr.node_id == enr.node_id
+    assert new_enr != enr
+
+    new_node = Node(new_enr)
+    await db.update(new_node)
+
+    new_db_node = await db.get(node.id)
+    assert new_db_node.enr == new_enr
 
 
 @pytest.mark.trio
