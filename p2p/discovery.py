@@ -823,7 +823,18 @@ class DiscoveryService(Service):
             enr, enr.items(), encode_hex(token))
         # Insert/update the new ENR/Node in our DB and routing table as soon as we receive it, as
         # we want that to happen even if the original requestor (request_enr()) gives up waiting.
-        await self.update_routing_table(Node(enr))
+        new_node = Node(enr)
+        if new_node.address is None:
+            self.logger.info(
+                "Received ENR with no endpoint info from %s, removing from DB/RT", node)
+            self.routing.remove_node(node)
+            async with self._node_db_lock:
+                try:
+                    await self.node_db.remove(node.id)
+                except KeyError:
+                    pass
+        else:
+            await self.update_routing_table(new_node)
         try:
             await channel.send((enr, token))
         except trio.BrokenResourceError:

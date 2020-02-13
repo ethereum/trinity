@@ -194,6 +194,13 @@ class FileNodeDB(BaseNodeDB):
             _, node = max(nodes.items(), key=operator.itemgetter(0))
             return node
 
+    async def remove(self, node_id: NodeID) -> None:
+        await trio.hazmat.checkpoint()
+        node_versions = self.nodes.pop(node_id)
+        for node in node_versions.values():
+            path = self.directory / get_node_filename(node)
+            path.unlink()
+
     async def contains(self, node_id: NodeID) -> bool:
         await trio.hazmat.checkpoint()
         return bool(self.nodes[node_id])

@@ -162,6 +162,23 @@ async def test_memory_remove(memory_db):
 
 
 @pytest.mark.trio
+async def test_filedb_remove(file_db):
+    node = Node(ENRFactory())
+
+    with pytest.raises(KeyError):
+        await file_db.remove(node.id)
+
+    node_file_path = file_db.directory / get_node_filename(node)
+    await file_db.insert(node)
+    assert node_file_path.exists()
+
+    await file_db.remove(node.id)
+
+    assert not await file_db.contains(node.id)
+    assert not node_file_path.exists()
+
+
+@pytest.mark.trio
 async def test_get(db):
     node = Node(ENRFactory())
 

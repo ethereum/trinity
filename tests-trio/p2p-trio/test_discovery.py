@@ -22,6 +22,7 @@ from p2p.discv5.constants import (
     TCP_PORT_ENR_KEY,
     UDP_PORT_ENR_KEY,
 )
+from p2p.discv5.enr import UnsignedENR, IDENTITY_SCHEME_ENR_KEY
 from p2p.discv5.enr_db import MemoryNodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
 from p2p.discovery import (
@@ -162,21 +163,20 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     # gets updated with the received ENR.
     bobs_node_with_stub_enr = Node.from_pubkey_and_addr(
         bob.this_node.pubkey, bob.this_node.address)
-    await alice.update_routing_table(bobs_node_with_stub_enr)
     alice.pong_times[bob.this_node.id] = time.monotonic()
+    await alice.update_routing_table(bobs_node_with_stub_enr)
     assert alice.routing.get_node(bobs_node_with_stub_enr.id).enr.sequence_number == 0
 
-    enr = None
+    received_enr = None
     got_enr = trio.Event()
 
-    async def get_enr():
-        nonlocal enr
-        enr = await alice.request_enr(bobs_node_with_stub_enr)
-        got_enr.set()
+    async def fetch_enr(event):
+        nonlocal received_enr
+        received_enr = await alice.request_enr(bobs_node_with_stub_enr)
+        event.set()
 
     # Start a task in the background that requests an ENR to bob and then waits for it.
-    nursery.start_soon(get_enr)
-    await trio.sleep(0)
+    nursery.start_soon(fetch_enr, got_enr)
 
     # Bob will now consume one datagram containing the ENR_REQUEST from alice, and as part of that
     # will send an ENR_RESPONSE, which will then be consumed by alice, and as part of that it will
@@ -188,8 +188,35 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     with trio.fail_after(1):
         await got_enr.wait()
 
-    validate_node_enr(bob.this_node, enr, sequence_number=1)
-    assert alice.routing.get_node(bob.this_node.id).enr == enr
+    validate_node_enr(bob.this_node, received_enr, sequence_number=1)
+    assert alice.routing.get_node(bob.this_node.id).enr == received_enr
+
+    # Now, if Bob later sends us a new ENR with no endpoint information, we'll evict him from both
+    # our DB and RT.
+    sequence_number = bob.this_node.enr.sequence_number + 1
+    new_unsigned_enr = UnsignedENR(
+        sequence_number,
+        kv_pairs={
+            IDENTITY_SCHEME_ENR_KEY: V4IdentityScheme.id,
+            V4IdentityScheme.public_key_enr_key: bob.pubkey.to_compressed_bytes(),
+        }
+    )
+    bob.this_node = Node(new_unsigned_enr.to_signed_enr(bob.privkey.to_bytes()))
+
+    received_enr = None
+    got_new_enr = trio.Event()
+    nursery.start_soon(fetch_enr, got_new_enr)
+    with trio.fail_after(0.1):
+        await bob.consume_datagram()
+        await alice.consume_datagram()
+
+    with trio.fail_after(1):
+        await got_new_enr.wait()
+
+    assert Node(received_enr).address is None
+    with pytest.raises(KeyError):
+        alice.routing.get_node(bob.this_node.id)
+    assert not await alice.node_db.contains(bob.this_node.id)
 
 
 @pytest.mark.trio
