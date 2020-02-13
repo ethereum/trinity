@@ -45,6 +45,10 @@ ROUTING_TABLE_LOOKUP_INTERVAL = 60  # intervals between lookups
 LOOKUP_RETRY_THRESHOLD = 5  # minimum number of ENRs desired in responses to FindNode requests
 LOOKUP_PARALLELIZATION_FACTOR = 3  # number of parallel lookup requests (aka alpha)
 
+ENDPOINT_VOTE_EXPIRY_TIME = 3 * 60 * 60  # votes older than this are disregarded
+ENDPOINT_VOTE_QUORUM = 10  # total number of votes needed for an endpoint change
+ENDPOINT_VOTE_MAJORITY_FRACTION = 0.5  # required fraction of votes needed for an endpoint change
+
 NUM_ROUTING_TABLE_BUCKETS = 256  # number of buckets in the routing table
 
 MAX_NODES_MESSAGE_TOTAL = 8  # max allowed total value for nodes messages

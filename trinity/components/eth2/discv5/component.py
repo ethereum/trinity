@@ -22,6 +22,9 @@ from eth_utils.toolz import (
 from lahja import EndpointAPI
 
 from p2p.discv5.constants import (
+    ENDPOINT_VOTE_EXPIRY_TIME,
+    ENDPOINT_VOTE_MAJORITY_FRACTION,
+    ENDPOINT_VOTE_QUORUM,
     NUM_ROUTING_TABLE_BUCKETS,
 )
 from p2p.discv5.abc import (
@@ -232,6 +235,9 @@ class DiscV5Component(TrioIsolatedComponent):
             node_db=node_db,
             identity_scheme_registry=identity_scheme_registry,
             vote_receive_channel=endpoint_vote_channels[1],
+            quorum=ENDPOINT_VOTE_QUORUM,
+            majority_fraction=ENDPOINT_VOTE_MAJORITY_FRACTION,
+            expiry_time=ENDPOINT_VOTE_EXPIRY_TIME,
         )
 
         routing_table_manager = RoutingTableManager(

@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import (
     DefaultDict,
     Dict,
@@ -114,6 +115,9 @@ class EndpointTracker(Service):
                  node_db: NodeDBAPI,
                  identity_scheme_registry: IdentitySchemeRegistry,
                  vote_receive_channel: ReceiveChannel[EndpointVote],
+                 quorum: int,
+                 majority_fraction: float,
+                 expiry_time: float,
                  ) -> None:
         self.local_private_key = local_private_key
         self.local_node_id = local_node_id
@@ -121,6 +125,12 @@ class EndpointTracker(Service):
         self.identity_scheme_registry = identity_scheme_registry
 
         self.vote_receive_channel = vote_receive_channel
+
+        self.ballot_box = EndpointVoteBallotBox(
+            quorum=quorum,
+            majority_fraction=majority_fraction,
+            expiry_time=expiry_time,
+        )
 
     async def run(self) -> None:
         async with self.vote_receive_channel:
@@ -134,24 +144,34 @@ class EndpointTracker(Service):
             encode_hex(vote.node_id),
         )
 
+        self.ballot_box.add_vote(vote)
+        self.ballot_box.remove_expired_votes(time.monotonic())
+        endpoint_vote_result = self.ballot_box.result
+
         current_node = await self.node_db.get(self.local_node_id)
         current_enr = current_node.enr
-
-        # TODO: majority voting, discard old votes
         are_endpoint_keys_present = (
             IP_V4_ADDRESS_ENR_KEY in current_enr and
             UDP_PORT_ENR_KEY in current_enr
         )
-        enr_needs_update = not are_endpoint_keys_present or (
-            vote.endpoint.ip_address != current_enr[IP_V4_ADDRESS_ENR_KEY] or
-            vote.endpoint.port != current_enr[UDP_PORT_ENR_KEY]
-        )
+
+        if endpoint_vote_result is None:
+            enr_needs_update = False
+        elif are_endpoint_keys_present:
+            endpoint_from_enr = Endpoint(
+                ip_address=current_enr[IP_V4_ADDRESS_ENR_KEY],
+                port=current_enr[UDP_PORT_ENR_KEY],
+            )
+            enr_needs_update = endpoint_vote_result != endpoint_from_enr
+        else:
+            enr_needs_update = True
+
         if enr_needs_update:
             kv_pairs = merge(
                 current_enr,
                 {
-                    IP_V4_ADDRESS_ENR_KEY: vote.endpoint.ip_address,
-                    UDP_PORT_ENR_KEY: vote.endpoint.port,
+                    IP_V4_ADDRESS_ENR_KEY: endpoint_vote_result.ip_address,
+                    UDP_PORT_ENR_KEY: endpoint_vote_result.port,
                 }
             )
             new_unsigned_enr = UnsignedENR(

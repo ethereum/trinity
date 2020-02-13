@@ -68,6 +68,9 @@ async def endpoint_tracker(private_key, initial_enr, node_db, vote_channels):
         node_db=node_db,
         identity_scheme_registry=default_identity_scheme_registry,
         vote_receive_channel=vote_channels[1],
+        quorum=3,
+        majority_fraction=0.5,
+        expiry_time=60,
     )
     async with background_trio_service(endpoint_tracker):
         yield endpoint_tracker
@@ -76,9 +79,16 @@ async def endpoint_tracker(private_key, initial_enr, node_db, vote_channels):
 @pytest.mark.trio
 async def test_endpoint_tracker_updates_enr(endpoint_tracker, initial_enr, node_db, vote_channels):
     endpoint = EndpointFactory()
-    endpoint_vote = EndpointVoteFactory(endpoint=endpoint)
-    await vote_channels[0].send(endpoint_vote)
-    await wait_all_tasks_blocked()  # wait until vote has been processed
+    for _ in range(2):
+        await vote_channels[0].send(EndpointVoteFactory(endpoint=endpoint))
+    await wait_all_tasks_blocked()
+
+    # quorum not reached, so no update yet
+    updated_node = await node_db.get(initial_enr.node_id)
+    assert updated_node.enr == initial_enr
+
+    await vote_channels[0].send(EndpointVoteFactory(endpoint=endpoint))
+    await wait_all_tasks_blocked()
 
     updated_node = await node_db.get(initial_enr.node_id)
     assert updated_node.enr.sequence_number == initial_enr.sequence_number + 1
