@@ -261,9 +261,13 @@ class DiscoveryService(Service):
 
     async def fetch_enrs(self) -> None:
         async with self.pending_enrs_consumer:
-            async for (remote_id, enr_seq) in self.pending_enrs_consumer:
-                self.logger.debug2("Received request to fetch ENR for %s", encode_hex(remote_id))
-                self.manager.run_task(self._ensure_enr, remote_id, enr_seq)
+            # Use a separate nursery to avoid the extra machinery involved in `run_task()`, which is
+            # not necessary here, thus reducing the load on the event loop.
+            async with trio.open_nursery() as nursery:
+                async for (remote_id, enr_seq) in self.pending_enrs_consumer:
+                    self.logger.debug2(
+                        "Received request to fetch ENR for %s", encode_hex(remote_id))
+                    nursery.start_soon(self._ensure_enr, remote_id, enr_seq)
 
     async def _ensure_enr(self, node_id: NodeID, enr_seq: int) -> None:
         if not self.is_bond_valid_with(node_id):
