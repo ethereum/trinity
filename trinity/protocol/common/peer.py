@@ -279,6 +279,11 @@ class BaseChainPeerPool(BasePeerPool):
 
 
 def skip_candidate_if_on_list(skip_list: Container[NodeID], candidate: NodeAPI) -> bool:
+    # This shouldn't happen as we don't keep ENRs with no endpoint information, but we check it
+    # here just in case.
+    if candidate.address is None:
+        p2p_logger.warning("Skipping connection candidate with no endpoint info: %s", candidate)
+        return True
     if candidate.id in skip_list:
         p2p_logger.debug2("Skipping connection candidate (%s) as it's on skip list", candidate)
         return True
@@ -291,8 +296,7 @@ def skip_candidate_if_on_list_or_fork_mismatch(
         fork_blocks: Tuple[BlockNumber, ...],
         skip_list: Container[NodeID],
         candidate: NodeAPI) -> bool:
-    if candidate.id in skip_list:
-        p2p_logger.debug("Skipping connection candidate (%s) as it's on skip list", candidate)
+    if skip_candidate_if_on_list(skip_list, candidate):
         return True
 
     # For now we accept candidates which don't specify a ForkID in their ENR, but we may want to
