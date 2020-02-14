@@ -3,6 +3,7 @@ from cached_property import cached_property
 
 from eth_typing import BlockNumber, Hash32
 
+from p2p.abc import ConnectionAPI
 from p2p.logic import Application
 from p2p.qualifiers import HasProtocol
 
@@ -15,6 +16,21 @@ from .abc import ChainInfoAPI, HeadInfoAPI
 
 AnyETHLES = HasProtocol(ETHProtocol) | HasProtocol(ETHProtocolV63) | HasProtocol(
     LESProtocolV2) | HasProtocol(LESProtocolV1)
+
+
+def choose_eth_or_les_api(
+        connection: ConnectionAPI) -> Union[ETHAPI, ETHV63API, LESV1API, LESV2API]:
+
+    if connection.has_protocol(ETHProtocol):
+        return connection.get_logic(ETHAPI.name, ETHAPI)
+    elif connection.has_protocol(ETHProtocolV63):
+        return connection.get_logic(ETHV63API.name, ETHV63API)
+    elif connection.has_protocol(LESProtocolV2):
+        return connection.get_logic(LESV2API.name, LESV2API)
+    elif connection.has_protocol(LESProtocolV1):
+        return connection.get_logic(LESV1API.name, LESV1API)
+    else:
+        raise Exception("Unreachable code path")
 
 
 class ChainInfo(Application, ChainInfoAPI):
@@ -31,16 +47,7 @@ class ChainInfo(Application, ChainInfoAPI):
         return self._get_logic().genesis_hash
 
     def _get_logic(self) -> Union[ETHAPI, ETHV63API, LESV1API, LESV2API]:
-        if self.connection.has_protocol(ETHProtocol):
-            return self.connection.get_logic(ETHAPI.name, ETHAPI)
-        elif self.connection.has_protocol(ETHProtocolV63):
-            return self.connection.get_logic(ETHV63API.name, ETHV63API)
-        elif self.connection.has_protocol(LESProtocolV2):
-            return self.connection.get_logic(LESV2API.name, LESV2API)
-        elif self.connection.has_protocol(LESProtocolV1):
-            return self.connection.get_logic(LESV1API.name, LESV1API)
-        else:
-            raise Exception("Unreachable code path")
+        return choose_eth_or_les_api(self.connection)
 
 
 class HeadInfo(Application, HeadInfoAPI):
@@ -50,20 +57,8 @@ class HeadInfo(Application, HeadInfoAPI):
 
     @cached_property
     def _tracker(self) -> HeadInfoAPI:
-        if self.connection.has_protocol(ETHProtocol):
-            eth_logic = self.connection.get_logic(ETHAPI.name, ETHAPI)
-            return eth_logic.head_info
-        elif self.connection.has_protocol(ETHProtocolV63):
-            eth_v63_logic = self.connection.get_logic(ETHV63API.name, ETHV63API)
-            return eth_v63_logic.head_info
-        elif self.connection.has_protocol(LESProtocolV2):
-            les_v2_logic = self.connection.get_logic(LESV2API.name, LESV2API)
-            return les_v2_logic.head_info
-        elif self.connection.has_protocol(LESProtocolV1):
-            les_v1_logic = self.connection.get_logic(LESV1API.name, LESV1API)
-            return les_v1_logic.head_info
-        else:
-            raise Exception("Unreachable code path")
+        api = choose_eth_or_les_api(self.connection)
+        return api.head_info
 
     @property
     def head_td(self) -> int:
