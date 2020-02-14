@@ -33,7 +33,6 @@ from mypy_extensions import (
 from async_service import (
     Service,
 )
-from p2p.kademlia import Node
 from p2p.trio_utils import (
     every,
 )
@@ -144,17 +143,17 @@ class BaseRoutingTableManagerComponent(Service):
         self.logger.debug("Updating %s in routing table", encode_hex(node_id))
         self.routing_table.update(node_id)
 
-    async def get_local_enr(self) -> ENR:
+    def get_local_enr(self) -> ENR:
         """Get the local enr from the ENR DB."""
         try:
-            local_node = await self.node_db.get(self.local_node_id)
+            local_enr = self.node_db.get_enr(self.local_node_id)
         except KeyError:
             raise ValueError(
                 f"Local ENR with node id {encode_hex(self.local_node_id)} not "
                 f"present in db"
             )
         else:
-            return local_node.enr
+            return local_enr
 
     async def maybe_request_remote_enr(self, incoming_message: IncomingMessage) -> None:
         """Request the peers ENR if there is a newer version according to a ping or pong."""
@@ -165,7 +164,7 @@ class BaseRoutingTableManagerComponent(Service):
             )
 
         try:
-            remote_node = await self.node_db.get(incoming_message.sender_node_id)
+            remote_enr = self.node_db.get_enr(incoming_message.sender_node_id)
         except KeyError:
             self.logger.warning(
                 "No ENR of %s present in the database even though it should post handshake. "
@@ -174,7 +173,7 @@ class BaseRoutingTableManagerComponent(Service):
             )
             request_update = True
         else:
-            current_sequence_number = remote_node.enr.sequence_number
+            current_sequence_number = remote_enr.sequence_number
             advertized_sequence_number = incoming_message.message.enr_seq
 
             if current_sequence_number < advertized_sequence_number:
@@ -258,7 +257,7 @@ class BaseRoutingTableManagerComponent(Service):
                     encode_hex(sender_node_id),
                     encode_hex(response.message.enrs[0].node_id),
                 )
-            await self.node_db.insert_or_update(enr)
+            self.node_db.set_enr(enr)
 
 
 class PingHandlerService(BaseRoutingTableManagerComponent):
@@ -296,7 +295,7 @@ class PingHandlerService(BaseRoutingTableManagerComponent):
                 f"{incoming_message.message.__class__.__name__}"
             )
 
-        local_enr = await self.get_local_enr()
+        local_enr = self.get_local_enr()
 
         pong = PongMessage(
             request_id=incoming_message.message.request_id,
@@ -346,7 +345,7 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
 
     async def respond_with_local_enr(self, incoming_message: IncomingMessage) -> None:
         """Send a Nodes message containing the local ENR in response to an incoming message."""
-        local_enr = await self.get_local_enr()
+        local_enr = self.get_local_enr()
         nodes_message = NodesMessage(
             request_id=incoming_message.message.request_id,
             total=1,
@@ -367,11 +366,11 @@ class FindNodeHandlerService(BaseRoutingTableManagerComponent):
         enrs = []
         for node_id in node_ids:
             try:
-                node = await self.node_db.get(node_id)
+                enr = self.node_db.get_enr(node_id)
             except KeyError:
                 self.logger.warning("Missing ENR for node %s", encode_hex(node_id))
             else:
-                enrs.append(node.enr)
+                enrs.append(enr)
 
         enr_partitions = partition_enrs(enrs, NODES_MESSAGE_PAYLOAD_SIZE) or ((),)
         self.logger.debug(
@@ -418,7 +417,7 @@ class PingSenderService(BaseRoutingTableManagerComponent):
                 self.logger.warning("Routing table is empty, no one to ping")
 
     async def ping(self, node_id: NodeID) -> None:
-        local_enr = await self.get_local_enr()
+        local_enr = self.get_local_enr()
         ping = PingMessage(
             request_id=self.message_dispatcher.get_free_request_id(node_id),
             enr_seq=local_enr.sequence_number,
@@ -487,7 +486,7 @@ class LookupService(BaseRoutingTableManagerComponent):
                 for enr in enrs:
                     received_enrs.append(enr)
                     received_node_ids.append(enr.node_id)
-                    await self.node_db.insert_or_update(Node(enr))
+                    self.node_db.set_enr(enr)
             else:
                 unresponsive_node_ids.add(peer)
 

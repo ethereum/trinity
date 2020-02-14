@@ -16,6 +16,8 @@ from eth_hash.auto import keccak
 
 from eth_keys import keys
 
+from eth.db.backends.memory import MemoryDB
+
 from p2p import constants
 from p2p.discv5.constants import (
     IP_V4_ADDRESS_ENR_KEY,
@@ -23,7 +25,7 @@ from p2p.discv5.constants import (
     UDP_PORT_ENR_KEY,
 )
 from p2p.discv5.enr import UnsignedENR, IDENTITY_SCHEME_ENR_KEY
-from p2p.discv5.enr_db import MemoryNodeDB
+from p2p.discv5.enr_db import NodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
 from p2p.discovery import (
     CMD_FIND_NODE,
@@ -116,7 +118,7 @@ async def test_get_local_enr(manually_driven_discovery):
     validate_node_enr(discovery.this_node, enr, sequence_number=2)
 
     # The new ENR will also be stored in our DB.
-    our_node = await discovery.node_db.get(discovery.this_node.id)
+    our_node = Node(discovery.node_db.get_enr(discovery.this_node.id))
     assert enr == our_node.enr
 
     # And the next refresh time will be updated.
@@ -129,8 +131,8 @@ async def test_local_enr_on_startup(manually_driven_discovery):
 
     validate_node_enr(discovery.this_node, discovery.this_node.enr, sequence_number=1)
     # Our local ENR will also be stored in our DB.
-    our_node = await discovery.node_db.get(discovery.this_node.id)
-    assert discovery.this_node.enr == our_node.enr
+    our_enr = discovery.node_db.get_enr(discovery.this_node.id)
+    assert discovery.this_node.enr == our_enr
 
 
 @pytest.mark.trio
@@ -157,13 +159,13 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
     # request.
-    bob.pong_times[alice.this_node.id] = time.monotonic()
+    bob.node_db.set_last_pong_time(alice.this_node.id, int(time.monotonic()))
 
     # Add a copy of Bob's node with a stub ENR to alice's RT as later we're going to check that it
     # gets updated with the received ENR.
     bobs_node_with_stub_enr = Node.from_pubkey_and_addr(
         bob.this_node.pubkey, bob.this_node.address)
-    alice.pong_times[bob.this_node.id] = time.monotonic()
+    alice.node_db.set_last_pong_time(bob.this_node.id, int(time.monotonic()))
     await alice.update_routing_table(bobs_node_with_stub_enr)
     assert alice.routing.get_node(bobs_node_with_stub_enr.id).enr.sequence_number == 0
 
@@ -216,7 +218,8 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     assert Node(received_enr).address is None
     with pytest.raises(KeyError):
         alice.routing.get_node(bob.this_node.id)
-    assert not await alice.node_db.contains(bob.this_node.id)
+    with pytest.raises(KeyError):
+        alice.node_db.get_enr(bob.this_node.id)
 
 
 @pytest.mark.trio
@@ -235,7 +238,7 @@ async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
 
     alice.recv_neighbours_v4 = recv_neighbours
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
-    bob.pong_times[alice.this_node.id] = time.monotonic()
+    bob.node_db.set_last_pong_time(alice.this_node.id, int(time.monotonic()))
 
     alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
 
@@ -395,8 +398,8 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
     # request.
-    alice.pong_times[bob.this_node.id] = time.monotonic()
-    bob.pong_times[alice.this_node.id] = time.monotonic()
+    alice.node_db.set_last_pong_time(bob.this_node.id, int(time.monotonic()))
+    bob.node_db.set_last_pong_time(alice.this_node.id, int(time.monotonic()))
 
     # Also add bob's node to alice's DB as when scheduling an ENR retrieval we only get the node ID
     # and need to look it up in the DB.
@@ -422,12 +425,15 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
         # it in our DB.
         while True:
             await trio.sleep(0.1)
-            if await alice.node_db.contains(bob.this_node.id):
+            try:
+                bob_enr = alice.node_db.get_enr(bob.this_node.id)
+            except KeyError:
+                continue
+            else:
                 break
 
-    bob_node = await alice.node_db.get(bob.this_node.id)
-    assert bob_node.enr is not None
-    assert bob_node.enr == await bob.get_local_enr()
+    assert bob_enr is not None
+    assert bob_enr == await bob.get_local_enr()
 
 
 @pytest.mark.trio
@@ -509,7 +515,7 @@ class MockDiscoveryService(DiscoveryService):
     def __init__(self, bootnodes):
         privkey = keys.PrivateKey(keccak(b"seed"))
         self.messages = []
-        node_db = MemoryNodeDB(default_identity_scheme_registry)
+        node_db = NodeDB(default_identity_scheme_registry, MemoryDB())
         socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
         event_bus = None
         super().__init__(privkey, AddressFactory(), bootnodes, event_bus, socket, node_db)

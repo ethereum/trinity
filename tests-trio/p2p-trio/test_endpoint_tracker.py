@@ -10,7 +10,7 @@ import pytest_trio
 
 from async_service import background_trio_service
 
-from p2p.kademlia import Node
+from eth.db.backends.memory import MemoryDB
 
 from p2p.tools.factories.discovery import (
     EndpointFactory,
@@ -29,7 +29,7 @@ from p2p.discv5.endpoint_tracker import (
     EndpointTracker,
 )
 from p2p.discv5.enr_db import (
-    MemoryNodeDB,
+    NodeDB,
 )
 from p2p.discv5.identity_schemes import (
     default_identity_scheme_registry,
@@ -50,8 +50,8 @@ def initial_enr(private_key):
 
 @pytest_trio.trio_fixture
 async def node_db(initial_enr):
-    node_db = MemoryNodeDB(default_identity_scheme_registry)
-    await node_db.insert(Node(initial_enr))
+    node_db = NodeDB(default_identity_scheme_registry, MemoryDB())
+    node_db.set_enr(initial_enr)
     return node_db
 
 
@@ -80,7 +80,7 @@ async def test_endpoint_tracker_updates_enr(endpoint_tracker, initial_enr, node_
     await vote_channels[0].send(endpoint_vote)
     await wait_all_tasks_blocked()  # wait until vote has been processed
 
-    updated_node = await node_db.get(initial_enr.node_id)
-    assert updated_node.enr.sequence_number == initial_enr.sequence_number + 1
-    assert updated_node.enr[IP_V4_ADDRESS_ENR_KEY] == endpoint.ip_address
-    assert updated_node.enr[UDP_PORT_ENR_KEY] == endpoint.port
+    updated_enr = node_db.get_enr(initial_enr.node_id)
+    assert updated_enr.sequence_number == initial_enr.sequence_number + 1
+    assert updated_enr[IP_V4_ADDRESS_ENR_KEY] == endpoint.ip_address
+    assert updated_enr[UDP_PORT_ENR_KEY] == endpoint.port

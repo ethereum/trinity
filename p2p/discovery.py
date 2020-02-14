@@ -134,8 +134,6 @@ class DiscoveryService(Service):
     _max_pending_enrs: int = 20
     _local_enr_refresh_interval: int = 60
 
-    logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
-
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  address: AddressAPI,
@@ -145,6 +143,7 @@ class DiscoveryService(Service):
                  node_db: NodeDBAPI,
                  enr_field_providers: Sequence[ENR_FieldProvider] = tuple(),
                  ) -> None:
+        self.logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
         self.privkey = privkey
         self.bootstrap_nodes = bootstrap_nodes
         self._event_bus = event_bus
@@ -154,12 +153,9 @@ class DiscoveryService(Service):
         self.ping_channels = ExpectedResponseChannels[None]()
         self.enr_field_providers = enr_field_providers
         self.node_db = node_db
-        # FIXME: Use a concurrency-safe NodeDB implementation.
-        self._node_db_lock = trio.Lock()
         self._local_enr_next_refresh: float = time.monotonic()
         self._local_enr_lock = trio.Lock()
         self._lookup_lock = trio.Lock()
-        self.pong_times: Dict[NodeID, float] = {}
         self.parity_pong_tokens: Dict[Hash32, Hash32] = {}
         if socket.family != trio.socket.AF_INET:
             raise ValueError("Invalid socket family")
@@ -177,24 +173,21 @@ class DiscoveryService(Service):
         self.routing = RoutingTable(self.this_node.id)
 
     async def _init(self) -> None:
-        async with self._node_db_lock:
-            try:
-                node = await self.node_db.get(self.this_node.id)
-            except KeyError:
-                # Either we have a fresh DB or our private key has changed, so create a new ENR
-                # with sequence number 1.
-                enr = await self._generate_local_enr(sequence_number=1)
-                node = Node(enr)
-                await self.node_db.insert(node)
+        try:
+            enr = self.node_db.get_enr(self.this_node.id)
+        except KeyError:
+            pass
+        else:
+            self.this_node = Node(enr)
 
-        self.this_node = node
-        # This is a no-op when we generate a fresh ENR above, but we need to run this without
-        # acquiring self._node_db_lock, so we run it here for simplicity.
-        await self._maybe_update_local_enr()
+        # We run this unconditionally because even when we successfully load our ENR from the DB,
+        # our address (or ENR field providers) may have changed and in that case we'd want to
+        # generate a new ENR.
+        await self.maybe_update_local_enr()
 
     def is_bond_valid_with(self, node_id: NodeID) -> bool:
         try:
-            pong_time = self.pong_times[node_id]
+            pong_time = self.node_db.get_last_pong_time(node_id)
         except KeyError:
             return False
         return pong_time > (time.monotonic() - constants.KADEMLIA_BOND_EXPIRATION)
@@ -214,14 +207,13 @@ class DiscoveryService(Service):
             if len(candidates) == max_candidates:
                 break
         else:
-            self.logger.info(
-                "Not enough nodes in routing table passed PeerCandidatesRequest's "
-                "filter, triggering a random lookup in the background.")
+            log_msg = "Not enough nodes in routing table passed PeerCandidatesRequest's filter, "
             if self._lookup_lock.locked():
-                self.logger.info(
-                    "Not performing random lookup as there is one in progress already")
+                log_msg += "but not triggering random lookup as there is one in progress already"
             else:
+                log_msg += "triggering a random lookup in the background."
                 self.manager.run_task(self.lookup_random)
+            self.logger.debug(log_msg)
         return tuple(candidates)
 
     async def handle_get_peer_candidates_requests(self) -> None:
@@ -274,16 +266,17 @@ class DiscoveryService(Service):
             return
 
         try:
-            node = await self.node_db.get(node_id)
+            enr = self.node_db.get_enr(node_id)
         except KeyError:
             self.logger.warning(
                 "Attempted to fetch ENR for Node (%s) not in our DB", encode_hex(node_id))
             return
 
-        if node.enr.sequence_number >= enr_seq:
-            self.logger.debug("Already got latest ENR for %s", node)
+        if enr.sequence_number >= enr_seq:
+            self.logger.debug("Already got latest ENR for %s", encode_hex(node_id))
             return
 
+        node = Node(enr)
         try:
             await self.request_enr(node)
         except CouldNotRetrieveENR as e:
@@ -300,7 +293,6 @@ class DiscoveryService(Service):
                 "Routing table has %s nodes in %s buckets (%s of which are full), and %s nodes "
                 "are in the replacement cache", total_nodes, len(self.routing.buckets),
                 len(full_buckets), nodes_in_replacement_cache)
-            self.logger.debug("Node DB has a total of %s entries", len(self.node_db))
             self.logger.debug("===========================================================")
 
     async def update_routing_table(self, node: NodeAPI) -> None:
@@ -323,8 +315,7 @@ class DiscoveryService(Service):
                 "Checking if %s is still responding, will evict if not", node, eviction_candidate)
             self.manager.run_task(self.bond, eviction_candidate)
 
-        async with self._node_db_lock:
-            await self.node_db.insert_or_update(node)
+        self.node_db.set_enr(node.enr)
 
     async def bond(self, node: NodeAPI) -> bool:
         """Bond with the given node.
@@ -442,10 +433,13 @@ class DiscoveryService(Service):
              it and return it.
         """
         if self._local_enr_next_refresh <= time.monotonic():
-            async with self._local_enr_lock:
-                await self._maybe_update_local_enr()
+            await self.maybe_update_local_enr()
 
         return self.this_node.enr
+
+    async def maybe_update_local_enr(self) -> None:
+        async with self._local_enr_lock:
+            await self._maybe_update_local_enr()
 
     async def _maybe_update_local_enr(self) -> None:
         self._local_enr_next_refresh = time.monotonic() + self._local_enr_refresh_interval
@@ -464,8 +458,7 @@ class DiscoveryService(Service):
             "Node details changed, generated new local ENR with sequence number %d",
             enr.sequence_number)
 
-        async with self._node_db_lock:
-            await self.node_db.update(self.this_node)
+        self.node_db.set_enr(enr)
 
     async def get_local_enr_seq(self) -> int:
         enr = await self.get_local_enr()
@@ -657,9 +650,11 @@ class DiscoveryService(Service):
             return
 
         try:
-            node = await self.node_db.get(node_id_from_pubkey(remote_pubkey))
+            enr = self.node_db.get_enr(node_id_from_pubkey(remote_pubkey))
         except KeyError:
             node = None
+        else:
+            node = Node(enr)
         # If we don't have an entry for the sender's NodeID in our DB, or if the one we do is
         # incomplete (i.e. without an Address), create a new one.
         if node is None or node.address is None or node.address != address:
@@ -828,11 +823,10 @@ class DiscoveryService(Service):
             self.logger.info(
                 "Received ENR with no endpoint info from %s, removing from DB/RT", node)
             self.routing.remove_node(node)
-            async with self._node_db_lock:
-                try:
-                    await self.node_db.remove(node.id)
-                except KeyError:
-                    pass
+            try:
+                self.node_db.delete_enr(node.id)
+            except KeyError:
+                pass
         else:
             await self.update_routing_table(new_node)
         try:
@@ -917,7 +911,7 @@ class DiscoveryService(Service):
             self.logger.debug(f'Unexpected pong from {remote} with token {encode_hex(token)}')
             return
 
-        self.pong_times[remote.id] = time.monotonic()
+        self.node_db.set_last_pong_time(remote.id, int(time.monotonic()))
         # Insert/update the Node in our DB and routing table as soon as we receive the pong, as
         # we want that to happen even if the original requestor (bond()) gives up waiting.
         await self.update_routing_table(remote)
@@ -938,8 +932,6 @@ class PreferredNodeDiscoveryService(DiscoveryService):
     preferred_nodes: Sequence[NodeAPI] = None
     preferred_node_recycle_time: int = 300
     _preferred_node_tracker: Dict[NodeAPI, float] = None
-
-    logger = get_extended_debug_logger('p2p.discovery.PreferredNodeDiscoveryService')
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
@@ -1005,12 +997,11 @@ class StaticDiscoveryService(Service):
     _static_peers: Tuple[NodeAPI, ...]
     _event_bus: EndpointAPI
 
-    logger = get_extended_debug_logger('p2p.discovery.StaticDiscoveryService')
-
     def __init__(
             self,
             event_bus: EndpointAPI,
             static_peers: Sequence[NodeAPI]) -> None:
+        self.logger = get_extended_debug_logger('p2p.discovery.StaticDiscoveryService')
         self._event_bus = event_bus
         self._static_peers = tuple(static_peers)
 
@@ -1051,9 +1042,9 @@ class StaticDiscoveryService(Service):
 
 class NoopDiscoveryService(Service):
     'A stub "discovery service" which does nothing'
-    logger = get_extended_debug_logger('p2p.discovery.NoopDiscoveryService')
 
     def __init__(self, event_bus: EndpointAPI) -> None:
+        self.logger = get_extended_debug_logger('p2p.discovery.NoopDiscoveryService')
         self._event_bus = event_bus
 
     async def handle_get_peer_candidates_requests(self) -> None:

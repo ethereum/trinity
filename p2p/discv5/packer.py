@@ -67,7 +67,6 @@ from p2p.exceptions import (
     DecryptionError,
     HandshakeFailure,
 )
-from p2p.kademlia import Node
 
 
 class PeerPacker(Service):
@@ -157,11 +156,11 @@ class PeerPacker(Service):
 
         if isinstance(incoming_packet.packet, AuthTagPacket):
             try:
-                remote_node = await self.node_db.get(self.remote_node_id)
+                remote_enr = self.node_db.get_enr(self.remote_node_id)
             except KeyError:
-                remote_node = None
+                remote_enr = None
             try:
-                local_node = await self.node_db.get(self.local_node_id)
+                local_enr = self.node_db.get_enr(self.local_node_id)
             except KeyError:
                 raise ValueError(
                     f"Unable to find local ENR in DB by node id {encode_hex(self.local_node_id)}"
@@ -170,8 +169,8 @@ class PeerPacker(Service):
             self.logger.debug("Received %s as handshake initiation", incoming_packet)
             self.start_handshake_as_recipient(
                 auth_tag=incoming_packet.packet.auth_tag,
-                local_enr=local_node.enr,
-                remote_enr=remote_node.enr,
+                local_enr=local_enr,
+                remote_enr=remote_enr,
             )
             self.logger.debug("Responding with WhoAreYou packet")
             await self.send_first_handshake_packet(incoming_packet.sender_endpoint)
@@ -217,9 +216,8 @@ class PeerPacker(Service):
                 )
 
             if handshake_result.enr is not None:
-                node = Node(handshake_result.enr)
-                self.logger.debug("Updating Node in DB with %r", node)
-                await self.node_db.insert_or_update(node)
+                self.logger.debug("Updating ENR in DB with %r", handshake_result.enr)
+                self.node_db.set_enr(handshake_result.enr)
 
             if handshake_result.auth_header_packet is not None:
                 outgoing_packet = OutgoingPacket(
@@ -290,13 +288,13 @@ class PeerPacker(Service):
             raise ValueError("Can only handle message pre handshake")
 
         try:
-            local_node = await self.node_db.get(self.local_node_id)
+            local_enr = self.node_db.get_enr(self.local_node_id)
         except KeyError:
             raise ValueError(
                 f"Unable to find local ENR in DB by node id {encode_hex(self.local_node_id)}"
             )
         try:
-            remote_node = await self.node_db.get(self.remote_node_id)
+            remote_enr = self.node_db.get_enr(self.remote_node_id)
         except KeyError:
             self.logger.warning(
                 "Unable to initiate handshake with %s as their ENR is not present in the DB",
@@ -306,8 +304,8 @@ class PeerPacker(Service):
 
         self.logger.info("Initiating handshake to send %s", outgoing_message)
         self.start_handshake_as_initiator(
-            local_enr=local_node.enr,
-            remote_enr=remote_node.enr,
+            local_enr=local_enr,
+            remote_enr=remote_enr,
             message=outgoing_message.message,
         )
         self.logger.debug("Sending initiating packet")

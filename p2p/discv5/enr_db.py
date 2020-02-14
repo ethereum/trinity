@@ -1,39 +1,24 @@
-import binascii
-from collections import defaultdict
-import operator
-import pathlib
-import re
-import time
-from typing import (
-    DefaultDict,
-    Dict,
+from eth_utils.encoding import (
+    big_endian_to_int,
+    int_to_big_endian,
 )
 
-from eth_utils import ValidationError
+from eth.abc import DatabaseAPI
 
 import rlp
 
-import trio
+from eth_utils import get_extended_debug_logger
 
-from eth_utils import (
-    encode_hex,
-    get_extended_debug_logger,
-)
-
-from p2p.abc import NodeAPI
 from p2p.discv5.abc import NodeDBAPI
 from p2p.discv5.enr import ENR
 from p2p.discv5.identity_schemes import IdentitySchemeRegistry
 from p2p.discv5.typing import NodeID
-from p2p.kademlia import Node
 
 
-ACCEPTABLE_LOAD_TIME = 1.0
+class NodeDB(NodeDBAPI):
 
-
-class BaseNodeDB(NodeDBAPI):
-
-    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry):
+    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry, db: DatabaseAPI) -> None:
+        self.db = db
         self.logger = get_extended_debug_logger(".".join((
             self.__module__,
             self.__class__.__name__,
@@ -57,214 +42,37 @@ class BaseNodeDB(NodeDBAPI):
                 f"identity scheme registry"
             )
 
-    async def insert_or_update(self, node: NodeAPI) -> None:
+    def set_enr(self, enr: ENR) -> None:
+        self.validate_identity_scheme(enr)
         try:
-            await self.update(node)
+            existing_enr = self.get_enr(enr.node_id)
         except KeyError:
-            await self.insert(node)
-
-
-def get_node_filename(node: NodeAPI) -> str:
-    return f"node_{encode_hex(node.id)}_{node.enr.sequence_number}"
-
-
-def is_valid_node_filename(filename: str) -> bool:
-    return bool(re.match(r"^node_0x[0-9a-f]{64}_\d+$", filename))
-
-
-class FileNodeDB(BaseNodeDB):
-    def __init__(self,
-                 identity_scheme_registry: IdentitySchemeRegistry,
-                 directory: pathlib.Path) -> None:
-        super().__init__(identity_scheme_registry)
-        self.directory = directory
-        self.nodes: DefaultDict[NodeID, Dict[int, NodeAPI]] = defaultdict(dict)
-        self.load_nodes_timed()
-
-    def load_nodes_timed(self) -> None:
-        start_time = time.time()
-
-        self.load_nodes()
-
-        end_time = time.time()
-        total_time = end_time - start_time
-
-        if total_time > ACCEPTABLE_LOAD_TIME:
-            self.logger.warning("Loading nodes took a very long time: %.1f seconds", total_time)
-        else:
-            self.logger.debug("Loading nodes took %.1f seconds", total_time)
-
-    def load_nodes(self) -> None:
-        node_paths = tuple(
-            path for path in self.directory.iterdir()
-            if path.is_file()
-        )
-
-        invalid_paths = tuple(
-            path for path in node_paths
-            if not is_valid_node_filename(path.name)
-        )
-        for invalid_path in invalid_paths:
-            self.logger.warning(
-                "Encountered invalid Node filename %s in NodeDB directory %s",
-                invalid_path,
-                self.directory
+            existing_enr = None
+        if existing_enr and existing_enr.sequence_number > enr.sequence_number:
+            raise ValueError(
+                "Cannot overwrite existing ENR (%d) with old one (%d)",
+                existing_enr.sequence_number,
+                enr.sequence_number
             )
+        self.db.set(self._get_enr_key(enr.node_id), rlp.encode(enr))
 
-        valid_paths = tuple(
-            path for path in node_paths
-            if path not in invalid_paths
-        )
-        for path in valid_paths:
-            try:
-                node = self.load_file(path)
-            except (
-                binascii.Error,
-                rlp.DeserializationError,
-                ValidationError,
-            ) as error:
-                self.logger.warning("Encountered invalid Node in file %s: %s", path, error)
-                continue
+    def get_enr(self, node_id: NodeID) -> ENR:
+        return rlp.decode(self.db[self._get_enr_key(node_id)], sedes=ENR)
 
-            if get_node_filename(node) != path.name:
-                self.logger.warning(
-                    "Node in %s has inconsistent name (actual node id: %s, actual seq num: %d)",
-                    path,
-                    encode_hex(node.id),
-                    node.enr.sequence_number
-                )
+    def delete_enr(self, node_id: NodeID) -> None:
+        del self.db[self._get_enr_key(node_id)]
 
-            self.nodes[node.id][node.enr.sequence_number] = node
+    def set_last_pong_time(self, node_id: NodeID, last_pong: int) -> None:
+        self.db.set(self._get_last_pong_time_key(node_id), int_to_big_endian(last_pong))
 
-    def load_file(self, path: pathlib.Path) -> NodeAPI:
-        enr_base64 = path.read_text()
-        enr = ENR.from_repr(enr_base64, self.identity_scheme_registry)
-        return Node(enr)
+    def get_last_pong_time(self, node_id: NodeID) -> int:
+        return big_endian_to_int(self.db[self._get_last_pong_time_key(node_id)])
 
-    def write_file(self, node: NodeAPI) -> None:
-        path = self.directory / get_node_filename(node)
-        path.write_text(repr(node.enr))
+    def delete_last_pong_time(self, node_id: NodeID) -> None:
+        del self.db[self._get_last_pong_time_key(node_id)]
 
-    async def insert(self, node: NodeAPI) -> None:
-        self.validate_identity_scheme(node.enr)
+    def _get_enr_key(self, node_id: NodeID) -> bytes:
+        return bytes(node_id) + b':enr'
 
-        if await self.contains(node.id):
-            raise ValueError("Node with node id %s already exists", encode_hex(node.id))
-        else:
-            self.logger.debug2(
-                "Inserting new Node of %s with sequence number %d",
-                encode_hex(node.id),
-                node.enr.sequence_number,
-            )
-            self.nodes[node.id][node.enr.sequence_number] = node
-            self.write_file(node)
-
-    async def update(self, node: NodeAPI) -> None:
-        self.validate_identity_scheme(node.enr)
-
-        existing_node = await self.get(node.id)
-        existing_seq = existing_node.enr.sequence_number
-        # If our existing seq number is 0, it means this is a stub ENR we create for v4 Nodes that
-        # don't support the ENR extension, and in that case we *must* always update them.
-        if existing_seq == 0 or existing_seq < node.enr.sequence_number:
-            self.logger.debug2(
-                "Updating Node of %s from sequence number %d to %d",
-                encode_hex(node.id),
-                existing_seq,
-                node.enr.sequence_number,
-            )
-            self.nodes[node.id][node.enr.sequence_number] = node
-            self.write_file(node)
-        else:
-            self.logger.debug(
-                "Not updating Node of %s as new sequence number %d is not higher than the current "
-                "one %d",
-                encode_hex(node.id),
-                node.enr.sequence_number,
-                existing_seq,
-            )
-
-    async def get(self, node_id: NodeID) -> NodeAPI:
-        await trio.hazmat.checkpoint()
-        nodes = self.nodes[node_id]
-        if not nodes:
-            raise KeyError(f"No Node for {encode_hex(node_id)} present in DB")
-        else:
-            # get Node with highest sequence number
-            _, node = max(nodes.items(), key=operator.itemgetter(0))
-            return node
-
-    async def remove(self, node_id: NodeID) -> None:
-        await trio.hazmat.checkpoint()
-        node_versions = self.nodes.pop(node_id)
-        for node in node_versions.values():
-            path = self.directory / get_node_filename(node)
-            path.unlink()
-
-    async def contains(self, node_id: NodeID) -> bool:
-        await trio.hazmat.checkpoint()
-        return bool(self.nodes[node_id])
-
-    def __len__(self) -> int:
-        return len(self.nodes)
-
-
-class MemoryNodeDB(BaseNodeDB):
-
-    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry):
-        super().__init__(identity_scheme_registry)
-
-        self.key_value_storage: Dict[NodeID, NodeAPI] = {}
-
-    async def insert(self, node: NodeAPI) -> None:
-        self.validate_identity_scheme(node.enr)
-
-        if await self.contains(node.id):
-            raise ValueError("Node with id %s already exists", encode_hex(node.id))
-        else:
-            self.logger.debug(
-                "Inserting new Node of %s with sequence number %d",
-                encode_hex(node.id),
-                node.enr.sequence_number,
-            )
-            self.key_value_storage[node.id] = node
-
-    async def update(self, node: NodeAPI) -> None:
-        self.validate_identity_scheme(node.enr)
-        existing_node = await self.get(node.id)
-        existing_seq = existing_node.enr.sequence_number
-        # If our existing seq number is 0, it means this is a stub ENR we create for v4 Nodes that
-        # don't support the ENR extension, and in that case we *must* always update them.
-        if existing_seq == 0 or existing_seq < node.enr.sequence_number:
-            self.logger.debug(
-                "Updating Node of %s from sequence number %d to %d",
-                encode_hex(node.id),
-                existing_seq,
-                node.enr.sequence_number,
-            )
-            self.key_value_storage[node.id] = node
-        else:
-            self.logger.debug(
-                "Not updating Node of %s as new sequence number %d is not higher than the current "
-                "one %d",
-                encode_hex(node.id),
-                node.enr.sequence_number,
-                existing_seq,
-            )
-
-    async def remove(self, node_id: NodeID) -> None:
-        self.key_value_storage.pop(node_id)
-        self.logger.debug("Removing Node of %s", encode_hex(node_id))
-
-        await trio.sleep(0)  # add checkpoint to make this a proper async function
-
-    async def get(self, node_id: NodeID) -> NodeAPI:
-        await trio.sleep(0)  # add checkpoint to make this a proper async function
-        return self.key_value_storage[node_id]
-
-    async def contains(self, node_id: NodeID) -> bool:
-        await trio.sleep(0)  # add checkpoint to make this a proper async function
-        return node_id in self.key_value_storage
-
-    def __len__(self) -> int:
-        return len(self.key_value_storage)
+    def _get_last_pong_time_key(self, node_id: NodeID) -> bytes:
+        return bytes(node_id) + b':last_pong_time'
