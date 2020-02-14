@@ -6,7 +6,7 @@ import trio
 
 from async_service import background_trio_service
 
-from p2p.kademlia import Node
+from eth.db.backends.memory import MemoryDB
 
 from p2p.tools.factories.discovery import (
     EndpointFactory,
@@ -17,7 +17,7 @@ from p2p.tools.factories.keys import (
     PrivateKeyFactory,
 )
 
-from p2p.discv5.enr_db import MemoryNodeDB
+from p2p.discv5.enr_db import NodeDB
 from p2p.discv5.channel_services import (
     IncomingMessage,
 )
@@ -78,9 +78,9 @@ def remote_enr(remote_private_key, remote_endpoint):
 
 @pytest_trio.trio_fixture
 async def node_db(enr, remote_enr):
-    db = MemoryNodeDB(default_identity_scheme_registry)
-    await db.insert(Node(enr))
-    await db.insert(Node(remote_enr))
+    db = NodeDB(default_identity_scheme_registry, MemoryDB())
+    db.set_enr(enr)
+    db.set_enr(remote_enr)
     return db
 
 

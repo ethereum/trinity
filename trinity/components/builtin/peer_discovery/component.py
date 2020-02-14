@@ -21,6 +21,7 @@ from eth_typing import BlockNumber
 
 from eth.abc import VirtualMachineAPI
 from eth.constants import GENESIS_BLOCK_NUMBER
+from eth.db.backends.level import LevelDB
 
 from p2p.constants import (
     DISCOVERY_EVENTBUS_ENDPOINT,
@@ -29,7 +30,7 @@ from p2p.discovery import (
     PreferredNodeDiscoveryService,
     StaticDiscoveryService,
 )
-from p2p.discv5.enr_db import FileNodeDB
+from p2p.discv5.enr_db import NodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.kademlia import (
     Address,
@@ -86,7 +87,8 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             eth_cap_provider = functools.partial(generate_eth_cap_enr_field, vm_config, headerdb)
             external_ip = "0.0.0.0"
             socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
-            node_db = FileNodeDB(default_identity_scheme_registry, config.node_db_dir)
+            base_db = LevelDB(config.node_db_dir)
+            node_db = NodeDB(default_identity_scheme_registry, base_db)
             await socket.bind((external_ip, config.port))
             discovery_service = PreferredNodeDiscoveryService(
                 config.nodekey,

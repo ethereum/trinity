@@ -12,7 +12,8 @@ from typing import (
     TypeVar,
 )
 
-from p2p.abc import NodeAPI
+from eth.abc import DatabaseAPI
+
 from p2p.discv5.enr import (
     ENR,
 )
@@ -107,47 +108,33 @@ class HandshakeParticipantAPI(ABC):
 
 
 class NodeDBAPI(ABC):
-    @abstractmethod
-    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry):
-        ...
 
-    @property
     @abstractmethod
-    def identity_scheme_registry(self) -> IdentitySchemeRegistry:
+    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry, db: DatabaseAPI) -> None:
         ...
 
     @abstractmethod
-    async def insert(self, node: NodeAPI) -> None:
-        """Insert a Node into the database."""
+    def set_enr(self, enr: ENR) -> None:
         ...
 
     @abstractmethod
-    async def update(self, node: NodeAPI) -> None:
-        """Update an existing Node if the sequence number is greater."""
+    def get_enr(self, node_id: NodeID) -> ENR:
         ...
 
     @abstractmethod
-    async def insert_or_update(self, node: NodeAPI) -> None:
-        """Insert or update a Node depending if it is already present already or not."""
+    def delete_enr(self, node_id: NodeID) -> None:
         ...
 
     @abstractmethod
-    async def get(self, node_id: NodeID) -> NodeAPI:
-        """Get a Node by its node id."""
+    def set_last_pong_time(self, node_id: NodeID, last_pong: int) -> None:
         ...
 
     @abstractmethod
-    async def remove(self, node_id: NodeID) -> None:
-        """Remove the node with the given ID."""
+    def get_last_pong_time(self, node_id: NodeID) -> int:
         ...
 
     @abstractmethod
-    async def contains(self, node_id: NodeID) -> bool:
-        """Check if the db contains a Node with the given node id."""
-        ...
-
-    @abstractmethod
-    def __len__(self) -> int:
+    def delete_last_pong_time(self, node_id: NodeID) -> None:
         ...
 
 

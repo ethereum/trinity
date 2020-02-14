@@ -17,6 +17,8 @@ from trio.testing import (
     wait_all_tasks_blocked,
 )
 
+from eth.db.backends.memory import MemoryDB
+
 from p2p.discv5.channel_services import (
     IncomingMessage,
 )
@@ -24,7 +26,7 @@ from p2p.discv5.constants import (
     ROUTING_TABLE_PING_INTERVAL,
 )
 from p2p.discv5.enr_db import (
-    MemoryNodeDB,
+    NodeDB,
 )
 from p2p.discv5.identity_schemes import (
     default_identity_scheme_registry,
@@ -50,8 +52,6 @@ from p2p.discv5.routing_table_manager import (
     PingHandlerService,
     PingSenderService,
 )
-
-from p2p.kademlia import Node
 
 from p2p.tools.factories.discovery import (
     EndpointFactory,
@@ -116,15 +116,15 @@ async def filled_routing_table(routing_table, node_db):
     while len(routing_table.get_nodes_at_log_distance(255)) < routing_table.bucket_size:
         enr = ENRFactory()
         routing_table.update(enr.node_id)
-        await node_db.insert(Node(enr))
+        node_db.set_enr(enr)
     return routing_table
 
 
 @pytest_trio.trio_fixture
 async def node_db(local_enr, remote_enr):
-    node_db = MemoryNodeDB(default_identity_scheme_registry)
-    await node_db.insert(Node(local_enr))
-    await node_db.insert(Node(remote_enr))
+    node_db = NodeDB(default_identity_scheme_registry, MemoryDB())
+    node_db.set_enr(local_enr)
+    node_db.set_enr(remote_enr)
     return node_db
 
 
@@ -311,8 +311,7 @@ async def test_find_node_handler_sends_many_remote_enrs(find_node_handler_servic
     distance = 255
     node_ids = filled_routing_table.get_nodes_at_log_distance(distance)
     assert len(node_ids) == filled_routing_table.bucket_size
-    nodes = [await node_db.get(node_id) for node_id in node_ids]
-    enrs = [node.enr for node in nodes]
+    enrs = [node_db.get_enr(node_id) for node_id in node_ids]
 
     find_node = FindNodeMessageFactory(distance=distance)
     incoming_message = IncomingMessageFactory(message=find_node)

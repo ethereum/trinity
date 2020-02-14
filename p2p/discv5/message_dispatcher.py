@@ -272,19 +272,19 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
 
     async def get_endpoint_from_node_db(self, receiver_node_id: NodeID) -> Endpoint:
         try:
-            node = await self.node_db.get(receiver_node_id)
+            enr = self.node_db.get_enr(receiver_node_id)
         except KeyError:
             raise ValueError(f"No ENR for peer {encode_hex(receiver_node_id)} known")
 
         try:
-            ip_address = node.enr[IP_V4_ADDRESS_ENR_KEY]
+            ip_address = enr[IP_V4_ADDRESS_ENR_KEY]
         except KeyError:
             raise ValueError(
                 f"ENR for peer {encode_hex(receiver_node_id)} does not contain an IP address"
             )
 
         try:
-            udp_port = node.enr[UDP_PORT_ENR_KEY]
+            udp_port = enr[UDP_PORT_ENR_KEY]
         except KeyError:
             raise ValueError(
                 f"ENR for peer {encode_hex(receiver_node_id)} does not contain a UDP port"

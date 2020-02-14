@@ -37,7 +37,6 @@ from p2p.discv5.identity_schemes import (
 from p2p.discv5.typing import (
     NodeID,
 )
-from p2p.kademlia import Node
 
 
 class EndpointVote(NamedTuple):
@@ -76,8 +75,7 @@ class EndpointTracker(Service):
             encode_hex(vote.node_id),
         )
 
-        current_node = await self.node_db.get(self.local_node_id)
-        current_enr = current_node.enr
+        current_enr = self.node_db.get_enr(self.local_node_id)
 
         # TODO: majority voting, discard old votes
         are_endpoint_keys_present = (
@@ -107,4 +105,4 @@ class EndpointTracker(Service):
                 vote.endpoint,
                 signed_enr.sequence_number,
             )
-            await self.node_db.update(Node(signed_enr))
+            self.node_db.set_enr(signed_enr)

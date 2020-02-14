@@ -21,6 +21,8 @@ from eth_utils.toolz import (
 
 from lahja import EndpointAPI
 
+from eth.db.backends.level import LevelDB
+
 from p2p.discv5.constants import (
     NUM_ROUTING_TABLE_BUCKETS,
 )
@@ -45,7 +47,7 @@ from p2p.discv5.endpoint_tracker import (
 )
 from p2p.discv5.enr import ENR
 from p2p.discv5.enr import UnsignedENR
-from p2p.discv5.enr_db import FileNodeDB
+from p2p.discv5.enr_db import NodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
 from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
@@ -60,8 +62,6 @@ from p2p.discv5.routing_table import (
 from p2p.discv5.routing_table_manager import (
     RoutingTableManager,
 )
-
-from p2p.kademlia import Node
 
 from trinity.boot_info import BootInfo
 from trinity.extensibility import TrioIsolatedComponent
@@ -107,12 +107,11 @@ async def get_local_enr(boot_info: BootInfo,
     node_id = minimal_enr.node_id
 
     try:
-        base_node = await node_db.get(node_id)
+        base_enr = node_db.get_enr(node_id)
     except KeyError:
         logger.info(f"No Node for {encode_hex(node_id)} found, creating new one")
         return minimal_enr
     else:
-        base_enr = base_node.enr
         if any(base_enr[key] != value for key, value in minimal_enr.items()):
             logger.debug(f"Updating local ENR")
             return UnsignedENR(
@@ -162,7 +161,7 @@ class DiscV5Component(TrioIsolatedComponent):
 
         nodedb_dir = get_nodedb_dir(boot_info)
         nodedb_dir.mkdir(exist_ok=True)
-        node_db = FileNodeDB(default_identity_scheme_registry, nodedb_dir)
+        node_db = NodeDB(default_identity_scheme_registry, LevelDB(nodedb_dir))
 
         local_private_key = get_local_private_key(boot_info)
         local_enr = await get_local_enr(boot_info, node_db, local_private_key)
@@ -170,10 +169,10 @@ class DiscV5Component(TrioIsolatedComponent):
 
         routing_table = KademliaRoutingTable(local_node_id, NUM_ROUTING_TABLE_BUCKETS)
 
-        await node_db.insert_or_update(Node(local_enr))
+        node_db.set_enr(local_enr)
         for enr_repr in boot_info.args.discovery_boot_enrs or ():
             enr = ENR.from_repr(enr_repr)
-            await node_db.insert_or_update(Node(enr))
+            node_db.set_enr(enr)
             routing_table.update(enr.node_id)
 
         port = boot_info.args.discovery_port
