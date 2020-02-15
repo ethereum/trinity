@@ -6,6 +6,7 @@ from eth_utils import (
 )
 
 from eth.db.atomic import AtomicDB
+from eth.db.backends.memory import MemoryDB
 from eth.vm.forks.homestead import HomesteadVM
 from eth.chains.mainnet import (
     MainnetChain,
@@ -23,7 +24,6 @@ from trinity.constants import (
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID,
 )
-from trinity._utils.db import MemoryDB
 from trinity._utils.eip1085 import validate_raw_eip1085_genesis_config
 
 
