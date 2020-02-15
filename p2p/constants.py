@@ -153,6 +153,11 @@ BLACKLIST_SECONDS_TOO_MANY_TIMEOUTS = 60 * 5  # 5 minutes
 # so.
 BLACKLIST_SECONDS_QUICK_DISCONNECT = 60
 
+# Some logs are noisy, but we're very interested in them when the peer pool is small.
+# Like we're eager to know about newly added peers. This constant defines the
+# minimum pool size that we start quieting the logs.
+QUIET_PEER_POOL_SIZE = 5
+
 #
 # Kademlia Constants
 #

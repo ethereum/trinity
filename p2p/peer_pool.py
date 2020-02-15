@@ -42,6 +42,7 @@ from p2p.constants import (
     DEFAULT_PEER_BOOT_TIMEOUT,
     HANDSHAKE_TIMEOUT,
     MAX_CONCURRENT_CONNECTION_ATTEMPTS,
+    QUIET_PEER_POOL_SIZE,
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
 from p2p.discv5.typing import NodeID
@@ -292,7 +293,11 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
         Appart from adding it to our list of connected nodes and adding each of our subscriber's
         to the peer, we also add the given messages to our subscriber's queues.
         """
-        self.logger.info('Adding %s to pool', peer)
+        if len(self) < QUIET_PEER_POOL_SIZE:
+            logger = self.logger.info
+        else:
+            logger = self.logger.debug
+        logger("Adding %s to pool", peer)
         self.connected_nodes[peer.session] = peer
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
