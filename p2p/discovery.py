@@ -842,6 +842,9 @@ class DiscoveryService(Service):
             pass
 
     def send_enr_request(self, node: NodeAPI) -> Hash32:
+        if node.address is None:
+            raise CouldNotRetrieveENR(f"Cannot ask for ENR from {node} with no address")
+
         message = self.send(node, CMD_ENR_REQUEST, [_get_msg_expiration()])
         token = Hash32(message[:MAC_SIZE])
         self.logger.debug("Sending ENR request with token: %s", encode_hex(token))
