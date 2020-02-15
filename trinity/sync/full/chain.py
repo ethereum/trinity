@@ -942,6 +942,12 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         except PeerConnectionLost:
             self.logger.debug("Peer went away, cancelling the receipts request and moving on...")
             return tuple()
+        except UnknownAPI as exc:
+            self.logger.debug(
+                "Peer was missing API, cancelling the receipts request and moving on... %r",
+                exc,
+            )
+            return tuple()
         except Exception:
             self.logger.exception("Unknown error when getting receipts")
             raise
