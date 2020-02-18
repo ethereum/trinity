@@ -13,7 +13,6 @@ from trinity.constants import MAINNET_NETWORK_ID
 MIN_EXPECTED_SCORE = 11631608640717612820968
 
 
-@pytest.mark.skip("Need support for API keys (https://github.com/ethereum/trinity/issues/1561)")
 @pytest.mark.parametrize(
     'uri',
     (
