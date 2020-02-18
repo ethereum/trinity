@@ -35,39 +35,44 @@ API_URLS = {
 }
 
 
-def etherscan_proxy_api_url(network: Network) -> str:
-    return f"{API_URLS[network]}?module=proxy"
+class Etherscan:
 
+    def __init__(self, api_key: str) -> None:
+        if not api_key:
+            raise ValueError("Must provide an API key for Etherscan API access")
 
-def etherscan_post(action: str, network: Network) -> Any:
-    response = requests.post(f"{etherscan_proxy_api_url(network)}&action={action}")
+        self.api_key = api_key
 
-    if response.status_code not in [200, 201]:
-        raise EtherscanAPIError(
-            f"Invalid status code: {response.status_code}, {response.reason}"
-        )
+    def get_proxy_api_url(self, network: Network) -> str:
+        return f"{API_URLS[network]}?module=proxy&apikey={self.api_key}"
 
-    try:
-        value = response.json()
-    except ValueError as err:
-        raise EtherscanAPIError(f"Invalid response: {response.text}") from err
+    def post(self, action: str, network: Network) -> Any:
+        response = requests.post(f"{self.get_proxy_api_url(network)}&action={action}")
 
-    message = value.get('message', '')
-    result = value['result']
+        if response.status_code not in [200, 201]:
+            raise EtherscanAPIError(
+                f"Invalid status code: {response.status_code}, {response.reason}"
+            )
 
-    api_error = message == 'NOTOK' or result == 'Error!'
+        try:
+            value = response.json()
+        except ValueError as err:
+            raise EtherscanAPIError(f"Invalid response: {response.text}") from err
 
-    if api_error:
-        raise EtherscanAPIError(f"API error: {message}, result: {result}")
+        message = value.get('message', '')
+        result = value['result']
 
-    return value['result']
+        api_error = message == 'NOTOK' or result == 'Error!'
 
+        if api_error:
+            raise EtherscanAPIError(f"API error: {message}, result: {result}")
 
-def get_latest_block(network: Network) -> int:
-    response = etherscan_post("eth_blockNumber", network)
-    return to_int(hexstr=response)
+        return value['result']
 
+    def get_latest_block(self, network: Network) -> int:
+        response = self.post("eth_blockNumber", network)
+        return to_int(hexstr=response)
 
-def get_block_by_number(block_number: int, network: Network) -> Dict[str, Any]:
-    num = to_hex(primitive=block_number)
-    return etherscan_post(f"eth_getBlockByNumber&tag={num}&boolean=false", network)
+    def get_block_by_number(self, block_number: int, network: Network) -> Dict[str, Any]:
+        num = to_hex(primitive=block_number)
+        return self.post(f"eth_getBlockByNumber&tag={num}&boolean=false", network)

@@ -1,4 +1,5 @@
 import argparse
+import os
 from pathlib import PurePosixPath
 import re
 import urllib
@@ -22,8 +23,7 @@ from eth_utils import (
 from trinity.sync.common.checkpoint import Checkpoint
 
 from .etherscan_api import (
-    get_block_by_number,
-    get_latest_block,
+    Etherscan,
     Network,
 )
 
@@ -64,9 +64,19 @@ def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> 
             f"for network {network_id}. Network not supported"
         )
 
-    latest_block_number = get_latest_block(network)
+    try:
+        etherscan_api_key = os.environ['TRINITY_ETHERSCAN_API_KEY']
+    except KeyError:
+        raise RuntimeError(
+            "Etherscan API key missing. Assign your Etherscan API key "
+            "to the TRINITY_ETHERSCAN_API_KEY environment variable."
+        )
+
+    etherscan_api = Etherscan(etherscan_api_key)
+
+    latest_block_number = etherscan_api.get_latest_block(network)
     checkpoint_block_number = latest_block_number - BLOCKS_FROM_TIP
-    checkpoint_block_response = get_block_by_number(checkpoint_block_number, network)
+    checkpoint_block_response = etherscan_api.get_block_by_number(checkpoint_block_number, network)
     checkpoint_score = to_int(hexstr=checkpoint_block_response['totalDifficulty'])
     checkpoint_hash = checkpoint_block_response['hash']
 
@@ -119,6 +129,6 @@ class NormalizeCheckpointURI(argparse.Action):
 
         try:
             parsed = parse_checkpoint_uri(value, namespace.network_id)
-        except ValidationError as exc:
+        except (ValidationError, RuntimeError) as exc:
             raise argparse.ArgumentError(self, str(exc))
         setattr(namespace, self.dest, parsed)

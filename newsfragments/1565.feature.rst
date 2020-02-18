@@ -1,0 +1,6 @@
+Add support for Etherscan API keys to continue support for the
+``--beam-from-checkpoint eth://block/byetherscan/latest`` flag now that
+Etherscan `has made API keys mandatory <https://medium.com/etherscan-blog/psa-for-developers-implementation-of-api-key-requirements-starting-from-february-15th-2020-b616870f3746>`_
+
+API keys need to be exposed via the ``TRINITY_ETHERSCAN_API_KEY``
+environment variable.
