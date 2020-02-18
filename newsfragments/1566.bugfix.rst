@@ -1,0 +1,2 @@
+Handle uncaught AttributeError and UnknownAPI exceptions. One happens during ENR retrieval,
+UnknownAPI happens when getting receipts for sync.
