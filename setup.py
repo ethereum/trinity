@@ -37,6 +37,11 @@ deps = {
         "coincurve>=10.0.0,<11.0.0",
         "dataclasses>=0.6, <1;python_version<'3.7'",
         "eth-utils>=1.8.4,<2",
+        # Fixing this dependency due to: requests 2.20.1 has requirement
+        # idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.
+        "idna==2.7",
+        # idna 2.7 is not supported by requests 2.18
+        "requests>=2.20,<3",
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
         "plyvel==1.1.0",
         PYEVM_DEPENDENCY,
@@ -104,11 +109,6 @@ deps = {
         "bumpversion>=0.5.3,<1",
         "wheel",
         "setuptools>=36.2.0",
-        # Fixing this dependency due to: requests 2.20.1 has requirement
-        # idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.
-        "idna==2.7",
-        # idna 2.7 is not supported by requests 2.18
-        "requests>=2.20,<3",
         "tox==2.7.0",
         "twine",
     ],
