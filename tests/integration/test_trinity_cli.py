@@ -237,6 +237,29 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
     await run_command_and_detect_errors(command, 20)
 
 
+@pytest.mark.asyncio
+async def test_1435(loop, monkeypatch):
+    from trinity.config import Eth1AppConfig
+    from trinity.constants import APP_IDENTIFIER_ETH1
+    from trinity.main import trinity_boot
+    from trinity.bootstrap import main_entry
+    from trinity.components.builtin.network_db.component import NetworkDBComponent
+    from trinity.components.builtin.peer_discovery.component import PeerDiscoveryComponent
+    import logging
+    root_logger = logging.getLogger()
+    for h in root_logger.handlers:
+        root_logger.removeHandler(h)
+    try:
+        await main_entry(
+            trinity_boot,
+            APP_IDENTIFIER_ETH1,
+            (PeerDiscoveryComponent, NetworkDBComponent),
+            (Eth1AppConfig,)
+        )
+    except SystemExit as e:
+        assert e.code == 0
+
+
 @pytest.mark.parametrize(
     'command,expected_stderr_logs,unexpected_stderr_logs,expected_file_logs,unexpected_file_logs',
     (

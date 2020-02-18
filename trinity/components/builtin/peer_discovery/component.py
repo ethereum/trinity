@@ -62,6 +62,7 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
     def configure_parser(cls,
                          arg_parser: ArgumentParser,
                          subparser: _SubParsersAction) -> None:
+        return
         arg_parser.add_argument(
             "--disable-discovery",
             action="store_true",
@@ -75,7 +76,8 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
         external_ip = "0.0.0.0"
         address = Address(external_ip, config.port, config.port)
 
-        if boot_info.args.disable_discovery:
+        # if boot_info.args.disable_discovery:
+        if False:
             discovery_service: async_service.Service = StaticDiscoveryService(
                 event_bus,
                 config.preferred_nodes,

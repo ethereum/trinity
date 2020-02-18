@@ -209,7 +209,7 @@ def child_process_logging(boot_info: BootInfo) -> Iterator[None]:
 
     logger.addHandler(ipc_handler)
 
-    logger.debug(
+    logger.info(
         'Logging initialized for file %s: PID=%s',
         boot_info.trinity_config.logging_ipc_path.resolve(),
         os.getpid(),
@@ -218,6 +218,7 @@ def child_process_logging(boot_info: BootInfo) -> Iterator[None]:
         try:
             yield
         finally:
+            logger.info("Removing IPC log handler")
             logger.removeHandler(ipc_handler)
 
 

@@ -56,12 +56,14 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
 
     @property
     def is_enabled(self) -> bool:
+        return True
         return not self._boot_info.args.disable_networkdb_component
 
     @classmethod
     def configure_parser(cls,
                          arg_parser: ArgumentParser,
                          subparser: _SubParsersAction) -> None:
+        return
         tracking_parser = arg_parser.add_argument_group('network db')
         tracking_parser.add_argument(
             '--network-tracking-backend',
@@ -151,6 +153,8 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
     #
     @classmethod
     def _get_blacklist_tracker(cls, boot_info: BootInfo) -> BaseConnectionTracker:
+        session = cls._get_database_session(boot_info)
+        return SQLiteConnectionTracker(session)
         backend = boot_info.args.network_tracking_backend
 
         if backend is TrackingBackend.SQLITE3:

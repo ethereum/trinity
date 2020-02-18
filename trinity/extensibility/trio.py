@@ -32,6 +32,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
         - _do_run -> do_run
             * sets up event bus and then enters user function.
         """
+        # XXX: why don't we use trio-run-in-process (or asyncio-run-in-process) here?
         process = ctx.Process(
             target=self.run_process,
             args=(self._boot_info,),

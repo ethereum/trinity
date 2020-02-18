@@ -86,10 +86,10 @@ TRINITY_AMBIGIOUS_FILESYSTEM_INFO = (
 BootFn = Callable[[BootInfo], Tuple[multiprocessing.Process, ...]]
 
 
-def main_entry(trinity_boot: BootFn,
-               app_identifier: str,
-               component_types: Tuple[Type[BaseComponentAPI], ...],
-               sub_configs: Sequence[Type[BaseAppConfig]]) -> None:
+async def main_entry(trinity_boot: BootFn,
+                     app_identifier: str,
+                     component_types: Tuple[Type[BaseComponentAPI], ...],
+                     sub_configs: Sequence[Type[BaseAppConfig]]) -> None:
     if is_prerelease():
         # this modifies the asyncio logger, but will be overridden by any custom settings below
         enable_warnings_by_default()
@@ -99,7 +99,10 @@ def main_entry(trinity_boot: BootFn,
 
     argcomplete.autocomplete(parser)
 
+    import sys
+    sys.argv = sys.argv[:1]
     args = parser.parse_args()
+    args.sync_mode = "full"
 
     if not args.genesis and args.network_id not in PRECONFIGURED_NETWORKS:
         parser.error(
@@ -258,8 +261,15 @@ def main_entry(trinity_boot: BootFn,
             'CTRL+C',
         )
 
+        async def cancel_manager():
+            await asyncio.sleep(3)
+            logger.info("Cancelling ComponentManager")
+            manager.cancel()
+
         try:
-            loop.run_until_complete(manager.run())
+            # loop.run_until_complete(manager.run())
+            loop.create_task(cancel_manager())
+            await manager.run()
         except BaseException as err:
             logger.error("Error during trinity run: %r", err)
             raise

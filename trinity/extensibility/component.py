@@ -113,11 +113,11 @@ class BaseIsolatedComponent(BaseComponent):
 @asynccontextmanager
 async def run_component(component: ComponentAPI) -> AsyncIterator[None]:
     task = asyncio.ensure_future(component.run())
-    logger.debug("Starting component: %s", component.name)
+    logger.info("Starting component: %s", component.name)
     try:
         yield
     finally:
-        logger.debug("Stopping component: %s", component.name)
+        logger.info("Stopping component: %s", component.name)
         if not task.done():
             logger.debug("Cancelling component: %s", component.name)
             task.cancel()
