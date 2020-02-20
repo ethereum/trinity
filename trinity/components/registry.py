@@ -4,6 +4,7 @@ from typing import (
     Type,
 )
 
+from trinity.components.builtin.metrics.component import MetricsComponent
 from trinity.extensibility import (
     BaseComponentAPI,
 )
@@ -63,6 +64,7 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     FixUncleanShutdownComponent,
     JsonRpcServerComponent,
     NetworkDBComponent,
+    MetricsComponent,
     PeerDiscoveryComponent,
     UpnpComponent,
 )
