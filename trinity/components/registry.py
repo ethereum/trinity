@@ -37,7 +37,7 @@ from trinity.components.builtin.network_db.component import (
     NetworkDBComponent,
 )
 from trinity.components.builtin.peer_discovery.component import (
-    PeerDiscoveryComponent,
+    EmptyComponent, PeerDiscoveryComponent,
 )
 from trinity.components.builtin.request_server.component import (
     RequestServerComponent,
@@ -64,6 +64,28 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     JsonRpcServerComponent,
     NetworkDBComponent,
     PeerDiscoveryComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
+    EmptyComponent,
     UpnpComponent,
 )
 

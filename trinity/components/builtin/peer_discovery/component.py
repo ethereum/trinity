@@ -48,6 +48,20 @@ from trinity.extensibility import (
 from trinity.protocol.eth import forkid
 
 
+class EmptyComponent(TrioIsolatedComponent):
+    name = "empty"
+    is_enabled = True
+
+    @classmethod
+    def get_endpoint_name(cls) -> str:
+        import uuid
+        return f'empty-{uuid.uuid4()}'
+
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        await trio.sleep(1000)
+
+
 class PeerDiscoveryComponent(TrioIsolatedComponent):
     """
     Continously discover other Ethereum nodes.

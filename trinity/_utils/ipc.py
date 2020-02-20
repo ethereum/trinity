@@ -12,7 +12,7 @@ from typing import (  # noqa: F401
 )
 
 
-def wait_for_ipc(ipc_path: pathlib.Path, timeout: int = 30) -> None:
+def wait_for_ipc(ipc_path: pathlib.Path, timeout: int = 50) -> None:
     """
     Waits up to ``timeout`` seconds for the IPC socket file to appear at path
     ``ipc_path``, or raises a :exc:`TimeoutError` otherwise.
