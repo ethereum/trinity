@@ -4,6 +4,7 @@ from typing import (
     Type,
 )
 
+from trinity.components.builtin.metrics.component import MetricsComponent
 from trinity.extensibility import (
     BaseComponentAPI,
 )
@@ -84,6 +85,7 @@ ETH1_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     EthstatsComponent,
     ExportBlockComponent,
     ImportBlockComponent,
+    MetricsComponent,
     RequestServerComponent,
     SyncerComponent,
     TxComponent,

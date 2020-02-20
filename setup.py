@@ -57,7 +57,9 @@ deps = {
         "argcomplete>=1.10.0,<2",
         "multiaddr>=0.0.8,<0.1.0",
         "prometheus-client==0.7.1",
+        "pyformance==0.4",
         "pymultihash>=0.8.2",
+        "psutil>=5.7.0, <6",
         "libp2p==0.1.4",
         # The direct dependency resolves a version conflict between multiaddr and libp2p
         "base58>=1.0.3,<2.0.0",
