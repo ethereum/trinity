@@ -13,6 +13,9 @@ from typing import (
 
 from lahja import EndpointAPI
 
+from eth.abc import (
+    BlockHeaderAPI,
+)
 from eth.vm.interrupt import (
     MissingAccountTrieNode,
     MissingBytecode,
@@ -66,7 +69,10 @@ def is_retryable(func: Func) -> bool:
 
 
 async def check_requested_block_age(chain: Union[AsyncChainAPI, BaseAsyncBeaconChainDB],
-                                    func: Func, params: Any) -> None:
+                                    func: Func, params: Any) -> BlockHeaderAPI:
+    """
+    :return: the reference header used for the data lookup.
+    """
     sig = inspect.signature(func)
     params = sig.bind(*params)
 
@@ -83,6 +89,10 @@ async def check_requested_block_age(chain: Union[AsyncChainAPI, BaseAsyncBeaconC
         current_block = chain.get_canonical_head().block_number
         if requested_block < current_block - 64:
             raise Exception(f'block "{at_block}" is too old to be fetched over the network')
+        else:
+            return requested_header
+    else:
+        raise Exception("Cannot check block age in beacon chain")
 
 
 async def execute_with_retries(event_bus: EndpointAPI, func: Func, params: Any,
@@ -108,13 +118,14 @@ async def execute_with_retries(event_bus: EndpointAPI, func: Func, params: Any,
             if not event_bus.is_any_endpoint_subscribed_to(CollectMissingAccount):
                 raise
 
-            await check_requested_block_age(chain, func, params)
+            requested_header = await check_requested_block_age(chain, func, params)
 
             await event_bus.request(CollectMissingAccount(
                 exc.missing_node_hash,
                 exc.address_hash,
                 exc.state_root_hash,
                 urgent=True,
+                block_number=requested_header.block_number,
             ))
         except MissingBytecode as exc:
             if not retryable:
@@ -128,11 +139,12 @@ async def execute_with_retries(event_bus: EndpointAPI, func: Func, params: Any,
             if not event_bus.is_any_endpoint_subscribed_to(CollectMissingBytecode):
                 raise
 
-            await check_requested_block_age(chain, func, params)
+            requested_header = await check_requested_block_age(chain, func, params)
 
             await event_bus.request(CollectMissingBytecode(
                 bytecode_hash=exc.missing_code_hash,
                 urgent=True,
+                block_number=requested_header.block_number,
             ))
         except MissingStorageTrieNode as exc:
             if not retryable:
@@ -146,7 +158,7 @@ async def execute_with_retries(event_bus: EndpointAPI, func: Func, params: Any,
             if not event_bus.is_any_endpoint_subscribed_to(CollectMissingStorage):
                 raise
 
-            await check_requested_block_age(chain, func, params)
+            requested_header = await check_requested_block_age(chain, func, params)
 
             await event_bus.request(CollectMissingStorage(
                 missing_node_hash=exc.missing_node_hash,
@@ -154,4 +166,5 @@ async def execute_with_retries(event_bus: EndpointAPI, func: Func, params: Any,
                 storage_root_hash=exc.storage_root_hash,
                 account_address=exc.account_address,
                 urgent=True,
+                block_number=requested_header.block_number,
             ))

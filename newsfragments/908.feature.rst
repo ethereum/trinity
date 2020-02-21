@@ -1,0 +1,3 @@
+We now "pivot" Beam Sync if we fall too many blocks behind. When a naive (non-pivoting) Beam Sync
+falls too far behind the tip of the chain, it can get "stuck" because the trie data is no longer
+available from peers.

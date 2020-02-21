@@ -8,7 +8,10 @@ from typing import (
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
+from cancel_token import (
+    CancelToken,
+    OperationCancelled,
+)
 from eth.abc import AtomicDatabaseAPI, DatabaseAPI
 from eth.constants import GENESIS_PARENT_HASH
 from eth.exceptions import (
@@ -35,6 +38,7 @@ from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.sync.beam.constants import (
+    BEAM_PIVOT_BUFFER_FRACTION,
     ESTIMATED_BEAMABLE_SECONDS,
     FULL_BLOCKS_NEEDED_TO_START_BEAM,
 )
@@ -50,9 +54,9 @@ from trinity.sync.common.events import (
     CollectMissingStorage,
     DoStatelessBlockImport,
     DoStatelessBlockPreview,
-    MissingAccountCollected,
-    MissingBytecodeCollected,
-    MissingStorageCollected,
+    MissingAccountResult,
+    MissingBytecodeResult,
+    MissingStorageResult,
 )
 from trinity.sync.common.headers import (
     HeaderSyncerAPI,
@@ -215,6 +219,12 @@ class BeamSyncer(BaseService):
         # First, download block bodies for previous 6 blocks, for validation
         await self.wait(self._download_blocks(final_headers[0]))
 
+        # Now, tell the MissingDataEventHandler about the minimum acceptable block number for
+        # data requests. This helps during pivots to quickly reject requests from old block imports
+        self._data_hunter.minimum_beam_block_number = min(
+            header.block_number for header in final_headers
+        )
+
         # Now let the beam sync importer kick in
         self._checkpoint_header_syncer.set_checkpoint_headers(final_headers)
 
@@ -227,6 +237,13 @@ class BeamSyncer(BaseService):
 
         # run sync until cancelled
         await self.cancellation()
+
+    def get_block_count_lag(self) -> int:
+        """
+        :return: the difference in block number between the currently importing block and
+            the latest known block
+        """
+        return self._body_syncer.get_block_count_lag()
 
     async def _download_blocks(self, before_header: BlockHeader) -> None:
         """
@@ -408,7 +425,7 @@ class HeaderOnlyPersist(BaseService):
 
     def _is_header_eligible_to_beam_sync(self, header: BlockHeader) -> bool:
         time_gap = time.time() - header.timestamp
-        return time_gap < ESTIMATED_BEAMABLE_SECONDS
+        return time_gap < (ESTIMATED_BEAMABLE_SECONDS * (1 - BEAM_PIVOT_BUFFER_FRACTION))
 
     async def _persist_headers_if_tip_too_old(self) -> None:
         tip = await self._db.coro_get_canonical_head()
@@ -722,6 +739,25 @@ class MissingDataEventHandler(BaseService):
         super().__init__(token=token)
         self._state_downloader = state_downloader
         self._event_bus = event_bus
+        self._minimum_beam_block_number = 0
+
+    @property
+    def minimum_beam_block_number(self) -> int:
+        return self._minimum_beam_block_number
+
+    @minimum_beam_block_number.setter
+    def minimum_beam_block_number(self, new_minimum: int) -> None:
+        if self._minimum_beam_block_number != 0:
+            self.logger.warning(
+                "Tried to re-set the starting Beam Import block number from %d to %d."
+                " This is highly unusual, and probably a bug."
+                " Treating the higher number as the new minimum...",
+                self._minimum_beam_block_number,
+                new_minimum,
+            )
+            self._minimum_beam_block_number = max(new_minimum, self._minimum_beam_block_number)
+        else:
+            self._minimum_beam_block_number = new_minimum
 
     async def _run(self) -> None:
         await self._launch_server()
@@ -734,15 +770,66 @@ class MissingDataEventHandler(BaseService):
 
     async def _provide_missing_account_tries(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(CollectMissingAccount)):
-            self.run_task(self.wait(self._serve_account(event)))
+            # If a request is coming in from an import on a block that's too old, cancel it
+            if event.block_number >= self.minimum_beam_block_number:
+                self.run_task(self._hang_until_account_served(event))
+            else:
+                await self._event_bus.broadcast(
+                    MissingAccountResult(is_retry_acceptable=False),
+                    event.broadcast_config(),
+                )
 
     async def _provide_missing_bytecode(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(CollectMissingBytecode)):
-            self.run_task(self.wait(self._serve_bytecode(event)))
+            if event.block_number >= self.minimum_beam_block_number:
+                self.run_task(self._hang_until_bytecode_served(event))
+            else:
+                await self._event_bus.broadcast(
+                    MissingBytecodeResult(is_retry_acceptable=False),
+                    event.broadcast_config(),
+                )
 
     async def _provide_missing_storage(self) -> None:
         async for event in self.wait_iter(self._event_bus.stream(CollectMissingStorage)):
-            self.run_task(self.wait(self._serve_storage(event)))
+            if event.block_number >= self.minimum_beam_block_number:
+                self.run_task(self._hang_until_storage_served(event))
+            else:
+                await self._event_bus.broadcast(
+                    MissingStorageResult(is_retry_acceptable=False),
+                    event.broadcast_config(),
+                )
+
+    async def _hang_until_account_served(self, event: CollectMissingAccount) -> None:
+        try:
+            await self.wait(self._serve_account(event))
+        except OperationCancelled:
+            # Beam sync is shutting down, probably either because the node is closing, or
+            #   a pivot is required. So communicate that import should stop.
+            await self._event_bus.broadcast(
+                MissingAccountResult(is_retry_acceptable=False),
+                event.broadcast_config(),
+            )
+            raise
+
+    async def _hang_until_bytecode_served(self, event: CollectMissingBytecode) -> None:
+        try:
+            await self.wait(self._serve_bytecode(event))
+        except OperationCancelled:
+            await self._event_bus.broadcast(
+                MissingBytecodeResult(is_retry_acceptable=False),
+                event.broadcast_config(),
+            )
+            raise
+
+    async def _hang_until_storage_served(self, event: CollectMissingStorage) -> None:
+        try:
+            await self.wait(self._serve_storage(event))
+        except OperationCancelled:
+            await self._event_bus.broadcast(
+                MissingStorageResult(is_retry_acceptable=False),
+                event.broadcast_config(),
+            )
+            raise
 
     async def _serve_account(self, event: CollectMissingAccount) -> None:
         _, num_nodes_collected = await self._state_downloader.download_account(
@@ -755,13 +842,13 @@ class MissingDataEventHandler(BaseService):
             event.urgent,
         )
         await self._event_bus.broadcast(
-            MissingAccountCollected(num_nodes_collected + bonus_node),
+            MissingAccountResult(num_nodes_collected + bonus_node),
             event.broadcast_config(),
         )
 
     async def _serve_bytecode(self, event: CollectMissingBytecode) -> None:
         await self._state_downloader.ensure_nodes_present({event.bytecode_hash}, event.urgent)
-        await self._event_bus.broadcast(MissingBytecodeCollected(), event.broadcast_config())
+        await self._event_bus.broadcast(MissingBytecodeResult(), event.broadcast_config())
 
     async def _serve_storage(self, event: CollectMissingStorage) -> None:
         num_nodes_collected = await self._state_downloader.download_storage(
@@ -775,6 +862,6 @@ class MissingDataEventHandler(BaseService):
             event.urgent,
         )
         await self._event_bus.broadcast(
-            MissingStorageCollected(num_nodes_collected + bonus_node),
+            MissingStorageResult(num_nodes_collected + bonus_node),
             event.broadcast_config(),
         )

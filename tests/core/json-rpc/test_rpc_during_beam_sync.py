@@ -23,9 +23,9 @@ from trinity.sync.common.events import (
     CollectMissingAccount,
     CollectMissingBytecode,
     CollectMissingStorage,
-    MissingAccountCollected,
-    MissingBytecodeCollected,
-    MissingStorageCollected,
+    MissingAccountResult,
+    MissingBytecodeResult,
+    MissingStorageResult,
 )
 
 
@@ -170,21 +170,21 @@ def fake_beam_syncer(chain, event_bus):
         async def collect_accounts(event: CollectMissingAccount):
             replace_missing_node(event.missing_node_hash)
             await event_bus.broadcast(
-                MissingAccountCollected(1), event.broadcast_config()
+                MissingAccountResult(1), event.broadcast_config()
             )
         accounts_sub = event_bus.subscribe(CollectMissingAccount, collect_accounts)
 
         async def collect_bytecodes(event: CollectMissingBytecode):
             replace_missing_node(event.bytecode_hash)
             await event_bus.broadcast(
-                MissingBytecodeCollected(), event.broadcast_config()
+                MissingBytecodeResult(), event.broadcast_config()
             )
         bytecode_sub = event_bus.subscribe(CollectMissingBytecode, collect_bytecodes)
 
         async def collect_storage(event: CollectMissingStorage):
             replace_missing_node(event.missing_node_hash)
             await event_bus.broadcast(
-                MissingStorageCollected(1), event.broadcast_config()
+                MissingStorageResult(1), event.broadcast_config()
             )
         storage_sub = event_bus.subscribe(CollectMissingStorage, collect_storage)
 

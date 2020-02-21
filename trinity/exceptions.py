@@ -116,3 +116,11 @@ class LocalChainIncompatibleOrStale(BaseForkIDValidationError):
     two chains have diverged in the past at some point (possibly at genesis).
     """
     pass
+
+
+class StateUnretrievable(BaseTrinityError):
+    """
+    Raised when state is missing locally, and cannot be retrieved from peers either, because
+    the peers have pruned their state tries.
+    """
+    pass

@@ -31,6 +31,7 @@ from eth.vm.interrupt import (
 )
 from eth_typing import (
     Address,
+    BlockNumber,
     Hash32,
 )
 from eth_utils import (
@@ -48,6 +49,7 @@ from lahja.common import BroadcastConfig
 
 from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
+from trinity.exceptions import StateUnretrievable
 from trinity.sync.beam.constants import (
     MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS,
     NUM_PREVIEW_SHARDS,
@@ -58,9 +60,9 @@ from trinity.sync.common.events import (
     CollectMissingStorage,
     DoStatelessBlockImport,
     DoStatelessBlockPreview,
-    MissingAccountCollected,
-    MissingBytecodeCollected,
-    MissingStorageCollected,
+    MissingAccountResult,
+    MissingBytecodeResult,
+    MissingStorageResult,
     StatelessBlockImportDone,
 )
 
@@ -180,31 +182,47 @@ def pausing_vm_decorator(
             missing_node_hash: Hash32,
             storage_key: Hash32,
             storage_root_hash: Hash32,
-            account_address: Address) -> MissingStorageCollected:
-        return await event_bus.request(CollectMissingStorage(
-            missing_node_hash,
-            storage_key,
-            storage_root_hash,
-            account_address,
-            urgent,
-        ))
+            account_address: Address,
+            block_number: BlockNumber) -> MissingStorageResult:
+        if event_bus.is_any_endpoint_subscribed_to(CollectMissingStorage):
+            return await event_bus.request(CollectMissingStorage(
+                missing_node_hash,
+                storage_key,
+                storage_root_hash,
+                account_address,
+                urgent,
+                block_number,
+            ))
+        else:
+            raise StateUnretrievable("No servers for CollectMissingStorage")
 
     async def request_missing_account(
             missing_node_hash: Hash32,
             address_hash: Hash32,
-            state_root_hash: Hash32) -> MissingAccountCollected:
-        return await event_bus.request(CollectMissingAccount(
-            missing_node_hash,
-            address_hash,
-            state_root_hash,
-            urgent,
-        ))
+            state_root_hash: Hash32,
+            block_number: BlockNumber) -> MissingAccountResult:
+        if event_bus.is_any_endpoint_subscribed_to(CollectMissingAccount):
+            return await event_bus.request(CollectMissingAccount(
+                missing_node_hash,
+                address_hash,
+                state_root_hash,
+                urgent,
+                block_number,
+            ))
+        else:
+            raise StateUnretrievable("No servers for CollectMissingAccount")
 
-    async def request_missing_bytecode(bytecode_hash: Hash32) -> MissingBytecodeCollected:
-        return await event_bus.request(CollectMissingBytecode(
-            bytecode_hash,
-            urgent,
-        ))
+    async def request_missing_bytecode(
+            bytecode_hash: Hash32,
+            block_number: BlockNumber) -> MissingBytecodeResult:
+        if event_bus.is_any_endpoint_subscribed_to(CollectMissingBytecode):
+            return await event_bus.request(CollectMissingBytecode(
+                bytecode_hash,
+                urgent,
+                block_number,
+            ))
+        else:
+            raise StateUnretrievable("No servers for CollectMissingBytecode")
 
     class PausingVMState(original_vm_class.get_state_class()):  # type: ignore
         """
@@ -237,7 +255,9 @@ def pausing_vm_decorator(
                     else:
                         log_func = self.logger.debug
                     log_func(
-                        "Beam Sync: retrying state data request after timeout. Stats so far: %s",
+                        "Timed out requsting state data for block #%d, retrying..."
+                        " Stats so far: %s",
+                        self.block_number,
                         self.stats_counter,
                     )
 
@@ -260,24 +280,33 @@ def pausing_vm_decorator(
                             exc.missing_node_hash,
                             exc.address_hash,
                             exc.state_root_hash,
+                            self.block_number,
                         ),
                         loop,
                     )
                     account_event = account_future.result(timeout=self.node_retrieval_timeout)
+
+                    # Collect the amount of paused time before checking if we should exit, so
+                    #   it shows up in logged statistics.
+                    self.stats_counter.data_pause_time += t.elapsed
+                    if not account_event.is_retry_acceptable:
+                        raise StateUnretrievable("Server asked us to stop trying")
                     self.stats_counter.num_accounts += 1
                     self.stats_counter.num_account_nodes += account_event.num_nodes_collected
-                    self.stats_counter.data_pause_time += t.elapsed
                 except MissingBytecode as exc:
                     t = Timer()
                     bytecode_future = asyncio.run_coroutine_threadsafe(
                         request_missing_bytecode(
                             exc.missing_code_hash,
+                            self.block_number,
                         ),
                         loop,
                     )
-                    bytecode_future.result(timeout=self.node_retrieval_timeout)
-                    self.stats_counter.num_bytecodes += 1
+                    bytecode_event = bytecode_future.result(timeout=self.node_retrieval_timeout)
                     self.stats_counter.data_pause_time += t.elapsed
+                    if not bytecode_event.is_retry_acceptable:
+                        raise StateUnretrievable("Server asked us to stop trying")
+                    self.stats_counter.num_bytecodes += 1
                 except MissingStorageTrieNode as exc:
                     t = Timer()
                     storage_future = asyncio.run_coroutine_threadsafe(
@@ -286,13 +315,16 @@ def pausing_vm_decorator(
                             exc.requested_key,
                             exc.storage_root_hash,
                             exc.account_address,
+                            self.block_number,
                         ),
                         loop,
                     )
                     storage_event = storage_future.result(timeout=self.node_retrieval_timeout)
+                    self.stats_counter.data_pause_time += t.elapsed
+                    if not storage_event.is_retry_acceptable:
+                        raise StateUnretrievable("Server asked us to stop trying")
                     self.stats_counter.num_storages += 1
                     self.stats_counter.num_storage_nodes += storage_event.num_nodes_collected
-                    self.stats_counter.data_pause_time += t.elapsed
 
         def get_balance(self, account: bytes) -> int:
             return self._pause_on_missing_data(super().get_balance, account)
@@ -387,20 +419,37 @@ def partial_import_block(beam_chain: BeamChain,
     def _import_block() -> Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]:
         t = Timer()
         beam_chain.clear_first_vm()
-        reorg_info = beam_chain.import_block(block, perform_validation=True)
-        import_time = t.elapsed
+        try:
+            reorg_info = beam_chain.import_block(block, perform_validation=True)
+        except StateUnretrievable as exc:
+            import_time = t.elapsed
 
-        vm = beam_chain.get_first_vm()
-        beam_stats = vm.get_beam_stats()
-        beam_chain.logger.debug(
-            "BeamImport %s (%d txns) total time: %.1f s, %%exec %.0f, stats: %s",
-            block.header,
-            len(block.transactions),
-            import_time,
-            100 * (import_time - beam_stats.data_pause_time) / import_time,
-            vm.get_beam_stats(),
-        )
-        return reorg_info
+            vm = beam_chain.get_first_vm()
+            beam_stats = vm.get_beam_stats()
+            vm.logger.debug(
+                "Beam pivot over %s (%d txns) because %r after %.1fs, %%exec %.0f, stats: %s",
+                block.header,
+                len(block.transactions),
+                exc,
+                import_time,
+                100 * (import_time - beam_stats.data_pause_time) / import_time,
+                beam_stats,
+            )
+            raise
+        else:
+            import_time = t.elapsed
+
+            vm = beam_chain.get_first_vm()
+            beam_stats = vm.get_beam_stats()
+            beam_chain.logger.debug(
+                "BeamImport %s (%d txns) total time: %.1f s, %%exec %.0f, stats: %s",
+                block.header,
+                len(block.transactions),
+                import_time,
+                100 * (import_time - beam_stats.data_pause_time) / import_time,
+                beam_stats,
+            )
+            return reorg_info
 
     return _import_block
 
@@ -442,16 +491,24 @@ class BlockImportServer(Service):
             # In the tests, for example, we await cancel() this service, so that we know
             #   that the in-progress block is complete. Then below, we do not send back
             #   the import completion (so the import server won't get triggered again).
-            await asyncio.shield(import_completion)
-
-            if self.manager.is_running:
-                _broadcast_import_complete(
-                    event_bus,
+            try:
+                await asyncio.shield(import_completion)
+            except StateUnretrievable as exc:
+                self.logger.debug(
+                    "Not broadcasting about %s Beam import. Listening for next request, because %r",
                     event.block,
-                    event.broadcast_config(),
-                    import_completion,  # type: ignore
+                    exc
                 )
             else:
+                if self.manager.is_running:
+                    _broadcast_import_complete(
+                        event_bus,
+                        event.block,
+                        event.broadcast_config(),
+                        import_completion,  # type: ignore
+                    )
+
+            if not self.manager.is_running:
                 break
 
 
@@ -471,12 +528,26 @@ def partial_trigger_missing_state_downloads(
         t = Timer()
         try:
             vm.apply_all_transactions(transactions, unused_header)
+            # Making the state root can also trigger missing trie nodes, so keep it in the try block
+            vm.state.make_state_root()
+            # We don't need to persist trie nodes here, they are persisted by the BeamDownloader.
+        except StateUnretrievable as exc:
+            preview_time = t.elapsed
+            beam_stats = vm.get_beam_stats()
+            vm.logger.debug(
+                "Beam pivot over all %d txns for %s b/c %r after %.1fs, %%exec %.0f, stats: %s",
+                len(transactions),
+                header,
+                exc,
+                preview_time,
+                100 * (preview_time - beam_stats.data_pause_time) / preview_time,
+                beam_stats,
+            )
         except ValidationError as exc:
             preview_time = t.elapsed
             vm.logger.debug(
-                "Preview of all %d transactions %s failed for %s after %.1fs: %s",
+                "Preview of all %d transactions failed for %s after %.1fs: %s",
                 len(transactions),
-                transactions,
                 header,
                 preview_time,
                 exc,
@@ -487,7 +558,6 @@ def partial_trigger_missing_state_downloads(
             vm.logger.info("Got BrokenPipeError while Beam Sync previewed execution of %s", header)
             vm.logger.debug("BrokenPipeError trace for %s", header, exc_info=True)
         else:
-            vm.state.make_state_root()
             preview_time = t.elapsed
 
             beam_stats = vm.get_beam_stats()
@@ -520,6 +590,18 @@ def partial_speculative_execute(
         t = Timer()
         try:
             _, receipts, _ = vm.apply_all_transactions(transactions, unused_header)
+        except StateUnretrievable as exc:
+            preview_time = t.elapsed
+            beam_stats = vm.get_beam_stats()
+            vm.logger.debug(
+                "Beam pivot over %d txn preview for %s b/c %r after %.1fs, %%exec %.0f, stats: %s",
+                len(transactions),
+                header,
+                exc,
+                preview_time,
+                100 * (preview_time - beam_stats.data_pause_time) / preview_time,
+                beam_stats,
+            )
         except ValidationError as exc:
             preview_time = t.elapsed
             vm.logger.debug(
