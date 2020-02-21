@@ -21,6 +21,7 @@ from cancel_token import CancelToken
 
 from eth_utils import get_extended_debug_logger, ValidationError
 from eth_utils.toolz import cons
+import rlp
 
 from p2p.abc import (
     CommandAPI,
@@ -36,6 +37,7 @@ from p2p.exceptions import (
     CorruptTransport,
     UnknownProtocol,
     UnknownProtocolCommand,
+    MalformedMessage,
 )
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p.transport_state import TransportState
@@ -84,7 +86,11 @@ async def stream_transport_messages(transport: TransportAPI,
 
         msg_proto = command_id_cache[command_id]
         command_type = msg_proto.get_command_type_for_command_id(command_id)
-        cmd = command_type.decode(msg, msg_proto.snappy_support)
+
+        try:
+            cmd = command_type.decode(msg, msg_proto.snappy_support)
+        except rlp.exceptions.DeserializationError as err:
+            raise MalformedMessage(f"Failed to decode {msg} for {command_type}") from err
 
         yield msg_proto, cmd
 
