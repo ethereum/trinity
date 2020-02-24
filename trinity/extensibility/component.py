@@ -150,8 +150,9 @@ async def run_standalone_component(
 
     logging.basicConfig(
         level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
-    for name, level in args.log_levels.items():
-        logging.getLogger(name).setLevel(level)
+    if args.log_levels is not None:
+        for name, level in args.log_levels.items():
+            logging.getLogger(name).setLevel(level)
 
     trinity_config = TrinityConfig.from_parser_args(args, app_identifier, app_config_types)
     trinity_config.trinity_root_dir.mkdir(exist_ok=True)

@@ -1,32 +1,29 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import ipaddress
+import netifaces
 from typing import (
     AsyncGenerator,
-    NamedTuple,
 )
 from urllib.parse import urlparse
 
+import upnpclient
+
+from lahja import EndpointAPI
+
 from async_service import Service
+
 from eth_utils import get_extended_debug_logger
 
 from p2p.exceptions import (
     NoInternalAddressMatchesDevice,
 )
-import netifaces
 
-from eth._warnings import catch_and_ignore_import_warning
-with catch_and_ignore_import_warning():
-    import upnpclient
+from trinity.components.builtin.upnp.events import NewUPnPMapping
 
 
 # UPnP discovery can take a long time, so use a loooong timeout here.
 UPNP_DISCOVER_TIMEOUT_SECONDS = 30
-
-
-class PortMapping(NamedTuple):
-    internal: str  # of the form "192.2.3.4:56"
-    external: str  # of the form "192.2.3.4:56"
 
 
 def find_internal_ip_on_device_network(upnp_dev: upnpclient.upnp.Device) -> str:
@@ -57,13 +54,13 @@ class UPnPService(Service):
 
     _nat_portmap_lifetime = 30 * 60
 
-    def __init__(self, port: int) -> None:
+    def __init__(self, port: int, event_bus: EndpointAPI) -> None:
         """
         :param port: The port that a server wants to bind to on this machine, and
         make publicly accessible.
         """
         self.port = port
-        self._mapping: PortMapping = None  # when called externally, this never returns None
+        self.event_bus = event_bus
 
     async def run(self) -> None:
         """Run an infinite loop refreshing our NAT port mapping.
@@ -73,7 +70,14 @@ class UPnPService(Service):
         """
         while self.manager.is_running:
             try:
-                await self.add_nat_portmap()
+                external_ip = await self.add_nat_portmap()
+                if external_ip is not None:
+                    event = NewUPnPMapping(external_ip)
+                    self.logger.debug(
+                        "NAT portmap created, broadcasting NewUPnPMapping event: %s", event)
+                    await self.event_bus.broadcast(event)
+                else:
+                    self.logger.info("Unable to setup NAT portmap")
                 # Wait for the port mapping lifetime, and then try registering it again
                 await asyncio.sleep(self._nat_portmap_lifetime)
             except asyncio.CancelledError:
@@ -81,9 +85,6 @@ class UPnPService(Service):
                 raise
             except Exception:
                 self.logger.exception("Failed to setup NAT portmap")
-
-    async def _cleanup(self) -> None:
-        pass
 
     async def add_nat_portmap(self) -> str:
         """
@@ -114,15 +115,7 @@ class UPnPService(Service):
             else:
                 self.logger.exception("Failed to setup NAT portmap")
 
-        self._mapping = None
         return None
-
-    def current_mapping(self) -> PortMapping:
-        if self._mapping is None:
-            unbound = ':%d' % self.port
-            return PortMapping(unbound, unbound)
-        else:
-            return self._mapping
 
     async def _add_nat_portmap(self, upnp_dev: upnpclient.upnp.Device) -> str:
         # Detect our internal IP address (which raises if there are no matches)
@@ -149,11 +142,8 @@ class UPnPService(Service):
                     exc
                 )
             else:
-                self._mapping = PortMapping(
-                    '%s:%d' % (internal_ip, self.port),
-                    '%s:%d' % (external_ip, self.port),
-                )
-                self.logger.info("NAT port forwarding successfully set up: %r", self._mapping)
+                self.logger.info(
+                    "NAT port forwarding successfully set up at %s:%d", external_ip, self.port)
         return external_ip
 
     async def _discover_upnp_devices(self) -> AsyncGenerator[upnpclient.upnp.Device, None]:
