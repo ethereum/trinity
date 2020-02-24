@@ -195,7 +195,7 @@ class BaseChainPeerPool(BasePeerPool):
                     fork_blocks,
                 )
             else:
-                self.logger.info(
+                self.logger.debug(
                     "Didn't get enough candidates last time, falling back to skipping "
                     "only peers that are blacklisted or already connected to")
                 should_skip = skip_candidate_if_on_list  # type: ignore

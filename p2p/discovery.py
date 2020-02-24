@@ -652,13 +652,19 @@ class DiscoveryService(Service):
         try:
             enr = self.node_db.get_enr(node_id_from_pubkey(remote_pubkey))
         except KeyError:
-            node = None
+            node = Node.from_pubkey_and_addr(remote_pubkey, address)
         else:
             node = Node(enr)
-        # If we don't have an entry for the sender's NodeID in our DB, or if the one we do is
-        # incomplete (i.e. without an Address), create a new one.
-        if node is None or node.address is None or node.address != address:
-            node = Node.from_pubkey_and_addr(remote_pubkey, address)
+            if node.address != address:
+                self.logger.warning(
+                    "Received msg from %s, using an address (%s) different than what we have "
+                    "stored in our DB (%s), deleting our DB record to force a refresh.",
+                    node,
+                    address,
+                    node.address,
+                )
+                self.node_db.delete_enr(node.id)
+                node = Node.from_pubkey_and_addr(remote_pubkey, address)
 
         self.logger.debug2("Received %s from %s with payload: %s", cmd.name, node, payload)
         handler = self._get_handler(cmd)
@@ -816,6 +822,16 @@ class DiscoveryService(Service):
         self.logger.debug(
             "Received ENR %s (%s) with expected response token: %s",
             enr, enr.items(), encode_hex(token))
+        existing_enr = self.node_db.get_enr(enr.node_id)
+        if enr.sequence_number < existing_enr.sequence_number:
+            self.logger.warning(
+                "Remote %s sent us an ENR with seq number (%d) prior to the one we already "
+                "have (%d). Ignoring it",
+                encode_hex(enr.node_id),
+                enr.sequence_number,
+                existing_enr.sequence_number,
+            )
+            return
         # Insert/update the new ENR/Node in our DB and routing table as soon as we receive it, as
         # we want that to happen even if the original requestor (request_enr()) gives up waiting.
         new_node = Node(enr)
