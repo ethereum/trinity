@@ -10,9 +10,8 @@ from trinity.boot_info import BootInfo
 from trinity.extensibility import (
     AsyncioIsolatedComponent,
 )
-from .nat import (
-    UPnPService
-)
+from trinity.components.builtin.upnp.nat import UPnPService
+from trinity.constants import UPNP_EVENTBUS_ENDPOINT
 
 
 class UpnpComponent(AsyncioIsolatedComponent):
@@ -21,6 +20,7 @@ class UpnpComponent(AsyncioIsolatedComponent):
     Universal Plug 'n' Play (upnp) standard.
     """
     name = "Upnp"
+    endpoint_name = UPNP_EVENTBUS_ENDPOINT
 
     @property
     def is_enabled(self) -> bool:
@@ -39,6 +39,13 @@ class UpnpComponent(AsyncioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         port = boot_info.trinity_config.port
-        upnp_service = UPnPService(port)
+        upnp_service = UPnPService(port, event_bus)
 
         await run_asyncio_service(upnp_service)
+
+
+if __name__ == "__main__":
+    import asyncio
+    from trinity.extensibility.component import run_standalone_eth1_component
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run_standalone_eth1_component(UpnpComponent))
