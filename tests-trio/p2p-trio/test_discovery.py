@@ -46,6 +46,8 @@ from p2p.tools.factories import (
     PrivateKeyFactory,
 )
 
+from trinity.components.builtin.upnp.events import NewUPnPMapping
+
 
 # Force our tests to fail quickly if they accidentally make network requests.
 @pytest.fixture(autouse=True)
@@ -307,6 +309,26 @@ async def test_get_peer_candidates(manually_driven_discovery, monkeypatch):
 
 
 @pytest.mark.trio
+async def test_handle_new_upnp_mapping(manually_driven_discovery, endpoint_server):
+    manually_driven_discovery._event_bus = endpoint_server
+    manually_driven_discovery.manager.run_daemon_task(
+        manually_driven_discovery.handle_new_upnp_mapping)
+    assert manually_driven_discovery.this_node.address.ip == '127.0.0.1'
+    assert manually_driven_discovery.this_node.enr.sequence_number == 1
+
+    await trio.hazmat.checkpoint()
+    external_ip = '43.248.27.0'
+    await endpoint_server.broadcast(NewUPnPMapping(external_ip))
+
+    with trio.fail_after(0.5):
+        while True:
+            await trio.sleep(0.01)
+            if manually_driven_discovery.this_node.address.ip == external_ip:
+                break
+    assert manually_driven_discovery.this_node.enr.sequence_number == 2
+
+
+@pytest.mark.trio
 async def test_protocol_bootstrap():
     node1, node2 = NodeFactory.create_batch(2)
     discovery = MockDiscoveryService([node1, node2])
@@ -518,7 +540,9 @@ class MockDiscoveryService(DiscoveryService):
         node_db = NodeDB(default_identity_scheme_registry, MemoryDB())
         socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
         event_bus = None
-        super().__init__(privkey, AddressFactory(), bootnodes, event_bus, socket, node_db)
+        address = AddressFactory()
+        super().__init__(
+            privkey, address.udp_port, address.tcp_port, bootnodes, event_bus, socket, node_db)
 
     def send(self, node, msg_type, payload):
         # Overwrite our parent's send() to ensure no tests attempt to use us to go over the

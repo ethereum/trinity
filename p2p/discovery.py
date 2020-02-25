@@ -6,6 +6,8 @@ listening nodes.
 More information at https://github.com/ethereum/devp2p/blob/master/rlpx.md#node-discovery
 """
 import collections
+import ipaddress
+import netifaces
 import random
 import secrets
 import time
@@ -81,7 +83,11 @@ from p2p.events import (
     BaseRequestResponseEvent,
     PeerCandidatesResponse,
 )
-from p2p.exceptions import AlreadyWaitingDiscoveryResponse, CouldNotRetrieveENR, NoEligibleNodes
+from p2p.exceptions import (
+    AlreadyWaitingDiscoveryResponse,
+    CouldNotRetrieveENR,
+    NoEligibleNodes,
+)
 from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
 from p2p import trio_utils
 
@@ -136,7 +142,8 @@ class DiscoveryService(Service):
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
-                 address: AddressAPI,
+                 udp_port: int,
+                 tcp_port: int,
                  bootstrap_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
                  socket: trio.socket.SocketType,
@@ -169,7 +176,10 @@ class DiscoveryService(Service):
         # be replaced in _init(). We could defer its creation until _init() is called by run(),
         # but doing this here simplifies things as we don't have to store the Address in another
         # instance attribute.
-        self.this_node: NodeAPI = Node.from_pubkey_and_addr(self.pubkey, address)
+        self.this_node: NodeAPI = Node.from_pubkey_and_addr(
+            self.pubkey,
+            Address("127.0.0.1", udp_port, tcp_port),
+        )
         self.routing = RoutingTable(self.this_node.id)
 
     async def _init(self) -> None:
@@ -183,7 +193,7 @@ class DiscoveryService(Service):
         # We run this unconditionally because even when we successfully load our ENR from the DB,
         # our address (or ENR field providers) may have changed and in that case we'd want to
         # generate a new ENR.
-        await self.maybe_update_local_enr()
+        await self.maybe_update_local_enr(get_external_ipaddress(self.logger))
 
     def is_bond_valid_with(self, node_id: NodeID) -> bool:
         try:
@@ -195,6 +205,14 @@ class DiscoveryService(Service):
     async def consume_datagrams(self) -> None:
         while self.manager.is_running:
             await self.consume_datagram()
+
+    async def handle_new_upnp_mapping(self) -> None:
+        from trinity.components.builtin.upnp.events import NewUPnPMapping
+        async for event in self._event_bus.stream(NewUPnPMapping):
+            external_ip = event.ip
+            self.logger.debug(
+                "Got new external IP address via UPnP mapping: %s", external_ip)
+            await self.maybe_update_local_enr(ipaddress.ip_address(external_ip))
 
     def get_peer_candidates(
         self, should_skip_fn: Callable[[NodeAPI], bool], max_candidates: int,
@@ -243,6 +261,7 @@ class DiscoveryService(Service):
         await self.manager.wait_finished()
 
     def run_daemons_and_bootstrap(self) -> None:
+        self.manager.run_daemon_task(self.handle_new_upnp_mapping)
         self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
         self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
         self.manager.run_daemon_task(self.report_stats)
@@ -403,14 +422,18 @@ class DiscoveryService(Service):
 
         return enr
 
-    async def _generate_local_enr(self, sequence_number: int) -> ENR:
+    async def _generate_local_enr(
+            self, sequence_number: int, ip_address: Optional[ipaddress.IPv4Address] = None) -> ENR:
+        if ip_address is None:
+            ip_address = ipaddress.ip_address(self.this_node.address.ip)
         kv_pairs = {
             IDENTITY_SCHEME_ENR_KEY: V4IdentityScheme.id,
             V4IdentityScheme.public_key_enr_key: self.pubkey.to_compressed_bytes(),
-            IP_V4_ADDRESS_ENR_KEY: self.this_node.address.ip_packed,
+            IP_V4_ADDRESS_ENR_KEY: ip_address.packed,
             UDP_PORT_ENR_KEY: self.this_node.address.udp_port,
             TCP_PORT_ENR_KEY: self.this_node.address.tcp_port,
         }
+
         for field_provider in self.enr_field_providers:
             key, value = await field_provider()
             if key in kv_pairs:
@@ -437,22 +460,24 @@ class DiscoveryService(Service):
 
         return self.this_node.enr
 
-    async def maybe_update_local_enr(self) -> None:
+    async def maybe_update_local_enr(
+            self, ip_address: Optional[ipaddress.IPv4Address] = None) -> None:
         async with self._local_enr_lock:
-            await self._maybe_update_local_enr()
+            await self._maybe_update_local_enr(ip_address)
 
-    async def _maybe_update_local_enr(self) -> None:
+    async def _maybe_update_local_enr(
+            self, ip_address: Optional[ipaddress.IPv4Address] = None) -> None:
         self._local_enr_next_refresh = time.monotonic() + self._local_enr_refresh_interval
 
         # Re-generate our ENR from scratch and compare it to the current one to see if we
         # must create a new one with a higher sequence number.
-        current_enr = await self._generate_local_enr(self.this_node.enr.sequence_number)
+        current_enr = await self._generate_local_enr(self.this_node.enr.sequence_number, ip_address)
         if current_enr == self.this_node.enr:
             return
 
         # Either our node's details (e.g. IP address) or one of our ENR fields have changed, so
         # generate a new one with a higher sequence number.
-        enr = await self._generate_local_enr(self.this_node.enr.sequence_number + 1)
+        enr = await self._generate_local_enr(self.this_node.enr.sequence_number + 1, ip_address)
         self.this_node = Node(enr)
         self.logger.info(
             "Node details changed, generated new local ENR with sequence number %d",
@@ -935,7 +960,8 @@ class PreferredNodeDiscoveryService(DiscoveryService):
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
-                 address: AddressAPI,
+                 udp_port: int,
+                 tcp_port: int,
                  bootstrap_nodes: Sequence[NodeAPI],
                  preferred_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
@@ -944,7 +970,8 @@ class PreferredNodeDiscoveryService(DiscoveryService):
                  enr_field_providers: Optional[Sequence[ENR_FieldProvider]] = tuple()
                  ) -> None:
         super().__init__(
-            privkey, address, bootstrap_nodes, event_bus, socket, node_db, enr_field_providers)
+            privkey, udp_port, tcp_port, bootstrap_nodes, event_bus, socket, node_db,
+            enr_field_providers)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)
         self._preferred_node_tracker = collections.defaultdict(lambda: 0)
@@ -1214,3 +1241,16 @@ class ExpectedResponseChannels(Generic[TMsg]):
 
 def node_id_from_pubkey(pubkey: keys.PublicKey) -> NodeID:
     return keccak(pubkey.to_bytes())
+
+
+def get_external_ipaddress(logger: ExtendedDebugLogger) -> ipaddress.IPv4Address:
+    for iface in netifaces.interfaces():
+        for family, addresses in netifaces.ifaddresses(iface).items():
+            if family != netifaces.AF_INET:
+                continue
+            for item in addresses:
+                iface_addr = ipaddress.ip_address(item['addr'])
+                if iface_addr.is_global:
+                    return iface_addr
+    logger.info("No internet-facing address found on any interface, using fallback one")
+    return ipaddress.ip_address('127.0.0.1')

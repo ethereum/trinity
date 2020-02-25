@@ -16,7 +16,6 @@ from eth.db.backends.memory import MemoryDB
 from p2p.discovery import DiscoveryService
 from p2p.discv5.enr_db import NodeDB
 from p2p.discv5.identity_schemes import default_identity_scheme_registry
-from p2p.kademlia import Address
 
 
 # Silence factory-boy logs; we're not interested in them.
@@ -41,10 +40,11 @@ async def socket_pair():
 
 @asynccontextmanager
 async def _manually_driven_discovery(seed, socket, nursery):
-    ip, port = socket.getsockname()
+    _, port = socket.getsockname()
     discovery = ManuallyDrivenDiscoveryService(
         keys.PrivateKey(keccak(seed)),
-        Address(ip, port, port),
+        port,
+        port,
         bootstrap_nodes=[],
         event_bus=None,
         socket=socket,
