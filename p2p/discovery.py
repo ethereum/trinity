@@ -152,7 +152,6 @@ class DiscoveryService(Service):
                  ) -> None:
         self.logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
         self.privkey = privkey
-        self.bootstrap_nodes = bootstrap_nodes
         self._event_bus = event_bus
         self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
         self.pong_channels = ExpectedResponseChannels[Tuple[Hash32, int]]()
@@ -171,6 +170,19 @@ class DiscoveryService(Service):
         self.socket = socket
         self.pending_enrs_producer, self.pending_enrs_consumer = trio.open_memory_channel[
             Tuple[NodeID, int]](self._max_pending_enrs)
+
+        # Ensure our bootstrap nodes are in our DB and keep only a reference to their IDs. This is
+        # to ensure self.bootstrap_nodes always returns the last known version of them.
+        self._bootstrap_node_ids: List[NodeID] = []
+        for node in bootstrap_nodes:
+            self._bootstrap_node_ids.append(node.id)
+            try:
+                self.node_db.get_enr(node.id)
+            except KeyError:
+                self.node_db.set_enr(node.enr)
+        if len(set(self._bootstrap_node_ids)) != len(self._bootstrap_node_ids):
+            raise ValueError(
+                "Multiple bootnodes with the same ID are not allowed: {self._bootstrap_node_ids}")
 
         # This is a stub Node instance (which will have an ENR with sequence number 0) that will
         # be replaced in _init(). We could defer its creation until _init() is called by run(),
@@ -194,6 +206,17 @@ class DiscoveryService(Service):
         # our address (or ENR field providers) may have changed and in that case we'd want to
         # generate a new ENR.
         await self.maybe_update_local_enr(get_external_ipaddress(self.logger))
+
+    @property  # type: ignore
+    @to_tuple
+    def bootstrap_nodes(self) -> Iterable[NodeAPI]:
+        for node_id in self._bootstrap_node_ids:
+            try:
+                enr = self.node_db.get_enr(node_id)
+            except KeyError:
+                self.logger.exception("Bootnode not found in our DB")
+            else:
+                yield Node(enr)
 
     def is_bond_valid_with(self, node_id: NodeID) -> bool:
         try:
@@ -314,7 +337,7 @@ class DiscoveryService(Service):
                 len(full_buckets), nodes_in_replacement_cache)
             self.logger.debug("===========================================================")
 
-    async def update_routing_table(self, node: NodeAPI) -> None:
+    def update_routing_table(self, node: NodeAPI) -> None:
         """Update the routing table entry for the given node.
 
         Also stores it in our NodeDB.
@@ -347,6 +370,7 @@ class DiscoveryService(Service):
         """Bond with the given node.
 
         Bonding consists of pinging the node, waiting for a pong and maybe a ping as well.
+
         It is necessary to do this at least once before we send find_node requests to a node.
 
         If we already have a valid bond with the given node we return immediately.
@@ -514,15 +538,18 @@ class DiscoveryService(Service):
             async with aclosing(gen):  # type: ignore
                 async for batch in gen:
                     self.logger.debug2(
-                        f'got expected neighbours response from {remote}: {batch}')
+                        'got expected neighbours response from %s: %s', remote, batch)
                     neighbours.extend(batch)
                     if len(neighbours) >= constants.KADEMLIA_BUCKET_SIZE:
                         break
-            self.logger.debug2(f'got expected neighbours response from {remote}')
+            self.logger.debug2('got expected neighbours response from %s', remote)
         if cancel_scope.cancelled_caught:
             self.logger.debug2(
-                f'timed out waiting for {constants.KADEMLIA_BUCKET_SIZE} neighbours from '
-                f'{remote}, got only {len(neighbours)}')
+                'timed out waiting for %d neighbours from %s, got only %d',
+                constants.KADEMLIA_BUCKET_SIZE,
+                remote,
+                len(neighbours),
+            )
         return tuple(n for n in neighbours if n != self.this_node)
 
     async def lookup(self, target_key: bytes) -> Tuple[NodeAPI, ...]:
@@ -572,6 +599,10 @@ class DiscoveryService(Service):
         closest = self.routing.neighbours(target_id)
         self.logger.debug("starting lookup; initial neighbours: %s", closest)
         nodes_to_ask = _exclude_if_asked(closest)
+        if not nodes_to_ask:
+            self.logger.warning("No nodes found in routing table, can't perform lookup")
+            return tuple()
+
         while nodes_to_ask:
             self.logger.debug2("node lookup; querying %s", nodes_to_ask)
             nodes_asked.update(nodes_to_ask)
@@ -636,7 +667,14 @@ class DiscoveryService(Service):
         cls._max_neighbours_per_packet_cache = _get_max_neighbours_per_packet()
         return cls._max_neighbours_per_packet_cache
 
+    def invalidate_bond(self, node_id: NodeID) -> None:
+        try:
+            self.node_db.delete_last_pong_time(node_id)
+        except KeyError:
+            pass
+
     async def bootstrap(self) -> None:
+        bonding_queries = []
         for node in self.bootstrap_nodes:
             uri = node.uri()
             pubkey, _, uri_tail = uri.partition('@')
@@ -645,17 +683,22 @@ class DiscoveryService(Service):
             self.logger.debug("full-bootnode: %s", uri)
             self.logger.debug("bootnode: %s...%s@%s", pubkey_head, pubkey_tail, uri_tail)
 
-        bonding_queries = (
-            (self.bond, n)
-            for n
-            in self.bootstrap_nodes
-            if (not self.ping_channels.already_waiting_for(n) and
-                not self.pong_channels.already_waiting_for(n))
-        )
+            # Upon startup we want to force a new bond with our bootnodes. That ensures we only
+            # query the ones that are still reachable and that we tell them about our latest ENR,
+            # which might have changed.
+            self.invalidate_bond(node.id)
+
+            bonding_queries.append((self.bond, node))
+
         bonded = await trio_utils.gather(*bonding_queries)
-        if not any(bonded):
-            self.logger.info("Failed to bond with bootstrap nodes %s", self.bootstrap_nodes)
+        successful_bonds = len([item for item in bonded if item is True])
+        if not successful_bonds:
+            self.logger.warning("Failed to bond with any bootstrap nodes %s", self.bootstrap_nodes)
             return
+        else:
+            self.logger.info(
+                "Bonded with %d bootstrap nodes, performing initial lookup", successful_bonds)
+
         await self.lookup_random()
 
     def send(self, node: NodeAPI, msg_type: DiscoveryCommand, payload: Sequence[Any]) -> bytes:
@@ -691,7 +734,7 @@ class DiscoveryService(Service):
         else:
             node = Node(enr)
             if node.address != address:
-                self.logger.warning(
+                self.logger.debug(
                     "Received msg from %s, using an address (%s) different than what we have "
                     "stored in our DB (%s), deleting our DB record to force a refresh.",
                     node,
@@ -879,7 +922,7 @@ class DiscoveryService(Service):
             except KeyError:
                 pass
         else:
-            await self.update_routing_table(new_node)
+            self.update_routing_table(new_node)
         try:
             await channel.send((enr, token))
         except trio.BrokenResourceError:
@@ -965,7 +1008,7 @@ class DiscoveryService(Service):
         self.node_db.set_last_pong_time(remote.id, int(time.monotonic()))
         # Insert/update the Node in our DB and routing table as soon as we receive the pong, as
         # we want that to happen even if the original requestor (bond()) gives up waiting.
-        await self.update_routing_table(remote)
+        self.update_routing_table(remote)
 
         try:
             await channel.send((token, enr_seq))

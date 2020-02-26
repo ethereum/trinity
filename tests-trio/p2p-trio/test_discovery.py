@@ -42,6 +42,7 @@ from p2p.discovery import (
 from p2p.kademlia import Node
 from p2p.tools.factories import (
     AddressFactory,
+    ENRFactory,
     NodeFactory,
     PrivateKeyFactory,
 )
@@ -56,7 +57,7 @@ def short_timeout(monkeypatch):
 
 
 @pytest.mark.trio
-async def test_ping_pong(nursery, manually_driven_discovery_pair):
+async def test_ping_pong(manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Collect all pongs received by alice in a list for later inspection.
     got_pong = trio.Event()
@@ -168,7 +169,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     bobs_node_with_stub_enr = Node.from_pubkey_and_addr(
         bob.this_node.pubkey, bob.this_node.address)
     alice.node_db.set_last_pong_time(bob.this_node.id, int(time.monotonic()))
-    await alice.update_routing_table(bobs_node_with_stub_enr)
+    alice.update_routing_table(bobs_node_with_stub_enr)
     assert alice.routing.get_node(bobs_node_with_stub_enr.id).enr.sequence_number == 0
 
     received_enr = None
@@ -225,12 +226,12 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
 
 
 @pytest.mark.trio
-async def test_find_node_neighbours(nursery, manually_driven_discovery_pair):
+async def test_find_node_neighbours(manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Add some nodes to bob's routing table so that it has something to use when replying to
     # alice's find_node.
     for _ in range(constants.KADEMLIA_BUCKET_SIZE * 2):
-        await bob.update_routing_table(NodeFactory())
+        bob.update_routing_table(NodeFactory())
 
     # Collect all neighbours packets received by alice in a list for later inspection.
     received_neighbours = []
@@ -329,19 +330,25 @@ async def test_handle_new_upnp_mapping(manually_driven_discovery, endpoint_serve
 
 
 @pytest.mark.trio
-async def test_protocol_bootstrap():
+async def test_protocol_bootstrap(monkeypatch):
     node1, node2 = NodeFactory.create_batch(2)
     discovery = MockDiscoveryService([node1, node2])
+    invalidated_bonds = []
+
+    def invalidate_bond(node_id):
+        invalidated_bonds.append(node_id)
 
     async def bond(node):
         assert discovery.routing.add_node(node) is None
         return True
 
+    monkeypatch.setattr(discovery, 'invalidate_bond', invalidate_bond)
     # Pretend we bonded successfully with our bootstrap nodes.
-    discovery.bond = bond
+    monkeypatch.setattr(discovery, 'bond', bond)
 
     await discovery.bootstrap()
 
+    assert sorted(invalidated_bonds) == sorted([node.id for node in [node1, node2]])
     assert len(discovery.messages) == 2
     # We don't care in which order the bootstrap nodes are contacted, nor which node_id was used
     # in the find_node request, so we just assert that we sent find_node msgs to both nodes.
@@ -416,6 +423,26 @@ async def test_bond(nursery, monkeypatch):
 
 
 @pytest.mark.trio
+async def test_bond_short_circuits(monkeypatch):
+    discovery = MockDiscoveryService([])
+    bob = NodeFactory()
+    # Pretend we have a valid bond with bob.
+    discovery.node_db.set_last_pong_time(bob.id, int(time.monotonic()))
+
+    class AttemptedNewBond(Exception):
+        pass
+
+    async def send_ping(node):
+        raise AttemptedNewBond()
+
+    monkeypatch.setattr(discovery, 'send_ping_v4', send_ping)
+
+    # When we have a valid bond, we won't attempt a new one.
+    assert discovery.is_bond_valid_with(bob.id)
+    assert await discovery.bond(bob)
+
+
+@pytest.mark.trio
 async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's ENR
@@ -425,7 +452,7 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
 
     # Also add bob's node to alice's DB as when scheduling an ENR retrieval we only get the node ID
     # and need to look it up in the DB.
-    await alice.update_routing_table(bob.this_node)
+    alice.update_routing_table(bob.this_node)
 
     # This task will run in a loop consuming from the pending_enrs_consumer channel and requesting
     # ENRs.
@@ -463,14 +490,14 @@ async def test_update_routing_table():
     discovery = MockDiscoveryService([])
     node = NodeFactory()
 
-    await discovery.update_routing_table(node)
+    discovery.update_routing_table(node)
 
     assert node in discovery.routing
 
 
 @pytest.mark.trio
 async def test_update_routing_table_triggers_bond_if_eviction_candidate(
-        nursery, manually_driven_discovery, monkeypatch):
+        manually_driven_discovery, monkeypatch):
     discovery = manually_driven_discovery
     old_node, new_node = NodeFactory.create_batch(2)
 
@@ -486,7 +513,7 @@ async def test_update_routing_table_triggers_bond_if_eviction_candidate(
     # node for an eviction check.
     monkeypatch.setattr(discovery.routing, 'add_node', lambda n: old_node)
 
-    await discovery.update_routing_table(new_node)
+    discovery.update_routing_table(new_node)
 
     assert new_node not in discovery.routing
     # The update_routing_table() call above will have scheduled a future call to discovery.bond() so
@@ -524,6 +551,25 @@ def test_unpack_eip8_packets():
             pubkey, cmd_id, payload, _ = _unpack_v4(packet)
             assert pubkey.to_hex() == '0xca634cae0d49acb401d8a4c6b6fe8c55b70d115bf400769cc1400f3258cd31387574077f301b421bc84df7266c44e9e6d569fc56be00812904767bf5ccd1fc7f'  # noqa: E501
             assert cmd.id == cmd_id
+
+
+@pytest.mark.trio
+async def test_bootstrap_nodes():
+    private_key = PrivateKeyFactory().to_bytes()
+    bootnode1 = ENRFactory(private_key=private_key)
+    bootnode2 = ENRFactory()
+    discovery = MockDiscoveryService([Node(bootnode1), Node(bootnode2)])
+
+    assert discovery.node_db.get_enr(bootnode1.node_id) == bootnode1
+    assert discovery.node_db.get_enr(bootnode2.node_id) == bootnode2
+    assert [node.enr for node in discovery.bootstrap_nodes] == [bootnode1, bootnode2]
+
+    # If our DB gets updated with a newer ENR of one of our bootnodes, the @bootstrap_nodes
+    # property will reflect that.
+    new_bootnode1 = ENRFactory(
+        private_key=private_key, sequence_number=bootnode1.sequence_number + 1)
+    discovery.node_db.set_enr(new_bootnode1)
+    assert [node.enr for node in discovery.bootstrap_nodes] == [new_bootnode1, bootnode2]
 
 
 class MockDiscoveryService(DiscoveryService):
