@@ -26,7 +26,7 @@ async def main() -> None:
     logger = logging.getLogger()
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-ipc', type=str, help="The path to DiscoveryService's IPC file")
+    parser.add_argument('--ipc', type=str, help="The path to DiscoveryService's IPC file")
     args = parser.parse_args()
 
     # XXX: This is an ugly hack, but it's the easiest way to ensure we use the same network as the
