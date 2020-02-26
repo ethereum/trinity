@@ -334,19 +334,29 @@ class DiscoveryService(Service):
                 "Checking if %s is still responding, will evict if not", node, eviction_candidate)
             self.manager.run_task(self.bond, eviction_candidate)
 
-        self.node_db.set_enr(node.enr)
+        try:
+            self.node_db.set_enr(node.enr)
+        except ValueError:
+            self.logger.exception(
+                "Attempted to overwrite ENR of %s with a previous version",
+                node,
+                stack_info=True,
+            )
 
     async def bond(self, node: NodeAPI) -> bool:
         """Bond with the given node.
 
         Bonding consists of pinging the node, waiting for a pong and maybe a ping as well.
         It is necessary to do this at least once before we send find_node requests to a node.
+
+        If we already have a valid bond with the given node we return immediately.
         """
         if node.id == self.this_node.id:
             # FIXME: We should be able to get rid of this check, but for now issue a warning.
             self.logger.warning("Attempted to bond with self; this shouldn't happen")
             return False
 
+        self.logger.debug2("Starting bond process with %s", node)
         if self.is_bond_valid_with(node.id):
             self.logger.debug("Bond with %s is still valid, not doing it again", node)
             return True

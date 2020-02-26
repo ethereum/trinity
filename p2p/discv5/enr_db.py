@@ -50,10 +50,8 @@ class NodeDB(NodeDBAPI):
             existing_enr = None
         if existing_enr and existing_enr.sequence_number > enr.sequence_number:
             raise ValueError(
-                "Cannot overwrite existing ENR (%d) with old one (%d)",
-                existing_enr.sequence_number,
-                enr.sequence_number
-            )
+                f"Cannot overwrite existing ENR ({existing_enr.sequence_number}) with old one "
+                f"({enr.sequence_number})")
         self.db.set(self._get_enr_key(enr.node_id), rlp.encode(enr))
 
     def get_enr(self, node_id: NodeID) -> ENR:
