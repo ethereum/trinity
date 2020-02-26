@@ -330,9 +330,13 @@ class Store:
             post_state.current_justified_checkpoint.epoch
             > self._context.justified_checkpoint.epoch
         ):
-            self._context.best_justified_checkpoint = (
-                post_state.current_justified_checkpoint
-            )
+            if (
+                post_state.current_justified_checkpoint.epoch
+                > self._context.best_justified_checkpoint.epoch
+            ):
+                self._context.best_justified_checkpoint = (
+                    post_state.current_justified_checkpoint
+                )
             if self._should_update_justified_checkpoint(
                 post_state.current_justified_checkpoint
             ):
@@ -361,6 +365,13 @@ class Store:
         if target.epoch not in (current_epoch, previous_epoch):
             raise ValidationError(
                 "Attestations must be from the current or previous epoch"
+            )
+
+        if target.epoch != compute_epoch_at_slot(
+            attestation.data.slot, self._config.SLOTS_PER_EPOCH
+        ):
+            raise ValidationError(
+                "Attestation's slot is not for the epoch given in the target"
             )
 
         if target.root not in self._context.blocks:
