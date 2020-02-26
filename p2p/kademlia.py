@@ -388,12 +388,17 @@ class RoutingTable:
         return None  # successfully added to not full bucket
 
     def get_node(self, node_id: NodeID) -> NodeAPI:
+        """
+        Return the Node with the given ID if it is in the routing table or the replacement cache.
+
+        Raises a KeyError otherwise.
+        """
         id_int = big_endian_to_int(node_id)
         bucket = binary_get_bucket_for_node(self.buckets, id_int)
         for node in itertools.chain(bucket.nodes, bucket.replacement_cache):
             if node.id == node_id:
                 return node
-        raise KeyError("Node {node_id} is not in routing table")
+        raise KeyError("Node {node_id} is not in routing table nor replacement cache")
 
     def get_bucket_for_node(self, node_id: int) -> KBucket:
         return binary_get_bucket_for_node(self.buckets, node_id)
