@@ -168,11 +168,13 @@ class Store:
     def slots_per_epoch(self) -> int:
         return self._config.SLOTS_PER_EPOCH
 
+    def _get_slots_since_genesis(self) -> int:
+        return (
+            self._context.time - self._context.genesis_time
+        ) // self._config.SECONDS_PER_SLOT
+
     def get_current_slot(self) -> Slot:
-        return Slot(
-            (self._context.time - self._context.genesis_time)
-            // self._config.SECONDS_PER_SLOT
-        )
+        return Slot(self._config.GENESIS_SLOT + self._get_slots_since_genesis())
 
     def _get_block_by_root(self, root: Root) -> BaseBeaconBlock:
         return self._db.get_block_by_root(root, self._block_class).message
@@ -294,10 +296,7 @@ class Store:
 
         # NOTE: this invariant should hold based on how we handle
         # block importing in the chain but we will sanity check for now
-        assert (
-            self._context.time
-            >= pre_state.genesis_time + block.slot * self._config.SECONDS_PER_SLOT
-        )
+        assert self.get_current_slot() >= block.slot
 
         root = block.hash_tree_root
 
@@ -378,12 +377,10 @@ class Store:
             raise ValidationError("Attestation targets a block we have not seen")
 
         base_state = self._context.block_states[target.root]
-        time_of_target_epoch = (
-            base_state.genesis_time
-            + compute_start_slot_at_epoch(target.epoch, self._config.SLOTS_PER_EPOCH)
-            * self._config.SECONDS_PER_SLOT
+        slot_of_target_epoch = compute_start_slot_at_epoch(
+            target.epoch, self._config.SLOTS_PER_EPOCH
         )
-        if self._context.time < time_of_target_epoch:
+        if self.get_current_slot() < slot_of_target_epoch:
             raise ValidationError("Attestation cannot be for a future epoch")
 
         beacon_block_root = attestation.data.beacon_block_root
@@ -402,10 +399,7 @@ class Store:
             self._context.checkpoint_states[target] = base_state
         target_state = self._context.checkpoint_states[target]
 
-        if (
-            self._context.time
-            < (attestation.data.slot + 1) * self._config.SECONDS_PER_SLOT
-        ):
+        if self.get_current_slot() < attestation.data.slot + 1:
             raise ValidationError(
                 "Attestations can only affect the fork choice of future slots"
             )
