@@ -68,6 +68,8 @@ async def manually_driven_discovery(nursery):
 async def manually_driven_discovery_pair(nursery, socket_pair):
     async with _manually_driven_discovery(b'seed1', socket_pair[0], nursery) as discovery1:
         async with _manually_driven_discovery(b'seed2', socket_pair[1], nursery) as discovery2:
+            discovery1.node_db.set_enr(discovery2.this_node.enr)
+            discovery2.node_db.set_enr(discovery1.this_node.enr)
             yield discovery1, discovery2
 
 

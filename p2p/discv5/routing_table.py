@@ -2,10 +2,10 @@ import collections
 import functools
 import itertools
 import logging
+import random
 import secrets
 from typing import (
     Any,
-    Generator,
     Collection,
     Deque,
     Iterator,
@@ -89,9 +89,9 @@ def compute_log_distance(left_node_id: NodeID, right_node_id: NodeID) -> int:
 
 
 class KademliaRoutingTable:
-    logger = logging.getLogger("p2p.discv5.routing_table.KademliaRoutingTable")
 
     def __init__(self, center_node_id: NodeID, bucket_size: int) -> None:
+        self.logger = logging.getLogger("p2p.discv5.routing_table.KademliaRoutingTable")
         self.center_node_id = center_node_id
         self.bucket_size = bucket_size
 
@@ -103,6 +103,14 @@ class KademliaRoutingTable:
         )
 
         self.bucket_update_order: Deque[int] = collections.deque()
+
+    def _contains(self, node_id: NodeID, include_replacement_cache: bool) -> bool:
+        _, bucket, replacement_cache = self.get_index_bucket_and_replacement_cache(node_id)
+        if include_replacement_cache:
+            nodes = bucket + replacement_cache
+        else:
+            nodes = bucket
+        return node_id in nodes
 
     def get_index_bucket_and_replacement_cache(self,
                                                node_id: NodeID,
@@ -255,10 +263,23 @@ class KademliaRoutingTable:
         else:
             return bucket_index + 1
 
-    def iter_nodes_around(self, reference_node_id: NodeID) -> Generator[NodeID, None, None]:
+    def iter_nodes_around(self, reference_node_id: NodeID) -> Iterator[NodeID]:
         """Iterate over all nodes in the routing table ordered by distance to a given reference."""
         all_node_ids = itertools.chain(*self.buckets)
         distance_to_reference = functools.partial(compute_distance, reference_node_id)
         sorted_node_ids = sorted(all_node_ids, key=distance_to_reference)
         for node_id in sorted_node_ids:
+            yield node_id
+
+    def iter_all_random(self) -> Iterator[NodeID]:
+        """
+        Iterate over all nodes in the table (including ones in the replacement cache) in a random
+        order.
+        """
+        # Create a new list with all available nodes as buckets can mutate while we're iterating.
+        # This shouldn't use a significant amount of memory as the new list will keep just
+        # references to the existing NodeID instances.
+        node_ids = list(itertools.chain(*self.buckets, *self.replacement_caches))
+        random.shuffle(node_ids)
+        for node_id in node_ids:
             yield node_id
