@@ -88,9 +88,9 @@ from p2p.exceptions import (
     CouldNotRetrieveENR,
     NoEligibleNodes,
 )
-from p2p.kademlia import (
-    Address, Node, RoutingTable, check_relayed_addr, create_stub_enr, sort_by_distance)
+from p2p.kademlia import Address, Node, check_relayed_addr, create_stub_enr, sort_by_distance
 from p2p import trio_utils
+from p2p.discv5.routing_table import KademliaRoutingTable
 
 
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
@@ -134,7 +134,7 @@ CMD_ID_MAP = dict(
 
 
 class DiscoveryService(Service):
-    _refresh_interval: int = 30
+    _stats_interval: int = 30
     _max_neighbours_per_packet_cache = None
     # Maximum number of ENR retrieval requests active at any moment. Need to be a relatively high
     # number as during a lookup() we'll bond and fetch ENRs of many nodes.
@@ -193,7 +193,7 @@ class DiscoveryService(Service):
             self.pubkey,
             Address("127.0.0.1", udp_port, tcp_port),
         )
-        self.routing = RoutingTable(self.this_node.id)
+        self.routing = KademliaRoutingTable(self.this_node.id, constants.KADEMLIA_BUCKET_SIZE)
 
     async def _init(self) -> None:
         try:
@@ -326,12 +326,16 @@ class DiscoveryService(Service):
             self.logger.debug("Failed to retrieve ENR for %s: %s", node, e)
 
     async def report_stats(self) -> None:
-        async for _ in trio_utils.every(self._refresh_interval):
+        async for _ in trio_utils.every(self._stats_interval):
             self.logger.debug("============================= Stats =======================")
-            full_buckets = [bucket for bucket in self.routing.buckets if bucket.is_full]
+            full_buckets = [
+                bucket
+                for bucket in self.routing.buckets
+                if len(bucket) >= self.routing.bucket_size
+            ]
             total_nodes = sum([len(bucket) for bucket in self.routing.buckets])
             nodes_in_replacement_cache = sum(
-                [len(bucket.replacement_cache) for bucket in self.routing.buckets])
+                [len(replacement_cache) for replacement_cache in self.routing.replacement_caches])
             self.logger.debug(
                 "Routing table has %s nodes in %s buckets (%s of which are full), and %s nodes "
                 "are in the replacement cache", total_nodes, len(self.routing.buckets),
@@ -347,7 +351,7 @@ class DiscoveryService(Service):
             # TODO: Maybe this should raise an exception, but for now just log it as a warning.
             self.logger.warning("Attempted to add node to RT when we haven't bonded before")
 
-        eviction_candidate = self.routing.add_node(node)
+        eviction_candidate = self.routing.update(node.id)
         if eviction_candidate:
             # This means we couldn't add the node because its bucket is full, so schedule a bond()
             # with the least recently seen node on that bucket. If the bonding fails the node will
@@ -367,7 +371,7 @@ class DiscoveryService(Service):
                 stack_info=True,
             )
 
-    async def bond(self, node: NodeAPI) -> bool:
+    async def bond(self, node_id: NodeID) -> bool:
         """Bond with the given node.
 
         Bonding consists of pinging the node, waiting for a pong and maybe a ping as well.
@@ -376,13 +380,19 @@ class DiscoveryService(Service):
 
         If we already have a valid bond with the given node we return immediately.
         """
-        if node.id == self.this_node.id:
+        if node_id == self.this_node.id:
             # FIXME: We should be able to get rid of this check, but for now issue a warning.
             self.logger.warning("Attempted to bond with self; this shouldn't happen")
             return False
 
+        try:
+            node = Node(self.node_db.get_enr(node_id))
+        except KeyError:
+            self.logger.exception("Attempted to bond with node that doesn't exist in our DB")
+            return False
+
         self.logger.debug2("Starting bond process with %s", node)
-        if self.is_bond_valid_with(node.id):
+        if self.is_bond_valid_with(node_id):
             self.logger.debug("Bond with %s is still valid, not doing it again", node)
             return True
 
@@ -403,7 +413,7 @@ class DiscoveryService(Service):
             self.logger.info(
                 "Bonding with %s failed, expected pong with token %s, but got %s",
                 node, token, received_token)
-            self.routing.remove_node(node)
+            self.routing.remove(node.id)
             return False
 
         ping_send_chan, ping_recv_chan = trio.open_memory_channel[None](1)
@@ -439,7 +449,7 @@ class DiscoveryService(Service):
         Raises CouldNotRetrieveENR if we can't get a ENR from the remote node.
         """
         # No need to use a timeout because bond() takes care of that internally.
-        await self.bond(remote)
+        await self.bond(remote.id)
         token = self.send_enr_request(remote)
         send_chan, recv_chan = trio.open_memory_channel[Tuple[ENR, Hash32]](1)
         try:
@@ -586,10 +596,12 @@ class DiscoveryService(Service):
                     not self.pong_channels.already_waiting_for(c))
             )
             self.logger.debug2("got %s new candidates", len(candidates))
+            # Ensure all received candidates are in our DB so that we can bond with them.
+            self._ensure_nodes_are_in_db(candidates)
             # Add new candidates to nodes_seen so that we don't attempt to bond with failing ones
             # in the future.
             nodes_seen.update(candidates)
-            bonded = await trio_utils.gather(*((self.bond, c) for c in candidates))
+            bonded = await trio_utils.gather(*((self.bond, c.id) for c in candidates))
             self.logger.debug2("bonded with %s candidates", bonded.count(True))
             return tuple(c for c in candidates if bonded[candidates.index(c)])
 
@@ -597,7 +609,7 @@ class DiscoveryService(Service):
             nodes_to_ask = list(set(nodes).difference(nodes_asked))
             return sort_by_distance(nodes_to_ask, target_id)[:constants.KADEMLIA_FIND_CONCURRENCY]
 
-        closest = self.routing.neighbours(target_id)
+        closest = list(self.get_neighbours(target_id))
         self.logger.debug("starting lookup; initial neighbours: %s", closest)
         nodes_to_ask = _exclude_if_asked(closest)
         if not nodes_to_ask:
@@ -632,6 +644,13 @@ class DiscoveryService(Service):
         ).rjust(constants.KADEMLIA_PUBLIC_KEY_SIZE // 8, b'\x00')
         return await self.lookup(target_key)
 
+    def _ensure_nodes_are_in_db(self, nodes: Tuple[NodeAPI, ...]) -> None:
+        for node in nodes:
+            try:
+                self.node_db.set_enr(node.enr)
+            except ValueError:
+                self.logger.debug2("DB entry for %s has a more recent ENR, keeping that", node)
+
     def get_random_bootnode(self) -> Iterator[NodeAPI]:
         if self.bootstrap_nodes:
             yield random.choice(self.bootstrap_nodes)
@@ -639,7 +658,12 @@ class DiscoveryService(Service):
             self.logger.warning('No bootnodes available')
 
     def iter_nodes(self) -> Iterator[NodeAPI]:
-        return self.routing.iter_random()
+        for node_id in self.routing.iter_all_random():
+            try:
+                yield Node(self.node_db.get_enr(node_id))
+            except KeyError:
+                self.logger.exception(
+                    "Node with ID %s is in routing table but not in node DB", encode_hex(node_id))
 
     @property
     def pubkey(self) -> datatypes.PublicKey:
@@ -689,7 +713,7 @@ class DiscoveryService(Service):
             # which might have changed.
             self.invalidate_bond(node.id)
 
-            bonding_queries.append((self.bond, node))
+            bonding_queries.append((self.bond, node.id))
 
         bonded = await trio_utils.gather(*bonding_queries)
         successful_bonds = len([item for item in bonded if item is True])
@@ -749,7 +773,8 @@ class DiscoveryService(Service):
         """
         Lookup the ENR for the given pubkey in our node DB, returning that if the address matches.
 
-        If we have no ENR for the given pubkey, simply create a stub one and return it.
+        If we have no ENR for the given pubkey, create a stub one, add it to our node DB and
+        return it.
 
         If the ENR in our DB has a different address, we create a stub ENR using the new address
         and overwrite the existing one with that.
@@ -758,6 +783,7 @@ class DiscoveryService(Service):
             enr = self.node_db.get_enr(node_id_from_pubkey(pubkey))
         except KeyError:
             enr = create_stub_enr(pubkey, address)
+            self.node_db.set_enr(enr)
         else:
             node = Node(enr)
             if node.address != address:
@@ -870,7 +896,7 @@ class DiscoveryService(Service):
         # If no communication with the sender has occurred within the last 12h, a ping
         # should be sent in addition to pong in order to receive an endpoint proof.
         if not self.is_bond_valid_with(remote.id):
-            self.manager.run_task(self.bond, remote)
+            self.manager.run_task(self.bond, remote.id)
 
     async def recv_find_node_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The find_node payload should have 2 elements: node_id, expiration
@@ -886,8 +912,20 @@ class DiscoveryService(Service):
                 "Ignoring find_node request from node (%s) we haven't bonded with", node)
             return
         target_id = NodeID(keccak(target))
-        found = self.routing.neighbours(target_id)
-        self.send_neighbours_v4(node, found)
+        self.send_neighbours_v4(node, self.get_neighbours(target_id))
+
+    @to_tuple
+    def get_neighbours(self, target_id: NodeID) -> Iterator[NodeAPI]:
+        count = 0
+        for node_id in self.routing.iter_nodes_around(target_id):
+            try:
+                yield Node(self.node_db.get_enr(node_id))
+                count += 1
+            except KeyError:
+                self.logger.exception(
+                    "Node with ID %s is in routing table but not in node DB", encode_hex(node_id))
+            if count == constants.KADEMLIA_BUCKET_SIZE:
+                break
 
     async def recv_enr_request(
             self, node: NodeAPI, payload: Sequence[Any], msg_hash: Hash32) -> None:
@@ -946,7 +984,7 @@ class DiscoveryService(Service):
         if new_node.address is None:
             self.logger.debug(
                 "Received ENR with no endpoint info from %s, removing from DB/RT", node)
-            self.routing.remove_node(node)
+            self.routing.remove(node.id)
             try:
                 self.node_db.delete_enr(node.id)
             except KeyError:
@@ -996,17 +1034,17 @@ class DiscoveryService(Service):
         payload = (node.address.to_endpoint(), token, expiration, int_to_big_endian(local_enr_seq))
         self.send(node, CMD_PONG, payload)
 
-    def send_neighbours_v4(self, node: NodeAPI, neighbours: List[NodeAPI]) -> None:
+    def send_neighbours_v4(self, node: NodeAPI, neighbours: Tuple[NodeAPI, ...]) -> None:
         nodes = []
-        neighbours = sorted(neighbours)
-        for n in neighbours:
+        sorted_neighbours: List[NodeAPI] = sorted(neighbours)
+        for n in sorted_neighbours:
             nodes.append(n.address.to_endpoint() + [n.pubkey.to_bytes()])
 
         expiration = _get_msg_expiration()
         max_neighbours = self._get_max_neighbours_per_packet()
         for i in range(0, len(nodes), max_neighbours):
             self.logger.debug2('>>> neighbours to %s: %s',
-                               node, neighbours[i:i + max_neighbours])
+                               node, sorted_neighbours[i:i + max_neighbours])
             payload = NeighboursPacket(
                 neighbours=nodes[i:i + max_neighbours],
                 expiration=expiration)

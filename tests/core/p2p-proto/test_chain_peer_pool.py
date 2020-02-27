@@ -77,7 +77,7 @@ def test_skip_candidate_if_on_list_or_fork_mismatch():
 
     # It returns False for candidates with no fork-id that are not on the skip list.
     with pytest.raises(ENRMissingForkID):
-        assert forkid.extract_forkid(no_forkid_nodes[0].enr)
+        forkid.extract_forkid(no_forkid_nodes[0].enr)
     assert functools.partial(should_skip_fn, skip_list)(no_forkid_nodes[0]) is False
 
     # It returns False for candidates with compatible fork-ids that are not on the skip list

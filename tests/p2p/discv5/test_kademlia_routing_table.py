@@ -1,3 +1,5 @@
+import itertools
+
 import pytest
 
 from p2p.discv5.routing_table import (
@@ -135,6 +137,33 @@ def test_is_empty(routing_table):
     assert not routing_table.is_empty
     routing_table.remove(node_id)
     assert routing_table.is_empty
+
+
+def test_iter_all_random(routing_table, center_node_id):
+    nodes_in_insertion_order = []
+    # Use a relatively high number of nodes here otherwise we could have two consecutive calls
+    # yielding nodes in the same order.
+    for _ in range(100):
+        node_id = NodeIDFactory()
+        routing_table.update(node_id)
+        nodes_in_insertion_order.append(node_id)
+
+    nodes_in_iteration_order = [node for node in routing_table.iter_all_random()]
+
+    # We iterate over all nodes
+    table_length = sum(
+        len(l) for l in itertools.chain(routing_table.buckets, routing_table.replacement_caches))
+    assert len(nodes_in_iteration_order) == table_length == len(nodes_in_insertion_order)
+    # No repeated nodes are returned
+    assert len(set(nodes_in_iteration_order)) == len(nodes_in_iteration_order)
+    # The order in which we iterate is not the same as the one in which nodes were inserted.
+    assert nodes_in_iteration_order != nodes_in_insertion_order
+
+    second_iteration_order = [node for node in routing_table.iter_all_random()]
+
+    # Multiple calls should yield the same nodes, but in a different order.
+    assert set(nodes_in_iteration_order) == set(second_iteration_order)
+    assert nodes_in_iteration_order != second_iteration_order
 
 
 def test_iter_around(routing_table, center_node_id):

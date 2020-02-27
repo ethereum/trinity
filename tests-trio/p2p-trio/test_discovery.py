@@ -50,10 +50,14 @@ from p2p.tools.factories import (
 from trinity.components.builtin.upnp.events import NewUPnPMapping
 
 
-# Force our tests to fail quickly if they accidentally make network requests.
+# Force our tests to fail quickly if they accidentally get stuck waiting for a response that will
+# never come. Notice that we can't use a too low value here because this constant is also used
+# when waiting for things like waiting for a msg handler coroutine to forward the received msg
+# over the appropriate channel (e.g. when request_enr() waits for the ENR to be sent over the
+# enr_response_channels).
 @pytest.fixture(autouse=True)
 def short_timeout(monkeypatch):
-    monkeypatch.setattr(constants, 'KADEMLIA_REQUEST_TIMEOUT', 0.05)
+    monkeypatch.setattr(constants, 'KADEMLIA_REQUEST_TIMEOUT', 0.2)
 
 
 @pytest.mark.trio
@@ -169,8 +173,9 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     bobs_node_with_stub_enr = Node.from_pubkey_and_addr(
         bob.this_node.pubkey, bob.this_node.address)
     alice.node_db.set_last_pong_time(bob.this_node.id, int(time.monotonic()))
-    alice.update_routing_table(bobs_node_with_stub_enr)
-    assert alice.routing.get_node(bobs_node_with_stub_enr.id).enr.sequence_number == 0
+    alice.node_db.delete_enr(bobs_node_with_stub_enr.id)
+    alice.node_db.set_enr(bobs_node_with_stub_enr.enr)
+    assert alice.node_db.get_enr(bobs_node_with_stub_enr.id).sequence_number == 0
 
     received_enr = None
     got_enr = trio.Event()
@@ -194,7 +199,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
         await got_enr.wait()
 
     validate_node_enr(bob.this_node, received_enr, sequence_number=1)
-    assert alice.routing.get_node(bob.this_node.id).enr == received_enr
+    assert alice.node_db.get_enr(bob.this_node.id) == received_enr
 
     # Now, if Bob later sends us a new ENR with no endpoint information, we'll evict him from both
     # our DB and RT.
@@ -219,8 +224,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
         await got_new_enr.wait()
 
     assert Node(received_enr).address is None
-    with pytest.raises(KeyError):
-        alice.routing.get_node(bob.this_node.id)
+    assert not alice.routing._contains(bob.this_node.id, include_replacement_cache=True)
     with pytest.raises(KeyError):
         alice.node_db.get_enr(bob.this_node.id)
 
@@ -228,10 +232,16 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
 @pytest.mark.trio
 async def test_find_node_neighbours(manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
-    # Add some nodes to bob's routing table so that it has something to use when replying to
-    # alice's find_node.
-    for _ in range(constants.KADEMLIA_BUCKET_SIZE * 2):
-        bob.update_routing_table(NodeFactory())
+    nodes_in_rt = 0
+    # Ensure we have plenty of nodes in our RT's buckets so that the NEIGHBOURS response sent by
+    # bob is split into multiple messages.
+    while nodes_in_rt < (constants.KADEMLIA_BUCKET_SIZE * 2):
+        node = NodeFactory()
+        eviction_candidate = bob.routing.update(node.id)
+        if eviction_candidate is not None:
+            continue
+        nodes_in_rt += 1
+        bob.node_db.set_enr(node.enr)
 
     # Collect all neighbours packets received by alice in a list for later inspection.
     received_neighbours = []
@@ -273,7 +283,8 @@ async def test_get_peer_candidates(manually_driven_discovery, monkeypatch):
     nodes = NodeFactory.create_batch(total_nodes)
     discovery = manually_driven_discovery
     for node in nodes:
-        discovery.routing.add_node(node)
+        discovery.node_db.set_enr(node.enr)
+        assert discovery.routing.update(node.id) is None
 
     discovery._random_lookup_calls = 0
 
@@ -338,8 +349,8 @@ async def test_protocol_bootstrap(monkeypatch):
     def invalidate_bond(node_id):
         invalidated_bonds.append(node_id)
 
-    async def bond(node):
-        assert discovery.routing.add_node(node) is None
+    async def bond(node_id):
+        assert discovery.routing.update(node_id) is None
         return True
 
     monkeypatch.setattr(discovery, 'invalidate_bond', invalidate_bond)
@@ -389,6 +400,7 @@ async def test_bond(nursery, monkeypatch):
     discovery = MockDiscoveryService([])
     us = discovery.this_node
     node = NodeFactory()
+    discovery.node_db.set_enr(node.enr)
 
     token = b'token'
 
@@ -404,7 +416,7 @@ async def test_bond(nursery, monkeypatch):
         us.address.to_endpoint(), token, _get_msg_expiration(), int_to_big_endian(enr_seq)]
     nursery.start_soon(discovery.recv_pong_v4, node, pong_msg_payload, b'')
 
-    bonded = await discovery.bond(node)
+    bonded = await discovery.bond(node.id)
 
     assert bonded
     assert discovery.is_bond_valid_with(node.id)
@@ -417,7 +429,8 @@ async def test_bond(nursery, monkeypatch):
 
     # If we try to bond with any other nodes we'll timeout and bond() will return False.
     node2 = NodeFactory()
-    bonded = await discovery.bond(node2)
+    discovery.node_db.set_enr(node2.enr)
+    bonded = await discovery.bond(node2.id)
 
     assert not bonded
 
@@ -426,6 +439,7 @@ async def test_bond(nursery, monkeypatch):
 async def test_bond_short_circuits(monkeypatch):
     discovery = MockDiscoveryService([])
     bob = NodeFactory()
+    discovery.node_db.set_enr(bob.enr)
     # Pretend we have a valid bond with bob.
     discovery.node_db.set_last_pong_time(bob.id, int(time.monotonic()))
 
@@ -439,7 +453,7 @@ async def test_bond_short_circuits(monkeypatch):
 
     # When we have a valid bond, we won't attempt a new one.
     assert discovery.is_bond_valid_with(bob.id)
-    assert await discovery.bond(bob)
+    assert await discovery.bond(bob.id)
 
 
 @pytest.mark.trio
@@ -452,7 +466,7 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
 
     # Also add bob's node to alice's DB as when scheduling an ENR retrieval we only get the node ID
     # and need to look it up in the DB.
-    alice.update_routing_table(bob.this_node)
+    alice.node_db.set_enr(bob.this_node.enr)
 
     # This task will run in a loop consuming from the pending_enrs_consumer channel and requesting
     # ENRs.
@@ -492,15 +506,14 @@ async def test_lookup_and_maybe_update_enr_new_node():
     address = AddressFactory()
 
     # When looking up the ENR for a node we haven't heard about before, we'll create a stub ENR
-    # but it will not be inserted in our DB (that will happen only after we've successfully
-    # bonded).
+    # and add that into our DB.
     enr = discovery.lookup_and_maybe_update_enr(privkey.public_key, address)
     assert enr.sequence_number == 0
     node = Node(enr)
     assert node.pubkey == privkey.public_key
     assert node.address == address
-    with pytest.raises(KeyError):
-        discovery.node_db.get_enr(node.id)
+    db_enr = discovery.node_db.get_enr(node.id)
+    assert db_enr == enr
 
 
 @pytest.mark.trio
@@ -543,7 +556,7 @@ async def test_update_routing_table():
 
     discovery.update_routing_table(node)
 
-    assert node in discovery.routing
+    assert discovery.routing._contains(node.id, include_replacement_cache=False)
 
 
 @pytest.mark.trio
@@ -554,19 +567,19 @@ async def test_update_routing_table_triggers_bond_if_eviction_candidate(
 
     bond_called = False
 
-    async def bond(node):
+    async def bond(node_id):
         nonlocal bond_called
         bond_called = True
-        assert node == old_node
+        assert node_id == old_node.id
 
     monkeypatch.setattr(discovery, 'bond', bond)
     # Pretend our routing table failed to add the new node by returning the least recently seen
     # node for an eviction check.
-    monkeypatch.setattr(discovery.routing, 'add_node', lambda n: old_node)
+    monkeypatch.setattr(discovery.routing, 'update', lambda n: old_node.id)
 
     discovery.update_routing_table(new_node)
 
-    assert new_node not in discovery.routing
+    assert not discovery.routing._contains(new_node.id, include_replacement_cache=False)
     # The update_routing_table() call above will have scheduled a future call to discovery.bond() so
     # we need to wait a bit here to give it a chance to run.
     with trio.fail_after(0.5):
