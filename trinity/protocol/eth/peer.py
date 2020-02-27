@@ -162,7 +162,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
 
         return eth_handshakers + firehose_handshakers
 
-    async def _get_eth_handshaker(self, genesis_hash: Hash32) -> Tuple[Handshaker, ...]:
+    async def _get_eth_handshakers(self, genesis_hash: Hash32) -> Tuple[Handshaker, ...]:
         headerdb = self.context.headerdb
         wait = self.cancel_token.cancellable_wait
 
@@ -199,6 +199,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
             version=FirehoseProtocol.version,
             network_id=self.context.network_id,
             genesis_hash=genesis_hash,
+        )
         return (FirehoseHandshaker(handshake_params), )
 
 
