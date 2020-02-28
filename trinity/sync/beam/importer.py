@@ -37,7 +37,6 @@ from eth_typing import (
 from eth_utils import (
     ExtendedDebugLogger,
     ValidationError,
-    get_extended_debug_logger,
     humanize_seconds,
 )
 from eth_utils.toolz import (
@@ -65,6 +64,7 @@ from trinity.sync.common.events import (
     MissingStorageResult,
     StatelessBlockImportDone,
 )
+from trinity._utils.logging import get_logger
 
 ImportBlockType = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
 
@@ -381,7 +381,7 @@ def pausing_vm_decorator(
             return self._pause_on_missing_data(super().make_state_root)
 
     class PausingVM(original_vm_class):  # type: ignore
-        logger = get_extended_debug_logger(f'eth.vm.base.VM.{original_vm_class.__name__}')
+        logger = get_logger(f'eth.vm.base.VM.{original_vm_class.__name__}')
 
         @classmethod
         def get_state_class(cls) -> Type[StateAPI]:
@@ -455,7 +455,7 @@ def partial_import_block(beam_chain: BeamChain,
 
 
 class BlockImportServer(Service):
-    logger = get_extended_debug_logger('trinity.sync.beam.BlockImportServer')
+    logger = get_logger('trinity.sync.beam.BlockImportServer')
 
     def __init__(
             self,
@@ -633,7 +633,7 @@ def partial_speculative_execute(
 
 
 class BlockPreviewServer(Service):
-    logger = get_extended_debug_logger('trinity.sync.beam.BlockPreviewServer')
+    logger = get_logger('trinity.sync.beam.BlockPreviewServer')
 
     def __init__(
             self,

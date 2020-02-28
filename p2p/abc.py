@@ -498,9 +498,13 @@ THandshakeReceipt = TypeVar('THandshakeReceipt', bound=HandshakeReceiptAPI)
 
 
 class HandshakerAPI(ABC, Generic[TProtocol]):
-    logger: ExtendedDebugLogger
 
     protocol_class: Type[TProtocol]
+
+    @property
+    @abstractmethod
+    def logger(self) -> ExtendedDebugLogger:
+        ...
 
     @abstractmethod
     async def do_handshake(self,

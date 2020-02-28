@@ -1,5 +1,3 @@
-import logging
-
 from cached_property import cached_property
 
 from p2p.abc import ConnectionAPI
@@ -7,6 +5,7 @@ from p2p.logic import Application, CommandHandler
 from p2p.disconnect import DisconnectReason
 from p2p.p2p_proto import Disconnect, Ping, Pong
 from p2p.qualifiers import always
+from p2p._utils import get_logger
 
 
 class PongWhenPinged(CommandHandler[Ping]):
@@ -23,12 +22,11 @@ class P2PAPI(Application):
     name = 'p2p'
     qualifier = always  # always valid for all connections.
 
-    logger = logging.getLogger('p2p.p2p_api.P2PAPI')
-
     local_disconnect_reason: DisconnectReason = None
     remote_disconnect_reason: DisconnectReason = None
 
     def __init__(self) -> None:
+        self.logger = get_logger('p2p.p2p_api.P2PAPI')
         self.add_child_behavior(PongWhenPinged().as_behavior())
 
     #

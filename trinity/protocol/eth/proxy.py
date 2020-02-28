@@ -13,7 +13,6 @@ from eth_typing import (
     BlockIdentifier,
     Hash32,
 )
-from eth_utils import get_extended_debug_logger
 from lahja import (
     BroadcastConfig,
     EndpointAPI,
@@ -22,6 +21,7 @@ from lahja import (
 from p2p.abc import SessionAPI
 
 from trinity._utils.errors import SupportsError
+from trinity._utils.logging import get_logger
 from trinity.protocol.common.typing import (
     BlockBodyBundles,
     NodeDataBundles,
@@ -54,7 +54,7 @@ class ProxyETHAPI:
     An ``ETHAPI`` that can be used outside of the process that runs the peer pool. Any
     action performed on this class is delegated to the process that runs the peer pool.
     """
-    logger = get_extended_debug_logger('trinity.protocol.eth.proxy.ProxyETHAPI')
+    logger = get_logger('trinity.protocol.eth.proxy.ProxyETHAPI')
 
     def __init__(self,
                  session: SessionAPI,

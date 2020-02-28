@@ -34,10 +34,7 @@ from async_generator import aclosing
 import trio
 
 import eth_utils.toolz
-from eth_utils import (
-    ExtendedDebugLogger,
-    get_extended_debug_logger,
-)
+from eth_utils import ExtendedDebugLogger
 
 from lahja import (
     EndpointAPI,
@@ -85,6 +82,7 @@ from p2p.exceptions import (
 )
 from p2p.kademlia import (
     Address, Node, check_relayed_addr, create_stub_enr, sort_by_distance, KademliaRoutingTable)
+from p2p._utils import get_logger
 from p2p import trio_utils
 
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
@@ -145,7 +143,7 @@ class DiscoveryService(Service):
                  node_db: NodeDBAPI,
                  enr_field_providers: Sequence[ENR_FieldProvider] = tuple(),
                  ) -> None:
-        self.logger = get_extended_debug_logger('p2p.discovery.DiscoveryService')
+        self.logger = get_logger('p2p.discovery.DiscoveryService')
         self.privkey = privkey
         self._event_bus = event_bus
         self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
@@ -1172,7 +1170,7 @@ class StaticDiscoveryService(Service):
             self,
             event_bus: EndpointAPI,
             static_peers: Sequence[NodeAPI]) -> None:
-        self.logger = get_extended_debug_logger('p2p.discovery.StaticDiscoveryService')
+        self.logger = get_logger('p2p.discovery.StaticDiscoveryService')
         self._event_bus = event_bus
         self._static_peers = tuple(static_peers)
 
@@ -1215,7 +1213,7 @@ class NoopDiscoveryService(Service):
     'A stub "discovery service" which does nothing'
 
     def __init__(self, event_bus: EndpointAPI) -> None:
-        self.logger = get_extended_debug_logger('p2p.discovery.NoopDiscoveryService')
+        self.logger = get_logger('p2p.discovery.NoopDiscoveryService')
         self._event_bus = event_bus
 
     async def handle_get_peer_candidates_requests(self) -> None:

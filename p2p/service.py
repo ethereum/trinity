@@ -21,11 +21,11 @@ from cancel_token import CancelToken, OperationCancelled
 from eth_utils import (
     ExtendedDebugLogger,
     ValidationError,
-    get_extended_debug_logger,
 )
 
 from p2p.abc import ServiceEventsAPI, AsyncioServiceAPI
 from p2p.cancellable import CancellableMixin
+from p2p._utils import get_logger
 
 
 class ServiceEvents(ServiceEventsAPI):
@@ -73,7 +73,7 @@ class BaseService(CancellableMixin, AsyncioServiceAPI):
     @property
     def logger(self) -> ExtendedDebugLogger:
         if self._logger is None:
-            self._logger = get_extended_debug_logger(
+            self._logger = get_logger(
                 self.__module__ + '.' + self.__class__.__name__
             )
         return self._logger

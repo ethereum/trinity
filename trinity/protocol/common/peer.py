@@ -18,7 +18,6 @@ from lahja import EndpointAPI
 
 from cancel_token import CancelToken, OperationCancelled
 
-from eth_utils.logging import get_extended_debug_logger
 from eth_utils.toolz import (
     excepts,
     groupby,
@@ -78,6 +77,7 @@ from trinity.components.builtin.network_db.eth1_peer_db.tracker import (
     EventBusEth1PeerTracker,
     NoopEth1PeerTracker,
 )
+from trinity._utils.logging import get_logger
 
 from .boot import DAOCheckBootManager
 from .context import ChainContext
@@ -86,7 +86,7 @@ from .events import (
 )
 
 
-p2p_logger = get_extended_debug_logger('p2p')
+p2p_logger = get_logger('p2p')
 
 
 class BaseChainPeer(BasePeer):

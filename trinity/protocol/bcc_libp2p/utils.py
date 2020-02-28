@@ -37,7 +37,6 @@ from eth_keys import (
 )
 from eth_utils import (
     ValidationError,
-    get_extended_debug_logger,
     to_tuple,
 )
 from libp2p.network.stream.exceptions import (
@@ -65,6 +64,8 @@ from ssz.hashable_container import (
 from ssz.tools import (
     to_formatted_dict,
 )
+
+from trinity._utils.logging import get_logger
 
 from .configs import (
     REQ_RESP_ENCODE_POSTFIX,
@@ -340,7 +341,7 @@ def get_beacon_blocks_by_root(
 
 class Interaction:
     stream: INetStream
-    logger = get_extended_debug_logger("trinity.protocol.bcc_libp2p.Interaction")
+    logger = get_logger("trinity.protocol.bcc_libp2p.Interaction")
 
     def __init__(self, stream: INetStream):
         self.stream = stream

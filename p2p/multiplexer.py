@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import collections
 from typing import (
     Any,
@@ -20,7 +19,7 @@ from async_generator import asynccontextmanager
 
 from cancel_token import CancelToken
 
-from eth_utils import get_extended_debug_logger, ValidationError
+from eth_utils import ValidationError
 from eth_utils.toolz import cons
 import rlp
 
@@ -42,9 +41,7 @@ from p2p.exceptions import (
 )
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p.transport_state import TransportState
-
-
-logger = logging.getLogger('p2p.multiplexer')
+from p2p._utils import get_logger
 
 
 async def stream_transport_messages(transport: TransportAPI,
@@ -101,7 +98,6 @@ async def stream_transport_messages(transport: TransportAPI,
 
 
 class Multiplexer(CancellableMixin, MultiplexerAPI):
-    logger = get_extended_debug_logger('p2p.multiplexer.Multiplexer')
 
     _multiplex_token: CancelToken
 
@@ -117,6 +113,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                  protocols: Sequence[ProtocolAPI],
                  token: CancelToken = None,
                  max_queue_size: int = 4096) -> None:
+        self.logger = get_logger('p2p.multiplexer.Multiplexer')
         if token is None:
             loop = None
         else:

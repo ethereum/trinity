@@ -13,7 +13,6 @@ from async_service import Service
 from lahja import EndpointAPI
 
 from eth_typing import Hash32
-from eth_utils import get_extended_debug_logger
 
 from eth.exceptions import (
     HeaderNotFound,
@@ -36,6 +35,7 @@ from trinity._utils.headers import sequence_builder
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.common.peer import BasePeerPool
 from trinity.protocol.common.payloads import BlockHeadersQuery
+from trinity._utils.logging import get_logger
 
 from .events import PeerPoolMessageEvent
 
@@ -91,7 +91,7 @@ class BaseIsolatedRequestServer(Service):
     Monitor commands from peers, to identify inbound requests that should receive a response.
     Handle those inbound requests by querying our local database and replying.
     """
-    logger = get_extended_debug_logger('trinity.protocol.common.servers.IsolatedRequestServer')
+    logger = get_logger('trinity.protocol.common.servers.IsolatedRequestServer')
 
     def __init__(
             self,
@@ -134,7 +134,7 @@ class BaseIsolatedRequestServer(Service):
 
 
 class BasePeerRequestHandler:
-    logger = get_extended_debug_logger('trinity.protocol.common.servers.PeerRequestHandler')
+    logger = get_logger('trinity.protocol.common.servers.PeerRequestHandler')
 
     def __init__(self, db: BaseAsyncHeaderDB) -> None:
         self.db = db

@@ -16,6 +16,7 @@ from async_generator import asynccontextmanager
 from lahja import AsyncioEndpoint, ConnectionConfig, TrioEndpoint
 
 from trinity._utils.os import friendly_filename_or_url
+from trinity._utils.logging import get_logger
 from trinity.boot_info import BootInfo
 from trinity.cli_parser import parser, subparser
 from trinity.config import BaseAppConfig, BeaconAppConfig, Eth1AppConfig, TrinityConfig
@@ -172,7 +173,7 @@ async def run_standalone_component(
         level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
     if args.log_levels is not None:
         for name, level in args.log_levels.items():
-            logging.getLogger(name).setLevel(level)
+            get_logger(name).setLevel(level)
 
     trinity_config = TrinityConfig.from_parser_args(args, app_identifier, (app_cfg,))
     trinity_config.trinity_root_dir.mkdir(exist_ok=True)

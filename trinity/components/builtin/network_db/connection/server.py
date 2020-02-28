@@ -1,10 +1,11 @@
 from lahja import EndpointAPI
 
 from async_service import Service
-from eth_utils import get_extended_debug_logger, humanize_seconds
+from eth_utils import humanize_seconds
 
 from p2p.tracking.connection import BaseConnectionTracker
 
+from trinity._utils.logging import get_logger
 from .events import (
     BlacklistEvent,
     GetBlacklistedPeersRequest,
@@ -17,7 +18,7 @@ class ConnectionTrackerServer(Service):
     Server to handle the event bus communication for BlacklistEvent and
     GetBlacklistedPeersRequest/Response events
     """
-    logger = get_extended_debug_logger('trinity.components.network_db.ConnectionTrackerServer')
+    logger = get_logger('trinity.components.network_db.ConnectionTrackerServer')
 
     def __init__(self,
                  event_bus: EndpointAPI,

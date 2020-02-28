@@ -11,13 +11,13 @@ import uuid
 from async_service import Service
 from lahja import EndpointAPI
 
-from eth_utils import get_extended_debug_logger
 from eth_utils.toolz import partition_all
 from eth.abc import SignedTransactionAPI
 
 from p2p.abc import SessionAPI
 
 from trinity._utils.bloom import RollingBloom
+from trinity._utils.logging import get_logger
 from trinity.protocol.eth.events import (
     TransactionsEvent,
 )
@@ -51,7 +51,7 @@ class TxPool(Service):
         This is a minimal viable implementation that only relays transactions but doesn't actually
         hold on to them yet. It's still missing many features of a grown up transaction pool.
     """
-    logger = get_extended_debug_logger('trinity.components.txpool.TxPool')
+    logger = get_logger('trinity.components.txpool.TxPool')
 
     def __init__(self,
                  event_bus: EndpointAPI,

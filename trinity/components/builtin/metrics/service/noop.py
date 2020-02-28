@@ -1,8 +1,8 @@
 from async_service import Service
-from eth_utils import get_extended_debug_logger
 
 from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
+from trinity._utils.logging import get_logger
 
 
 class NoopMetricsService(Service, MetricsServiceAPI):
@@ -12,7 +12,7 @@ class NoopMetricsService(Service, MetricsServiceAPI):
     will only incur the cost of a noop.
     """
 
-    logger = get_extended_debug_logger('trinity.components.builtin.metrics.NoopMetricsService')
+    logger = get_logger('trinity.components.builtin.metrics.NoopMetricsService')
 
     def __init__(self,
                  influx_server: str = '',

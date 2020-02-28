@@ -1,11 +1,10 @@
 from abc import abstractmethod
 from typing import Optional
 
-from eth_utils import get_extended_debug_logger
-
 from p2p.stats.ema import EMA
 from p2p.stats.percentile import Percentile
 from p2p.stats.stddev import StandardDeviation
+from p2p._utils import get_logger
 
 from .abc import PerformanceTrackerAPI
 from .constants import ROUND_TRIP_TIMEOUT
@@ -13,9 +12,9 @@ from .typing import TRequestCommand, TResult
 
 
 class BasePerformanceTracker(PerformanceTrackerAPI[TRequestCommand, TResult]):
-    logger = get_extended_debug_logger('trinity.protocol.common.trackers.PerformanceTracker')
 
     def __init__(self) -> None:
+        self.logger = get_logger('trinity.protocol.common.trackers.PerformanceTracker')
         self.total_msgs = 0
         self.total_items = 0
         self.total_timeouts = 0
