@@ -20,6 +20,8 @@ from typing import (
     TypeVar,
 )
 
+import eth_utils
+
 from trinity._utils.shellart import (
     bold_red,
     bold_yellow,
@@ -35,8 +37,25 @@ LOG_MAX_MB = 5
 THandler = TypeVar("THandler", bound="IPCHandler")
 
 
+def get_logger(name: str) -> eth_utils.ExtendedDebugLogger:
+    """
+    A wrapper around get_extended_debug_logger() that ensures we have loggers for all ancestors in
+    the chain leading to the given name.  E.g. for name=='foo.bar.baz', this will ensure we have
+    loggers named 'foo' and 'foo.bar' as direct and 2nd degree ancestors of the returned logger.
+
+    This is necessary because otherwise a callsite could create the 'foo.bar.baz' logger before
+    all its ancestors have been created, and that would cause it to have the root logger as parent,
+    thus not inheriting the properties of the 'foo.bar' logger.
+    """
+    # TODO: Move this to eth_utils once we're confident it has no unintended side-effects.
+    sub_names = name.split('.')
+    for i in range(1, len(sub_names)):
+        eth_utils.get_extended_debug_logger('.'.join(sub_names[:i]))
+    return eth_utils.get_extended_debug_logger(name)
+
+
 class IPCHandler(logging.Handler):
-    logger = logging.getLogger('trinity._utils.logging.IPCHandler')
+    logger = get_logger('trinity._utils.logging.IPCHandler')
 
     def __init__(self, sock: socket.socket):
         self._socket = BufferedSocket(sock)
@@ -79,7 +98,7 @@ class IPCHandler(logging.Handler):
 
 
 class IPCListener(IPCSocketServer):
-    logger = logging.getLogger('trinity._utils.logging.IPCListener')
+    logger = get_logger('trinity._utils.logging.IPCListener')
 
     def __init__(self, *handlers: logging.Handler) -> None:
         super().__init__()
@@ -143,7 +162,7 @@ def set_logger_levels(log_levels: Dict[str, int],
         if name is None:
             continue
 
-        logger = logging.getLogger(name)
+        logger = get_logger(name)
         logger.propagate = False
         logger.setLevel(level)
 

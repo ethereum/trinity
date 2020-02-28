@@ -9,8 +9,10 @@ from typing import (
 )
 
 from async_service import Service
-from eth_utils import get_extended_debug_logger
+
 import websockets
+
+from trinity._utils.logging import get_logger
 
 
 # Returns UTC timestamp in ms, used for latency calculation
@@ -31,7 +33,7 @@ class EthstatsException(Exception):
 
 
 class EthstatsClient(Service):
-    logger = get_extended_debug_logger('trinity.components.ethstats.Client')
+    logger = get_logger('trinity.components.ethstats.Client')
 
     def __init__(
         self,

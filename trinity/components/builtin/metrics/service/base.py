@@ -1,11 +1,11 @@
 from abc import abstractmethod
 
 from async_service import Service
-from eth_utils import get_extended_debug_logger
 from pyformance.reporters import InfluxReporter
 
 from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.components.builtin.metrics.registry import HostMetricsRegistry
+from trinity._utils.logging import get_logger
 
 
 class BaseMetricsService(Service, MetricsServiceAPI):
@@ -34,7 +34,7 @@ class BaseMetricsService(Service, MetricsServiceAPI):
             server=influx_server
         )
 
-    logger = get_extended_debug_logger('trinity.components.builtin.metrics.MetricsService')
+    logger = get_logger('trinity.components.builtin.metrics.MetricsService')
 
     @property
     def registry(self) -> HostMetricsRegistry:

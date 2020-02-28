@@ -4,11 +4,10 @@ from typing import (
     Type,
 )
 
-from eth_utils import (
-    get_extended_debug_logger,
-)
-
 from p2p.protocol import BaseProtocol
+
+from trinity._utils.logging import get_logger
+
 from .commands import (
     BlockBodies,
     BlockHeaders,
@@ -48,7 +47,7 @@ class ETHProtocolV63(BaseETHProtocol):
     )
     command_length = 17
 
-    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocolV63')
+    logger = get_logger('trinity.protocol.eth.proto.ETHProtocolV63')
     status_command_type = StatusV63
 
 
@@ -66,5 +65,5 @@ class ETHProtocol(BaseETHProtocol):
     )
     command_length = 17
 
-    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocol')
+    logger = get_logger('trinity.protocol.eth.proto.ETHProtocol')
     status_command_type = Status

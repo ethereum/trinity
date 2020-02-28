@@ -26,7 +26,6 @@ from eth_typing import (
 )
 from eth_utils import (
     ValidationError,
-    get_extended_debug_logger,
 )
 import rlp
 
@@ -78,6 +77,7 @@ from trinity.sync.beam.state import (
     BeamDownloader,
 )
 from trinity._utils.timer import Timer
+from trinity._utils.logging import get_logger
 
 from .backfill import BeamStateBackfill
 
@@ -369,7 +369,7 @@ class HeaderCheckpointSyncer(HeaderSyncerAPI):
 
     Can be used by a body syncer to pause syncing until a header checkpoint is reached.
     """
-    logger = get_extended_debug_logger('trinity.sync.beam.chain.HeaderCheckpointSyncer')
+    logger = get_logger('trinity.sync.beam.chain.HeaderCheckpointSyncer')
 
     def __init__(self, passthrough: HeaderSyncerAPI) -> None:
         self._real_syncer = passthrough

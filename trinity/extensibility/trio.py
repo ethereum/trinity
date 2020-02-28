@@ -1,6 +1,5 @@
 from abc import abstractmethod
 import asyncio
-import logging
 import signal
 
 import trio
@@ -9,7 +8,7 @@ from async_service import background_trio_service
 from lahja import EndpointAPI
 
 from trinity._utils.ipc import kill_process_gracefully
-from trinity._utils.logging import child_process_logging
+from trinity._utils.logging import child_process_logging, get_logger
 from trinity._utils.mp import ctx
 from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
@@ -43,7 +42,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
         finally:
             kill_process_gracefully(
                 process,
-                logging.getLogger('trinity.extensibility.TrioIsolatedComponent'),
+                get_logger('trinity.extensibility.TrioIsolatedComponent'),
             )
 
     @classmethod

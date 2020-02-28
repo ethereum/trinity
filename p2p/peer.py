@@ -23,8 +23,8 @@ from lahja import EndpointAPI
 from cached_property import cached_property
 
 from eth_utils import (
-    get_extended_debug_logger,
     to_tuple,
+    ExtendedDebugLogger,
     ValidationError,
 )
 
@@ -60,6 +60,7 @@ from p2p.tracking.connection import (
     BaseConnectionTracker,
     NoopConnectionTracker,
 )
+from p2p._utils import get_logger
 
 if TYPE_CHECKING:
     from p2p.peer_pool import BasePeerPool  # noqa: F401
@@ -464,9 +465,12 @@ class PeerSubscriber(ABC):
 
 
 class MsgBuffer(PeerSubscriber):
-    logger = get_extended_debug_logger('p2p.peer.MsgBuffer')
     msg_queue_maxsize = 500
     subscription_msg_types = frozenset({BaseCommand})
+
+    @cached_property
+    def logger(self) -> ExtendedDebugLogger:
+        return get_logger('p2p.peer.MsgBuffer')
 
     @to_tuple
     def get_messages(self) -> Iterator[PeerMessage]:

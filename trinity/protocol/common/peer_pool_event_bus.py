@@ -17,7 +17,6 @@ from typing import (
 
 from async_service import Service
 from cancel_token import CancelToken
-from eth_utils import get_extended_debug_logger
 
 from lahja import (
     BaseEvent,
@@ -34,6 +33,8 @@ from p2p.peer import (
 )
 from p2p.peer_pool import BasePeerPool
 from p2p.service import BaseService
+
+from trinity._utils.logging import get_logger
 
 from .events import (
     ConnectToNodeCommand,
@@ -65,7 +66,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
     This class bridges all common APIs but protocol specific communication can be enabled through
     subclasses that add more handlers.
     """
-    logger = get_extended_debug_logger('trinity.protocol.common.PeerPoolEventServer')
+    logger = get_logger('trinity.protocol.common.PeerPoolEventServer')
 
     msg_queue_maxsize: int = 2000
 

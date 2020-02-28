@@ -5,9 +5,6 @@ from typing import Tuple
 from cached_property import cached_property
 from cancel_token import CancelToken
 from eth_keys import datatypes
-from eth_utils import (
-    get_extended_debug_logger,
-)
 
 from p2p.abc import MessageAPI, NodeAPI, TransportAPI
 from p2p.exceptions import PeerConnectionLost
@@ -15,6 +12,7 @@ from p2p.message import Message
 from p2p.session import Session
 from p2p.tools.asyncio_streams import get_directly_connected_streams
 from p2p.transport_state import TransportState
+from p2p._utils import get_logger
 
 
 CONNECTION_LOST_ERRORS = (
@@ -25,7 +23,6 @@ CONNECTION_LOST_ERRORS = (
 
 
 class MemoryTransport(TransportAPI):
-    logger = get_extended_debug_logger('p2p.tools.memory_transport.MemoryTransport')
     read_state = TransportState.IDLE
 
     def __init__(self,
@@ -33,6 +30,7 @@ class MemoryTransport(TransportAPI):
                  private_key: datatypes.PrivateKey,
                  reader: asyncio.StreamReader,
                  writer: asyncio.StreamWriter) -> None:
+        self.logger = get_logger('p2p.tools.memory_transport.MemoryTransport')
         self.remote = remote
         self.session = Session(remote)
         self._private_key = private_key

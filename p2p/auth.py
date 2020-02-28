@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 import random
 import struct
@@ -29,6 +28,7 @@ from p2p.exceptions import (
     HandshakeFailure,
 )
 from p2p._utils import (
+    get_logger,
     sxor,
 )
 
@@ -114,7 +114,6 @@ async def _handshake(initiator: 'HandshakeInitiator', reader: asyncio.StreamRead
 
 
 class HandshakeBase:
-    logger = logging.getLogger("p2p.peer.Handshake")
     _is_initiator = False
 
     def __init__(
@@ -125,6 +124,7 @@ class HandshakeBase:
         elif remote.address is None:
             raise ValidationError("Cannot create handshake with remote address=None")
 
+        self.logger = get_logger("p2p.peer.Handshake")
         self.remote = remote
         self.privkey = privkey
         self.ephemeral_privkey = ecies.generate_privkey()

@@ -1,6 +1,5 @@
 from abc import abstractmethod
 import asyncio
-import logging
 import signal
 from typing import Optional
 
@@ -10,7 +9,7 @@ from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
 
-from trinity._utils.logging import child_process_logging
+from trinity._utils.logging import child_process_logging, get_logger
 from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
 
@@ -18,7 +17,7 @@ from .component import BaseIsolatedComponent
 from .event_bus import AsyncioEventBusService
 
 
-logger = logging.getLogger('trinity.extensibility.asyncio.AsyncioIsolatedComponent')
+logger = get_logger('trinity.extensibility.asyncio.AsyncioIsolatedComponent')
 
 
 class AsyncioIsolatedComponent(BaseIsolatedComponent):

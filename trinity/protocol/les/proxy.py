@@ -3,7 +3,6 @@ from typing import (
 )
 
 from eth.abc import BlockHeaderAPI
-from eth_utils import get_extended_debug_logger
 from lahja import (
     BroadcastConfig,
     EndpointAPI,
@@ -17,6 +16,7 @@ from trinity._utils.les import (
 from trinity._utils.errors import (
     SupportsError,
 )
+from trinity._utils.logging import get_logger
 
 from .commands import (
     BlockHeaders,
@@ -34,7 +34,7 @@ class ProxyLESAPI:
     An ``LESAPI`` that can be used outside of the process that runs the peer pool. Any
     action performed on this class is delegated to the process that runs the peer pool.
     """
-    logger = get_extended_debug_logger('trinity.protocol.les.proxy.ProxyLESAPI')
+    logger = get_logger('trinity.protocol.les.proxy.ProxyLESAPI')
 
     def __init__(self,
                  session: SessionAPI,

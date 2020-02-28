@@ -2,7 +2,6 @@ import collections
 import functools
 import ipaddress
 import itertools
-import logging
 import operator
 import random
 import struct
@@ -37,6 +36,7 @@ from p2p.constants import (
     IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY, NUM_ROUTING_TABLE_BUCKETS)
 from p2p.identity_schemes import V4CompatIdentityScheme
 from p2p.typing import NodeID
+from p2p._utils import get_logger
 from p2p.validation import validate_enode_uri
 
 
@@ -275,7 +275,7 @@ def compute_log_distance(left_node_id: NodeID, right_node_id: NodeID) -> int:
 class KademliaRoutingTable:
 
     def __init__(self, center_node_id: NodeID, bucket_size: int) -> None:
-        self.logger = logging.getLogger("p2p.discv5.routing_table.KademliaRoutingTable")
+        self.logger = get_logger("p2p.kademlia.KademliaRoutingTable")
         self.center_node_id = center_node_id
         self.bucket_size = bucket_size
 

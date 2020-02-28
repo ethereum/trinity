@@ -7,22 +7,18 @@ from eth.abc import DatabaseAPI
 
 import rlp
 
-from eth_utils import get_extended_debug_logger
-
 from p2p.abc import NodeDBAPI
 from p2p.enr import ENR
 from p2p.identity_schemes import IdentitySchemeRegistry
 from p2p.typing import NodeID
+from p2p._utils import get_logger
 
 
 class NodeDB(NodeDBAPI):
 
     def __init__(self, identity_scheme_registry: IdentitySchemeRegistry, db: DatabaseAPI) -> None:
         self.db = db
-        self.logger = get_extended_debug_logger(".".join((
-            self.__module__,
-            self.__class__.__name__,
-        )))
+        self.logger = get_logger(".".join((self.__module__, self.__class__.__name__,)))
         self._identity_scheme_registry = identity_scheme_registry
 
     @property

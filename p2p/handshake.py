@@ -10,17 +10,19 @@ from typing import (
     Tuple,
 )
 
+from cached_property import cached_property
+
 from cancel_token import CancelToken
 
 from eth_utils import (
-    get_extended_debug_logger,
+    ExtendedDebugLogger,
     to_tuple,
 )
 from eth_utils.toolz import groupby, valmap
 
 from eth_keys import keys
 
-from p2p._utils import duplicates
+from p2p._utils import duplicates, get_logger
 from p2p.abc import (
     ConnectionAPI,
     HandshakerAPI,
@@ -66,7 +68,10 @@ class Handshaker(HandshakerAPI[TProtocol]):
     justification for this class's existence is to house parameters that are
     needed for the protocol handshake.
     """
-    logger = get_extended_debug_logger('p2p.handshake.Handshaker')
+
+    @cached_property
+    def logger(self) -> ExtendedDebugLogger:
+        return get_logger('p2p.handshake.Handshaker')
 
 
 class DevP2PHandshakeParams(NamedTuple):

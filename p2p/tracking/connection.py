@@ -1,18 +1,19 @@
 from abc import ABC, abstractmethod
-import logging
 from typing import (
     Dict,
     Tuple,
     Type,
 )
 
+from eth_utils.logging import get_extended_debug_logger
+
 from p2p.abc import NodeAPI
-from p2p.typing import NodeID
 from p2p.exceptions import (
     BaseP2PError,
     HandshakeFailure,
     HandshakeFailureTooManyPeers,
 )
+from p2p.typing import NodeID
 
 
 FAILURE_TIMEOUTS: Dict[Type[Exception], int] = {}
@@ -41,7 +42,7 @@ class BaseConnectionTracker(ABC):
     Base API which defines the interface that the peer pool uses to record
     information about connection failures when attempting to connect to peers
     """
-    logger = logging.getLogger('p2p.tracking.connection.ConnectionTracker')
+    logger = get_extended_debug_logger('p2p.tracking.connection.ConnectionTracker')
 
     def record_failure(self, remote: NodeAPI, failure: BaseP2PError) -> None:
         timeout_seconds = get_timeout_for_failure(failure)

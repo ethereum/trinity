@@ -1,4 +1,3 @@
-import logging
 from typing import (
     Any,
     Sequence,
@@ -15,15 +14,16 @@ from p2p.abc import (
 )
 from p2p.constants import P2P_PROTOCOL_COMMAND_LENGTH
 from p2p.typing import Capability
+from p2p._utils import get_logger
 
 
 class BaseProtocol(ProtocolAPI):
-    logger = logging.getLogger('p2p.protocol.Protocol')
 
     def __init__(self,
                  transport: TransportAPI,
                  command_id_offset: int,
                  snappy_support: bool) -> None:
+        self.logger = get_logger('p2p.protocol.Protocol')
         self.transport = transport
         self.command_id_offset = command_id_offset
         self.snappy_support = snappy_support

@@ -3,6 +3,15 @@ from typing import Hashable, Sequence, Tuple, TypeVar
 
 import rlp
 
+import eth_utils
+
+
+def get_logger(name: str) -> eth_utils.ExtendedDebugLogger:
+    # Just a local wrapper around trinity's get_logger() as we need to delay the import to avoid
+    # cyclical imports ar parse time.
+    from trinity._utils.logging import get_logger as trinity_get_logger
+    return trinity_get_logger(name)
+
 
 def sxor(s1: bytes, s2: bytes) -> bytes:
     if len(s1) != len(s2):

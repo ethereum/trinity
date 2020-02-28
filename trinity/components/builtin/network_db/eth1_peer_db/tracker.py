@@ -34,7 +34,6 @@ from eth_typing import Hash32
 
 from eth_utils import (
     humanize_seconds,
-    get_extended_debug_logger,
     to_hex,
     to_tuple,
 )
@@ -59,6 +58,7 @@ from trinity.db.orm import (
 from trinity.components.builtin.network_db.connection.tracker import (
     BlacklistRecord,
 )
+from trinity._utils.logging import get_logger
 
 from .events import (
     TrackPeerEvent,
@@ -93,7 +93,7 @@ class Remote(Base):
 
 
 class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
-    logger = get_extended_debug_logger('trinity.protocol.common.connection.PeerTracker')
+    logger = get_logger('trinity.protocol.common.connection.PeerTracker')
 
     msg_queue_maxsize = 100
     subscription_msg_types: FrozenSet[Type[CommandAPI[Any]]] = frozenset()

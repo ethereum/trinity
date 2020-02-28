@@ -13,13 +13,12 @@ from lahja import EndpointAPI
 
 from async_service import Service
 
-from eth_utils import get_extended_debug_logger
-
 from p2p.exceptions import (
     NoInternalAddressMatchesDevice,
 )
 
 from trinity.components.builtin.upnp.events import NewUPnPMapping
+from trinity._utils.logging import get_logger
 
 
 # UPnP discovery can take a long time, so use a loooong timeout here.
@@ -50,7 +49,7 @@ class UPnPService(Service):
     Generate a mapping of external network IP address/port to internal IP address/port,
     using the Universal Plug 'n' Play standard.
     """
-    logger = get_extended_debug_logger('trinity.components.upnp.UPnPService')
+    logger = get_logger('trinity.components.upnp.UPnPService')
 
     _nat_portmap_lifetime = 30 * 60
 
