@@ -53,6 +53,10 @@ def _mk_attestation_inputs_in_epoch(epoch, block_producer, state, config):
             # empty committee this slot
             continue
 
+        if slot >= state.slot:
+            # do not make attestations in the future
+            break
+
         block = block_producer(slot)
         root = block.message.hash_tree_root
         attestation_data = AttestationData.create(
@@ -108,6 +112,10 @@ def _find_collision(state, config, validator_index, epoch, block_producer):
     for committee, committee_index, slot in iterate_committees_at_epoch(
         state, epoch, config
     ):
+        if slot >= state.slot:
+            # do not make attestations in the future
+            return {}
+
         if validator_index in committee:
             # TODO(ralexstokes) refactor w/ tools/builder
             block = block_producer(slot)
@@ -134,7 +142,7 @@ def _find_collision(state, config, validator_index, epoch, block_producer):
 def _introduce_collisions(all_attestations_by_index, block_producer, state, config):
     """
     Find some attestations for later epochs for the validators
-    that are current attesting in each source of attestation.
+    that are currently attesting in each source of attestation.
     """
     collisions = (all_attestations_by_index[0],)
     for src, dst in sliding_window(2, all_attestations_by_index):
