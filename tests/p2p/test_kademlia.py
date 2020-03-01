@@ -1,16 +1,9 @@
-import socket
-
 import pytest
 
 from eth_hash.auto import keccak
 
 from p2p import kademlia
 from p2p.constants import KADEMLIA_ID_SIZE, KADEMLIA_MAX_NODE_ID
-from p2p.discv5.constants import (
-    IP_V4_ADDRESS_ENR_KEY,
-    TCP_PORT_ENR_KEY,
-    UDP_PORT_ENR_KEY,
-)
 from p2p.kademlia import (
     Address,
     KBucket,
@@ -20,8 +13,8 @@ from p2p.kademlia import (
     check_relayed_addr,
 )
 from p2p.tools.factories import (
+    AddressFactory,
     ENRFactory,
-    IPAddressFactory,
     NodeFactory,
     PrivateKeyFactory,
 )
@@ -40,35 +33,24 @@ def test_node_from_enode_uri():
 
 def test_node_from_enr_uri():
     privkey = PrivateKeyFactory()
-    ip = socket.inet_aton(IPAddressFactory.generate())
-    udp_port = tcp_port = 30303
-    enr = ENRFactory(
-        private_key=privkey.to_bytes(),
-        custom_kv_pairs={
-            IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port, TCP_PORT_ENR_KEY: tcp_port})
+    address = AddressFactory()
+    enr = ENRFactory(private_key=privkey.to_bytes(), address=address)
 
     node = Node.from_uri(repr(enr))
 
     assert node.id == keccak(privkey.public_key.to_bytes())
-    assert node.address.ip_packed == ip
-    assert node.address.tcp_port == tcp_port
-    assert node.address.udp_port == udp_port
+    assert node.address == address
 
 
 def test_node_constructor():
     privkey = PrivateKeyFactory()
-    ip = socket.inet_aton(IPAddressFactory.generate())
-    udp_port = tcp_port = 30303
-    enr = ENRFactory(
-        private_key=privkey.to_bytes(),
-        custom_kv_pairs={IP_V4_ADDRESS_ENR_KEY: ip, UDP_PORT_ENR_KEY: udp_port})
+    address = AddressFactory()
+    enr = ENRFactory(private_key=privkey.to_bytes(), address=address)
 
     node = Node(enr)
 
     assert node.id == keccak(privkey.public_key.to_bytes())
-    assert node.address.ip_packed == ip
-    assert node.address.tcp_port == tcp_port
-    assert node.address.udp_port == udp_port
+    assert node.address == address
 
 
 def test_routingtable_split_bucket():

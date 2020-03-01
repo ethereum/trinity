@@ -42,6 +42,7 @@ from p2p.discovery import (
 from p2p.kademlia import Node
 from p2p.tools.factories import (
     AddressFactory,
+    ENRFactory,
     NodeFactory,
     PrivateKeyFactory,
 )
@@ -456,6 +457,57 @@ async def test_fetch_enrs(nursery, manually_driven_discovery_pair):
 
     assert bob_enr is not None
     assert bob_enr == await bob.get_local_enr()
+
+
+@pytest.mark.trio
+async def test_lookup_and_maybe_update_enr_new_node():
+    discovery = MockDiscoveryService([])
+    privkey = PrivateKeyFactory()
+    address = AddressFactory()
+
+    # When looking up the ENR for a node we haven't heard about before, we'll create a stub ENR
+    # but it will not be inserted in our DB (that will happen only after we've successfully
+    # bonded).
+    enr = discovery.lookup_and_maybe_update_enr(privkey.public_key, address)
+    assert enr.sequence_number == 0
+    node = Node(enr)
+    assert node.pubkey == privkey.public_key
+    assert node.address == address
+    with pytest.raises(KeyError):
+        discovery.node_db.get_enr(node.id)
+
+
+@pytest.mark.trio
+async def test_lookup_and_maybe_update_enr_existing_node():
+    discovery = MockDiscoveryService([])
+    privkey = PrivateKeyFactory()
+    address = AddressFactory()
+
+    # When we have an ENR for the given pubkey, and its address matches the given one, the
+    # existing ENR is returned.
+    enr = ENRFactory(private_key=privkey.to_bytes(), address=address)
+    discovery.node_db.set_enr(enr)
+    lookedup_enr = discovery.lookup_and_maybe_update_enr(privkey.public_key, address)
+    assert lookedup_enr == enr
+
+
+@pytest.mark.trio
+async def test_lookup_and_maybe_update_enr_existing_node_different_address():
+    discovery = MockDiscoveryService([])
+    privkey = PrivateKeyFactory()
+    address = AddressFactory()
+
+    # If the address given is different than the one we have in our DB, though, a stub ENR would
+    # be created and stored in our DB, replacing the existing one.
+    enr = ENRFactory(private_key=privkey.to_bytes(), address=address)
+    discovery.node_db.set_enr(enr)
+    new_address = AddressFactory()
+    lookedup_enr = discovery.lookup_and_maybe_update_enr(privkey.public_key, new_address)
+    assert lookedup_enr != enr
+    assert lookedup_enr.public_key == enr.public_key
+    assert lookedup_enr.sequence_number == 0
+    assert Node(lookedup_enr).address == new_address
+    assert lookedup_enr == discovery.node_db.get_enr(enr.node_id)
 
 
 @pytest.mark.trio

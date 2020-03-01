@@ -150,18 +150,7 @@ class Node(NodeAPI):
     @classmethod
     def from_pubkey_and_addr(
             cls: Type[TNode], pubkey: datatypes.PublicKey, address: AddressAPI) -> TNode:
-        enr = ENR(
-            0,
-            {
-                IDENTITY_SCHEME_ENR_KEY: V4CompatIdentityScheme.id,
-                V4CompatIdentityScheme.public_key_enr_key: pubkey.to_compressed_bytes(),
-                IP_V4_ADDRESS_ENR_KEY: address.ip_packed,
-                UDP_PORT_ENR_KEY: address.udp_port,
-                TCP_PORT_ENR_KEY: address.tcp_port,
-            },
-            signature=b''
-        )
-        return cls(enr)
+        return cls(create_stub_enr(pubkey, address))
 
     @classmethod
     def from_uri(cls: Type[TNode], uri: str) -> TNode:
@@ -493,3 +482,17 @@ def _compute_shared_prefix_bits(nodes: List[NodeAPI]) -> int:
 def sort_by_distance(nodes: Iterable[NodeAPI], target_id: NodeID) -> List[NodeAPI]:
     target_id_int = big_endian_to_int(target_id)
     return sorted(nodes, key=operator.methodcaller('distance_to', target_id_int))
+
+
+def create_stub_enr(pubkey: datatypes.PublicKey, address: AddressAPI) -> ENR:
+    return ENR(
+        0,
+        {
+            IDENTITY_SCHEME_ENR_KEY: V4CompatIdentityScheme.id,
+            V4CompatIdentityScheme.public_key_enr_key: pubkey.to_compressed_bytes(),
+            IP_V4_ADDRESS_ENR_KEY: address.ip_packed,
+            UDP_PORT_ENR_KEY: address.udp_port,
+            TCP_PORT_ENR_KEY: address.tcp_port,
+        },
+        signature=b''
+    )
