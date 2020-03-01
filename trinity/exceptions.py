@@ -134,3 +134,10 @@ class StateUnretrievable(BaseTrinityError):
     the peers have pruned their state tries.
     """
     pass
+
+
+class ENRMissingForkID(BaseTrinityError):
+    """
+    Raised when a peer sends us an ENR without a ForkID.
+    """
+    pass

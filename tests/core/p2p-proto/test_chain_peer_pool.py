@@ -15,7 +15,7 @@ from p2p.kademlia import Node
 from p2p.tools.factories.discovery import ENRFactory
 from p2p.tools.factories.kademlia import IPAddressFactory, NodeFactory
 
-from trinity.exceptions import BaseForkIDValidationError
+from trinity.exceptions import BaseForkIDValidationError, ENRMissingForkID
 from trinity.protocol.common.peer import skip_candidate_if_on_list_or_fork_mismatch
 from trinity.protocol.eth import forkid
 
@@ -76,7 +76,8 @@ def test_skip_candidate_if_on_list_or_fork_mismatch():
     assert functools.partial(should_skip_fn, skip_list)(no_forkid_nodes[1]) is True
 
     # It returns False for candidates with no fork-id that are not on the skip list.
-    assert forkid.extract_forkid(no_forkid_nodes[0].enr) is None
+    with pytest.raises(ENRMissingForkID):
+        assert forkid.extract_forkid(no_forkid_nodes[0].enr)
     assert functools.partial(should_skip_fn, skip_list)(no_forkid_nodes[0]) is False
 
     # It returns False for candidates with compatible fork-ids that are not on the skip list

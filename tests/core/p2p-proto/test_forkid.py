@@ -10,8 +10,10 @@ from eth.chains.mainnet import MAINNET_VM_CONFIGURATION
 from eth.chains.ropsten import ROPSTEN_VM_CONFIGURATION
 
 from p2p.discv5.enr import ENR
+from p2p.exceptions import MalformedMessage
+from p2p.tools.factories.discovery import ENRFactory
 
-from trinity.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
+from trinity.exceptions import ENRMissingForkID, RemoteChainIsStale, LocalChainIncompatibleOrStale
 from trinity.protocol.eth.forkid import (
     extract_fork_blocks,
     extract_forkid,
@@ -212,3 +214,14 @@ def test_extract_forkid():
         "-GOBEio6Ultyf1Aog2V0aMrJhGN2AZCDGfCggmlkgnY0gmlwhF4_wLuJc2VjcDI1NmsxoQOt7cA_B_Kg"
         "nQ5RmwyA6ji8M1Y0jfINItRGbOOwy7XgbIN0Y3CCdl-DdWRwgnZf")
     assert extract_forkid(enr) == ForkID(hash=to_bytes(hexstr='0x63760190'), next=1700000)
+
+
+def test_extract_forkid_missing():
+    with pytest.raises(ENRMissingForkID):
+        extract_forkid(ENRFactory())
+
+
+def test_extract_forkid_malformed():
+    enr = ENRFactory(custom_kv_pairs={b'eth': []})
+    with pytest.raises(MalformedMessage):
+        extract_forkid(enr)
