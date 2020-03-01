@@ -88,7 +88,8 @@ from p2p.exceptions import (
     CouldNotRetrieveENR,
     NoEligibleNodes,
 )
-from p2p.kademlia import Address, Node, RoutingTable, check_relayed_addr, sort_by_distance
+from p2p.kademlia import (
+    Address, Node, RoutingTable, check_relayed_addr, create_stub_enr, sort_by_distance)
 from p2p import trio_utils
 
 
@@ -684,26 +685,39 @@ class DiscoveryService(Service):
             self.logger.warning("Ignoring uknown msg type: %s; payload=%s", cmd_id, payload)
             return
 
+        node = Node(self.lookup_and_maybe_update_enr(remote_pubkey, address))
+        self.logger.debug2("Received %s from %s with payload: %s", cmd.name, node, payload)
+        handler = self._get_handler(cmd)
+        await handler(node, payload, message_hash)
+
+    def lookup_and_maybe_update_enr(self, pubkey: datatypes.PublicKey, address: AddressAPI) -> ENR:
+        """
+        Lookup the ENR for the given pubkey in our node DB, returning that if the address matches.
+
+        If we have no ENR for the given pubkey, simply create a stub one and return it.
+
+        If the ENR in our DB has a different address, we create a stub ENR using the new address
+        and overwrite the existing one with that.
+        """
         try:
-            enr = self.node_db.get_enr(node_id_from_pubkey(remote_pubkey))
+            enr = self.node_db.get_enr(node_id_from_pubkey(pubkey))
         except KeyError:
-            node = Node.from_pubkey_and_addr(remote_pubkey, address)
+            enr = create_stub_enr(pubkey, address)
         else:
             node = Node(enr)
             if node.address != address:
-                self.logger.warning(
+                self.logger.debug(
                     "Received msg from %s, using an address (%s) different than what we have "
-                    "stored in our DB (%s), deleting our DB record to force a refresh.",
+                    "stored in our DB (%s). Overwriting DB record with new one.",
                     node,
                     address,
                     node.address,
                 )
-                self.node_db.delete_enr(node.id)
-                node = Node.from_pubkey_and_addr(remote_pubkey, address)
+                self.node_db.delete_enr(enr.node_id)
+                enr = create_stub_enr(pubkey, address)
+                self.node_db.set_enr(enr)
 
-        self.logger.debug2("Received %s from %s with payload: %s", cmd.name, node, payload)
-        handler = self._get_handler(cmd)
-        await handler(node, payload, message_hash)
+        return enr
 
     def _is_msg_expired(self, rlp_expiration: bytes) -> bool:
         expiration = rlp.sedes.big_endian_int.deserialize(rlp_expiration)
@@ -854,24 +868,28 @@ class DiscoveryService(Service):
             self.logger.debug("Unexpected ENR_RESPONSE from %s", node)
             return
         enr.validate_signature()
-        self.logger.debug(
+        self.logger.debug2(
             "Received ENR %s (%s) with expected response token: %s",
             enr, enr.items(), encode_hex(token))
-        existing_enr = self.node_db.get_enr(enr.node_id)
-        if enr.sequence_number < existing_enr.sequence_number:
-            self.logger.warning(
-                "Remote %s sent us an ENR with seq number (%d) prior to the one we already "
-                "have (%d). Ignoring it",
-                encode_hex(enr.node_id),
-                enr.sequence_number,
-                existing_enr.sequence_number,
-            )
-            return
+        try:
+            existing_enr = self.node_db.get_enr(enr.node_id)
+        except KeyError:
+            self.logger.warning("No existing ENR for %s, this shouldn't happen", node)
+        else:
+            if enr.sequence_number < existing_enr.sequence_number:
+                self.logger.warning(
+                    "Remote %s sent us an ENR with seq number (%d) prior to the one we already "
+                    "have (%d). Ignoring it",
+                    encode_hex(enr.node_id),
+                    enr.sequence_number,
+                    existing_enr.sequence_number,
+                )
+                return
         # Insert/update the new ENR/Node in our DB and routing table as soon as we receive it, as
         # we want that to happen even if the original requestor (request_enr()) gives up waiting.
         new_node = Node(enr)
         if new_node.address is None:
-            self.logger.info(
+            self.logger.debug(
                 "Received ENR with no endpoint info from %s, removing from DB/RT", node)
             self.routing.remove_node(node)
             try:

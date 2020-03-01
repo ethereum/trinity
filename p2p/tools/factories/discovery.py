@@ -63,6 +63,8 @@ from p2p.discv5.typing import (
     Topic,
 )
 
+from .kademlia import AddressFactory
+
 
 class AuthTagPacketFactory(factory.Factory):
     class Meta:
@@ -196,6 +198,9 @@ class ENRFactory(factory.Factory):
     kv_pairs = factory.LazyAttribute(lambda o: merge({
         b"id": b"v4",
         b"secp256k1": keys.PrivateKey(o.private_key).public_key.to_compressed_bytes(),
+        b"ip": o.address.ip_packed,
+        b"udp": o.address.udp_port,
+        b"tcp": o.address.tcp_port,
     }, o.custom_kv_pairs))
     signature = factory.LazyAttribute(
         lambda o: UnsignedENR(
@@ -206,6 +211,7 @@ class ENRFactory(factory.Factory):
 
     class Params:
         private_key = factory.Faker("binary", length=V4IdentityScheme.private_key_size)
+        address = factory.SubFactory(AddressFactory)
         custom_kv_pairs: Dict[bytes, Any] = {}
 
 
