@@ -14,8 +14,9 @@ from eth_typing import BlockNumber, Hash32
 from eth_utils import encode_hex, to_tuple
 
 from p2p.discv5.enr import ENR
+from p2p.exceptions import MalformedMessage
 
-from trinity.exceptions import RemoteChainIsStale, LocalChainIncompatibleOrStale
+from trinity.exceptions import ENRMissingForkID, RemoteChainIsStale, LocalChainIncompatibleOrStale
 
 
 class ForkID(rlp.Serializable):
@@ -122,11 +123,16 @@ def validate_forkid(
 
 
 def extract_forkid(enr: ENR) -> ForkID:
-    eth_cap = enr.get(b'eth', None)
-    if eth_cap is not None:
+    try:
+        eth_cap = enr[b'eth']
+    except KeyError:
+        raise ENRMissingForkID()
+
+    try:
         [forkid] = rlp.sedes.List([ForkID]).deserialize(eth_cap)
         return forkid
-    return None
+    except rlp.exceptions.ListDeserializationError:
+        raise MalformedMessage("Unable to extract ForkID from {eth_cap}")
 
 
 def _crc_to_bytes(crc: int) -> bytes:

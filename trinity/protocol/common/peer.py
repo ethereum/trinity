@@ -38,6 +38,7 @@ from p2p.constants import (
 from p2p.disconnect import DisconnectReason
 from p2p.discv5.typing import NodeID
 from p2p.exceptions import (
+    MalformedMessage,
     NoConnectedPeers,
     PeerConnectionLost,
     UnknownAPI,
@@ -60,7 +61,7 @@ from p2p.tracking.connection import (
 )
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
-from trinity.exceptions import BaseForkIDValidationError
+from trinity.exceptions import BaseForkIDValidationError, ENRMissingForkID
 from trinity.protocol.common.abc import ChainInfoAPI, HeadInfoAPI
 from trinity.protocol.common.api import ChainInfo, HeadInfo, choose_eth_or_les_api
 from trinity.protocol.eth.api import ETHV63API, ETHAPI
@@ -290,9 +291,20 @@ def skip_candidate_if_on_list_or_fork_mismatch(
 
     # For now we accept candidates which don't specify a ForkID in their ENR, but we may want to
     # change that if we realize we're getting too many chain-mismatch errors when connecting.
-    candidate_forkid = extract_forkid(candidate.enr)
-    if candidate_forkid is None:
+    try:
+        candidate_forkid = extract_forkid(candidate.enr)
+    except ENRMissingForkID:
         p2p_logger.debug("Accepting connection candidate (%s) with no ForkID", candidate)
+        return False
+    except MalformedMessage as e:
+        # Logging as a warning just in case there's a bug in our code that fails to deserialize
+        # valid ForkIDs. If this becomes too noisy, we should consider reducing the severity.
+        p2p_logger.warning(
+            "Unable to extract ForkID from ENR of %s (%s), accepting as connection candidate "
+            "anyway",
+            candidate,
+            e,
+        )
         return False
 
     try:
