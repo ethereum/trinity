@@ -658,10 +658,22 @@ class DiscoveryService(Service):
             return
         await self.lookup_random()
 
+    async def _sendto(self, msg: bytes, ip: str, port: int) -> None:
+        try:
+            await self.socket.sendto(msg, (ip, port))
+        except OSError:
+            self.logger.exception("Unexpected error sending msg to %s", (ip, port))
+
     def send(self, node: NodeAPI, msg_type: DiscoveryCommand, payload: Sequence[Any]) -> bytes:
+        """
+        Pack the given payload using the given msg type and fire a background task to try and
+        send it over our socket.
+
+        If we get an OSError from our socket when attempting to send it, that will be logged
+        and the message will be lost.
+        """
         message = _pack_v4(msg_type.id, payload, self.privkey)
-        self.manager.run_task(
-            self.socket.sendto, message, (node.address.ip, node.address.udp_port))
+        self.manager.run_task(self._sendto, message, node.address.ip, node.address.udp_port)
         return message
 
     async def consume_datagram(self) -> None:

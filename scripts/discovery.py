@@ -12,6 +12,7 @@ from p2p.events import PeerCandidatesRequest
 from p2p.constants import DISCOVERY_EVENTBUS_ENDPOINT
 from p2p.discv5.typing import NodeID
 
+from trinity.exceptions import ENRMissingForkID
 from trinity.network_configurations import PRECONFIGURED_NETWORKS
 from trinity.protocol.eth.forkid import (
     extract_fork_blocks,
@@ -62,10 +63,12 @@ async def main() -> None:
             with trio.fail_after(1):
                 response = await client.request(PeerCandidatesRequest(MAX_PEERS, should_skip))
             candidates = response.candidates
-            missing_forkid = [
-                candidate.id for candidate in candidates
-                if extract_forkid(candidate.enr) is None
-            ]
+            missing_forkid = []
+            for candidate in candidates:
+                try:
+                    extract_forkid(candidate.enr)
+                except ENRMissingForkID:
+                    missing_forkid.append(candidate.id)
             logger.info(
                 "Got %d connection candidates, %d of those with a matching ForkID",
                 len(candidates),
