@@ -5,6 +5,67 @@ Trinity is moving fast. Read up on all the latest improvements.
 
 .. towncrier release notes start
 
+Trinity 0.1.0-alpha.35 (2020-03-03)
+-----------------------------------
+
+Features
+~~~~~~~~
+
+- We now "pivot" Beam Sync if we fall too many blocks behind. When a naive (non-pivoting) Beam Sync
+  falls too far behind the tip of the chain, it can get "stuck" because the trie data is no longer
+  available from peers. (`#908 <https://github.com/ethereum/trinity/issues/908>`__)
+- Add support for networks that run under Clique consensus.
+  Add support for syncing the Görli network via `--goerli` flag. (`#1196 <https://github.com/ethereum/trinity/issues/1196>`__)
+- Support ``include_transactions`` param in ``eth_getBlockBy*`` APIs (`#1465 <https://github.com/ethereum/trinity/issues/1465>`__)
+- Improve error message for when the parameters to JSON-RPC calls are invalid
+
+  Improve error message for ``eth_getWork``, ``eth_submitWork`` and ``eth_submitHashrate``
+  APIs which Trinity does not support as it generally does not support mining operations.
+
+  Change ``eth_hashrate`` and ``eth_coinbase`` to also return errors instead of default values. (`#1475 <https://github.com/ethereum/trinity/issues/1475>`__)
+- Upgrade to py-evm `v0.3.0-alpha.14
+  <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-14-2020-02-10>`_ (`#1478 <https://github.com/ethereum/trinity/issues/1478>`__)
+- Implement ``admin_nodeInfo`` JSON-RPC endpoint (`#1503 <https://github.com/ethereum/trinity/issues/1503>`__)
+- Implement the ``eth/64`` networking protocol according to
+  `EIP 2124 <https://eips.ethereum.org/EIPS/eip-2124>`_ (`#1543 <https://github.com/ethereum/trinity/issues/1543>`__)
+- Add support for Etherscan API keys to continue support for the
+  ``--beam-from-checkpoint eth://block/byetherscan/latest`` flag now that
+  Etherscan `has made API keys mandatory <https://medium.com/etherscan-blog/psa-for-developers-implementation-of-api-key-requirements-starting-from-february-15th-2020-b616870f3746>`_.
+  API keys need to be exposed via the ``TRINITY_ETHERSCAN_API_KEY``
+  environment variable. (`#1565 <https://github.com/ethereum/trinity/issues/1565>`__)
+
+
+Bugfixes
+~~~~~~~~
+
+- The ``p2p.abc.TransportAPI.close`` and ``p2p.abc.MultiplexerAPI.close`` methods are now coroutines to allow ``p2p.abc.TransportAPI.close()`` to drain the underlying ``StreamWriter`` before closing it, ensuring that any pending messages are written over the socket before closing it. (`#1417 <https://github.com/ethereum/trinity/issues/1417>`__)
+- Ensure validation errors in components are properly handled
+  during bootstrap. (`#1486 <https://github.com/ethereum/trinity/issues/1486>`__)
+- Fix broken API docs on https://trinity-client.readthedocs.io/en/latest/api/ (`#1510 <https://github.com/ethereum/trinity/issues/1510>`__)
+- :class:`~p2p.exceptions.PeerConnectionLost` was escaping during a ``highest_td_peer`` call, and
+  crashing whatever called it. The exception is now caught. (`#1524 <https://github.com/ethereum/trinity/issues/1524>`__)
+- Catch a variety of uncaught exceptions: :class:`asyncio.TimeoutError`,
+  :class:`~p2p.exceptions.UnknownAPI`, :class:`~p2p.exceptions.PeerConnectionLost`,
+  OSError, :class:`~eth_utils.exceptions.ValidationError`, :class:`~p2p.exceptions.CorruptTransport`.
+  Also, prevent AttributeError when printing a :class:`p2p.kademlia.Node` that has no address. (`#1545 <https://github.com/ethereum/trinity/issues/1545>`__)
+- Catch a :class:`~p2p.exceptions.PeerConnectionLost` raised when: disconnecting from a peer for sending
+  a malformed message, and another one when finding the fastest peer. Reject handshake attempts when
+  the IP address is unknown. Catch a :class:`~p2p.exceptions.CorruptTransport`, raised during multiplex. (`#1548 <https://github.com/ethereum/trinity/issues/1548>`__)
+
+
+Performance improvements
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Exit a bit more quickly from Beam Sync, by cancelling any hanging requests for state data. This
+  prevents a 5 second wait and timeout in the :class:`~p2p.service.BaseService`. (`#1545 <https://github.com/ethereum/trinity/issues/1545>`__)
+
+
+Internal Changes - for Trinity Contributors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Less noisy logs when adding peers. Only show INFO logs when you have fewer than 5 peers. (`#1567 <https://github.com/ethereum/trinity/issues/1567>`__)
+
+
 Trinity 0.1.0-alpha.34 (2019-12-23)
 -----------------------------------
 

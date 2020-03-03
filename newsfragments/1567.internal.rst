@@ -1,1 +1,0 @@
-Less noisy logs when adding peers. Only show INFO logs when you have fewer than 5 peers.

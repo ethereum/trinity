@@ -1,4 +1,0 @@
-Catch a variety of uncaught exceptions: :cls:`asyncio.TimeoutError`,
-:cls:`~p2p.exceptions.UnknownAPI`, :cls:`~p2p.exceptions.PeerConnectionLost`, 
-OSError, :cls:`~eth_utils.exceptions.ValidationError`, :cls:`~p2p.exceptions.CorruptTransport`.
-Also, prevent AttributeError when printing a :cls:`p2p.kademlia.Node` that has no address.

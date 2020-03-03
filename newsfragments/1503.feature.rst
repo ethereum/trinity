@@ -1,1 +1,0 @@
-Implement ``admin_nodeInfo`` JSON-RPC endpoint
