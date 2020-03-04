@@ -916,6 +916,9 @@ class DiscoveryService(Service):
 
     @to_tuple
     def get_neighbours(self, target_id: NodeID) -> Iterator[NodeAPI]:
+        """
+        Return (up to) the closest 16 nodes to the target id.
+        """
         count = 0
         for node_id in self.routing.iter_nodes_around(target_id):
             try:
@@ -924,7 +927,7 @@ class DiscoveryService(Service):
             except KeyError:
                 self.logger.exception(
                     "Node with ID %s is in routing table but not in node DB", encode_hex(node_id))
-            if count == constants.KADEMLIA_BUCKET_SIZE:
+            if count == constants.NEIGHBOURS_RESPONSE_ITEMS:
                 break
 
     async def recv_enr_request(
