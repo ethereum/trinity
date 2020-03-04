@@ -1,20 +1,12 @@
-import bisect
 from functools import total_ordering
 import ipaddress
-import itertools
-import logging
 import operator
-import random
 import struct
-import time
 from typing import (
     Any,
     Dict,
     Iterable,
-    Iterator,
     List,
-    Sized,
-    Tuple,
     Type,
     TypeVar,
 )
@@ -36,7 +28,6 @@ from eth_keys import (
 from eth_hash.auto import keccak
 
 from p2p.abc import AddressAPI, NodeAPI
-from p2p import constants
 from p2p.discv5.enr import ENR, IDENTITY_SCHEME_ENR_KEY
 from p2p.discv5.constants import (
     IP_V4_ADDRESS_ENR_KEY,
@@ -231,208 +222,6 @@ class Node(NodeAPI):
         self._init(ENR.from_repr(state.pop('enr')))
 
 
-@total_ordering
-class KBucket(Sized):
-    """A bucket of nodes whose IDs fall between the bucket's start and end.
-
-    The bucket is kept sorted by time last seen—least-recently seen node at the head,
-    most-recently seen at the tail.
-    """
-    def __init__(self, start: int, end: int, size: int = constants.KADEMLIA_BUCKET_SIZE) -> None:
-        self.size = size
-        self.start = start
-        self.end = end
-        self.nodes: List[NodeAPI] = []
-        self.replacement_cache: List[NodeAPI] = []
-        self.last_updated = time.monotonic()
-
-    @property
-    def midpoint(self) -> int:
-        return self.start + (self.end - self.start) // 2
-
-    def distance_to(self, id: int) -> int:
-        return self.midpoint ^ id
-
-    def nodes_by_distance_to(self, id: int) -> List[NodeAPI]:
-        return sorted(self.nodes, key=operator.methodcaller('distance_to', id))
-
-    def split(self) -> Tuple['KBucket', 'KBucket']:
-        """Split at the median id"""
-        splitid = self.midpoint
-        lower = KBucket(self.start, splitid)
-        upper = KBucket(splitid + 1, self.end)
-        for node in self.nodes:
-            node_id_int = node._id_int  # type: ignore
-            bucket = lower if node_id_int <= splitid else upper
-            bucket.add(node)
-        for node in self.replacement_cache:
-            node_id_int = node._id_int  # type: ignore
-            bucket = lower if node_id_int <= splitid else upper
-            bucket.replacement_cache.append(node)
-        return lower, upper
-
-    def remove_node(self, node: NodeAPI) -> None:
-        if node not in self:
-            return
-        self.nodes.remove(node)
-        if self.replacement_cache:
-            replacement_node = self.replacement_cache.pop()
-            self.nodes.append(replacement_node)
-
-    def in_range(self, node_id: int) -> bool:
-        return self.start <= node_id <= self.end
-
-    @property
-    def is_full(self) -> bool:
-        return len(self) == self.size
-
-    def add(self, node: NodeAPI) -> NodeAPI:
-        """Try to add the given node to this bucket.
-
-        If the node is already present, it is moved to the tail of the list, and we return None.
-
-        If the node is not already present and the bucket has fewer than k entries, it is inserted
-        at the tail of the list, and we return None.
-
-        If the bucket is full, we add the node to the bucket's replacement cache and return the
-        node at the head of the list (i.e. the least recently seen), which should be evicted if it
-        fails to respond to a ping.
-        """
-        self.last_updated = time.monotonic()
-        if node in self.nodes:
-            self.nodes.remove(node)
-            self.nodes.append(node)
-        elif len(self) < self.size:
-            self.nodes.append(node)
-        else:
-            if node in self.replacement_cache:
-                self.replacement_cache.remove(node)
-            elif len(self.replacement_cache) >= self.size:
-                self.replacement_cache.pop(0)
-            self.replacement_cache.append(node)
-            return self.head
-        return None
-
-    @property
-    def head(self) -> NodeAPI:
-        """Least recently seen"""
-        return self.nodes[0]
-
-    def __contains__(self, node: NodeAPI) -> bool:
-        return node in self.nodes
-
-    def __len__(self) -> int:
-        return len(self.nodes)
-
-    def __lt__(self, other: 'KBucket') -> bool:
-        if not isinstance(other, self.__class__):
-            raise TypeError(f"Cannot compare KBucket with type {other.__class__}")
-        return self.end < other.start
-
-
-class RoutingTable:
-    logger = logging.getLogger("p2p.kademlia.RoutingTable")
-
-    def __init__(self, node_id: NodeID) -> None:
-        self._initialized_at = time.monotonic()
-        self.this_node_id_int = big_endian_to_int(node_id)
-        self.buckets = [KBucket(0, constants.KADEMLIA_MAX_NODE_ID)]
-
-    def iter_random(self) -> Iterator[NodeAPI]:
-        # Create a new list with all available nodes as buckets can mutate while we're iterating.
-        # This shouldn't use a significant amount of memory as the new list will keep just
-        # references to the existing Node instances.
-        nodes = list(itertools.chain(*[bucket.nodes for bucket in self.buckets]))
-        random.shuffle(nodes)
-        for node in nodes:
-            yield node
-
-    def split_bucket(self, index: int) -> None:
-        bucket = self.buckets[index]
-        a, b = bucket.split()
-        self.buckets[index] = a
-        self.buckets.insert(index + 1, b)
-
-    @property
-    def idle_buckets(self) -> List[KBucket]:
-        idle_cutoff_time = time.monotonic() - constants.KADEMLIA_IDLE_BUCKET_REFRESH_INTERVAL
-        return [b for b in self.buckets if b.last_updated < idle_cutoff_time]
-
-    @property
-    def not_full_buckets(self) -> List[KBucket]:
-        return [b for b in self.buckets if not b.is_full]
-
-    def remove_node(self, node: NodeAPI) -> None:
-        node_id_int = node._id_int  # type: ignore
-        binary_get_bucket_for_node(self.buckets, node_id_int).remove_node(node)
-
-    def add_node(self, node: NodeAPI) -> NodeAPI:
-        node_id_int = node._id_int  # type: ignore
-        if node_id_int == self.this_node_id_int:
-            raise ValueError("Cannot add this_node to routing table")
-        bucket = binary_get_bucket_for_node(self.buckets, node_id_int)
-        eviction_candidate = bucket.add(node)
-        if eviction_candidate is not None:  # bucket is full
-            # Split if the bucket has the local node in its range or if the depth is not congruent
-            # to 0 mod KADEMLIA_BITS_PER_HOP
-            depth = _compute_shared_prefix_bits(bucket.nodes)
-            should_split = any((
-                bucket.in_range(self.this_node_id_int),
-                (depth % constants.KADEMLIA_BITS_PER_HOP != 0 and depth != constants.KADEMLIA_ID_SIZE),  # noqa: E501
-            ))
-            if should_split:
-                self.split_bucket(self.buckets.index(bucket))
-                return self.add_node(node)  # retry
-            # Nothing added, ping eviction_candidate
-            return eviction_candidate
-        return None  # successfully added to not full bucket
-
-    def get_node(self, node_id: NodeID) -> NodeAPI:
-        """
-        Return the Node with the given ID if it is in the routing table or the replacement cache.
-
-        Raises a KeyError otherwise.
-        """
-        id_int = big_endian_to_int(node_id)
-        bucket = binary_get_bucket_for_node(self.buckets, id_int)
-        for node in itertools.chain(bucket.nodes, bucket.replacement_cache):
-            if node.id == node_id:
-                return node
-        raise KeyError("Node {node_id} is not in routing table nor replacement cache")
-
-    def get_bucket_for_node(self, node_id: int) -> KBucket:
-        return binary_get_bucket_for_node(self.buckets, node_id)
-
-    def buckets_by_distance_to(self, id: int) -> List[KBucket]:
-        return sorted(self.buckets, key=operator.methodcaller('distance_to', id))
-
-    def __contains__(self, node: NodeAPI) -> bool:
-        node_id_int = node._id_int  # type: ignore
-        return node in self.get_bucket_for_node(node_id_int)
-
-    def __len__(self) -> int:
-        return sum(len(b) for b in self.buckets)
-
-    def __iter__(self) -> Iterable[NodeAPI]:
-        for b in self.buckets:
-            for n in b.nodes:
-                yield n
-
-    def neighbours(self, node_id: NodeID, k: int = constants.KADEMLIA_BUCKET_SIZE) -> List[NodeAPI]:
-        """Return up to k neighbours of the given node."""
-        id_int = big_endian_to_int(node_id)
-        nodes = []
-        # Sorting by bucket.midpoint does not work in edge cases, so build a short list of k * 2
-        # nodes and sort it by distance_to.
-        for bucket in self.buckets_by_distance_to(id_int):
-            for n in bucket.nodes_by_distance_to(id_int):
-                if n.id is not node_id:
-                    nodes.append(n)
-                    if len(nodes) == k * 2:
-                        break
-        return sort_by_distance(nodes, node_id)[:k]
-
-
 def check_relayed_addr(sender: AddressAPI, addr: AddressAPI) -> bool:
     """Check if an address relayed by the given sender is valid.
 
@@ -448,40 +237,6 @@ def check_relayed_addr(sender: AddressAPI, addr: AddressAPI) -> bool:
     if addr.is_loopback and not sender.is_loopback:
         return False
     return True
-
-
-def binary_get_bucket_for_node(buckets: List[KBucket], node_id: int) -> KBucket:
-    """Given a list of ordered buckets, returns the bucket for a given node ID."""
-    bucket_ends = [bucket.end for bucket in buckets]
-    bucket_position = bisect.bisect_left(bucket_ends, node_id)
-    # Prevents edge cases where bisect_left returns an out of range index
-    try:
-        bucket = buckets[bucket_position]
-        assert bucket.start <= node_id <= bucket.end
-        return bucket
-    except (IndexError, AssertionError):
-        raise ValueError(f"No bucket found for node with id {node_id}")
-
-
-def _compute_shared_prefix_bits(nodes: List[NodeAPI]) -> int:
-    """Count the number of prefix bits shared by all nodes."""
-    def to_binary(x: int) -> str:  # left padded bit representation
-        b = bin(x)[2:]
-        return '0' * (constants.KADEMLIA_ID_SIZE - len(b)) + b
-
-    if len(nodes) < 2:
-        return constants.KADEMLIA_ID_SIZE
-
-    bits = [
-        to_binary(n._id_int)  # type: ignore
-        for n in nodes
-    ]
-    for i in range(1, constants.KADEMLIA_ID_SIZE + 1):
-        if len(set(b[:i] for b in bits)) != 1:
-            return i - 1
-    # This means we have at least two nodes with the same ID, so raise an AssertionError
-    # because we don't want it to be caught accidentally.
-    raise AssertionError("Unable to calculate number of shared prefix bits")
 
 
 def sort_by_distance(nodes: Iterable[NodeAPI], target_id: NodeID) -> List[NodeAPI]:
