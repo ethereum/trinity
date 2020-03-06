@@ -16,15 +16,13 @@ from p2p.discv5.packets import (
     AuthHeaderPacket,
     AuthTagPacket,
 )
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
 )
 from p2p.discv5.messages import (
     PingMessage,
 )
-from p2p.discv5.constants import (
-    AES128_KEY_SIZE,
-)
+from p2p.constants import AES128_KEY_SIZE
 
 from tests.p2p.discv5.strategies import (
     id_nonce_st,

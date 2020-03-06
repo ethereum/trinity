@@ -9,8 +9,10 @@ from eth_typing import (
     Hash32,
 )
 
+from p2p.typing import SessionKeys
+
 if TYPE_CHECKING:
-    from p2p.discv5.enr import (  # noqa: F401
+    from p2p.enr import (  # noqa: F401
         ENR,
     )
     from p2p.discv5.messages import (  # noqa: F401
@@ -20,21 +22,9 @@ if TYPE_CHECKING:
         AuthHeaderPacket,
     )
 
-
-AES128Key = NewType("AES128Key", bytes)
-Nonce = NewType("Nonce", bytes)
-IDNonce = NewType("IDNonce", bytes)
 Tag = NewType("Tag", bytes)
 
-NodeID = NewType("NodeID", bytes)
-
 Topic = NewType("Topic", Hash32)
-
-
-class SessionKeys(NamedTuple):
-    encryption_key: AES128Key
-    decryption_key: AES128Key
-    auth_response_key: AES128Key
 
 
 class HandshakeResult(NamedTuple):

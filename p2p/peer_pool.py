@@ -45,7 +45,7 @@ from p2p.constants import (
     QUIET_PEER_POOL_SIZE,
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
-from p2p.discv5.typing import NodeID
+from p2p.typing import NodeID
 from p2p.exceptions import (
     BaseP2PError,
     IneligiblePeer,

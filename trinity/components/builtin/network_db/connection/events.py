@@ -9,7 +9,7 @@ from lahja import (
 )
 
 from p2p.abc import NodeAPI
-from p2p.discv5.typing import NodeID
+from p2p.typing import NodeID
 
 
 class BaseConnectionTrackerEvent(BaseEvent):

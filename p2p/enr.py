@@ -37,20 +37,13 @@ from eth_utils.toolz import (
     interleave,
 )
 
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     default_identity_scheme_registry as default_id_scheme_registry,
     IdentityScheme,
     IdentitySchemeRegistry,
 )
-from p2p.discv5.typing import (
-    NodeID,
-)
-from p2p.discv5.constants import (
-    MAX_ENR_SIZE,
-    ENR_REPR_PREFIX,
-    IP_V4_SIZE,
-    IP_V6_SIZE,
-)
+from p2p.typing import NodeID
+from p2p.constants import ENR_REPR_PREFIX, MAX_ENR_SIZE, IP_V4_SIZE, IP_V6_SIZE
 
 
 class ENRContentSedes:

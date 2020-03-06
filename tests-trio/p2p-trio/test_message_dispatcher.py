@@ -17,11 +17,11 @@ from p2p.tools.factories.keys import (
     PrivateKeyFactory,
 )
 
-from p2p.discv5.enr_db import NodeDB
+from p2p.node_db import NodeDB
 from p2p.discv5.channel_services import (
     IncomingMessage,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     default_identity_scheme_registry,
 )
 from p2p.discv5.messages import (

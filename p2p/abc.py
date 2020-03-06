@@ -22,18 +22,19 @@ import uuid
 
 from async_service import ServiceAPI
 from cancel_token import CancelToken
+from eth.abc import DatabaseAPI
 
 from eth_utils import ExtendedDebugLogger
 
 from eth_keys import keys
 
-from p2p.discv5.enr import ENR
-from p2p.discv5.typing import NodeID
+from p2p.enr import ENR
+from p2p.identity_schemes import IdentitySchemeRegistry
 from p2p.typing import (
     Capabilities,
     Capability,
     TCommandPayload,
-)
+    NodeID)
 from p2p.transport_state import TransportState
 
 if TYPE_CHECKING:
@@ -674,4 +675,35 @@ class ConnectionAPI(AsyncioServiceAPI):
     @property
     @abstractmethod
     def safe_client_version_string(self) -> str:
+        ...
+
+
+class NodeDBAPI(ABC):
+
+    @abstractmethod
+    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry, db: DatabaseAPI) -> None:
+        ...
+
+    @abstractmethod
+    def set_enr(self, enr: ENR) -> None:
+        ...
+
+    @abstractmethod
+    def get_enr(self, node_id: NodeID) -> ENR:
+        ...
+
+    @abstractmethod
+    def delete_enr(self, node_id: NodeID) -> None:
+        ...
+
+    @abstractmethod
+    def set_last_pong_time(self, node_id: NodeID, last_pong: int) -> None:
+        ...
+
+    @abstractmethod
+    def get_last_pong_time(self, node_id: NodeID) -> int:
+        ...
+
+    @abstractmethod
+    def delete_last_pong_time(self, node_id: NodeID) -> None:
         ...

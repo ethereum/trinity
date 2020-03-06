@@ -40,11 +40,11 @@ from p2p.discv5.channel_services import (
 from p2p.discv5.endpoint_tracker import (
     EndpointVote,
 )
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
     UnsignedENR,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     V4IdentityScheme,
 )
 from p2p.discv5.messages import (
@@ -55,13 +55,11 @@ from p2p.discv5.handshake import (
     HandshakeInitiator,
     HandshakeRecipient,
 )
-from p2p.discv5.routing_table import (
-    compute_log_distance,
-)
+from ...kademlia import compute_log_distance
 from p2p.discv5.typing import (
-    NodeID,
     Topic,
 )
+from ...typing import NodeID
 
 from .kademlia import AddressFactory
 

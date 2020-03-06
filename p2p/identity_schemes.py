@@ -35,21 +35,11 @@ from eth_utils import (
     ValidationError,
 )
 
-from p2p.discv5.typing import (
-    AES128Key,
-    IDNonce,
-    NodeID,
-    SessionKeys,
-)
-from p2p.discv5.constants import (
-    AES128_KEY_SIZE,
-    HKDF_INFO,
-    ID_NONCE_SIGNATURE_PREFIX,
-)
-
+from p2p.typing import AES128Key, IDNonce, NodeID, SessionKeys
+from p2p.constants import AES128_KEY_SIZE, HKDF_INFO, ID_NONCE_SIGNATURE_PREFIX
 
 if TYPE_CHECKING:
-    from p2p.discv5.enr import (  # noqa: F401
+    from p2p.enr import (  # noqa: F401
         BaseENR,
         ENR,
     )

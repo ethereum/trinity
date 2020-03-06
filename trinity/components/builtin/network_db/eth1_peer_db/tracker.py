@@ -40,7 +40,7 @@ from eth_utils import (
 )
 
 from p2p.abc import CommandAPI, NodeAPI
-from p2p.discv5.typing import NodeID
+from p2p.typing import NodeID
 from p2p.events import PeerCandidatesRequest
 from p2p.kademlia import Node
 from p2p.peer_backend import BasePeerBackend

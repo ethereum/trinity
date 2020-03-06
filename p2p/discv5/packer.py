@@ -25,9 +25,9 @@ from async_service import (
 )
 
 from p2p.discv5.abc import (
-    NodeDBAPI,
     HandshakeParticipantAPI,
 )
+from p2p.abc import NodeDBAPI
 from p2p.discv5.channel_services import (
     Endpoint,
     IncomingMessage,
@@ -38,7 +38,7 @@ from p2p.discv5.channel_services import (
 from p2p.discv5.constants import (
     HANDSHAKE_TIMEOUT,
 )
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
 )
 from p2p.discv5.handshake import (
@@ -57,11 +57,7 @@ from p2p.discv5.tags import (
     compute_tag,
     recover_source_id_from_tag,
 )
-from p2p.discv5.typing import (
-    NodeID,
-    Nonce,
-    SessionKeys,
-)
+from p2p.typing import Nonce, NodeID, SessionKeys
 
 from p2p.exceptions import (
     DecryptionError,

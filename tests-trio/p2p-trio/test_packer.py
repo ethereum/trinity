@@ -12,13 +12,13 @@ from p2p.discv5.channel_services import (
     IncomingPacket,
     OutgoingMessage,
 )
-from p2p.discv5.enr_db import (
+from p2p.node_db import (
     NodeDB,
 )
 from p2p.discv5.messages import (
     default_message_type_registry,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     default_identity_scheme_registry,
 )
 from p2p.discv5.packer import (

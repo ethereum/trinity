@@ -38,9 +38,9 @@ from p2p.trio_utils import (
 )
 
 from p2p.discv5.abc import (
-    NodeDBAPI,
     MessageDispatcherAPI,
 )
+from p2p.abc import NodeDBAPI
 from p2p.discv5.channel_services import (
     Endpoint,
     IncomingMessage,
@@ -58,7 +58,7 @@ from p2p.discv5.constants import (
 from p2p.discv5.endpoint_tracker import (
     EndpointVote,
 )
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
 )
 from p2p.discv5.messages import (
@@ -67,14 +67,8 @@ from p2p.discv5.messages import (
     PingMessage,
     PongMessage,
 )
-from p2p.discv5.routing_table import (
-    compute_log_distance,
-    compute_distance,
-    KademliaRoutingTable,
-)
-from p2p.discv5.typing import (
-    NodeID,
-)
+from p2p.kademlia import compute_distance, compute_log_distance, KademliaRoutingTable
+from p2p.typing import NodeID
 from p2p.exceptions import (
     UnexpectedMessage,
 )

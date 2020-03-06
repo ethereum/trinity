@@ -67,16 +67,11 @@ from eth_hash.auto import keccak
 from async_service import Service
 
 from p2p import constants
-from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI
-from p2p.discv5.abc import NodeDBAPI
-from p2p.discv5.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
-from p2p.discv5.identity_schemes import V4IdentityScheme
-from p2p.discv5.constants import (
-    IP_V4_ADDRESS_ENR_KEY,
-    TCP_PORT_ENR_KEY,
-    UDP_PORT_ENR_KEY,
-)
-from p2p.discv5.typing import NodeID
+from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI, NodeDBAPI
+from p2p.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
+from p2p.identity_schemes import V4IdentityScheme
+from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY
+from p2p.typing import NodeID
 from p2p.events import (
     PeerCandidatesRequest,
     RandomBootnodeRequest,
@@ -88,10 +83,9 @@ from p2p.exceptions import (
     CouldNotRetrieveENR,
     NoEligibleNodes,
 )
-from p2p.kademlia import Address, Node, check_relayed_addr, create_stub_enr, sort_by_distance
+from p2p.kademlia import (
+    Address, Node, check_relayed_addr, create_stub_enr, sort_by_distance, KademliaRoutingTable)
 from p2p import trio_utils
-from p2p.discv5.routing_table import KademliaRoutingTable
-
 
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
 V4_HANDLER_TYPE = Callable[[NodeAPI, Tuple[Any, ...], Hash32], Awaitable[Any]]

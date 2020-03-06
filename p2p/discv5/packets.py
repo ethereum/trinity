@@ -48,7 +48,7 @@ from p2p.discv5.messages import (
     MessageTypeRegistry,
     default_message_type_registry,
 )
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
 )
 from p2p.discv5.constants import (
@@ -63,12 +63,9 @@ from p2p.discv5.constants import (
     WHO_ARE_YOU_MAGIC_SUFFIX,
 )
 from p2p.discv5.typing import (
-    AES128Key,
-    IDNonce,
-    NodeID,
-    Nonce,
     Tag,
 )
+from p2p.typing import AES128Key, Nonce, IDNonce, NodeID
 
 from p2p.constants import DISCOVERY_MAX_PACKET_SIZE
 

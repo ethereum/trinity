@@ -23,12 +23,8 @@ from lahja import EndpointAPI
 
 from eth.db.backends.level import LevelDB
 
-from p2p.discv5.constants import (
-    NUM_ROUTING_TABLE_BUCKETS,
-)
-from p2p.discv5.abc import (
-    NodeDBAPI,
-)
+from p2p.constants import NUM_ROUTING_TABLE_BUCKETS
+from p2p.abc import NodeDBAPI
 from p2p.discv5.channel_services import (
     DatagramReceiver,
     DatagramSender,
@@ -45,10 +41,10 @@ from p2p.discv5.endpoint_tracker import (
     EndpointTracker,
     EndpointVote,
 )
-from p2p.discv5.enr import ENR
-from p2p.discv5.enr import UnsignedENR
-from p2p.discv5.enr_db import NodeDB
-from p2p.discv5.identity_schemes import default_identity_scheme_registry
+from p2p.enr import ENR
+from p2p.enr import UnsignedENR
+from p2p.node_db import NodeDB
+from p2p.identity_schemes import default_identity_scheme_registry
 from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
 )
@@ -56,9 +52,7 @@ from p2p.discv5.messages import default_message_type_registry
 from p2p.discv5.packer import (
     Packer,
 )
-from p2p.discv5.routing_table import (
-    KademliaRoutingTable,
-)
+from p2p.kademlia import KademliaRoutingTable
 from p2p.discv5.routing_table_manager import (
     RoutingTableManager,
 )

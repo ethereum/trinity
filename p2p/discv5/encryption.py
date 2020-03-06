@@ -14,12 +14,9 @@ from p2p.exceptions import (
 )
 from p2p.discv5.constants import (
     NONCE_SIZE,
-    AES128_KEY_SIZE,
 )
-from p2p.discv5.typing import (
-    AES128Key,
-    Nonce,
-)
+from p2p.constants import AES128_KEY_SIZE
+from p2p.typing import AES128Key, Nonce
 
 
 def validate_aes128_key(key: AES128Key) -> None:

@@ -41,23 +41,20 @@ from p2p.discv5.channel_services import (
 )
 from p2p.discv5.abc import (
     ChannelHandlerSubscriptionAPI,
-    NodeDBAPI,
     MessageDispatcherAPI,
 )
+from p2p.abc import NodeDBAPI
 from p2p.discv5.constants import (
-    IP_V4_ADDRESS_ENR_KEY,
     MAX_REQUEST_ID,
     MAX_REQUEST_ID_ATTEMPTS,
     MAX_NODES_MESSAGE_TOTAL,
-    UDP_PORT_ENR_KEY,
 )
+from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY
 from p2p.discv5.messages import (
     BaseMessage,
     NodesMessage,
 )
-from p2p.discv5.typing import (
-    NodeID,
-)
+from p2p.typing import NodeID
 
 
 def get_random_request_id() -> int:

@@ -36,7 +36,7 @@ from p2p.constants import (
     PEER_CONNECT_INTERVAL,
 )
 from p2p.disconnect import DisconnectReason
-from p2p.discv5.typing import NodeID
+from p2p.typing import NodeID
 from p2p.exceptions import (
     MalformedMessage,
     NoConnectedPeers,

@@ -13,12 +13,12 @@ from eth_utils.toolz import (
     assoc_in,
 )
 
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
     ENRSedes,
     UnsignedENR,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     IdentityScheme,
     V4IdentityScheme,
     IdentitySchemeRegistry,
