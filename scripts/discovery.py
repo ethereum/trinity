@@ -10,7 +10,7 @@ from lahja import ConnectionConfig, TrioEndpoint
 
 from p2p.events import PeerCandidatesRequest
 from p2p.constants import DISCOVERY_EVENTBUS_ENDPOINT
-from p2p.discv5.typing import NodeID
+from p2p.typing import NodeID
 
 from trinity.exceptions import ENRMissingForkID
 from trinity.network_configurations import PRECONFIGURED_NETWORKS
@@ -44,7 +44,7 @@ async def main() -> None:
     network_cfg = PRECONFIGURED_NETWORKS[network_id]
     vm_config = network_cfg.vm_configuration
     fork_blocks = extract_fork_blocks(vm_config)
-    MAX_PEERS = 60
+    MAX_PEERS = 260
     skip_list: Set[NodeID] = set()
     async with TrioEndpoint(f"discv4-driver-{uuid.uuid4()}").run() as client:
         with trio.fail_after(2):

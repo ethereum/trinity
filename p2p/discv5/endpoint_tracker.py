@@ -18,25 +18,18 @@ from async_service import (
     Service,
 )
 
-from p2p.discv5.abc import (
-    NodeDBAPI,
-)
+from p2p.abc import NodeDBAPI
 from p2p.discv5.channel_services import (
     Endpoint,
 )
-from p2p.discv5.constants import (
-    IP_V4_ADDRESS_ENR_KEY,
-    UDP_PORT_ENR_KEY,
-)
-from p2p.discv5.enr import (
+from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY
+from p2p.enr import (
     UnsignedENR,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     IdentitySchemeRegistry,
 )
-from p2p.discv5.typing import (
-    NodeID,
-)
+from p2p.typing import NodeID
 
 
 class EndpointVote(NamedTuple):

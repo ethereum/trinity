@@ -31,9 +31,7 @@ from p2p.discv5.packets import (
     decode_packet,
     Packet,
 )
-from p2p.discv5.typing import (
-    NodeID,
-)
+from p2p.typing import NodeID
 
 from p2p.constants import DISCOVERY_DATAGRAM_BUFFER_SIZE
 

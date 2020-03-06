@@ -7,7 +7,7 @@ from typing import (
 )
 
 from p2p.abc import NodeAPI
-from p2p.discv5.typing import NodeID
+from p2p.typing import NodeID
 from p2p.exceptions import (
     BaseP2PError,
     HandshakeFailure,

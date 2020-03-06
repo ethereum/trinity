@@ -25,10 +25,10 @@ from p2p.discv5.channel_services import (
 from p2p.discv5.constants import (
     ROUTING_TABLE_PING_INTERVAL,
 )
-from p2p.discv5.enr_db import (
+from p2p.node_db import (
     NodeDB,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     default_identity_scheme_registry,
 )
 from p2p.discv5.messages import (
@@ -40,11 +40,7 @@ from p2p.discv5.messages import (
 from p2p.discv5.message_dispatcher import (
     MessageDispatcher,
 )
-from p2p.discv5.routing_table import (
-    compute_distance,
-    compute_log_distance,
-    KademliaRoutingTable,
-)
+from p2p.kademlia import compute_distance, compute_log_distance, KademliaRoutingTable
 from p2p.discv5.routing_table_manager import (
     iter_closest_nodes,
     partition_enr_indices_by_size,

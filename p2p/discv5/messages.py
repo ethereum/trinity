@@ -19,15 +19,13 @@ from eth_utils import (
     int_to_big_endian,
 )
 
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
 )
 from p2p.discv5.constants import (
     TOPIC_HASH_SIZE,
-    IP_V4_SIZE,
-    IP_V6_SIZE,
 )
-
+from p2p.constants import IP_V4_SIZE, IP_V6_SIZE
 
 # https://github.com/python/mypy/issues/5264#issuecomment-399407428
 if TYPE_CHECKING:

@@ -13,7 +13,7 @@ from eth_utils import (
 )
 from eth_utils import toolz
 
-from p2p.discv5.enr import ENR
+from p2p.enr import ENR
 from p2p.discv5.typing import (
     Topic,
 )

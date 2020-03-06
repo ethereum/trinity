@@ -11,13 +11,12 @@ from eth_keys.constants import (
 )
 
 from p2p.discv5.constants import (
-    AES128_KEY_SIZE,
     NONCE_SIZE,
     ID_NONCE_SIZE,
     MAGIC_SIZE,
     TAG_SIZE,
 )
-
+from p2p.constants import AES128_KEY_SIZE
 
 tag_st = st.binary(min_size=TAG_SIZE, max_size=TAG_SIZE)
 nonce_st = st.binary(min_size=NONCE_SIZE, max_size=NONCE_SIZE)

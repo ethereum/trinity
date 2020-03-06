@@ -2,11 +2,7 @@ import itertools
 
 import pytest
 
-from p2p.discv5.routing_table import (
-    compute_distance,
-    compute_log_distance,
-    KademliaRoutingTable,
-)
+from p2p.kademlia import compute_distance, compute_log_distance, KademliaRoutingTable
 
 from p2p.tools.factories.discovery import (
     NodeIDFactory,

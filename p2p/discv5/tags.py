@@ -5,9 +5,9 @@ from p2p._utils import (
 )
 
 from p2p.discv5.typing import (
-    NodeID,
     Tag,
 )
+from p2p.typing import NodeID
 
 
 def compute_tag(source_node_id: NodeID, destination_node_id: NodeID) -> Tag:

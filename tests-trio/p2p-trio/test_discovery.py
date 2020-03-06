@@ -19,14 +19,10 @@ from eth_keys import keys
 from eth.db.backends.memory import MemoryDB
 
 from p2p import constants
-from p2p.discv5.constants import (
-    IP_V4_ADDRESS_ENR_KEY,
-    TCP_PORT_ENR_KEY,
-    UDP_PORT_ENR_KEY,
-)
-from p2p.discv5.enr import UnsignedENR, IDENTITY_SCHEME_ENR_KEY
-from p2p.discv5.enr_db import NodeDB
-from p2p.discv5.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
+from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY
+from p2p.enr import UnsignedENR, IDENTITY_SCHEME_ENR_KEY
+from p2p.node_db import NodeDB
+from p2p.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
 from p2p.discovery import (
     CMD_FIND_NODE,
     CMD_NEIGHBOURS,

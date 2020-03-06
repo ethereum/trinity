@@ -18,11 +18,9 @@ from eth_keys.datatypes import (
     NonRecoverableSignature,
 )
 
-from p2p.discv5 import identity_schemes as identity_schemes_module
-from p2p.discv5.constants import (
-    ID_NONCE_SIGNATURE_PREFIX,
-)
-from p2p.discv5.identity_schemes import (
+from p2p import identity_schemes as identity_schemes_module
+from p2p.constants import ID_NONCE_SIGNATURE_PREFIX
+from p2p.identity_schemes import (
     default_identity_scheme_registry,
     ecdh_agree,
     hkdf_expand_and_extract,
@@ -30,7 +28,7 @@ from p2p.discv5.identity_schemes import (
     V4IdentityScheme,
     V4CompatIdentityScheme,
 )
-from p2p.discv5.enr import (
+from p2p.enr import (
     UnsignedENR,
     ENR,
 )

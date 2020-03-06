@@ -18,14 +18,12 @@ from p2p.discv5.encryption import (
     aesgcm_decrypt,
     validate_aes128_key,
     validate_nonce,
-    AES128Key,
-    Nonce,
 )
+from p2p.typing import AES128Key, Nonce
 from p2p.discv5.constants import (
-    AES128_KEY_SIZE,
     NONCE_SIZE,
 )
-
+from p2p.constants import AES128_KEY_SIZE
 
 key_st = st.binary(min_size=AES128_KEY_SIZE, max_size=AES128_KEY_SIZE)
 nonce_st = st.binary(min_size=NONCE_SIZE, max_size=NONCE_SIZE)

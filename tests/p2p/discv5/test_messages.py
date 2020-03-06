@@ -12,7 +12,7 @@ from rlp.sedes import (
 )
 
 from p2p.discv5 import messages
-from p2p.discv5.enr import ENR
+from p2p.enr import ENR
 from p2p.discv5.messages import (
     default_message_type_registry,
     BaseMessage,

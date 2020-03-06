@@ -13,7 +13,7 @@ from eth_typing import BlockNumber, Hash32
 
 from eth_utils import encode_hex, to_tuple
 
-from p2p.discv5.enr import ENR
+from p2p.enr import ENR
 from p2p.exceptions import MalformedMessage
 
 from trinity.exceptions import ENRMissingForkID, RemoteChainIsStale, LocalChainIncompatibleOrStale

@@ -24,7 +24,7 @@ from lahja import (
 from eth_utils import humanize_seconds, to_bytes, to_hex
 
 from p2p.abc import NodeAPI
-from p2p.discv5.typing import NodeID
+from p2p.typing import NodeID
 from p2p.tracking.connection import BaseConnectionTracker
 
 from trinity.constants import (

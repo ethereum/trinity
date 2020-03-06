@@ -19,7 +19,7 @@ from p2p.discv5.packets import (
     AuthTagPacket,
     WhoAreYouPacket,
 )
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
 )
 from p2p.discv5.messages import (
@@ -35,7 +35,7 @@ from p2p.discv5.constants import (
     MAGIC_SIZE,
     ZERO_NONCE,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     V4IdentityScheme,
 )
 

@@ -12,18 +12,15 @@ from typing import (
     TypeVar,
 )
 
-from eth.abc import DatabaseAPI
-
-from p2p.discv5.enr import (
+from p2p.enr import (
     ENR,
 )
 from p2p.discv5.channel_services import (
     Endpoint,
     IncomingMessage,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     IdentityScheme,
-    IdentitySchemeRegistry,
 )
 from p2p.discv5.messages import (
     BaseMessage,
@@ -32,10 +29,10 @@ from p2p.discv5.packets import (
     Packet,
 )
 from p2p.discv5.typing import (
-    NodeID,
     HandshakeResult,
     Tag,
 )
+from p2p.typing import NodeID
 
 
 class HandshakeParticipantAPI(ABC):
@@ -104,37 +101,6 @@ class HandshakeParticipantAPI(ABC):
     @abstractmethod
     def tag(self) -> Tag:
         """The tag used for message packets sent by this node to the peer."""
-        ...
-
-
-class NodeDBAPI(ABC):
-
-    @abstractmethod
-    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry, db: DatabaseAPI) -> None:
-        ...
-
-    @abstractmethod
-    def set_enr(self, enr: ENR) -> None:
-        ...
-
-    @abstractmethod
-    def get_enr(self, node_id: NodeID) -> ENR:
-        ...
-
-    @abstractmethod
-    def delete_enr(self, node_id: NodeID) -> None:
-        ...
-
-    @abstractmethod
-    def set_last_pong_time(self, node_id: NodeID, last_pong: int) -> None:
-        ...
-
-    @abstractmethod
-    def get_last_pong_time(self, node_id: NodeID) -> int:
-        ...
-
-    @abstractmethod
-    def delete_last_pong_time(self, node_id: NodeID) -> None:
         ...
 
 

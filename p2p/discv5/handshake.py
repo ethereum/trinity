@@ -17,8 +17,8 @@ from p2p.exceptions import (
 )
 
 from p2p.discv5.abc import HandshakeParticipantAPI
-from p2p.discv5.enr import ENR
-from p2p.discv5.identity_schemes import IdentityScheme
+from p2p.enr import ENR
+from p2p.identity_schemes import IdentityScheme
 from p2p.discv5.messages import BaseMessage
 from p2p.discv5.packets import (
     AuthHeaderPacket,
@@ -34,13 +34,10 @@ from p2p.discv5.tags import (
     recover_source_id_from_tag,
 )
 from p2p.discv5.typing import (
-    AES128Key,
-    IDNonce,
-    NodeID,
-    Nonce,
     HandshakeResult,
     Tag,
 )
+from p2p.typing import AES128Key, Nonce, IDNonce, NodeID
 
 
 class BaseHandshakeParticipant(HandshakeParticipantAPI):

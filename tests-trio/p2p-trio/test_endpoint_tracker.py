@@ -21,17 +21,14 @@ from p2p.tools.factories.keys import (
     PrivateKeyFactory,
 )
 
-from p2p.discv5.constants import (
-    IP_V4_ADDRESS_ENR_KEY,
-    UDP_PORT_ENR_KEY,
-)
+from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY
 from p2p.discv5.endpoint_tracker import (
     EndpointTracker,
 )
-from p2p.discv5.enr_db import (
+from p2p.node_db import (
     NodeDB,
 )
-from p2p.discv5.identity_schemes import (
+from p2p.identity_schemes import (
     default_identity_scheme_registry,
 )
 

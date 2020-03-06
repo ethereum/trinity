@@ -14,8 +14,8 @@ from eth_keys import keys
 from eth.db.backends.memory import MemoryDB
 
 from p2p.discovery import DiscoveryService
-from p2p.discv5.enr_db import NodeDB
-from p2p.discv5.identity_schemes import default_identity_scheme_registry
+from p2p.node_db import NodeDB
+from p2p.identity_schemes import default_identity_scheme_registry
 
 
 # Silence factory-boy logs; we're not interested in them.

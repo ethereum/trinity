@@ -9,10 +9,10 @@ import rlp
 
 from eth_utils import get_extended_debug_logger
 
-from p2p.discv5.abc import NodeDBAPI
-from p2p.discv5.enr import ENR
-from p2p.discv5.identity_schemes import IdentitySchemeRegistry
-from p2p.discv5.typing import NodeID
+from p2p.abc import NodeDBAPI
+from p2p.enr import ENR
+from p2p.identity_schemes import IdentitySchemeRegistry
+from p2p.typing import NodeID
 
 
 class NodeDB(NodeDBAPI):
