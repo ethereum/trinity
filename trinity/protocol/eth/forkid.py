@@ -13,6 +13,7 @@ from eth_typing import BlockNumber, Hash32
 
 from eth_utils import encode_hex, to_tuple
 
+from p2p.abc import HandshakeCheckAPI
 from p2p.enr import ENR
 from p2p.exceptions import MalformedMessage
 
@@ -31,6 +32,10 @@ class ForkID(rlp.Serializable):
 
     def __repr__(self) -> str:
         return f"ForkID(hash={encode_hex(self.hash)}, next={self.next})"
+
+
+class ForkIDHandshakeCheck(HandshakeCheckAPI):
+    pass
 
 
 @to_tuple

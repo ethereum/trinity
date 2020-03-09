@@ -477,8 +477,20 @@ class AsyncioServiceAPI(ABC):
         ...
 
 
+class HandshakeCheckAPI(ABC):
+    """
+    A certain type of check performed during a handshake with another peer.
+
+    e.g. Checking that we're on the same network, ForkID validation, etc.
+    """
+
+
 class HandshakeReceiptAPI(ABC):
     protocol: ProtocolAPI
+
+    @abstractmethod
+    def was_check_performed(self, check_type: Type[HandshakeCheckAPI]) -> bool:
+        ...
 
 
 THandshakeReceipt = TypeVar('THandshakeReceipt', bound=HandshakeReceiptAPI)

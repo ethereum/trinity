@@ -12,6 +12,7 @@ from p2p.exceptions import PeerConnectionLost
 from p2p.peer import BasePeerBootManager
 
 from trinity.exceptions import DAOForkCheckFailure
+from trinity.protocol.eth.forkid import ForkIDHandshakeCheck
 
 from .constants import CHAIN_SPLIT_CHECK_TIMEOUT
 
@@ -30,12 +31,23 @@ class DAOCheckBootManager(BasePeerBootManager):
             self.peer.disconnect_nowait(DisconnectReason.USELESS_PEER)
 
     async def ensure_same_side_on_dao_fork(self) -> None:
-        """Ensure we're on the same side of the DAO fork as the given peer.
-
-        In order to do that we have to request the DAO fork block and its parent, but while we
-        wait for that we may receive other messages from the peer, which are returned so that they
-        can be re-added to our subscribers' queues when the peer is finally added to the pool.
         """
+        Ensure we're on the same side of the DAO fork as the remote peer.
+
+        If any of our protocol receipts validated the remote's forkid, we take that as
+        confirmation that we're on the same side, otherwise we request the remote's DAO fork block
+        header and validate it using the VM we have configured for that block.
+        """
+        for receipt in self.peer.connection.protocol_receipts:
+            if receipt.was_check_performed(ForkIDHandshakeCheck):
+                self.logger.debug(
+                    "Skipping DAO fork block check as ForkID was validated during handshake of %s",
+                    receipt.protocol)
+                return
+
+        await self.validate_remote_dao_fork_block()
+
+    async def validate_remote_dao_fork_block(self) -> None:
         for start_block, vm_class in self.peer.context.vm_configuration:
             if not issubclass(vm_class, HomesteadVM):
                 continue

@@ -1,4 +1,7 @@
+from typing import Type
+
 from p2p.abc import (
+    HandshakeCheckAPI,
     HandshakeReceiptAPI,
     ProtocolAPI,
 )
@@ -13,3 +16,6 @@ class HandshakeReceipt(HandshakeReceiptAPI):
 
     def __init__(self, protocol: ProtocolAPI) -> None:
         self.protocol = protocol
+
+    def was_check_performed(self, check_type: Type[HandshakeCheckAPI]) -> bool:
+        return False
