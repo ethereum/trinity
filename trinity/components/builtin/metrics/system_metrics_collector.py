@@ -1,6 +1,5 @@
 from typing import (
     NamedTuple,
-    Tuple,
 )
 
 from async_service import (
@@ -34,6 +33,20 @@ class DiskStats(NamedTuple):
     write_bytes: int
 
 
+class NetworkStats(NamedTuple):
+
+    # Number of network packets sent
+    out_packets: int
+    # Number of network packets received
+    in_packets: int
+
+
+class SystemStats(NamedTuple):
+    cpu_stats: CpuStats
+    disk_stats: DiskStats
+    network_stats: NetworkStats
+
+
 def read_cpu_stats() -> CpuStats:
     stats = psutil.cpu_times()
     return CpuStats(
@@ -52,12 +65,20 @@ def read_disk_stats() -> DiskStats:
     )
 
 
+def read_network_stats() -> NetworkStats:
+    stats = psutil.net_io_counters()
+    return NetworkStats(
+        in_packets=stats.packets_recv,
+        out_packets=stats.packets_sent
+    )
+
+
 @as_service
 async def collect_process_metrics(manager: ManagerAPI,
                                   registry: HostMetricsRegistry,
                                   frequency_seconds: int) -> None:
 
-    previous: Tuple[CpuStats, DiskStats] = None
+    previous: SystemStats = None
 
     cpu_sysload_gauge = registry.gauge('trinity.system/cpu/sysload.gauge')
     cpu_syswait_gauge = registry.gauge('trinity.system/cpu/syswait.gauge')
@@ -65,21 +86,32 @@ async def collect_process_metrics(manager: ManagerAPI,
     disk_readdata_meter = registry.meter('trinity.system/disk/readdata.meter')
     disk_writedata_meter = registry.meter('trinity.system/disk/writedata.meter')
 
+    network_in_packets_meter = registry.meter('trinity.network/in/packets/total.meter')
+    network_out_packets_meter = registry.meter('trinity.network/out/packets/total.meter')
+
     async for _ in trio_utils.every(frequency_seconds):
-        current = (read_cpu_stats(), read_disk_stats())
+        current = SystemStats(
+            cpu_stats=read_cpu_stats(),
+            disk_stats=read_disk_stats(),
+            network_stats=read_network_stats(),
+        )
 
         if previous is not None:
-            current_cpu_stats, current_disk_stats = current
-            previous_cpu_stats, previous_disk_stats = previous
-            global_time = current_cpu_stats.global_time - previous_cpu_stats.global_time
+
+            global_time = current.cpu_stats.global_time - previous.cpu_stats.global_time
             cpu_sysload_gauge.set_value(global_time / frequency_seconds)
-            global_wait = current_cpu_stats.global_wait_io - previous_cpu_stats.global_wait_io
+            global_wait = current.cpu_stats.global_wait_io - previous.cpu_stats.global_wait_io
             cpu_syswait_gauge.set_value(global_wait / frequency_seconds)
 
-            read_bytes = current_disk_stats.read_bytes - previous_disk_stats.read_bytes
+            read_bytes = current.disk_stats.read_bytes - previous.disk_stats.read_bytes
             disk_readdata_meter.mark(read_bytes)
 
-            write_bytes = current_disk_stats.write_bytes - previous_disk_stats.write_bytes
+            write_bytes = current.disk_stats.write_bytes - previous.disk_stats.write_bytes
             disk_writedata_meter.mark(write_bytes)
+
+            in_packets = current.network_stats.in_packets - previous.network_stats.in_packets
+            network_in_packets_meter.mark(in_packets)
+            out_packets = current.network_stats.out_packets - previous.network_stats.out_packets
+            network_out_packets_meter.mark(out_packets)
 
         previous = current
