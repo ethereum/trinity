@@ -65,7 +65,7 @@ async def test_ETH_peers():
 
 
 @pytest.mark.asyncio
-async def test_peer_pool_iter(request, event_loop):
+async def test_peer_pool_iter(event_loop):
     factory_a = ETHPeerPairFactory()
     factory_b = ETHPeerPairFactory()
     factory_c = ETHPeerPairFactory()
@@ -87,3 +87,35 @@ async def test_peer_pool_iter(request, event_loop):
         assert peer1 in peers
         assert peer2 not in peers
         assert peer3 in peers
+
+
+@pytest.mark.asyncio
+async def test_remote_dao_fork_validation_skipped_on_eth64(monkeypatch):
+    dao_fork_validator_called = False
+
+    async def validate_remote_dao_fork_block():
+        nonlocal dao_fork_validator_called
+        dao_fork_validator_called = True
+
+    async with ETHPeerPairFactory() as (alice, _):
+        boot_manager = alice.get_boot_manager()
+        monkeypatch.setattr(
+            boot_manager, 'validate_remote_dao_fork_block', validate_remote_dao_fork_block)
+        await boot_manager.run()
+        assert not dao_fork_validator_called
+
+
+@pytest.mark.asyncio
+async def test_remote_dao_fork_validation_on_eth63(monkeypatch):
+    dao_fork_validator_called = False
+
+    async def validate_remote_dao_fork_block():
+        nonlocal dao_fork_validator_called
+        dao_fork_validator_called = True
+
+    async with ETHV63PeerPairFactory() as (alice, _):
+        boot_manager = alice.get_boot_manager()
+        monkeypatch.setattr(
+            boot_manager, 'validate_remote_dao_fork_block', validate_remote_dao_fork_block)
+        await boot_manager.run()
+        assert dao_fork_validator_called

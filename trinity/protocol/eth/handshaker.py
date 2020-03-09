@@ -1,11 +1,11 @@
-from typing import Union, TypeVar, Generic, Tuple
+from typing import Union, Type, TypeVar, Generic, Tuple
 
 from cached_property import cached_property
 
 from eth_typing import Hash32, BlockNumber
 from eth_utils import encode_hex
 
-from p2p.abc import MultiplexerAPI, ProtocolAPI, NodeAPI
+from p2p.abc import HandshakeCheckAPI, MultiplexerAPI, ProtocolAPI, NodeAPI
 from p2p.exceptions import (
     HandshakeFailure,
 )
@@ -21,7 +21,7 @@ from trinity.exceptions import (
 
 
 from .commands import StatusV63, Status
-from .forkid import ForkID, validate_forkid
+from .forkid import ForkID, ForkIDHandshakeCheck, validate_forkid
 from .payloads import StatusV63Payload, StatusPayload
 from .proto import ETHProtocolV63, ETHProtocol
 
@@ -66,6 +66,11 @@ class ETHHandshakeReceipt(BaseETHHandshakeReceipt[StatusPayload]):
     @cached_property
     def fork_id(self) -> ForkID:
         return self.handshake_params.fork_id
+
+    def was_check_performed(self, check_type: Type[HandshakeCheckAPI]) -> bool:
+        if check_type == ForkIDHandshakeCheck:
+            return True
+        return False
 
 
 def validate_base_receipt(remote: NodeAPI,
