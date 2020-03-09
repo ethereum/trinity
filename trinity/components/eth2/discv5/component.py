@@ -125,8 +125,16 @@ class DiscV5Component(TrioIsolatedComponent):
         discovery_parser = arg_parser.add_argument_group("discovery")
 
         discovery_parser.add_argument(
-            "--enr-dir",
-            help="Path to the directory in which ENRs are stored",
+            "--nodedb-dir",
+            help="Path to the directory in which our NodeDB is stored",
+        )
+        arg_parser.add_argument(
+            "--bootstrap_nodes",
+            help="/ip4/127.0.0.1/tcp/1234/p2p/node1_peer_id,/ip4/127.0.0.1/tcp/5678/p2p/node2_peer_id",  # noqa: E501
+        )
+        arg_parser.add_argument(
+            "--preferred_nodes",
+            help="/ip4/127.0.0.1/tcp/1234/p2p/node1_peer_id,/ip4/127.0.0.1/tcp/5678/p2p/node2_peer_id",  # noqa: E501
         )
         discovery_parser.add_argument(
             "--discovery-boot-enrs",
@@ -254,3 +262,12 @@ class DiscV5Component(TrioIsolatedComponent):
         async with trio.open_nursery() as nursery:
             for service in services:
                 nursery.start_soon(async_service.TrioManager.run_service, service)
+
+
+async def main() -> None:
+    from trinity.extensibility.component import run_standalone_eth2_component
+    await run_standalone_eth2_component(DiscV5Component)
+
+
+if __name__ == "__main__":
+    trio.run(main)
