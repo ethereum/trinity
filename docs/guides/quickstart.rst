@@ -124,6 +124,15 @@ the package and it will immediately start syncing. Head over to the
 Running Trinity
 ~~~~~~~~~~~~~~~
 
+.. warning::
+
+    Executing the following command will download the entire ethereum mainnet chain. Please be sure that
+    this is what you want to do. It will probably take a long time, as well as a good internet connection and 
+    enough disk space on your machine to store the whole blockchain. 
+    
+    If you want to run Trinity as a light node, check out :ref:`Run Trinity as a light client<cookbook_recipe_running_as_a_light_client>`
+    or use the ``--sync-mode=light`` flag. 
+
 After Trinity is installed we should have the ``trinity`` command available to start it.
 
 .. code:: sh
