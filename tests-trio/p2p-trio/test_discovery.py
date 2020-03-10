@@ -10,17 +10,17 @@ import pytest
 
 import rlp
 
-from eth_utils import decode_hex, int_to_big_endian
+from eth_utils import decode_hex, int_to_big_endian, ValidationError
 
 from eth_hash.auto import keccak
 
-from eth_keys import keys
+import eth_keys
 
 from eth.db.backends.memory import MemoryDB
 
 from p2p import constants
 from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY
-from p2p.enr import UnsignedENR, IDENTITY_SCHEME_ENR_KEY
+from p2p.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
 from p2p.node_db import NodeDB
 from p2p.identity_schemes import default_identity_scheme_registry, V4IdentityScheme
 from p2p.discovery import (
@@ -155,6 +155,29 @@ async def test_local_enr_fields(manually_driven_discovery):
     discovery._local_enr_next_refresh = time.monotonic() - 1
     enr = await discovery.get_local_enr()
     validate_node_enr(discovery.this_node, enr, sequence_number=2, extra_fields=expected_fields)
+
+
+@pytest.mark.trio
+async def test_enr_response_handler_does_not_crash_on_invalid_responses():
+    discovery = MockDiscoveryService([])
+    token = b''
+    invalid_enr = b'garbage'
+    payload = [token, invalid_enr]
+    await discovery.recv_enr_response(discovery.this_node, payload, b'')
+
+    enr = ENRFactory()
+    enr._kv_pairs.pop(b'secp256k1')
+    with pytest.raises(ValidationError):
+        ENR.deserialize(ENR.serialize(enr))
+    payload = [token, ENR.serialize(enr)]
+    await discovery.recv_enr_response(discovery.this_node, payload, b'')
+
+    enr = ENRFactory()
+    enr._signature = b'garbage'
+    with pytest.raises(eth_keys.exceptions.ValidationError):
+        enr.validate_signature()
+    payload = [token, ENR.serialize(enr)]
+    await discovery.recv_enr_response(discovery.this_node, payload, b'')
 
 
 @pytest.mark.trio
@@ -641,7 +664,7 @@ class MockDiscoveryService(DiscoveryService):
     """
 
     def __init__(self, bootnodes):
-        privkey = keys.PrivateKey(keccak(b"seed"))
+        privkey = eth_keys.keys.PrivateKey(keccak(b"seed"))
         self.messages = []
         node_db = NodeDB(default_identity_scheme_registry, MemoryDB())
         socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)

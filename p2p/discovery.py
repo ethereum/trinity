@@ -59,7 +59,7 @@ from eth_utils import (
     ValidationError,
 )
 
-from eth_keys import keys
+import eth_keys
 from eth_keys import datatypes
 
 from eth_hash.auto import keccak
@@ -941,8 +941,7 @@ class DiscoveryService(Service):
         payload = (msg_hash, ENR.serialize(enr))
         self.send(node, CMD_ENR_RESPONSE, payload)
 
-    async def recv_enr_response(
-            self, node: NodeAPI, payload: Sequence[Any], msg_hash: Hash32) -> None:
+    async def recv_enr_response(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The enr_response payload should have at least two elements: request_hash, enr.
         if len(payload) < 2:
             self.logger.warning('Ignoring ENR_RESPONSE msg with invalid payload: %s', payload)
@@ -951,13 +950,24 @@ class DiscoveryService(Service):
         try:
             enr = ENR.deserialize(serialized_enr)
         except DeserializationError as error:
-            raise ValidationError("ENR in response is not properly encoded") from error
+            self.logger.info('Ignoring improperly encoded ENR_RESPONSE: %s', error)
+            return
+        except ValidationError as error:
+            self.logger.info('Ignoring ENR_RESPONSE with invalid ENR: %s', error)
+            return
+
+        try:
+            enr.validate_signature()
+        except (ValidationError, eth_keys.exceptions.ValidationError) as error:
+            self.logger.info('Ignoring ENR_RESPONSE with invalid ENR signature: %s', error)
+            return
+
         try:
             channel = self.enr_response_channels.get_channel(node)
         except KeyError:
             self.logger.debug("Unexpected ENR_RESPONSE from %s", node)
             return
-        enr.validate_signature()
+
         self.logger.debug2(
             "Received ENR %s (%s) with expected response token: %s",
             enr, enr.items(), encode_hex(token))
@@ -1242,7 +1252,7 @@ def _extract_nodes_from_payload(
         ip, udp_port, tcp_port, node_id = item
         address = Address.from_endpoint(ip, udp_port, tcp_port)
         if check_relayed_addr(sender, address):
-            yield Node.from_pubkey_and_addr(keys.PublicKey(node_id), address)
+            yield Node.from_pubkey_and_addr(eth_keys.keys.PublicKey(node_id), address)
         else:
             logger.debug("Skipping invalid address %s relayed by %s", address, sender)
 
@@ -1293,7 +1303,7 @@ def _unpack_v4(message: bytes) -> Tuple[datatypes.PublicKey, int, Tuple[Any, ...
     message_hash = Hash32(message[:MAC_SIZE])
     if message_hash != keccak(message[MAC_SIZE:]):
         raise WrongMAC("Wrong msg mac")
-    signature = keys.Signature(message[MAC_SIZE:HEAD_SIZE])
+    signature = eth_keys.keys.Signature(message[MAC_SIZE:HEAD_SIZE])
     signed_data = message[HEAD_SIZE:]
     remote_pubkey = signature.recover_public_key_from_msg(signed_data)
     cmd_id = message[HEAD_SIZE]
@@ -1373,7 +1383,7 @@ class ExpectedResponseChannels(Generic[TMsg]):
             self._channels.pop(remote, None)
 
 
-def node_id_from_pubkey(pubkey: keys.PublicKey) -> NodeID:
+def node_id_from_pubkey(pubkey: eth_keys.keys.PublicKey) -> NodeID:
     return keccak(pubkey.to_bytes())
 
 
