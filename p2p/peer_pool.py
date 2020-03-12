@@ -35,6 +35,7 @@ from eth_utils.toolz import (
 from lahja import (
     EndpointAPI,
 )
+from pyformance import MetricsRegistry
 
 from p2p.abc import AsyncioServiceAPI, NodeAPI, SessionAPI
 from p2p.constants import (
@@ -83,7 +84,6 @@ from p2p.tracking.connection import (
     NoopConnectionTracker,
 )
 
-
 COMMON_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
     NoMatchingPeerCapabilities,
     PeerConnectionLost,
@@ -117,6 +117,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                  max_peers: int = DEFAULT_MAX_PEERS,
                  token: CancelToken = None,
                  event_bus: EndpointAPI = None,
+                 metrics_registry: MetricsRegistry = None,
                  ) -> None:
         super().__init__(token)
 
@@ -128,6 +129,12 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         self._subscribers: List[PeerSubscriber] = []
         self._event_bus = event_bus
+
+        if metrics_registry is None:
+            # Initialize with a MetricsRegistry from pyformance as p2p can not depend on Trinity
+            # This is so that we don't need to pass a MetricsRegistry in tests and mocked pools.
+            metrics_registry = MetricsRegistry()
+        self._active_peer_counter = metrics_registry.counter('trinity.p2p/peers.counter')
 
         # Restricts the number of concurrent connection attempts can be made
         self._connection_attempt_lock = asyncio.BoundedSemaphore(MAX_CONCURRENT_CONNECTION_ATTEMPTS)
@@ -301,6 +308,7 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             logger = self.logger.debug
         logger("Adding %s to pool", peer)
         self.connected_nodes[peer.session] = peer
+        self._active_peer_counter.inc()
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
             subscriber.register_peer(peer)
@@ -487,6 +495,8 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         for subscriber in self._subscribers:
             subscriber.deregister_peer(peer)
+
+        self._active_peer_counter.dec()
 
     async def __aiter__(self) -> AsyncIterator[BasePeer]:
         for peer in tuple(self.connected_nodes.values()):

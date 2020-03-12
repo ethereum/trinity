@@ -75,12 +75,6 @@ class NoopMeter(Meter):
 
 class NoopTimer(Timer):
 
-    """
-    A timer metric which aggregates timing durations and provides duration statistics, plus
-    throughput statistics via Meter and Histogram.
-
-    """
-
     def __init__(self) -> None:
         pass
 

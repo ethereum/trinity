@@ -13,6 +13,7 @@ from cancel_token import CancelToken, OperationCancelled
 from eth_typing import BlockNumber
 
 from eth.abc import AtomicDatabaseAPI, VirtualMachineAPI
+from pyformance import MetricsRegistry
 
 from p2p.constants import DEFAULT_MAX_PEERS, DEVP2P_V5
 from p2p.disconnect import DisconnectReason
@@ -63,11 +64,13 @@ class BaseServer(BaseService, Generic[TPeerPool]):
                  network_id: int,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  event_bus: EndpointAPI = None,
+                 metrics_registry: MetricsRegistry = None,
                  token: CancelToken = None,
                  ) -> None:
         super().__init__(token)
         # cross process event bus
         self.event_bus = event_bus
+        self.metrics_registry = metrics_registry
 
         # setup parameters for the base devp2p handshake.
         self.p2p_handshake_params = DevP2PHandshakeParams(
@@ -213,7 +216,8 @@ class FullServer(BaseServer[ETHPeerPool]):
             max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
+            metrics_registry=self.metrics_registry,
         )
 
 
@@ -233,5 +237,6 @@ class LightServer(BaseServer[LESPeerPool]):
             max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
-            event_bus=self.event_bus
+            event_bus=self.event_bus,
+            metrics_registry=self.metrics_registry,
         )

@@ -29,6 +29,9 @@ from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
 )
+from trinity.components.builtin.metrics.component import metrics_service_from_args
+from trinity.components.builtin.metrics.service.asyncio import AsyncioMetricsService
+from trinity.components.builtin.metrics.service.noop import NOOP_METRICS_SERVICE
 from trinity.constants import (
     NETWORKING_EVENTBUS_ENDPOINT,
     SYNC_FULL,
@@ -302,9 +305,17 @@ class SyncerComponent(AsyncioIsolatedComponent):
 
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+
+        if boot_info.args.enable_metrics:
+            metrics_service = metrics_service_from_args(boot_info.args, AsyncioMetricsService)
+        else:
+            # Use a NoopMetricsService so that no code branches need to be taken if metrics
+            # are disabled
+            metrics_service = NOOP_METRICS_SERVICE
+
         trinity_config = boot_info.trinity_config
         NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
-        node = NodeClass(event_bus, trinity_config)
+        node = NodeClass(event_bus, metrics_service, trinity_config)
         strategy = cls.get_active_strategy(boot_info)
 
         async with background_asyncio_service(node) as manager:

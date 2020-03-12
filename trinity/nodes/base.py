@@ -36,6 +36,7 @@ from .events import (
     NetworkIdRequest,
     NetworkIdResponse,
 )
+from ..components.builtin.metrics.abc import MetricsServiceAPI
 
 TPeer = TypeVar('TPeer', bound=BasePeer)
 
@@ -48,7 +49,10 @@ class Node(Service, Generic[TPeer]):
     _full_chain: FullChain = None
     _event_server: PeerPoolEventServer[TPeer] = None
 
-    def __init__(self, event_bus: EndpointAPI, trinity_config: TrinityConfig) -> None:
+    def __init__(self,
+                 event_bus: EndpointAPI,
+                 metrics_service: MetricsServiceAPI,
+                 trinity_config: TrinityConfig) -> None:
         self.trinity_config = trinity_config
         self._base_db = DBClient.connect(trinity_config.database_ipc_path)
         self._headerdb = AsyncHeaderDB(self._base_db)
@@ -57,6 +61,7 @@ class Node(Service, Generic[TPeer]):
         self._network_id = trinity_config.network_id
 
         self.event_bus = event_bus
+        self.metrics_service = metrics_service
         self.master_cancel_token = CancelToken(type(self).__name__)
 
     async def handle_network_id_requests(self) -> None:
@@ -128,6 +133,7 @@ class Node(Service, Generic[TPeer]):
             self.manager.run_daemon_task(self.handle_network_id_requests)
             self.manager.run_daemon_child_service(self.get_p2p_server().as_new_service())
             self.manager.run_daemon_child_service(self.get_event_server())
+            self.manager.run_daemon_child_service(self.metrics_service)
             try:
                 await self.manager.wait_finished()
             finally:
