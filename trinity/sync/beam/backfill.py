@@ -66,7 +66,6 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
         self._node_hashes: List[Hash32] = []
 
         self._peer_pool = peer_pool
-        self._available_peers = asyncio.Event()
 
         self._is_missing: Set[Hash32] = set()
 

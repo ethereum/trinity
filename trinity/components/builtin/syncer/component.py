@@ -64,7 +64,7 @@ from trinity.sync.beam.service import (
 from trinity.sync.light.chain import (
     LightChainSyncer,
 )
-from .cli import NormalizeCheckpointURI
+from trinity.components.builtin.syncer.cli import NormalizeCheckpointURI
 
 
 class BaseSyncStrategy(ABC):
@@ -331,3 +331,14 @@ class SyncerComponent(AsyncioIsolatedComponent):
         if strategy.shutdown_node_on_halt:
             cls.logger.error("Sync ended unexpectedly. Shutting down trinity")
             await event_bus.broadcast(ShutdownRequest("Sync ended unexpectedly"))
+
+
+if __name__ == "__main__":
+    # SyncerComponent depends on a separate component to get peer candidates, so when running it
+    # you must pass the path to the discovery component's IPC file, like:
+    # $ python .../syncer/component.py --trinity-root-dir /tmp/syncer \
+    #        --connect-to-endpoints /tmp/syncer/mainnet/ipcs-eth1/discovery.ipc
+    import asyncio
+    from trinity.extensibility.component import run_standalone_eth1_component
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run_standalone_eth1_component(SyncerComponent))

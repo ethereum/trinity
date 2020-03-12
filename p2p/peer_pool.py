@@ -184,7 +184,9 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
                 self.connection_tracker.get_blacklisted(),
                 timeout=1)
         except asyncio.TimeoutError:
-            self.logger.warning("ConnectionTracker.get_blacklisted() request timed out.")
+            self.logger.warning(
+                "Timed out getting blacklisted peers from connection tracker, pausing peer "
+                "addition until we can get that.")
             return 0
 
         skip_list = connected_node_ids.union(blacklisted_node_ids)
