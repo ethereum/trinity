@@ -1,9 +1,10 @@
 import os
 from argparse import (
     ArgumentParser,
+    Namespace,
     _SubParsersAction,
 )
-
+from typing import Type
 
 from async_exit_stack import AsyncExitStack
 from async_service import background_trio_service
@@ -12,12 +13,26 @@ from eth_utils import ValidationError
 from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
-from trinity.components.builtin.metrics.metrics_service import MetricsService
+from trinity.components.builtin.metrics.abc import MetricsServiceAPI
+from trinity.components.builtin.metrics.service.trio import TrioMetricsService
 from trinity.components.builtin.metrics.system_metrics_collector import collect_process_metrics
 
 from trinity.extensibility import (
     TrioIsolatedComponent,
 )
+
+
+def metrics_service_from_args(
+        args: Namespace,
+        metrics_service_class: Type[MetricsServiceAPI] = TrioMetricsService) -> MetricsServiceAPI:
+    return metrics_service_class(
+        influx_server=args.metrics_influx_server,
+        influx_user=args.metrics_influx_user,
+        influx_password=args.metrics_influx_password,
+        influx_database=args.metrics_influx_database,
+        host=args.metrics_host,
+        reporting_frequency=args.metrics_reporting_frequency,
+    )
 
 
 class MetricsComponent(TrioIsolatedComponent):
@@ -101,14 +116,7 @@ class MetricsComponent(TrioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
 
-        metrics_service = MetricsService(
-            influx_server=boot_info.args.metrics_influx_server,
-            influx_user=boot_info.args.metrics_influx_user,
-            influx_password=boot_info.args.metrics_influx_password,
-            influx_database=boot_info.args.metrics_influx_database,
-            host=boot_info.args.metrics_host,
-            reporting_frequency=boot_info.args.metrics_reporting_frequency,
-        )
+        metrics_service = metrics_service_from_args(boot_info.args)
 
         # types ignored due to https://github.com/ethereum/async-service/issues/5
         system_metrics_collector = collect_process_metrics(  # type: ignore
