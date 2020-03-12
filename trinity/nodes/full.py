@@ -5,6 +5,7 @@ from lahja import EndpointAPI
 from p2p.peer_pool import BasePeerPool
 
 from trinity.chains.full import FullChain
+from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.config import TrinityConfig
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.protocol.common.peer_pool_event_bus import PeerPoolEventServer
@@ -18,8 +19,11 @@ class FullNode(Node[ETHPeer]):
     _chain: FullChain = None
     _p2p_server: FullServer = None
 
-    def __init__(self, event_bus: EndpointAPI, trinity_config: TrinityConfig) -> None:
-        super().__init__(event_bus, trinity_config)
+    def __init__(self,
+                 event_bus: EndpointAPI,
+                 metrics_service: MetricsServiceAPI,
+                 trinity_config: TrinityConfig) -> None:
+        super().__init__(event_bus, metrics_service, trinity_config)
         self._node_key = trinity_config.nodekey
         self._node_port = trinity_config.port
         self._max_peers = trinity_config.max_peers
@@ -53,6 +57,7 @@ class FullNode(Node[ETHPeer]):
                 max_peers=self._max_peers,
                 token=self.master_cancel_token,
                 event_bus=self.event_bus,
+                metrics_registry=self.metrics_service.registry,
             )
         return self._p2p_server
 

@@ -15,6 +15,7 @@ from p2p.peer_pool import BasePeerPool
 from trinity.chains.light import (
     LightDispatchChain,
 )
+from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.config import (
     TrinityConfig,
 )
@@ -40,8 +41,11 @@ class LightNode(Node[LESPeer]):
     network_id: int = None
     nodekey: PrivateKey = None
 
-    def __init__(self, event_bus: EndpointAPI, trinity_config: TrinityConfig) -> None:
-        super().__init__(event_bus, trinity_config)
+    def __init__(self,
+                 event_bus: EndpointAPI,
+                 metrics_service: MetricsServiceAPI,
+                 trinity_config: TrinityConfig) -> None:
+        super().__init__(event_bus, metrics_service, trinity_config)
 
         self._nodekey = trinity_config.nodekey
         self._port = trinity_config.port
@@ -94,6 +98,7 @@ class LightNode(Node[LESPeer]):
                 max_peers=self._max_peers,
                 token=self.master_cancel_token,
                 event_bus=self.event_bus,
+                metrics_registry=self.metrics_service.registry,
             )
         return self._p2p_server
 
