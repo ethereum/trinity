@@ -6,46 +6,19 @@ import multiprocessing
 import os
 import shutil
 import signal
-from typing import (
-    Callable,
-    Iterable,
-    Sequence,
-    Tuple,
-    Type,
-)
+from typing import Callable, Iterable, Sequence, Tuple, Type
 
 from async_service import AsyncioManager
 from eth_utils import ValidationError
 
-from trinity.exceptions import (
-    AmbigiousFileSystem,
-    MissingPath,
-)
-from trinity.initialization import (
-    initialize_data_dir,
-    is_data_dir_initialized,
-)
+from trinity.exceptions import AmbigiousFileSystem, MissingPath
+from trinity.initialization import initialize_data_dir, is_data_dir_initialized
 from trinity.boot_info import BootInfo
-from trinity.cli_parser import (
-    parser,
-    subparser,
-)
-from trinity.config import (
-    BaseAppConfig,
-    TrinityConfig,
-)
-from trinity.extensibility import (
-    BaseComponentAPI,
-    ComponentAPI,
-    ComponentManager,
-)
-from trinity.network_configurations import (
-    PRECONFIGURED_NETWORKS,
-)
-from trinity._utils.ipc import (
-    kill_process_gracefully,
-    remove_dangling_ipc_files,
-)
+from trinity.cli_parser import parser, subparser
+from trinity.config import BaseAppConfig, TrinityConfig
+from trinity.extensibility import BaseComponentAPI, ComponentAPI, ComponentManager
+from trinity.network_configurations import PRECONFIGURED_NETWORKS
+from trinity._utils.ipc import kill_process_gracefully, remove_dangling_ipc_files
 from trinity._utils.logging import (
     enable_warnings_by_default,
     set_logger_levels,
@@ -53,21 +26,19 @@ from trinity._utils.logging import (
     setup_stderr_logging,
     IPCListener,
 )
-from trinity._utils.version import (
-    construct_trinity_client_identifier,
-    is_prerelease,
+from trinity._utils.version import construct_trinity_client_identifier, is_prerelease
+
+
+TRINITY_HEADER = "\n".join(
+    (
+        "\n" r"      ______     _       _ __       ",
+        r"     /_  __/____(_)___  (_) /___  __",
+        r"      / / / ___/ / __ \/ / __/ / / /",
+        r"     / / / /  / / / / / / /_/ /_/ / ",
+        r"    /_/ /_/  /_/_/ /_/_/\__/\__, /  ",
+        r"                           /____/   ",
+    )
 )
-
-
-TRINITY_HEADER = "\n".join((
-    "\n"
-    r"      ______     _       _ __       ",
-    r"     /_  __/____(_)___  (_) /___  __",
-    r"      / / / ___/ / __ \/ / __/ / / /",
-    r"     / / / /  / / / / / / /_/ /_/ / ",
-    r"    /_/ /_/  /_/_/ /_/_/\__/\__, /  ",
-    r"                           /____/   ",
-))
 
 TRINITY_AMBIGIOUS_FILESYSTEM_INFO = (
     "Could not initialize data directory\n\n"
@@ -86,10 +57,12 @@ TRINITY_AMBIGIOUS_FILESYSTEM_INFO = (
 BootFn = Callable[[BootInfo], Tuple[multiprocessing.Process, ...]]
 
 
-def main_entry(trinity_boot: BootFn,
-               app_identifier: str,
-               component_types: Tuple[Type[BaseComponentAPI], ...],
-               sub_configs: Sequence[Type[BaseAppConfig]]) -> None:
+def main_entry(
+    trinity_boot: BootFn,
+    app_identifier: str,
+    component_types: Tuple[Type[BaseComponentAPI], ...],
+    sub_configs: Sequence[Type[BaseAppConfig]],
+) -> None:
     if is_prerelease():
         # this modifies the asyncio logger, but will be overridden by any custom settings below
         enable_warnings_by_default()
@@ -112,13 +85,9 @@ def main_entry(trinity_boot: BootFn,
     # The `common_log_level` is derived from `--log-level <Level>` / `-l <Level>` without
     # specifying any module. If present, it is used for both `stderr` and `file` logging.
     common_log_level = args.log_levels and args.log_levels.get(None)
-    has_ambigous_logging_config = ((
-        common_log_level is not None and
-        args.stderr_log_level is not None
-    ) or (
-        common_log_level is not None and
-        args.file_log_level is not None
-    ))
+    has_ambigous_logging_config = (
+        common_log_level is not None and args.stderr_log_level is not None
+    ) or (common_log_level is not None and args.file_log_level is not None)
 
     if has_ambigous_logging_config:
         parser.error(
@@ -134,7 +103,9 @@ def main_entry(trinity_boot: BootFn,
         )
 
     try:
-        trinity_config = TrinityConfig.from_parser_args(args, app_identifier, sub_configs)
+        trinity_config = TrinityConfig.from_parser_args(
+            args, app_identifier, sub_configs
+        )
     except AmbigiousFileSystem:
         parser.error(TRINITY_AMBIGIOUS_FILESYSTEM_INFO)
 
@@ -191,9 +162,7 @@ def main_entry(trinity_boot: BootFn,
 
     # Determine what logging level child processes should use.
     child_process_log_level = min(
-        stderr_logger_level,
-        file_logger_level,
-        *logger_levels.values(),
+        stderr_logger_level, file_logger_level, *logger_levels.values()
     )
 
     boot_info = BootInfo(
@@ -213,12 +182,9 @@ def main_entry(trinity_boot: BootFn,
 
     # Components can provide a subcommand with a `func` which does then control
     # the entire process from here.
-    if hasattr(args, 'func'):
+    if hasattr(args, "func"):
         args.func(args, trinity_config)
         return
-
-    if hasattr(args, 'munge_func'):
-        args.munge_func(args, trinity_config)
 
     runtime_component_types = tuple(
         component_cls
@@ -233,29 +199,16 @@ def main_entry(trinity_boot: BootFn,
         loop = asyncio.get_event_loop()
 
         def kill_trinity_with_reason(reason: str) -> None:
-            kill_trinity_gracefully(
-                trinity_config,
-                logger,
-                processes,
-                reason=reason
-            )
+            kill_trinity_gracefully(trinity_config, logger, processes, reason=reason)
 
         component_manager_service = ComponentManager(
-            boot_info,
-            runtime_component_types,
-            kill_trinity_with_reason,
+            boot_info, runtime_component_types, kill_trinity_with_reason
         )
         manager = AsyncioManager(component_manager_service)
 
+        loop.add_signal_handler(signal.SIGTERM, manager.cancel, "SIGTERM")
         loop.add_signal_handler(
-            signal.SIGTERM,
-            manager.cancel,
-            'SIGTERM',
-        )
-        loop.add_signal_handler(
-            signal.SIGINT,
-            component_manager_service.shutdown,
-            'CTRL+C',
+            signal.SIGINT, component_manager_service.shutdown, "CTRL+C"
         )
 
         try:
@@ -270,17 +223,21 @@ def main_entry(trinity_boot: BootFn,
 
 
 def display_launch_logs(trinity_config: TrinityConfig) -> None:
-    logger = logging.getLogger('trinity')
+    logger = logging.getLogger("trinity")
     logger.info(TRINITY_HEADER)
     logger.info("Started main process (pid=%d)", os.getpid())
     logger.info(construct_trinity_client_identifier())
-    logger.info("Trinity DEBUG log file is created at %s", str(trinity_config.logfile_path))
+    logger.info(
+        "Trinity DEBUG log file is created at %s", str(trinity_config.logfile_path)
+    )
 
 
-def kill_trinity_gracefully(trinity_config: TrinityConfig,
-                            logger: logging.Logger,
-                            processes: Iterable[multiprocessing.Process],
-                            reason: str = None) -> None:
+def kill_trinity_gracefully(
+    trinity_config: TrinityConfig,
+    logger: logging.Logger,
+    processes: Iterable[multiprocessing.Process],
+    reason: str = None,
+) -> None:
     # When a user hits Ctrl+C in the terminal, the SIGINT is sent to all processes in the
     # foreground *process group*, so both our networking and database processes will terminate
     # at the same time and not sequentially as we'd like. That shouldn't be a problem but if
@@ -293,7 +250,7 @@ def kill_trinity_gracefully(trinity_config: TrinityConfig,
     # perform a non-gracefull shutdown if the process takes too long to terminate.
 
     hint = f" ({reason})" if reason else f""
-    logger.info('Shutting down Trinity%s', hint)
+    logger.info("Shutting down Trinity%s", hint)
 
     for process in processes:
         # Our sub-processes will have received a SIGINT already (see comment above), so here we
@@ -301,7 +258,7 @@ def kill_trinity_gracefully(trinity_config: TrinityConfig,
         process.join(2)
         if process.is_alive():
             kill_process_gracefully(process, logger)
-        logger.info('%s process (pid=%d) terminated', process.name, process.pid)
+        logger.info("%s process (pid=%d) terminated", process.name, process.pid)
 
     remove_dangling_ipc_files(logger, trinity_config.ipc_dir)
 

@@ -1,60 +1,36 @@
 import pkg_resources
-from typing import (
-    Tuple,
-    Type,
-)
+from typing import Tuple, Type
 
-from trinity.extensibility import (
-    BaseComponentAPI,
-)
+from trinity.extensibility import BaseComponentAPI
 from trinity.components.builtin.attach.component import (
     DbShellComponent,
     AttachComponent,
 )
-from trinity.components.builtin.beam_exec.component import (
-    BeamChainExecutionComponent,
-)
+from trinity.components.builtin.beam_exec.component import BeamChainExecutionComponent
 from trinity.components.builtin.beam_preview.component import (
     BeamChainPreviewComponent0,
     BeamChainPreviewComponent1,
     BeamChainPreviewComponent2,
     BeamChainPreviewComponent3,
 )
-from trinity.components.builtin.ethstats.component import (
-    EthstatsComponent,
-)
+from trinity.components.builtin.ethstats.component import EthstatsComponent
 from trinity.components.builtin.fix_unclean_shutdown.component import (
-    FixUncleanShutdownComponent
+    FixUncleanShutdownComponent,
 )
 from trinity.components.builtin.import_export.component import (
     ExportBlockComponent,
     ImportBlockComponent,
 )
-from trinity.components.builtin.json_rpc.component import (
-    JsonRpcServerComponent,
-)
-from trinity.components.builtin.network_db.component import (
-    NetworkDBComponent,
-)
-from trinity.components.builtin.peer_discovery.component import (
-    PeerDiscoveryComponent,
-)
-from trinity.components.builtin.request_server.component import (
-    RequestServerComponent,
-)
-from trinity.components.builtin.syncer.component import (
-    SyncerComponent,
-)
-from trinity.components.builtin.upnp.component import (
-    UpnpComponent,
-)
+from trinity.components.builtin.json_rpc.component import JsonRpcServerComponent
+from trinity.components.builtin.network_db.component import NetworkDBComponent
+from trinity.components.builtin.peer_discovery.component import PeerDiscoveryComponent
+from trinity.components.builtin.request_server.component import RequestServerComponent
+from trinity.components.builtin.syncer.component import SyncerComponent
+from trinity.components.builtin.upnp.component import UpnpComponent
 from trinity.components.eth2.beacon.component import BeaconNodeComponent
 from trinity.components.eth2.discv5.component import DiscV5Component
 from trinity.components.eth2.eth1_monitor.component import Eth1MonitorComponent
-from trinity.components.eth2.interop.component import InteropComponent
-from trinity.components.builtin.tx_pool.component import (
-    TxComponent,
-)
+from trinity.components.builtin.tx_pool.component import TxComponent
 
 
 BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
@@ -69,7 +45,6 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
 
 BEACON_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     BeaconNodeComponent,
-    InteropComponent,
     Eth1MonitorComponent,
     DiscV5Component,
 )
@@ -95,12 +70,14 @@ def discover_components() -> Tuple[Type[BaseComponentAPI], ...]:
     # https://packaging.python.org/guides/creating-and-discovering-components/#using-package-metadata
 
     return tuple(
-        entry_point.load() for entry_point in pkg_resources.iter_entry_points('trinity.components')
+        entry_point.load()
+        for entry_point in pkg_resources.iter_entry_points("trinity.components")
     )
 
 
-def get_all_components(*extra_components: Type[BaseComponentAPI],
-                       ) -> Tuple[Type[BaseComponentAPI], ...]:
+def get_all_components(
+    *extra_components: Type[BaseComponentAPI],
+) -> Tuple[Type[BaseComponentAPI], ...]:
     return BASE_COMPONENTS + extra_components + discover_components()
 
 
