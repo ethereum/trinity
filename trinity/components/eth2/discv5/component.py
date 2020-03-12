@@ -264,10 +264,6 @@ class DiscV5Component(TrioIsolatedComponent):
                 nursery.start_soon(async_service.TrioManager.run_service, service)
 
 
-async def main() -> None:
-    from trinity.extensibility.component import run_standalone_eth2_component
-    await run_standalone_eth2_component(DiscV5Component)
-
-
 if __name__ == "__main__":
-    trio.run(main)
+    from trinity.extensibility.component import run_standalone_eth2_component
+    trio.run(run_standalone_eth2_component, DiscV5Component)

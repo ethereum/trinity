@@ -1,6 +1,7 @@
 import argparse
 import functools
 import logging
+import pathlib
 from typing import Set
 import uuid
 
@@ -9,7 +10,6 @@ import trio
 from lahja import ConnectionConfig, TrioEndpoint
 
 from p2p.events import PeerCandidatesRequest
-from p2p.constants import DISCOVERY_EVENTBUS_ENDPOINT
 from p2p.typing import NodeID
 
 from trinity.exceptions import ENRMissingForkID
@@ -40,7 +40,8 @@ async def main() -> None:
         raise AssertionError("Failed to detect network_id")
 
     logger.info(f"Asking DiscoveryService for peers on {network_cfg.chain_name}")
-    connection_config = ConnectionConfig(DISCOVERY_EVENTBUS_ENDPOINT, args.ipc)
+    ipc_path = pathlib.Path(args.ipc)
+    connection_config = ConnectionConfig(name=ipc_path.stem, path=ipc_path)
     network_cfg = PRECONFIGURED_NETWORKS[network_id]
     vm_config = network_cfg.vm_configuration
     fork_blocks = extract_fork_blocks(vm_config)

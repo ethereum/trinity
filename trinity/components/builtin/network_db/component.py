@@ -29,17 +29,17 @@ from trinity.db.network import (
 )
 from trinity.exceptions import BadDatabaseError
 
-from .connection.server import ConnectionTrackerServer
-from .connection.tracker import (
+from trinity.components.builtin.network_db.connection.server import ConnectionTrackerServer
+from trinity.components.builtin.network_db.connection.tracker import (
     SQLiteConnectionTracker,
     MemoryConnectionTracker,
 )
-from .cli import (
+from trinity.components.builtin.network_db.cli import (
     TrackingBackend,
     NormalizeTrackingBackend,
 )
-from .eth1_peer_db.server import PeerDBServer
-from .eth1_peer_db.tracker import (
+from trinity.components.builtin.network_db.eth1_peer_db.server import PeerDBServer
+from trinity.components.builtin.network_db.eth1_peer_db.tracker import (
     BaseEth1PeerTracker,
     NoopEth1PeerTracker,
     SQLiteEth1PeerTracker,
@@ -249,3 +249,9 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
                 manager.wait_finished()
                 for manager in tracker_managers
             ))
+
+
+if __name__ == "__main__":
+    from trinity.extensibility.component import run_standalone_eth1_component
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(run_standalone_eth1_component(NetworkDBComponent))

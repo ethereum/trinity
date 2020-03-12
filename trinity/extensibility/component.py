@@ -8,6 +8,7 @@ from argparse import (
 )
 import asyncio
 import logging
+import pathlib
 from typing import AsyncIterator, Type, TYPE_CHECKING, Union
 
 from async_generator import asynccontextmanager
@@ -157,6 +158,12 @@ async def run_standalone_component(
             break
 
     component.configure_parser(parser, subparser)
+    parser.add_argument(
+        '--connect-to-endpoints',
+        help="A list of event bus IPC files for components we should connect to",
+        nargs='+',
+        default=tuple(),
+    )
     args = parser.parse_args()
     # FIXME: Figure out a way to avoid having to set this.
     args.sync_mode = SYNC_FULL
@@ -180,8 +187,15 @@ async def run_standalone_component(
     )
     conn_config = ConnectionConfig.from_name(component.get_endpoint_name(), trinity_config.ipc_dir)
 
-    async with endpoint_type.serve(conn_config) as endpoint:
-        await component.do_run(boot_info, endpoint)
+    async with endpoint_type.serve(conn_config) as event_bus:
+        for endpoint in args.connect_to_endpoints:
+            path = pathlib.Path(endpoint)
+            if not path.is_socket():
+                raise ValueError("Invalid IPC path: {path}")
+            connection_config = ConnectionConfig(name=path.stem, path=path)
+            logger.info("Attempting to connect to eventbus endpoint at %s", connection_config)
+            await event_bus.connect_to_endpoints(connection_config)
+        await component.do_run(boot_info, event_bus)
 
 
 async def run_standalone_eth1_component(

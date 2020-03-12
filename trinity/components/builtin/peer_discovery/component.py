@@ -115,10 +115,6 @@ async def generate_eth_cap_enr_field(
     return (b'eth', sedes.List([forkid.ForkID]).serialize([our_forkid]))
 
 
-async def main() -> None:
-    from trinity.extensibility.component import run_standalone_eth1_component
-    await run_standalone_eth1_component(PeerDiscoveryComponent)
-
-
 if __name__ == "__main__":
-    trio.run(main)
+    from trinity.extensibility.component import run_standalone_eth1_component
+    trio.run(run_standalone_eth1_component, PeerDiscoveryComponent)
