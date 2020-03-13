@@ -1,0 +1,1 @@
+Don't let `CompressedLengthError` escape and be written to the console.
