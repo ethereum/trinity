@@ -13,6 +13,7 @@ from typing import (
     Union,
 )
 
+import snappy
 from cached_property import cached_property
 
 from async_generator import asynccontextmanager
@@ -89,7 +90,7 @@ async def stream_transport_messages(transport: TransportAPI,
 
         try:
             cmd = command_type.decode(msg, msg_proto.snappy_support)
-        except rlp.exceptions.DeserializationError as err:
+        except (rlp.exceptions.DeserializationError, snappy.CompressedLengthError) as err:
             raise MalformedMessage(f"Failed to decode {msg} for {command_type}") from err
 
         yield msg_proto, cmd
