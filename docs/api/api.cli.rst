@@ -19,7 +19,7 @@ We can also generate an always up-to-date version of them by running ``trinity -
                   [--disable-networkdb-component] [--disable-blacklistdb]
                   [--disable-eth1-peer-db]
                   [--enable-experimental-eth1-peer-tracking]
-                  [--disable-discovery] [--disable-upnp] [--ethstats]
+                  [--disable-discovery] [--disable-upnp] [--enable-ethstats]
                   [--ethstats-server-url ETHSTATS_SERVER_URL]
                   [--ethstats-server-secret ETHSTATS_SERVER_SECRET]
                   [--ethstats-node-id ETHSTATS_NODE_ID]
@@ -140,7 +140,7 @@ We can also generate an always up-to-date version of them by running ``trinity -
                             successful connections to Eth1 peers.
 
     ethstats (experimental):
-      --ethstats            Enable node stats reporting service
+      --enable-ethstats     Enable node stats reporting service
       --ethstats-server-url ETHSTATS_SERVER_URL
                             Node stats server URL (e. g. wss://example.com/api)
       --ethstats-server-secret ETHSTATS_SERVER_SECRET

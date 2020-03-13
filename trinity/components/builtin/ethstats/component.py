@@ -48,7 +48,7 @@ class EthstatsComponent(AsyncioIsolatedComponent):
         ethstats_parser = arg_parser.add_argument_group('ethstats (experimental)')
 
         ethstats_parser.add_argument(
-            '--ethstats',
+            '--enable-ethstats',
             action='store_true',
             help='Enable node stats reporting service',
         )
@@ -83,7 +83,7 @@ class EthstatsComponent(AsyncioIsolatedComponent):
     def validate_cli(cls, boot_info: BootInfo) -> None:
         args = boot_info.args
 
-        if not args.ethstats:
+        if not args.enable_ethstats:
             return
 
         network_id = boot_info.trinity_config.network_id
@@ -100,7 +100,7 @@ class EthstatsComponent(AsyncioIsolatedComponent):
 
     @property
     def is_enabled(self) -> bool:
-        return bool(self._boot_info.args.ethstats)
+        return bool(self._boot_info.args.enable_ethstats)
 
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
