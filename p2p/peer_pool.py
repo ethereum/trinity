@@ -43,6 +43,7 @@ from p2p.constants import (
     DEFAULT_PEER_BOOT_TIMEOUT,
     HANDSHAKE_TIMEOUT,
     MAX_CONCURRENT_CONNECTION_ATTEMPTS,
+    PEER_READY_TIMEOUT,
     QUIET_PEER_POOL_SIZE,
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
@@ -268,11 +269,9 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
     async def start_peer(self, peer: BasePeer) -> None:
         self.run_child_service(peer.connection)
-        await self.wait(peer.connection.events.started.wait(), timeout=1)
+        await self.wait(peer.connection.events.started.wait(), timeout=PEER_READY_TIMEOUT)
 
-        self.run_child_service(peer)
-        await self.wait(peer.events.started.wait(), timeout=1)
-        await self.wait(peer.ready.wait(), timeout=1)
+        await peer.connection.run_peer(peer)
         if peer.is_operational:
             self._add_peer(peer, ())
         else:
@@ -328,19 +327,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         self.run_daemon_task(self._periodically_report_stats())
         await self.cancel_token.wait()
-
-    async def stop_all_peers(self) -> None:
-        self.logger.info("Stopping all peers ...")
-        peers = self.connected_nodes.values()
-        disconnections = (
-            peer.disconnect(DisconnectReason.CLIENT_QUITTING)
-            for peer in peers
-            if peer.is_running
-        )
-        await asyncio.gather(*disconnections)
-
-    async def _cleanup(self) -> None:
-        await self.stop_all_peers()
 
     async def connect(self, remote: NodeAPI) -> BasePeer:
         """

@@ -9,6 +9,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    TYPE_CHECKING,
     Union,
 )
 
@@ -31,6 +32,7 @@ from p2p.abc import (
     TLogic,
     TProtocol,
 )
+from p2p.constants import PEER_READY_TIMEOUT
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import (
     DuplicateAPI,
@@ -45,6 +47,9 @@ from p2p.subscription import Subscription
 from p2p.service import BaseService
 from p2p.p2p_proto import BaseP2PProtocol, DevP2PReceipt, Disconnect
 from p2p.typing import Capabilities
+
+if TYPE_CHECKING:
+    from p2p.peer import BasePeer  # noqa: F401
 
 
 class Connection(ConnectionAPI, BaseService):
@@ -88,6 +93,17 @@ class Connection(ConnectionAPI, BaseService):
 
     def start_protocol_streams(self) -> None:
         self._handlers_ready.set()
+
+    async def run_peer(self, peer: 'BasePeer') -> None:
+        """
+        Run the peer as a child service.
+
+        A peer must always run as a child of the connection so that it has an open connection
+        until it finishes its cleanup.
+        """
+        self.run_child_service(peer)
+        await self.wait(peer.events.started.wait(), timeout=PEER_READY_TIMEOUT)
+        await self.wait(peer.ready.wait(), timeout=PEER_READY_TIMEOUT)
 
     #
     # Primary properties of the connection
