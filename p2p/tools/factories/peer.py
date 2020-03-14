@@ -11,7 +11,6 @@ from eth_keys import keys
 
 from p2p.abc import NodeAPI
 from p2p.peer import BasePeer, BasePeerContext, BasePeerFactory
-from p2p.service import run_service
 
 from p2p.tools.paragon import ParagonPeer, ParagonContext, ParagonPeerFactory
 
@@ -70,14 +69,16 @@ async def PeerPairFactory(*,
         bob_p2p_version=bob_p2p_version,
         cancel_token=cancel_token,
     )
+
     async with connection_pair as (alice_connection, bob_connection):
         alice = alice_factory.create_peer(connection=alice_connection)
         bob = bob_factory.create_peer(connection=bob_connection)
 
-        async with run_service(alice), run_service(bob):
-            await asyncio.wait_for(alice.ready.wait(), timeout=1)
-            await asyncio.wait_for(bob.ready.wait(), timeout=1)
-            yield alice, bob
+        await alice_connection.run_peer(alice)
+        await bob_connection.run_peer(bob)
+        await asyncio.wait_for(alice.ready.wait(), timeout=1)
+        await asyncio.wait_for(bob.ready.wait(), timeout=1)
+        yield alice, bob
 
 
 def ParagonPeerPairFactory(*,

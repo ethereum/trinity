@@ -39,6 +39,7 @@ from p2p.transport_state import TransportState
 
 if TYPE_CHECKING:
     from p2p.handshake import DevP2PReceipt  # noqa: F401
+    from p2p.peer import BasePeer  # noqa: F401
     from p2p.p2p_proto import (  # noqa: F401
         BaseP2PProtocol,
     )
@@ -583,6 +584,10 @@ class ConnectionAPI(AsyncioServiceAPI):
     @property
     @abstractmethod
     def is_closing(self) -> bool:
+        ...
+
+    @abstractmethod
+    async def run_peer(self, peer: 'BasePeer') -> None:
         ...
 
     #
