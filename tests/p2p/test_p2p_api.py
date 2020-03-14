@@ -70,24 +70,7 @@ async def test_p2p_api_disconnect_fn(bob, alice):
             alice_p2p_api = alice.get_logic('p2p', P2PAPI)
             bob_p2p_api = bob.get_logic('p2p', P2PAPI)
 
-            await alice_p2p_api.disconnect(DisconnectReason.CLIENT_QUITTING)
-            await asyncio.wait_for(bob.events.cancelled.wait(), timeout=1)
-
-            assert alice_p2p_api.remote_disconnect_reason is None
-            assert alice_p2p_api.local_disconnect_reason is DisconnectReason.CLIENT_QUITTING
-
-            assert bob_p2p_api.remote_disconnect_reason is DisconnectReason.CLIENT_QUITTING
-            assert bob_p2p_api.local_disconnect_reason is None
-
-
-@pytest.mark.asyncio
-async def test_p2p_api_disconnect_fn_nowait(bob, alice):
-    async with P2PAPI().as_behavior().apply(alice):
-        async with P2PAPI().as_behavior().apply(bob):
-            alice_p2p_api = alice.get_logic('p2p', P2PAPI)
-            bob_p2p_api = bob.get_logic('p2p', P2PAPI)
-
-            alice_p2p_api.disconnect_nowait(DisconnectReason.CLIENT_QUITTING)
+            alice_p2p_api.disconnect(DisconnectReason.CLIENT_QUITTING)
             await asyncio.wait_for(bob.events.cancelled.wait(), timeout=1)
 
             assert alice_p2p_api.remote_disconnect_reason is None

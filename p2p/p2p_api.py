@@ -32,8 +32,13 @@ class CancelOnDisconnect(CommandHandler[Disconnect]):
     disconnect_reason: DisconnectReason = None
 
     async def handle(self, connection: ConnectionAPI, cmd: Disconnect) -> None:
+        self.logger.warning("Received disconnect on %s", self.connection)
         self.disconnect_reason = cmd.payload
 
+        # XXX: This is probably necessary to trigger the peer's cancellation as well, although
+        # ideally we should cancel the peer
+        # Maybe the Peer should itself subscribe to Disconnect msgs so that it can cancel itself
+        # then. It doesn't seem right to have the P2PAPI cancel the connection...
         if connection.is_operational:
             connection.cancel_nowait()
 
@@ -72,7 +77,7 @@ class P2PAPI(Application):
         """
         return self._disconnect_handler.disconnect_reason
 
-    def _disconnect(self, reason: DisconnectReason) -> None:
+    def disconnect(self, reason: DisconnectReason) -> None:
         self.logger.debug(
             "Sending Disconnect to remote peer %s; reason: %s",
             self.connection,
@@ -80,16 +85,6 @@ class P2PAPI(Application):
         )
         self.send_disconnect(reason)
         self.local_disconnect_reason = reason
-
-    async def disconnect(self, reason: DisconnectReason) -> None:
-        self._disconnect(reason)
-        if self.connection.is_operational:
-            await self.connection.cancel()
-
-    def disconnect_nowait(self, reason: DisconnectReason) -> None:
-        self._disconnect(reason)
-        if self.connection.is_operational:
-            self.connection.cancel_nowait()
 
     #
     # Sending Pings

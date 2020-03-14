@@ -110,6 +110,12 @@ class BasePeer(BaseService):
                  event_bus: EndpointAPI = None,
                  ) -> None:
         super().__init__(token=connection.cancel_token, loop=connection.cancel_token.loop)
+        # XXX: Just an idea, but since we can't allow the connection to be closed before we've had
+        # a chance to run our cleanup, we can't let it keep its orginal cancel token as that is
+        # chained to the PeerPool's. Notice that we ensure the connection's token gets triggered
+        # by explicitly calling connection.cancel() in cleanup()
+        connection.cancel_token = CancelToken("BasePeerTookOverTheConnection")
+        connection.get_multiplexer().cancel_token = connection.cancel_token
 
         # Peer context object
         self.context = context
@@ -218,10 +224,15 @@ class BasePeer(BaseService):
         if subscriber in self._subscribers:
             self._subscribers.remove(subscriber)
 
-    async def _cleanup(self) -> None:
-        if self.connection.is_operational:
-            # the connection might be closed from when its cancel token triggers
-            await self.connection.cancel()
+    async def cleanup(self) -> None:
+        # We overwrite BaseService.cleanup() because in case neither side has sent a P2P
+        # Disconnect msg yet, we need to do so before the connection gets closed, which
+        # would be the case after BaseService.cleanup().
+        if (self.p2p_api.local_disconnect_reason is None and
+                self.p2p_api.remote_disconnect_reason is None):
+            self.p2p_api.disconnect(DisconnectReason.CLIENT_QUITTING)
+        await self.connection.cancel()
+        await super().cleanup()
 
     def setup_protocol_handlers(self) -> None:
         """
@@ -230,6 +241,10 @@ class BasePeer(BaseService):
         pass
 
     async def _run(self) -> None:
+        # XXX: Does it make any difference if we run them here instead of inside the context
+        # manager below?
+        self.run_child_service(self.connection)
+        await self.wait(self.connection.events.started.wait(), timeout=1)
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
             self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
@@ -276,11 +291,11 @@ class BasePeer(BaseService):
                 timeout_seconds=BLACKLIST_SECONDS_BAD_PROTOCOL,
                 reason="Bad protocol",
             )
-        if hasattr(self, "p2p_api"):
-            try:
-                await self.p2p_api.disconnect(reason)
-            except PeerConnectionLost:
-                self.logger.debug("Tried to disconnect from %s, but already disconnected", self)
+        try:
+            self.logger.warning("Sending Disconnect to remote peer %s", self.remote)
+            self.p2p_api.disconnect(reason)
+        except PeerConnectionLost:
+            self.logger.warning("Tried to disconnect from %s, but already disconnected", self)
 
         if self.is_operational:
             await self.cancel()
@@ -295,7 +310,7 @@ class BasePeer(BaseService):
                 reason="Bad protocol",
             )
         try:
-            self.p2p_api.disconnect_nowait(reason)
+            self.p2p_api.disconnect(reason)
         except PeerConnectionLost:
             self.logger.debug("Tried to nowait disconnect from %s, but already disconnected", self)
 

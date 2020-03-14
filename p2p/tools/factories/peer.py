@@ -16,7 +16,7 @@ from p2p.service import run_service
 from p2p.tools.paragon import ParagonPeer, ParagonContext, ParagonPeerFactory
 
 from .cancel_token import CancelTokenFactory
-from .connection import ConnectionPairFactory
+from .connection import ConnectionPairFactoryNotRunning
 
 
 @asynccontextmanager
@@ -57,7 +57,7 @@ async def PeerPairFactory(*,
     alice_handshakers = await alice_factory.get_handshakers()
     bob_handshakers = await bob_factory.get_handshakers()
 
-    connection_pair = ConnectionPairFactory(
+    alice_connection, bob_connection = await ConnectionPairFactoryNotRunning(
         alice_handshakers=alice_handshakers,
         bob_handshakers=bob_handshakers,
         alice_remote=alice_remote,
@@ -70,14 +70,13 @@ async def PeerPairFactory(*,
         bob_p2p_version=bob_p2p_version,
         cancel_token=cancel_token,
     )
-    async with connection_pair as (alice_connection, bob_connection):
-        alice = alice_factory.create_peer(connection=alice_connection)
-        bob = bob_factory.create_peer(connection=bob_connection)
+    alice = alice_factory.create_peer(connection=alice_connection)
+    bob = bob_factory.create_peer(connection=bob_connection)
 
-        async with run_service(alice), run_service(bob):
-            await asyncio.wait_for(alice.ready.wait(), timeout=1)
-            await asyncio.wait_for(bob.ready.wait(), timeout=1)
-            yield alice, bob
+    async with run_service(alice), run_service(bob):
+        await asyncio.wait_for(alice.ready.wait(), timeout=1)
+        await asyncio.wait_for(bob.ready.wait(), timeout=1)
+        yield alice, bob
 
 
 def ParagonPeerPairFactory(*,

@@ -37,7 +37,42 @@ async def ConnectionPairFactory(*,
                                 cancel_token: CancelToken = None,
                                 start_streams: bool = True,
                                 ) -> AsyncIterator[Tuple[ConnectionAPI, ConnectionAPI]]:
+    alice_connection, bob_connection = await ConnectionPairFactoryNotRunning(
+        alice_handshakers=alice_handshakers,
+        bob_handshakers=bob_handshakers,
+        alice_remote=alice_remote,
+        alice_private_key=alice_private_key,
+        alice_client_version=alice_client_version,
+        alice_p2p_version=alice_p2p_version,
+        bob_remote=bob_remote,
+        bob_private_key=bob_private_key,
+        bob_client_version=bob_client_version,
+        bob_p2p_version=bob_p2p_version,
+        cancel_token=cancel_token,
+        start_streams=start_streams
+    )
+    async with run_service(alice_connection), run_service(bob_connection):
+        if start_streams:
+            alice_connection.start_protocol_streams()
+            bob_connection.start_protocol_streams()
+        yield alice_connection, bob_connection
 
+
+async def ConnectionPairFactoryNotRunning(
+        *,
+        alice_handshakers: Tuple[HandshakerAPI[ProtocolAPI], ...] = (),
+        bob_handshakers: Tuple[HandshakerAPI[ProtocolAPI], ...] = (),
+        alice_remote: NodeAPI = None,
+        alice_private_key: keys.PrivateKey = None,
+        alice_client_version: str = 'alice',
+        alice_p2p_version: int = DEVP2P_V5,
+        bob_remote: NodeAPI = None,
+        bob_private_key: keys.PrivateKey = None,
+        bob_client_version: str = 'bob',
+        bob_p2p_version: int = DEVP2P_V5,
+        cancel_token: CancelToken = None,
+        start_streams: bool = True,
+) -> Tuple[ConnectionAPI, ConnectionAPI]:
     if alice_handshakers or bob_handshakers:
         # We only leverage `negotiate_protocol_handshakes` if we have actual
         # protocol handshakers since it raises `NoMatchingPeerCapabilities` if
@@ -123,8 +158,4 @@ async def ConnectionPairFactory(*,
         is_dial_out=False,
     )
 
-    async with run_service(alice_connection), run_service(bob_connection):
-        if start_streams:
-            alice_connection.start_protocol_streams()
-            bob_connection.start_protocol_streams()
-        yield alice_connection, bob_connection
+    return alice_connection, bob_connection

@@ -260,9 +260,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
             peer.remove_subscriber(subscriber)
 
     async def start_peer(self, peer: BasePeer) -> None:
-        self.run_child_service(peer.connection)
-        await self.wait(peer.connection.events.started.wait(), timeout=1)
-
         self.run_child_service(peer)
         await self.wait(peer.events.started.wait(), timeout=1)
         await self.wait(peer.ready.wait(), timeout=1)
@@ -320,19 +317,6 @@ class BasePeerPool(BaseService, AsyncIterable[BasePeer]):
 
         self.run_daemon_task(self._periodically_report_stats())
         await self.cancel_token.wait()
-
-    async def stop_all_peers(self) -> None:
-        self.logger.info("Stopping all peers ...")
-        peers = self.connected_nodes.values()
-        disconnections = (
-            peer.disconnect(DisconnectReason.CLIENT_QUITTING)
-            for peer in peers
-            if peer.is_running
-        )
-        await asyncio.gather(*disconnections)
-
-    async def _cleanup(self) -> None:
-        await self.stop_all_peers()
 
     async def connect(self, remote: NodeAPI) -> BasePeer:
         """
