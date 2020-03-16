@@ -390,28 +390,38 @@ async def test_protocol_bootstrap(monkeypatch):
 @pytest.mark.trio
 async def test_wait_neighbours(nursery):
     service = MockDiscoveryService([])
-    node = NodeFactory()
+    addresses = [
+        AddressFactory(ip='10.0.0.1'),
+        AddressFactory(ip='10.0.0.2'),
+        AddressFactory(ip='10.0.0.3'),
+        AddressFactory(ip='10.0.0.4')
+    ]
+    sender = NodeFactory(address=addresses[0])
+
+    # All our nodes are on the same network as the sender to ensure they pass the
+    # check_relayed_addr() check, otherwise in some rare cases we may get a random IP address
+    # that doesn't and it will be ignored by wait_neighbours, causing the test to fail.
+    neighbours = tuple(NodeFactory(address=address) for address in addresses[1:])
 
     # Schedule a call to service.recv_neighbours_v4() simulating a neighbours response from the
     # node we expect.
-    neighbours = tuple(NodeFactory.create_batch(3))
     expiration = _get_msg_expiration()
     neighbours_msg_payload = [
         [n.address.to_endpoint() + [n.pubkey.to_bytes()] for n in neighbours],
         expiration]
-    nursery.start_soon(service.recv_neighbours_v4, node, neighbours_msg_payload, b'')
+    nursery.start_soon(service.recv_neighbours_v4, sender, neighbours_msg_payload, b'')
 
-    received_neighbours = await service.wait_neighbours(node)
+    received_neighbours = await service.wait_neighbours(sender)
 
     assert neighbours == received_neighbours
     # Ensure wait_neighbours() cleaned up after itself.
-    assert not service.neighbours_channels.already_waiting_for(node)
+    assert not service.neighbours_channels.already_waiting_for(sender)
 
     # If wait_neighbours() times out, we get an empty list of neighbours.
-    received_neighbours = await service.wait_neighbours(node)
+    received_neighbours = await service.wait_neighbours(sender)
 
     assert received_neighbours == tuple()
-    assert not service.neighbours_channels.already_waiting_for(node)
+    assert not service.neighbours_channels.already_waiting_for(sender)
 
 
 @pytest.mark.trio
