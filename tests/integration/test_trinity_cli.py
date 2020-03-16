@@ -221,11 +221,9 @@ async def test_web3_commands_via_attached_console(command,
     (
         # mainnet
         ('trinity',),
-        ('trinity', '--disable-tx-pool',),
         ('trinity', '--sync-mode=light',),
         # ropsten
         ('trinity', '--ropsten',),
-        ('trinity', '--ropsten', '--disable-tx-pool',),
         ('trinity', '--sync-mode=light', '--ropsten',),
     )
 )
