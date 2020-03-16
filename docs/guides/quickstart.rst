@@ -124,6 +124,10 @@ the package and it will immediately start syncing. Head over to the
 Running Trinity
 ~~~~~~~~~~~~~~~
 
+.. note::
+
+    Execution of the following comand will cause downloading of a considerable amount of data. We need to make sure to have enough disk space available as well as a data plan that allows such traffic.
+
 After Trinity is installed we should have the ``trinity`` command available to start it.
 
 .. code:: sh
