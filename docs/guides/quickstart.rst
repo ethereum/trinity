@@ -126,10 +126,7 @@ Running Trinity
 
 .. note::
 
-    Execution of the following comand will result in the downloading of a considerable amount of data. We need to make sure to have enough disk space available as well as a data plan that allows such traffic. 
-    
-    If you want to run Trinity as a light node, check out :ref:`Run Trinity as a light client<cookbook_recipe_running_as_a_light_client>`
-    or use the ``--sync-mode=light`` flag. 
+    Execution of the following comand will cause downloading of a considerable amount of data. We need to make sure to have enough disk space available as well as a data plan that allows such traffic.
 
 After Trinity is installed we should have the ``trinity`` command available to start it.
 
