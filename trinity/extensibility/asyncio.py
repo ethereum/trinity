@@ -1,6 +1,4 @@
 from abc import abstractmethod
-import asyncio
-import signal
 from typing import Optional
 
 from asyncio_run_in_process import open_in_process
@@ -32,23 +30,7 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             subprocess_kwargs=self.get_subprocess_kwargs(),
         )
         async with proc_ctx as proc:
-            try:
-                await proc.wait_result()
-            except asyncio.CancelledError as err:
-                logger.debug('Component %s exiting. Sending SIGINT to pid=%d', self, proc.pid)
-                proc.send_signal(signal.SIGINT)
-                try:
-                    await asyncio.wait_for(proc.wait(), timeout=2)
-                except asyncio.TimeoutError:
-                    logger.debug(
-                        'Component %s running in process pid=%d timed out '
-                        'during shutdown. Sending SIGTERM and exiting.',
-                        self,
-                        proc.pid,
-                    )
-                    proc.send_signal(signal.SIGTERM)
-                finally:
-                    raise err
+            await proc.wait_result_or_raise()
 
     @classmethod
     async def _do_run(cls, boot_info: BootInfo) -> None:
