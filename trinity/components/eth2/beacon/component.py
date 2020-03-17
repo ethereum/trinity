@@ -261,6 +261,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                     await stack.enter_async_context(run_service(service))
 
                 await asyncio.gather(*(
-                    service.cancellation()
+                    service.threadsafe_cancel()
                     for service in services
                 ))
