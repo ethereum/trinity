@@ -17,10 +17,15 @@ from eth2.validator_client.duty_scheduler import (
     schedule_and_dispatch_duties_at_tick,
 )
 from eth2.validator_client.duty_store import DutyStore
+from eth2.validator_client.randao import mk_randao_provider
 from eth2.validator_client.signatory import sign_and_broadcast_operation_if_valid
 from eth2.validator_client.signatory_db import InMemorySignatoryDB
 from eth2.validator_client.tick import Tick
-from eth2.validator_client.typing import PrivateKeyProvider, ResolvedDuty
+from eth2.validator_client.typing import (
+    PrivateKeyProvider,
+    RandaoProvider,
+    ResolvedDuty,
+)
 
 # NOTE: ``MAX_INDIVIDUAL_DUTIES_PER_SLOT`` is the maximum number of duties
 # per slot we expect a single validator to have to be able to perform.
@@ -87,7 +92,11 @@ class Client(Service):
             duty_dispatcher,
         )
         self.manager.run_daemon_task(
-            self.duty_resolver, self._beacon_node, duties_to_resolve, resolved_duties
+            self.duty_resolver,
+            self._beacon_node,
+            mk_randao_provider(self._key_store.private_key_for),
+            duties_to_resolve,
+            resolved_duties,
         )
         self.manager.run_daemon_task(
             self.signatory,
@@ -153,12 +162,15 @@ class Client(Service):
     async def duty_resolver(
         self,
         beacon_node: BeaconNodeAPI,
+        randao_provider: RandaoProvider,
         duties_to_resolve: ReceiveChannel[Duty],
         resolved_duties: SendChannel[ResolvedDuty],
     ) -> None:
         async with duties_to_resolve:
             async for duty in duties_to_resolve:
-                self.manager.run_task(resolve_duty, beacon_node, duty, resolved_duties)
+                self.manager.run_task(
+                    resolve_duty, beacon_node, randao_provider, duty, resolved_duties
+                )
 
     async def signatory(
         self,

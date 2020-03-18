@@ -28,16 +28,21 @@ class Duty:
     tick_for_execution: Tick
     # ``Tick`` when this ``Duty`` was discovered via a ``BeaconNode``
     discovered_at_tick: Tick
+
+    # which ``Tick`` within a ``Slot`` should this ``Duty`` be performed
+    tick_count: int
     duty_type: DutyType
     signature_domain: SignatureDomain
 
 
 @dataclass(eq=True, frozen=True)
 class AttestationDuty(Duty):
+    tick_count: int = field(init=False, default=1)
     duty_type: DutyType = field(init=False, default=DutyType.Attestation)
     signature_domain: SignatureDomain = field(
         init=False, default=SignatureDomain.DOMAIN_BEACON_ATTESTER
     )
+
     committee_index: CommitteeIndex
 
     def __repr__(self) -> str:
@@ -51,6 +56,7 @@ class AttestationDuty(Duty):
 
 @dataclass(eq=True, frozen=True)
 class BlockProposalDuty(Duty):
+    tick_count: int = field(init=False, default=0)
     duty_type: DutyType = field(init=False, default=DutyType.BlockProposal)
     signature_domain: SignatureDomain = field(
         init=False, default=SignatureDomain.DOMAIN_BEACON_PROPOSER

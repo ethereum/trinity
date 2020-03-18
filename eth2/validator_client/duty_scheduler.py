@@ -9,13 +9,16 @@ from eth2.validator_client.abc import BeaconNodeAPI
 from eth2.validator_client.duty import AttestationDuty, Duty, DutyType
 from eth2.validator_client.duty_store import DutyStore
 from eth2.validator_client.tick import Tick
-from eth2.validator_client.typing import ResolvedDuty
+from eth2.validator_client.typing import RandaoProvider, ResolvedDuty
 
 logger = logging.getLogger("eth2.validator_client.duty_scheduler")
 
 
 async def resolve_duty(
-    beacon_node: BeaconNodeAPI, duty: Duty, resolved_duties: SendChannel[ResolvedDuty]
+    beacon_node: BeaconNodeAPI,
+    randao_provider: RandaoProvider,
+    duty: Duty,
+    resolved_duties: SendChannel[ResolvedDuty],
 ) -> None:
     if duty.duty_type == DutyType.Attestation:
         duty = cast(AttestationDuty, duty)
@@ -26,8 +29,11 @@ async def resolve_duty(
         )
         await resolved_duties.send((duty, attestation))
     elif duty.duty_type == DutyType.BlockProposal:
+        randao_reveal = randao_provider(
+            duty.validator_public_key, duty.tick_for_execution.epoch
+        )
         block_proposal = await beacon_node.fetch_block_proposal(
-            duty.validator_public_key, duty.tick_for_execution.slot
+            duty.tick_for_execution.slot, randao_reveal
         )
         await resolved_duties.send((duty, block_proposal))
     else:

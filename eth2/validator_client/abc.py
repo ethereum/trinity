@@ -5,7 +5,7 @@ from eth_typing import BLSPubkey, BLSSignature
 
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock
-from eth2.beacon.typing import CommitteeIndex, Epoch, Operation, Slot
+from eth2.beacon.typing import CommitteeIndex, Epoch, Operation, SignedOperation, Slot
 from eth2.validator_client.duty import Duty
 from eth2.validator_client.tick import Tick
 from eth2.validator_client.typing import BLSPrivateKey
@@ -35,12 +35,12 @@ class BeaconNodeAPI(AsyncContextManager["BeaconNodeAPI"]):
 
     @abstractmethod
     async def fetch_block_proposal(
-        self, public_key: BLSPubkey, slot: Slot
+        self, slot: Slot, randao_reveal: BLSSignature
     ) -> BeaconBlock:
         ...
 
     @abstractmethod
-    async def publish(self, duty: Duty, signature: BLSSignature) -> None:
+    async def publish(self, duty: Duty, signed_operation: SignedOperation) -> None:
         ...
 
 

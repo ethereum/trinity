@@ -1,19 +1,25 @@
+from enum import Enum, unique
 import logging
 import random
 from types import TracebackType
-from typing import Callable, Collection, Dict, Optional, Set, Tuple, Type
+from typing import Any, Callable, Collection, Dict, Optional, Set, Tuple, Type
 
 from asks import Session
 from eth_typing import BLSPubkey, BLSSignature
-from eth_utils import ValidationError
+from eth_utils import ValidationError, decode_hex, encode_hex
+from eth_utils.toolz import mapcat
+import ssz
+from ssz.tools.dump import to_formatted_dict
+from ssz.tools.parse import from_formatted_dict
 import trio
 
 from eth2._utils.humanize import humanize_bytes
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
-from eth2.beacon.types.blocks import BeaconBlock
-from eth2.beacon.typing import CommitteeIndex, Epoch, Slot
+from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
+from eth2.beacon.typing import CommitteeIndex, Epoch, Operation, SignedOperation, Slot
 from eth2.validator_client.abc import BeaconNodeAPI
+from eth2.validator_client.clock import TICKS_PER_SLOT
 from eth2.validator_client.config import Config
 from eth2.validator_client.duty import (
     AttestationDuty,
@@ -23,48 +29,190 @@ from eth2.validator_client.duty import (
 )
 from eth2.validator_client.tick import Tick
 
-
-async def _get_duties_from_beacon_node(
-    session: Session,
-    url: str,
-    public_keys: Collection[BLSPubkey],
-    epoch: Epoch,
-    slots_per_epoch: int,
-) -> Tuple[Duty, ...]:
-    # TODO
-    # resp = await session.get(url, params={"validator_pubkeys": public_keys, "epoch": epoch})
-    # ... parse resp into duties
-    return ()
+SYNCING_POLL_INTERVAL = 10  # seconds
+CONNECTION_RETRY_INTERVAL = 5  # seconds
 
 
-async def _publish_duty_with_signature(
-    session: Session, url: str, duty: Duty, signature: BLSSignature
-) -> None:
-    # TODO
-    # resp = await session.post(url, params)
-    # ... ensure resp is OK
-    return
+@unique
+class BeaconNodePath(Enum):
+    node_version = "/node/version"
+    genesis_time = "/node/genesis_time"
+    sync_status = "/node/syncing"
+    validator_duties = "/validator/duties"
+    block_proposal = "/validator/block"
+    attestation = "/validator/attestation"
+
+
+async def _get_node_version(session: Session, url: str) -> str:
+    return (await session.get(url)).text
 
 
 async def _get_syncing_status(session: Session, url: str) -> bool:
-    # TODO
-    return False
+    status_response = await session.get(url)
+    status = status_response.json()
+    return status["is_syncing"]
 
 
 async def _get_genesis_time(session: Session, url: str) -> int:
-    # TODO
-    return 0
+    return (await session.get(url)).json()
+
+
+async def _get_duties_from_beacon_node(
+    session: Session, url: str, public_keys: Collection[BLSPubkey], epoch: Epoch
+) -> Tuple[Dict[str, Any]]:
+    return (
+        await session.get(
+            url,
+            params={
+                "validator_pubkeys": [
+                    encode_hex(public_key) for public_key in public_keys
+                ],
+                "epoch": epoch,
+            },
+        )
+    ).json()
+
+
+def _parse_bls_pubkey(encoded_public_key: str) -> BLSPubkey:
+    return BLSPubkey(decode_hex(encoded_public_key))
+
+
+def _parse_attestation_duty(
+    duty_data: Dict[str, Any],
+    validator_public_key: BLSPubkey,
+    current_tick: Tick,
+    target_epoch: Epoch,
+    genesis_time: int,
+    seconds_per_slot: int,
+    ticks_per_slot: int,
+) -> AttestationDuty:
+    target_tick = Tick.computing_t_from(
+        Slot(duty_data["attestation_slot"]),
+        target_epoch,
+        AttestationDuty.tick_count,
+        genesis_time,
+        seconds_per_slot,
+        ticks_per_slot,
+    )
+    return AttestationDuty(
+        validator_public_key=validator_public_key,
+        tick_for_execution=target_tick,
+        discovered_at_tick=current_tick,
+        # TODO update field name
+        committee_index=CommitteeIndex(duty_data["attestation_shard"]),
+    )
+
+
+def _parse_block_proposal_duty(
+    duty_data: Dict[str, Any],
+    validator_public_key: BLSPubkey,
+    current_tick: Tick,
+    target_epoch: Epoch,
+    genesis_time: int,
+    seconds_per_slot: int,
+    ticks_per_slot: int,
+) -> BlockProposalDuty:
+    target_tick = Tick.computing_t_from(
+        Slot(duty_data["block_proposal_slot"]),
+        target_epoch,
+        BlockProposalDuty.tick_count,
+        genesis_time,
+        seconds_per_slot,
+        ticks_per_slot,
+    )
+    return BlockProposalDuty(
+        validator_public_key=validator_public_key,
+        tick_for_execution=target_tick,
+        discovered_at_tick=current_tick,
+    )
+
+
+def _parse_duties(
+    duty_data: Dict[str, Any],
+    current_tick: Tick,
+    target_epoch: Epoch,
+    genesis_time: int,
+    seconds_per_slot: int,
+    ticks_per_slot: int,
+) -> Tuple[Duty, ...]:
+    validator_public_key = _parse_bls_pubkey(duty_data["validator_pubkey"])
+    attestation_duty = _parse_attestation_duty(
+        duty_data,
+        validator_public_key,
+        current_tick,
+        target_epoch,
+        genesis_time,
+        seconds_per_slot,
+        ticks_per_slot,
+    )
+    block_proposal_duty = _parse_block_proposal_duty(
+        duty_data,
+        validator_public_key,
+        current_tick,
+        target_epoch,
+        genesis_time,
+        seconds_per_slot,
+        ticks_per_slot,
+    )
+    duties: Tuple[Duty, ...] = tuple()
+    if attestation_duty:
+        duties += (attestation_duty,)
+    if block_proposal_duty:
+        duties += (block_proposal_duty,)
+    return duties
+
+
+async def _get_attestation_from_beacon_node(
+    session: Session,
+    url: str,
+    public_key: BLSPubkey,
+    slot: Slot,
+    committee_index: CommitteeIndex,
+) -> Attestation:
+    attestation_response = (
+        await session.get(
+            url,
+            params={
+                "validator_pubkey": encode_hex(public_key),
+                "slot": slot,
+                "committee_index": committee_index,
+            },
+        )
+    ).json()
+    return from_formatted_dict(attestation_response, Attestation)
+
+
+async def _get_block_proposal_from_beacon_node(
+    session: Session, url: str, slot: Slot, randao_reveal: BLSSignature
+) -> BeaconBlock:
+    block_proposal_response = (
+        await session.get(
+            url, params={"slot": slot, "randao_reveal": encode_hex(randao_reveal)}
+        )
+    ).json()
+    return from_formatted_dict(block_proposal_response, BeaconBlock)
+
+
+async def _post_signed_operation_to_beacon_node(
+    session: Session, url: str, signed_operation: Operation, sedes: ssz.BaseSedes
+) -> None:
+    await session.post(url, json=to_formatted_dict(signed_operation, sedes))
+
+
+def _normalize_url(url: str) -> str:
+    return url[:-1] if url.endswith("/") else url
 
 
 class BeaconNode(BeaconNodeAPI):
     logger = logging.getLogger("eth2.validator_client.beacon_node")
 
     def __init__(
-        self, genesis_time: int, beacon_node_endpoint: str, slots_per_epoch: Slot
+        self, genesis_time: int, beacon_node_endpoint: str, seconds_per_slot: int
     ) -> None:
         self._genesis_time = genesis_time
-        self._beacon_node_endpoint = beacon_node_endpoint
-        self._slots_per_epoch = slots_per_epoch
+        self._beacon_node_endpoint = _normalize_url(beacon_node_endpoint)
+        self._seconds_per_slot = seconds_per_slot
+        self._ticks_per_slot = TICKS_PER_SLOT
         self._session = Session()
         self._connection_lock = trio.Lock()
         self._is_connected = False
@@ -74,6 +222,9 @@ class BeaconNode(BeaconNodeAPI):
         return cls(
             config.genesis_time, config.beacon_node_endpoint, config.slots_per_epoch
         )
+
+    def _url_for(self, path: BeaconNodePath) -> str:
+        return self._beacon_node_endpoint + path.value
 
     async def __aenter__(self) -> BeaconNodeAPI:
         if self._is_connected:
@@ -88,36 +239,57 @@ class BeaconNode(BeaconNodeAPI):
         exc_value: Optional[BaseException],
         traceback: Optional[TracebackType],
     ) -> None:
-        pass
+        self._is_connected = not self._is_connected
 
-    async def _connect(self) -> None:
+    async def _connect(self, retry: bool = True) -> None:
         """
         Verify the syncing status and genesis time of the provided
         beacon node, ensuring it is up-to-date and reachable.
         """
-        await self._wait_for_synced_beacon_node()
-        await self._validate_genesis_time()
-        self._is_connected = True
+        try:
+            await self._ping_beacon_node()
+            await self._wait_for_synced_beacon_node()
+            await self._validate_genesis_time()
+            self._is_connected = True
+        except OSError as e:
+            if retry:
+                self.logger.warn(
+                    "could not connect to beacon node at %s; retrying connection in %d seconds",
+                    self._beacon_node_endpoint,
+                    CONNECTION_RETRY_INTERVAL,
+                )
+                await trio.sleep(CONNECTION_RETRY_INTERVAL)
+                await self._connect(retry=False)
+            else:
+                self.logger.error(e)
+                raise
+
+    async def _ping_beacon_node(self) -> None:
+        """
+        To "ping" a beacon node, the ``BeaconNode`` instance attempts to query
+        some endpoint which should not fail and get back a successful response.
+        """
+        url = self._url_for(BeaconNodePath.node_version)
+        version = await _get_node_version(self._session, url)
+        self.logger.info("Connected to a node with version identifier: %s", version)
 
     async def _get_syncing_status(self) -> bool:
-        # TODO
-        url = ""  # self._syncing_endpoint
+        url = self._url_for(BeaconNodePath.sync_status)
         return await _get_syncing_status(self._session, url)
 
     async def _wait_for_synced_beacon_node(self) -> None:
         is_syncing = await self._get_syncing_status()
-        if is_syncing:
-            # TODO
-            # some loop +  time-out until synced!
-            pass
+        while is_syncing:
+            await trio.sleep(SYNCING_POLL_INTERVAL)
+            is_syncing = await self._get_syncing_status()
 
     async def _validate_genesis_time(self) -> None:
         """
         Ensure the connected beacon node has the same genesis time
         as was provided during instantiation of ``self``.
         """
-        genesis_url = ""  # self._genesis_endpoint
-        genesis_time = await _get_genesis_time(self._session, genesis_url)
+        genesis_time_url = self._url_for(BeaconNodePath.genesis_time)
+        genesis_time = await _get_genesis_time(self._session, genesis_time_url)
         if genesis_time != self._genesis_time:
             raise ValidationError(
                 f"Genesis time of validator client {self._genesis_time} did not match genesis time"
@@ -130,26 +302,53 @@ class BeaconNode(BeaconNodeAPI):
         public_keys: Collection[BLSPubkey],
         target_epoch: Epoch,
     ) -> Collection[Duty]:
-        url = ""  # self._fetch_duties_endpoint
-        return await _get_duties_from_beacon_node(
-            self._session, url, public_keys, target_epoch, self._slots_per_epoch
+        url = self._url_for(BeaconNodePath.validator_duties)
+        duties_data = await _get_duties_from_beacon_node(
+            self._session, url, public_keys, target_epoch
+        )
+        return tuple(
+            mapcat(
+                lambda data: _parse_duties(
+                    data,
+                    current_tick,
+                    target_epoch,
+                    self._genesis_time,
+                    self._seconds_per_slot,
+                    self._ticks_per_slot,
+                ),
+                duties_data,
+            )
         )
 
     async def fetch_attestation(
         self, public_key: BLSPubkey, slot: Slot, committee_index: CommitteeIndex
     ) -> Attestation:
-        # TODO make API call
-        return Attestation.create(data=AttestationData.create(slot=slot))
+        url = self._url_for(BeaconNodePath.attestation)
+        return await _get_attestation_from_beacon_node(
+            self._session, url, public_key, slot, committee_index
+        )
 
     async def fetch_block_proposal(
-        self, public_key: BLSPubkey, slot: Slot
+        self, slot: Slot, randao_reveal: BLSSignature
     ) -> BeaconBlock:
-        # TODO make API call
-        return BeaconBlock.create(slot=slot)
+        url = self._url_for(BeaconNodePath.block_proposal)
+        return await _get_block_proposal_from_beacon_node(
+            self._session, url, slot, randao_reveal
+        )
 
-    async def publish(self, duty: Duty, signature: BLSSignature) -> None:
-        url = ""  # self._publish_endpoint
-        await _publish_duty_with_signature(self._session, url, duty, signature)
+    async def publish(self, duty: Duty, signed_operation: SignedOperation) -> None:
+        if duty.duty_type == DutyType.Attestation:
+            url = self._url_for(BeaconNodePath.attestation)
+            sedes = Attestation
+        elif duty.duty_type == DutyType.BlockProposal:
+            url = self._url_for(BeaconNodePath.block_proposal)
+            sedes = SignedBeaconBlock
+        else:
+            raise NotImplementedError(f"unrecognized duty type in duty {duty}")
+
+        await _post_signed_operation_to_beacon_node(
+            self._session, url, signed_operation, sedes
+        )
 
 
 DutyFetcher = Callable[
@@ -285,14 +484,15 @@ class MockBeaconNode(BeaconNodeAPI):
         )
 
     async def fetch_block_proposal(
-        self, public_key: BLSPubkey, slot: Slot
+        self, slot: Slot, randao_reveal: BLSSignature
     ) -> BeaconBlock:
-        return BeaconBlock.create(slot=slot)
+        body = BeaconBlockBody.create(randao_reveal=randao_reveal)
+        return BeaconBlock.create(slot=slot, body=body)
 
-    async def publish(self, duty: Duty, signature: BLSSignature) -> None:
+    async def publish(self, duty: Duty, signed_operation: SignedOperation) -> None:
         self.logger.debug(
             "publishing %s with signature %s to beacon node",
             duty,
-            humanize_bytes(signature),
+            humanize_bytes(signed_operation.signature),
         )
-        self.published_signatures[duty] = signature
+        self.published_signatures[duty] = signed_operation.signature
