@@ -253,9 +253,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             else:
                 services += (validator,)
 
-            if boot_info.args.enable_metrics:
-                services += (metrics_server,)
-
             async with AsyncExitStack() as stack:
                 for service in services:
                     await stack.enter_async_context(run_service(service))
