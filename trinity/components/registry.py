@@ -53,6 +53,7 @@ from trinity.components.eth2.beacon.component import BeaconNodeComponent
 from trinity.components.eth2.discv5.component import DiscV5Component
 from trinity.components.eth2.eth1_monitor.component import Eth1MonitorComponent
 from trinity.components.eth2.interop.component import InteropComponent
+from trinity.components.eth2.network_generator.component import NetworkGeneratorComponent
 from trinity.components.builtin.tx_pool.component import (
     TxComponent,
 )
@@ -71,6 +72,7 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
 BEACON_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     BeaconNodeComponent,
     InteropComponent,
+    NetworkGeneratorComponent,
     Eth1MonitorComponent,
     DiscV5Component,
 )
