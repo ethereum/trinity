@@ -1,6 +1,6 @@
 from typing import Any, NamedTuple, NewType, Sequence, Tuple
 
-from eth_typing import Hash32
+from eth_typing import BLSSignature, Hash32
 from typing_extensions import Protocol
 
 Slot = NewType("Slot", int)  # uint64
@@ -68,3 +68,7 @@ default_version = Version(b"\x00" * 4)
 
 class Operation(Protocol):
     hash_tree_root: Root
+
+
+class SignedOperation(Operation):
+    signature: BLSSignature

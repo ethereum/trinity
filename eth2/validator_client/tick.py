@@ -13,5 +13,18 @@ class Tick:
     def __repr__(self) -> str:
         return f"Tick({self.epoch},{self.slot},{self.count})"
 
+    @classmethod
+    def computing_t_from(
+        cls,
+        slot: Slot,
+        epoch: Epoch,
+        count: int,
+        genesis_time: int,
+        seconds_per_slot: int,
+        ticks_per_slot: int,
+    ) -> "Tick":
+        t = genesis_time + seconds_per_slot * slot + seconds_per_slot / ticks_per_slot
+        return cls(t, slot, epoch, count)
+
     def is_at_genesis(self, genesis_time: int) -> bool:
         return int(self.t) == genesis_time and self.count == 0

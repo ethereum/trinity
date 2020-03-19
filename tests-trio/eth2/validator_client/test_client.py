@@ -9,6 +9,7 @@ from eth2.validator_client.client import Client
 from eth2.validator_client.clock import Clock
 from eth2.validator_client.duty import AttestationDuty, BlockProposalDuty, DutyType
 from eth2.validator_client.key_store import InMemoryKeyStore
+from eth2.validator_client.randao import mk_randao_provider
 from eth2.validator_client.signatory import sign
 from eth2.validator_client.tick import Tick
 
@@ -87,6 +88,8 @@ async def test_client_works(
     )
     client = Client(key_store, clock, beacon_node)
 
+    randao_provider = mk_randao_provider(key_store.private_key_for)
+
     try:
         async with background_trio_service(client):
             await trio.sleep(total_epochs_to_run * seconds_per_epoch)
@@ -111,8 +114,11 @@ async def test_client_works(
                 duty.committee_index,
             )
         else:
+            randao_reveal = randao_provider(
+                duty.validator_public_key, duty.tick_for_execution.epoch
+            )
             operation = await beacon_node.fetch_block_proposal(
-                duty.validator_public_key, duty.tick_for_execution.slot
+                duty.tick_for_execution.slot, randao_reveal
             )
 
         observed_signature = beacon_node.published_signatures[duty]
