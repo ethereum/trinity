@@ -2,17 +2,14 @@ import argparse
 import getpass
 import logging
 import signal
-from typing import Dict
 
 import argcomplete
 from async_service.trio import background_trio_service
-from eth_typing import BLSPubkey
 import trio
 
 from eth2.validator_client.client import Client
 from eth2.validator_client.config import Config
 from eth2.validator_client.key_store import KeyStore
-from eth2.validator_client.typing import BLSPrivateKey
 from trinity.cli_parser import parser, subparser
 
 DEMO_MODE_HELP_MSG = (
@@ -45,8 +42,7 @@ async def _import_key(
 ) -> None:
     logger.info("importing private key...")
     try:
-        key_pairs: Dict[BLSPubkey, BLSPrivateKey] = {}
-        key_store = KeyStore.from_config(config, key_pairs)
+        key_store = KeyStore.from_config(config)
         logger.warn(
             "please enter a password to protect the key on-disk (can be empty):"
         )

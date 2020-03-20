@@ -40,6 +40,8 @@ class KeyStore(KeyStoreAPI):
     ) -> None:
         self._location = key_store_dir
         self._demo_mode = demo_mode
+        # TODO(ralexstokes) reconcile ``key_pairs`` provided to this class
+        # with those serialized on disk
         self._key_pairs = key_pairs
         # NOTE: ``_key_files`` is a temporary cache
         # so that there may be key pairs in ``_key_pairs``
@@ -49,10 +51,8 @@ class KeyStore(KeyStoreAPI):
         self._ensure_dirs()
 
     @classmethod
-    def from_config(
-        cls, config: Config, key_pairs: Dict[BLSPubkey, BLSPrivateKey]
-    ) -> "KeyStore":
-        return cls(config.key_store_dir, key_pairs, config.demo_mode)
+    def from_config(cls, config: Config) -> "KeyStore":
+        return cls(config.key_store_dir, config.key_pairs, config.demo_mode)
 
     def __enter__(self) -> KeyStoreAPI:
         self._load_validator_key_pairs()
@@ -131,10 +131,8 @@ class InMemoryKeyStore(KeyStoreAPI):
         self._key_pairs = key_pairs
 
     @classmethod
-    def from_config(
-        cls, config: Config, key_pairs: Dict[BLSPubkey, BLSPrivateKey]
-    ) -> "InMemoryKeyStore":
-        return cls(key_pairs)
+    def from_config(cls, config: Config) -> "InMemoryKeyStore":
+        return cls(config.key_pairs)
 
     def __enter__(self) -> KeyStoreAPI:
         return self
