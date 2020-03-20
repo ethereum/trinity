@@ -71,8 +71,8 @@ async def test_client_works(
         non_aligned_time + epochs_before_genesis_to_start * seconds_per_epoch
     )
 
-    public_key, _ = sample_bls_key_pair
-    key_store = InMemoryKeyStore((sample_bls_key_pair,))
+    public_key = tuple(sample_bls_key_pair.keys())[0]
+    key_store = InMemoryKeyStore(sample_bls_key_pair)
     beacon_node = MockBeaconNode(
         slots_per_epoch,
         seconds_per_slot,

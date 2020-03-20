@@ -2,16 +2,19 @@ import argparse
 import getpass
 import logging
 import signal
+from typing import Dict
 
 import argcomplete
 from async_service.trio import background_trio_service
+from eth_typing import BLSPubkey
 import trio
 
 from eth2.validator_client.client import Client
 from eth2.validator_client.config import Config
 from eth2.validator_client.key_store import KeyStore
+from eth2.validator_client.typing import BLSPrivateKey
+from trinity.cli_parser import parser, subparser
 
-CLI_PARSER_DESCRIPTION = "Trinity Eth2.0 Validator Client"
 DEMO_MODE_HELP_MSG = (
     "set configuration suitable for demonstration purposes (like ignoring a password)."
     " Do NOT use in production."
@@ -42,7 +45,8 @@ async def _import_key(
 ) -> None:
     logger.info("importing private key...")
     try:
-        key_store = KeyStore.from_config(config)
+        key_pairs: Dict[BLSPubkey, BLSPrivateKey] = {}
+        key_store = KeyStore.from_config(config, key_pairs)
         logger.warn(
             "please enter a password to protect the key on-disk (can be empty):"
         )
@@ -52,16 +56,14 @@ async def _import_key(
         logger.exception("error importing key")
 
 
-def parse_cli_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=CLI_PARSER_DESCRIPTION)
+def parse_cli_args() -> argparse.ArgumentParser:
     parser.add_argument("--demo-mode", action="store_true", help=DEMO_MODE_HELP_MSG)
     parser.set_defaults(func=_main)
-    subparsers = parser.add_subparsers(title="subcommands", dest="subparser_name")
-    import_key_parser = subparsers.add_parser("import-key", help=IMPORT_PARSER_HELP_MSG)
+    import_key_parser = subparser.add_parser("import-key", help=IMPORT_PARSER_HELP_MSG)
     import_key_parser.add_argument(
         "private_key", type=str, help=IMPORT_PARSER_KEY_ARGUMENT_HELP_MSG
     )
     import_key_parser.set_defaults(func=_import_key)
 
     argcomplete.autocomplete(parser)
-    return parser.parse_args()
+    return parser
