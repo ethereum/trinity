@@ -15,7 +15,6 @@ from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONF
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
 from trinity.components.builtin.network_db.component import TrackingBackend
-from trinity.components.eth2.constants import GENESIS_FILE, VALIDATOR_KEY_DIR
 from trinity.config import BeaconAppConfig, TrinityConfig
 from trinity.extensibility import Application
 
@@ -139,11 +138,11 @@ class InteropComponent(Application):
 
         # Save the genesis state to the data dir!
         yaml = YAML(typ="unsafe")
-        with open(trinity_config.trinity_root_dir / GENESIS_FILE, "w") as f:
+        with open(trinity_config.trinity_root_dir / "genesis", "w") as f:
             yaml.dump(to_formatted_dict(state), f)
 
         # Save the validator keys to the data dir
-        keys_dir = trinity_config.trinity_root_dir / VALIDATOR_KEY_DIR
+        keys_dir = trinity_config.trinity_root_dir / "keys"
         try:
             shutil.rmtree(keys_dir)
         except FileNotFoundError:
