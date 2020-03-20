@@ -1,102 +1,72 @@
-from argparse import (
-    ArgumentParser,
-    Namespace,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, Namespace, _SubParsersAction
 import logging
-from pathlib import (
-    Path,
-)
-import sys
+from pathlib import Path
 import shutil
+import sys
 import time
-from typing import Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
-from eth_utils import (
-    to_int,
-)
-from ruamel.yaml import (
-    YAML,
-)
-from ssz.tools import (
-    to_formatted_dict,
-)
+from eth_utils import to_int
+from ruamel.yaml import YAML
+import ssz
+from ssz.tools import to_formatted_dict
 
 from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONFIG
-from eth2.beacon.tools.misc.ssz_vector import (
-    override_lengths,
-)
-from trinity.config import (
-    TrinityConfig,
-    BeaconAppConfig,
-)
-from trinity.extensibility import Application
-import ssz
-
+from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
-
-from trinity.components.eth2.constants import (
-    GENESIS_FILE,
-    VALIDATOR_KEY_DIR,
-)
-
 from trinity.components.builtin.network_db.component import TrackingBackend
+from trinity.components.eth2.constants import GENESIS_FILE, VALIDATOR_KEY_DIR
+from trinity.config import BeaconAppConfig, TrinityConfig
+from trinity.extensibility import Application
 
 if TYPE_CHECKING:
     from typing import Any, IO  # noqa: F401
 
 
 class InteropComponent(Application):
-    logger = logging.getLogger('trinity.components.eth2.Interop')
+    logger = logging.getLogger("trinity.components.eth2.Interop")
 
     @classmethod
-    def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        cls, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
 
         interop_parser = subparser.add_parser(
-            'interop',
-            help='Run with a hard-coded configuration',
+            "interop", help="Run with a hard-coded configuration"
         )
 
-        time_group = interop_parser.add_mutually_exclusive_group(
-            required=False,
+        time_group = interop_parser.add_mutually_exclusive_group(required=False)
+        time_group.add_argument(
+            "--start-time", help="Unix timestamp to use as genesis start time", type=int
         )
         time_group.add_argument(
-            '--start-time',
-            help="Unix timestamp to use as genesis start time",
-            type=int,
-        )
-        time_group.add_argument(
-            '--start-delay',
+            "--start-delay",
             help="How many seconds until the genesis is active",
             type=int,
         )
 
-        validator_group = interop_parser.add_mutually_exclusive_group(
-            required=False,
+        validator_group = interop_parser.add_mutually_exclusive_group(required=False)
+
+        validator_group.add_argument(
+            "--validators", help="Which validators should run", type=str
         )
 
         validator_group.add_argument(
-            '--validators',
-            help="Which validators should run",
-            type=str,
-        )
-
-        validator_group.add_argument(
-            '--validators-from-yaml-key-file',
+            "--validators-from-yaml-key-file",
             help="Which validators should run, inferred by provided key pairs",
             type=str,
         )
 
         interop_parser.add_argument(
-            '--genesis-state-ssz-path',
+            "--genesis-state-ssz-path",
             help="Path to a SSZ-encoded genesis state",
             type=str,
         )
 
         interop_parser.add_argument(
-            '--wipedb',
+            "--wipedb",
             help="Blows away the chaindb so we can start afresh",
-            action='store_true',
+            action="store_true",
         )
 
         interop_parser.set_defaults(munge_func=cls.munge_all_args)
@@ -109,7 +79,7 @@ class InteropComponent(Application):
 
         if args.wipedb:
             beacon_config = trinity_config.get_app_config(BeaconAppConfig)
-            cls.logger.info(f'Blowing away the database: {beacon_config.database_dir}')
+            cls.logger.info(f"Blowing away the database: {beacon_config.database_dir}")
             try:
                 shutil.rmtree(beacon_config.database_dir)
             except FileNotFoundError:
@@ -118,16 +88,17 @@ class InteropComponent(Application):
             else:
                 beacon_config.database_dir.mkdir()
 
-        genesis_path = args.genesis_state_ssz_path or Path('resources/genesis.ssz')
+        genesis_path = args.genesis_state_ssz_path or Path("resources/genesis.ssz")
         cls.logger.info(f"Using genesis from {genesis_path}")
 
         # read the genesis!
         try:
-            with open(genesis_path, 'rb') as f:  # type: IO[Any]
+            with open(genesis_path, "rb") as f:  # type: IO[Any]
                 encoded = f.read()
             state = ssz.decode(encoded, sedes=BeaconState)
         except FileNotFoundError:
             import os
+
             cls.logger.critical(
                 "Required: the genesis state at %s/genesis.ssz,"
                 " or the path to this state with command line"
@@ -140,17 +111,14 @@ class InteropComponent(Application):
         if args.start_time:
             if args.start_time <= now:
                 cls.logger.warning(
-                    "--start-time must be a time in the future. Current time is %s",
-                    now,
+                    "--start-time must be a time in the future. Current time is %s", now
                 )
 
             delta = args.start_time - now
             cls.logger.info("Time will begin %d seconds from now", delta)
 
             # adapt the state, then print the new root!
-            state = state.set(
-                "genesis_time", args.start_time
-            )
+            state = state.set("genesis_time", args.start_time)
         elif args.start_delay:
             if args.start_delay < 0:
                 cls.logger.info(f"--start-time must be positive")
@@ -159,19 +127,19 @@ class InteropComponent(Application):
             start_time = now + args.start_delay
             cls.logger.info("Genesis time is %d", start_time)
 
-            state = state.set(
-                "genesis_time", start_time
-            )
+            state = state.set("genesis_time", start_time)
         else:
-            cls.logger.info("Using genesis_time from genesis state to determine start time")
+            cls.logger.info(
+                "Using genesis_time from genesis state to determine start time"
+            )
 
         cls.logger.info(f"Genesis hash tree root: {state.hash_tree_root.hex()}")
 
         cls.logger.info(f"Configuring {trinity_config.trinity_root_dir}")
 
         # Save the genesis state to the data dir!
-        yaml = YAML(typ='unsafe')
-        with open(trinity_config.trinity_root_dir / GENESIS_FILE, 'w') as f:
+        yaml = YAML(typ="unsafe")
+        with open(trinity_config.trinity_root_dir / GENESIS_FILE, "w") as f:
             yaml.dump(to_formatted_dict(state), f)
 
         # Save the validator keys to the data dir
@@ -189,7 +157,7 @@ class InteropComponent(Application):
                 return maybe_hexstr
 
         validators = args.validators
-        if (args.validators or args.validators_from_yaml_key_file):
+        if args.validators or args.validators_from_yaml_key_file:
             if not validators:
                 validators_keys_file = args.validators_from_yaml_key_file
                 yaml = YAML(typ="unsafe")
@@ -198,9 +166,9 @@ class InteropComponent(Application):
                     file_name = f"v_{i}.privkey"
                     key_path = keys_dir / file_name
                     with open(key_path, "w") as f:
-                        f.write(str(parse_key(key['privkey'])))
+                        f.write(str(parse_key(key["privkey"])))
             else:
-                validators = [int(token) for token in validators.split(',')]
+                validators = [int(token) for token in validators.split(",")]
                 for validator in validators:
                     if validator < 0 or validator > 15:
                         cls.logger.error(f"{validator} is not a valid validator")
@@ -209,7 +177,7 @@ class InteropComponent(Application):
                 yaml = YAML(typ="unsafe")
                 keys = yaml.load(
                     Path(
-                        'eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml'
+                        "eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml"
                     )
                 )
 
@@ -218,7 +186,7 @@ class InteropComponent(Application):
                     file_name = f"v{validator_index:07d}.privkey"
                     key_path = keys_dir / file_name
                     with open(key_path, "w") as f:
-                        f.write(str(parse_key(key['privkey'])))
+                        f.write(str(parse_key(key["privkey"])))
         else:
             cls.logger.info("not running any validators")
 

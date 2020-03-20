@@ -1,48 +1,23 @@
-from typing import (
-    Callable,
-    Tuple,
-)
+from typing import Callable, Tuple
 
-from cancel_token import (
-    CancelToken,
-)
-from eth_typing import (
-    Hash32,
-)
-from eth_utils import (
-    ValidationError,
-)
+from cancel_token import CancelToken
+from eth_typing import Hash32
+from eth_utils import ValidationError
 from lahja import EndpointAPI
 
-from eth2.beacon.chains.base import (
-    BaseBeaconChain,
-)
-from eth2.beacon.state_machines.base import (
-    BaseBeaconStateMachine,
-)
-from eth2.beacon.types.attestations import (
-    Attestation,
-)
-from eth2.beacon.types.states import (
-    BeaconState,
-)
-from eth2.beacon.typing import (
-    CommitteeIndex,
-    Slot,
-    Timestamp,
-)
-from p2p.service import (
-    BaseService,
-)
-from trinity._utils.shellart import (
-    bold_green,
-)
-from trinity.components.eth2.beacon.slot_ticker import (
-    SlotTickEvent,
-)
+from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.state_machines.base import BaseBeaconStateMachine
+from eth2.beacon.types.attestations import Attestation
+from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import CommitteeIndex, Slot, Timestamp
+from p2p.service import BaseService
+from trinity._utils.shellart import bold_green
+from trinity.components.eth2.beacon.slot_ticker import SlotTickEvent
 
 GetReadyAttestationsFn = Callable[[Slot, bool], Tuple[Attestation, ...]]
-GetAggregatableAttestationsFn = Callable[[Slot, CommitteeIndex], Tuple[Attestation, ...]]
+GetAggregatableAttestationsFn = Callable[
+    [Slot, CommitteeIndex], Tuple[Attestation, ...]
+]
 ImportAttestationFn = Callable[[Attestation, bool], None]
 
 
@@ -55,10 +30,8 @@ class ChainMaintainer(BaseService):
     starting_eth1_block_hash: Hash32
 
     def __init__(
-            self,
-            chain: BaseBeaconChain,
-            event_bus: EndpointAPI,
-            token: CancelToken = None) -> None:
+        self, chain: BaseBeaconChain, event_bus: EndpointAPI, token: CancelToken = None
+    ) -> None:
         super().__init__(token)
         self.genesis_time = chain.get_head_state().genesis_time
         self.chain = chain
@@ -78,8 +51,8 @@ class ChainMaintainer(BaseService):
         slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
         # Update eth1 block_hash in the beginning of each voting period
         if (
-            slot % slots_per_eth1_voting_period == 0 and
-            self.starting_eth1_block_hash != state.eth1_data.block_hash
+            slot % slots_per_eth1_voting_period == 0
+            and self.starting_eth1_block_hash != state.eth1_data.block_hash
         ):
             self.starting_eth1_block_hash = state.eth1_data.block_hash
 
@@ -107,27 +80,19 @@ class ChainMaintainer(BaseService):
         state_machine = self.chain.get_state_machine()
         state = self.chain.get_head_state()
         if state.slot < slot:
-            self.skip_block(
-                slot=slot,
-                state=state,
-                state_machine=state_machine,
-            )
+            self.skip_block(slot=slot, state=state, state_machine=state_machine)
 
-    def skip_block(self,
-                   slot: Slot,
-                   state: BeaconState,
-                   state_machine: BaseBeaconStateMachine) -> BeaconState:
+    def skip_block(
+        self, slot: Slot, state: BeaconState, state_machine: BaseBeaconStateMachine
+    ) -> BeaconState:
         """
         Forward state to the target ``slot`` and persist the state.
         """
         post_state = state_machine.state_transition.apply_state_transition(
-            state,
-            future_slot=slot,
+            state, future_slot=slot
         )
         self.logger.debug(
-            bold_green("Skip block at slot=%s  post_state=%s"),
-            slot,
-            repr(post_state),
+            bold_green("Skip block at slot=%s  post_state=%s"), slot, repr(post_state)
         )
         # FIXME: We might not need to persist state for skip slots since `create_block_on_state`
         # will run the state transition which also includes the state transition for skipped slots.

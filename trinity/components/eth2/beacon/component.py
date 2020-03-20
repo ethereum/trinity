@@ -1,100 +1,64 @@
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, _SubParsersAction
 import asyncio
 import logging
 import os
 from typing import Set, Tuple, cast
 
 from async_exit_stack import AsyncExitStack
-from lahja import EndpointAPI
-
-from libp2p.crypto.keys import KeyPair
-from libp2p.crypto.secp256k1 import create_new_key_pair, Secp256k1PrivateKey
-
 from eth_utils import decode_hex
+from lahja import EndpointAPI
+from libp2p.crypto.keys import KeyPair
+from libp2p.crypto.secp256k1 import Secp256k1PrivateKey, create_new_key_pair
 
-from eth2.beacon.typing import (
-    SubnetId,
-    ValidatorIndex,
-)
-
+from eth2.beacon.typing import SubnetId, ValidatorIndex
 from p2p.service import BaseService, run_service
-
 from trinity.boot_info import BootInfo
 from trinity.config import BeaconAppConfig
+from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient
 from trinity.extensibility import AsyncioIsolatedComponent
 from trinity.http.handlers.api_handler import APIHandler
 from trinity.http.handlers.metrics_handler import MetricsHandler
-from trinity.http.main import (
-    HTTPServer,
-)
+from trinity.http.main import HTTPServer
 from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.servers import BCCReceiveServer
+from trinity.sync.beacon.chain import BeaconChainSyncer
+from trinity.sync.common.chain import SyncBlockImporter
 
 from .chain_maintainer import ChainMaintainer
-from .slot_ticker import (
-    SlotTicker,
-)
-from .validator import (
-    Validator,
-)
-from .validator_handler import (
-    ValidatorHandler,
-)
-
-from trinity.sync.beacon.chain import BeaconChainSyncer
-from trinity.db.beacon.chain import AsyncBeaconChainDB
-from trinity.sync.common.chain import (
-    SyncBlockImporter,
-)
+from .slot_ticker import SlotTicker
+from .validator import Validator
+from .validator_handler import ValidatorHandler
 
 
 class BeaconNodeComponent(AsyncioIsolatedComponent):
     name = "Beacon Node"
 
-    logger = logging.getLogger('trinity.components.beacon.BeaconNode')
+    logger = logging.getLogger("trinity.components.beacon.BeaconNode")
 
     @classmethod
-    def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        cls, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
+        arg_parser.add_argument("--beacon-nodekey", help="0xabcd")
         arg_parser.add_argument(
-            "--beacon-nodekey",
-            help="0xabcd",
+            "--enable-metrics", action="store_true", help="Enables the Metrics Server"
         )
         arg_parser.add_argument(
-            "--enable-metrics",
-            action="store_true",
-            help="Enables the Metrics Server",
+            "--metrics-port", type=int, help="Metrics server port", default=8008
         )
         arg_parser.add_argument(
-            "--metrics-port",
-            type=int,
-            help="Metrics server port",
-            default=8008,
+            "--debug-libp2p", action="store_true", help="Enable debug logging of libp2p"
         )
         arg_parser.add_argument(
-            "--debug-libp2p",
-            action="store_true",
-            help="Enable debug logging of libp2p",
+            "--enable-api", action="store_true", help="Enables the API Server"
         )
         arg_parser.add_argument(
-            "--enable-api",
-            action="store_true",
-            help="Enables the API Server",
+            "--api-port", type=int, help="API server port", default=5005
         )
         arg_parser.add_argument(
-            "--api-port",
-            type=int,
-            help="API server port",
-            default=5005,
-        )
-        arg_parser.add_argument(
-            "--bn-only",
-            action="store_true",
-            help="Run with BeaconNode only mode",
+            "--bn-only", action="store_true", help="Run with BeaconNode only mode"
         )
 
     @property
@@ -104,9 +68,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
     @classmethod
     def _load_or_create_node_key(cls, boot_info: BootInfo) -> KeyPair:
         if boot_info.args.beacon_nodekey:
-            privkey = Secp256k1PrivateKey.new(
-                decode_hex(boot_info.args.beacon_nodekey)
-            )
+            privkey = Secp256k1PrivateKey.new(decode_hex(boot_info.args.beacon_nodekey))
             key_pair = KeyPair(private_key=privkey, public_key=privkey.get_public_key())
             return key_pair
         else:
@@ -117,8 +79,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                     key_data = f.read()
                 private_key = Secp256k1PrivateKey.new(key_data)
                 key_pair = KeyPair(
-                    private_key=private_key,
-                    public_key=private_key.get_public_key()
+                    private_key=private_key, public_key=private_key.get_public_key()
                 )
                 return key_pair
             else:
@@ -143,8 +104,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
         with base_db:
             chain_config = beacon_app_config.get_chain_config()
             chain = chain_config.beacon_chain_class(
-                base_db,
-                chain_config.genesis_config
+                base_db, chain_config.genesis_config
             )
             # TODO: To simplify, subsribe all subnets
             subnets: Set[SubnetId] = set(
@@ -177,9 +137,13 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             validator_keymap = chain_config.genesis_data.validator_keymap
             for pubkey in validator_keymap:
                 try:
-                    validator_index = cast(ValidatorIndex, registry_pubkeys.index(pubkey))
+                    validator_index = cast(
+                        ValidatorIndex, registry_pubkeys.index(pubkey)
+                    )
                 except ValueError:
-                    cls.logger.error(f'Could not find pubkey {pubkey.hex()} in genesis state')
+                    cls.logger.error(
+                        f"Could not find pubkey {pubkey.hex()} in genesis state"
+                    )
                     raise
                 validator_privkeys[validator_index] = validator_keymap[pubkey]
 
@@ -195,9 +159,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             )
 
             chain_maintainer = ChainMaintainer(
-                chain=chain,
-                event_bus=event_bus,
-                token=libp2p_node.cancel_token,
+                chain=chain, event_bus=event_bus, token=libp2p_node.cancel_token
             )
 
             validator_handler = ValidatorHandler(
@@ -219,10 +181,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             )
 
             syncer = BeaconChainSyncer(
-                chain_db=AsyncBeaconChainDB(
-                    base_db,
-                    chain_config.genesis_config,
-                ),
+                chain_db=AsyncBeaconChainDB(base_db, chain_config.genesis_config),
                 peer_pool=libp2p_node.handshaked_peers,
                 block_importer=SyncBlockImporter(chain),
                 genesis_config=chain_config.genesis_config,
@@ -239,7 +198,10 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             )
 
             services: Tuple[BaseService, ...] = (
-                libp2p_node, receive_server, slot_ticker, syncer
+                libp2p_node,
+                receive_server,
+                slot_ticker,
+                syncer,
             )
 
             if boot_info.args.enable_metrics:
@@ -257,7 +219,4 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 for service in services:
                     await stack.enter_async_context(run_service(service))
 
-                await asyncio.gather(*(
-                    service.cancellation()
-                    for service in services
-                ))
+                await asyncio.gather(*(service.cancellation() for service in services))

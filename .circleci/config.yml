@@ -238,12 +238,6 @@ jobs:
       - image: circleci/python:3.6
         environment:
           TOXENV: py36-p2p-trio
-  py36-eth1-monitor-trio:
-    <<: *common
-    docker:
-      - image: circleci/python:3.6
-        environment:
-          TOXENV: py36-eth1-monitor-trio
   py36-eth2-core:
     <<: *common
     docker:
@@ -280,6 +274,12 @@ jobs:
       - image: circleci/python:3.6
         environment:
           TOXENV: py36-eth1-components
+  py36-eth2-trio:
+    <<: *common
+    docker:
+      - image: circleci/python:3.6
+        environment:
+          TOXENV: py36-eth2-trio
 
   py37-rpc-state-quadratic:
     <<: *common
@@ -324,12 +324,6 @@ jobs:
       - image: circleci/python:3.7
         environment:
           TOXENV: py37-p2p-trio
-  py37-eth1-monitor-trio:
-    <<: *common
-    docker:
-      - image: circleci/python:3.7
-        environment:
-          TOXENV: py37-eth1-monitor-trio
   py37-eth2-core:
     <<: *common
     docker:
@@ -378,6 +372,12 @@ jobs:
       - image: circleci/python:3.7
         environment:
           TOXENV: py37-eth2-components
+  py37-eth2-trio:
+    <<: *common
+    docker:
+      - image: circleci/python:3.7
+        environment:
+          TOXENV: py37-eth2-trio
 
   docker-trinity-image-build-test:
     machine: true
@@ -409,7 +409,6 @@ workflows:
       - py37-eth1-core
       - py37-p2p
       - py37-p2p-trio
-      - py37-eth1-monitor-trio
       - py37-eth2-core
       - py37-eth2-utils
       - py37-eth2-fixtures
@@ -417,6 +416,7 @@ workflows:
       - py37-eth2-components
       - py37-libp2p
       - py37-eth1-components
+      - py37-eth2-trio
 
       - py37-rpc-state-quadratic
       - py37-rpc-state-zero_knowledge
@@ -433,12 +433,12 @@ workflows:
       - py36-eth1-core
       - py36-p2p
       - py36-p2p-trio
-      - py36-eth1-monitor-trio
       - py36-eth2-core
       - py36-eth2-utils
       - py36-eth2-fixtures
       - py36-eth2-integration
       - py36-eth1-components
+      - py36-eth2-trio
 
       - py36-lightchain_integration
 

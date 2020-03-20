@@ -3,10 +3,8 @@ import time
 from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
 
 from eth.exceptions import BlockNotFound
-
-from eth_typing import Address, BLSPubkey, BLSSignature, BlockNumber, Hash32
+from eth_typing import Address, BlockNumber, BLSPubkey, BLSSignature, Hash32
 from eth_utils import encode_hex, event_abi_to_log_topic
-
 from web3 import Web3
 
 from eth2.beacon.constants import GWEI_PER_ETH
@@ -15,7 +13,7 @@ from eth2.beacon.tools.builder.validator import (
     mk_key_pair_from_seed_index,
     sign_proof_of_possession,
 )
-from eth2.beacon.types.deposit_data import DepositMessage, DepositData
+from eth2.beacon.types.deposit_data import DepositData, DepositMessage
 from eth2.beacon.typing import Gwei, Timestamp
 
 
@@ -122,12 +120,10 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
             }
         )
         processed_logs = tuple(
-            self._deposit_contract.events.DepositEvent().processLog(log)
-            for log in logs
+            self._deposit_contract.events.DepositEvent().processLog(log) for log in logs
         )
         parsed_logs = tuple(
-            DepositLog.from_contract_log_dict(log)
-            for log in processed_logs
+            DepositLog.from_contract_log_dict(log) for log in processed_logs
         )
         return parsed_logs
 
@@ -178,8 +174,8 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
 
     def _get_block_time(self, block_number: BlockNumber) -> Timestamp:
         return Timestamp(
-            self.start_block_timestamp +
-            (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
+            self.start_block_timestamp
+            + (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
         )
 
     def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
@@ -246,15 +242,14 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                 # the input to the function is generated deterministically but does not
                 # conflict with blocks in the future.
                 pubkey, privkey = mk_key_pair_from_seed_index(block_number * 10 + seed)
-                withdrawal_credentials = Hash32(b'\x12' * 32)
+                withdrawal_credentials = Hash32(b"\x12" * 32)
                 deposit_data_message = DepositMessage.create(
                     pubkey=pubkey,
                     withdrawal_credentials=withdrawal_credentials,
                     amount=amount,
                 )
                 signature = sign_proof_of_possession(
-                    deposit_message=deposit_data_message,
-                    privkey=privkey,
+                    deposit_message=deposit_data_message, privkey=privkey
                 )
                 logs = logs + (
                     DepositLog(
@@ -271,15 +266,17 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
         if block_number <= self.start_block_number:
             return self.num_initial_deposits.to_bytes(32, byteorder="little")
         deposit_count = (
-            self.num_initial_deposits +
-            (block_number - self.start_block_number) * self.num_deposits_per_block
+            self.num_initial_deposits
+            + (block_number - self.start_block_number) * self.num_deposits_per_block
         )
         return deposit_count.to_bytes(32, byteorder="little")
 
     def get_deposit_root(self, block_number: BlockNumber) -> Hash32:
         # Check and update deposit data when deposit root is requested
         if self.latest_processed_block_number < block_number:
-            for blk_number in range(self.latest_processed_block_number + 1, block_number + 1):
+            for blk_number in range(
+                self.latest_processed_block_number + 1, block_number + 1
+            ):
                 deposit_logs = self.get_logs(BlockNumber(blk_number))
                 self.deposits += tuple(
                     convert_deposit_log_to_deposit_data(deposit_log)

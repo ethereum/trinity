@@ -1,12 +1,9 @@
 from abc import ABC, abstractmethod
-
 from typing import List, Optional, Sequence, Tuple
 
-import ssz
-
-from eth_typing import BlockNumber
-
 from eth.abc import AtomicDatabaseAPI, DatabaseAPI
+from eth_typing import BlockNumber
+import ssz
 
 from eth2.beacon.types.deposit_data import DepositData
 

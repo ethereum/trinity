@@ -3,12 +3,8 @@ import json
 from pathlib import Path
 
 from async_service import Service, TrioManager
-
 from eth_typing import BlockNumber
-
 from lahja import EndpointAPI
-
-# from web3 import Web3
 
 from eth2.beacon.tools.builder.initializer import (
     create_keypair_and_mock_withdraw_credentials,
@@ -17,16 +13,16 @@ from eth2.beacon.tools.builder.validator import create_mock_deposit_data
 from eth2.beacon.tools.fixtures.loading import load_yaml_at
 from eth2.beacon.typing import Timestamp
 from trinity.boot_info import BootInfo
+from trinity.components.eth2.beacon.base_validator import ETH1_FOLLOW_DISTANCE
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import FakeEth1DataProvider
-from trinity.components.eth2.beacon.base_validator import ETH1_FOLLOW_DISTANCE
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
 from trinity.events import ShutdownRequest
 from trinity.extensibility import TrioIsolatedComponent
 
-from .eth1_monitor import Eth1Monitor
 from .eth1_data_provider import AVERAGE_BLOCK_TIME
+from .eth1_monitor import Eth1Monitor
 
 # Fake eth1 monitor config
 # TODO: These configs should be read from a config file, e.g., `eth1_monitor_config.yaml`.
@@ -98,7 +94,8 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         # Set the timestamp of start block earlier enough so that eth1 monitor
         # can query up to 2 * `ETH1_FOLLOW_DISTANCE` of blocks in the beginning.
         start_block_timestamp = (
-            chain_config.genesis_data.genesis_time - 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
+            chain_config.genesis_data.genesis_time
+            - 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
         )
         with base_db:
             fake_eth1_data_provider = FakeEth1DataProvider(

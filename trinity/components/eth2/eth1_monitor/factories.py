@@ -3,7 +3,6 @@ import random
 import factory
 
 from eth2.beacon.types.deposit_data import DepositData
-
 from trinity.tools.factories.db import AtomicDBFactory
 
 from .db import DepositDataDB, ListCachedDepositDataDB
