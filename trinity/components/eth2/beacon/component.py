@@ -2,7 +2,7 @@ from argparse import ArgumentParser, _SubParsersAction
 import asyncio
 import logging
 import os
-from typing import Set, Tuple, cast
+from typing import Set, Tuple
 
 from async_exit_stack import AsyncExitStack
 from eth_utils import decode_hex
@@ -10,7 +10,7 @@ from lahja import EndpointAPI
 from libp2p.crypto.keys import KeyPair
 from libp2p.crypto.secp256k1 import Secp256k1PrivateKey, create_new_key_pair
 
-from eth2.beacon.typing import SubnetId, ValidatorIndex
+from eth2.beacon.typing import SubnetId
 from p2p.service import BaseService, run_service
 from trinity.boot_info import BootInfo
 from trinity.config import BeaconAppConfig
@@ -28,7 +28,6 @@ from trinity.sync.common.chain import SyncBlockImporter
 
 from .chain_maintainer import ChainMaintainer
 from .slot_ticker import SlotTicker
-from .validator import Validator
 from .validator_handler import ValidatorHandler
 
 
@@ -130,34 +129,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 cancel_token=libp2p_node.cancel_token,
             )
 
-            state = chain.get_state_by_slot(chain_config.genesis_config.GENESIS_SLOT)
-            registry_pubkeys = [v_record.pubkey for v_record in state.validators]
-
-            validator_privkeys = {}
-            validator_keymap = chain_config.genesis_data.validator_keymap
-            for pubkey in validator_keymap:
-                try:
-                    validator_index = cast(
-                        ValidatorIndex, registry_pubkeys.index(pubkey)
-                    )
-                except ValueError:
-                    cls.logger.error(
-                        f"Could not find pubkey {pubkey.hex()} in genesis state"
-                    )
-                    raise
-                validator_privkeys[validator_index] = validator_keymap[pubkey]
-
-            validator = Validator(
-                chain=chain,
-                p2p_node=libp2p_node,
-                validator_privkeys=validator_privkeys,
-                event_bus=event_bus,
-                token=libp2p_node.cancel_token,
-                get_ready_attestations_fn=receive_server.get_ready_attestations,
-                get_aggregatable_attestations_fn=receive_server.get_aggregatable_attestations,
-                import_attestation_fn=receive_server.import_attestation,
-            )
-
             chain_maintainer = ChainMaintainer(
                 chain=chain, event_bus=event_bus, token=libp2p_node.cancel_token
             )
@@ -174,7 +145,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
 
             slot_ticker = SlotTicker(
                 genesis_slot=chain_config.genesis_config.GENESIS_SLOT,
-                genesis_time=chain_config.genesis_data.genesis_time,
+                genesis_time=chain_config.genesis_time,
                 seconds_per_slot=chain_config.genesis_config.SECONDS_PER_SLOT,
                 event_bus=event_bus,
                 token=libp2p_node.cancel_token,
@@ -212,8 +183,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
 
             if boot_info.args.bn_only:
                 services += (chain_maintainer, validator_handler)
-            else:
-                services += (validator,)
 
             async with AsyncExitStack() as stack:
                 for service in services:

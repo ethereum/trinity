@@ -1,6 +1,7 @@
 from argparse import ArgumentParser, _SubParsersAction
 import logging
 import pathlib
+import re
 import secrets
 
 import async_service
@@ -39,8 +40,9 @@ from trinity.extensibility import TrioIsolatedComponent
 
 DEFAULT_NODEDB_DIR_NAME = "nodes"
 
-
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(
+    re.sub(re.escape("component") + "$", "DiscV5Component", __name__)
+)
 
 
 def get_nodedb_dir(boot_info: BootInfo) -> pathlib.Path:

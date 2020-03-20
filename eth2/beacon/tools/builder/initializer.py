@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, Sequence, Tuple, Type
 
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSPubkey, Hash32
-from eth_utils import decode_hex
+from eth_utils import decode_hex, encode_hex
 from eth_utils.toolz import curry
 from py_ecc.optimized_bls12_381.optimized_curve import (
     curve_order as BLS12_381_CURVE_ORDER,
@@ -28,6 +28,48 @@ from eth2.beacon.validator_status_helpers import activate_validator
 from eth2.configs import Eth2Config
 
 from .validator import make_deposit_proof, make_deposit_tree_and_root
+
+
+def _encode_private_key_as_hex(private_key: int) -> str:
+    return encode_hex(private_key.to_bytes(32, byteorder="little"))
+
+
+def _decode_private_key_from_hex(encoded_private_key: str) -> int:
+    return int.from_bytes(decode_hex(encoded_private_key), byteorder="little")
+
+
+def mk_genesis_key_map(
+    key_pairs: Dict[BLSPubkey, int],
+    genesis_state: BeaconState,
+    public_key_codec: Callable[[BLSPubkey], str] = encode_hex,
+    private_key_codec: Callable[[int], str] = _encode_private_key_as_hex,
+) -> Tuple[Dict[str, str], ...]:
+    key_map: Tuple[Dict[str, str], ...] = ()
+    for _, validator in enumerate(genesis_state.validators):
+        public_key = validator.pubkey
+        private_key = key_pairs[public_key]
+        key_map += (
+            {
+                "public_key": public_key_codec(public_key),
+                "private_key": private_key_codec(private_key),
+            },
+        )
+    return key_map
+
+
+def load_genesis_key_map(
+    encoded_key_map: Tuple[Dict[str, Any]],
+    public_key_codec: Callable[[str], BLSPubkey] = lambda key: BLSPubkey(
+        decode_hex(key)
+    ),
+    private_key_codec: Callable[[str], int] = _decode_private_key_from_hex,
+) -> Dict[BLSPubkey, int]:
+    key_map = {}
+    for key_pair in encoded_key_map:
+        public_key = public_key_codec(key_pair["public_key"])
+        private_key = private_key_codec(key_pair["private_key"])
+        key_map[public_key] = private_key
+    return key_map
 
 
 def generate_privkey_from_index(index: int) -> int:
