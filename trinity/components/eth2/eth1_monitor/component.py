@@ -94,8 +94,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         # Set the timestamp of start block earlier enough so that eth1 monitor
         # can query up to 2 * `ETH1_FOLLOW_DISTANCE` of blocks in the beginning.
         start_block_timestamp = (
-            chain_config.genesis_data.genesis_time
-            - 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
+            chain_config.genesis_time - 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
         )
         with base_db:
             fake_eth1_data_provider = FakeEth1DataProvider(

@@ -1,4 +1,6 @@
-from typing import NamedTuple
+from typing import Any, NamedTuple, Tuple, Union, cast
+
+from eth_utils import decode_hex, encode_hex
 
 from eth2.beacon.typing import Epoch, Gwei, Second, Slot
 
@@ -58,6 +60,31 @@ Eth2Config = NamedTuple(
         ("DEPOSIT_CONTRACT_ADDRESS", bytes),
     ),
 )
+
+
+def _serialize(item: Any) -> Union[int, str]:
+    if isinstance(item, bytes):
+        return encode_hex(item)
+    else:
+        return int(item)
+
+
+def serialize(config: Eth2Config) -> Tuple[Union[int, str], ...]:
+    return tuple(_serialize(item) for item in config)
+
+
+def _deserialize(item: Union[int, str], typ: Any) -> Any:
+    if typ is bytes:
+        return decode_hex(cast(str, item))
+    else:
+        return typ(item)
+
+
+def deserialize(config: Tuple[Union[int, str], ...]) -> Eth2Config:
+    values: Tuple[Any, ...] = ()
+    for index, (_, typ) in enumerate(Eth2Config._field_types.items()):
+        values += (_deserialize(config[index], typ),)
+    return Eth2Config(*values)
 
 
 class CommitteeConfig:

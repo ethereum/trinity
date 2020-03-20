@@ -727,6 +727,24 @@ def create_mock_voluntary_exit(
 #
 # Deposit
 #
+def create_deposit_data(
+    public_key: BLSPubkey,
+    private_key: int,
+    withdrawal_credentials: Hash32,
+    amount: Gwei,
+) -> DepositData:
+    message = DepositMessage.create(
+        pubkey=public_key, withdrawal_credentials=withdrawal_credentials, amount=amount
+    )
+    signature = sign_proof_of_possession(deposit_message=message, privkey=private_key)
+    return DepositData.create(
+        pubkey=public_key,
+        withdrawal_credentials=withdrawal_credentials,
+        amount=amount,
+        signature=signature,
+    )
+
+
 def create_mock_deposit_data(
     *,
     config: Eth2Config,

@@ -19,7 +19,6 @@ from typing import (
     Any,
     Dict,
     Iterable,
-    NamedTuple,
     Tuple,
     Type,
     TypeVar,
@@ -64,17 +63,23 @@ from eth2.beacon.chains.testnet import (
 from eth2.beacon.genesis import (
     get_genesis_block,
 )
+from eth2.beacon.tools.builder.initializer import load_genesis_key_map
+from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
     Timestamp,
 )
 from eth2.configs import (
+    Eth2Config,
     Eth2GenesisConfig,
+    deserialize as deserialize_eth2_config
 )
 from eth2.validator_client.config import Config as ValidatorClientConfig
 from p2p.kademlia import (
     Node as KademliaNode,
 )
+from ssz.tools.parse import from_formatted_dict
+
 from trinity._utils.chains import (
     construct_trinity_config_params,
     get_data_dir_for_network_id,
@@ -105,14 +110,6 @@ from trinity.constants import (
     NODE_DB_DIR,
     PID_DIR,
     SYNC_LIGHT,
-)
-from trinity.components.eth2.beacon.utils import (
-    extract_genesis_state_from_stream,
-    extract_privkeys_from_dir,
-)
-from trinity.components.eth2.constants import (
-    VALIDATOR_KEY_DIR,
-    GENESIS_FILE,
 )
 from trinity.network_configurations import (
     PRECONFIGURED_NETWORKS
@@ -679,85 +676,70 @@ class Eth1AppConfig(BaseAppConfig):
         return self._sync_mode
 
 
-class BeaconGenesisData(NamedTuple):
-    """
-    Use this data to initialize BeaconChainConfig
-    """
-    genesis_time: Timestamp
-    # TODO: Should come from eth2.beacon.genesis.get_genesis_beacon_state
-    state: BeaconState
-    # TODO: Trinity should have no knowledge of validators' private keys
-    validator_keymap: Dict[BLSPubkey, int]
-    # TODO: Maybe Validator deposit data
-
-
 class BeaconChainConfig:
-    network_id: int
-    genesis_data: BeaconGenesisData
-    _chain_name: str
+    _genesis_state: BeaconState
     _beacon_chain_class: Type['BaseBeaconChain'] = None
     _genesis_config: Eth2GenesisConfig = None
+    _key_map: Dict[BLSPubkey, int]
 
     def __init__(self,
-                 chain_name: str = None,
-                 genesis_data: BeaconGenesisData = None) -> None:
-
-        self.network_id = 5567
-        self.genesis_data = genesis_data
-
-        self._chain_name = chain_name
+                 genesis_state: BeaconState,
+                 genesis_config: Eth2Config,
+                 genesis_validator_key_map: Dict[BLSPubkey, int]) -> None:
+        self._genesis_state = genesis_state
+        self._eth2_config = genesis_config
+        self._key_map = genesis_validator_key_map
 
     @property
     def genesis_config(self) -> Eth2GenesisConfig:
+        """
+        NOTE: this ``genesis_config`` is derivative of the ``Eth2Config``.
+        TODO:(ralexstokes) patch up the names here...
+        """
         if self._genesis_config is None:
             self._genesis_config = Eth2GenesisConfig(
-                self.beacon_chain_class.get_genesis_state_machine_class().config,
+                self._eth2_config
             )
 
         return self._genesis_config
 
     @property
-    def chain_name(self) -> str:
-        if self._chain_name is None:
-            return "CustomBeaconChain"
-        else:
-            return self._chain_name
+    def genesis_time(self) -> Timestamp:
+        return self._genesis_state.genesis_time
 
     @property
     def beacon_chain_class(self) -> Type['BaseBeaconChain']:
         if self._beacon_chain_class is None:
             # TODO: we should be able to customize configs for tests/ instead of using the configs
             # from the specific chain
-            self._beacon_chain_class = SkeletonLakeChain.configure(
-                __name__=self.chain_name,
-            )
+            self._beacon_chain_class = SkeletonLakeChain
         return self._beacon_chain_class
 
     @classmethod
-    def from_genesis_files(cls,
-                           root_dir: Path,
-                           chain_name: str = None) -> 'BeaconChainConfig':
-        # parse `genesis_state`
-        genesis_file_path = root_dir / GENESIS_FILE
-        state = extract_genesis_state_from_stream(genesis_file_path)
-        # parse privkeys and build `validator_keymap`
-        keys_path = root_dir / VALIDATOR_KEY_DIR
-        validator_keymap = extract_privkeys_from_dir(keys_path)
-        # set `genesis_data`
-        genesis_data = BeaconGenesisData(
-            genesis_time=state.genesis_time,
-            state=state,
-            validator_keymap=validator_keymap,
-        )
-        return cls(
-            genesis_data=genesis_data,
-            chain_name=chain_name,
-        )
+    def get_genesis_config_file_path(_cls) -> Path:
+        # TODO(ralexstokes): allow user to select config profile
+        return ASSETS_DIR / 'eth2' / 'minimal' / 'genesis_config.json'
+
+    @classmethod
+    def from_genesis_config(cls) -> 'BeaconChainConfig':
+        """
+        Construct an instance of ``cls`` reading the genesis configuration
+        data under the local data directory.
+        """
+        with open(cls.get_genesis_config_file_path()) as config_file:
+            config = json.load(config_file)
+            genesis_eth2_config = deserialize_eth2_config(config["eth2_config"])
+            # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
+            override_lengths(genesis_eth2_config)
+
+            genesis_state = from_formatted_dict(config["genesis_state"], BeaconState)
+            genesis_validator_key_map = load_genesis_key_map(config["genesis_validator_key_pairs"])
+            return cls(genesis_state, genesis_eth2_config, genesis_validator_key_map)
 
     def initialize_chain(self,
                          base_db: AtomicDatabaseAPI) -> 'BaseBeaconChain':
         chain_class = self.beacon_chain_class
-        state = self.genesis_data.state
+        state = self._genesis_state
         genesis_state_machine_class = chain_class.get_genesis_state_machine_class()
         block = get_genesis_block(
             genesis_state_root=state.hash_tree_root,
@@ -805,10 +787,7 @@ class BeaconAppConfig(BaseAppConfig):
         """
         Return the :class:`~trinity.config.BeaconChainConfig` that is derived from the genesis file
         """
-        return BeaconChainConfig.from_genesis_files(
-            root_dir=self.trinity_config.trinity_root_dir,
-            chain_name="SkeletonLakeChain",
-        )
+        return BeaconChainConfig.from_genesis_config()
 
 
 class ValidatorClientAppConfig(BaseAppConfig):
