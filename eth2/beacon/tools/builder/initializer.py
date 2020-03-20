@@ -1,8 +1,8 @@
-from typing import Any, Callable, Dict, Sequence, Tuple, Type
+from typing import Any, Callable, Dict, Iterable, Sequence, Tuple, Type
 
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSPubkey, Hash32
-from eth_utils import decode_hex, encode_hex
+from eth_utils import decode_hex, encode_hex, to_dict, to_tuple
 from eth_utils.toolz import curry
 from py_ecc.optimized_bls12_381.optimized_curve import (
     curve_order as BLS12_381_CURVE_ORDER,
@@ -106,19 +106,18 @@ def create_keypair_and_mock_withdraw_credentials(
     return (pubkeys, privkeys, withdrawal_credentials)
 
 
-def create_key_pairs_for(validator_count: int) -> Dict[BLSPubkey, int]:
+@to_dict
+def create_key_pairs_for(validator_count: int) -> Iterable[Tuple[BLSPubkey, int]]:
     """
     Generates ``validator_count`` key pairs derived in a deterministic manner based
     on the validator index in the ``range(validator_count)``.
 
     Returns a second map associating a public key with the validator's index in the set.
     """
-    key_pairs = {}
     for i in range(validator_count):
         private_key = generate_privkey_from_index(i)
         public_key = bls.privtopub(private_key)
-        key_pairs[public_key] = private_key
-    return key_pairs
+        yield public_key, private_key
 
 
 @curry
@@ -141,11 +140,12 @@ def create_deposit(
     return Deposit.create(proof=proof, data=deposit_data)
 
 
+@to_tuple
 def create_genesis_deposits_from(
     key_pairs: Dict[BLSPubkey, int],
     withdrawal_credentials_provider: Callable[[BLSPubkey], Hash32],
     amount_provider: Callable[[BLSPubkey], Gwei],
-) -> Tuple[Deposit, ...]:
+) -> Iterable[Deposit]:
     deposit_data = tuple(
         create_deposit_data(
             public_key,
@@ -156,12 +156,10 @@ def create_genesis_deposits_from(
         for public_key, private_key in key_pairs.items()
     )
 
-    deposits: Tuple[Deposit, ...] = tuple()
     for index, data in enumerate(deposit_data):
         data_to_index = deposit_data[: index + 1]
         tree, _ = make_deposit_tree_and_root(data_to_index)
-        deposits += (create_deposit(data, tree, index, len(data_to_index)),)
-    return deposits
+        yield create_deposit(data, tree, index, len(data_to_index))
 
 
 def create_mock_deposits_and_root(
