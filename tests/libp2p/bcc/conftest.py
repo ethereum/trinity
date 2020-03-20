@@ -9,6 +9,7 @@ from eth2.beacon.state_machines.forks.skeleton_lake.config import (
 )
 from eth2.beacon.tools.builder.initializer import create_mock_genesis
 from eth2.beacon.tools.builder.validator import mk_keymap_of_size
+from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.typing import Timestamp
 from trinity.protocol.bcc_libp2p import servers, utils
 from trinity.tools.bcc_factories import NodeFactory
@@ -60,7 +61,10 @@ async def make_nodes(num_nodes, chains=None):
 
 @pytest.fixture
 def config():
-    return MINIMAL_SERENITY_CONFIG
+    config = MINIMAL_SERENITY_CONFIG
+    # NOTE: we do this here to ensure the SSZ types are correctly configured
+    override_lengths(config)
+    return config
 
 
 @pytest.fixture
