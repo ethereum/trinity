@@ -344,6 +344,11 @@ class MultiplexerAPI(ABC):
     def get_total_msg_count(self) -> int:
         ...
 
+    @property
+    @abstractmethod
+    def last_msg_time(self) -> float:
+        ...
+
     #
     # Proxy Transport properties and methods
     #

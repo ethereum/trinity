@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import time
 from typing import (
     Any,
     AsyncIterator,
@@ -103,6 +104,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
 
     _transport: TransportAPI
     _msg_counts: DefaultDict[Type[CommandAPI[Any]], int]
+    _last_msg_time: float
 
     _protocol_locks: Dict[Type[ProtocolAPI], asyncio.Lock]
     _protocol_queues: Dict[Type[ProtocolAPI], 'asyncio.Queue[CommandAPI[Any]]']
@@ -153,6 +155,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         }
 
         self._msg_counts = collections.defaultdict(int)
+        self._last_msg_time = 0
 
     def __str__(self) -> str:
         protocol_infos = ','.join(tuple(
@@ -176,6 +179,10 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
     #
     def get_total_msg_count(self) -> int:
         return sum(self._msg_counts.values())
+
+    @property
+    def last_msg_time(self) -> float:
+        return self._last_msg_time
 
     #
     # Proxy Transport methods
@@ -423,6 +430,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
             stop: asyncio.Event) -> None:
 
         async for protocol, cmd in msg_stream:
+            self._last_msg_time = time.monotonic()
             # track total number of messages received for each command type.
             self._msg_counts[type(cmd)] += 1
 

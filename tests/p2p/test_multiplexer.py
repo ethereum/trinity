@@ -1,4 +1,5 @@
 import asyncio
+import time
 
 import pytest
 
@@ -234,3 +235,31 @@ async def test_connection_get_protocol_for_command_type():
 
     with pytest.raises(ValidationError):
         multiplexer.get_protocol_for_command_type(CommandB)
+
+
+@pytest.mark.asyncio
+async def test_last_msg_time(monkeypatch):
+    alice_multiplexer, bob_multiplexer = MultiplexerPairFactory()
+
+    async with alice_multiplexer.multiplex():
+        async with bob_multiplexer.multiplex():
+            assert alice_multiplexer.last_msg_time == 0
+            assert bob_multiplexer.last_msg_time == 0
+            alice_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
+            bob_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
+
+            alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
+            bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
+
+            now = time.monotonic()
+            monkeypatch.setattr(time, 'monotonic', lambda: now)
+
+            alice_p2p_protocol.send(Ping(None))
+            cmd = await asyncio.wait_for(bob_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+            assert isinstance(cmd, Ping)
+            assert bob_multiplexer.last_msg_time == now
+
+            bob_p2p_protocol.send(Pong(None))
+            cmd = await asyncio.wait_for(alice_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+            assert isinstance(cmd, Pong)
+            assert alice_multiplexer.last_msg_time == now
