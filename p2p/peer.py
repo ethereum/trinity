@@ -220,6 +220,10 @@ class BasePeer(BaseService):
     def received_msgs_count(self) -> int:
         return self.connection.get_multiplexer().get_total_msg_count()
 
+    @property
+    def last_msg_time(self) -> float:
+        return self.connection.get_multiplexer().last_msg_time
+
     def add_subscriber(self, subscriber: 'PeerSubscriber') -> None:
         self._subscribers.append(subscriber)
 
