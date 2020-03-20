@@ -1,16 +1,7 @@
-from dataclasses import (
-    dataclass,
-)
-from typing import (
-    Tuple,
-    Type,
-)
+from dataclasses import dataclass
+from typing import Tuple, Type
 
-from lahja import (
-    BaseEvent,
-    BaseRequestResponseEvent,
-)
-
+from lahja import BaseEvent, BaseRequestResponseEvent
 from libp2p.peer.id import ID
 
 
@@ -19,6 +10,7 @@ class Libp2pPeersResponse(BaseEvent):
     """
     libp2p_peers: Handshaked Peer IDs.
     """
+
     result: Tuple[ID, ...]
 
 

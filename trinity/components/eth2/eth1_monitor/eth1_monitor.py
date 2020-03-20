@@ -4,33 +4,30 @@ import logging
 from typing import Any, AsyncGenerator, Callable, Sequence, Tuple, Type, TypeVar, Union
 
 from async_service import Service
+from eth.abc import AtomicDatabaseAPI
+from eth.exceptions import BlockNotFound
 from eth_typing import BlockNumber, Hash32
-
+from eth_utils import humanize_hash
 from lahja import EndpointAPI
 import trio
 from web3 import Web3
 
-from eth.abc import AtomicDatabaseAPI
-from eth.exceptions import BlockNotFound
-
-from eth_utils import humanize_hash
-
-from eth2.beacon.typing import Timestamp
-from eth2.beacon.types.deposits import Deposit
-from eth2.beacon.types.deposit_data import DepositData
-from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.tools.builder.validator import (
     make_deposit_proof,
     make_deposit_tree_and_root,
 )
+from eth2.beacon.types.deposit_data import DepositData
+from eth2.beacon.types.deposits import Deposit
+from eth2.beacon.types.eth1_data import Eth1Data
+from eth2.beacon.typing import Timestamp
 
 from .db import BaseDepositDataDB, ListCachedDepositDataDB
 from .eth1_data_provider import BaseEth1DataProvider, DepositLog, Eth1Block
 from .events import (
+    GetDepositRequest,
+    GetDepositResponse,
     GetDistanceRequest,
     GetDistanceResponse,
-    GetDepositResponse,
-    GetDepositRequest,
     GetEth1DataRequest,
     GetEth1DataResponse,
 )
@@ -39,7 +36,6 @@ from .exceptions import (
     Eth1BlockNotFound,
     Eth1MonitorValidationError,
 )
-
 
 TRequest = TypeVar("TRequest", bound=Union[GetDepositRequest, GetEth1DataRequest])
 
@@ -217,7 +213,9 @@ class Eth1Monitor(Service):
         if self._largest_block_timestamp is None:
             return eth1_data
 
-        largest_block_number = self._block_timestamp_to_number[self._largest_block_timestamp]
+        largest_block_number = self._block_timestamp_to_number[
+            self._largest_block_timestamp
+        ]
         # If we have processed the target block number, validate deposit root.
         if largest_block_number >= target_block_number:
             # Verify that the deposit data in db and the deposit data in contract match
@@ -297,7 +295,9 @@ class Eth1Monitor(Service):
                     from_block_number + 1, target_block_number + 1
                 ):
                     try:
-                        block = self._eth1_data_provider.get_block(BlockNumber(block_number))
+                        block = self._eth1_data_provider.get_block(
+                            BlockNumber(block_number)
+                        )
                     except BlockNotFound:
                         raise Eth1MonitorValidationError(
                             f"Block does not exist for block number={block_number}"
@@ -358,7 +358,10 @@ class Eth1Monitor(Service):
         # Compare with the largest recoreded block timestamp first before querying
         # for the latest block.
         # If timestamp larger than largest block timestamp, request block from eth1 provider.
-        if self._largest_block_timestamp is None or timestamp > self._largest_block_timestamp:
+        if (
+            self._largest_block_timestamp is None
+            or timestamp > self._largest_block_timestamp
+        ):
             try:
                 block = self._eth1_data_provider.get_block("latest")
             except BlockNotFound:
@@ -406,7 +409,9 @@ class Eth1Monitor(Service):
         Get the accumulated deposit count from deposit contract with `get_deposit_count`
         at block `block_number`.
         """
-        deposit_count_bytes = self._eth1_data_provider.get_deposit_count(block_number=block_number)
+        deposit_count_bytes = self._eth1_data_provider.get_deposit_count(
+            block_number=block_number
+        )
         return int.from_bytes(deposit_count_bytes, "little")
 
     def _get_deposit_root_from_contract(self, block_number: BlockNumber) -> Hash32:

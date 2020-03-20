@@ -1,51 +1,30 @@
 import asyncio
-from typing import (
-    Tuple,
-)
+from typing import Tuple
 
-from eth.exceptions import (
-    BlockNotFound,
-)
-from eth_utils.toolz import (
-    partition_all,
-)
-from lahja import (
-    BroadcastConfig,
-)
+from eth.exceptions import BlockNotFound
+from eth_utils.toolz import partition_all
+from lahja import BroadcastConfig
 import pytest
 
-from eth2.beacon.helpers import (
-    compute_epoch_at_slot,
+from eth2.beacon.exceptions import NoCommitteeAssignment
+from eth2.beacon.helpers import compute_epoch_at_slot, compute_start_slot_at_epoch
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_attestation,
 )
-from eth2.beacon.exceptions import (
-    NoCommitteeAssignment,
-)
-from eth2.beacon.helpers import compute_start_slot_at_epoch
-from eth2.beacon.state_machines.forks.serenity.block_validation import validate_attestation
 from eth2.beacon.state_machines.forks.skeleton_lake.config import (
     MINIMAL_SERENITY_CONFIG,
 )
-from eth2.beacon.tools.factories import (
-    BeaconChainFactory,
+from eth2.beacon.tools.builder.proposer import get_beacon_proposer_index, is_proposer
+from eth2.beacon.tools.builder.validator import (
+    mk_key_pair_from_seed_index,
+    mk_keymap_of_size,
 )
-from eth2.beacon.tools.builder.proposer import (
-    get_beacon_proposer_index,
-    is_proposer,
-)
-from eth2.beacon.tools.builder.validator import mk_key_pair_from_seed_index, mk_keymap_of_size
-from eth2.beacon.tools.misc.ssz_vector import (
-    override_lengths,
-)
+from eth2.beacon.tools.factories import BeaconChainFactory
+from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.configs import CommitteeConfig
-
-from trinity.components.eth2.beacon.validator import (
-    Validator,
-)
-from trinity.components.eth2.beacon.slot_ticker import (
-    SlotTickEvent,
-)
+from trinity.components.eth2.beacon.slot_ticker import SlotTickEvent
+from trinity.components.eth2.beacon.validator import Validator
 from trinity.components.eth2.misc.tick_type import TickType
-
 
 override_lengths(MINIMAL_SERENITY_CONFIG)
 
@@ -70,11 +49,7 @@ class FakeNode:
 
 
 async def get_validator(
-    event_loop,
-    event_bus,
-    monkeypatch,
-    indices,
-    num_validators=None,
+    event_loop, event_bus, monkeypatch, indices, num_validators=None
 ) -> Validator:
     if num_validators is not None:
         chain = BeaconChainFactory(num_validators=num_validators)
@@ -82,8 +57,7 @@ async def get_validator(
         chain = BeaconChainFactory()
 
     validator_privkeys = {
-        index: mk_key_pair_from_seed_index(index)[1]
-        for index in indices
+        index: mk_key_pair_from_seed_index(index)[1] for index in indices
     }
 
     # Mock attestation pool
@@ -115,11 +89,13 @@ async def get_validator(
     # Make requesting eth1 vote and deposit a stub
     async def _get_eth1_vote(slot, state, state_machine):
         return None
-    monkeypatch.setattr(v, '_get_eth1_vote', _get_eth1_vote)
+
+    monkeypatch.setattr(v, "_get_eth1_vote", _get_eth1_vote)
 
     async def _get_deposit_data(state, state_machine, eth1_vote):
         return None
-    monkeypatch.setattr(v, '_get_deposit_data', _get_deposit_data)
+
+    monkeypatch.setattr(v, "_get_deposit_data", _get_deposit_data)
 
     asyncio.ensure_future(v.run(), loop=event_loop)
     await v.events.started.wait()
@@ -128,15 +104,14 @@ async def get_validator(
     return v
 
 
-async def get_linked_validators(event_loop, event_bus, monkeypatch) -> Tuple[Validator, Validator]:
+async def get_linked_validators(
+    event_loop, event_bus, monkeypatch
+) -> Tuple[Validator, Validator]:
     keymap = mk_keymap_of_size(NUM_VALIDATORS)
-    all_indices = tuple(
-        index for index in range(len(keymap))
-    )
+    all_indices = tuple(index for index in range(len(keymap)))
     global_peer_count = 2
     alice_indices, bob_indices = partition_all(
-        len(all_indices) // global_peer_count,
-        all_indices
+        len(all_indices) // global_peer_count, all_indices
     )
     alice = await get_validator(event_loop, event_bus, monkeypatch, alice_indices)
     bob = await get_validator(event_loop, event_bus, monkeypatch, bob_indices)
@@ -149,7 +124,9 @@ def _get_slot_with_validator_selected(candidate_indices, state, config):
 
     for index in candidate_indices:
         try:
-            for slot in range(epoch_start_slot, epoch_start_slot + config.SLOTS_PER_EPOCH):
+            for slot in range(
+                epoch_start_slot, epoch_start_slot + config.SLOTS_PER_EPOCH
+            ):
                 state = state.set("slot", slot)
                 if is_proposer(state, index, config):
                     return slot, index
@@ -164,17 +141,13 @@ def _get_slot_with_validator_selected(candidate_indices, state, config):
 @pytest.mark.asyncio
 async def test_validator_propose_block_succeeds(event_loop, event_bus, monkeypatch):
     alice, bob = await get_linked_validators(
-        event_loop=event_loop,
-        event_bus=event_bus,
-        monkeypatch=monkeypatch,
+        event_loop=event_loop, event_bus=event_bus, monkeypatch=monkeypatch
     )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
 
     slot, proposer_index = _get_slot_with_validator_selected(
-        alice.validator_privkeys,
-        state,
-        state_machine.config,
+        alice.validator_privkeys, state, state_machine.config
     )
 
     head = alice.chain.get_canonical_head()
@@ -200,18 +173,16 @@ async def test_validator_propose_block_succeeds(event_loop, event_bus, monkeypat
 @pytest.mark.asyncio
 async def test_validator_propose_block_fails(event_loop, event_bus, monkeypatch):
     alice, bob = await get_linked_validators(
-        event_loop=event_loop,
-        event_bus=event_bus,
-        monkeypatch=monkeypatch,
+        event_loop=event_loop, event_bus=event_bus, monkeypatch=monkeypatch
     )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
 
-    assert set(alice.validator_privkeys).intersection(set(bob.validator_privkeys)) == set()
+    assert (
+        set(alice.validator_privkeys).intersection(set(bob.validator_privkeys)) == set()
+    )
     slot, proposer_index = _get_slot_with_validator_selected(
-        bob.validator_privkeys,
-        state,
-        state_machine.config,
+        bob.validator_privkeys, state, state_machine.config
     )
     head = alice.chain.get_canonical_head()
     # test: if a non-proposer validator proposes a block, the block validation should fail.
@@ -228,19 +199,12 @@ async def test_validator_propose_block_fails(event_loop, event_bus, monkeypatch)
 @pytest.mark.asyncio
 async def test_validator_skip_block(event_loop, event_bus, monkeypatch):
     alice = await get_validator(
-        event_loop=event_loop,
-        event_bus=event_bus,
-        monkeypatch=monkeypatch,
-        indices=[0],
+        event_loop=event_loop, event_bus=event_bus, monkeypatch=monkeypatch, indices=[0]
     )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
     slot = state.slot + 1
-    post_state = alice.skip_block(
-        slot=slot,
-        state=state,
-        state_machine=state_machine,
-    )
+    post_state = alice.skip_block(slot=slot, state=state, state_machine=state_machine)
     # test: confirm that no block is imported at the slot
     with pytest.raises(BlockNotFound):
         alice.chain.get_canonical_block_by_slot(slot)
@@ -252,10 +216,7 @@ async def test_validator_skip_block(event_loop, event_bus, monkeypatch):
 @pytest.mark.asyncio
 async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
     alice = await get_validator(
-        event_loop=event_loop,
-        event_bus=event_bus,
-        monkeypatch=monkeypatch,
-        indices=[0],
+        event_loop=event_loop, event_bus=event_bus, monkeypatch=monkeypatch, indices=[0]
     )
 
     event_first_tick_called = asyncio.Event()
@@ -271,27 +232,19 @@ async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
     async def handle_third_tick(slot):
         event_third_tick_called.set()
 
-    monkeypatch.setattr(alice, 'handle_first_tick', handle_first_tick)
-    monkeypatch.setattr(alice, 'handle_second_tick', handle_second_tick)
-    monkeypatch.setattr(alice, 'handle_third_tick', handle_third_tick)
+    monkeypatch.setattr(alice, "handle_first_tick", handle_first_tick)
+    monkeypatch.setattr(alice, "handle_second_tick", handle_second_tick)
+    monkeypatch.setattr(alice, "handle_third_tick", handle_third_tick)
 
     # sleep for `event_bus` ready
     await asyncio.sleep(0.01)
 
     # First tick
     await event_bus.broadcast(
-        SlotTickEvent(
-            slot=1,
-            elapsed_time=2,
-            tick_type=TickType.SLOT_START,
-        ),
+        SlotTickEvent(slot=1, elapsed_time=2, tick_type=TickType.SLOT_START),
         BroadcastConfig(internal=True),
     )
-    await asyncio.wait_for(
-        event_first_tick_called.wait(),
-        timeout=2,
-        loop=event_loop,
-    )
+    await asyncio.wait_for(event_first_tick_called.wait(), timeout=2, loop=event_loop)
     assert event_first_tick_called.is_set()
     assert not event_second_tick_called.is_set()
     assert not event_third_tick_called.is_set()
@@ -299,18 +252,10 @@ async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
 
     # Second tick
     await event_bus.broadcast(
-        SlotTickEvent(
-            slot=1,
-            elapsed_time=2,
-            tick_type=TickType.SLOT_ONE_THIRD,
-        ),
+        SlotTickEvent(slot=1, elapsed_time=2, tick_type=TickType.SLOT_ONE_THIRD),
         BroadcastConfig(internal=True),
     )
-    await asyncio.wait_for(
-        event_second_tick_called.wait(),
-        timeout=2,
-        loop=event_loop,
-    )
+    await asyncio.wait_for(event_second_tick_called.wait(), timeout=2, loop=event_loop)
     assert not event_first_tick_called.is_set()
     assert event_second_tick_called.is_set()
     assert not event_third_tick_called.is_set()
@@ -318,18 +263,10 @@ async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
 
     # Third tick
     await event_bus.broadcast(
-        SlotTickEvent(
-            slot=1,
-            elapsed_time=2,
-            tick_type=TickType.SLOT_TWO_THIRD,
-        ),
+        SlotTickEvent(slot=1, elapsed_time=2, tick_type=TickType.SLOT_TWO_THIRD),
         BroadcastConfig(internal=True),
     )
-    await asyncio.wait_for(
-        event_third_tick_called.wait(),
-        timeout=2,
-        loop=event_loop,
-    )
+    await asyncio.wait_for(event_third_tick_called.wait(), timeout=2, loop=event_loop)
     assert not event_first_tick_called.is_set()
     assert not event_second_tick_called.is_set()
     assert event_third_tick_called.is_set()
@@ -338,18 +275,14 @@ async def test_validator_handle_slot_tick(event_loop, event_bus, monkeypatch):
 @pytest.mark.asyncio
 async def test_validator_handle_first_tick(event_loop, event_bus, monkeypatch):
     alice, bob = await get_linked_validators(
-        event_loop=event_loop,
-        event_bus=event_bus,
-        monkeypatch=monkeypatch,
+        event_loop=event_loop, event_bus=event_bus, monkeypatch=monkeypatch
     )
     state_machine = alice.chain.get_state_machine()
     state = alice.chain.get_head_state()
 
     # test: `handle_first_tick` should call `propose_block` if the validator get selected
     slot_to_propose, index = _get_slot_with_validator_selected(
-        alice.validator_privkeys,
-        state,
-        state_machine.config,
+        alice.validator_privkeys, state, state_machine.config
     )
 
     is_proposing = None
@@ -358,7 +291,7 @@ async def test_validator_handle_first_tick(event_loop, event_bus, monkeypatch):
         nonlocal is_proposing
         is_proposing = True
 
-    monkeypatch.setattr(alice, 'propose_block', propose_block)
+    monkeypatch.setattr(alice, "propose_block", propose_block)
 
     await alice.handle_first_tick(slot_to_propose)
     assert is_proposing
@@ -367,9 +300,7 @@ async def test_validator_handle_first_tick(event_loop, event_bus, monkeypatch):
 @pytest.mark.asyncio
 async def test_validator_handle_second_tick(event_loop, event_bus, monkeypatch):
     alice, bob = await get_linked_validators(
-        event_loop=event_loop,
-        event_bus=event_bus,
-        monkeypatch=monkeypatch,
+        event_loop=event_loop, event_bus=event_bus, monkeypatch=monkeypatch
     )
     state = alice.chain.get_head_state()
 
@@ -386,8 +317,8 @@ async def test_validator_handle_second_tick(event_loop, event_bus, monkeypatch):
         nonlocal is_attesting
         is_attesting = True
 
-    monkeypatch.setattr(alice, 'skip_block', skip_block)
-    monkeypatch.setattr(alice, 'attest', attest)
+    monkeypatch.setattr(alice, "skip_block", skip_block)
+    monkeypatch.setattr(alice, "attest", attest)
 
     await alice.handle_second_tick(state.slot + 1)
     assert is_skipping
@@ -438,14 +369,9 @@ async def test_validator_attest(event_loop, event_bus, monkeypatch):
     # Advance the state and validate the attestation
     config = state_machine.config
     future_state = state_machine.state_transition.apply_state_transition(
-        state,
-        future_slot=assignment.slot + config.MIN_ATTESTATION_INCLUSION_DELAY,
+        state, future_slot=assignment.slot + config.MIN_ATTESTATION_INCLUSION_DELAY
     )
-    validate_attestation(
-        future_state,
-        attestation,
-        config,
-    )
+    validate_attestation(future_state, attestation, config)
 
 
 @pytest.mark.asyncio
@@ -485,14 +411,9 @@ async def test_validator_aggregate(event_loop, event_bus, monkeypatch):
         # Advance the state and validate the attestation
         config = state_machine.config
         future_state = state_machine.state_transition.apply_state_transition(
-            state,
-            future_slot=assignment.slot + config.MIN_ATTESTATION_INCLUSION_DELAY,
+            state, future_slot=assignment.slot + config.MIN_ATTESTATION_INCLUSION_DELAY
         )
-        validate_attestation(
-            future_state,
-            attestation,
-            config,
-        )
+        validate_attestation(future_state, attestation, config)
         # break
 
 
@@ -518,12 +439,14 @@ async def test_validator_include_ready_attestations(event_loop, event_bus, monke
     # attested to.
     def get_ready_attestations_fn(slot, is_aggregated):
         return attestations
-    monkeypatch.setattr(alice, 'get_ready_attestations', get_ready_attestations_fn)
 
-    proposing_slot = attesting_slot + MINIMAL_SERENITY_CONFIG.MIN_ATTESTATION_INCLUSION_DELAY
+    monkeypatch.setattr(alice, "get_ready_attestations", get_ready_attestations_fn)
+
+    proposing_slot = (
+        attesting_slot + MINIMAL_SERENITY_CONFIG.MIN_ATTESTATION_INCLUSION_DELAY
+    )
     proposer_index = get_beacon_proposer_index(
-        state.set("slot", proposing_slot),
-        CommitteeConfig(state_machine.config),
+        state.set("slot", proposing_slot), CommitteeConfig(state_machine.config)
     )
 
     head = alice.chain.get_canonical_head()

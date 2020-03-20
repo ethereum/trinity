@@ -1,25 +1,18 @@
 import asyncio
+
+from aiohttp.test_utils import RawTestServer, TestClient
+from eth_utils import encode_hex
+from libp2p.crypto.secp256k1 import create_new_key_pair
 import pytest
 
-from aiohttp.test_utils import (
-    RawTestServer,
-    TestClient,
-)
-from eth_utils import encode_hex
-
+from eth2.beacon.tools.factories import BeaconChainFactory
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock
-from eth2.beacon.tools.factories import (
-    BeaconChainFactory,
-)
-from libp2p.crypto.secp256k1 import create_new_key_pair
-
-from trinity.protocol.bcc_libp2p.node import Node
 from trinity.http.handlers.api_handler import APIHandler
+from trinity.protocol.bcc_libp2p.node import Node
 
-
-GET_METHOD = 'GET'
-POST_METHOD = 'POST'
+GET_METHOD = "GET"
+POST_METHOD = "POST"
 
 
 @pytest.fixture()
@@ -29,8 +22,7 @@ def chain(num_validators, base_db):
     state = chain.get_head_state()
     slot = 4
     post_state = state_machine.state_transition.apply_state_transition(
-        state,
-        future_slot=slot,
+        state, future_slot=slot
     )
     chain.chaindb.persist_state(post_state)
     chain.chaindb.update_head_state(post_state.slot, post_state.hash_tree_root)
@@ -72,18 +64,15 @@ sample_block = BeaconBlock.create()
 sample_attestation = Attestation.create()
 
 
+@pytest.mark.parametrize("num_validators", (2,))
 @pytest.mark.parametrize(
-    'num_validators',
-    (2,),
-)
-@pytest.mark.parametrize(
-    'method, resource, object, json_data, status_code',
+    "method, resource, object, json_data, status_code",
     (
-        (GET_METHOD, 'beacon', 'head', '', 200),
-        (GET_METHOD, 'beacon', 'block?slot=0', '', 200),
-        (GET_METHOD, 'beacon', 'state?slot=4', '', 200),
-        (GET_METHOD, 'beacon', 'state?root=AVAILABLE_STATE_ROOT', '', 200),
-    )
+        (GET_METHOD, "beacon", "head", "", 200),
+        (GET_METHOD, "beacon", "block?slot=0", "", 200),
+        (GET_METHOD, "beacon", "state?slot=4", "", 200),
+        (GET_METHOD, "beacon", "state?root=AVAILABLE_STATE_ROOT", "", 200),
+    ),
 )
 @pytest.mark.asyncio
 async def test_restful_http_server(
@@ -104,18 +93,18 @@ async def test_restful_http_server(
         state_root = encode_hex(chain.get_head_state().hash_tree_root)
         object = object.replace("AVAILABLE_STATE_ROOT", state_root)
 
-    request_path = resource + '/' + object
+    request_path = resource + "/" + object
     response = await http_client.request(method, request_path, json=json_data)
 
     try:
         assert response.status == status_code
     except Exception:
-        print('[ERROR]:', response.reason)
+        print("[ERROR]:", response.reason)
         raise
 
     # The server may return 200 or 202 or others. 200 and 202 are both success.
-    if str(status_code).startswith('2'):
+    if str(status_code).startswith("2"):
         response_data = await response.json()
-        print(f'[SUCCESS]: {request_path}: \t {response_data}\n')
+        print(f"[SUCCESS]: {request_path}: \t {response_data}\n")
 
     await http_client.close()

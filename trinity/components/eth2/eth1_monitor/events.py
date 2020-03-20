@@ -1,18 +1,16 @@
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar, Type  # noqa: F401
-import ssz
-
-from lahja import BaseEvent, BaseRequestResponseEvent
+from typing import Any, Generic, Type, TypeVar  # noqa: F401
 
 from eth_typing import BlockNumber, Hash32
+from lahja import BaseEvent, BaseRequestResponseEvent
+import ssz
 
-from eth2.beacon.typing import Timestamp
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
-
+from eth2.beacon.typing import Timestamp
 
 TData = TypeVar("TData", Deposit, Eth1Data)
-T = TypeVar("T", bound='SSZSerializableEvent[Any]')
+T = TypeVar("T", bound="SSZSerializableEvent[Any]")
 
 
 @dataclass

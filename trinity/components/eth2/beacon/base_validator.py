@@ -1,60 +1,35 @@
 # Add a base class to share the same logic
 # It's a temporary stage
 
-from typing import (
-    Callable,
-    Tuple,
-)
+from typing import Callable, Tuple
 
-from cancel_token import (
-    CancelToken,
-)
-from eth_typing import (
-    BlockNumber,
-    Hash32,
-)
+from cancel_token import CancelToken
+from eth_typing import BlockNumber, Hash32
 from lahja import EndpointAPI
 
 from eth2._utils.numeric import integer_squareroot
-from eth2.beacon.chains.base import (
-    BaseBeaconChain,
-)
-from eth2.beacon.state_machines.base import (
-    BaseBeaconStateMachine,
-)
-from eth2.beacon.types.attestations import (
-    Attestation,
-)
-from eth2.beacon.types.deposits import (
-    Deposit,
-)
-from eth2.beacon.types.eth1_data import (
-    Eth1Data,
-)
-from eth2.beacon.types.states import (
-    BeaconState,
-)
-from eth2.beacon.typing import (
-    CommitteeIndex,
-    Slot,
-    Timestamp,
-)
-from p2p.service import (
-    BaseService,
-)
+from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.state_machines.base import BaseBeaconStateMachine
+from eth2.beacon.types.attestations import Attestation
+from eth2.beacon.types.deposits import Deposit
+from eth2.beacon.types.eth1_data import Eth1Data
+from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import CommitteeIndex, Slot, Timestamp
+from p2p.service import BaseService
 from trinity.components.eth2.eth1_monitor.events import (
-    GetDistanceRequest,
-    GetDistanceResponse,
     GetDepositRequest,
     GetDepositResponse,
+    GetDistanceRequest,
+    GetDistanceResponse,
     GetEth1DataRequest,
     GetEth1DataResponse,
 )
 from trinity.protocol.bcc_libp2p.node import Node
 
-
 GetReadyAttestationsFn = Callable[[Slot, bool], Tuple[Attestation, ...]]
-GetAggregatableAttestationsFn = Callable[[Slot, CommitteeIndex], Tuple[Attestation, ...]]
+GetAggregatableAttestationsFn = Callable[
+    [Slot, CommitteeIndex], Tuple[Attestation, ...]
+]
 ImportAttestationFn = Callable[[Attestation, bool], None]
 
 
@@ -71,14 +46,15 @@ class BaseValidator(BaseService):
     starting_eth1_block_hash: Hash32
 
     def __init__(
-            self,
-            chain: BaseBeaconChain,
-            p2p_node: Node,
-            event_bus: EndpointAPI,
-            get_ready_attestations_fn: GetReadyAttestationsFn,
-            get_aggregatable_attestations_fn: GetAggregatableAttestationsFn,
-            import_attestation_fn: ImportAttestationFn,
-            token: CancelToken = None) -> None:
+        self,
+        chain: BaseBeaconChain,
+        p2p_node: Node,
+        event_bus: EndpointAPI,
+        get_ready_attestations_fn: GetReadyAttestationsFn,
+        get_aggregatable_attestations_fn: GetAggregatableAttestationsFn,
+        import_attestation_fn: ImportAttestationFn,
+        token: CancelToken = None,
+    ) -> None:
         super().__init__(token)
         self.genesis_time = chain.get_head_state().genesis_time
         self.chain = chain
@@ -95,10 +71,12 @@ class BaseValidator(BaseService):
     #
     # Proposing block
     #
-    async def _get_deposit_data(self,
-                                state: BeaconState,
-                                state_machine: BaseBeaconStateMachine,
-                                eth1_vote: Eth1Data) -> Tuple[Deposit, ...]:
+    async def _get_deposit_data(
+        self,
+        state: BeaconState,
+        state_machine: BaseBeaconStateMachine,
+        eth1_vote: Eth1Data,
+    ) -> Tuple[Deposit, ...]:
         eth1_data = state.eth1_data
         # Check if the eth1 vote pass the threshold
         slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
@@ -130,10 +108,9 @@ class BaseValidator(BaseService):
                 )
         return tuple(deposits)
 
-    async def _request_eth1_data(self,
-                                 eth1_voting_period_start_timestamp: Timestamp,
-                                 start: int,
-                                 end: int) -> Tuple[Eth1Data, ...]:
+    async def _request_eth1_data(
+        self, eth1_voting_period_start_timestamp: Timestamp, start: int, end: int
+    ) -> Tuple[Eth1Data, ...]:
         eth1_data: Tuple[Eth1Data, ...] = ()
         for distance in range(start, end):
             resp: GetEth1DataResponse = await self.event_bus.request(
@@ -155,16 +132,15 @@ class BaseValidator(BaseService):
                 )
         return eth1_data
 
-    async def _get_eth1_vote(self,
-                             slot: Slot,
-                             state: BeaconState,
-                             state_machine: BaseBeaconStateMachine) -> Eth1Data:
+    async def _get_eth1_vote(
+        self, slot: Slot, state: BeaconState, state_machine: BaseBeaconStateMachine
+    ) -> Eth1Data:
         slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
         seconds_per_slot = state_machine.config.SECONDS_PER_SLOT
         eth1_follow_distance = ETH1_FOLLOW_DISTANCE
         eth1_voting_period_start_timestamp = (
-            self.genesis_time +
-            (slot - slot % slots_per_eth1_voting_period) * seconds_per_slot
+            self.genesis_time
+            + (slot - slot % slots_per_eth1_voting_period) * seconds_per_slot
         )
 
         new_eth1_data = await self._request_eth1_data(
@@ -180,7 +156,9 @@ class BaseValidator(BaseService):
         resp: GetDistanceResponse = await self.event_bus.request(
             GetDistanceRequest(
                 block_hash=self.starting_eth1_block_hash,
-                eth1_voting_period_start_timestamp=Timestamp(eth1_voting_period_start_timestamp),
+                eth1_voting_period_start_timestamp=Timestamp(
+                    eth1_voting_period_start_timestamp
+                ),
             )
         )
         if resp.error is not None:

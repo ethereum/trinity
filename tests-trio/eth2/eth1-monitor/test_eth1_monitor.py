@@ -1,19 +1,18 @@
+from async_service import background_trio_service
 from eth_utils import ValidationError
 from lahja import BroadcastConfig
 import pytest
-
-from async_service import background_trio_service
 import trio
 from trio.testing import wait_all_tasks_blocked
 
-from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
 from eth2._utils.merkle.common import verify_merkle_branch
+from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
 from trinity.components.eth2.eth1_monitor.eth1_monitor import (
-    make_deposit_tree_and_root,
+    Eth1Monitor,
+    GetDepositRequest,
     GetDistanceRequest,
     GetEth1DataRequest,
-    GetDepositRequest,
-    Eth1Monitor,
+    make_deposit_tree_and_root,
 )
 from trinity.components.eth2.eth1_monitor.exceptions import (
     DepositDataCorrupted,
@@ -250,9 +249,9 @@ async def test_get_eth1_data(
         with pytest.raises(DepositDataCorrupted):
             eth1_monitor._get_eth1_data(
                 distance=0,
-                eth1_voting_period_start_timestamp=w3.eth.getBlock(latest_processed_block_number)[
-                    "timestamp"
-                ],
+                eth1_voting_period_start_timestamp=w3.eth.getBlock(
+                    latest_processed_block_number
+                )["timestamp"],
             )
 
 
@@ -333,7 +332,7 @@ async def test_ipc(
         assert resp.error is None
     # Fails
     get_distance_fail_kwargs = {
-        "block_hash": b'\x12' * 32,
+        "block_hash": b"\x12" * 32,
         "eth1_voting_period_start_timestamp": eth1_voting_period_start_timestamp,
     }
     resp = await request(GetDistanceRequest, **get_distance_fail_kwargs)

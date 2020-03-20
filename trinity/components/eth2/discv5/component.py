@@ -1,30 +1,18 @@
-from argparse import (
-    ArgumentParser,
-    _SubParsersAction,
-)
+from argparse import ArgumentParser, _SubParsersAction
 import logging
 import pathlib
 import secrets
 
 import async_service
-
-from eth_keys.datatypes import (
-    PrivateKey,
-)
-from eth_utils import (
-    decode_hex,
-    encode_hex,
-)
-from eth_utils.toolz import (
-    merge,
-)
-
-from lahja import EndpointAPI
-
 from eth.db.backends.level import LevelDB
+from eth_keys.datatypes import PrivateKey
+from eth_utils import decode_hex, encode_hex
+from eth_utils.toolz import merge
+from lahja import EndpointAPI
+import trio
 
-from p2p.constants import NUM_ROUTING_TABLE_BUCKETS
 from p2p.abc import NodeDBAPI
+from p2p.constants import NUM_ROUTING_TABLE_BUCKETS
 from p2p.discv5.channel_services import (
     DatagramReceiver,
     DatagramSender,
@@ -37,31 +25,17 @@ from p2p.discv5.channel_services import (
     PacketDecoder,
     PacketEncoder,
 )
-from p2p.discv5.endpoint_tracker import (
-    EndpointTracker,
-    EndpointVote,
-)
-from p2p.enr import ENR
-from p2p.enr import UnsignedENR
-from p2p.node_db import NodeDB
-from p2p.identity_schemes import default_identity_scheme_registry
-from p2p.discv5.message_dispatcher import (
-    MessageDispatcher,
-)
+from p2p.discv5.endpoint_tracker import EndpointTracker, EndpointVote
+from p2p.discv5.message_dispatcher import MessageDispatcher
 from p2p.discv5.messages import default_message_type_registry
-from p2p.discv5.packer import (
-    Packer,
-)
+from p2p.discv5.packer import Packer
+from p2p.discv5.routing_table_manager import RoutingTableManager
+from p2p.enr import ENR, UnsignedENR
+from p2p.identity_schemes import default_identity_scheme_registry
 from p2p.kademlia import KademliaRoutingTable
-from p2p.discv5.routing_table_manager import (
-    RoutingTableManager,
-)
-
+from p2p.node_db import NodeDB
 from trinity.boot_info import BootInfo
 from trinity.extensibility import TrioIsolatedComponent
-
-import trio
-
 
 DEFAULT_NODEDB_DIR_NAME = "nodes"
 
@@ -85,10 +59,9 @@ def get_local_private_key(boot_info: BootInfo) -> PrivateKey:
     return PrivateKey(local_private_key_bytes)
 
 
-async def get_local_enr(boot_info: BootInfo,
-                        node_db: NodeDBAPI,
-                        local_private_key: PrivateKey,
-                        ) -> ENR:
+async def get_local_enr(
+    boot_info: BootInfo, node_db: NodeDBAPI, local_private_key: PrivateKey
+) -> ENR:
     minimal_enr = UnsignedENR(
         sequence_number=1,
         kv_pairs={
@@ -121,12 +94,13 @@ class DiscV5Component(TrioIsolatedComponent):
     name = "DiscV5"
 
     @classmethod
-    def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
+    def configure_parser(
+        cls, arg_parser: ArgumentParser, subparser: _SubParsersAction
+    ) -> None:
         discovery_parser = arg_parser.add_argument_group("discovery")
 
         discovery_parser.add_argument(
-            "--nodedb-dir",
-            help="Path to the directory in which our NodeDB is stored",
+            "--nodedb-dir", help="Path to the directory in which our NodeDB is stored"
         )
         arg_parser.add_argument(
             "--bootstrap_nodes",
@@ -180,8 +154,7 @@ class DiscV5Component(TrioIsolatedComponent):
         port = boot_info.args.discovery_port
 
         socket = trio.socket.socket(
-            family=trio.socket.AF_INET,
-            type=trio.socket.SOCK_DGRAM,
+            family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM
         )
         outgoing_datagram_channels = trio.open_memory_channel[OutgoingDatagram](0)
         incoming_datagram_channels = trio.open_memory_channel[IncomingDatagram](0)
@@ -193,21 +166,17 @@ class DiscV5Component(TrioIsolatedComponent):
 
         # types ignored due to https://github.com/ethereum/async-service/issues/5
         datagram_sender = DatagramSender(  # type: ignore
-            outgoing_datagram_channels[1],
-            socket,
+            outgoing_datagram_channels[1], socket
         )
         datagram_receiver = DatagramReceiver(  # type: ignore
-            socket,
-            incoming_datagram_channels[0],
+            socket, incoming_datagram_channels[0]
         )
 
         packet_encoder = PacketEncoder(  # type: ignore
-            outgoing_packet_channels[1],
-            outgoing_datagram_channels[0],
+            outgoing_packet_channels[1], outgoing_datagram_channels[0]
         )
         packet_decoder = PacketDecoder(  # type: ignore
-            incoming_datagram_channels[1],
-            incoming_packet_channels[0],
+            incoming_datagram_channels[1], incoming_packet_channels[0]
         )
 
         packer = Packer(
@@ -266,4 +235,5 @@ class DiscV5Component(TrioIsolatedComponent):
 
 if __name__ == "__main__":
     from trinity.extensibility.component import run_standalone_eth2_component
+
     trio.run(run_standalone_eth2_component, DiscV5Component)

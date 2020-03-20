@@ -1,13 +1,9 @@
 import asyncio
+import time
 
 import pytest
 
-import time
-
-from trinity.components.eth2.beacon.slot_ticker import (
-    SlotTickEvent,
-    SlotTicker,
-)
+from trinity.components.eth2.beacon.slot_ticker import SlotTicker, SlotTickEvent
 
 
 @pytest.mark.asyncio
@@ -21,9 +17,7 @@ async def test_slot_ticker_ticking(event_bus, event_loop):
     asyncio.ensure_future(slot_ticker.run(), loop=event_loop)
     try:
         slot_tick_event = await asyncio.wait_for(
-            event_bus.wait_for(SlotTickEvent),
-            timeout=2,
-            loop=event_loop,
+            event_bus.wait_for(SlotTickEvent), timeout=2, loop=event_loop
         )
     except asyncio.TimeoutError:
         raise AssertionError("Slot not ticking")
@@ -44,9 +38,7 @@ async def test_slot_ticker_all_ticks(event_bus, event_loop):
     asyncio.ensure_future(slot_ticker.run(), loop=event_loop)
     try:
         first_slot_event = await asyncio.wait_for(
-            event_bus.wait_for(SlotTickEvent),
-            timeout=seconds_per_slot,
-            loop=event_loop,
+            event_bus.wait_for(SlotTickEvent), timeout=seconds_per_slot, loop=event_loop
         )
     except asyncio.TimeoutError:
         raise AssertionError("Slot not ticking")
@@ -54,9 +46,7 @@ async def test_slot_ticker_all_ticks(event_bus, event_loop):
 
     try:
         second_slot_event = await asyncio.wait_for(
-            event_bus.wait_for(SlotTickEvent),
-            timeout=seconds_per_slot,
-            loop=event_loop,
+            event_bus.wait_for(SlotTickEvent), timeout=seconds_per_slot, loop=event_loop
         )
     except asyncio.TimeoutError:
         raise AssertionError("Should have gotten the second tick")
@@ -65,9 +55,7 @@ async def test_slot_ticker_all_ticks(event_bus, event_loop):
 
     try:
         third_slot_event = await asyncio.wait_for(
-            event_bus.wait_for(SlotTickEvent),
-            timeout=seconds_per_slot,
-            loop=event_loop,
+            event_bus.wait_for(SlotTickEvent), timeout=seconds_per_slot, loop=event_loop
         )
     except asyncio.TimeoutError:
         raise AssertionError("Should have gotten the third tick")
