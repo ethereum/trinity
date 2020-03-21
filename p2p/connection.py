@@ -133,7 +133,7 @@ class Connection(ConnectionAPI, BaseService):
                 await self.cancellation()
         except (PeerConnectionLost, asyncio.CancelledError):
             pass
-        except (MalformedMessage,) as err:
+        except MalformedMessage as err:
             self.logger.debug(
                 "Disconnecting peer %s for sending MalformedMessage: %s",
                 self.remote,
@@ -146,7 +146,6 @@ class Connection(ConnectionAPI, BaseService):
                     "%s went away while trying to disconnect for MalformedMessage",
                     self,
                 )
-            pass
 
     async def _cleanup(self) -> None:
         await self._multiplexer.close()

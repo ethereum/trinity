@@ -39,6 +39,7 @@ from p2p.exceptions import (
     UnknownProtocol,
     UnknownProtocolCommand,
     MalformedMessage,
+    PeerConnectionLost,
 )
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p.transport_state import TransportState
@@ -414,12 +415,20 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         try:
             await self._handle_commands(msg_stream, stop)
         except asyncio.TimeoutError as exc:
+            # XXX: Transport.read() used to let TimeoutErrors (from peers that have been idle to
+            # long) bubble up and those were silenced here. That is why peers could get stuck
+            # in the pool forever. I'm not sure if we still need this, and in case we do,
+            # shouldn't we cancel the peer/connection here as well?
             self.logger.warning(
                 "Timed out waiting for command from %s, Stop: %r, exiting...",
                 self,
                 stop.is_set(),
             )
             self.logger.debug("Timeout %r: %s", self, exc, exc_info=True)
+        except PeerConnectionLost:
+            # XXX: This is the multiplex_token created in multiplex(), so I don't understand how
+            # triggering it cancels the connection, but it seems to cause that.
+            token.trigger()
         except CorruptTransport as exc:
             self.logger.error("Corrupt transport, while multiplexing %s: %r", self, exc)
             self.logger.debug("Corrupt transport, multiplexing trace: %s", self, exc_info=True)

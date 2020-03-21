@@ -251,13 +251,7 @@ class Transport(TransportAPI):
 
     async def read(self, n: int, token: CancelToken) -> bytes:
         self.logger.debug2("Waiting for %s bytes from %s", n, self.remote)
-        try:
-            return await token.cancellable_wait(
-                self._reader.readexactly(n),
-                timeout=CONN_IDLE_TIMEOUT,
-            )
-        except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError) as err:
-            raise PeerConnectionLost(f"Lost connection to {self.remote}") from err
+        return await read(self._reader, n, token)
 
     def write(self, data: bytes) -> None:
         self._writer.write(data)
@@ -413,3 +407,16 @@ class Transport(TransportAPI):
         encoded_size = b'\x00' + header[:3]
         (size,) = struct.unpack(b'>I', encoded_size)
         return size
+
+
+async def read(reader: asyncio.StreamReader,
+               n: int,
+               token: CancelToken,
+               timeout: int = CONN_IDLE_TIMEOUT
+               ) -> bytes:
+    try:
+        return await token.cancellable_wait(reader.readexactly(n), timeout=timeout)
+    except (asyncio.IncompleteReadError, ConnectionResetError, BrokenPipeError) as err:
+        raise PeerConnectionLost(f"Lost connection to peer") from err
+    except asyncio.TimeoutError as err:
+        raise PeerConnectionLost("Connection reached idle timeout limit") from err

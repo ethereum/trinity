@@ -7,23 +7,18 @@ from cancel_token import CancelToken
 from eth_keys import datatypes
 
 from p2p.abc import MessageAPI, NodeAPI, TransportAPI
-from p2p.exceptions import PeerConnectionLost
+from p2p.constants import CONN_IDLE_TIMEOUT
 from p2p.message import Message
 from p2p.session import Session
 from p2p.tools.asyncio_streams import get_directly_connected_streams
+from p2p import transport as p2p_transport
 from p2p.transport_state import TransportState
 from p2p._utils import get_logger
 
 
-CONNECTION_LOST_ERRORS = (
-    asyncio.IncompleteReadError,
-    ConnectionResetError,
-    BrokenPipeError,
-)
-
-
 class MemoryTransport(TransportAPI):
     read_state = TransportState.IDLE
+    idle_timeout = CONN_IDLE_TIMEOUT
 
     def __init__(self,
                  remote: NodeAPI,
@@ -62,13 +57,9 @@ class MemoryTransport(TransportAPI):
         return self._private_key.public_key
 
     async def read(self, n: int, token: CancelToken) -> bytes:
-        self.logger.debug2("Waiting for %s bytes from %s", n, self.remote)
-        try:
-            return await token.cancellable_wait(
-                self._reader.readexactly(n),
-            )
-        except CONNECTION_LOST_ERRORS as err:
-            raise PeerConnectionLost from err
+        self.logger.debug2(
+            "Waiting for %s bytes from %s, timeout=%s", n, self.remote, self.idle_timeout)
+        return await p2p_transport.read(self._reader, n, token, self.idle_timeout)
 
     def write(self, data: bytes) -> None:
         self._writer.write(data)
