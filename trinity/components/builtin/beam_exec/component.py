@@ -39,9 +39,7 @@ class BeamChainExecutionComponent(AsyncioIsolatedComponent):
         app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
 
-        base_db = DBClient.connect(trinity_config.database_ipc_path)
-
-        with base_db:
+        with DBClient.connect(trinity_config.database_ipc_path) as base_db:
             beam_chain = make_pausing_beam_chain(
                 chain_config.vm_configuration,
                 chain_config.chain_id,

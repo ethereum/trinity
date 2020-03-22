@@ -49,13 +49,13 @@ def run_client(ipc_path, client_id, num_operations):
         for i in range(num_operations)
     }
 
-    db_client = DBClient.connect(ipc_path)
+    with DBClient.connect(ipc_path) as db_client:
+        start = time.perf_counter()
+        for key, value in key_values.items():
+            db_client.set(key, value)
+            db_client.get(key)
+        end = time.perf_counter()
 
-    start = time.perf_counter()
-    for key, value in key_values.items():
-        db_client.set(key, value)
-        db_client.get(key)
-    end = time.perf_counter()
     duration = end - start
 
     logger.info(

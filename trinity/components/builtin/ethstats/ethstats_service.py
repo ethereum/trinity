@@ -159,9 +159,8 @@ class EthstatsService(Service):
         chain_config = app_config.get_chain_config()
 
         chain: ChainAPI
-        base_db = DBClient.connect(self.boot_info.trinity_config.database_ipc_path)
 
-        with base_db:
+        with DBClient.connect(self.boot_info.trinity_config.database_ipc_path) as base_db:
             if self.boot_info.args.sync_mode == SYNC_LIGHT:
                 header_db = AsyncHeaderDB(base_db)
                 chain = chain_config.light_chain_class(

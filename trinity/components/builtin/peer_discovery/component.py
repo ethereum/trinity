@@ -69,39 +69,39 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         config = boot_info.trinity_config
-        db = DBClient.connect(config.database_ipc_path)
+        with DBClient.connect(config.database_ipc_path) as db:
+            if boot_info.args.disable_discovery:
+                discovery_service: async_service.Service = StaticDiscoveryService(
+                    event_bus,
+                    config.preferred_nodes,
+                )
+            else:
+                vm_config = config.get_app_config(Eth1AppConfig).get_chain_config().vm_configuration
+                headerdb = TrioHeaderDB(db)
+                eth_cap_provider = functools.partial(
+                    generate_eth_cap_enr_field, vm_config, headerdb
+                )
+                socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
+                await socket.bind(("0.0.0.0", config.port))
+                base_db = LevelDB(config.node_db_dir)
+                node_db = NodeDB(default_identity_scheme_registry, base_db)
+                discovery_service = PreferredNodeDiscoveryService(
+                    config.nodekey,
+                    config.port,
+                    config.port,
+                    config.bootstrap_nodes,
+                    config.preferred_nodes,
+                    event_bus,
+                    socket,
+                    node_db,
+                    (eth_cap_provider,),
+                )
 
-        if boot_info.args.disable_discovery:
-            discovery_service: async_service.Service = StaticDiscoveryService(
-                event_bus,
-                config.preferred_nodes,
-            )
-        else:
-            vm_config = config.get_app_config(Eth1AppConfig).get_chain_config().vm_configuration
-            headerdb = TrioHeaderDB(db)
-            eth_cap_provider = functools.partial(generate_eth_cap_enr_field, vm_config, headerdb)
-            socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
-            await socket.bind(("0.0.0.0", config.port))
-            base_db = LevelDB(config.node_db_dir)
-            node_db = NodeDB(default_identity_scheme_registry, base_db)
-            discovery_service = PreferredNodeDiscoveryService(
-                config.nodekey,
-                config.port,
-                config.port,
-                config.bootstrap_nodes,
-                config.preferred_nodes,
-                event_bus,
-                socket,
-                node_db,
-                (eth_cap_provider,),
-            )
-
-        try:
-            with db:
+            try:
                 await async_service.run_trio_service(discovery_service)
-        except Exception:
-            await event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
-            raise
+            except Exception:
+                await event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
+                raise
 
 
 async def generate_eth_cap_enr_field(

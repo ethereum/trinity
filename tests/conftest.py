@@ -1,5 +1,6 @@
 import asyncio
 import os
+import pathlib
 from pathlib import Path
 import tempfile
 import uuid
@@ -45,6 +46,7 @@ from trinity.constants import (
 from trinity.chains.coro import (
     AsyncChainMixin,
 )
+from trinity.db.manager import DBClient, DBManager
 from trinity.initialization import (
     ensure_eth1_dirs,
     initialize_data_dir,
@@ -143,8 +145,37 @@ def eth1_app_config(trinity_config):
 
 
 @pytest.fixture
+def ipc_path():
+    with tempfile.TemporaryDirectory() as dir:
+        ipc_path = pathlib.Path(dir) / "db_manager.ipc"
+        yield ipc_path
+
+
+@pytest.fixture
 def base_db():
     return AtomicDB()
+
+
+@pytest.fixture
+def db_manager(base_db, ipc_path):
+    with DBManager(base_db).run(ipc_path) as manager:
+        yield manager
+
+
+@pytest.fixture
+def db_client(ipc_path, db_manager):
+    with DBClient.connect(ipc_path) as client:
+        yield client
+
+
+@pytest.fixture
+def db(db_client):
+    return db_client
+
+
+@pytest.fixture
+def atomic_db(db):
+    return db
 
 
 @pytest.fixture

@@ -42,9 +42,7 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
         app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
 
-        base_db = DBClient.connect(trinity_config.database_ipc_path)
-
-        with base_db:
+        with DBClient.connect(trinity_config.database_ipc_path) as base_db:
             loop = asyncio.get_event_loop()
 
             beam_chain = make_pausing_beam_chain(

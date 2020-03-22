@@ -348,12 +348,17 @@ class DBClient(BaseAtomicDB):
         self._socket.close()
 
     @classmethod
-    def connect(cls, path: pathlib.Path, timeout: int = 5) -> "DBClient":
+    @contextlib.contextmanager
+    def connect(cls, path: pathlib.Path, timeout: int = 5) -> Iterator["DBClient"]:
         wait_for_ipc(path, timeout)
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         cls.logger.debug("Opened connection to %s: %s", path, s)
         s.connect(str(path))
-        return cls(s)
+        db = cls(s)
+        try:
+            yield db
+        finally:
+            db.close()
 
 
 class AtomicBatch(BaseDB):

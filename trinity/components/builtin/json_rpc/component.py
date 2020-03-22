@@ -52,9 +52,7 @@ def chain_for_eth1_config(trinity_config: TrinityConfig,
                           event_bus: EndpointAPI) -> Iterator[AsyncChainAPI]:
     chain_config = eth1_app_config.get_chain_config()
 
-    db = DBClient.connect(trinity_config.database_ipc_path)
-
-    with db:
+    with DBClient.connect(trinity_config.database_ipc_path) as db:
         if eth1_app_config.database_mode is Eth1DbMode.LIGHT:
             header_db = HeaderDB(db)
             event_bus_light_peer_chain = EventBusLightPeerChain(event_bus)
@@ -72,8 +70,7 @@ def chain_for_beacon_config(trinity_config: TrinityConfig,
                             beacon_app_config: BeaconAppConfig,
                             ) -> Iterator[AsyncBeaconChainDB]:
     chain_config = beacon_app_config.get_chain_config()
-    db = DBClient.connect(trinity_config.database_ipc_path)
-    with db:
+    with DBClient.connect(trinity_config.database_ipc_path) as db:
         yield AsyncBeaconChainDB(db, chain_config.genesis_config)
 
 

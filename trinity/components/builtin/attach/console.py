@@ -140,8 +140,7 @@ def db_shell(use_ipython: bool, config: Dict[str, str]) -> None:
 def _get_base_db(database_dir: Path, ipc_path: Path) -> Iterator[AtomicDatabaseAPI]:
     trinity_already_running = ipc_path.exists()
     if trinity_already_running:
-        db = DBClient.connect(ipc_path)
-        with db:
+        with DBClient.connect(ipc_path) as db:
             yield db
     else:
         yield LevelDB(database_dir)

@@ -93,14 +93,12 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
         trinity_config = boot_info.trinity_config
         key_pair = cls._load_or_create_node_key(boot_info)
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
-        base_db = DBClient.connect(trinity_config.database_ipc_path)
+        with DBClient.connect(trinity_config.database_ipc_path) as base_db:
+            if boot_info.args.debug_libp2p:
+                logging.getLogger("libp2p").setLevel(logging.DEBUG)
+            else:
+                logging.getLogger("libp2p").setLevel(logging.INFO)
 
-        if boot_info.args.debug_libp2p:
-            logging.getLogger("libp2p").setLevel(logging.DEBUG)
-        else:
-            logging.getLogger("libp2p").setLevel(logging.INFO)
-
-        with base_db:
             chain_config = beacon_app_config.get_chain_config()
             chain = chain_config.beacon_chain_class(
                 base_db, chain_config.genesis_config

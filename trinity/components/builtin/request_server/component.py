@@ -44,8 +44,7 @@ class RequestServerComponent(AsyncioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         trinity_config = boot_info.trinity_config
-        base_db = DBClient.connect(trinity_config.database_ipc_path)
-        with base_db:
+        with DBClient.connect(trinity_config.database_ipc_path) as base_db:
             if trinity_config.has_app_config(Eth1AppConfig):
                 server = cls.make_eth1_request_server(
                     trinity_config.get_app_config(Eth1AppConfig),

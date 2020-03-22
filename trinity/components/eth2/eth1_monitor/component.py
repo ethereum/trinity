@@ -61,42 +61,49 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         trinity_config = boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         chain_config = beacon_app_config.get_chain_config()
-        base_db = DBClient.connect(trinity_config.database_ipc_path)
+        with DBClient.connect(trinity_config.database_ipc_path) as base_db:
 
-        # TODO: For now we use fake eth1 monitor.
-        # if boot_info.args.eth1client_rpc:
-        #     w3: Web3 = Web3.HTTPProvider(boot_info.args.eth1client_rpc)
-        # else:
-        #     w3: Web3 = None
+            # TODO: For now we use fake eth1 monitor.
+            # if boot_info.args.eth1client_rpc:
+            #     w3: Web3 = Web3.HTTPProvider(boot_info.args.eth1client_rpc)
+            # else:
+            #     w3: Web3 = None
 
-        # TODO: For now we use fake eth1 monitor. So we load validators data from
-        # interop setting and hardcode the deposit data into fake eth1 data provider.
-        chain = chain_config.beacon_chain_class(base_db, chain_config.genesis_config)
-        config = chain.get_state_machine().config
-        key_set = load_yaml_at(
-            Path("eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml")
-        )
-        pubkeys, privkeys, withdrawal_credentials = create_keypair_and_mock_withdraw_credentials(
-            config, key_set  # type: ignore
-        )
-        initial_deposits = (
-            create_mock_deposit_data(
-                config=config,
-                pubkey=pubkey,
-                privkey=privkey,
-                withdrawal_credentials=withdrawal_credential,
+            # TODO: For now we use fake eth1 monitor. So we load validators data from
+            # interop setting and hardcode the deposit data into fake eth1 data provider.
+            chain = chain_config.beacon_chain_class(
+                base_db, chain_config.genesis_config
             )
-            for pubkey, privkey, withdrawal_credential in zip(
-                pubkeys, privkeys, withdrawal_credentials
+            config = chain.get_state_machine().config
+            key_set = load_yaml_at(
+                Path("eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml")
             )
-        )
+            (
+                pubkeys,
+                privkeys,
+                withdrawal_credentials,
+            ) = create_keypair_and_mock_withdraw_credentials(
+                config, key_set
+            )  # type: ignore
 
-        # Set the timestamp of start block earlier enough so that eth1 monitor
-        # can query up to 2 * `ETH1_FOLLOW_DISTANCE` of blocks in the beginning.
-        start_block_timestamp = (
-            chain_config.genesis_time - 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
-        )
-        with base_db:
+            initial_deposits = (
+                create_mock_deposit_data(
+                    config=config,
+                    pubkey=pubkey,
+                    privkey=privkey,
+                    withdrawal_credentials=withdrawal_credential,
+                )
+                for pubkey, privkey, withdrawal_credential in zip(
+                    pubkeys, privkeys, withdrawal_credentials
+                )
+            )
+
+            # Set the timestamp of start block earlier enough so that eth1 monitor
+            # can query up to 2 * `ETH1_FOLLOW_DISTANCE` of blocks in the beginning.
+            start_block_timestamp = (
+                chain_config.genesis_time
+                - 3 * ETH1_FOLLOW_DISTANCE * AVERAGE_BLOCK_TIME
+            )
             fake_eth1_data_provider = FakeEth1DataProvider(
                 start_block_number=START_BLOCK_NUMBER,
                 start_block_timestamp=Timestamp(start_block_timestamp),
