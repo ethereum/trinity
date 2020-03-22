@@ -1,19 +1,27 @@
+import json
 import logging
-import os
 from pathlib import Path
-import time
-from typing import Callable, Collection
+from typing import Any, Callable, Dict
 
+from eth_typing import BLSPubkey
+from ssz.tools.parse import from_formatted_dict
 import trio
 
-from eth2._utils.bls import bls
+from eth2.beacon.tools.builder.initializer import load_genesis_key_map
+from eth2.beacon.tools.misc.ssz_vector import override_lengths
+from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
+from eth2.configs import deserialize
 from eth2.validator_client.abc import KeyStoreAPI
 from eth2.validator_client.cli_parser import parse_cli_args
 from eth2.validator_client.config import Config
 from eth2.validator_client.key_store import InMemoryKeyStore
-from eth2.validator_client.typing import KeyPair
+from eth2.validator_client.tools.directory import create_dir_if_missing
+from eth2.validator_client.typing import BLSPrivateKey
 from trinity._utils.logging import LOG_FORMATTER
+from trinity.bootstrap import load_trinity_config_from_parser_args
+from trinity.config import ValidatorClientAppConfig
+from trinity.constants import APP_IDENTIFIER_VALIDATOR_CLIENT
 
 
 def _setup_logging() -> logging.Logger:
@@ -28,31 +36,13 @@ def _setup_logging() -> logging.Logger:
     return logger
 
 
-def _random_private_key(index: int) -> int:
-    """
-    Using the algorithm from:
-    https://github.com/ethereum/eth2.0-pm/blob/master/interop/mocked_start/keygen.py
-    """
-    from py_ecc.optimized_bls12_381 import curve_order
-    from hashlib import sha256
-
-    return (
-        int.from_bytes(
-            sha256(index.to_bytes(length=32, byteorder="little")).digest(),
-            byteorder="little",
-        )
-        % curve_order
-    )
-
-
-def _mk_random_key_pair(index: int) -> KeyPair:
-    private_key = _random_private_key(index)
-    public_key = bls.privtopub(private_key)
-    return (public_key, private_key)
+def _load_genesis_config_at(genesis_config_path: Path) -> Dict[str, Any]:
+    with open(genesis_config_path) as genesis_config_file:
+        return json.load(genesis_config_file)
 
 
 def _mk_key_store_from_key_pairs(
-    key_pairs: Collection[KeyPair]
+    key_pairs: Dict[BLSPubkey, BLSPrivateKey]
 ) -> Callable[[Config], KeyStoreAPI]:
     def _mk_key_store(config: Config) -> KeyStoreAPI:
         return InMemoryKeyStore.from_config(config, key_pairs)
@@ -61,33 +51,44 @@ def _mk_key_store_from_key_pairs(
 
 
 def main_validator() -> None:
-    # TODO:
-    # Merge into trinity platform
-    # 1. CLI parsing
-    # 2. Loading config from file and/or cmd line
-    # 3. Logging
     logger = _setup_logging()
-    arguments = parse_cli_args()
-    root_data_dir = (
-        Path(os.environ["HOME"]) /
-        ".local" /
-        "share" /
-        "trinity" /
-        "eth2" /
-        "validator_client"
+
+    parser = parse_cli_args()
+    arguments = parser.parse_args()
+    trinity_config = load_trinity_config_from_parser_args(
+        parser, arguments, APP_IDENTIFIER_VALIDATOR_CLIENT, (ValidatorClientAppConfig,)
     )
-    slots_per_epoch = Slot(4)
-    seconds_per_slot = 2
-    genesis_time = int(time.time()) + slots_per_epoch * seconds_per_slot + 3
-    num_validators = 16
-    key_pairs = tuple(_mk_random_key_pair(index) for index in range(num_validators))
+
+    # NOTE: we do not want the rest of the functionality in
+    # ``trinity.bootstrap.ensure_data_dir_is_initialized
+    create_dir_if_missing(trinity_config.data_dir)
+    validator_client_app_config = trinity_config.get_app_config(
+        ValidatorClientAppConfig
+    )
+    root_dir = validator_client_app_config.root_dir
+    create_dir_if_missing(root_dir)
+
+    genesis_config = _load_genesis_config_at(
+        validator_client_app_config.genesis_config_path
+    )
+    eth2_config = deserialize(genesis_config["eth2_config"])
+    override_lengths(eth2_config)
+    key_pairs = load_genesis_key_map(genesis_config["genesis_validator_key_pairs"])
+    genesis_state = from_formatted_dict(genesis_config["genesis_state"], BeaconState)
+
+    slots_per_epoch = Slot(eth2_config.SLOTS_PER_EPOCH)
+    seconds_per_slot = eth2_config.SECONDS_PER_SLOT
+    genesis_time = genesis_state.genesis_time
 
     config = Config(
         key_store_constructor=_mk_key_store_from_key_pairs(key_pairs),
-        root_data_dir=root_data_dir,
+        root_data_dir=root_dir,
         slots_per_epoch=slots_per_epoch,
         seconds_per_slot=seconds_per_slot,
         genesis_time=genesis_time,
         demo_mode=arguments.demo_mode,
     )
+    # NOTE: we deviate from the multiprocess-driven Component-based
+    # application machinery here until said machinery is more stable
+    # with respect to boot, shutdown and general concurrent control.
     trio.run(arguments.func, logger, config, arguments)

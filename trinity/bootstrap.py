@@ -1,5 +1,5 @@
 import asyncio
-from argparse import ArgumentParser
+import argparse
 import argcomplete
 import logging
 import multiprocessing
@@ -84,6 +84,36 @@ TRINITY_AMBIGIOUS_FILESYSTEM_INFO = (
 
 
 BootFn = Callable[[BootInfo], Tuple[multiprocessing.Process, ...]]
+SubConfigs = Sequence[Type[BaseAppConfig]]
+
+
+def load_trinity_config_from_parser_args(parser: argparse.ArgumentParser,
+                                         args: argparse.Namespace,
+                                         app_identifier: str,
+                                         sub_configs: SubConfigs) -> TrinityConfig:
+    try:
+        return TrinityConfig.from_parser_args(args, app_identifier, sub_configs)
+    except AmbigiousFileSystem:
+        parser.error(TRINITY_AMBIGIOUS_FILESYSTEM_INFO)
+
+
+def ensure_data_dir_is_initialized(trinity_config: TrinityConfig) -> None:
+    if not is_data_dir_initialized(trinity_config):
+        # TODO: this will only work as is for chains with known genesis
+        # parameters.  Need to flesh out how genesis parameters for custom
+        # chains are defined and passed around.
+        try:
+            initialize_data_dir(trinity_config)
+        except AmbigiousFileSystem:
+            parser.error(TRINITY_AMBIGIOUS_FILESYSTEM_INFO)
+        except MissingPath as e:
+            parser.error(
+                "\n"
+                f"It appears that {e.path} does not exist. "
+                "Trinity does not attempt to create directories outside of its root path. "
+                "Either manually create the path or ensure you are using a data directory "
+                "inside the XDG_TRINITY_ROOT path"
+            )
 
 
 def main_entry(trinity_boot: BootFn,
@@ -133,27 +163,12 @@ def main_entry(trinity_boot: BootFn,
             """
         )
 
-    try:
-        trinity_config = TrinityConfig.from_parser_args(args, app_identifier, sub_configs)
-    except AmbigiousFileSystem:
-        parser.error(TRINITY_AMBIGIOUS_FILESYSTEM_INFO)
+    trinity_config = load_trinity_config_from_parser_args(parser,
+                                                          args,
+                                                          app_identifier,
+                                                          sub_configs)
 
-    if not is_data_dir_initialized(trinity_config):
-        # TODO: this will only work as is for chains with known genesis
-        # parameters.  Need to flesh out how genesis parameters for custom
-        # chains are defined and passed around.
-        try:
-            initialize_data_dir(trinity_config)
-        except AmbigiousFileSystem:
-            parser.error(TRINITY_AMBIGIOUS_FILESYSTEM_INFO)
-        except MissingPath as e:
-            parser.error(
-                "\n"
-                f"It appears that {e.path} does not exist. "
-                "Trinity does not attempt to create directories outside of its root path. "
-                "Either manually create the path or ensure you are using a data directory "
-                "inside the XDG_TRINITY_ROOT path"
-            )
+    ensure_data_dir_is_initialized(trinity_config)
 
     # +---------------+
     # | LOGGING SETUP |
@@ -302,4 +317,4 @@ def kill_trinity_gracefully(trinity_config: TrinityConfig,
 
     remove_dangling_ipc_files(logger, trinity_config.ipc_dir)
 
-    ArgumentParser().exit(message=f"Trinity shutdown complete{hint}\n")
+    argparse.ArgumentParser().exit(message=f"Trinity shutdown complete{hint}\n")

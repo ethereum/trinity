@@ -13,6 +13,7 @@ from eth2._utils.bls import bls
 from eth2._utils.humanize import humanize_bytes
 from eth2.validator_client.abc import KeyStoreAPI
 from eth2.validator_client.config import Config
+from eth2.validator_client.tools.directory import create_dir_if_missing
 from eth2.validator_client.typing import BLSPrivateKey, KeyPair
 
 EMPTY_PASSWORD = b""
@@ -23,13 +24,6 @@ def _compute_key_pair_from_private_key_bytes(private_key_bytes: bytes) -> KeyPai
     return (bls.privtopub(private_key), private_key)
 
 
-def _create_dir_if_missing(path: Path) -> bool:
-    if not path.exists():
-        path.mkdir(parents=True)
-        return True
-    return False
-
-
 class KeyStore(KeyStoreAPI):
     """
     A ``KeyStore`` instance is a read-only repository for the private and public keys
@@ -38,10 +32,15 @@ class KeyStore(KeyStoreAPI):
 
     logger = logging.getLogger("eth2.validator_client.key_store")
 
-    def __init__(self, key_store_dir: Path, demo_mode: bool) -> None:
+    def __init__(
+        self,
+        key_store_dir: Path,
+        key_pairs: Dict[BLSPubkey, BLSPrivateKey],
+        demo_mode: bool,
+    ) -> None:
         self._location = key_store_dir
         self._demo_mode = demo_mode
-        self._key_pairs: Dict[BLSPubkey, BLSPrivateKey] = {}
+        self._key_pairs = key_pairs
         # NOTE: ``_key_files`` is a temporary cache
         # so that there may be key pairs in ``_key_pairs``
         # that do not have key files in ``_key_files``.
@@ -50,8 +49,10 @@ class KeyStore(KeyStoreAPI):
         self._ensure_dirs()
 
     @classmethod
-    def from_config(cls, config: Config) -> "KeyStore":
-        return cls(config.key_store_dir, config.demo_mode)
+    def from_config(
+        cls, config: Config, key_pairs: Dict[BLSPubkey, BLSPrivateKey]
+    ) -> "KeyStore":
+        return cls(config.key_store_dir, key_pairs, config.demo_mode)
 
     def __enter__(self) -> KeyStoreAPI:
         self._load_validator_key_pairs()
@@ -68,7 +69,7 @@ class KeyStore(KeyStoreAPI):
                 json.dump(key_file_json, key_file_handle)
 
     def _ensure_dirs(self) -> None:
-        did_create = _create_dir_if_missing(self._location)
+        did_create = create_dir_if_missing(self._location)
         if did_create:
             self.logger.warning(
                 "the key store location provided (%s) was created because it was missing",
@@ -126,12 +127,12 @@ class KeyStore(KeyStoreAPI):
 
 
 class InMemoryKeyStore(KeyStoreAPI):
-    def __init__(self, key_pairs: Collection[KeyPair] = ()) -> None:
-        self._key_pairs = dict(key_pairs)
+    def __init__(self, key_pairs: Dict[BLSPubkey, BLSPrivateKey]) -> None:
+        self._key_pairs = key_pairs
 
     @classmethod
     def from_config(
-        cls, config: Config, key_pairs: Collection[KeyPair] = ()
+        cls, config: Config, key_pairs: Dict[BLSPubkey, BLSPrivateKey]
     ) -> "InMemoryKeyStore":
         return cls(key_pairs)
 

@@ -74,7 +74,6 @@ from eth2.configs import (
     Eth2GenesisConfig,
     deserialize as deserialize_eth2_config
 )
-from eth2.validator_client.config import Config as ValidatorClientConfig
 from p2p.kademlia import (
     Node as KademliaNode,
 )
@@ -110,6 +109,7 @@ from trinity.constants import (
     NODE_DB_DIR,
     PID_DIR,
     SYNC_LIGHT,
+    APP_IDENTIFIER_VALIDATOR_CLIENT,
 )
 from trinity.network_configurations import (
     PRECONFIGURED_NETWORKS
@@ -147,6 +147,11 @@ def _get_preconfigured_chain_name(network_id: int) -> str:
         raise TypeError(f"Unknown or unsupported `network_id`: {network_id}")
     else:
         return PRECONFIGURED_NETWORKS[network_id].chain_name
+
+
+def _get_eth2_genesis_config_file_path() -> Path:
+    # TODO(ralexstokes): allow user to select config profile
+    return ASSETS_DIR / 'eth2' / 'minimal' / 'genesis_config.json'
 
 
 class Eth1ChainConfig:
@@ -593,6 +598,10 @@ class BaseAppConfig(ABC):
         pass
 
 
+class BaseEth2AppConfig(BaseAppConfig):
+    pass
+
+
 class Eth1DbMode(Enum):
 
     FULL = auto()
@@ -716,17 +725,12 @@ class BeaconChainConfig:
         return self._beacon_chain_class
 
     @classmethod
-    def get_genesis_config_file_path(_cls) -> Path:
-        # TODO(ralexstokes): allow user to select config profile
-        return ASSETS_DIR / 'eth2' / 'minimal' / 'genesis_config.json'
-
-    @classmethod
     def from_genesis_config(cls) -> 'BeaconChainConfig':
         """
         Construct an instance of ``cls`` reading the genesis configuration
         data under the local data directory.
         """
-        with open(cls.get_genesis_config_file_path()) as config_file:
+        with open(_get_eth2_genesis_config_file_path()) as config_file:
             config = json.load(config_file)
             genesis_eth2_config = deserialize_eth2_config(config["eth2_config"])
             # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
@@ -735,6 +739,10 @@ class BeaconChainConfig:
             genesis_state = from_formatted_dict(config["genesis_state"], BeaconState)
             genesis_validator_key_map = load_genesis_key_map(config["genesis_validator_key_pairs"])
             return cls(genesis_state, genesis_eth2_config, genesis_validator_key_map)
+
+    @classmethod
+    def get_genesis_config_file_path(cls) -> Path:
+        return _get_eth2_genesis_config_file_path()
 
     def initialize_chain(self,
                          base_db: AtomicDatabaseAPI) -> 'BaseBeaconChain':
@@ -753,7 +761,7 @@ class BeaconChainConfig:
         )
 
 
-class BeaconAppConfig(BaseAppConfig):
+class BeaconAppConfig(BaseEth2AppConfig):
 
     @classmethod
     def from_parser_args(cls,
@@ -790,6 +798,26 @@ class BeaconAppConfig(BaseAppConfig):
         return BeaconChainConfig.from_genesis_config()
 
 
-class ValidatorClientAppConfig(BaseAppConfig):
-    def get_client_config(self) -> ValidatorClientConfig:
-        return ValidatorClientConfig()
+class ValidatorClientAppConfig(BaseEth2AppConfig):
+    @classmethod
+    def from_parser_args(cls,
+                         args: argparse.Namespace,
+                         trinity_config: TrinityConfig) -> 'BaseAppConfig':
+        """
+        Initialize from the namespace object produced by
+        an ``argparse.ArgumentParser`` and the :class:`~trinity.config.TrinityConfig`
+        """
+        return cls(trinity_config)
+
+    @property
+    def root_dir(self) -> Path:
+        """
+        Return the root directory of the validator client data.
+
+        This is resolved relative to the ``data_dir``
+        """
+        return self.trinity_config.data_dir / APP_IDENTIFIER_VALIDATOR_CLIENT
+
+    @property
+    def genesis_config_path(self) -> Path:
+        return _get_eth2_genesis_config_file_path()

@@ -19,6 +19,7 @@ from p2p.kademlia import Address, Node
 # application identifier
 APP_IDENTIFIER_ETH1 = "eth1"
 APP_IDENTIFIER_BEACON = "beacon"
+APP_IDENTIFIER_VALIDATOR_CLIENT = "validator-client"
 
 # The file path to the non-python assets
 ASSETS_DIR = Path(__file__).parent / "assets"
