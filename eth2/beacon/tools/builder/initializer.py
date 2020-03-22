@@ -31,52 +31,46 @@ from .validator import make_deposit_proof, make_deposit_tree_and_root
 
 
 def _encode_private_key_as_hex(private_key: int) -> str:
-    return encode_hex(private_key.to_bytes(32, byteorder="little"))
+    return encode_hex(private_key.to_bytes(32, "little"))
 
 
 def _decode_private_key_from_hex(encoded_private_key: str) -> int:
-    return int.from_bytes(decode_hex(encoded_private_key), byteorder="little")
+    return int.from_bytes(decode_hex(encoded_private_key), "little")
 
 
+@to_tuple
 def mk_genesis_key_map(
     key_pairs: Dict[BLSPubkey, int],
     genesis_state: BeaconState,
     public_key_codec: Callable[[BLSPubkey], str] = encode_hex,
     private_key_codec: Callable[[int], str] = _encode_private_key_as_hex,
-) -> Tuple[Dict[str, str], ...]:
-    key_map: Tuple[Dict[str, str], ...] = ()
+) -> Iterable[Dict[str, str]]:
     for _, validator in enumerate(genesis_state.validators):
         public_key = validator.pubkey
         private_key = key_pairs[public_key]
-        key_map += (
-            {
-                "public_key": public_key_codec(public_key),
-                "private_key": private_key_codec(private_key),
-            },
-        )
-    return key_map
+        yield {
+            "public_key": public_key_codec(public_key),
+            "private_key": private_key_codec(private_key),
+        }
 
 
+@to_dict
 def load_genesis_key_map(
     encoded_key_map: Tuple[Dict[str, Any]],
     public_key_codec: Callable[[str], BLSPubkey] = lambda key: BLSPubkey(
         decode_hex(key)
     ),
     private_key_codec: Callable[[str], int] = _decode_private_key_from_hex,
-) -> Dict[BLSPubkey, int]:
-    key_map = {}
+) -> Iterable[Tuple[BLSPubkey, int]]:
     for key_pair in encoded_key_map:
         public_key = public_key_codec(key_pair["public_key"])
         private_key = private_key_codec(key_pair["private_key"])
-        key_map[public_key] = private_key
-    return key_map
+        yield public_key, private_key
 
 
 def generate_privkey_from_index(index: int) -> int:
     return (
-        int.from_bytes(
-            hash_eth2(index.to_bytes(length=32, byteorder="little")), byteorder="little"
-        )
+        int.from_bytes(hash_eth2(index.to_bytes(32, "little")), "little")
         % BLS12_381_CURVE_ORDER
     )
 
@@ -95,8 +89,7 @@ def create_keypair_and_mock_withdraw_credentials(
         pubkey = BLSPubkey(decode_hex(key_pair["pubkey"]))
         privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
         withdrawal_credential = Hash32(
-            config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="big")
-            + hash_eth2(pubkey)[1:]
+            config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, "big") + hash_eth2(pubkey)[1:]
         )
 
         pubkeys += (pubkey,)
@@ -128,7 +121,7 @@ def mk_withdrawal_credentials_from(prefix: bytes, public_key: BLSPubkey) -> Hash
 def create_deposit_proof(
     tree: MerkleTree, index: int, leaf_count: int
 ) -> Tuple[Hash32, ...]:
-    length_mix_in = Hash32(leaf_count.to_bytes(32, byteorder="little"))
+    length_mix_in = Hash32(leaf_count.to_bytes(32, "little"))
     proof = get_merkle_proof(tree, index)
     return proof + (length_mix_in,)
 
