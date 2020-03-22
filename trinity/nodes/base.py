@@ -1,7 +1,9 @@
+import contextlib
 from abc import abstractmethod
 from pathlib import Path
 from typing import (
     Generic,
+    Iterator,
     TypeVar,
 )
 
@@ -19,7 +21,6 @@ from trinity.chains.full import FullChain
 from trinity.db.manager import DBClient
 from trinity.db.eth1.header import (
     AsyncHeaderDB,
-    BaseAsyncHeaderDB,
 )
 from trinity.events import ShutdownRequest
 from trinity.config import (
@@ -54,8 +55,6 @@ class Node(Service, Generic[TPeer]):
                  metrics_service: MetricsServiceAPI,
                  trinity_config: TrinityConfig) -> None:
         self.trinity_config = trinity_config
-        self._base_db = DBClient.connect(trinity_config.database_ipc_path)
-        self._headerdb = AsyncHeaderDB(self._base_db)
 
         self._jsonrpc_ipc_path: Path = trinity_config.jsonrpc_ipc_path
         self._network_id = trinity_config.network_id
@@ -88,52 +87,53 @@ class Node(Service, Generic[TPeer]):
         return self._chain_config
 
     @abstractmethod
-    def get_chain(self) -> AsyncChainAPI:
+    def get_chain(self, base_db: AtomicDatabaseAPI) -> AsyncChainAPI:
         ...
 
-    def get_full_chain(self) -> FullChain:
+    def get_full_chain(self, base_db: AtomicDatabaseAPI) -> FullChain:
         if self._full_chain is None:
             chain_class = self.chain_config.full_chain_class
-            self._full_chain = chain_class(self._base_db)
+            self._full_chain = chain_class(base_db)
 
         return self._full_chain
 
     @abstractmethod
-    def get_event_server(self) -> PeerPoolEventServer[TPeer]:
+    def get_event_server(self, base_db: AtomicDatabaseAPI) -> PeerPoolEventServer[TPeer]:
         """
         Return the ``PeerPoolEventServer`` of the node
         """
         ...
 
     @abstractmethod
-    def get_peer_pool(self) -> BasePeerPool:
+    def get_peer_pool(self, base_db: AtomicDatabaseAPI) -> BasePeerPool:
         """
         Return the PeerPool instance of the node
         """
         ...
 
     @abstractmethod
-    def get_p2p_server(self) -> AsyncioServiceAPI:
+    def get_p2p_server(self, base_db: AtomicDatabaseAPI) -> AsyncioServiceAPI:
         """
         This is the main service that will be run, when calling :meth:`run`.
         It's typically responsible for syncing the chain, with peer connections.
         """
         ...
 
-    @property
-    def base_db(self) -> AtomicDatabaseAPI:
-        return self._base_db
+    @contextlib.contextmanager
+    def db_client_ctx(self) -> Iterator[AtomicDatabaseAPI]:
+        with DBClient.connect(self.trinity_config.database_ipc_path) as db:
+            yield db
 
-    @property
-    def headerdb(self) -> BaseAsyncHeaderDB:
-        return self._headerdb
+    def get_headerdb(self, base_db: AtomicDatabaseAPI) -> AsyncHeaderDB:
+        return AsyncHeaderDB(base_db)
 
     async def run(self) -> None:
-        with self._base_db:
+        with self.db_client_ctx() as base_db:
             self.manager.run_daemon_task(self.handle_network_id_requests)
-            self.manager.run_daemon_child_service(self.get_p2p_server().as_new_service())
-            self.manager.run_daemon_child_service(self.get_event_server())
+            self.manager.run_daemon_child_service(self.get_p2p_server(base_db).as_new_service())
+            self.manager.run_daemon_child_service(self.get_event_server(base_db))
             self.manager.run_daemon_child_service(self.metrics_service)
+
             try:
                 await self.manager.wait_finished()
             finally:

@@ -329,15 +329,17 @@ class SyncerComponent(AsyncioIsolatedComponent):
                           boot_info: BootInfo,
                           event_bus: EndpointAPI) -> None:
         await node.get_manager().wait_started()
-        await strategy.sync(
-            boot_info.args,
-            cls.logger,
-            node.get_chain(),
-            node.base_db,
-            node.get_peer_pool(),
-            event_bus,
-            node.master_cancel_token
-        )
+
+        with node.db_client_ctx() as base_db:
+            await strategy.sync(
+                boot_info.args,
+                cls.logger,
+                node.get_chain(base_db),
+                base_db,
+                node.get_peer_pool(base_db),
+                event_bus,
+                node.master_cancel_token
+            )
 
         if strategy.shutdown_node_on_halt:
             cls.logger.error("Sync ended unexpectedly. Shutting down trinity")

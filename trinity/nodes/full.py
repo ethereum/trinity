@@ -1,5 +1,7 @@
 from typing import Type
 
+from eth.abc import AtomicDatabaseAPI
+
 from lahja import EndpointAPI
 
 from p2p.peer_pool import BasePeerPool
@@ -13,6 +15,7 @@ from trinity.protocol.eth.peer import ETHPeer, ETHPeerPoolEventServer
 from trinity.server import FullServer
 
 from .base import Node
+from ..db.eth1.header import AsyncHeaderDB
 
 
 class FullNode(Node[ETHPeer]):
@@ -32,27 +35,27 @@ class FullNode(Node[ETHPeer]):
     def chain_class(self) -> Type[FullChain]:
         return self.chain_config.full_chain_class
 
-    def get_chain(self) -> FullChain:
-        return self.get_full_chain()
+    def get_chain(self, base_db: AtomicDatabaseAPI) -> FullChain:
+        return self.get_full_chain(base_db)
 
-    def get_event_server(self) -> PeerPoolEventServer[ETHPeer]:
+    def get_event_server(self, base_db: AtomicDatabaseAPI) -> PeerPoolEventServer[ETHPeer]:
         """
         Return the ``PeerPoolEventServer`` of the FullNode
         """
         if self._event_server is None:
             self._event_server = ETHPeerPoolEventServer(
-                self.event_bus, self.get_peer_pool())
+                self.event_bus, self.get_peer_pool(base_db))
         return self._event_server
 
-    def get_p2p_server(self) -> FullServer:
+    def get_p2p_server(self, base_db: AtomicDatabaseAPI) -> FullServer:
         if self._p2p_server is None:
             self._p2p_server = FullServer(
                 privkey=self._node_key,
                 port=self._node_port,
-                chain=self.get_full_chain(),
-                chaindb=AsyncChainDB(self._base_db),
-                headerdb=self.headerdb,
-                base_db=self._base_db,
+                chain=self.get_full_chain(base_db),
+                chaindb=AsyncChainDB(base_db),
+                headerdb=AsyncHeaderDB(base_db),
+                base_db=base_db,
                 network_id=self._network_id,
                 max_peers=self._max_peers,
                 token=self.master_cancel_token,
@@ -61,5 +64,5 @@ class FullNode(Node[ETHPeer]):
             )
         return self._p2p_server
 
-    def get_peer_pool(self) -> BasePeerPool:
-        return self.get_p2p_server().peer_pool
+    def get_peer_pool(self, base_db: AtomicDatabaseAPI) -> BasePeerPool:
+        return self.get_p2p_server(base_db).peer_pool

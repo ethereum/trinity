@@ -3,12 +3,11 @@ from typing import (
     Type,
 )
 
+from eth.abc import AtomicDatabaseAPI
+
 from lahja import EndpointAPI
 
 from eth_keys.datatypes import PrivateKey
-from eth_utils import (
-    ValidationError,
-)
 
 from p2p.peer_pool import BasePeerPool
 
@@ -20,6 +19,7 @@ from trinity.config import (
     TrinityConfig,
 )
 from trinity.db.eth1.chain import AsyncChainDB
+from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.nodes.base import Node
 from trinity.protocol.common.peer_pool_event_bus import (
     PeerPoolEventServer,
@@ -51,49 +51,56 @@ class LightNode(Node[LESPeer]):
         self._port = trinity_config.port
         self._max_peers = trinity_config.max_peers
 
-        self._peer_chain = LightPeerChain(
-            self.headerdb,
-            cast(LESPeerPool, self.get_peer_pool()),
-            token=self.master_cancel_token,
-        )
+    def get_peer_chain(self, base_db: AtomicDatabaseAPI) -> LightPeerChain:
+        if self._peer_chain is None:
+            self._peer_chain = LightPeerChain(
+                AsyncHeaderDB(base_db),
+                cast(LESPeerPool, self.get_peer_pool(base_db)),
+                token=self.master_cancel_token,
+            )
+
+        return self._peer_chain
 
     @property
     def chain_class(self) -> Type[LightDispatchChain]:
         return self.chain_config.light_chain_class
 
     async def run(self) -> None:
-        self.manager.run_daemon_child_service(self._peer_chain.as_new_service())
+        with self.db_client_ctx() as base_db:
+            peer_chain = self.get_peer_chain(base_db)
+            self.manager.run_daemon_child_service(peer_chain.as_new_service())
         await super().run()
 
-    def get_chain(self) -> LightDispatchChain:
+    def get_chain(self, base_db: AtomicDatabaseAPI) -> LightDispatchChain:
         if self._chain is None:
             if self.chain_class is None:
                 raise AttributeError("LightNode subclass must set chain_class")
-            elif self._peer_chain is None:
-                raise ValidationError("peer chain is not initialized!")
             else:
-                self._chain = self.chain_class(self.headerdb, peer_chain=self._peer_chain)
+                peer_chain = self.get_peer_chain(base_db)
+                self._chain = self.chain_class(
+                    AsyncHeaderDB(base_db), peer_chain=peer_chain
+                )
 
         return self._chain
 
-    def get_event_server(self) -> PeerPoolEventServer[LESPeer]:
+    def get_event_server(self, base_db: AtomicDatabaseAPI) -> PeerPoolEventServer[LESPeer]:
         if self._event_server is None:
             self._event_server = LESPeerPoolEventServer(
                 self.event_bus,
-                self.get_peer_pool(),
-                self._peer_chain
+                self.get_peer_pool(base_db),
+                self.get_peer_chain(base_db)
             )
         return self._event_server
 
-    def get_p2p_server(self) -> LightServer:
+    def get_p2p_server(self, base_db: AtomicDatabaseAPI) -> LightServer:
         if self._p2p_server is None:
             self._p2p_server = LightServer(
                 privkey=self._nodekey,
                 port=self._port,
-                chain=self.get_full_chain(),
-                chaindb=AsyncChainDB(self._base_db),
-                headerdb=self.headerdb,
-                base_db=self._base_db,
+                chain=self.get_full_chain(base_db),
+                chaindb=AsyncChainDB(base_db),
+                headerdb=AsyncHeaderDB(base_db),
+                base_db=base_db,
                 network_id=self._network_id,
                 max_peers=self._max_peers,
                 token=self.master_cancel_token,
@@ -102,5 +109,5 @@ class LightNode(Node[LESPeer]):
             )
         return self._p2p_server
 
-    def get_peer_pool(self) -> BasePeerPool:
-        return self.get_p2p_server().peer_pool
+    def get_peer_pool(self, base_db: AtomicDatabaseAPI) -> BasePeerPool:
+        return self.get_p2p_server(base_db).peer_pool
