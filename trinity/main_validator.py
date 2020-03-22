@@ -73,7 +73,6 @@ def main_validator() -> None:
         slots_per_epoch=slots_per_epoch,
         seconds_per_slot=seconds_per_slot,
         genesis_time=genesis_time,
-        demo_mode=arguments.demo_mode,
     )
     # NOTE: we deviate from the multiprocess-driven Component-based
     # application machinery here until said machinery is more stable

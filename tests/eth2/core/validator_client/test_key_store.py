@@ -19,7 +19,6 @@ def test_key_store_can_import_private_key(tmp_path, sample_bls_key_pairs):
 @pytest.mark.parametrize(("has_key_pairs"), [(True), (False)])
 def test_key_store_can_persist_key_files(tmp_path, sample_bls_key_pairs, has_key_pairs):
     some_password = b"password"
-    password_provider = lambda _public_key: some_password
     public_key, private_key = tuple(sample_bls_key_pairs.items())[0]
     private_key_bytes = private_key.to_bytes(32, "little")
     encoded_private_key = private_key_bytes.hex()
@@ -29,7 +28,9 @@ def test_key_store_can_persist_key_files(tmp_path, sample_bls_key_pairs, has_key
     else:
         key_pairs = {}
     key_store = KeyStore(
-        key_pairs=key_pairs, key_store_dir=tmp_path, password_provider=password_provider
+        key_pairs=key_pairs,
+        key_store_dir=tmp_path,
+        password_provider=lambda _public_key: some_password,
     )
 
     with key_store.persistence():
@@ -44,5 +45,5 @@ def test_key_store_can_persist_key_files(tmp_path, sample_bls_key_pairs, has_key
         key_file_json = json.load(key_file_handle)
         assert decode_hex(key_file_json["public_key"]) == public_key
         assert private_key_bytes == eth_keyfile.decode_keyfile_json(
-            key_file_json, password_provider(public_key)
+            key_file_json, some_password
         )

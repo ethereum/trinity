@@ -1,4 +1,3 @@
-import getpass
 import json
 import logging
 from pathlib import Path
@@ -41,12 +40,6 @@ def _compute_key_pair_from_private_key_bytes(
     return (bls.privtopub(private_key), private_key)
 
 
-def _terminal_password_provider(public_key: BLSPubkey) -> bytes:
-    return getpass.getpass(
-        f"Please enter password for keyfile with public key {encode_hex(public_key)}:"
-    ).encode()
-
-
 def _insecure_password_provider(public_key: BLSPubkey) -> bytes:
     return public_key
 
@@ -61,30 +54,22 @@ class KeyStore(KeyStoreAPI):
 
     def __init__(
         self,
-        key_pairs: Dict[BLSPubkey, BLSPrivateKey],
+        key_pairs: Optional[Dict[BLSPubkey, BLSPrivateKey]] = None,
         key_store_dir: Optional[Path] = None,
-        demo_mode: bool = True,
         password_provider: Callable[[BLSPubkey], bytes] = _insecure_password_provider,
     ) -> None:
-        self._key_pairs = key_pairs
+        self._key_pairs = key_pairs if key_pairs else {}
         self._key_store_dir = key_store_dir
-        if demo_mode:
-            self._password_provider = _insecure_password_provider
-        else:
-            self._password_provider = password_provider
+        self._password_provider = password_provider
 
         self._key_files: Dict[str, Dict[str, Any]] = {}
         # Mapping of public key to key file ID
         self._key_file_index: Dict[BLSPubkey, str] = {}
+        self._should_load_existing_key_pairs = False
 
     @classmethod
     def from_config(cls, config: Config) -> "KeyStore":
-        return cls(
-            config.key_pairs,
-            config.key_store_dir,
-            config.demo_mode,
-            _terminal_password_provider,
-        )
+        return cls(config.key_pairs, config.key_store_dir, _insecure_password_provider)
 
     def _ensure_dirs(self) -> None:
         did_create = create_dir_if_missing(self._key_store_dir)
@@ -94,9 +79,11 @@ class KeyStore(KeyStoreAPI):
                 self._key_store_dir,
             )
 
-    def persistence(self) -> ContextManager[KeyStoreAPI]:
+    def persistence(
+        self, should_load_existing_key_pairs: bool = True
+    ) -> ContextManager[KeyStoreAPI]:
         """
-        Signal to this object to {de,}serialize key pairs to disk.
+        {De,}serialize key pairs from/to disk.
 
         Example:
         key_store = KeyStore.from_config(config)
@@ -106,17 +93,23 @@ class KeyStore(KeyStoreAPI):
             ...
         # key_store used outside the context block
         # are available in memory, but not persisted to disk.
+
+        NOTE: ``should_load_existing_key_pairs`` indicates if any key pairs already on-disk
+        should be loaded into memory or not. This option is useful for single-key interaction, e.g.
+        by a user at some UI.
         """
-        self._ensure_dirs()
+        self._should_load_existing_key_pairs = should_load_existing_key_pairs
         return self
 
     def __enter__(self) -> KeyStoreAPI:
-        self._load_key_pairs()
-        self.logger.info(
-            "found %d validator key pair(s) for public key(s) %s",
-            len(self.public_keys),
-            tuple(map(humanize_bytes, self.public_keys)),
-        )
+        self._ensure_dirs()
+        if self._should_load_existing_key_pairs:
+            self._load_key_pairs()
+            self.logger.info(
+                "found %d validator key pair(s) for public key(s) %s",
+                len(self.public_keys),
+                tuple(map(humanize_bytes, self.public_keys)),
+            )
         return self
 
     def __exit__(
@@ -126,6 +119,7 @@ class KeyStore(KeyStoreAPI):
         traceback: Optional[TracebackType],
     ) -> None:
         self._store_key_pairs()
+        self._should_load_existing_key_pairs = False
 
     def _load_key_pairs(self) -> None:
         """
@@ -148,9 +142,15 @@ class KeyStore(KeyStoreAPI):
     def _load_key_file(self, key_file: Path) -> Tuple[BLSPubkey, BLSPrivateKey, str]:
         with open(key_file) as key_file_handle:
             keyfile_json = json.load(key_file_handle)
-            public_key = decode_hex(keyfile_json["public_key"])
+            public_key = BLSPubkey(decode_hex(keyfile_json["public_key"]))
             password = self._password_provider(public_key)
-            private_key = eth_keyfile.decode_keyfile_json(keyfile_json, password)
+            try:
+                private_key = eth_keyfile.decode_keyfile_json(keyfile_json, password)
+            except ValueError:
+                self.logger.error(
+                    "password was incorrect for public key %s", encode_hex(public_key)
+                )
+                raise
             return (public_key, private_key, keyfile_json["id"])
 
     def _is_persisted(self, public_key: BLSPubkey) -> bool:
