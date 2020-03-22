@@ -217,9 +217,6 @@ def main_entry(trinity_boot: BootFn,
         args.func(args, trinity_config)
         return
 
-    if hasattr(args, 'munge_func'):
-        args.munge_func(args, trinity_config)
-
     runtime_component_types = tuple(
         component_cls
         for component_cls in component_types
