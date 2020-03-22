@@ -88,8 +88,6 @@ async def test_client_works(
     )
     client = Client(key_store, clock, beacon_node)
 
-    randao_provider = mk_randao_provider(key_store.private_key_for)
-
     try:
         async with background_trio_service(client):
             await trio.sleep(total_epochs_to_run * seconds_per_epoch)
@@ -106,6 +104,7 @@ async def test_client_works(
         )
     )
     assert len(beacon_node.published_signatures) == len(fulfilled_duties)
+    randao_provider = mk_randao_provider(key_store.private_key_for)
     for duty in fulfilled_duties:
         if duty.duty_type == DutyType.Attestation:
             operation = await beacon_node.fetch_attestation(
