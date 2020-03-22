@@ -1,9 +1,8 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict
+from typing import Any, Dict
 
-from eth_typing import BLSPubkey
 from ssz.tools.parse import from_formatted_dict
 import trio
 
@@ -12,12 +11,9 @@ from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 from eth2.configs import deserialize
-from eth2.validator_client.abc import KeyStoreAPI
 from eth2.validator_client.cli_parser import parse_cli_args
 from eth2.validator_client.config import Config
-from eth2.validator_client.key_store import InMemoryKeyStore
 from eth2.validator_client.tools.directory import create_dir_if_missing
-from eth2.validator_client.typing import BLSPrivateKey
 from trinity._utils.logging import LOG_FORMATTER
 from trinity.bootstrap import load_trinity_config_from_parser_args
 from trinity.config import ValidatorClientAppConfig
@@ -39,15 +35,6 @@ def _setup_logging() -> logging.Logger:
 def _load_genesis_config_at(genesis_config_path: Path) -> Dict[str, Any]:
     with open(genesis_config_path) as genesis_config_file:
         return json.load(genesis_config_file)
-
-
-def _mk_key_store_from_key_pairs(
-    key_pairs: Dict[BLSPubkey, BLSPrivateKey]
-) -> Callable[[Config], KeyStoreAPI]:
-    def _mk_key_store(config: Config) -> KeyStoreAPI:
-        return InMemoryKeyStore.from_config(config, key_pairs)
-
-    return _mk_key_store
 
 
 def main_validator() -> None:
@@ -81,7 +68,7 @@ def main_validator() -> None:
     genesis_time = genesis_state.genesis_time
 
     config = Config(
-        key_store_constructor=_mk_key_store_from_key_pairs(key_pairs),
+        key_pairs=key_pairs,
         root_data_dir=root_dir,
         slots_per_epoch=slots_per_epoch,
         seconds_per_slot=seconds_per_slot,
