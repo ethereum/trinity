@@ -1,5 +1,4 @@
 import argparse
-import getpass
 import logging
 import signal
 
@@ -43,11 +42,8 @@ async def _import_key(
     logger.info("importing private key...")
     try:
         key_store = KeyStore.from_config(config)
-        logger.warn(
-            "please enter a password to protect the key on-disk (can be empty):"
-        )
-        password = getpass.getpass().encode()
-        key_store.import_private_key(arguments.private_key, password)
+        with key_store.persistence():
+            key_store.import_private_key(arguments.private_key)
     except Exception:
         logger.exception("error importing key")
 

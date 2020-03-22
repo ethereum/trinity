@@ -8,7 +8,7 @@ from eth2.validator_client.beacon_node import MockBeaconNode
 from eth2.validator_client.client import Client
 from eth2.validator_client.clock import Clock
 from eth2.validator_client.duty import AttestationDuty, BlockProposalDuty, DutyType
-from eth2.validator_client.key_store import InMemoryKeyStore
+from eth2.validator_client.key_store import KeyStore
 from eth2.validator_client.randao import mk_randao_provider
 from eth2.validator_client.signatory import sign
 from eth2.validator_client.tick import Tick
@@ -49,7 +49,7 @@ def _mk_duty_fetcher(public_key, slots_per_epoch, seconds_per_slot):
 
 @pytest.mark.trio
 async def test_client_works(
-    autojump_clock, sample_bls_key_pair, seconds_per_slot, slots_per_epoch
+    autojump_clock, sample_bls_key_pairs, seconds_per_slot, slots_per_epoch
 ):
     """
     This test constructs a ``Client`` with enough known inputs to compute an expected set of
@@ -71,8 +71,8 @@ async def test_client_works(
         non_aligned_time + epochs_before_genesis_to_start * seconds_per_epoch
     )
 
-    public_key = tuple(sample_bls_key_pair.keys())[0]
-    key_store = InMemoryKeyStore(sample_bls_key_pair)
+    public_key = tuple(sample_bls_key_pairs.keys())[0]
+    key_store = KeyStore(sample_bls_key_pairs)
     beacon_node = MockBeaconNode(
         slots_per_epoch,
         seconds_per_slot,
