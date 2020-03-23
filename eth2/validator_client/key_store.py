@@ -22,6 +22,7 @@ from eth2._utils.humanize import humanize_bytes
 from eth2.validator_client.abc import KeyStoreAPI
 from eth2.validator_client.config import Config
 from eth2.validator_client.tools.directory import create_dir_if_missing
+from eth2.validator_client.tools.password_providers import insecure_password_provider
 from eth2.validator_client.typing import BLSPrivateKey
 
 
@@ -40,10 +41,6 @@ def _compute_key_pair_from_private_key_bytes(
     return (bls.privtopub(private_key), private_key)
 
 
-def _insecure_password_provider(public_key: BLSPubkey) -> bytes:
-    return public_key
-
-
 class KeyStore(KeyStoreAPI):
     """
     A ``KeyStore`` instance is a repository for the private and public keys
@@ -56,7 +53,7 @@ class KeyStore(KeyStoreAPI):
         self,
         key_pairs: Optional[Dict[BLSPubkey, BLSPrivateKey]] = None,
         key_store_dir: Optional[Path] = None,
-        password_provider: Callable[[BLSPubkey], bytes] = _insecure_password_provider,
+        password_provider: Callable[[BLSPubkey], bytes] = insecure_password_provider,
     ) -> None:
         self._key_pairs = key_pairs if key_pairs else {}
         self._key_store_dir = key_store_dir
@@ -69,7 +66,7 @@ class KeyStore(KeyStoreAPI):
 
     @classmethod
     def from_config(cls, config: Config) -> "KeyStore":
-        return cls(config.key_pairs, config.key_store_dir, _insecure_password_provider)
+        return cls(config.key_pairs, config.key_store_dir, insecure_password_provider)
 
     def _ensure_dirs(self) -> None:
         did_create = create_dir_if_missing(self._key_store_dir)
