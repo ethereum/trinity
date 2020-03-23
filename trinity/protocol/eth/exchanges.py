@@ -7,7 +7,7 @@ from eth_typing import (
     BlockIdentifier,
     Hash32,
 )
-from eth.abc import BlockHeaderAPI
+from eth.abc import BlockHeaderAPI, SignedTransactionAPI
 
 from p2p.exchange import (
     BaseExchange,
@@ -31,24 +31,29 @@ from .commands import (
     GetReceipts,
     NodeData,
     Receipts,
+    GetPooledTransactions,
+    PooledTransactions,
 )
 from .normalizers import (
     BlockHeadersNormalizer,
     GetBlockBodiesNormalizer,
     GetNodeDataNormalizer,
     ReceiptsNormalizer,
+    GetPooledTransactionsNormalizer,
 )
 from .trackers import (
     GetBlockHeadersTracker,
     GetBlockBodiesTracker,
     GetNodeDataTracker,
-    GetReceiptsTracker
+    GetReceiptsTracker,
+    GetPooledTransactionsTracker,
 )
 from .validators import (
     GetBlockBodiesValidator,
     GetBlockHeadersValidator,
     GetNodeDataValidator,
     ReceiptsValidator,
+    GetPooledTransactionsValidator,
 )
 
 BaseGetBlockHeadersExchange = BaseExchange[
@@ -156,6 +161,34 @@ class GetBlockBodiesExchange(BaseGetBlockBodiesExchange):
         block_hashes = tuple(header.hash for header in headers)
         request = GetBlockBodies(block_hashes)
 
+        return await self.get_result(
+            request,
+            self._normalizer,
+            validator,
+            noop_payload_validator,
+            timeout,
+        )
+
+
+BasePooledTransactionsExchange = BaseExchange[
+    GetPooledTransactions,
+    PooledTransactions,
+    Tuple[SignedTransactionAPI, ...]
+]
+
+
+class GetPooledTransactionsExchange(BasePooledTransactionsExchange):
+    _normalizer = GetPooledTransactionsNormalizer()
+    tracker_class = GetPooledTransactionsTracker
+
+    _request_command_type = GetPooledTransactions
+    _response_command_type = PooledTransactions
+
+    async def __call__(self,  # type: ignore
+                       transaction_hashes: Sequence[Hash32],
+                       timeout: float = None) -> Tuple[SignedTransactionAPI, ...]:
+        validator = GetPooledTransactionsValidator(transaction_hashes)
+        request = GetPooledTransactions(tuple(transaction_hashes))
         return await self.get_result(
             request,
             self._normalizer,

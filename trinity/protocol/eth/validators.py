@@ -1,5 +1,6 @@
 from typing import (
     Sequence,
+    Tuple,
 )
 
 from eth_typing import (
@@ -8,7 +9,7 @@ from eth_typing import (
 from eth_utils import (
     ValidationError,
 )
-from eth.abc import BlockHeaderAPI
+from eth.abc import BlockHeaderAPI, SignedTransactionAPI
 
 from p2p.exchange import ValidatorAPI
 
@@ -88,3 +89,26 @@ class GetBlockBodiesValidator(ValidatorAPI[BlockBodyBundles]):
         unexpected_keys = actual_keys.difference(expected_keys)
         if unexpected_keys:
             raise ValidationError(f"Got {len(unexpected_keys)} unexpected block bodies")
+
+
+class GetPooledTransactionsValidator(ValidatorAPI[Tuple[SignedTransactionAPI, ...]]):
+    def __init__(self, transaction_hashes: Sequence[Hash32]) -> None:
+        self.transaction_hashes = transaction_hashes
+
+    def validate_result(self, response: Tuple[SignedTransactionAPI, ...]) -> None:
+        if not response:
+            # an empty response is always valid
+            return
+
+        tx_hashes = tuple(tx.hash for tx in response)
+        tx_hash_set = set(tx_hashes)
+
+        if len(tx_hashes) != len(tx_hash_set):
+            raise ValidationError("Response may not contain duplicate tx hashes")
+
+        unexpected_hashs = tx_hash_set.difference(self.transaction_hashes)
+
+        if unexpected_hashs:
+            raise ValidationError(
+                f"Response contains {len(unexpected_hashs)} unexpected transactions"
+            )

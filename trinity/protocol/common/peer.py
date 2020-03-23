@@ -9,7 +9,6 @@ from typing import (
     List,
     Tuple,
     Type,
-    Union,
 )
 
 from cached_property import cached_property
@@ -62,14 +61,13 @@ from p2p.tracking.connection import (
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.exceptions import BaseForkIDValidationError, ENRMissingForkID
 from trinity.protocol.common.abc import ChainInfoAPI, HeadInfoAPI
-from trinity.protocol.common.api import ChainInfo, HeadInfo, choose_eth_or_les_api
-from trinity.protocol.eth.api import ETHV63API, ETHAPI
+from trinity.protocol.common.api import ChainInfo, HeadInfo, choose_eth_or_les_api, AnyETHLESAPI
+
 from trinity.protocol.eth.forkid import (
     extract_fork_blocks,
     extract_forkid,
     validate_forkid,
 )
-from trinity.protocol.les.api import LESV1API, LESV2API
 
 from trinity.components.builtin.network_db.connection.tracker import ConnectionTrackerClient
 from trinity.components.builtin.network_db.eth1_peer_db.tracker import (
@@ -94,7 +92,7 @@ class BaseChainPeer(BasePeer):
     context: ChainContext
 
     @cached_property
-    def chain_api(self) -> Union[ETHAPI, ETHV63API, LESV1API, LESV2API]:
+    def chain_api(self) -> AnyETHLESAPI:
         return choose_eth_or_les_api(self.connection)
 
     @cached_property

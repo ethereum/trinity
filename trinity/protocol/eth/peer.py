@@ -39,7 +39,7 @@ from trinity.protocol.common.typing import (
 )
 from . import forkid
 
-from .api import ETHV63API, ETHAPI, AnyETHAPI
+from .api import ETHV63API, ETHAPI, AnyETHAPI, ETHV64API
 from .commands import (
     GetBlockHeaders,
     GetBlockBodies,
@@ -48,6 +48,8 @@ from .commands import (
     NewBlock,
     NewBlockHashes,
     Transactions,
+    NewPooledTransactionHashes,
+    GetPooledTransactions,
 )
 from .constants import MAX_HEADERS_FETCH
 from .events import (
@@ -66,9 +68,13 @@ from .events import (
     NewBlockEvent,
     NewBlockHashesEvent,
     TransactionsEvent,
+    NewPooledTransactionHashesEvent,
+    GetPooledTransactionsEvent,
+    GetPooledTransactionsRequest,
+    SendPooledTransactionsEvent,
 )
 from .payloads import StatusV63Payload, StatusPayload
-from .proto import ETHProtocolV63, ETHProtocol
+from .proto import ETHProtocolV63, ETHProtocol, ETHProtocolV64
 from .proxy import ProxyETHAPI
 from .handshaker import ETHV63Handshaker, ETHHandshaker
 
@@ -86,6 +92,8 @@ class ETHPeer(BaseChainPeer):
     def eth_api(self) -> AnyETHAPI:
         if self.connection.has_protocol(ETHProtocolV63):
             return self.connection.get_logic(ETHV63API.name, ETHV63API)
+        if self.connection.has_protocol(ETHProtocolV64):
+            return self.connection.get_logic(ETHV64API.name, ETHV64API)
         elif self.connection.has_protocol(ETHProtocol):
             return self.connection.get_logic(ETHAPI.name, ETHAPI)
         else:
@@ -179,6 +187,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         Transactions,
         NewBlockHashes,
         NewBlock,
+        NewPooledTransactionHashes,
+        GetPooledTransactions,
     })
 
     async def run(self) -> None:
@@ -186,11 +196,16 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         self.run_daemon_event(SendBlockBodiesEvent, self.handle_block_bodies_event)
         self.run_daemon_event(SendNodeDataEvent, self.handle_node_data_event)
         self.run_daemon_event(SendReceiptsEvent, self.handle_receipts_event)
+        self.run_daemon_event(SendPooledTransactionsEvent, self.handle_pooled_transactions_event)
 
         self.run_daemon_request(GetBlockHeadersRequest, self.handle_get_block_headers_request)
         self.run_daemon_request(GetReceiptsRequest, self.handle_get_receipts_request)
         self.run_daemon_request(GetBlockBodiesRequest, self.handle_get_block_bodies_request)
         self.run_daemon_request(GetNodeDataRequest, self.handle_get_node_data_request)
+        self.run_daemon_request(
+            GetPooledTransactionsRequest,
+            self.handle_get_pooled_transactions_request
+        )
 
         await super().run()
 
@@ -217,6 +232,13 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     @async_fire_and_forget
     async def handle_receipts_event(self, event: SendReceiptsEvent) -> None:
+        await self.try_with_session(
+            event.session,
+            lambda peer: peer.sub_proto.send(event.command)
+        )
+
+    @async_fire_and_forget
+    async def handle_pooled_transactions_event(self, event: SendPooledTransactionsEvent) -> None:
         await self.try_with_session(
             event.session,
             lambda peer: peer.sub_proto.send(event.command)
@@ -259,6 +281,16 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
             lambda peer: peer.eth_api.get_node_data(event.node_hashes)
         )
 
+    async def handle_get_pooled_transactions_request(
+            self,
+            event: GetPooledTransactionsRequest) -> NodeDataBundles:
+
+        return await self.with_node_and_timeout(
+            event.session,
+            event.timeout,
+            lambda peer: peer.eth_api.get_pooled_transactions(event.transaction_hashes)
+        )
+
     async def handle_native_peer_message(self,
                                          session: SessionAPI,
                                          cmd: CommandAPI[Any]) -> None:
@@ -277,6 +309,10 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
             await self.event_bus.broadcast(NewBlockHashesEvent(session, cmd))
         elif isinstance(cmd, Transactions):
             await self.event_bus.broadcast(TransactionsEvent(session, cmd))
+        elif isinstance(cmd, NewPooledTransactionHashes):
+            await self.event_bus.broadcast(NewPooledTransactionHashesEvent(session, cmd))
+        elif isinstance(cmd, GetPooledTransactions):
+            await self.event_bus.broadcast(GetPooledTransactionsEvent(session, cmd))
         else:
             raise Exception(f"Command {cmd} is not broadcasted")
 

@@ -7,22 +7,26 @@ from p2p.abc import ConnectionAPI
 from p2p.logic import Application
 from p2p.qualifiers import HasProtocol
 
-from trinity.protocol.eth.api import ETHV63API, ETHAPI
-from trinity.protocol.eth.proto import ETHProtocolV63, ETHProtocol
+from trinity.protocol.eth.api import ETHV63API, ETHAPI, ETHV64API
+from trinity.protocol.eth.proto import ETHProtocolV63, ETHProtocol, ETHProtocolV64
 from trinity.protocol.les.api import LESV1API, LESV2API
 from trinity.protocol.les.proto import LESProtocolV1, LESProtocolV2
 
 from .abc import ChainInfoAPI, HeadInfoAPI
 
-AnyETHLES = HasProtocol(ETHProtocol) | HasProtocol(ETHProtocolV63) | HasProtocol(
-    LESProtocolV2) | HasProtocol(LESProtocolV1)
+AnyETHLES = HasProtocol(ETHProtocol) | HasProtocol(ETHProtocolV64) | HasProtocol(
+    ETHProtocolV63) | HasProtocol(LESProtocolV2) | HasProtocol(LESProtocolV1)
+
+AnyETHLESAPI = Union[ETHAPI, ETHV64API, ETHV63API, LESV1API, LESV2API]
 
 
 def choose_eth_or_les_api(
-        connection: ConnectionAPI) -> Union[ETHAPI, ETHV63API, LESV1API, LESV2API]:
+        connection: ConnectionAPI) -> AnyETHLESAPI:
 
     if connection.has_protocol(ETHProtocol):
         return connection.get_logic(ETHAPI.name, ETHAPI)
+    elif connection.has_protocol(ETHProtocolV64):
+        return connection.get_logic(ETHV64API.name, ETHV64API)
     elif connection.has_protocol(ETHProtocolV63):
         return connection.get_logic(ETHV63API.name, ETHV63API)
     elif connection.has_protocol(LESProtocolV2):
@@ -46,7 +50,7 @@ class ChainInfo(Application, ChainInfoAPI):
     def genesis_hash(self) -> Hash32:
         return self._get_logic().genesis_hash
 
-    def _get_logic(self) -> Union[ETHAPI, ETHV63API, LESV1API, LESV2API]:
+    def _get_logic(self) -> AnyETHLESAPI:
         return choose_eth_or_les_api(self.connection)
 
 

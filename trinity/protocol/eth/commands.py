@@ -8,7 +8,7 @@ from eth_utils.curried import (
 from eth_utils.toolz import compose
 from rlp import sedes
 
-from eth.abc import BlockHeaderAPI, ReceiptAPI
+from eth.abc import BlockHeaderAPI, ReceiptAPI, SignedTransactionAPI
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 from eth.rlp.transactions import BaseTransactionFields
@@ -156,6 +156,27 @@ class NewBlock(BaseCommand[NewBlockPayload]):
                 0,
             )
         )
+    )
+
+
+class NewPooledTransactionHashes(BaseCommand[Tuple[Hash32, ...]]):
+    protocol_command_id = 8
+    serialization_codec: RLPCodec[Tuple[Hash32, ...]] = RLPCodec(
+        sedes=sedes.CountableList(hash_sedes),
+    )
+
+
+class GetPooledTransactions(BaseCommand[Tuple[Hash32, ...]]):
+    protocol_command_id = 9
+    serialization_codec: RLPCodec[Tuple[Hash32, ...]] = RLPCodec(
+        sedes=sedes.CountableList(hash_sedes),
+    )
+
+
+class PooledTransactions(BaseCommand[Tuple[SignedTransactionAPI, ...]]):
+    protocol_command_id = 10
+    serialization_codec: RLPCodec[Tuple[SignedTransactionAPI, ...]] = RLPCodec(
+        sedes=sedes.CountableList(SignedTransactionAPI),
     )
 
 

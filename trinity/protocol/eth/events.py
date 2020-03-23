@@ -8,6 +8,7 @@ from typing import (
 
 from eth.abc import (
     BlockHeaderAPI,
+    SignedTransactionAPI,
 )
 
 from lahja import (
@@ -43,6 +44,9 @@ from .commands import (
     NodeData,
     Receipts,
     Transactions,
+    NewPooledTransactionHashes,
+    GetPooledTransactions,
+    PooledTransactions,
 )
 
 
@@ -104,6 +108,30 @@ class NewBlockHashesEvent(PeerPoolMessageEvent):
     command: NewBlockHashes
 
 
+class NewPooledTransactionHashesEvent(PeerPoolMessageEvent):
+    """
+    Event to carry a ``NewPooledTransactionHashes`` command from the peer pool to any process that
+    subscribes the event through the event bus.
+    """
+    command: NewPooledTransactionHashes
+
+
+class GetPooledTransactionsEvent(PeerPoolMessageEvent):
+    """
+    Event to carry a ``GetPooledTransactions`` command from the peer pool to any process that
+    subscribes the event through the event bus.
+    """
+    command: GetPooledTransactions
+
+
+class PooledTransactionsEvent(PeerPoolMessageEvent):
+    """
+    Event to carry a ``PooledTransactions`` command from the peer pool to any process that
+    subscribes the event through the event bus.
+    """
+    command: PooledTransactions
+
+
 # Events flowing from Proxy to PeerPool
 
 
@@ -155,6 +183,16 @@ class SendTransactionsEvent(BaseEvent):
     """
     session: SessionAPI
     command: Transactions
+
+
+@dataclass
+class SendPooledTransactionsEvent(BaseEvent):
+    """
+    Event to proxy a ``ETHPeer.sub_proto.send_pooled_transactions`` call from a proxy peer to
+    the actual peer that sits in the peer pool.
+    """
+    session: SessionAPI
+    command: PooledTransactions
 
 # EXCHANGE HANDLER REQUEST / RESPONSE PAIRS
 
@@ -283,3 +321,32 @@ class GetReceiptsRequest(BaseRequestResponseEvent[GetReceiptsResponse]):
     @staticmethod
     def expected_response_type() -> Type[GetReceiptsResponse]:
         return GetReceiptsResponse
+
+
+@dataclass
+class GetPooledTransactionsResponse(BaseEvent):
+    """
+    The response class to answer a ``GetPooledTransactionsRequest``.
+    """
+    transactions: Sequence[SignedTransactionAPI]
+    error: Exception = None
+
+
+@dataclass
+class GetPooledTransactionsRequest(BaseRequestResponseEvent[GetPooledTransactionsResponse]):
+    """
+    A request class to delegate a ``GetPooledTransactions`` command from any process to another
+    process that can perform the actual ``GetPooledTransactions`` command, wrap the result and
+    send it back to the origin process via a ``GetPooledTransactionsResponse``.
+
+    This is a low-level event class used by :class:`trinity.protocol.proxy.ProxyETHAPI` to allow
+    any Trinity process to interact with peers through the event bus.
+    """
+
+    session: SessionAPI
+    transaction_hashes: Sequence[Hash32]
+    timeout: float
+
+    @staticmethod
+    def expected_response_type() -> Type[GetPooledTransactionsResponse]:
+        return GetPooledTransactionsResponse

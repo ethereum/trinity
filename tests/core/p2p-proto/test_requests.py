@@ -4,9 +4,11 @@ import pytest
 
 from async_exit_stack import AsyncExitStack
 from async_service import background_asyncio_service
+from eth_utils import decode_hex
 
 from p2p.exceptions import PeerConnectionLost
 from p2p.service import run_service
+from trinity.components.builtin.tx_pool.pool import TxPool
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
@@ -94,6 +96,53 @@ async def test_proxy_peer_requests(request,
 
         node_data = await proxy_peer.eth_api.get_node_data((block_header.state_root,))
         assert node_data[0][0] == block_header.state_root
+
+
+@pytest.mark.asyncio
+async def test_get_pooled_transactions_request(request,
+                                               event_bus,
+                                               other_event_bus,
+                                               event_loop,
+                                               chaindb_20,
+                                               client_and_server):
+    server_event_bus = event_bus
+    client_event_bus = other_event_bus
+    client_peer, server_peer = client_and_server
+
+    client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
+    server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
+
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(run_peer_pool_event_server(
+            client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+
+        await stack.enter_async_context(run_peer_pool_event_server(
+            server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
+
+        # The reason we run this test separately from the other request tests is because
+        # GetPooledTransactions requests should be answered from the tx pool which the previous
+        # test does not depend on.
+        await stack.enter_async_context(background_asyncio_service(TxPool(
+            server_event_bus,
+            ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
+            lambda _: True
+        )))
+
+        client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(client_proxy_peer_pool))
+
+        proxy_peer_pool = ETHProxyPeerPool(server_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(proxy_peer_pool))
+
+        proxy_peer = await client_proxy_peer_pool.ensure_proxy_peer(client_peer.session)
+
+        # The tx pool always answers these with an empty response
+        txs = await proxy_peer.eth_api.get_pooled_transactions(
+            (decode_hex('0x9ea39df6210064648ecbc465cd628fe52f69af53792e1c2f27840133435159d4'),)
+        )
+        assert len(txs) == 0
 
 
 @pytest.mark.asyncio

@@ -32,7 +32,9 @@ from trinity.protocol.eth.commands import (
     Receipts,
     StatusV63,
     Transactions,
-    Status)
+    Status,
+    GetPooledTransactions,
+)
 from trinity.rlp.block_body import BlockBody
 
 from .exchanges import (
@@ -40,6 +42,7 @@ from .exchanges import (
     GetBlockHeadersExchange,
     GetNodeDataExchange,
     GetReceiptsExchange,
+    GetPooledTransactionsExchange,
 )
 from .handshaker import ETHV63HandshakeReceipt, ETHHandshakeReceipt, BaseETHHandshakeReceipt
 from .payloads import (
@@ -49,7 +52,7 @@ from .payloads import (
     StatusV63Payload,
     StatusPayload,
 )
-from .proto import ETHProtocolV63, ETHProtocol
+from .proto import ETHProtocolV63, ETHProtocol, ETHProtocolV64
 
 THandshakeReceipt = TypeVar("THandshakeReceipt", bound=BaseETHHandshakeReceipt[Any])
 
@@ -117,6 +120,7 @@ class BaseETHAPI(Application):
     get_block_headers: GetBlockHeadersExchange
     get_node_data: GetNodeDataExchange
     get_receipts: GetReceiptsExchange
+    get_pooled_transactions: GetPooledTransactionsExchange
 
     def __init__(self) -> None:
         self.head_info = self.head_info_tracker_cls()
@@ -235,8 +239,8 @@ class ETHV63API(BaseETHAPI):
         self.protocol.send(StatusV63(payload))
 
 
-class ETHAPI(BaseETHAPI):
-    qualifier = HasProtocol(ETHProtocol)
+class ETHV64API(BaseETHAPI):
+    qualifier = HasProtocol(ETHProtocolV64)
     head_info_tracker_cls = ETHHeadInfoTracker
 
     @cached_property
@@ -251,4 +255,18 @@ class ETHAPI(BaseETHAPI):
         self.protocol.send(Status(payload))
 
 
-AnyETHAPI = Union[ETHV63API, ETHAPI]
+class ETHAPI(ETHV64API):
+    qualifier = HasProtocol(ETHProtocol)
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        # Request/Response API
+        self.get_pooled_transactions = GetPooledTransactionsExchange()
+        self.add_child_behavior(ExchangeLogic(self.get_pooled_transactions).as_behavior())
+
+    def send_get_pooled_transactions(self, transaction_hashes: Sequence[Hash32]) -> None:
+        self.protocol.send(GetPooledTransactions(tuple(transaction_hashes)))
+
+
+AnyETHAPI = Union[ETHV63API, ETHV64API, ETHAPI]

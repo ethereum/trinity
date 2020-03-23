@@ -35,6 +35,7 @@ from .commands import (
     NodeData,
     Receipts,
     Transactions,
+    PooledTransactions,
 )
 from .events import (
     GetBlockBodiesRequest,
@@ -46,6 +47,8 @@ from .events import (
     SendNodeDataEvent,
     SendReceiptsEvent,
     SendTransactionsEvent,
+    GetPooledTransactionsRequest,
+    SendPooledTransactionsEvent,
 )
 
 
@@ -169,11 +172,42 @@ class ProxyETHAPI:
 
         return response.bundles
 
+    async def get_pooled_transactions(self,
+                                      tx_hashes: Sequence[Hash32],
+                                      timeout: float = None) -> Sequence[SignedTransactionAPI]:
+
+        response = await self._event_bus.request(
+            GetPooledTransactionsRequest(
+                self.session,
+                tx_hashes,
+                timeout
+            ),
+            self._broadcast_config
+        )
+
+        self.raise_if_needed(response)
+
+        self.logger.debug2(
+            "ProxyETHExchangeHandler returning %s pooled transactions from %s",
+            len(response.transactions),
+            self.session
+        )
+
+        return response.transactions
+
     def send_transactions(self,
                           txns: Sequence[SignedTransactionAPI]) -> None:
         command = Transactions(tuple(txns))
         self._event_bus.broadcast_nowait(
             SendTransactionsEvent(self.session, command),
+            self._broadcast_config,
+        )
+
+    def send_pooled_transactions(self,
+                                 txns: Sequence[SignedTransactionAPI]) -> None:
+        command = PooledTransactions(tuple(txns))
+        self._event_bus.broadcast_nowait(
+            SendPooledTransactionsEvent(self.session, command),
             self._broadcast_config,
         )
 

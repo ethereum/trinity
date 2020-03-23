@@ -1,9 +1,9 @@
 from typing import (
     Optional,
     Tuple,
-)
+    Sequence)
 
-from eth.abc import BlockHeaderAPI
+from eth.abc import BlockHeaderAPI, SignedTransactionAPI
 
 from p2p.exchange import BasePerformanceTracker
 
@@ -19,6 +19,7 @@ from .commands import (
     GetBlockHeaders,
     GetNodeData,
     GetReceipts,
+    GetPooledTransactions,
 )
 
 
@@ -86,4 +87,22 @@ class GetNodeDataTracker(BasePerformanceTracker[GetNodeData, NodeDataBundles]):
         return len(result)
 
     def _get_result_item_count(self, result: NodeDataBundles) -> int:
+        return len(result)
+
+
+BaseGetPooledTransactionsTracker = BasePerformanceTracker[
+    GetPooledTransactions,
+    Tuple[SignedTransactionAPI, ...]
+]
+
+
+class GetPooledTransactionsTracker(BaseGetPooledTransactionsTracker):
+
+    def _get_request_size(self, request: GetPooledTransactions) -> Optional[int]:
+        return len(request.payload)
+
+    def _get_result_size(self, result: Sequence[SignedTransactionAPI]) -> int:
+        return len(result)
+
+    def _get_result_item_count(self, result: Sequence[SignedTransactionAPI]) -> int:
         return len(result)
