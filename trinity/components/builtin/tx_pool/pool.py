@@ -20,6 +20,7 @@ from trinity._utils.bloom import RollingBloom
 from trinity._utils.logging import get_logger
 from trinity.protocol.eth.events import (
     TransactionsEvent,
+    GetPooledTransactionsEvent,
 )
 from trinity.protocol.eth.peer import (
     ETHProxyPeer,
@@ -102,8 +103,17 @@ class TxPool(Service):
         # our other peers.
         self.manager.run_daemon_task(self._process_transactions)
 
+        # Process GetPooledTransactions requests
+        self.manager.run_daemon_task(self._process_get_pooled_transactions_requests)
+
         async for event in self._event_bus.stream(TransactionsEvent):
             self.manager.run_task(self._handle_tx, event.session, event.command.payload)
+
+    async def _process_get_pooled_transactions_requests(self) -> None:
+
+        async for event in self._event_bus.stream(GetPooledTransactionsEvent):
+            asking_peer = await self._peer_pool.ensure_proxy_peer(event.session)
+            asking_peer.eth_api.send_pooled_transactions([])
 
     async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SignedTransactionAPI]) -> None:
 

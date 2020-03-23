@@ -4,9 +4,9 @@ from typing import (
     Type,
 )
 
-from p2p.protocol import BaseProtocol
+from eth_utils import get_extended_debug_logger
 
-from trinity._utils.logging import get_logger
+from p2p.protocol import BaseProtocol
 
 from .commands import (
     BlockBodies,
@@ -22,6 +22,9 @@ from .commands import (
     Transactions,
     StatusV63,
     Status,
+    NewPooledTransactionHashes,
+    GetPooledTransactions,
+    PooledTransactions,
 )
 
 if TYPE_CHECKING:
@@ -47,11 +50,11 @@ class ETHProtocolV63(BaseETHProtocol):
     )
     command_length = 17
 
-    logger = get_logger('trinity.protocol.eth.proto.ETHProtocolV63')
+    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocolV63')
     status_command_type = StatusV63
 
 
-class ETHProtocol(BaseETHProtocol):
+class ETHProtocolV64(BaseETHProtocol):
     version = 64
     commands = (
         Status,
@@ -65,5 +68,25 @@ class ETHProtocol(BaseETHProtocol):
     )
     command_length = 17
 
-    logger = get_logger('trinity.protocol.eth.proto.ETHProtocol')
+    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocolV64')
+    status_command_type = Status
+
+
+class ETHProtocol(BaseETHProtocol):
+    version = 65
+    commands = (
+        Status,
+        NewBlockHashes,
+        Transactions,
+        GetBlockHeaders, BlockHeaders,
+        GetBlockBodies, BlockBodies,
+        NewBlock,
+        NewPooledTransactionHashes, GetPooledTransactions, PooledTransactions,
+        GetNodeData, NodeData,
+        GetReceipts, Receipts,
+    )
+    command_length = 20
+
+    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocol')
+
     status_command_type = Status
