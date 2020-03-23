@@ -29,7 +29,6 @@ class Config:
         slots_per_epoch: Slot = None,
         seconds_per_slot: int = None,
         genesis_time: int = None,
-        demo_mode: bool = False,
     ) -> None:
         self.key_pairs = key_pairs
         self._root_data_dir = root_data_dir
@@ -39,7 +38,6 @@ class Config:
         self.slots_per_epoch = slots_per_epoch
         self.seconds_per_slot = seconds_per_slot
         self.genesis_time = genesis_time
-        self.demo_mode = demo_mode
 
     @cached_property
     def seconds_per_epoch(self) -> int:

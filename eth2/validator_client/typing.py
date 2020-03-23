@@ -7,8 +7,6 @@ from eth2.validator_client.duty import Duty
 
 BLSPrivateKey = int
 
-KeyPair = Tuple[BLSPubkey, BLSPrivateKey]
-
 PrivateKeyProvider = Callable[[BLSPubkey], BLSPrivateKey]
 
 RandaoProvider = Callable[[BLSPubkey, Epoch], BLSSignature]

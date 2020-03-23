@@ -70,7 +70,7 @@ class KeyStoreAPI(ContextManager["KeyStoreAPI"]):
         ...
 
     @abstractmethod
-    def import_private_key(self, encoded_private_key: str, password: bytes) -> None:
+    def import_private_key(self, encoded_private_key: str) -> None:
         ...
 
     @abstractmethod

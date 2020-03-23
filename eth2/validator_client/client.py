@@ -6,18 +6,13 @@ from eth_typing import BLSPubkey
 import trio
 from trio.abc import ReceiveChannel, SendChannel
 
-from eth2._utils.humanize import humanize_bytes
 from eth2.validator_client.abc import BeaconNodeAPI, KeyStoreAPI, SignatoryDatabaseAPI
-from eth2.validator_client.beacon_node import MockBeaconNode as BeaconNode
-from eth2.validator_client.clock import Clock
-from eth2.validator_client.config import Config
 from eth2.validator_client.duty import Duty
 from eth2.validator_client.duty_scheduler import (
     resolve_duty,
     schedule_and_dispatch_duties_at_tick,
 )
 from eth2.validator_client.duty_store import DutyStore
-from eth2.validator_client.key_store import InMemoryKeyStore as KeyStore
 from eth2.validator_client.randao import mk_randao_provider
 from eth2.validator_client.signatory import sign_and_broadcast_operation_if_valid
 from eth2.validator_client.signatory_db import InMemorySignatoryDB
@@ -59,13 +54,6 @@ class Client(Service):
 
         self._duty_store = DutyStore()
         self._signature_db = InMemorySignatoryDB()
-
-    @classmethod
-    def from_config(cls, config: Config) -> "Client":
-        clock = Clock.from_config(config)
-        beacon_node = BeaconNode.from_config(config)
-        key_store = KeyStore.from_config(config)
-        return cls(key_store, clock, beacon_node)
 
     async def _run_client(self) -> None:
         # NOTE: all duties dispatched from the scheduler are expected to be
@@ -123,17 +111,9 @@ class Client(Service):
         pass
 
     async def run(self) -> None:
-        self.logger.debug("booting client from the provided config...")
-
-        with self._key_store:
-            self.logger.info(
-                "found %d validator key pair(s) for public key(s) %s",
-                len(self._key_store.public_keys),
-                tuple(map(humanize_bytes, self._key_store.public_keys)),
-            )
-            async with self._beacon_node:
-                await self._verify_client_state_at_boot()
-                await self._run_client()
+        self.logger.debug("booting client...")
+        await self._verify_client_state_at_boot()
+        await self._run_client()
 
     async def duty_scheduler(
         self,
