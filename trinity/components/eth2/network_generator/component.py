@@ -19,7 +19,7 @@ from eth2.beacon.tools.builder.initializer import (
     mk_withdrawal_credentials_from,
 )
 from eth2.beacon.typing import Timestamp
-from eth2.configs import Eth2Config, serialize
+from eth2.configs import Eth2Config
 from trinity.config import BeaconChainConfig, TrinityConfig
 from trinity.extensibility import Application
 
@@ -98,7 +98,7 @@ class NetworkGeneratorComponent(Application):
             config=config,
         )
         output = {
-            "eth2_config": serialize(config),
+            "eth2_config": config.to_formatted_dict(),
             "genesis_validator_key_pairs": mk_genesis_key_map(
                 validator_key_pairs, genesis_state
             ),

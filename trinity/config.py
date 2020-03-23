@@ -72,7 +72,6 @@ from eth2.beacon.typing import (
 from eth2.configs import (
     Eth2Config,
     Eth2GenesisConfig,
-    deserialize as deserialize_eth2_config
 )
 from p2p.kademlia import (
     Node as KademliaNode,
@@ -732,7 +731,7 @@ class BeaconChainConfig:
         """
         with open(_get_eth2_genesis_config_file_path()) as config_file:
             config = json.load(config_file)
-            genesis_eth2_config = deserialize_eth2_config(config["eth2_config"])
+            genesis_eth2_config = Eth2Config.from_formatted_dict(config["eth2_config"])
             # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
             override_lengths(genesis_eth2_config)
 
