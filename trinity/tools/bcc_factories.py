@@ -29,7 +29,6 @@ from eth2.beacon.types.blocks import (
 )
 from eth2.beacon.state_machines.forks.serenity import SERENITY_CONFIG
 from eth2.beacon.typing import Slot
-from eth2.configs import Eth2GenesisConfig
 from multiaddr import Multiaddr
 
 from trinity.db.beacon.chain import AsyncBeaconChainDB
@@ -48,7 +47,7 @@ except ImportError:
     )
 
 
-SERENITY_GENESIS_CONFIG = Eth2GenesisConfig(SERENITY_CONFIG)
+SERENITY_GENESIS_CONFIG = SERENITY_CONFIG
 
 
 #

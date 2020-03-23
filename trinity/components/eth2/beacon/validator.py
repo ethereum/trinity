@@ -36,7 +36,7 @@ from eth2.beacon.typing import (
     SubnetId,
     ValidatorIndex,
 )
-from eth2.configs import CommitteeConfig
+from eth2.configs import Eth2Config
 from trinity._utils.shellart import bold_green
 from trinity.components.eth2.beacon.base_validator import (
     BaseValidator,
@@ -177,9 +177,7 @@ class Validator(BaseValidator):
         temp_state = state_machine.state_transition.apply_state_transition(
             state, future_slot=slot
         )
-        proposer_index = get_beacon_proposer_index(
-            temp_state, CommitteeConfig(state_machine.config)
-        )
+        proposer_index = get_beacon_proposer_index(temp_state, state_machine.config)
 
         # `latest_proposed_epoch` is used to prevent validator from erraneously proposing twice
         # in the same epoch due to service crashing.
@@ -430,7 +428,7 @@ class Validator(BaseValidator):
     #
     @to_tuple
     def _get_aggregates(
-        self, slot: Slot, committee_index: CommitteeIndex, config: CommitteeConfig
+        self, slot: Slot, committee_index: CommitteeIndex, config: Eth2Config
     ) -> Iterable[Attestation]:
         """
         Return the aggregate attestation of the given committee.
@@ -474,11 +472,9 @@ class Validator(BaseValidator):
             # 2. For each attester
             for validator_index, privkey in attesting_validator_privkeys.items():
                 # Check if the vallidator is one of the aggregators
-                signature = get_slot_signature(
-                    state, slot, privkey, CommitteeConfig(config)
-                )
+                signature = get_slot_signature(state, slot, privkey, config)
                 is_aggregator_result = is_aggregator(
-                    state, slot, committee_index, signature, CommitteeConfig(config)
+                    state, slot, committee_index, signature, config
                 )
                 if is_aggregator_result:
                     self.logger.debug(

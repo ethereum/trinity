@@ -30,7 +30,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import Bitfield, Epoch, Gwei, ValidatorIndex
 from eth2.beacon.validator_status_helpers import initiate_exit_for_validator
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 
 def _bft_threshold_met(participation: Gwei, total: Gwei) -> bool:
@@ -259,7 +259,6 @@ def _is_threshold_met_against_committee(
 def get_attestation_deltas(
     state: BeaconState, config: Eth2Config
 ) -> Tuple[Sequence[Gwei], Sequence[Gwei]]:
-    committee_config = CommitteeConfig(config)
     rewards = tuple(0 for _ in range(len(state.validators)))
     penalties = tuple(0 for _ in range(len(state.validators)))
     previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH)
@@ -287,7 +286,7 @@ def get_attestation_deltas(
         matching_head_attestations,
     ):
         unslashed_attesting_indices = get_unslashed_attesting_indices(
-            state, attestations, committee_config
+            state, attestations, config
         )
         attesting_balance = get_total_balance(state, unslashed_attesting_indices)
         for index in eligible_validator_indices:
@@ -309,16 +308,14 @@ def get_attestation_deltas(
                 )
 
     for index in get_unslashed_attesting_indices(
-        state, matching_source_attestations, committee_config
+        state, matching_source_attestations, config
     ):
         attestation = min(
             (
                 a
                 for a in matching_source_attestations
                 if index
-                in get_attesting_indices(
-                    state, a.data, a.aggregation_bits, committee_config
-                )
+                in get_attesting_indices(state, a.data, a.aggregation_bits, config)
             ),
             key=lambda a: a.inclusion_delay,
         )
@@ -341,7 +338,7 @@ def get_attestation_deltas(
     finality_delay = previous_epoch - state.finalized_checkpoint.epoch
     if finality_delay > config.MIN_EPOCHS_TO_INACTIVITY_PENALTY:
         matching_target_attesting_indices = get_unslashed_attesting_indices(
-            state, matching_target_attestations, committee_config
+            state, matching_target_attestations, config
         )
         for index in eligible_validator_indices:
             penalties = update_tuple_item_with_fn(

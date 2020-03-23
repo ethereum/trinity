@@ -33,7 +33,6 @@ from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import Gwei
-from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.parametrize(
@@ -257,9 +256,7 @@ def test_get_attestation_deltas(
                 "inclusion_delay",
                 min_attestation_inclusion_delay,
                 "proposer_index",
-                get_beacon_proposer_index(
-                    state.set("slot", slot), CommitteeConfig(config)
-                ),
+                get_beacon_proposer_index(state.set("slot", slot), config),
                 "data",
                 AttestationData.create(**sample_attestation_data_params).mset(
                     "slot",

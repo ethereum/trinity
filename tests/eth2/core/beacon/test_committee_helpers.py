@@ -12,7 +12,6 @@ from eth2.beacon.committee_helpers import (
 )
 from eth2.beacon.helpers import get_seed, signature_domain_to_domain_type
 from eth2.beacon.signature_domain import SignatureDomain
-from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.parametrize(
@@ -96,16 +95,15 @@ def test_get_beacon_proposer_index(genesis_state, config):
     )
     for slot in range(0, config.SLOTS_PER_EPOCH):
         state = state.mset("slot", slot, "validators", validators)
-        committee_config = CommitteeConfig(config)
-        proposer_index = get_beacon_proposer_index(state, committee_config)
+        proposer_index = get_beacon_proposer_index(state, config)
         assert proposer_index
 
-        current_epoch = state.current_epoch(committee_config.SLOTS_PER_EPOCH)
+        current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
         domain_type = signature_domain_to_domain_type(
             SignatureDomain.DOMAIN_BEACON_PROPOSER
         )
         seed = hash_eth2(
-            get_seed(state, current_epoch, domain_type, committee_config)
+            get_seed(state, current_epoch, domain_type, config)
             + state.slot.to_bytes(8, "little")
         )
         random_byte = hash_eth2(seed + (proposer_index // 32).to_bytes(8, "little"))[
@@ -133,9 +131,7 @@ def test_get_beacon_committee(genesis_state, config):
             config.TARGET_COMMITTEE_SIZE,
         )
         for committee_index in range(committees_at_slot):
-            some_committee = get_beacon_committee(
-                state, slot, committee_index, CommitteeConfig(config)
-            )
+            some_committee = get_beacon_committee(state, slot, committee_index, config)
             indices += tuple(some_committee)
 
     assert set(indices) == set(range(len(genesis_state.validators)))

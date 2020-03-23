@@ -17,7 +17,7 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import CommitteeIndex, Epoch, Gwei, Slot, ValidatorIndex
-from eth2.configs import CommitteeConfig
+from eth2.configs import Eth2Config
 
 logger = logging.getLogger("eth2.beacon.committee_helpers")
 
@@ -89,19 +89,17 @@ def compute_proposer_index(
         i += 1
 
 
-def get_beacon_proposer_index(
-    state: BeaconState, committee_config: CommitteeConfig
-) -> ValidatorIndex:
+def get_beacon_proposer_index(state: BeaconState, config: Eth2Config) -> ValidatorIndex:
     """
     Return the current beacon proposer index.
     """
-    current_epoch = state.current_epoch(committee_config.SLOTS_PER_EPOCH)
+    current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     domain_type = signature_domain_to_domain_type(
         SignatureDomain.DOMAIN_BEACON_PROPOSER
     )
 
     seed = hash_eth2(
-        get_seed(state, current_epoch, domain_type, committee_config)
+        get_seed(state, current_epoch, domain_type, config)
         + state.slot.to_bytes(8, "little")
     )
     indices = get_active_validator_indices(state.validators, current_epoch)
@@ -109,8 +107,8 @@ def get_beacon_proposer_index(
         state.validators,
         indices,
         seed,
-        committee_config.MAX_EFFECTIVE_BALANCE,
-        committee_config.SHUFFLE_ROUND_COUNT,
+        config.MAX_EFFECTIVE_BALANCE,
+        config.SHUFFLE_ROUND_COUNT,
     )
 
 
@@ -177,7 +175,7 @@ def _compute_committee(
 
 
 def get_beacon_committee(
-    state: BeaconState, slot: Slot, index: CommitteeIndex, config: CommitteeConfig
+    state: BeaconState, slot: Slot, index: CommitteeIndex, config: Eth2Config
 ) -> Tuple[ValidatorIndex, ...]:
     epoch = compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH)
     committees_per_slot = get_committee_count_at_slot(
@@ -204,7 +202,7 @@ def get_beacon_committee(
 
 
 def iterate_committees_at_epoch(
-    state: BeaconState, epoch: Epoch, config: CommitteeConfig
+    state: BeaconState, epoch: Epoch, config: Eth2Config
 ) -> Iterable[Tuple[Tuple[ValidatorIndex, ...], CommitteeIndex, Slot]]:
     """
     Iterate ``committee``, ``committee_index``, ``slot`` of the given ``epoch``.
@@ -224,7 +222,7 @@ def iterate_committees_at_epoch(
 
 
 def iterate_committees_at_slot(
-    state: BeaconState, slot: Slot, committees_per_slot: int, config: CommitteeConfig
+    state: BeaconState, slot: Slot, committees_per_slot: int, config: Eth2Config
 ) -> Iterable[Tuple[Tuple[ValidatorIndex, ...], CommitteeIndex, Slot]]:
     """
     Iterate ``committee``, ``committee_index``, ``slot`` of the given ``slot``.

@@ -27,7 +27,7 @@ from eth2.beacon.tools.builder.aggregator import (
     validate_attestation_signature,
 )
 from eth2.beacon.typing import SubnetId
-from eth2.configs import CommitteeConfig
+from eth2.configs import Eth2Config
 
 from libp2p.peer.id import ID
 from libp2p.pubsub.pb import rpc_pb2
@@ -91,7 +91,7 @@ def get_beacon_attestation_validator(chain: BaseBeaconChain) -> Callable[..., bo
             validate_attestation_signature(
                 state,
                 attestation,
-                CommitteeConfig(state_machine.config),
+                state_machine.config,
             )
         except InvalidGossipMessage as error:
             logger.debug("%s", str(error))
@@ -134,7 +134,7 @@ def get_committee_index_beacon_attestation_validator(
             validate_attestation_signature(
                 state,
                 attestation,
-                CommitteeConfig(state_machine.config),
+                state_machine.config,
             )
         except InvalidGossipMessage as error:
             logger.debug("%s", str(error))
@@ -167,7 +167,7 @@ def get_beacon_aggregate_and_proof_validator(chain: BaseBeaconChain) -> Callable
             run_validate_aggregate_and_proof(
                 state,
                 aggregate_and_proof,
-                CommitteeConfig(state_machine.config),
+                state_machine.config,
             )
         except InvalidGossipMessage as error:
             logger.debug("%s", str(error))
@@ -199,7 +199,7 @@ def run_validate_block_proposer_signature(
         )
 
     try:
-        validate_proposer_signature(future_state, block, CommitteeConfig(state_machine.config))
+        validate_proposer_signature(future_state, block, state_machine.config)
     except ValidationError as error:
         raise InvalidGossipMessage(
             f"Failed to validate block={encode_hex(block.message.hash_tree_root)}",
@@ -239,7 +239,7 @@ def validate_voting_beacon_block(chain: BaseBeaconChain, attestation: Attestatio
 def run_validate_aggregate_and_proof(
     state: BeaconState,
     aggregate_and_proof: AggregateAndProof,
-    config: CommitteeConfig
+    config: Eth2Config
 ) -> None:
     try:
         validate_aggregate_and_proof(

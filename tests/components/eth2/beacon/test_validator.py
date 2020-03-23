@@ -21,7 +21,6 @@ from eth2.beacon.tools.builder.validator import (
 )
 from eth2.beacon.tools.factories import BeaconChainFactory
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
-from eth2.configs import CommitteeConfig
 from trinity.components.eth2.beacon.slot_ticker import SlotTickEvent
 from trinity.components.eth2.beacon.validator import Validator
 from trinity.components.eth2.misc.tick_type import TickType
@@ -446,7 +445,7 @@ async def test_validator_include_ready_attestations(event_loop, event_bus, monke
         attesting_slot + MINIMAL_SERENITY_CONFIG.MIN_ATTESTATION_INCLUSION_DELAY
     )
     proposer_index = get_beacon_proposer_index(
-        state.set("slot", proposing_slot), CommitteeConfig(state_machine.config)
+        state.set("slot", proposing_slot), state_machine.config
     )
 
     head = alice.chain.get_canonical_head()

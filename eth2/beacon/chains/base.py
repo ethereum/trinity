@@ -19,7 +19,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Root, Slot, Timestamp
-from eth2.configs import Eth2Config, Eth2GenesisConfig
+from eth2.configs import Eth2Config
 
 if TYPE_CHECKING:
     from eth2.beacon.state_machines.base import BaseBeaconStateMachine  # noqa: F401
@@ -38,9 +38,7 @@ class BaseBeaconChain(Configurable, ABC):
     chain_id = None  # type: int
 
     @abstractmethod
-    def __init__(
-        self, base_db: AtomicDatabaseAPI, genesis_config: Eth2GenesisConfig
-    ) -> None:
+    def __init__(self, base_db: AtomicDatabaseAPI, genesis_config: Eth2Config) -> None:
         ...
 
     #
@@ -61,7 +59,7 @@ class BaseBeaconChain(Configurable, ABC):
         base_db: AtomicDatabaseAPI,
         genesis_state: BeaconState,
         genesis_block: BaseBeaconBlock,
-        genesis_config: Eth2GenesisConfig,
+        genesis_config: Eth2Config,
     ) -> "BaseBeaconChain":
         ...
 
@@ -187,9 +185,7 @@ class BeaconChain(BaseBeaconChain):
 
     chaindb_class = BeaconChainDB  # type: Type[BaseBeaconChainDB]
 
-    def __init__(
-        self, base_db: AtomicDatabaseAPI, genesis_config: Eth2GenesisConfig
-    ) -> None:
+    def __init__(self, base_db: AtomicDatabaseAPI, genesis_config: Eth2Config) -> None:
         if not self.sm_configuration:
             raise ValueError(
                 "The Chain class cannot be instantiated with an empty `sm_configuration`"
@@ -222,7 +218,7 @@ class BeaconChain(BaseBeaconChain):
         base_db: AtomicDatabaseAPI,
         genesis_state: BeaconState,
         genesis_block: BaseBeaconBlock,
-        genesis_config: Eth2GenesisConfig,
+        genesis_config: Eth2Config,
     ) -> "BaseBeaconChain":
         """
         Initialize the ``BeaconChain`` from a genesis state and block.

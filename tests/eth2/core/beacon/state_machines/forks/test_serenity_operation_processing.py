@@ -18,7 +18,6 @@ from eth2.beacon.tools.builder.validator import (
     create_mock_voluntary_exit,
 )
 from eth2.beacon.types.blocks import BeaconBlockBody
-from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.parametrize(
@@ -48,7 +47,7 @@ def test_process_proposer_slashings(
 ):
     current_slot = config.GENESIS_SLOT + 1
     state = genesis_state.set("slot", current_slot)
-    whistleblower_index = get_beacon_proposer_index(state, CommitteeConfig(config))
+    whistleblower_index = get_beacon_proposer_index(state, config)
     slashing_proposer_index = (whistleblower_index + 1) % len(state.validators)
     proposer_slashing = create_mock_proposer_slashing_at_block(
         state,

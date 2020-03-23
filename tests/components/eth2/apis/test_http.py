@@ -9,7 +9,6 @@ from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.tools.builder.initializer import create_mock_genesis
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
-from eth2.configs import Eth2GenesisConfig
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient, DBManager
 from trinity.http.handlers.rpc_handler import RPCHandler
@@ -31,7 +30,7 @@ async def test_json_rpc_http_server(
         # Set chaindb
         override_lengths(SERENITY_CONFIG)
         db = DBClient.connect(ipc_path)
-        genesis_config = Eth2GenesisConfig(SERENITY_CONFIG)
+        genesis_config = SERENITY_CONFIG
         chaindb = AsyncBeaconChainDB(db, genesis_config)
 
         fork_choice_scoring = HigherSlotScoring()

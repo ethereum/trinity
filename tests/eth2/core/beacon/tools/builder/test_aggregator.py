@@ -14,7 +14,6 @@ from eth2.beacon.tools.builder.aggregator import (
 )
 from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
-from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.slow
@@ -22,7 +21,6 @@ from eth2.configs import CommitteeConfig
     ("validator_count", "target_committee_size", "slots_per_epoch"), [(1000, 100, 10)]
 )
 def test_aggregator_selection(validator_count, privkeys, genesis_state, config):
-    config = CommitteeConfig(config)
     state = genesis_state
     epoch = compute_epoch_at_slot(state.slot, config.SLOTS_PER_EPOCH)
 

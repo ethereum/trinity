@@ -18,7 +18,6 @@ from eth2.beacon.validator_status_helpers import (
     initiate_exit_for_validator,
     slash_validator,
 )
-from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.parametrize(("is_already_activated,"), [(True), (False)])
@@ -264,7 +263,7 @@ def test_slash_validator(genesis_state, config):
         )
 
         expected_total_slashed_balance = expected_slashings[epoch]
-        proposer_index = get_beacon_proposer_index(state, CommitteeConfig(config))
+        proposer_index = get_beacon_proposer_index(state, config)
 
         expected_proposer_rewards = update_in(
             expected_proposer_rewards,

@@ -22,7 +22,7 @@ from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import FromBlockParams, Slot, ValidatorIndex
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 
 def is_proposer(
@@ -31,7 +31,7 @@ def is_proposer(
     """
     Return if the validator is proposer of `state.slot`.
     """
-    return get_beacon_proposer_index(state, CommitteeConfig(config)) == validator_index
+    return get_beacon_proposer_index(state, config) == validator_index
 
 
 def _generate_randao_reveal(
@@ -60,9 +60,7 @@ def _generate_randao_reveal(
 def validate_proposer_index(
     state: BeaconState, config: Eth2Config, slot: Slot, validator_index: ValidatorIndex
 ) -> None:
-    beacon_proposer_index = get_beacon_proposer_index(
-        state.copy(slot=slot), CommitteeConfig(config)
-    )
+    beacon_proposer_index = get_beacon_proposer_index(state.copy(slot=slot), config)
 
     if validator_index != beacon_proposer_index:
         raise ProposerIndexError
@@ -185,7 +183,7 @@ def create_mock_block(
     Note that it doesn't return the correct ``state_root``.
     """
     future_state = advance_to_slot(state_machine, state, slot)
-    proposer_index = get_beacon_proposer_index(future_state, CommitteeConfig(config))
+    proposer_index = get_beacon_proposer_index(future_state, config)
     proposer_pubkey = state.validators[proposer_index].pubkey
     proposer_privkey = keymap[proposer_pubkey]
 

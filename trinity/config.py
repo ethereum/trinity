@@ -71,7 +71,6 @@ from eth2.beacon.typing import (
 )
 from eth2.configs import (
     Eth2Config,
-    Eth2GenesisConfig,
 )
 from p2p.kademlia import (
     Node as KademliaNode,
@@ -687,7 +686,7 @@ class Eth1AppConfig(BaseAppConfig):
 class BeaconChainConfig:
     _genesis_state: BeaconState
     _beacon_chain_class: Type['BaseBeaconChain'] = None
-    _genesis_config: Eth2GenesisConfig = None
+    _genesis_config: Eth2Config = None
     _key_map: Dict[BLSPubkey, int]
 
     def __init__(self,
@@ -699,17 +698,13 @@ class BeaconChainConfig:
         self._key_map = genesis_validator_key_map
 
     @property
-    def genesis_config(self) -> Eth2GenesisConfig:
+    def genesis_config(self) -> Eth2Config:
         """
-        NOTE: this ``genesis_config`` is derivative of the ``Eth2Config``.
+        NOTE: this ``genesis_config`` means something slightly different from the
+        genesis config referenced in other places in this class...
         TODO:(ralexstokes) patch up the names here...
         """
-        if self._genesis_config is None:
-            self._genesis_config = Eth2GenesisConfig(
-                self._eth2_config
-            )
-
-        return self._genesis_config
+        return self._eth2_config
 
     @property
     def genesis_time(self) -> Timestamp:
@@ -756,7 +751,7 @@ class BeaconChainConfig:
             base_db=base_db,
             genesis_state=state,
             genesis_block=block,
-            genesis_config=self.genesis_config,
+            genesis_config=self._eth2_config,
         )
 
 

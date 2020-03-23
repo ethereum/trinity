@@ -13,7 +13,7 @@ from eth2.beacon.epoch_processing_helpers import (
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import Epoch, Gwei, ValidatorIndex
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 
 def activate_validator(validator: Validator, activation_epoch: Epoch) -> Validator:
@@ -135,7 +135,7 @@ def slash_validator(
         state, index, slashed_balance // config.MIN_SLASHING_PENALTY_QUOTIENT
     )
 
-    proposer_index = get_beacon_proposer_index(state, CommitteeConfig(config))
+    proposer_index = get_beacon_proposer_index(state, config)
     if whistleblower_index is None:
         whistleblower_index = proposer_index
     whistleblower_reward = Gwei(slashed_balance // config.WHISTLEBLOWER_REWARD_QUOTIENT)

@@ -18,7 +18,7 @@ from eth2.beacon.typing import (
     Version,
     default_version,
 )
-from eth2.configs import CommitteeConfig
+from eth2.configs import Eth2Config
 
 if TYPE_CHECKING:
     from eth2.beacon.types.states import BeaconState  # noqa: F401
@@ -130,17 +130,14 @@ def _get_seed(
     domain_type: DomainType,
     randao_provider: RandaoProvider,
     epoch_provider: Callable[[Epoch], Hash32],
-    committee_config: CommitteeConfig,
+    config: Eth2Config,
 ) -> Hash32:
     randao_mix = randao_provider(
         state,
         Epoch(
-            epoch
-            + committee_config.EPOCHS_PER_HISTORICAL_VECTOR
-            - committee_config.MIN_SEED_LOOKAHEAD
-            - 1
+            epoch + config.EPOCHS_PER_HISTORICAL_VECTOR - config.MIN_SEED_LOOKAHEAD - 1
         ),
-        committee_config.EPOCHS_PER_HISTORICAL_VECTOR,
+        config.EPOCHS_PER_HISTORICAL_VECTOR,
     )
     epoch_as_bytes = epoch_provider(epoch)
 
@@ -148,17 +145,12 @@ def _get_seed(
 
 
 def get_seed(
-    state: "BeaconState",
-    epoch: Epoch,
-    domain_type: DomainType,
-    committee_config: CommitteeConfig,
+    state: "BeaconState", epoch: Epoch, domain_type: DomainType, config: Eth2Config
 ) -> Hash32:
     """
     Generate a seed for the given ``epoch``.
     """
-    return _get_seed(
-        state, epoch, domain_type, get_randao_mix, _epoch_for_seed, committee_config
-    )
+    return _get_seed(state, epoch, domain_type, get_randao_mix, _epoch_for_seed, config)
 
 
 def get_total_balance(

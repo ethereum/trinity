@@ -8,7 +8,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 from eth2.beacon.types.block_headers import BeaconBlockHeader
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 from .block_validation import (
     validate_block_parent_root,
@@ -23,9 +23,7 @@ def process_block_header(
 ) -> BeaconState:
     validate_block_slot(state, block)
     validate_block_parent_root(state, block)
-    validate_proposer_is_not_slashed(
-        state, block.hash_tree_root, CommitteeConfig(config)
-    )
+    validate_proposer_is_not_slashed(state, block.hash_tree_root, config)
 
     return state.set(
         "latest_block_header",
@@ -42,9 +40,7 @@ def process_block_header(
 def process_randao(
     state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
 ) -> BeaconState:
-    proposer_index = get_beacon_proposer_index(
-        state=state, committee_config=CommitteeConfig(config)
-    )
+    proposer_index = get_beacon_proposer_index(state=state, config=config)
 
     epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
 

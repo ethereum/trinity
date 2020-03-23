@@ -18,7 +18,7 @@ from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, ValidatorIndex
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 
 def increase_balance(
@@ -40,7 +40,7 @@ def get_attesting_indices(
     state: BeaconState,
     attestation_data: AttestationData,
     bitfield: Bitfield,
-    config: CommitteeConfig,
+    config: Eth2Config,
 ) -> Set[ValidatorIndex]:
     """
     Return the attesting indices corresponding to ``attestation_data`` and ``bitfield``.
@@ -52,7 +52,7 @@ def get_attesting_indices(
 
 
 def get_indexed_attestation(
-    state: BeaconState, attestation: Attestation, config: CommitteeConfig
+    state: BeaconState, attestation: Attestation, config: Eth2Config
 ) -> IndexedAttestation:
     attesting_indices = get_attesting_indices(
         state, attestation.data, attestation.aggregation_bits, config
@@ -132,9 +132,7 @@ def get_matching_head_attestations(
 
 
 def get_unslashed_attesting_indices(
-    state: BeaconState,
-    attestations: Sequence[PendingAttestation],
-    config: CommitteeConfig,
+    state: BeaconState, attestations: Sequence[PendingAttestation], config: Eth2Config
 ) -> Set[ValidatorIndex]:
     output: Set[ValidatorIndex] = set()
     for a in attestations:
@@ -148,8 +146,7 @@ def get_attesting_balance(
     state: BeaconState, attestations: Sequence[PendingAttestation], config: Eth2Config
 ) -> Gwei:
     return get_total_balance(
-        state,
-        get_unslashed_attesting_indices(state, attestations, CommitteeConfig(config)),
+        state, get_unslashed_attesting_indices(state, attestations, config)
     )
 
 

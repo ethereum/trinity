@@ -2,7 +2,7 @@ from eth2.beacon.state_machines.state_transitions import BaseStateTransition
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 from .block_processing import process_block
 from .block_validation import validate_proposer_signature
@@ -32,9 +32,7 @@ class SerenityStateTransition(BaseStateTransition):
 
         if signed_block:
             if check_proposer_signature:
-                validate_proposer_signature(
-                    state, signed_block, committee_config=CommitteeConfig(self.config)
-                )
+                validate_proposer_signature(state, signed_block, self.config)
             state = process_block(state, signed_block.message, self.config)
 
         return state

@@ -9,7 +9,7 @@ from eth2.beacon.validator_status_helpers import (
     initiate_validator_exit,
     slash_validator,
 )
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 from .block_validation import (
     validate_attestation,
@@ -93,7 +93,7 @@ def process_attestations(
 
     for attestation in block.body.attestations:
         validate_attestation(state, attestation, config)
-        proposer_index = get_beacon_proposer_index(state, CommitteeConfig(config))
+        proposer_index = get_beacon_proposer_index(state, config)
         pending_attestation = PendingAttestation.create(
             aggregation_bits=attestation.aggregation_bits,
             data=attestation.data,

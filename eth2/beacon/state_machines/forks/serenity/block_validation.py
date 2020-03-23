@@ -1,4 +1,4 @@
-from typing import Iterable, Sequence, Tuple, cast  # noqa: F401
+from typing import cast  # noqa: F401
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import ValidationError, encode_hex
@@ -30,7 +30,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
 from eth2.beacon.typing import CommitteeIndex, Epoch, Root, Slot
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 
 def validate_correct_number_of_deposits(
@@ -72,7 +72,7 @@ def validate_block_parent_root(state: BeaconState, block: BaseBeaconBlock) -> No
 
 
 def validate_proposer_is_not_slashed(
-    state: BeaconState, block_root: Root, config: CommitteeConfig
+    state: BeaconState, block_root: Root, config: Eth2Config
 ) -> None:
     proposer_index = get_beacon_proposer_index(state, config)
     proposer = state.validators[proposer_index]
@@ -81,17 +81,15 @@ def validate_proposer_is_not_slashed(
 
 
 def validate_proposer_signature(
-    state: BeaconState,
-    signed_block: BaseSignedBeaconBlock,
-    committee_config: CommitteeConfig,
+    state: BeaconState, signed_block: BaseSignedBeaconBlock, config: Eth2Config
 ) -> None:
     message_hash = signed_block.message.hash_tree_root
 
     # Get the public key of proposer
-    beacon_proposer_index = get_beacon_proposer_index(state, committee_config)
+    beacon_proposer_index = get_beacon_proposer_index(state, config)
     proposer_pubkey = state.validators[beacon_proposer_index].pubkey
     domain = get_domain(
-        state, SignatureDomain.DOMAIN_BEACON_PROPOSER, committee_config.SLOTS_PER_EPOCH
+        state, SignatureDomain.DOMAIN_BEACON_PROPOSER, config.SLOTS_PER_EPOCH
     )
 
     try:
@@ -386,7 +384,7 @@ def _validate_attestation_data(
 
 
 def _validate_aggregation_bits(
-    state: BeaconState, attestation: Attestation, config: CommitteeConfig
+    state: BeaconState, attestation: Attestation, config: Eth2Config
 ) -> None:
     data = attestation.data
     committee = get_beacon_committee(state, data.slot, data.index, config)
@@ -406,10 +404,10 @@ def validate_attestation(
     Raise ``ValidationError`` if it's invalid.
     """
     _validate_attestation_data(state, attestation.data, config)
-    _validate_aggregation_bits(state, attestation, CommitteeConfig(config))
+    _validate_aggregation_bits(state, attestation, config)
     validate_indexed_attestation(
         state,
-        get_indexed_attestation(state, attestation, CommitteeConfig(config)),
+        get_indexed_attestation(state, attestation, config),
         config.MAX_VALIDATORS_PER_COMMITTEE,
         config.SLOTS_PER_EPOCH,
     )

@@ -21,7 +21,6 @@ from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Timestamp
-from eth2.configs import Eth2GenesisConfig
 
 
 class BeaconChainFactory(factory.Factory):
@@ -73,9 +72,7 @@ class BeaconChainFactory(factory.Factory):
             genesis_block = kwargs["genesis_block"]
 
         db = kwargs.pop("db", AtomicDB())
-        genesis_config = Eth2GenesisConfig(
-            model_class.get_genesis_state_machine_class().config
-        )
+        genesis_config = model_class.get_genesis_state_machine_class().config
         chain = model_class.from_genesis(
             base_db=db,
             genesis_state=genesis_state,

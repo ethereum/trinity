@@ -6,7 +6,7 @@ from eth2.beacon.committee_helpers import iterate_committees_at_epoch
 from eth2.beacon.exceptions import NoCommitteeAssignment
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import CommitteeIndex, Epoch, Slot, ValidatorIndex
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 CommitteeAssignment = NamedTuple(
     "CommitteeAssignment",
@@ -38,7 +38,7 @@ def get_committee_assignment(
         )
 
     for committee, committee_index, slot in iterate_committees_at_epoch(
-        state, epoch, CommitteeConfig(config)
+        state, epoch, config
     ):
         if validator_index in committee:
             return CommitteeAssignment(

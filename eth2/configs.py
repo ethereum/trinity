@@ -98,38 +98,3 @@ class Eth2Config:
     def from_formatted_dict(cls, data: Dict[str, EncodedConfigTypes]) -> "Eth2Config":
         # NOTE: mypy does not recognize the kwarg unpacking here...
         return cls(**_decoder(data, fields(cls)))  # type: ignore
-
-
-class CommitteeConfig:
-    def __init__(self, config: Eth2Config):
-        # Basic
-        self.GENESIS_SLOT = config.GENESIS_SLOT
-        self.GENESIS_EPOCH = config.GENESIS_EPOCH
-        self.MAX_COMMITTEES_PER_SLOT = config.MAX_COMMITTEES_PER_SLOT
-        self.SLOTS_PER_EPOCH = config.SLOTS_PER_EPOCH
-        self.TARGET_COMMITTEE_SIZE = config.TARGET_COMMITTEE_SIZE
-        self.SHUFFLE_ROUND_COUNT = config.SHUFFLE_ROUND_COUNT
-
-        # For seed
-        self.MIN_SEED_LOOKAHEAD = config.MIN_SEED_LOOKAHEAD
-        self.MAX_SEED_LOOKAHEAD = config.MAX_SEED_LOOKAHEAD
-        self.EPOCHS_PER_HISTORICAL_VECTOR = config.EPOCHS_PER_HISTORICAL_VECTOR
-        self.EPOCHS_PER_HISTORICAL_VECTOR = config.EPOCHS_PER_HISTORICAL_VECTOR
-
-        self.MAX_EFFECTIVE_BALANCE = config.MAX_EFFECTIVE_BALANCE
-        self.EFFECTIVE_BALANCE_INCREMENT = config.EFFECTIVE_BALANCE_INCREMENT
-
-
-class Eth2GenesisConfig:
-    """
-    Genesis parameters that might lives in
-    a state or a state machine config
-    but is assumed unlikely to change between forks.
-    Pass this to the chains, chain_db, or other objects that need them.
-    """
-
-    def __init__(self, config: Eth2Config) -> None:
-        self.GENESIS_SLOT = config.GENESIS_SLOT
-        self.GENESIS_EPOCH = config.GENESIS_EPOCH
-        self.SECONDS_PER_SLOT = config.SECONDS_PER_SLOT
-        self.SLOTS_PER_EPOCH = config.SLOTS_PER_EPOCH
