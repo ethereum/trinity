@@ -98,10 +98,11 @@ class NewBlockEvent(PeerPoolMessageEvent):
 
 class NewBlockHashesEvent(PeerPoolMessageEvent):
     """
-    Event to carry a ``Transactions`` command from the peer pool to any process that
+    Event to carry a ``NewBlockHashes`` command from the peer pool to any process that
     subscribes the event through the event bus.
     """
     command: NewBlockHashes
+
 
 # Events flowing from Proxy to PeerPool
 
@@ -160,6 +161,9 @@ class SendTransactionsEvent(BaseEvent):
 
 @dataclass
 class GetBlockHeadersResponse(BaseEvent):
+    """
+    The response class to answer a ``GetBlockHeadersRequest``.
+    """
 
     headers: Sequence[BlockHeaderAPI]
     error: Exception = None
@@ -167,6 +171,16 @@ class GetBlockHeadersResponse(BaseEvent):
 
 @dataclass
 class GetBlockHeadersRequest(BaseRequestResponseEvent[GetBlockHeadersResponse]):
+    """
+    A request class to delegate a :class:`trinity.protocol.proxy.eth.events.GetBlockHeaders` command
+    from any process to another process that can perform the actual
+    :class:`trinity.protocol.proxy.eth.events.GetBlockHeaders` command, wrap the result and send it
+    back to the origin process via a
+    :class:`trinity.protocol.proxy.eth.events.GetBlockHeadersResponse`.
+
+    This is a low-level event class used by :class:`trinity.protocol.proxy.ProxyETHAPI` to allow
+    any Trinity process to interact with peers through the event bus.
+    """
 
     session: SessionAPI
     block_number_or_hash: BlockIdentifier
@@ -182,13 +196,25 @@ class GetBlockHeadersRequest(BaseRequestResponseEvent[GetBlockHeadersResponse]):
 
 @dataclass
 class GetBlockBodiesResponse(BaseEvent):
-
+    """
+    The response class to answer a :class:`trinity.protocol.proxy.eth.events.GetBlockBodiesRequest`
+    """
     bundles: BlockBodyBundles
     error: Exception = None
 
 
 @dataclass
 class GetBlockBodiesRequest(BaseRequestResponseEvent[GetBlockBodiesResponse]):
+    """
+    A request class to delegate a :class:`trinity.protocol.proxy.eth.events.GetBlockBodies` command
+    from any process to another process that can perform the actual
+    :class:`trinity.protocol.proxy.eth.events.GetBlockBodies` command, wrap the result and send it
+    back to the origin process via a
+    :class:`trinity.protocol.proxy.eth.events.GetBlockBodiesResponse`.
+
+    This is a low-level event class used by :class:`trinity.protocol.proxy.ProxyETHAPI` to allow
+    any Trinity process to interact with peers through the event bus.
+    """
 
     session: SessionAPI
     headers: Sequence[BlockHeaderAPI]
@@ -201,13 +227,24 @@ class GetBlockBodiesRequest(BaseRequestResponseEvent[GetBlockBodiesResponse]):
 
 @dataclass
 class GetNodeDataResponse(BaseEvent):
-
+    """
+    The response class to answer a :class:`trinity.protocol.proxy.eth.events.GetNodeDataRequest`.
+    """
     bundles: NodeDataBundles
     error: Exception = None
 
 
 @dataclass
 class GetNodeDataRequest(BaseRequestResponseEvent[GetNodeDataResponse]):
+    """
+    A request class to delegate a :class:`trinity.protocol.proxy.eth.events.GetNodeData` command
+    from any process to another process that can perform the actual
+    :class:`trinity.protocol.proxy.eth.events.GetNodeData` command, wrap the result and send it back
+    to the origin process via a :class:`trinity.protocol.proxy.eth.events.GetNodeDataResponse`.
+
+    This is a low-level event class used by :class:`trinity.protocol.proxy.ProxyETHAPI` to allow
+    any Trinity process to interact with peers through the event bus.
+    """
 
     session: SessionAPI
     node_hashes: Sequence[Hash32]
@@ -220,13 +257,24 @@ class GetNodeDataRequest(BaseRequestResponseEvent[GetNodeDataResponse]):
 
 @dataclass
 class GetReceiptsResponse(BaseEvent):
-
+    """
+    The response class to answer a :class:`trinity.protocol.proxy.eth.events.GetReceiptsRequest`.
+    """
     bundles: ReceiptsBundles
     error: Exception = None
 
 
 @dataclass
 class GetReceiptsRequest(BaseRequestResponseEvent[GetReceiptsResponse]):
+    """
+    A request class to delegate a :class:`trinity.protocol.proxy.eth.events.GetReceipts` command
+    from any process to another process that can perform the actual
+    :class:`trinity.protocol.proxy.eth.events.GetReceipts` command, wrap the result and send it back
+    to the origin process via a :class:`trinity.protocol.proxy.eth.events.GetNodeDataResponse`.
+
+    This is a low-level event class used by :class:`trinity.protocol.proxy.ProxyETHAPI` to allow
+    any Trinity process to interact with peers through the event bus.
+    """
 
     session: SessionAPI
     headers: Sequence[BlockHeaderAPI]

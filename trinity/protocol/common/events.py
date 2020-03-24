@@ -81,7 +81,9 @@ class PeerInfo(NamedTuple):
 
 @dataclass
 class GetConnectedPeersResponse(BaseEvent):
-
+    """
+    The response class to answer a :class:`trinity.protocol.common.events.GetConnectedPeersRequest`
+    """
     peers: Tuple[PeerInfo, ...]
 
     @staticmethod
@@ -97,7 +99,10 @@ class GetConnectedPeersResponse(BaseEvent):
 
 
 class GetConnectedPeersRequest(BaseRequestResponseEvent[GetConnectedPeersResponse]):
-
+    """
+    A request class that can be dispatched from any process to be answered from another process
+    with a :class:`trinity.protocol.common.events.GetConnectedPeersResponse`.
+   """
     @staticmethod
     def expected_response_type() -> Type[GetConnectedPeersResponse]:
         return GetConnectedPeersResponse
@@ -116,12 +121,18 @@ class PeerPoolMessageEvent(BaseEvent):
 
 @dataclass
 class ProtocolCapabilitiesResponse(BaseEvent):
-
+    """
+    The response class to answer a
+    :class:`trinity.protocol.common.events.GetProtocolCapabilitiesRequest`
+    """
     capabilities: Capabilities
 
 
 class GetProtocolCapabilitiesRequest(BaseRequestResponseEvent[ProtocolCapabilitiesResponse]):
-
+    """
+    A request class that can be dispatched from any process to be answered from another process
+    with a :class:`trinity.protocol.common.events.ProtocolCapabilitiesResponse`.
+   """
     @staticmethod
     def expected_response_type() -> Type[ProtocolCapabilitiesResponse]:
         return ProtocolCapabilitiesResponse
