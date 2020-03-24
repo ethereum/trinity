@@ -17,9 +17,11 @@ from trinity.config import BeaconAppConfig
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient
 from trinity.extensibility import AsyncioIsolatedComponent
+from trinity.http.apps.validator_api import ValidatorAPIHandler
 from trinity.http.handlers.api_handler import APIHandler
 from trinity.http.handlers.metrics_handler import MetricsHandler
 from trinity.http.main import HTTPServer
+from trinity.http.server import HTTPServer as HTTPAppServer
 from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 from trinity.protocol.bcc_libp2p.node import Node
 from trinity.protocol.bcc_libp2p.servers import BCCReceiveServer
@@ -163,9 +165,19 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 handler=MetricsHandler.handle(chain)(event_bus),
                 port=boot_info.args.metrics_port,
             )
+            # NOTE: this API server provides an interface into the beacon node
             api_server = HTTPServer(
                 handler=APIHandler.handle(chain)(event_bus),
                 port=boot_info.args.api_port,
+            )
+
+            # NOTE: this API server provides an interface between the beacon node and
+            # any connected validator clients.
+            validator_api_handler = ValidatorAPIHandler(
+                chain, event_bus, chain_config.genesis_time
+            )
+            validator_api_server = HTTPAppServer(
+                routes=validator_api_handler.make_routes(), port=30303
             )
 
             services: Tuple[BaseService, ...] = (
@@ -173,6 +185,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
                 receive_server,
                 slot_ticker,
                 syncer,
+                validator_api_server,
             )
 
             if boot_info.args.enable_metrics:
