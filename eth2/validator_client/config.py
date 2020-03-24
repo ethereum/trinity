@@ -7,7 +7,7 @@ from eth_typing import BLSPubkey
 from eth2.beacon.typing import Slot
 from eth2.validator_client.typing import BLSPrivateKey
 
-DEFAULT_BEACON_NODE_ENDPOINT = "https://127.0.0.1:30303"
+DEFAULT_BEACON_NODE_ENDPOINT = "http://127.0.0.1:30303"
 DEFAULT_VALIDATOR_DATA_DIR = Path("validator_client")
 DEFAULT_KEY_STORE_DIR_SUFFIX = Path("key_store")
 DEFAULT_SIGNATORY_DB_DIR_SUFFIX = Path("db") / "signatory"
