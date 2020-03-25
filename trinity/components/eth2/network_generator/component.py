@@ -23,7 +23,7 @@ from eth2.beacon.tools.builder.initializer import (
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Timestamp
-from eth2.configs import Eth2Config, serialize
+from eth2.configs import Eth2Config
 from trinity.config import BeaconChainConfig, TrinityConfig
 from trinity.extensibility import Application
 
@@ -133,7 +133,7 @@ class NetworkGeneratorComponent(Application):
             initial_state, args.genesis_time, args.genesis_delay
         )
         output = {
-            "eth2_config": serialize(config),
+            "eth2_config": config.to_formatted_dict(),
             "genesis_validator_key_pairs": mk_genesis_key_map(
                 validator_key_pairs, genesis_state
             ),
