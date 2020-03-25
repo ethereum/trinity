@@ -71,7 +71,7 @@ class KeyStore(KeyStoreAPI):
     def _ensure_dirs(self) -> None:
         did_create = create_dir_if_missing(self._key_store_dir)
         if did_create:
-            self.logger.warning(
+            self.logger.info(
                 "the key store location provided (%s) was created because it was missing",
                 self._key_store_dir,
             )
