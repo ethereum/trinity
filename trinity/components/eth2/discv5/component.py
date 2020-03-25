@@ -1,7 +1,6 @@
 from argparse import ArgumentParser, _SubParsersAction
 import logging
 import pathlib
-import secrets
 
 import async_service
 from eth.db.backends.level import LevelDB
@@ -52,10 +51,9 @@ def get_nodedb_dir(boot_info: BootInfo) -> pathlib.Path:
 def get_local_private_key(boot_info: BootInfo) -> PrivateKey:
     if boot_info.args.discovery_private_key:
         local_private_key_bytes = decode_hex(boot_info.args.discovery_private_key)
+        return PrivateKey(local_private_key_bytes)
     else:
-        logger.debug("No private key given, using random one")
-        local_private_key_bytes = secrets.token_bytes(32)
-    return PrivateKey(local_private_key_bytes)
+        return boot_info.trinity_config.nodekey
 
 
 async def get_local_enr(
