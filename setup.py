@@ -121,7 +121,7 @@ deps = {
         "py-ecc==1.7.1",
         "rlp>=1.1.0,<2.0.0",
         PYEVM_DEPENDENCY,
-        "ssz==0.2.3",
+        "ssz==0.2.4",
         "asks>=2.3.6,<3",  # validator client
         "eth-keyfile",  # validator client
     ],
