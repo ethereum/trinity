@@ -154,7 +154,7 @@ from .utils import (
 )
 from async_generator import asynccontextmanager
 
-from trinity.components.eth2.metrics.events import (
+from trinity.metrics.events import (
     Libp2pPeersRequest,
     Libp2pPeersResponse,
 )

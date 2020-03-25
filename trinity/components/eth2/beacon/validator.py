@@ -45,7 +45,7 @@ from trinity.components.eth2.beacon.base_validator import (
     ImportAttestationFn,
 )
 from trinity.components.eth2.beacon.slot_ticker import SlotTickEvent
-from trinity.components.eth2.metrics.registry import metrics
+from trinity.metrics.registry import metrics
 from trinity.protocol.bcc_libp2p.configs import ATTESTATION_SUBNET_COUNT
 from trinity.protocol.bcc_libp2p.node import Node
 
