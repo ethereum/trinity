@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# temporary comment
 import os
 import re
 from setuptools import setup, find_packages
