@@ -242,7 +242,7 @@ def test_get_domain(
 
 def test_get_seed(
     genesis_state,
-    committee_config,
+    config,
     slots_per_epoch,
     min_seed_lookahead,
     max_seed_lookahead,
@@ -258,7 +258,7 @@ def test_get_seed(
     state = genesis_state
     epoch = 1
     state = state.set(
-        "slot", compute_start_slot_at_epoch(epoch, committee_config.SLOTS_PER_EPOCH)
+        "slot", compute_start_slot_at_epoch(epoch, config.SLOTS_PER_EPOCH)
     )
 
     epoch_as_bytes = epoch.to_bytes(32, "little")
@@ -271,7 +271,7 @@ def test_get_seed(
         domain_type=domain_type,
         randao_provider=mock_get_randao_mix,
         epoch_provider=lambda *_: epoch_as_bytes,
-        committee_config=committee_config,
+        config=config,
     )
     assert seed == hash_eth2(
         domain_type

@@ -22,7 +22,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, Root, Slot, Timestamp, ValidatorIndex
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 LMD_GHOST_SCORE_DATA_LENGTH = 2
 
@@ -406,7 +406,7 @@ class Store:
 
         # TODO: has this validation already been performed?
         indexed_attestation = get_indexed_attestation(
-            target_state, attestation, CommitteeConfig(self._config)
+            target_state, attestation, self._config
         )
         validate_indexed_attestation(
             target_state,

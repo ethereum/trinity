@@ -16,7 +16,6 @@ from eth2.beacon.state_machines.forks.skeleton_lake.config import (
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock, SignedBeaconBlock
-from eth2.configs import Eth2GenesisConfig
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.protocol.bcc_libp2p.configs import (
     ATTESTATION_SUBNET_COUNT,
@@ -58,7 +57,7 @@ class FakeChain(SkeletonLakeChain):
 
 
 async def get_fake_chain() -> FakeChain:
-    genesis_config = Eth2GenesisConfig(MINIMAL_SERENITY_CONFIG)
+    genesis_config = MINIMAL_SERENITY_CONFIG
     chain_db = AsyncBeaconChainDBFactory(genesis_config=genesis_config)
     genesis_block = SignedBeaconBlockFactory()
     chain_db.persist_block(

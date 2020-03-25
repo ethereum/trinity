@@ -52,7 +52,7 @@ from eth2.beacon.typing import (
     default_epoch,
     default_slot,
 )
-from eth2.configs import CommitteeConfig, Eth2Config
+from eth2.configs import Eth2Config
 
 
 #
@@ -117,7 +117,7 @@ def _mk_some_pending_attestations_with_some_participation_in_epoch(
         state, epoch, config.SLOTS_PER_EPOCH, config.SLOTS_PER_HISTORICAL_ROOT
     )
     for committee, committee_index, slot in iterate_committees_at_epoch(
-        state, epoch, CommitteeConfig(config)
+        state, epoch, config
     ):
         if not committee:
             continue
@@ -670,7 +670,7 @@ def create_mock_signed_attestations_at_slot(
     target_epoch = compute_epoch_at_slot(state.slot, config.SLOTS_PER_EPOCH)
 
     for committee, committee_index, _ in iterate_committees_at_slot(
-        state, attestation_slot, committees_per_slot, CommitteeConfig(config)
+        state, attestation_slot, committees_per_slot, config
     ):
         attestation_data = AttestationData.create(
             slot=attestation_slot,

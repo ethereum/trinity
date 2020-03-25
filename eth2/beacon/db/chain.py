@@ -28,7 +28,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, Root, Slot
-from eth2.configs import Eth2GenesisConfig
+from eth2.configs import Eth2Config
 
 # When performing a chain sync (either fast or regular modes), we'll very often need to look
 # up recent blocks to validate the chain, and decoding their SSZ representation is
@@ -47,9 +47,7 @@ class BaseBeaconChainDB(ABC):
     db: AtomicDatabaseAPI = None
 
     @abstractmethod
-    def __init__(
-        self, db: AtomicDatabaseAPI, genesis_config: Eth2GenesisConfig
-    ) -> None:
+    def __init__(self, db: AtomicDatabaseAPI, genesis_config: Eth2Config) -> None:
         ...
 
     #
@@ -189,9 +187,7 @@ class BaseBeaconChainDB(ABC):
 
 
 class BeaconChainDB(BaseBeaconChainDB):
-    def __init__(
-        self, db: AtomicDatabaseAPI, genesis_config: Eth2GenesisConfig
-    ) -> None:
+    def __init__(self, db: AtomicDatabaseAPI, genesis_config: Eth2Config) -> None:
         self.db = db
         self.genesis_config = genesis_config
 

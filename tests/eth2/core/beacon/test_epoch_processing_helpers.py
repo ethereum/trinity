@@ -23,7 +23,6 @@ from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.typing import Gwei
-from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.parametrize(
@@ -63,9 +62,7 @@ def test_get_attesting_indices(genesis_state, config):
     target_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     target_slot = compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH)
     committee_index = 0
-    some_committee = get_beacon_committee(
-        state, target_slot, committee_index, CommitteeConfig(config)
-    )
+    some_committee = get_beacon_committee(state, target_slot, committee_index, config)
 
     data = AttestationData.create(
         slot=target_slot,
@@ -80,7 +77,7 @@ def test_get_attesting_indices(genesis_state, config):
         if index in some_subset:
             bitfield = set_voted(bitfield, i)
 
-    indices = get_attesting_indices(state, data, bitfield, CommitteeConfig(config))
+    indices = get_attesting_indices(state, data, bitfield, config)
 
     assert set(indices) == set(some_subset)
     assert len(indices) == len(some_subset)
@@ -235,9 +232,7 @@ def test_get_unslashed_attesting_indices(genesis_state, config):
     target_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     target_slot = compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH)
     committee_index = 0
-    some_committee = get_beacon_committee(
-        state, target_slot, committee_index, CommitteeConfig(config)
-    )
+    some_committee = get_beacon_committee(state, target_slot, committee_index, config)
 
     data = AttestationData.create(
         slot=state.slot,
@@ -261,7 +256,7 @@ def test_get_unslashed_attesting_indices(genesis_state, config):
     indices = get_unslashed_attesting_indices(
         state,
         (PendingAttestation.create(data=data, aggregation_bits=bitfield),),
-        CommitteeConfig(config),
+        config,
     )
 
     assert set(indices) == set(some_subset)

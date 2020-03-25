@@ -39,7 +39,7 @@ from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex, Version
-from eth2.configs import CommitteeConfig, Eth2Config, Eth2GenesisConfig
+from eth2.configs import Eth2Config
 
 
 # SSZ
@@ -350,16 +350,6 @@ def config(
     )
 
 
-@pytest.fixture
-def committee_config(config):
-    return CommitteeConfig(config)
-
-
-@pytest.fixture
-def genesis_config(config):
-    return Eth2GenesisConfig(config)
-
-
 #
 # Sample data params
 #
@@ -661,8 +651,8 @@ def fork_choice_scoring():
 # ChainDB
 #
 @pytest.fixture
-def chaindb(base_db, genesis_config):
-    return BeaconChainDB(base_db, genesis_config)
+def chaindb(base_db, config):
+    return BeaconChainDB(base_db, config)
 
 
 @pytest.fixture

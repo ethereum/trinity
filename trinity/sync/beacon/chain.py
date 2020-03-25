@@ -27,7 +27,7 @@ from eth2.beacon.typing import (
     Slot,
 )
 from eth2.configs import (
-    Eth2GenesisConfig,
+    Eth2Config
 )
 
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
@@ -50,7 +50,7 @@ class BeaconChainSyncer(BaseService):
     chain_db: BaseAsyncBeaconChainDB
     peer_pool: PeerPool
     block_importer: SyncBlockImporter
-    genesis_config: Eth2GenesisConfig
+    genesis_config: Eth2Config
     sync_peer: Peer
     _event_bus: EndpointAPI
 
@@ -58,7 +58,7 @@ class BeaconChainSyncer(BaseService):
                  chain_db: BaseAsyncBeaconChainDB,
                  peer_pool: PeerPool,
                  block_importer: SyncBlockImporter,
-                 genesis_config: Eth2GenesisConfig,
+                 genesis_config: Eth2Config,
                  event_bus: EndpointAPI,
                  token: CancelToken = None) -> None:
         super().__init__(token)

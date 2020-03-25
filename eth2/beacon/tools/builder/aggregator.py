@@ -20,14 +20,14 @@ from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Bitfield, CommitteeIndex, Slot
-from eth2.configs import CommitteeConfig
+from eth2.configs import Eth2Config
 
 # TODO: TARGET_AGGREGATORS_PER_COMMITTEE is not in Eth2Config now.
 TARGET_AGGREGATORS_PER_COMMITTEE = 16
 
 
 def get_slot_signature(
-    state: BeaconState, slot: Slot, privkey: int, config: CommitteeConfig
+    state: BeaconState, slot: Slot, privkey: int, config: Eth2Config
 ) -> BLSSignature:
     """
     Sign on ``slot`` and return the signature.
@@ -46,7 +46,7 @@ def is_aggregator(
     slot: Slot,
     index: CommitteeIndex,
     signature: BLSSignature,
-    config: CommitteeConfig,
+    config: Eth2Config,
 ) -> bool:
     """
     Check if the validator is one of the aggregators of the given ``slot``.
@@ -102,7 +102,7 @@ def validate_aggregate_and_proof(
     state: BeaconState,
     aggregate_and_proof: AggregateAndProof,
     attestation_propagation_slot_range: int,
-    config: CommitteeConfig,
+    config: Eth2Config,
 ) -> None:
     """
     Validate aggregate_and_proof
@@ -159,7 +159,7 @@ def validate_attestation_propagation_slot_range(
 
 
 def validate_aggregator_proof(
-    state: BeaconState, aggregate_and_proof: AggregateAndProof, config: CommitteeConfig
+    state: BeaconState, aggregate_and_proof: AggregateAndProof, config: Eth2Config
 ) -> None:
     slot = aggregate_and_proof.aggregate.data.slot
     pubkey = state.validators[aggregate_and_proof.aggregator_index].pubkey
@@ -180,7 +180,7 @@ def validate_aggregator_proof(
 
 
 def validate_attestation_signature(
-    state: BeaconState, attestation: Attestation, config: CommitteeConfig
+    state: BeaconState, attestation: Attestation, config: Eth2Config
 ) -> None:
     indexed_attestation = get_indexed_attestation(state, attestation, config)
     validate_indexed_attestation_aggregate_signature(

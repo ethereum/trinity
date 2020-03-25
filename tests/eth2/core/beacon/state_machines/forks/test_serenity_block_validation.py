@@ -12,7 +12,6 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 from eth2.beacon.tools.builder.initializer import create_mock_validator
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.configs import CommitteeConfig
 
 
 @pytest.mark.parametrize(
@@ -79,10 +78,10 @@ def test_validate_proposer_signature(
     )
 
     if is_valid_signature:
-        validate_proposer_signature(state, proposed_block, CommitteeConfig(config))
+        validate_proposer_signature(state, proposed_block, config)
     else:
         with pytest.raises(ValidationError):
-            validate_proposer_signature(state, proposed_block, CommitteeConfig(config))
+            validate_proposer_signature(state, proposed_block, config)
 
 
 @pytest.mark.parametrize(
