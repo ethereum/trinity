@@ -91,7 +91,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         trinity_config = boot_info.trinity_config
-        key_pair = cls._load_or_create_node_key(boot_info)
+        key_pair = KeyPair(trinity_config.nodekey, trinity_config.nodekey.public_key)
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         base_db = DBClient.connect(trinity_config.database_ipc_path)
 
