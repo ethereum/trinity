@@ -33,7 +33,7 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
         )
         async with proc_ctx as proc:
             try:
-                await proc.wait()
+                await proc.wait_result()
             except asyncio.CancelledError as err:
                 logger.debug('Component %s exiting. Sending SIGINT to pid=%d', self, proc.pid)
                 proc.send_signal(signal.SIGINT)
