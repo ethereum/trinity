@@ -1,14 +1,12 @@
 from argparse import ArgumentParser, _SubParsersAction
 import asyncio
 import logging
-import os
 from typing import Set, Tuple
 
 from async_exit_stack import AsyncExitStack
-from eth_utils import decode_hex
 from lahja import EndpointAPI
 from libp2p.crypto.keys import KeyPair
-from libp2p.crypto.secp256k1 import Secp256k1PrivateKey, create_new_key_pair
+from libp2p.crypto.secp256k1 import create_new_key_pair
 
 from eth2.beacon.typing import SubnetId
 from p2p.service import BaseService, run_service
@@ -46,7 +44,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
     def configure_parser(
         cls, arg_parser: ArgumentParser, subparser: _SubParsersAction
     ) -> None:
-        arg_parser.add_argument("--beacon-nodekey", help="0xabcd")
         arg_parser.add_argument(
             "--enable-metrics", action="store_true", help="Enables the Metrics Server"
         )
@@ -69,30 +66,6 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
     @property
     def is_enabled(self) -> bool:
         return self._boot_info.trinity_config.has_app_config(BeaconAppConfig)
-
-    @classmethod
-    def _load_or_create_node_key(cls, boot_info: BootInfo) -> KeyPair:
-        if boot_info.args.beacon_nodekey:
-            privkey = Secp256k1PrivateKey.new(decode_hex(boot_info.args.beacon_nodekey))
-            key_pair = KeyPair(private_key=privkey, public_key=privkey.get_public_key())
-            return key_pair
-        else:
-            config = boot_info.trinity_config
-            beacon_nodekey_path = f"{config.nodekey_path}-beacon"
-            if os.path.isfile(beacon_nodekey_path):
-                with open(beacon_nodekey_path, "rb") as f:
-                    key_data = f.read()
-                private_key = Secp256k1PrivateKey.new(key_data)
-                key_pair = KeyPair(
-                    private_key=private_key, public_key=private_key.get_public_key()
-                )
-                return key_pair
-            else:
-                key_pair = create_new_key_pair()
-                private_key_bytes = key_pair.private_key.to_bytes()
-                with open(beacon_nodekey_path, "wb") as f:
-                    f.write(private_key_bytes)
-                return key_pair
 
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
