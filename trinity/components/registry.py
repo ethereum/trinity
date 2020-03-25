@@ -71,6 +71,7 @@ BEACON_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     BeaconNodeComponent,
     NetworkGeneratorComponent,
     DiscV5Component,
+    FixUncleanShutdownComponent,
 )
 
 
