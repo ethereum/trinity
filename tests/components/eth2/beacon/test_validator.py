@@ -21,9 +21,8 @@ from eth2.beacon.tools.builder.validator import (
 )
 from eth2.beacon.tools.factories import BeaconChainFactory
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
-from trinity.components.eth2.beacon.slot_ticker import SlotTickEvent
+from trinity.components.eth2.beacon.slot_ticker import SlotTickEvent, TickType
 from trinity.components.eth2.beacon.validator import Validator
-from trinity.components.eth2.misc.tick_type import TickType
 
 override_lengths(MINIMAL_SERENITY_CONFIG)
 
