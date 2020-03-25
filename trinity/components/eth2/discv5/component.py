@@ -216,7 +216,6 @@ class DiscV5Component(TrioIsolatedComponent):
         logger.info(f"Local Node ID: {encode_hex(local_enr.node_id)}")
         logger.info(f"Local ENR: {local_enr}")
 
-        await socket.bind(("0.0.0.0", port))
         services = (
             datagram_sender,
             datagram_receiver,
@@ -227,9 +226,11 @@ class DiscV5Component(TrioIsolatedComponent):
             endpoint_tracker,
             routing_table_manager,
         )
-        async with trio.open_nursery() as nursery:
-            for service in services:
-                nursery.start_soon(async_service.TrioManager.run_service, service)
+        await socket.bind(("0.0.0.0", port))
+        with socket:
+            async with trio.open_nursery() as nursery:
+                for service in services:
+                    nursery.start_soon(async_service.TrioManager.run_service, service)
 
 
 if __name__ == "__main__":
