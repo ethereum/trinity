@@ -255,7 +255,6 @@ def main_entry(trinity_boot: BootFn,
         component_manager_service = ComponentManager(
             boot_info,
             runtime_component_types,
-            kill_trinity_with_reason,
         )
         manager = AsyncioManager(component_manager_service)
 

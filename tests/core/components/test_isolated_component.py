@@ -51,7 +51,7 @@ async def test_asyncio_isolated_component(boot_info,
                                           log_listener):
     # Test the lifecycle management for isolated process components to be sure
     # they start and stop as expected
-    component_manager = ComponentManager(boot_info, (AsyncioComponentForTest,), lambda reason: None)
+    component_manager = ComponentManager(boot_info, (AsyncioComponentForTest,))
 
     async with background_asyncio_service(component_manager):
         event_bus = await component_manager.get_event_bus()
