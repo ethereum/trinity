@@ -335,14 +335,13 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         # multiplex so that we can reliably cancel it without requiring the
         # master token for the multiplexer to be cancelled.
         async with self._multiplex_lock:
-            multiplex_token = CancelToken(
+            self._multiplex_token = CancelToken(
                 'multiplex',
                 loop=self.cancel_token.loop,
             ).chain(self.cancel_token)
 
             stop = asyncio.Event()
-            self._multiplex_token = multiplex_token
-            fut = asyncio.ensure_future(self._do_multiplexing(stop, multiplex_token))
+            fut = asyncio.ensure_future(self._do_multiplexing(stop))
             # wait for the multiplexing to actually start
             try:
                 yield
@@ -398,10 +397,10 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                     except asyncio.CancelledError:
                         pass
 
-                multiplex_token.trigger()
+                self._multiplex_token.trigger()
                 del self._multiplex_token
 
-    async def _do_multiplexing(self, stop: asyncio.Event, token: CancelToken) -> None:
+    async def _do_multiplexing(self, stop: asyncio.Event) -> None:
         """
         Background task that reads messages from the transport and feeds them
         into individual queues for each of the protocols.
@@ -410,14 +409,15 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
             self._transport,
             self._base_protocol,
             *self._protocols,
-            token=token,
-        ), token=token)
+            token=self._multiplex_token,
+        ), token=self._multiplex_token)
         try:
             await self._handle_commands(msg_stream, stop)
         except PeerConnectionLost:
-            # XXX: This is the multiplex_token created in multiplex(), so I don't understand how
-            # triggering it cancels the connection, but it seems to cause that.
-            token.trigger()
+            # Cancelling self._multiplex_token will cause feed_protocol_handlers() to raise an
+            # OperationCancelled, causing the Connection._feed_protocol_handlers() daemon to return,
+            # which in turn causes the Connection to be cancelled.
+            self._multiplex_token.trigger()
         except CorruptTransport as exc:
             self.logger.error("Corrupt transport, while multiplexing %s: %r", self, exc)
             self.logger.debug("Corrupt transport, multiplexing trace: %s", self, exc_info=True)
