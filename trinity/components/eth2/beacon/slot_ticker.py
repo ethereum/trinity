@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from enum import IntEnum, unique
 import time
 from typing import Optional, Set
 
@@ -9,7 +10,25 @@ from lahja import BaseEvent, BroadcastConfig, EndpointAPI
 from eth2.beacon.typing import Second, Slot
 from p2p.service import BaseService
 from trinity._utils.shellart import bold_white
-from trinity.components.eth2.misc.tick_type import TickType
+
+
+@unique
+class TickType(IntEnum):
+    SLOT_START = 0
+    SLOT_ONE_THIRD = 1  # SECONDS_PER_SLOT / 3
+    SLOT_TWO_THIRD = 2  # SECONDS_PER_SLOT * 2 / 3
+
+    @property
+    def is_start(self) -> bool:
+        return self == self.SLOT_START
+
+    @property
+    def is_one_third(self) -> bool:
+        return self == self.SLOT_ONE_THIRD
+
+    @property
+    def is_two_third(self) -> bool:
+        return self == self.SLOT_TWO_THIRD
 
 
 @dataclass
