@@ -131,7 +131,7 @@ class Connection(ConnectionAPI, BaseService):
                     self.run_daemon_task(self._feed_protocol_handlers(protocol))
 
                 await self.cancellation()
-        except (PeerConnectionLost, asyncio.CancelledError):
+        except asyncio.CancelledError:
             pass
         except MalformedMessage as err:
             self.logger.debug(
