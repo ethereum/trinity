@@ -180,7 +180,7 @@ class BaseService(CancellableMixin, AsyncioServiceAPI):
                 await awaitable
             finally:
                 if not self.is_cancelled:
-                    self.logger.debug(
+                    self.logger.warning(
                         "%s finished while %s is still running, terminating as well",
                         awaitable,
                         self,

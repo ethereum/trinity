@@ -284,6 +284,12 @@ async def negotiate_protocol_handshakes(transport: TransportAPI,
     # the `Transport` and feeds them into protocol specific queues.  Each
     # protocol is responsible for reading its own messages from that queue via
     # the `Multiplexer.stream_protocol_messages` API.
+    # XXX: A PeerConnectionLost raised during the handshake will cause the multiplex_token to be
+    # triggered in _do_multiplexing(), and this to raise an OperationCancelled, which in turn
+    # bubbles up all the way to the PeerPool and causes it to return
+    # PP.connect -> handshake -> dial_out -> negotiate_protocol_handshakes -> do_handshake
+    # Not sure if need to catch that OperationCancelled on one of the above methods, or maybe
+    # triggering the multiplex token is not the right thing?
     async with multiplexer.multiplex():
         # Concurrently perform the handshakes for each protocol, gathering up
         # the returned receipts.

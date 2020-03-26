@@ -291,6 +291,9 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         if not hasattr(self, '_multiplex_token'):
             raise Exception("No cancel token found for multiplexing.")
 
+        # XXX: This is another place that could raise an OperationCancelled after we trigger
+        # self._multiplex_token. If we were to catch it here, how would we handle it? could
+        # check if self.cancel_token is triggered to decide...
         # We do the wait_iter here so that the call sites in the handshakers
         # that use this don't need to be aware of cancellation tokens.
         return self.wait_iter(
@@ -417,6 +420,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
             # Cancelling self._multiplex_token will cause feed_protocol_handlers() to raise an
             # OperationCancelled, causing the Connection._feed_protocol_handlers() daemon to return,
             # which in turn causes the Connection to be cancelled.
+            self.logger.warning("Got PeerConnectionLost, triggering multiplex token")
             self._multiplex_token.trigger()
         except CorruptTransport as exc:
             self.logger.error("Corrupt transport, while multiplexing %s: %r", self, exc)

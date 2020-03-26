@@ -208,6 +208,9 @@ class BaseChainPeerPool(BasePeerPool):
                 ))
                 last_candidates_count = sum(candidate_counts)
             except OperationCancelled:
+                # XXX: The triggering of either the multiplex or the connection token
+                # is causing an OperationCancelled here
+                self.logger.exception("Got OperationCancelled, breaking out of loop")
                 break
             except asyncio.CancelledError:
                 # no need to log this exception, this is expected

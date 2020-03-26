@@ -109,6 +109,10 @@ class ETHV63Handshaker(Handshaker[ETHProtocolV63]):
 
         protocol.send(StatusV63(self.handshake_params))
 
+        # During handshake we use the multiplexer without a wrapping connection, and both
+        # wait_iter() calls in there use _multiplex_token, so the
+        # OperationCancelled could be caused by triggering the multiplex_token in
+        # multiplexer.multiplex() or by the Multiplexer.cancel_token being triggered externally
         async for cmd in multiplexer.stream_protocol_messages(protocol):
             if not isinstance(cmd, StatusV63):
                 raise HandshakeFailure(f"Expected a ETH Status msg, got {cmd}, disconnecting")
