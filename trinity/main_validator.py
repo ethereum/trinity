@@ -16,6 +16,7 @@ from eth2.validator_client.config import Config
 from eth2.validator_client.tools.directory import create_dir_if_missing
 from trinity._utils.logging import LOG_FORMATTER
 from trinity.bootstrap import load_trinity_config_from_parser_args
+from trinity.components.eth2.network_generator.component import _generate_genesis_config
 from trinity.config import ValidatorClientAppConfig
 from trinity.constants import APP_IDENTIFIER_VALIDATOR_CLIENT
 
@@ -55,9 +56,13 @@ def main_validator() -> None:
     root_dir = validator_client_app_config.root_dir
     create_dir_if_missing(root_dir)
 
-    genesis_config = _load_genesis_config_at(
-        validator_client_app_config.genesis_config_path
-    )
+    try:
+        genesis_config = _load_genesis_config_at(
+            validator_client_app_config.genesis_config_path
+        )
+    except FileNotFoundError:
+        genesis_config = _generate_genesis_config("minimal")
+
     eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
     override_lengths(eth2_config)
     key_pairs = load_genesis_key_map(genesis_config["genesis_validator_key_pairs"])

@@ -3,11 +3,12 @@ import json
 import logging
 import pathlib
 import time
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from eth.constants import ZERO_HASH32
 from eth_utils import humanize_hash
 from ssz.tools.dump import to_formatted_dict
+from typing_extensions import Literal
 
 from eth2.beacon.genesis import initialize_beacon_state_from_eth1
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
@@ -102,9 +103,10 @@ class NetworkGeneratorComponent(Application):
     def _generate_network_as_json(
         cls, args: Namespace, trinity_config: TrinityConfig
     ) -> None:
-        config = _get_eth2_config(args.config_profile)
-        override_lengths(config)
-        validator_count = config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
+        eth2_config = _get_eth2_config(args.config_profile)
+        override_lengths(eth2_config)
+        validator_count = eth2_config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
+
         output_file_path = args.output
 
         cls.logger.info(
@@ -113,37 +115,51 @@ class NetworkGeneratorComponent(Application):
             output_file_path,
             validator_count,
         )
-        validator_key_pairs = create_key_pairs_for(validator_count)
-        deposits = create_genesis_deposits_from(
-            validator_key_pairs,
-            withdrawal_credentials_provider=mk_withdrawal_credentials_from(
-                config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="little")
-            ),
-            amount_provider=lambda _public_key: config.MAX_EFFECTIVE_BALANCE,
+
+        genesis_config = _generate_genesis_config(
+            args.config_profile, args.genesis_time, args.genesis_delay
         )
-        eth1_block_hash = ZERO_HASH32
-        eth1_timestamp = config.MIN_GENESIS_TIME
-        initial_state = initialize_beacon_state_from_eth1(
-            eth1_block_hash=eth1_block_hash,
-            eth1_timestamp=Timestamp(eth1_timestamp),
-            deposits=deposits,
-            config=config,
-        )
-        genesis_state = _adjust_genesis_time(
-            initial_state, args.genesis_time, args.genesis_delay
-        )
-        output = {
-            "eth2_config": config.to_formatted_dict(),
-            "genesis_validator_key_pairs": mk_genesis_key_map(
-                validator_key_pairs, genesis_state
-            ),
-            "genesis_state": to_formatted_dict(genesis_state),
-        }
+
         cls.logger.info(
             "configuration generated; genesis state has root %s with genesis time %d",
-            humanize_hash(genesis_state.hash_tree_root),
-            genesis_state.genesis_time,
+            humanize_hash(genesis_config["genesis_state"].hash_tree_root),
+            genesis_config["genesis_state"].genesis_time,
         )
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file_path, "w") as output_file:
-            output_file.write(json.dumps(output))
+            output_file.write(json.dumps(genesis_config))
+
+
+def _generate_genesis_config(
+    config_profile: Literal["minimal", "mainnet"],
+    genesis_time: Timestamp = None,
+    genesis_delay: int = None,
+) -> Dict[str, Any]:
+    eth2_config = _get_eth2_config(config_profile)
+    override_lengths(eth2_config)
+    validator_count = eth2_config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
+
+    validator_key_pairs = create_key_pairs_for(validator_count)
+    deposits = create_genesis_deposits_from(
+        validator_key_pairs,
+        withdrawal_credentials_provider=mk_withdrawal_credentials_from(
+            eth2_config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="little")
+        ),
+        amount_provider=lambda _public_key: eth2_config.MAX_EFFECTIVE_BALANCE,
+    )
+    eth1_block_hash = ZERO_HASH32
+    eth1_timestamp = eth2_config.MIN_GENESIS_TIME
+    initial_state = initialize_beacon_state_from_eth1(
+        eth1_block_hash=eth1_block_hash,
+        eth1_timestamp=Timestamp(eth1_timestamp),
+        deposits=deposits,
+        config=eth2_config,
+    )
+    genesis_state = _adjust_genesis_time(initial_state, genesis_time, genesis_delay)
+    return {
+        "eth2_config": eth2_config.to_formatted_dict(),
+        "genesis_validator_key_pairs": mk_genesis_key_map(
+            validator_key_pairs, genesis_state
+        ),
+        "genesis_state": to_formatted_dict(genesis_state),
+    }
