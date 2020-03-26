@@ -12,10 +12,10 @@ from eth2.beacon.chains.base import (
 
 
 from trinity.http.handlers.base import BaseHTTPHandler, response_error
-from trinity.components.eth2.metrics.events import (
+from trinity.metrics.events import (
     Libp2pPeersRequest,
 )
-from trinity.components.eth2.metrics.registry import metrics, registry
+from trinity.metrics.registry import metrics, registry
 
 
 def root_to_int(root: Hash32) -> int:
