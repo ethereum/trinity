@@ -1,8 +1,6 @@
 import asyncio
 import logging
 from typing import (
-    Any,
-    Callable,
     Sequence,
     Type,
     Tuple,
@@ -36,11 +34,10 @@ class ComponentManager(Service):
 
     def __init__(self,
                  boot_info: BootInfo,
-                 component_types: Sequence[Type[ComponentAPI]],
-                 kill_trinity_fn: Callable[[str], Any]) -> None:
+                 component_types: Sequence[Type[ComponentAPI]]) -> None:
         self._boot_info = boot_info
         self._component_types = component_types
-        self._kill_trinity_fn = kill_trinity_fn
+
         self._endpoint_available = asyncio.Event()
         self._trigger_component_exit = asyncio.Event()
 
