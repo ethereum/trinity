@@ -39,3 +39,7 @@ from .main_beacon import (  # noqa: F401
 from .main_validator import (  # noqa: F401
     main_validator
 )
+
+from .main_beacon_trio import (  # noqa: F401
+    main_beacon as main_beacon_trio
+)
