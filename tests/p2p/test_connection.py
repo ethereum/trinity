@@ -129,6 +129,7 @@ async def test_connection_protocol_and_command_handlers():
         bob_handshakers=bob_handshakers,
     )
     async with pair_factory as (alice_connection, bob_connection):
+        all_msgs = []
         messages_cmd_A = []
         messages_cmd_D = []
         messages_second_protocol = []
@@ -147,10 +148,14 @@ async def test_connection_protocol_and_command_handlers():
         async def _handler_cmd_C(conn, cmd):
             done.set()
 
+        async def _handler_all_msgs(conn, cmd):
+            all_msgs.append(cmd)
+
         alice_connection.add_protocol_handler(SecondProtocol, _handler_second_protocol)
         alice_connection.add_command_handler(CommandA, _handler_cmd_A)
         alice_connection.add_command_handler(CommandC, _handler_cmd_C)
         alice_connection.add_command_handler(CommandD, _handler_cmd_D)
+        alice_connection.add_msg_handler(_handler_all_msgs)
 
         alice_connection.start_protocol_streams()
         bob_connection.start_protocol_streams()
@@ -173,3 +178,4 @@ async def test_connection_protocol_and_command_handlers():
         assert len(messages_second_protocol) == 5
         assert len(messages_cmd_A) == 2
         assert len(messages_cmd_D) == 3
+        assert len(all_msgs) == 9

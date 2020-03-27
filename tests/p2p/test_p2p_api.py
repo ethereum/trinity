@@ -2,9 +2,11 @@ import asyncio
 
 import pytest
 
+from cancel_token.exceptions import OperationCancelled
+
 from p2p.disconnect import DisconnectReason
 from p2p.p2p_proto import Pong, Ping
-from p2p.p2p_api import P2PAPI
+from p2p.p2p_api import DisconnectIfIdle, P2PAPI
 
 from p2p.tools.factories import ConnectionPairFactory
 
@@ -64,3 +66,41 @@ async def test_p2p_api_disconnect_fn(bob, alice):
 
             assert alice_p2p_api.local_disconnect_reason is DisconnectReason.CLIENT_QUITTING
             assert bob_p2p_api.local_disconnect_reason is None
+
+
+@pytest.mark.asyncio
+async def test_p2p_api_applies_DisconnectIfIdle(bob, alice):
+    p2p_api = P2PAPI()
+    for behavior in p2p_api._behaviors:
+        if isinstance(behavior.logic, DisconnectIfIdle):
+            break
+    else:
+        raise AssertionError("DisconnectIfIdle not among P2PAPI behaviors")
+
+
+@pytest.mark.asyncio
+async def test_DisconnectIfIdle_sends_ping_when_conn_idle(bob, alice):
+    got_ping = asyncio.Event()
+
+    async def _handle_ping(conn, cmd):
+        got_ping.set()
+
+    idle_timeout = 0.1
+    async with DisconnectIfIdle(idle_timeout).apply(bob):
+        alice.add_command_handler(Ping, _handle_ping)
+        await asyncio.wait_for(got_ping.wait(), timeout=0.5)
+        assert bob.is_operational
+        assert alice.is_operational
+
+
+@pytest.mark.asyncio
+async def test_DisconnectIfIdle_cancels_after_idle_timeout(bob, alice, monkeypatch):
+    idle_timeout = 0.1
+    async with DisconnectIfIdle(idle_timeout).apply(bob):
+        alice_transport = alice.get_multiplexer().get_transport()
+        monkeypatch.setattr(alice_transport, 'write', lambda data: None)  # Mute alice.
+        with pytest.raises(OperationCancelled):
+            # bob.connection.cancellation() should raise OperationCancelled when the connection is
+            # cancelled.
+            await asyncio.wait_for(bob.cancellation(), timeout=0.5)
+        assert bob.is_cancelled
