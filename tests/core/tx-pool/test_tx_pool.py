@@ -8,35 +8,41 @@ from eth._utils.address import (
     force_bytes_to_address
 )
 
-from p2p.tools.factories import SessionFactory
 from p2p.service import run_service
 
-from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.components.builtin.tx_pool.pool import (
     TxPool,
 )
 from trinity.components.builtin.tx_pool.validators import (
     DefaultTransactionValidator
 )
-from trinity.protocol.common.events import (
-    GetConnectedPeersRequest,
-)
-from trinity.protocol.eth.commands import (
-    Transactions
-)
+from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.eth.events import (
     TransactionsEvent,
-    SendTransactionsEvent,
 )
-from trinity.tools.event_bus import mock_request_response
-from trinity.tools.factories.events import GetConnectedPeersResponseFactory
-
 from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
+    ETHPeerPoolEventServer
 )
+from trinity.tools.factories import ETHPeerPairFactory, ChainContextFactory
+
+from tests.core.integration_test_helpers import run_peer_pool_event_server
+from tests.core.peer_helpers import MockPeerPoolWithConnectedPeers
 
 
-TEST_NODES = tuple(SessionFactory.create_batch(2))
+def observe_incoming_transactions(event_bus):
+    incoming_tx = []
+    got_txns = asyncio.Event()
+
+    async def _txn_handler(event):
+        got_txns.clear()
+
+        incoming_tx.append(event.command.payload[0])
+        got_txns.set()
+
+    event_bus.subscribe(TransactionsEvent, _txn_handler)
+
+    return incoming_tx, got_txns
 
 
 @pytest.fixture
@@ -44,146 +50,150 @@ def tx_validator(chain_with_block_validation):
     return DefaultTransactionValidator(chain_with_block_validation, 0)
 
 
-def observe_outgoing_transactions(event_bus):
-    outgoing_tx = []
-    got_txns = asyncio.Event()
-
-    async def _txn_handler(event):
-        got_txns.clear()
-        outgoing_tx.append((event.session, event.command.payload))
-        got_txns.set()
-
-    event_bus.subscribe(SendTransactionsEvent, _txn_handler)
-
-    return outgoing_tx, got_txns
+@pytest.fixture
+async def client_and_server():
+    peer_pair = ETHPeerPairFactory(
+        alice_peer_context=ChainContextFactory(),
+        bob_peer_context=ChainContextFactory(),
+    )
+    async with peer_pair as (client_peer, server_peer):
+        yield client_peer, server_peer
 
 
-@pytest.mark.asyncio
-async def test_tx_propagation(event_bus,
-                              funded_address_private_key,
-                              chain_with_block_validation,
-                              tx_validator):
+@pytest.fixture
+async def two_connected_tx_pools(event_bus,
+                                 other_event_bus,
+                                 event_loop,
+                                 funded_address_private_key,
+                                 chain_with_block_validation,
+                                 tx_validator,
+                                 client_and_server):
 
-    initial_two_peers = TEST_NODES[:2]
-    node_one = initial_two_peers[0]
-    node_two = initial_two_peers[1]
+    peer1_event_bus = event_bus
+    peer2_event_bus = other_event_bus
+    peer2, peer1 = client_and_server
+
+    peer2_peer_pool = MockPeerPoolWithConnectedPeers([peer2], event_bus=peer2_event_bus)
+    peer1_peer_pool = MockPeerPoolWithConnectedPeers([peer1], event_bus=peer1_event_bus)
 
     async with AsyncExitStack() as stack:
-        await stack.enter_async_context(mock_request_response(
-            GetConnectedPeersRequest,
-            GetConnectedPeersResponseFactory.from_sessions(initial_two_peers),
-            event_bus,
+        await stack.enter_async_context(run_peer_pool_event_server(
+            peer2_event_bus, peer2_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
 
-        peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(peer_pool))
+        await stack.enter_async_context(run_peer_pool_event_server(
+            peer1_event_bus, peer1_peer_pool, handler_type=ETHPeerPoolEventServer
+        ))
 
-        tx_pool = TxPool(event_bus, peer_pool, tx_validator)
-        await stack.enter_async_context(background_asyncio_service(tx_pool))
-
-        await asyncio.sleep(0.01)
-
-        txs_broadcasted_by_peer1 = [
-            create_random_tx(chain_with_block_validation, funded_address_private_key)
-        ]
-
-        # this needs to go here to ensure that the subscription is *after*
-        # the one installed by the transaction pool so that the got_txns
-        # event will get set after the other handlers have been called.
-        outgoing_tx, got_txns = observe_outgoing_transactions(event_bus)
-
-        # Peer1 sends some txs
-        await event_bus.broadcast(
-            TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
+        peer1_tx_pool = TxPool(
+            peer1_event_bus,
+            ETHProxyPeerPool(peer1_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
+            tx_validator,
         )
+        await stack.enter_async_context(background_asyncio_service(peer1_tx_pool))
 
-        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
-
-        assert outgoing_tx == [
-            (node_two, tuple(txs_broadcasted_by_peer1)),
-        ]
-        # Clear the recording, we asserted all we want and would like to have a fresh start
-        outgoing_tx.clear()
-
-        # Peer1 sends same txs again
-        await event_bus.broadcast(
-            TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
+        peer2_tx_pool = TxPool(
+            peer2_event_bus,
+            ETHProxyPeerPool(peer2_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
+            tx_validator,
         )
-        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
-        # Check that Peer2 doesn't receive them again
-        assert len(outgoing_tx) == 0
+        await stack.enter_async_context(background_asyncio_service(peer2_tx_pool))
 
-        # Peer2 sends exact same txs back
-        await event_bus.broadcast(
-            TransactionsEvent(session=node_two, command=Transactions(txs_broadcasted_by_peer1))
-        )
-        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
+        peer2_proxy_peer_pool = ETHProxyPeerPool(peer2_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(peer2_proxy_peer_pool))
 
-        # Check that Peer1 won't get them as that is where they originally came from
-        assert len(outgoing_tx) == 0
+        peer1_proxy_peer_pool = ETHProxyPeerPool(peer1_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(peer1_proxy_peer_pool))
 
-        txs_broadcasted_by_peer2 = [
-            create_random_tx(chain_with_block_validation, funded_address_private_key),
-            txs_broadcasted_by_peer1[0]
-        ]
-
-        # Peer2 sends old + new tx
-        await event_bus.broadcast(
-            TransactionsEvent(session=node_two, command=Transactions(txs_broadcasted_by_peer2))
-        )
-        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
-        # Not sure why this sleep is needed....
-        await asyncio.sleep(0.01)
-
-        # Check that Peer1 receives only the one tx that it didn't know about
-        assert outgoing_tx == [
-            (node_one, (txs_broadcasted_by_peer2[0],)),
-        ]
+        yield (peer1, peer1_event_bus, peer1_tx_pool, ), (peer2, peer2_event_bus, peer2_tx_pool)
 
 
 @pytest.mark.asyncio
-async def test_does_not_propagate_invalid_tx(event_bus,
+async def test_tx_propagation(two_connected_tx_pools,
+                              chain_with_block_validation,
+                              funded_address_private_key):
+
+    (
+        (peer1, peer1_event_bus, peer1_tx_pool),
+        (peer2, peer2_event_bus, peer2_tx_pool)
+    ) = two_connected_tx_pools
+
+    peer1_incoming_tx, peer1_got_tx = observe_incoming_transactions(peer1_event_bus)
+    peer2_incoming_tx, peer2_got_tx = observe_incoming_transactions(peer2_event_bus)
+
+    txs_broadcasted_by_peer1 = [
+        create_random_tx(chain_with_block_validation, funded_address_private_key)
+    ]
+
+    # Peer1 sends some txs (Important we let the TxPool send them to feed the bloom)
+    await peer1_tx_pool._handle_tx(peer2.session, txs_broadcasted_by_peer1)
+
+    await asyncio.wait_for(peer2_got_tx.wait(), timeout=0.01)
+    assert len(peer2_incoming_tx) == 1
+
+    assert peer2_incoming_tx[0].as_dict() == txs_broadcasted_by_peer1[0].as_dict()
+
+    # Clear the recording, we asserted all we want and would like to have a fresh start
+    peer2_incoming_tx.clear()
+    peer2_got_tx.clear()
+
+    # Peer1 sends same txs again (Important we let the TxPool send them to feed the bloom)
+    await peer1_tx_pool._handle_tx(peer2.session, txs_broadcasted_by_peer1)
+
+    # Check that Peer2 doesn't receive them again
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(peer2_got_tx.wait(), timeout=0.01)
+    assert len(peer2_incoming_tx) == 0
+
+    # Peer2 sends exact same txs back (Important we let the TxPool send them to feed the bloom)
+    await peer1_tx_pool._handle_tx(peer1.session, txs_broadcasted_by_peer1)
+
+    # Check that Peer1 won't get them as that is where they originally came from
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(peer1_got_tx.wait(), timeout=0.01)
+    assert len(peer1_incoming_tx) == 0
+
+    txs_broadcasted_by_peer2 = [
+        create_random_tx(chain_with_block_validation, funded_address_private_key),
+        txs_broadcasted_by_peer1[0]
+    ]
+
+    # Peer2 sends old + new tx
+    await peer2_tx_pool._handle_tx(peer1.session, txs_broadcasted_by_peer2)
+
+    await asyncio.wait_for(peer1_got_tx.wait(), timeout=0.01)
+
+    # Check that Peer1 receives only the one tx that it didn't know about
+    assert peer1_incoming_tx[0].as_dict() == txs_broadcasted_by_peer2[0].as_dict()
+    assert len(peer1_incoming_tx) == 1
+
+
+@pytest.mark.asyncio
+async def test_does_not_propagate_invalid_tx(two_connected_tx_pools,
                                              funded_address_private_key,
-                                             chain_with_block_validation,
-                                             tx_validator):
+                                             chain_with_block_validation):
+    (
+        (peer1, peer1_event_bus, peer1_tx_pool),
+        (peer2, peer2_event_bus, peer2_tx_pool)
+    ) = two_connected_tx_pools
+
+    peer1_incoming_tx, peer1_got_tx = observe_incoming_transactions(peer1_event_bus)
+    peer2_incoming_tx, peer2_got_tx = observe_incoming_transactions(peer2_event_bus)
+
     chain = chain_with_block_validation
 
-    initial_two_peers = TEST_NODES[:2]
-    node_one = initial_two_peers[0]
-    node_two = initial_two_peers[1]
+    txs_broadcasted_by_peer1 = [
+        create_random_tx(chain, funded_address_private_key, is_valid=False),
+        create_random_tx(chain, funded_address_private_key)
+    ]
 
-    async with AsyncExitStack() as stack:
-        await stack.enter_async_context(mock_request_response(
-            GetConnectedPeersRequest,
-            GetConnectedPeersResponseFactory.from_sessions(initial_two_peers),
-            event_bus,
-        ))
+    # Peer1 sends some txs (Important we let the TxPool send them to feed the bloom)
+    await peer1_tx_pool._handle_tx(peer2.session, txs_broadcasted_by_peer1)
 
-        peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(peer_pool))
-
-        tx_pool = TxPool(event_bus, peer_pool, tx_validator)
-        await stack.enter_async_context(background_asyncio_service(tx_pool))
-
-        await asyncio.sleep(0.01)
-
-        txs_broadcasted_by_peer1 = [
-            create_random_tx(chain, funded_address_private_key, is_valid=False),
-            create_random_tx(chain, funded_address_private_key)
-        ]
-
-        outgoing_tx, got_txns = observe_outgoing_transactions(event_bus)
-
-        # Peer1 sends some txs
-        await event_bus.broadcast(
-            TransactionsEvent(session=node_one, command=Transactions(txs_broadcasted_by_peer1))
-        )
-        await asyncio.wait_for(got_txns.wait(), timeout=0.1)
-
-        # Check that Peer2 received only the second tx which is valid
-        assert outgoing_tx == [
-            (node_two, (txs_broadcasted_by_peer1[1],)),
-        ]
+    # Check that Peer2 received only the second tx which is valid
+    await asyncio.wait_for(peer2_got_tx.wait(), timeout=0.01)
+    assert len(peer2_incoming_tx) == 1
+    assert peer2_incoming_tx[0].as_dict() == txs_broadcasted_by_peer1[1].as_dict()
 
 
 def create_random_tx(chain, private_key, is_valid=True):
