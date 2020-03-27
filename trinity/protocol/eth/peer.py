@@ -72,6 +72,7 @@ from .events import (
     GetPooledTransactionsEvent,
     GetPooledTransactionsRequest,
     SendPooledTransactionsEvent,
+    SendTransactionsEvent
 )
 from .payloads import StatusV63Payload, StatusPayload
 from .proto import ETHProtocolV63, ETHProtocol, ETHProtocolV64
@@ -197,6 +198,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         self.run_daemon_event(SendNodeDataEvent, self.handle_node_data_event)
         self.run_daemon_event(SendReceiptsEvent, self.handle_receipts_event)
         self.run_daemon_event(SendPooledTransactionsEvent, self.handle_pooled_transactions_event)
+        self.run_daemon_event(SendTransactionsEvent, self.handle_transactions_event)
 
         self.run_daemon_request(GetBlockHeadersRequest, self.handle_get_block_headers_request)
         self.run_daemon_request(GetReceiptsRequest, self.handle_get_receipts_request)
@@ -239,6 +241,13 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     @async_fire_and_forget
     async def handle_pooled_transactions_event(self, event: SendPooledTransactionsEvent) -> None:
+        await self.try_with_session(
+            event.session,
+            lambda peer: peer.sub_proto.send(event.command)
+        )
+
+    @async_fire_and_forget
+    async def handle_transactions_event(self, event: SendTransactionsEvent) -> None:
         await self.try_with_session(
             event.session,
             lambda peer: peer.sub_proto.send(event.command)
