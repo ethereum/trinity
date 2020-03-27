@@ -127,7 +127,7 @@ class GetBlockHeadersEvent(PeerPoolMessageEvent):
 
 
 @dataclass
-class SendBlockHeadersEvent(BaseEvent):
+class SendBlockHeadersEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``LESPeer.sub_proto.send_block_headers`` call from a proxy peer to the actual
     peer that sits in the peer pool.

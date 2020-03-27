@@ -136,7 +136,7 @@ class PooledTransactionsEvent(PeerPoolMessageEvent):
 
 
 @dataclass
-class SendBlockHeadersEvent(BaseEvent):
+class SendBlockHeadersEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``ETHPeer.sub_proto.send_block_headers`` call from a proxy peer to the actual
     peer that sits in the peer pool.
@@ -146,7 +146,7 @@ class SendBlockHeadersEvent(BaseEvent):
 
 
 @dataclass
-class SendBlockBodiesEvent(BaseEvent):
+class SendBlockBodiesEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``ETHPeer.sub_proto.send_block_bodies`` call from a proxy peer to the actual
     peer that sits in the peer pool.
@@ -156,7 +156,7 @@ class SendBlockBodiesEvent(BaseEvent):
 
 
 @dataclass
-class SendNodeDataEvent(BaseEvent):
+class SendNodeDataEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``ETHPeer.sub_proto.send_node_data`` call from a proxy peer to the actual
     peer that sits in the peer pool.
@@ -166,7 +166,7 @@ class SendNodeDataEvent(BaseEvent):
 
 
 @dataclass
-class SendReceiptsEvent(BaseEvent):
+class SendReceiptsEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``ETHPeer.sub_proto.send_receipts`` call from a proxy peer to the actual
     peer that sits in the peer pool.
@@ -176,7 +176,7 @@ class SendReceiptsEvent(BaseEvent):
 
 
 @dataclass
-class SendTransactionsEvent(BaseEvent):
+class SendTransactionsEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``ETHPeer.sub_proto.send_transactions`` call from a proxy peer to the actual
     peer that sits in the peer pool.
@@ -186,7 +186,7 @@ class SendTransactionsEvent(BaseEvent):
 
 
 @dataclass
-class SendPooledTransactionsEvent(BaseEvent):
+class SendPooledTransactionsEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``ETHPeer.sub_proto.send_pooled_transactions`` call from a proxy peer to
     the actual peer that sits in the peer pool.
