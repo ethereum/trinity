@@ -69,43 +69,43 @@ async def two_connected_tx_pools(event_bus,
                                  tx_validator,
                                  client_and_server):
 
-    peer1_event_bus = event_bus
-    peer2_event_bus = other_event_bus
-    peer2, peer1 = client_and_server
+    alice_event_bus = event_bus
+    bob_event_bus = other_event_bus
+    bob, alice = client_and_server
 
-    peer2_peer_pool = MockPeerPoolWithConnectedPeers([peer2], event_bus=peer2_event_bus)
-    peer1_peer_pool = MockPeerPoolWithConnectedPeers([peer1], event_bus=peer1_event_bus)
+    bob_peer_pool = MockPeerPoolWithConnectedPeers([bob], event_bus=bob_event_bus)
+    alice_peer_pool = MockPeerPoolWithConnectedPeers([alice], event_bus=alice_event_bus)
 
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(run_peer_pool_event_server(
-            peer2_event_bus, peer2_peer_pool, handler_type=ETHPeerPoolEventServer
+            bob_event_bus, bob_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
 
         await stack.enter_async_context(run_peer_pool_event_server(
-            peer1_event_bus, peer1_peer_pool, handler_type=ETHPeerPoolEventServer
+            alice_event_bus, alice_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
 
-        peer1_tx_pool = TxPool(
-            peer1_event_bus,
-            ETHProxyPeerPool(peer1_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
+        alice_tx_pool = TxPool(
+            alice_event_bus,
+            ETHProxyPeerPool(alice_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
             tx_validator,
         )
-        await stack.enter_async_context(background_asyncio_service(peer1_tx_pool))
+        await stack.enter_async_context(background_asyncio_service(alice_tx_pool))
 
-        peer2_tx_pool = TxPool(
-            peer2_event_bus,
-            ETHProxyPeerPool(peer2_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
+        bob_tx_pool = TxPool(
+            bob_event_bus,
+            ETHProxyPeerPool(bob_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
             tx_validator,
         )
-        await stack.enter_async_context(background_asyncio_service(peer2_tx_pool))
+        await stack.enter_async_context(background_asyncio_service(bob_tx_pool))
 
-        peer2_proxy_peer_pool = ETHProxyPeerPool(peer2_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(peer2_proxy_peer_pool))
+        bob_proxy_peer_pool = ETHProxyPeerPool(bob_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(bob_proxy_peer_pool))
 
-        peer1_proxy_peer_pool = ETHProxyPeerPool(peer1_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(peer1_proxy_peer_pool))
+        alice_proxy_peer_pool = ETHProxyPeerPool(alice_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(run_service(alice_proxy_peer_pool))
 
-        yield (peer1, peer1_event_bus, peer1_tx_pool, ), (peer2, peer2_event_bus, peer2_tx_pool)
+        yield (alice, alice_event_bus, alice_tx_pool, ), (bob, bob_event_bus, bob_tx_pool)
 
 
 @pytest.mark.asyncio
@@ -114,58 +114,58 @@ async def test_tx_propagation(two_connected_tx_pools,
                               funded_address_private_key):
 
     (
-        (peer1, peer1_event_bus, peer1_tx_pool),
-        (peer2, peer2_event_bus, peer2_tx_pool)
+        (alice, alice_event_bus, alice_tx_pool),
+        (bob, bob_event_bus, bob_tx_pool)
     ) = two_connected_tx_pools
 
-    peer1_incoming_tx, peer1_got_tx = observe_incoming_transactions(peer1_event_bus)
-    peer2_incoming_tx, peer2_got_tx = observe_incoming_transactions(peer2_event_bus)
+    alice_incoming_tx, alice_got_tx = observe_incoming_transactions(alice_event_bus)
+    bob_incoming_tx, bob_got_tx = observe_incoming_transactions(bob_event_bus)
 
-    txs_broadcasted_by_peer1 = [
+    txs_broadcasted_by_alice = [
         create_random_tx(chain_with_block_validation, funded_address_private_key)
     ]
 
-    # Peer1 sends some txs (Important we let the TxPool send them to feed the bloom)
-    await peer1_tx_pool._handle_tx(peer2.session, txs_broadcasted_by_peer1)
+    # Alice sends some txs (Important we let the TxPool send them to feed the bloom)
+    await alice_tx_pool._handle_tx(bob.session, txs_broadcasted_by_alice)
 
-    await asyncio.wait_for(peer2_got_tx.wait(), timeout=0.01)
-    assert len(peer2_incoming_tx) == 1
+    await asyncio.wait_for(bob_got_tx.wait(), timeout=0.01)
+    assert len(bob_incoming_tx) == 1
 
-    assert peer2_incoming_tx[0].as_dict() == txs_broadcasted_by_peer1[0].as_dict()
+    assert bob_incoming_tx[0].as_dict() == txs_broadcasted_by_alice[0].as_dict()
 
     # Clear the recording, we asserted all we want and would like to have a fresh start
-    peer2_incoming_tx.clear()
-    peer2_got_tx.clear()
+    bob_incoming_tx.clear()
+    bob_got_tx.clear()
 
-    # Peer1 sends same txs again (Important we let the TxPool send them to feed the bloom)
-    await peer1_tx_pool._handle_tx(peer2.session, txs_broadcasted_by_peer1)
+    # Alice sends same txs again (Important we let the TxPool send them to feed the bloom)
+    await alice_tx_pool._handle_tx(bob.session, txs_broadcasted_by_alice)
 
-    # Check that Peer2 doesn't receive them again
+    # Check that Bob doesn't receive them again
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(peer2_got_tx.wait(), timeout=0.01)
-    assert len(peer2_incoming_tx) == 0
+        await asyncio.wait_for(bob_got_tx.wait(), timeout=0.01)
+    assert len(bob_incoming_tx) == 0
 
-    # Peer2 sends exact same txs back (Important we let the TxPool send them to feed the bloom)
-    await peer1_tx_pool._handle_tx(peer1.session, txs_broadcasted_by_peer1)
+    # Bob sends exact same txs back (Important we let the TxPool send them to feed the bloom)
+    await alice_tx_pool._handle_tx(alice.session, txs_broadcasted_by_alice)
 
-    # Check that Peer1 won't get them as that is where they originally came from
+    # Check that Alice won't get them as that is where they originally came from
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(peer1_got_tx.wait(), timeout=0.01)
-    assert len(peer1_incoming_tx) == 0
+        await asyncio.wait_for(alice_got_tx.wait(), timeout=0.01)
+    assert len(alice_incoming_tx) == 0
 
-    txs_broadcasted_by_peer2 = [
+    txs_broadcasted_by_bob = [
         create_random_tx(chain_with_block_validation, funded_address_private_key),
-        txs_broadcasted_by_peer1[0]
+        txs_broadcasted_by_alice[0]
     ]
 
-    # Peer2 sends old + new tx
-    await peer2_tx_pool._handle_tx(peer1.session, txs_broadcasted_by_peer2)
+    # Bob sends old + new tx
+    await bob_tx_pool._handle_tx(alice.session, txs_broadcasted_by_bob)
 
-    await asyncio.wait_for(peer1_got_tx.wait(), timeout=0.01)
+    await asyncio.wait_for(alice_got_tx.wait(), timeout=0.01)
 
-    # Check that Peer1 receives only the one tx that it didn't know about
-    assert peer1_incoming_tx[0].as_dict() == txs_broadcasted_by_peer2[0].as_dict()
-    assert len(peer1_incoming_tx) == 1
+    # Check that Alice receives only the one tx that it didn't know about
+    assert alice_incoming_tx[0].as_dict() == txs_broadcasted_by_bob[0].as_dict()
+    assert len(alice_incoming_tx) == 1
 
 
 @pytest.mark.asyncio
@@ -173,27 +173,27 @@ async def test_does_not_propagate_invalid_tx(two_connected_tx_pools,
                                              funded_address_private_key,
                                              chain_with_block_validation):
     (
-        (peer1, peer1_event_bus, peer1_tx_pool),
-        (peer2, peer2_event_bus, peer2_tx_pool)
+        (alice, alice_event_bus, alice_tx_pool),
+        (bob, bob_event_bus, bob_tx_pool)
     ) = two_connected_tx_pools
 
-    peer1_incoming_tx, peer1_got_tx = observe_incoming_transactions(peer1_event_bus)
-    peer2_incoming_tx, peer2_got_tx = observe_incoming_transactions(peer2_event_bus)
+    alice_incoming_tx, alice_got_tx = observe_incoming_transactions(alice_event_bus)
+    bob_incoming_tx, bob_got_tx = observe_incoming_transactions(bob_event_bus)
 
     chain = chain_with_block_validation
 
-    txs_broadcasted_by_peer1 = [
+    txs_broadcasted_by_alice = [
         create_random_tx(chain, funded_address_private_key, is_valid=False),
         create_random_tx(chain, funded_address_private_key)
     ]
 
-    # Peer1 sends some txs (Important we let the TxPool send them to feed the bloom)
-    await peer1_tx_pool._handle_tx(peer2.session, txs_broadcasted_by_peer1)
+    # Alice sends some txs (Important we let the TxPool send them to feed the bloom)
+    await alice_tx_pool._handle_tx(bob.session, txs_broadcasted_by_alice)
 
-    # Check that Peer2 received only the second tx which is valid
-    await asyncio.wait_for(peer2_got_tx.wait(), timeout=0.01)
-    assert len(peer2_incoming_tx) == 1
-    assert peer2_incoming_tx[0].as_dict() == txs_broadcasted_by_peer1[1].as_dict()
+    # Check that Bob received only the second tx which is valid
+    await asyncio.wait_for(bob_got_tx.wait(), timeout=0.01)
+    assert len(bob_incoming_tx) == 1
+    assert bob_incoming_tx[0].as_dict() == txs_broadcasted_by_alice[1].as_dict()
 
 
 def create_random_tx(chain, private_key, is_valid=True):

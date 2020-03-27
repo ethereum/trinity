@@ -169,13 +169,7 @@ class LESPeerPoolEventServer(PeerPoolEventServer[LESPeer]):
 
     async def run(self) -> None:
 
-        self.run_daemon_event(
-            SendBlockHeadersEvent,
-            lambda ev: self.try_with_session(
-                ev.session,
-                lambda peer: peer.sub_proto.send(ev.command)
-            )
-        )
+        self.run_daemon_event(SendBlockHeadersEvent, self.handle_send_command)
 
         self.run_daemon_request(
             GetBlockHeaderByHashRequest,

@@ -111,9 +111,12 @@ class GetConnectedPeersRequest(BaseRequestResponseEvent[GetConnectedPeersRespons
 @dataclass
 class PeerPoolMessageEvent(BaseEvent):
     """
-    Base event for all peer messages that are relayed on the event bus. The events are mapped
+    Base event for all peer messages that are routed through the event bus. The events are mapped
     to individual subclasses for every different ``cmd`` to allow efficient consumption through
     the event bus.
+    The event type is used bidirectionally, for peer messages that originate in the peer pool and
+    are propagated to any consuming party but also for peer messages that originate elsewhere but
+    are propagated toward the peer pool to be dispatched on a peer.
     """
     session: SessionAPI
     command: CommandAPI[Any]

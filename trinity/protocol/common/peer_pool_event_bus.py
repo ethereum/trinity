@@ -35,6 +35,7 @@ from p2p.peer_pool import BasePeerPool
 from p2p.service import BaseService
 
 from trinity._utils.logging import get_logger
+from trinity._utils.decorators import async_suppress_exceptions
 
 from .events import (
     ConnectToNodeCommand,
@@ -47,6 +48,7 @@ from .events import (
     PeerJoinedEvent,
     PeerLeftEvent,
     ProtocolCapabilitiesResponse,
+    PeerPoolMessageEvent,
 )
 from .peer import BaseProxyPeer
 
@@ -54,6 +56,9 @@ from .peer import BaseProxyPeer
 TPeer = TypeVar('TPeer', bound=BasePeer)
 TEvent = TypeVar('TEvent', bound=BaseEvent)
 TRequest = TypeVar('TRequest', bound=BaseRequestResponseEvent[Any])
+
+
+async_fire_and_forget = async_suppress_exceptions(PeerConnectionLost, asyncio.TimeoutError)
 
 
 class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
@@ -94,6 +99,17 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
         self.manager.run_daemon_task(self.handle_protocol_capabilities_requests)
 
         await self.manager.wait_finished()
+
+    @async_fire_and_forget
+    async def handle_send_command(self, event: PeerPoolMessageEvent) -> None:
+        """
+        Process any :class:`trinity.protocol.common.events.PeerPoolMessageEvent` by
+        sending the wrapped command through the protocol of the corresponding session.
+        """
+        await self.try_with_session(
+            event.session,
+            lambda peer: peer.sub_proto.send(event.command)
+        )
 
     def run_daemon_event(self,
                          event_type: Type[TEvent],

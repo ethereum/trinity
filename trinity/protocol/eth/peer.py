@@ -1,4 +1,3 @@
-import asyncio
 from typing import (
     Any,
     Tuple,
@@ -17,11 +16,7 @@ from lahja import (
 )
 
 from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI
-from p2p.exceptions import PeerConnectionLost
 
-from trinity._utils.decorators import (
-    async_suppress_exceptions,
-)
 from trinity.protocol.common.peer import (
     BaseChainPeer,
     BaseChainPeerFactory,
@@ -72,7 +67,7 @@ from .events import (
     GetPooledTransactionsEvent,
     GetPooledTransactionsRequest,
     SendPooledTransactionsEvent,
-    SendTransactionsEvent
+    SendTransactionsEvent,
 )
 from .payloads import StatusV63Payload, StatusPayload
 from .proto import ETHProtocolV63, ETHProtocol, ETHProtocolV64
@@ -172,9 +167,6 @@ class ETHPeerFactory(BaseChainPeerFactory):
         )
 
 
-async_fire_and_forget = async_suppress_exceptions(PeerConnectionLost, asyncio.TimeoutError)
-
-
 class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
     """
     ETH protocol specific ``PeerPoolEventServer``. See ``PeerPoolEventServer`` for more info.
@@ -192,13 +184,20 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         GetPooledTransactions,
     })
 
+    # SendX events that need to be forwarded to peer.sub_proto.send(event.command)
+    send_event_types = frozenset({
+        SendBlockHeadersEvent,
+        SendBlockBodiesEvent,
+        SendNodeDataEvent,
+        SendReceiptsEvent,
+        SendPooledTransactionsEvent,
+        SendTransactionsEvent,
+    })
+
     async def run(self) -> None:
-        self.run_daemon_event(SendBlockHeadersEvent, self.handle_block_headers_event)
-        self.run_daemon_event(SendBlockBodiesEvent, self.handle_block_bodies_event)
-        self.run_daemon_event(SendNodeDataEvent, self.handle_node_data_event)
-        self.run_daemon_event(SendReceiptsEvent, self.handle_receipts_event)
-        self.run_daemon_event(SendPooledTransactionsEvent, self.handle_pooled_transactions_event)
-        self.run_daemon_event(SendTransactionsEvent, self.handle_transactions_event)
+
+        for event_type in self.send_event_types:
+            self.run_daemon_event(event_type, self.handle_send_command)
 
         self.run_daemon_request(GetBlockHeadersRequest, self.handle_get_block_headers_request)
         self.run_daemon_request(GetReceiptsRequest, self.handle_get_receipts_request)
@@ -210,48 +209,6 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         )
 
         await super().run()
-
-    @async_fire_and_forget
-    async def handle_block_headers_event(self, event: SendBlockHeadersEvent) -> None:
-        await self.try_with_session(
-            event.session,
-            lambda peer: peer.sub_proto.send(event.command)
-        )
-
-    @async_fire_and_forget
-    async def handle_block_bodies_event(self, event: SendBlockBodiesEvent) -> None:
-        await self.try_with_session(
-            event.session,
-            lambda peer: peer.sub_proto.send(event.command)
-        )
-
-    @async_fire_and_forget
-    async def handle_node_data_event(self, event: SendNodeDataEvent) -> None:
-        await self.try_with_session(
-            event.session,
-            lambda peer: peer.sub_proto.send(event.command)
-        )
-
-    @async_fire_and_forget
-    async def handle_receipts_event(self, event: SendReceiptsEvent) -> None:
-        await self.try_with_session(
-            event.session,
-            lambda peer: peer.sub_proto.send(event.command)
-        )
-
-    @async_fire_and_forget
-    async def handle_pooled_transactions_event(self, event: SendPooledTransactionsEvent) -> None:
-        await self.try_with_session(
-            event.session,
-            lambda peer: peer.sub_proto.send(event.command)
-        )
-
-    @async_fire_and_forget
-    async def handle_transactions_event(self, event: SendTransactionsEvent) -> None:
-        await self.try_with_session(
-            event.session,
-            lambda peer: peer.sub_proto.send(event.command)
-        )
 
     async def handle_get_block_headers_request(
             self,
