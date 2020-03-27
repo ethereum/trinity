@@ -1,8 +1,21 @@
+import asyncio
+from typing import Any, AsyncIterator, cast
+
+from async_generator import asynccontextmanager
+
 from cached_property import cached_property
 
-from p2p.abc import ConnectionAPI
-from p2p.logic import Application, CommandHandler
+from cancel_token import OperationCancelled
+
+from async_service import (
+    background_asyncio_service,
+    Service,
+)
+
+from p2p.abc import CommandAPI, ConnectionAPI, HandlerFn
+from p2p import constants
 from p2p.disconnect import DisconnectReason
+from p2p.logic import Application, BaseLogic, CommandHandler
 from p2p.p2p_proto import Disconnect, Ping, Pong
 from p2p.qualifiers import always
 from p2p._utils import get_logger
@@ -15,7 +28,67 @@ class PongWhenPinged(CommandHandler[Ping]):
     command_type = Ping
 
     async def handle(self, connection: ConnectionAPI, cmd: Ping) -> None:
+        connection.logger.debug2("Received ping on %s, replying with pong", connection)
         connection.get_base_protocol().send(Pong(None))
+
+
+class PingAndDisconnectIfIdle(Service):
+
+    def __init__(self, connection: ConnectionAPI, idle_timeout: float) -> None:
+        self.connection = connection
+        self.idle_timeout = idle_timeout
+
+    async def run(self) -> None:
+        msg_received = asyncio.Event()
+
+        async def set_msg_received(connection: ConnectionAPI, cmd: CommandAPI[Any]) -> None:
+            msg_received.set()
+
+        conn = self.connection
+        half_timeout = self.idle_timeout / 2
+        with conn.add_msg_handler(cast(HandlerFn, set_msg_received)):
+            while conn.is_operational:
+                try:
+                    await conn.wait_first(msg_received.wait(), asyncio.sleep(half_timeout))
+                except OperationCancelled:
+                    return
+                if msg_received.is_set():
+                    conn.logger.debug2("Received msg on %s, restarting idle monitor", conn)
+                    msg_received.clear()
+                    continue
+                _send_ping(conn)
+                try:
+                    await conn.wait_first(msg_received.wait(), asyncio.sleep(half_timeout))
+                except OperationCancelled:
+                    return
+                if msg_received.is_set():
+                    conn.logger.debug2("Received msg on %s, restarting idle monitor", conn)
+                    msg_received.clear()
+                    continue
+
+                conn.logger.info(
+                    "Reached idle limit (%.2f) on %s, disconnecting", half_timeout * 2, conn)
+                conn.cancel_nowait()
+                return
+
+
+class DisconnectIfIdle(BaseLogic):
+    """
+    Cancels the connection if we receive no messages on it for CONN_IDLE_TIMEOUT seconds.
+
+    After CONN_IDLE_TIMEOUT/2 seconds without receiving any messages, we send a ping. If after
+    CONN_IDLE_TIMEOUT/2 we still haven't received any messages, cancel the connection.
+    """
+    qualifier = always  # always valid for all connections.
+
+    def __init__(self, idle_timeout: float) -> None:
+        self.idle_timeout = idle_timeout
+
+    @asynccontextmanager
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
+        service = PingAndDisconnectIfIdle(connection, self.idle_timeout)
+        async with background_asyncio_service(service):
+            yield
 
 
 class P2PAPI(Application):
@@ -28,6 +101,7 @@ class P2PAPI(Application):
     def __init__(self) -> None:
         self.logger = get_logger('p2p.p2p_api.P2PAPI')
         self.add_child_behavior(PongWhenPinged().as_behavior())
+        self.add_child_behavior(DisconnectIfIdle(constants.CONN_IDLE_TIMEOUT).as_behavior())
 
     #
     # Properties from handshake
@@ -56,10 +130,15 @@ class P2PAPI(Application):
     # Sending Pings
     #
     def send_ping(self) -> None:
-        self.connection.get_base_protocol().send(Ping(None))
+        _send_ping(self.connection)
 
     def send_pong(self) -> None:
         self.connection.get_base_protocol().send(Pong(None))
 
     def send_disconnect(self, reason: DisconnectReason) -> None:
+        self.logger.debug2("Sending Disconnect on %s", self.connection)
         self.connection.get_base_protocol().send(Disconnect(reason))
+
+
+def _send_ping(connection: ConnectionAPI) -> None:
+    connection.get_base_protocol().send(Ping(None))

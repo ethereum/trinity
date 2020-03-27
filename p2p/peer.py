@@ -234,7 +234,7 @@ class BasePeer(BaseService):
     async def _cleanup(self) -> None:
         if (self.p2p_api.local_disconnect_reason is None and
                 self.p2p_api.remote_disconnect_reason is None):
-            self.p2p_api.disconnect(DisconnectReason.CLIENT_QUITTING)
+            self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
         # We run as a child service of the connection, but we don't want to leave a connection
         # open if somebody cancels just us, so this ensures the connection gets closed as well.
         if not self.connection.is_cancelled:
@@ -249,7 +249,8 @@ class BasePeer(BaseService):
 
     async def _handle_disconnect(self, connection: ConnectionAPI, cmd: Disconnect) -> None:
         self.p2p_api.remote_disconnect_reason = cmd.payload
-        self.cancel_nowait()
+        if not self.is_cancelled:
+            self.cancel_nowait()
 
     async def _run(self) -> None:
         self.connection.add_command_handler(Disconnect, cast(HandlerFn, self._handle_disconnect))
@@ -261,12 +262,7 @@ class BasePeer(BaseService):
                 if behavior.should_apply_to(self.connection):
                     await stack.enter_async_context(behavior.apply(self.connection))
 
-            # setup handler for protocol messages to pass messages to subscribers
-            for protocol in self.connection.get_protocols():
-                self.connection.add_protocol_handler(
-                    type(protocol),
-                    self._handle_subscriber_message,
-                )
+            self.connection.add_msg_handler(self._handle_subscriber_message)
 
             self.setup_protocol_handlers()
 
@@ -293,16 +289,7 @@ class BasePeer(BaseService):
         On completion of this method, the peer will be disconnected
         and not in the peer pool anymore.
         """
-        if reason is DisconnectReason.BAD_PROTOCOL:
-            self.connection_tracker.record_blacklist(
-                self.remote,
-                timeout_seconds=BLACKLIST_SECONDS_BAD_PROTOCOL,
-                reason="Bad protocol",
-            )
-        try:
-            self.p2p_api.disconnect(reason)
-        except PeerConnectionLost:
-            self.logger.warning("Tried to disconnect from %s, but already disconnected", self)
+        self.disconnect_nowait(reason)
 
         if self.is_operational:
             await self.cancel()
@@ -316,10 +303,13 @@ class BasePeer(BaseService):
                 timeout_seconds=BLACKLIST_SECONDS_BAD_PROTOCOL,
                 reason="Bad protocol",
             )
+        self._send_disconnect(reason)
+
+    def _send_disconnect(self, reason: DisconnectReason) -> None:
         try:
             self.p2p_api.disconnect(reason)
         except PeerConnectionLost:
-            self.logger.debug("Tried to nowait disconnect from %s, but already disconnected", self)
+            self.logger.debug("Tried to disconnect from %s, but already disconnected", self)
 
 
 class PeerMessage(NamedTuple):

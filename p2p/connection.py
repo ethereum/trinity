@@ -57,6 +57,7 @@ class Connection(ConnectionAPI, BaseService):
         Type[ProtocolAPI],
         Set[HandlerFn]
     ]
+    _msg_handlers: Set[HandlerFn]
     _command_handlers: DefaultDict[
         Type[CommandAPI[Any]],
         Set[HandlerFn]
@@ -76,6 +77,7 @@ class Connection(ConnectionAPI, BaseService):
 
         self._protocol_handlers = collections.defaultdict(set)
         self._command_handlers = collections.defaultdict(set)
+        self._msg_handlers = set()
 
         # An event that controls when the connection will start reading from
         # the individual multiplexed protocol streams and feeding handlers.
@@ -182,6 +184,7 @@ class Connection(ConnectionAPI, BaseService):
                 )
                 self.run_task(proto_handler_fn(self, cmd))
             command_handlers = set(self._command_handlers[type(cmd)])
+            command_handlers.update(self._msg_handlers)
             for cmd_handler_fn in command_handlers:
                 self.logger.debug2(
                     'Running command handler %s for protocol=%s command=%s',
@@ -205,6 +208,11 @@ class Connection(ConnectionAPI, BaseService):
             self._protocol_handlers[protocol_class].remove,
             handler_fn,
         )
+        return Subscription(cancel_fn)
+
+    def add_msg_handler(self, handler_fn: HandlerFn) -> SubscriptionAPI:
+        self._msg_handlers.add(handler_fn)
+        cancel_fn = functools.partial(self._msg_handlers.remove, handler_fn)
         return Subscription(cancel_fn)
 
     def add_command_handler(self,

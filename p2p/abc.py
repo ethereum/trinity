@@ -482,6 +482,13 @@ class AsyncioServiceAPI(ABC):
                    timeout: float = None) -> TReturn:
         ...
 
+    @abstractmethod
+    async def wait_first(self,
+                         *awaitables: Awaitable[TReturn],
+                         token: CancelToken = None,
+                         timeout: float = None) -> TReturn:
+        ...
+
 
 class HandshakeCheckAPI(ABC):
     """
@@ -618,6 +625,16 @@ class ConnectionAPI(AsyncioServiceAPI):
                             command_type: Type[CommandAPI[Any]],
                             handler_fn: HandlerFn,
                             ) -> SubscriptionAPI:
+        """
+        Add a handler for messages of the given type.
+        """
+        ...
+
+    @abstractmethod
+    def add_msg_handler(self, handler_fn: HandlerFn) -> SubscriptionAPI:
+        """
+        Add a handler for messages of any type.
+        """
         ...
 
     #
