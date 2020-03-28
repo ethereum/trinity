@@ -6,7 +6,7 @@ import time
 
 from eth_utils import humanize_hash
 
-from eth2.configs import generate_genesis_config
+from eth2.genesis import generate_genesis_config
 from trinity.config import BeaconChainConfig, TrinityConfig
 from trinity.extensibility import Application
 
@@ -75,9 +75,7 @@ class NetworkGeneratorComponent(Application):
         else:
             genesis_time = None
 
-        genesis_config = generate_genesis_config(
-            args.config_profile, genesis_time
-        )
+        genesis_config = generate_genesis_config(args.config_profile, genesis_time)
 
         output_file_path = args.output
         cls.logger.info(

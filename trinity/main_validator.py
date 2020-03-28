@@ -10,7 +10,8 @@ from eth2.beacon.tools.builder.initializer import load_genesis_key_map
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
-from eth2.configs import Eth2Config, generate_genesis_config
+from eth2.configs import Eth2Config
+from eth2.genesis import generate_genesis_config
 from eth2.validator_client.cli_parser import parse_cli_args
 from eth2.validator_client.config import Config
 from eth2.validator_client.tools.directory import create_dir_if_missing

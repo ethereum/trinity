@@ -71,6 +71,8 @@ from eth2.beacon.typing import (
 )
 from eth2.configs import (
     Eth2Config,
+)
+from eth2.genesis import (
     generate_genesis_config,
 )
 from p2p.kademlia import (
@@ -736,8 +738,10 @@ class BeaconChainConfig:
         override_lengths(eth2_config)
 
         genesis_state = from_formatted_dict(genesis_config["genesis_state"], BeaconState)
-        genesis_validator_key_map = load_genesis_key_map(genesis_config["genesis_validator_key_pairs"])
-        return cls(genesis_state, genesis_eth2_config, genesis_validator_key_map)
+        genesis_validator_key_map = load_genesis_key_map(
+            genesis_config["genesis_validator_key_pairs"]
+        )
+        return cls(genesis_state, eth2_config, genesis_validator_key_map)
 
     @classmethod
     def get_genesis_config_file_path(cls) -> Path:
