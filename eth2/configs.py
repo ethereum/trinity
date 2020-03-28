@@ -1,5 +1,5 @@
 from dataclasses import Field, dataclass, fields
-from typing import Any, Collection, Dict, Iterable, Tuple, Union, cast
+from typing import Any, Collection, Dict, Iterable, Optional, Tuple, Union, cast
 
 from eth.constants import ZERO_HASH32
 from eth_utils import decode_hex, encode_hex, to_dict
@@ -117,7 +117,7 @@ class Eth2Config:
 
 def generate_genesis_config(
     config_profile: Literal["minimal", "mainnet"],
-    genesis_time: Timestamp = None,
+    genesis_time: Optional[Timestamp] = None,
 ) -> Dict[str, Any]:
     eth2_config = _get_eth2_config(config_profile)
     override_lengths(eth2_config)
@@ -142,7 +142,6 @@ def generate_genesis_config(
 
     if genesis_time:
         initial_state.set("genesis_time", genesis_time)
-    # instead of genesis_state = adjust_
 
     return {
         "eth2_config": eth2_config.to_formatted_dict(),

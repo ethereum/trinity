@@ -81,7 +81,8 @@ class NetworkGeneratorComponent(Application):
 
         output_file_path = args.output
         cls.logger.info(
-            "configuration generated; genesis state has root %s with genesis time %d; writing to '%s'",
+            "configuration generated; genesis state has root %s with genesis time %d; "
+            "writing to '%s'",
             humanize_hash(genesis_config["genesis_state"].hash_tree_root),
             genesis_config["genesis_state"].genesis_time,
             output_file_path,
