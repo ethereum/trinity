@@ -756,6 +756,10 @@ class BeaconChainConfig:
 
 
 class BeaconAppConfig(BaseEth2AppConfig):
+    def __init__(self, config: TrinityConfig) -> None:
+        super().__init__(config)
+        self.bootstrap_nodes = config.bootstrap_nodes
+        self.preferred_nodes = config.preferred_nodes
 
     @classmethod
     def from_parser_args(cls,
@@ -767,12 +771,14 @@ class BeaconAppConfig(BaseEth2AppConfig):
         """
         if args is not None:
             # This is quick and dirty way to get bootstrap_nodes
-            trinity_config.bootstrap_nodes = tuple(
-                Multiaddr(maddr.strip()) for maddr in args.bootstrap_nodes.split(',') if maddr
-            ) if args.bootstrap_nodes is not None else tuple()
-            trinity_config.preferred_nodes = tuple(
-                Multiaddr(maddr.strip()) for maddr in args.preferred_nodes.split(',') if maddr
-            ) if args.preferred_nodes is not None else tuple()
+            if 'bootstrap_nodes' in args:
+                trinity_config.bootstrap_nodes = tuple(
+                    Multiaddr(maddr.strip()) for maddr in args.bootstrap_nodes.split(',') if maddr
+                ) if args.bootstrap_nodes is not None else tuple()
+            if 'preferred_nodes' in args:
+                trinity_config.preferred_nodes = tuple(
+                    Multiaddr(maddr.strip()) for maddr in args.preferred_nodes.split(',') if maddr
+                ) if args.preferred_nodes is not None else tuple()
         return cls(trinity_config)
 
     @property
