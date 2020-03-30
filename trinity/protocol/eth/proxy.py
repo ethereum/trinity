@@ -1,3 +1,4 @@
+import asyncio
 from typing import (
     Sequence,
     Tuple,
@@ -16,12 +17,16 @@ from eth_typing import (
 from lahja import (
     BroadcastConfig,
     EndpointAPI,
+    BaseEvent,
+    BaseRequestResponseEvent,
 )
+from lahja.base import TResponse
 
 from p2p.abc import SessionAPI
 
 from trinity._utils.errors import SupportsError
 from trinity._utils.logging import get_logger
+from trinity.exceptions import ExpectedSubscribersMissing
 from trinity.protocol.common.typing import (
     BlockBodyBundles,
     NodeDataBundles,
@@ -50,6 +55,9 @@ from .events import (
     GetPooledTransactionsRequest,
     SendPooledTransactionsEvent,
 )
+
+# Maximum number of seconds to wait for event / request subscribers
+MAX_SUBSCRIBER_WAIT_SECONDS = 2
 
 
 class ProxyETHAPI:
@@ -107,13 +115,12 @@ class ProxyETHAPI:
                                headers: Sequence[BlockHeaderAPI],
                                timeout: float = None) -> BlockBodyBundles:
 
-        response = await self._event_bus.request(
+        response = await self._safe_request(
             GetBlockBodiesRequest(
                 self.session,
                 headers,
                 timeout,
-            ),
-            self._broadcast_config
+            )
         )
 
         self.raise_if_needed(response)
@@ -130,13 +137,12 @@ class ProxyETHAPI:
                             node_hashes: Sequence[Hash32],
                             timeout: float = None) -> NodeDataBundles:
 
-        response = await self._event_bus.request(
+        response = await self._safe_request(
             GetNodeDataRequest(
                 self.session,
                 node_hashes,
                 timeout,
             ),
-            self._broadcast_config
         )
 
         self.raise_if_needed(response)
@@ -153,13 +159,12 @@ class ProxyETHAPI:
                            headers: Sequence[BlockHeaderAPI],
                            timeout: float = None) -> ReceiptsBundles:
 
-        response = await self._event_bus.request(
+        response = await self._safe_request(
             GetReceiptsRequest(
                 self.session,
                 headers,
                 timeout,
-            ),
-            self._broadcast_config
+            )
         )
 
         self.raise_if_needed(response)
@@ -176,13 +181,12 @@ class ProxyETHAPI:
                                       tx_hashes: Sequence[Hash32],
                                       timeout: float = None) -> Sequence[SignedTransactionAPI]:
 
-        response = await self._event_bus.request(
+        response = await self._safe_request(
             GetPooledTransactionsRequest(
                 self.session,
                 tx_hashes,
                 timeout
-            ),
-            self._broadcast_config
+            )
         )
 
         self.raise_if_needed(response)
@@ -195,50 +199,67 @@ class ProxyETHAPI:
 
         return response.transactions
 
-    def send_transactions(self,
-                          txns: Sequence[SignedTransactionAPI]) -> None:
+    async def send_transactions(self,
+                                txns: Sequence[SignedTransactionAPI]) -> None:
         command = Transactions(tuple(txns))
-        self._event_bus.broadcast_nowait(
-            SendTransactionsEvent(self.session, command),
-            self._broadcast_config,
-        )
+        await self._safe_broadcast(SendTransactionsEvent(self.session, command))
 
-    def send_pooled_transactions(self,
-                                 txns: Sequence[SignedTransactionAPI]) -> None:
+    async def send_pooled_transactions(self,
+                                       txns: Sequence[SignedTransactionAPI]) -> None:
         command = PooledTransactions(tuple(txns))
-        self._event_bus.broadcast_nowait(
-            SendPooledTransactionsEvent(self.session, command),
-            self._broadcast_config,
-        )
+        await self._safe_broadcast(SendPooledTransactionsEvent(self.session, command))
 
-    def send_block_headers(self, headers: Sequence[BlockHeaderAPI]) -> None:
+    async def send_block_headers(self, headers: Sequence[BlockHeaderAPI]) -> None:
         command = BlockHeaders(tuple(headers))
-        self._event_bus.broadcast_nowait(
-            SendBlockHeadersEvent(self.session, command),
-            self._broadcast_config,
-        )
+        await self._safe_broadcast(SendBlockHeadersEvent(self.session, command))
 
-    def send_block_bodies(self, blocks: Sequence[BlockAPI]) -> None:
+    async def send_block_bodies(self, blocks: Sequence[BlockAPI]) -> None:
         block_bodies = tuple(
             BlockBody(block.transactions, block.uncles)
             for block in blocks
         )
         command = BlockBodies(block_bodies)
-        self._event_bus.broadcast_nowait(
-            SendBlockBodiesEvent(self.session, command),
-            self._broadcast_config,
-        )
+        await self._safe_broadcast(SendBlockBodiesEvent(self.session, command))
 
-    def send_receipts(self, receipts: Sequence[Sequence[ReceiptAPI]]) -> None:
+    async def send_receipts(self, receipts: Sequence[Sequence[ReceiptAPI]]) -> None:
         command = Receipts(tuple(map(tuple, receipts)))
-        self._event_bus.broadcast_nowait(
-            SendReceiptsEvent(self.session, command),
-            self._broadcast_config,
-        )
+        await self._safe_broadcast(SendReceiptsEvent(self.session, command))
 
-    def send_node_data(self, nodes: Sequence[bytes]) -> None:
+    async def send_node_data(self, nodes: Sequence[bytes]) -> None:
         command = NodeData(tuple(nodes))
-        self._event_bus.broadcast_nowait(
-            SendNodeDataEvent(self.session, command),
-            self._broadcast_config,
-        )
+        await self._safe_broadcast(SendNodeDataEvent(self.session, command))
+
+    async def _safe_broadcast(self, event: BaseEvent) -> None:
+        """
+        Make a broadcast only after it was validated that is has subscribers,
+        otherwise raise exception.
+        """
+        event_type = type(event)
+        try:
+            await asyncio.wait_for(
+                self._event_bus.wait_until_any_endpoint_subscribed_to(event_type),
+                MAX_SUBSCRIBER_WAIT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            raise ExpectedSubscribersMissing(f"No subscribers for event type: {event_type}")
+        else:
+            self._event_bus.broadcast_nowait(
+                event,
+                self._broadcast_config,
+            )
+
+    async def _safe_request(self, request: BaseRequestResponseEvent[TResponse]) -> TResponse:
+        """
+        Make a request only after it was validated that it has subscribers,
+        otherwise raise an exception.
+        """
+        request_type = type(request)
+        try:
+            await asyncio.wait_for(
+                self._event_bus.wait_until_any_endpoint_subscribed_to(request_type),
+                MAX_SUBSCRIBER_WAIT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            raise ExpectedSubscribersMissing(f"No subscribers for request type: {request_type}")
+        else:
+            return await self._event_bus.request(request, self._broadcast_config)

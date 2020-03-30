@@ -113,7 +113,7 @@ class TxPool(Service):
 
         async for event in self._event_bus.stream(GetPooledTransactionsEvent):
             asking_peer = await self._peer_pool.ensure_proxy_peer(event.session)
-            asking_peer.eth_api.send_pooled_transactions([])
+            await asking_peer.eth_api.send_pooled_transactions([])
 
     async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SignedTransactionAPI]) -> None:
 
@@ -157,7 +157,7 @@ class TxPool(Service):
                         len(filtered_tx),
                         receiving_peer,
                     )
-                    receiving_peer.eth_api.send_transactions(filtered_tx)
+                    await receiving_peer.eth_api.send_transactions(filtered_tx)
                     self._add_txs_to_bloom(receiving_peer.session, filtered_tx)
                     # release to the event loop since this loop processes a
                     # lot of data queue up a lot of outbound messages.

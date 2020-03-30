@@ -64,7 +64,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
 
         headers = await self.lookup_headers(command.payload)
         self.logger.debug2("Replying to %s with %d headers", peer, len(headers))
-        peer.eth_api.send_block_headers(headers)
+        await peer.eth_api.send_block_headers(headers)
 
     async def handle_get_block_bodies(self,
                                       peer: ETHProxyPeer,
@@ -105,7 +105,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
                 continue
             bodies.append(BlockBody(transactions, uncles))
         self.logger.debug2("Replying to %s with %d block bodies", peer, len(bodies))
-        peer.eth_api.send_block_bodies(bodies)
+        await peer.eth_api.send_block_bodies(bodies)
 
     async def handle_get_receipts(self, peer: ETHProxyPeer, command: GetReceipts) -> None:
         block_hashes = command.payload
@@ -134,7 +134,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
                 continue
             receipts.append(block_receipts)
         self.logger.debug2("Replying to %s with receipts for %d blocks", peer, len(receipts))
-        peer.eth_api.send_receipts(receipts)
+        await peer.eth_api.send_receipts(receipts)
 
     async def handle_get_node_data(self, peer: ETHProxyPeer, command: GetNodeData) -> None:
         node_hashes = command.payload
@@ -158,7 +158,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
                 len(missing_node_hashes),
                 len(node_hashes),
             )
-        peer.eth_api.send_node_data(tuple(nodes))
+        await peer.eth_api.send_node_data(tuple(nodes))
 
 
 class ETHRequestServer(BaseIsolatedRequestServer):

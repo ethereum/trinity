@@ -141,3 +141,11 @@ class ENRMissingForkID(BaseTrinityError):
     Raised when a peer sends us an ENR without a ForkID.
     """
     pass
+
+
+class ExpectedSubscribersMissing(BaseTrinityError):
+    """
+    Raised when an eventbus request or broadcast was expected
+    to have subscribers but they were missing.
+    """
+    pass
