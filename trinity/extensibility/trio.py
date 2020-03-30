@@ -13,8 +13,16 @@ from trinity._utils.mp import ctx
 from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
 
-from .component import BaseIsolatedComponent
+from .component import BaseIsolatedComponent, BaseComponent
 from .event_bus import TrioEventBusService
+
+
+class TrioComponent(BaseComponent):
+    """
+    ``TrioComponent`` is a component that executes in-process
+    with the ``trio`` concurrency library.
+    """
+    pass
 
 
 class TrioIsolatedComponent(BaseIsolatedComponent):
