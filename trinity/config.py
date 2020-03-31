@@ -95,6 +95,7 @@ from trinity._utils.eip1085 import (
 from trinity._utils.filesystem import (
     PidFile,
 )
+from trinity._utils.version import construct_trinity_client_identifier
 from trinity._utils.xdg import (
     get_xdg_trinity_root,
 )
@@ -760,6 +761,7 @@ class BeaconAppConfig(BaseEth2AppConfig):
         super().__init__(config)
         self.bootstrap_nodes = config.bootstrap_nodes
         self.preferred_nodes = config.preferred_nodes
+        self.client_identifier = construct_trinity_client_identifier()
 
     @classmethod
     def from_parser_args(cls,
