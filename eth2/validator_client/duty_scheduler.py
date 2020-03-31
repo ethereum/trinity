@@ -5,10 +5,10 @@ from eth_typing import BLSPubkey
 from trio.abc import SendChannel
 
 from eth2.beacon.typing import Epoch
+from eth2.clock import Tick
 from eth2.validator_client.abc import BeaconNodeAPI
 from eth2.validator_client.duty import AttestationDuty, Duty, DutyType
 from eth2.validator_client.duty_store import DutyStore
-from eth2.validator_client.tick import Tick
 from eth2.validator_client.typing import RandaoProvider, ResolvedDuty
 
 logger = logging.getLogger("eth2.validator_client.duty_scheduler")

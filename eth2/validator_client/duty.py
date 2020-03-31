@@ -6,7 +6,7 @@ from eth_typing import BLSPubkey
 from eth2._utils.humanize import humanize_bytes
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.typing import CommitteeIndex
-from eth2.validator_client.tick import Tick
+from eth2.clock import Tick
 
 
 @unique

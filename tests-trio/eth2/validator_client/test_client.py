@@ -4,14 +4,13 @@ import pytest
 import trio
 
 from eth2.beacon.typing import CommitteeIndex
+from eth2.clock import Clock, Tick
 from eth2.validator_client.beacon_node import MockBeaconNode
 from eth2.validator_client.client import Client
-from eth2.validator_client.clock import Clock
 from eth2.validator_client.duty import AttestationDuty, BlockProposalDuty, DutyType
 from eth2.validator_client.key_store import KeyStore
 from eth2.validator_client.randao import mk_randao_provider
 from eth2.validator_client.signatory import sign
-from eth2.validator_client.tick import Tick
 
 
 def _mk_duty_fetcher(public_key, slots_per_epoch, seconds_per_slot):

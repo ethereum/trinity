@@ -5,8 +5,7 @@ from typing import AsyncIterable, AsyncIterator, Callable, Tuple
 import trio
 
 from eth2.beacon.typing import Epoch, Slot
-from eth2.validator_client.config import Config
-from eth2.validator_client.tick import Tick
+from eth2.clock.tick import Tick
 
 TICKS_PER_SLOT = 2
 DEFAULT_EPOCH_LOOKAHEAD = 1
@@ -59,18 +58,6 @@ class Clock(AsyncIterable[Tick]):
         self._genesis_time = genesis_time
         self._slots_per_epoch = slots_per_epoch
         self._seconds_per_epoch = seconds_per_epoch
-
-    @classmethod
-    def from_config(
-        cls, config: Config, time_provider: TimeProvider = _get_unix_time
-    ) -> "Clock":
-        return cls(
-            config.seconds_per_slot,
-            config.genesis_time,
-            config.slots_per_epoch,
-            config.seconds_per_epoch,
-            time_provider=time_provider,
-        )
 
     def _compute_slot_and_alignment(self, t: float) -> Tuple[Slot, bool]:
         """

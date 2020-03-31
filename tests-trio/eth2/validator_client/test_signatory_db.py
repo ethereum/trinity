@@ -2,7 +2,7 @@ import pytest
 
 from eth2.beacon.types.attestations import Attestation, AttestationData
 from eth2.beacon.types.blocks import BeaconBlock
-from eth2.validator_client.clock import Tick
+from eth2.clock import Tick
 from eth2.validator_client.duty import AttestationDuty, BlockProposalDuty
 from eth2.validator_client.signatory_db import InMemorySignatoryDB
 

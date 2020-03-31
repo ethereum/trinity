@@ -6,9 +6,9 @@ import argcomplete
 from async_service.trio import background_trio_service
 import trio
 
+from eth2.clock import Clock
 from eth2.validator_client.beacon_node import MockBeaconNode as BeaconNode
 from eth2.validator_client.client import Client
-from eth2.validator_client.clock import Clock
 from eth2.validator_client.config import Config
 from eth2.validator_client.key_store import KeyStore
 from eth2.validator_client.tools.password_providers import terminal_password_provider
@@ -30,7 +30,12 @@ async def _main(
     logger: logging.Logger, config: Config, arguments: argparse.Namespace
 ) -> None:
     key_store = KeyStore.from_config(config)
-    clock = Clock.from_config(config)
+    clock = Clock(
+        config.seconds_per_slot,
+        config.genesis_time,
+        config.slots_per_epoch,
+        config.seconds_per_epoch,
+    )
     beacon_node = BeaconNode.from_config(config)
 
     # with key_store.persistence():

@@ -18,8 +18,8 @@ from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
 from eth2.beacon.typing import CommitteeIndex, Epoch, Operation, SignedOperation, Slot
+from eth2.clock import TICKS_PER_SLOT, Tick
 from eth2.validator_client.abc import BeaconNodeAPI
-from eth2.validator_client.clock import TICKS_PER_SLOT
 from eth2.validator_client.config import Config
 from eth2.validator_client.duty import (
     AttestationDuty,
@@ -27,7 +27,6 @@ from eth2.validator_client.duty import (
     Duty,
     DutyType,
 )
-from eth2.validator_client.tick import Tick
 
 SYNCING_POLL_INTERVAL = 10  # seconds
 CONNECTION_RETRY_INTERVAL = 5  # seconds
