@@ -301,9 +301,6 @@ def construct_boot_info(app_identifier: str,
         common_log_level
     )
 
-    # This prints out the ASCII "trinity" header in the terminal
-    display_launch_logs(trinity_config)
-
     boot_info = BootInfo(
         args=args,
         trinity_config=trinity_config,
@@ -330,6 +327,9 @@ def main_entry(trinity_boot: BootFn,
     if hasattr(args, 'func'):
         args.func(args, trinity_config)
         return
+
+    # This prints out the ASCII "trinity" header in the terminal
+    display_launch_logs(trinity_config)
 
     # Setup the log listener which child processes relay their logs through
     with IPCListener(*handlers).run(trinity_config.logging_ipc_path):
