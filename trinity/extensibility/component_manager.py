@@ -7,7 +7,6 @@ from typing import (
 )
 
 from async_service import Service
-from async_exit_stack import AsyncExitStack
 
 from lahja import AsyncioEndpoint, ConnectionConfig, EndpointAPI
 
@@ -15,6 +14,7 @@ from trinity.boot_info import BootInfo
 from trinity.constants import (
     MAIN_EVENTBUS_ENDPOINT,
 )
+from trinity.contextgroup import AsyncContextGroup
 from trinity.events import (
     ShutdownRequest,
     AvailableEndpointsUpdated,
@@ -81,16 +81,12 @@ class ComponentManager(Service):
             # a little bit of extra try/finally structure here to produce good
             # logging messages about the component lifecycle.
             try:
-                async with AsyncExitStack() as stack:
-                    self.logger.info(
-                        "Starting components: %s",
-                        '/'.join(component.name for component in enabled_components),
-                    )
-                    # Concurrently start the components.
-                    await asyncio.gather(*(
-                        stack.enter_async_context(run_component(component))
-                        for component in enabled_components
-                    ))
+                self.logger.info(
+                    "Starting components: %s",
+                    '/'.join(component.name for component in enabled_components),
+                )
+                context_managers = [run_component(component) for component in enabled_components]
+                async with AsyncContextGroup(context_managers):
                     self.logger.info("Components started")
                     try:
                         await self._trigger_component_exit.wait()
