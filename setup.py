@@ -45,7 +45,7 @@ deps = {
         "plyvel==1.1.0",
         PYEVM_DEPENDENCY,
         "web3==5.4.0",
-        "lahja>=0.15.2,<0.16",
+        "lahja>=0.16.0,<0.17",
         "termcolor>=1.1.0,<2.0.0",
         "uvloop==0.14.0;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
         "websockets>=8.1.0",

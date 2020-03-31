@@ -18,6 +18,7 @@ from p2p.exceptions import (
 )
 
 from trinity.components.builtin.upnp.events import NewUPnPMapping
+from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity._utils.logging import get_logger
 
 
@@ -74,7 +75,7 @@ class UPnPService(Service):
                     event = NewUPnPMapping(external_ip)
                     self.logger.debug(
                         "NAT portmap created, broadcasting NewUPnPMapping event: %s", event)
-                    await self.event_bus.broadcast(event)
+                    await self.event_bus.broadcast(event, FIRE_AND_FORGET_BROADCASTING)
                 else:
                     self.logger.info("Unable to setup NAT portmap")
                 # Wait for the port mapping lifetime, and then try registering it again

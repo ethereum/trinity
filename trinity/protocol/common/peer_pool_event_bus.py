@@ -34,6 +34,7 @@ from p2p.peer import (
 from p2p.peer_pool import BasePeerPool
 from p2p.service import BaseService
 
+from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity._utils.logging import get_logger
 from trinity._utils.decorators import async_suppress_exceptions
 
@@ -253,11 +254,11 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
 
     def register_peer(self, peer: BasePeer) -> None:
         self.logger.debug2("Broadcasting PeerJoinedEvent for %s", peer)
-        self.event_bus.broadcast_nowait(PeerJoinedEvent(peer.session))
+        self.event_bus.broadcast_nowait(PeerJoinedEvent(peer.session), FIRE_AND_FORGET_BROADCASTING)
 
     def deregister_peer(self, peer: BasePeer) -> None:
         self.logger.debug2("Broadcasting PeerLeftEvent for %s", peer)
-        self.event_bus.broadcast_nowait(PeerLeftEvent(peer.session))
+        self.event_bus.broadcast_nowait(PeerLeftEvent(peer.session), FIRE_AND_FORGET_BROADCASTING)
 
 
 class DefaultPeerPoolEventServer(PeerPoolEventServer[BasePeer]):
