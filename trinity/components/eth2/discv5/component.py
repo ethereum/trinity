@@ -125,7 +125,7 @@ class DiscV5Component(TrioIsolatedComponent):
 
     @property
     def is_enabled(self) -> bool:
-        return True
+        return False
 
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
