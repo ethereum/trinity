@@ -1,10 +1,8 @@
 import argparse
 import logging
-import signal
 
 import argcomplete
 from async_service.trio import background_trio_service
-import trio
 
 from eth2.validator_client.beacon_node import MockBeaconNode as BeaconNode
 from eth2.validator_client.client import Client
@@ -12,18 +10,13 @@ from eth2.validator_client.clock import Clock
 from eth2.validator_client.config import Config
 from eth2.validator_client.key_store import KeyStore
 from eth2.validator_client.tools.password_providers import terminal_password_provider
+from trinity._utils.trio_utils import wait_for_interrupts
 from trinity.cli_parser import parser, subparser
 
 IMPORT_PARSER_HELP_MSG = (
     "import a validator private key to the keystore discovered from the configuration"
 )
 IMPORT_PARSER_KEY_ARGUMENT_HELP_MSG = "private key, encoded as big-endian hex"
-
-
-async def _wait_for_interrupts() -> None:
-    with trio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as stream:
-        async for _ in stream:
-            return
 
 
 async def _main(
@@ -37,7 +30,7 @@ async def _main(
     async with beacon_node:
         client = Client(key_store, clock, beacon_node)
         async with background_trio_service(client):
-            await _wait_for_interrupts()
+            await wait_for_interrupts()
             logger.info("received interrupt; shutting down...")
 
 
