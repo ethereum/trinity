@@ -32,6 +32,7 @@ import rlp
 from p2p.service import BaseService
 
 from trinity.chains.base import AsyncChainAPI
+from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.eth.peer import ETHPeerPool
@@ -627,7 +628,8 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
         # Always broadcast, to start previewing transactions that are further ahead in the block
         old_state_header = header.copy(state_root=parent_state_root)
         self._event_bus.broadcast_nowait(
-            DoStatelessBlockPreview(old_state_header, transactions)
+            DoStatelessBlockPreview(old_state_header, transactions),
+            FIRE_AND_FORGET_BROADCASTING
         )
 
         self._backfiller.set_root_hash(parent_state_root)

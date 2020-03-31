@@ -26,6 +26,7 @@ from trinity.protocol.common.peer_pool_event_bus import (
     BaseProxyPeer,
     BaseProxyPeerPool,
     PeerPoolEventServer,
+    FIRE_AND_FORGET_BROADCASTING,
 )
 from trinity.protocol.common.typing import (
     BlockBodyBundles,
@@ -261,24 +262,53 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
                                          session: SessionAPI,
                                          cmd: CommandAPI[Any]) -> None:
 
+        # These are broadcasted without a specific target. We shouldn't worry if they are consumed
+        # or not (e.g. transaction pool is enabled or disabled etc)
         if isinstance(cmd, GetBlockHeaders):
-            await self.event_bus.broadcast(GetBlockHeadersEvent(session, cmd))
+            await self.event_bus.broadcast(
+                GetBlockHeadersEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING,
+            )
         elif isinstance(cmd, GetBlockBodies):
-            await self.event_bus.broadcast(GetBlockBodiesEvent(session, cmd))
+            await self.event_bus.broadcast(
+                GetBlockBodiesEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING,
+            )
         elif isinstance(cmd, GetReceipts):
-            await self.event_bus.broadcast(GetReceiptsEvent(session, cmd))
+            await self.event_bus.broadcast(
+                GetReceiptsEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING,
+            )
         elif isinstance(cmd, GetNodeData):
-            await self.event_bus.broadcast(GetNodeDataEvent(session, cmd))
+            await self.event_bus.broadcast(
+                GetNodeDataEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING,
+            )
         elif isinstance(cmd, NewBlock):
-            await self.event_bus.broadcast(NewBlockEvent(session, cmd))
+            await self.event_bus.broadcast(
+                NewBlockEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING,
+            )
         elif isinstance(cmd, NewBlockHashes):
-            await self.event_bus.broadcast(NewBlockHashesEvent(session, cmd))
+            await self.event_bus.broadcast(
+                NewBlockHashesEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING,
+            )
         elif isinstance(cmd, Transactions):
-            await self.event_bus.broadcast(TransactionsEvent(session, cmd))
+            await self.event_bus.broadcast(
+                TransactionsEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING,
+            )
         elif isinstance(cmd, NewPooledTransactionHashes):
-            await self.event_bus.broadcast(NewPooledTransactionHashesEvent(session, cmd))
+            await self.event_bus.broadcast(
+                NewPooledTransactionHashesEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING
+            )
         elif isinstance(cmd, GetPooledTransactions):
-            await self.event_bus.broadcast(GetPooledTransactionsEvent(session, cmd))
+            await self.event_bus.broadcast(
+                GetPooledTransactionsEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING
+            )
         else:
             raise Exception(f"Command {cmd} is not broadcasted")
 

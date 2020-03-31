@@ -40,6 +40,8 @@ NETWORKDB_EVENTBUS_ENDPOINT = 'network-db'
 NETWORKING_EVENTBUS_ENDPOINT = 'networking'
 UPNP_EVENTBUS_ENDPOINT = 'upnp'
 TO_NETWORKING_BROADCAST_CONFIG = BroadcastConfig(filter_endpoint=NETWORKING_EVENTBUS_ENDPOINT)
+FIRE_AND_FORGET_BROADCASTING = BroadcastConfig(require_subscriber=False)
+
 
 # Network IDs: https://ethereum.stackexchange.com/questions/17051/how-to-select-a-network-id-or-is-there-a-list-of-network-ids/17101#17101  # noqa: E501
 MAINNET_NETWORK_ID = 1

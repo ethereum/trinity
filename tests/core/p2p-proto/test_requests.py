@@ -167,6 +167,12 @@ async def test_proxy_peer_requests_with_timeouts(request,
             server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
 
+        # We just want an ETHRequestServer that doesn't answer us but we still have to run
+        # *something* to at least subscribe to the events. Otherwise Lahja's safety check will yell
+        # at us for sending requests into the void.
+        for event_type in ETHRequestServer(None, None, None)._subscribed_events:
+            server_event_bus.subscribe(event_type, lambda _: None)
+
         client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
         await stack.enter_async_context(run_service(client_proxy_peer_pool))
 
