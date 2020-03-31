@@ -112,8 +112,15 @@ class Clock(AsyncIterable[Tick]):
         """
         genesis_time = self._genesis_time
         start_time = genesis_time - (with_epoch_lookahead * self._seconds_per_epoch)
+        now = int(self._time_provider())
+
+        if start_time < now:
+            return
+
         self.logger.info(
-            "...blocking until unix time %s which is %d epochs before the genesis time %d",
+            "...blocking for %d seconds until unix time %s which is %d epoch(s)"
+            " before the genesis time %d",
+            start_time - now,
             start_time,
             with_epoch_lookahead,
             genesis_time,
@@ -146,7 +153,6 @@ class Clock(AsyncIterable[Tick]):
 
         while True:
             tick = self._compute_current_tick()
-            self.logger.debug("%s", tick)
             if tick.is_at_genesis(self._genesis_time):
                 self.logger.warning("Network genesis time is now!")
             yield tick
