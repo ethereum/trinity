@@ -146,7 +146,6 @@ class Clock(AsyncIterable[Tick]):
 
         while True:
             tick = self._compute_current_tick()
-            self.logger.debug("%s", tick)
             if tick.is_at_genesis(self._genesis_time):
                 self.logger.warning("Network genesis time is now!")
             yield tick
