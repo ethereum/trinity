@@ -106,8 +106,9 @@ class TxPool(Service):
         # Process GetPooledTransactions requests
         self.manager.run_daemon_task(self._process_get_pooled_transactions_requests)
 
-        async for event in self._event_bus.stream(TransactionsEvent):
-            self.manager.run_task(self._handle_tx, event.session, event.command.payload)
+        async with trio.open_nursery() as nursery:
+            async for event in self._event_bus.stream(TransactionsEvent):
+                nursery.start_soon(self._handle_tx, event.session, event.command.payload)
 
     async def _process_get_pooled_transactions_requests(self) -> None:
 
