@@ -228,7 +228,7 @@ class ETHV63API(BaseETHAPI):
     head_info_tracker_cls = ETHV63HeadInfoTracker
 
     @cached_property
-    def protocol(self) -> ETHProtocolV63:
+    def protocol(self) -> ProtocolAPI:
         return self.connection.get_protocol_by_type(ETHProtocolV63)
 
     @cached_property
@@ -244,8 +244,8 @@ class ETHV64API(BaseETHAPI):
     head_info_tracker_cls = ETHHeadInfoTracker
 
     @cached_property
-    def protocol(self) -> ETHProtocol:
-        return self.connection.get_protocol_by_type(ETHProtocol)
+    def protocol(self) -> ProtocolAPI:
+        return self.connection.get_protocol_by_type(ETHProtocolV64)
 
     @cached_property
     def receipt(self) -> ETHHandshakeReceipt:
@@ -257,6 +257,10 @@ class ETHV64API(BaseETHAPI):
 
 class ETHAPI(ETHV64API):
     qualifier = HasProtocol(ETHProtocol)
+
+    @cached_property
+    def protocol(self) -> ProtocolAPI:
+        return self.connection.get_protocol_by_type(ETHProtocol)
 
     def __init__(self) -> None:
         super().__init__()

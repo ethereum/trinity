@@ -79,11 +79,15 @@ from .handshaker import ETHV63Handshaker, ETHHandshaker
 class ETHPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    supported_sub_protocols = (ETHProtocolV63, ETHProtocol)
+    supported_sub_protocols = (ETHProtocolV63, ETHProtocolV64, ETHProtocol)
     sub_proto: ETHProtocol = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
-        return super().get_behaviors() + (ETHV63API().as_behavior(), ETHAPI().as_behavior())
+        return super().get_behaviors() + (
+            ETHV63API().as_behavior(),
+            ETHV64API().as_behavior(),
+            ETHAPI().as_behavior()
+        )
 
     @cached_property
     def eth_api(self) -> AnyETHAPI:

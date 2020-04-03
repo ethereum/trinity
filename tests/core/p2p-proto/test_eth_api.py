@@ -15,7 +15,7 @@ from eth.vm.forks import MuirGlacierVM, PetersburgVM
 from trinity._utils.assertions import assert_type_equality
 from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.exceptions import WrongForkIDFailure
-from trinity.protocol.eth.api import ETHAPI, ETHV63API
+from trinity.protocol.eth.api import ETHAPI, ETHV63API, ETHV64API
 from trinity.protocol.eth.commands import (
     GetBlockHeaders,
     GetNodeData,
@@ -24,7 +24,11 @@ from trinity.protocol.eth.commands import (
     StatusV63,
 )
 from trinity.protocol.eth.handshaker import ETHHandshakeReceipt, ETHV63HandshakeReceipt
-from trinity.protocol.eth.proto import ETHProtocolV63, ETHProtocol
+from trinity.protocol.eth.proto import (
+    ETHProtocol,
+    ETHProtocolV63,
+    ETHProtocolV64,
+)
 
 from trinity.tools.factories.common import (
     BlockHeadersQueryFactory,
@@ -38,6 +42,7 @@ from trinity.tools.factories import (
     ChainContextFactory,
     ETHPeerPairFactory,
     ETHV63PeerPairFactory,
+    ETHV64PeerPairFactory,
 )
 
 
@@ -80,7 +85,7 @@ def alice_chain_on_fork(bob_chain):
     return chain
 
 
-@pytest.fixture(params=(ETHV63PeerPairFactory, ETHPeerPairFactory))
+@pytest.fixture(params=(ETHV63PeerPairFactory, ETHV64PeerPairFactory, ETHPeerPairFactory))
 async def alice_and_bob(alice_chain, bob_chain, request):
     pair_factory = request.param(
         alice_client_version='alice',
@@ -108,6 +113,8 @@ def bob(alice_and_bob):
 def protocol_specific_classes(alice):
     if alice.connection.has_protocol(ETHProtocolV63):
         return ETHV63API, ETHV63HandshakeReceipt, StatusV63, StatusV63PayloadFactory
+    elif alice.connection.has_protocol(ETHProtocolV64):
+        return ETHV64API, ETHHandshakeReceipt, Status, StatusPayloadFactory
     elif alice.connection.has_protocol(ETHProtocol):
         return ETHAPI, ETHHandshakeReceipt, Status, StatusPayloadFactory
     else:
@@ -140,6 +147,7 @@ def StatusPayloadFactory_class(protocol_specific_classes):
 
 @pytest.mark.asyncio
 async def test_eth_api_properties(alice, ETHAPI_class, ETHHandshakeReceipt_class):
+
     assert alice.connection.has_logic(ETHAPI_class.name)
     eth_api = alice.connection.get_logic(ETHAPI_class.name, ETHAPI_class)
 
