@@ -252,6 +252,5 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
 
 
 if __name__ == "__main__":
-    from trinity.extensibility.component import run_standalone_eth1_component
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_standalone_eth1_component(NetworkDBComponent))
+    from trinity.extensibility.component import run_asyncio_eth1_component
+    run_asyncio_eth1_component(NetworkDBComponent)

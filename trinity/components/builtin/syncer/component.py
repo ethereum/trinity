@@ -349,7 +349,5 @@ if __name__ == "__main__":
     # you must pass the path to the discovery component's IPC file, like:
     # $ python .../syncer/component.py --trinity-root-dir /tmp/syncer \
     #        --connect-to-endpoints /tmp/syncer/mainnet/ipcs-eth1/discovery.ipc
-    import asyncio
-    from trinity.extensibility.component import run_standalone_eth1_component
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_standalone_eth1_component(SyncerComponent))
+    from trinity.extensibility.component import run_asyncio_eth1_component
+    run_asyncio_eth1_component(SyncerComponent)
