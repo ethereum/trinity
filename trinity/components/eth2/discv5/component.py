@@ -232,6 +232,6 @@ class DiscV5Component(TrioIsolatedComponent):
 
 
 if __name__ == "__main__":
-    from trinity.extensibility.component import run_standalone_eth2_component
+    from trinity.extensibility.component import run_trio_eth1_component
 
-    trio.run(run_standalone_eth2_component, DiscV5Component)
+    run_trio_eth1_component(DiscV5Component)

@@ -116,5 +116,5 @@ async def generate_eth_cap_enr_field(
 
 
 if __name__ == "__main__":
-    from trinity.extensibility.component import run_standalone_eth1_component
-    trio.run(run_standalone_eth1_component, PeerDiscoveryComponent)
+    from trinity.extensibility.component import run_trio_eth1_component
+    run_trio_eth1_component(PeerDiscoveryComponent)

@@ -3,7 +3,7 @@ from argparse import (
     _SubParsersAction,
 )
 
-from async_service import run_asyncio_service
+from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
@@ -41,11 +41,10 @@ class UpnpComponent(AsyncioIsolatedComponent):
         port = boot_info.trinity_config.port
         upnp_service = UPnPService(port, event_bus)
 
-        await run_asyncio_service(upnp_service)
+        async with background_asyncio_service(upnp_service) as manager:
+            await manager.wait_finished()
 
 
 if __name__ == "__main__":
-    import asyncio
-    from trinity.extensibility.component import run_standalone_eth1_component
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_standalone_eth1_component(UpnpComponent))
+    from trinity.extensibility.component import run_asyncio_eth1_component
+    run_asyncio_eth1_component(UpnpComponent)

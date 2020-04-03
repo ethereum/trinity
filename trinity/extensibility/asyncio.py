@@ -72,7 +72,7 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
 
     @classmethod
     @abstractmethod
-    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         """
         Define the entry point of the component. Should be overwritten in subclasses.
         """
