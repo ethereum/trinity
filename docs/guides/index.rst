@@ -12,3 +12,4 @@ This section aims to provide hands-on guides to demonstrate how to use Trinity. 
    architecture
    creating_a_custom_testnet
    writing_components
+   setting_up_local_monitoring
