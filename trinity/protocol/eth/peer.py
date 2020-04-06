@@ -71,7 +71,7 @@ from .events import (
     SendTransactionsEvent,
 )
 from .payloads import StatusV63Payload, StatusPayload
-from .proto import ETHProtocolV63, ETHProtocol, ETHProtocolV64
+from .proto import ETHProtocolV63, ETHProtocolV64, ETHProtocolV65
 from .proxy import ProxyETHAPI
 from .handshaker import ETHV63Handshaker, ETHHandshaker
 
@@ -79,8 +79,8 @@ from .handshaker import ETHV63Handshaker, ETHHandshaker
 class ETHPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    supported_sub_protocols = (ETHProtocolV63, ETHProtocolV64, ETHProtocol)
-    sub_proto: ETHProtocol = None
+    supported_sub_protocols = (ETHProtocolV63, ETHProtocolV64, ETHProtocolV65)
+    sub_proto: ETHProtocolV65 = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
         return super().get_behaviors() + (
@@ -95,7 +95,7 @@ class ETHPeer(BaseChainPeer):
             return self.connection.get_logic(ETHV63API.name, ETHV63API)
         if self.connection.has_protocol(ETHProtocolV64):
             return self.connection.get_logic(ETHV64API.name, ETHV64API)
-        elif self.connection.has_protocol(ETHProtocol):
+        elif self.connection.has_protocol(ETHProtocolV65):
             return self.connection.get_logic(ETHAPI.name, ETHAPI)
         else:
             raise Exception("Unreachable code")
@@ -162,7 +162,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
             total_difficulty=total_difficulty,
             genesis_hash=genesis_hash,
             network_id=self.context.network_id,
-            version=ETHProtocol.version,
+            version=ETHProtocolV65.version,
             fork_id=our_forkid
         )
 

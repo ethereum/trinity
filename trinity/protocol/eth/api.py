@@ -52,7 +52,7 @@ from .payloads import (
     StatusV63Payload,
     StatusPayload,
 )
-from .proto import ETHProtocolV63, ETHProtocol, ETHProtocolV64
+from .proto import ETHProtocolV63, ETHProtocolV65, ETHProtocolV64
 
 THandshakeReceipt = TypeVar("THandshakeReceipt", bound=BaseETHHandshakeReceipt[Any])
 
@@ -256,11 +256,11 @@ class ETHV64API(BaseETHAPI):
 
 
 class ETHAPI(ETHV64API):
-    qualifier = HasProtocol(ETHProtocol)
+    qualifier = HasProtocol(ETHProtocolV65)
 
     @cached_property
     def protocol(self) -> ProtocolAPI:
-        return self.connection.get_protocol_by_type(ETHProtocol)
+        return self.connection.get_protocol_by_type(ETHProtocolV65)
 
     def __init__(self) -> None:
         super().__init__()

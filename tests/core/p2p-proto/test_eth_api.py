@@ -25,9 +25,9 @@ from trinity.protocol.eth.commands import (
 )
 from trinity.protocol.eth.handshaker import ETHHandshakeReceipt, ETHV63HandshakeReceipt
 from trinity.protocol.eth.proto import (
-    ETHProtocol,
     ETHProtocolV63,
     ETHProtocolV64,
+    ETHProtocolV65,
 )
 
 from trinity.tools.factories.common import (
@@ -115,7 +115,7 @@ def protocol_specific_classes(alice):
         return ETHV63API, ETHV63HandshakeReceipt, StatusV63, StatusV63PayloadFactory
     elif alice.connection.has_protocol(ETHProtocolV64):
         return ETHV64API, ETHHandshakeReceipt, Status, StatusPayloadFactory
-    elif alice.connection.has_protocol(ETHProtocol):
+    elif alice.connection.has_protocol(ETHProtocolV65):
         return ETHAPI, ETHHandshakeReceipt, Status, StatusPayloadFactory
     else:
         raise Exception("No ETH protocol found")

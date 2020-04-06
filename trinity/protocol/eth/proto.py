@@ -72,7 +72,7 @@ class ETHProtocolV64(BaseETHProtocol):
     status_command_type = Status
 
 
-class ETHProtocol(BaseETHProtocol):
+class ETHProtocolV65(BaseETHProtocol):
     version = 65
     commands = (
         Status,
