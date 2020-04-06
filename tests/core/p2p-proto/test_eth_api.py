@@ -15,7 +15,7 @@ from eth.vm.forks import MuirGlacierVM, PetersburgVM
 from trinity._utils.assertions import assert_type_equality
 from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.exceptions import WrongForkIDFailure
-from trinity.protocol.eth.api import ETHAPI, ETHV63API, ETHV64API
+from trinity.protocol.eth.api import ETHV65API, ETHV63API, ETHV64API
 from trinity.protocol.eth.commands import (
     GetBlockHeaders,
     GetNodeData,
@@ -116,7 +116,7 @@ def protocol_specific_classes(alice):
     elif alice.connection.has_protocol(ETHProtocolV64):
         return ETHV64API, ETHHandshakeReceipt, Status, StatusPayloadFactory
     elif alice.connection.has_protocol(ETHProtocolV65):
-        return ETHAPI, ETHHandshakeReceipt, Status, StatusPayloadFactory
+        return ETHV65API, ETHHandshakeReceipt, Status, StatusPayloadFactory
     else:
         raise Exception("No ETH protocol found")
 

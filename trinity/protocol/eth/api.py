@@ -255,7 +255,7 @@ class ETHV64API(BaseETHAPI):
         self.protocol.send(Status(payload))
 
 
-class ETHAPI(ETHV64API):
+class ETHV65API(ETHV64API):
     qualifier = HasProtocol(ETHProtocolV65)
 
     @cached_property
@@ -273,4 +273,4 @@ class ETHAPI(ETHV64API):
         self.protocol.send(GetPooledTransactions(tuple(transaction_hashes)))
 
 
-AnyETHAPI = Union[ETHV63API, ETHV64API, ETHAPI]
+AnyETHAPI = Union[ETHV63API, ETHV64API, ETHV65API]

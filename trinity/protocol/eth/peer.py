@@ -35,7 +35,7 @@ from trinity.protocol.common.typing import (
 )
 from . import forkid
 
-from .api import ETHV63API, ETHAPI, AnyETHAPI, ETHV64API
+from .api import ETHV63API, ETHV65API, AnyETHAPI, ETHV64API
 from .commands import (
     GetBlockHeaders,
     GetBlockBodies,
@@ -86,7 +86,7 @@ class ETHPeer(BaseChainPeer):
         return super().get_behaviors() + (
             ETHV63API().as_behavior(),
             ETHV64API().as_behavior(),
-            ETHAPI().as_behavior()
+            ETHV65API().as_behavior()
         )
 
     @cached_property
@@ -96,7 +96,7 @@ class ETHPeer(BaseChainPeer):
         if self.connection.has_protocol(ETHProtocolV64):
             return self.connection.get_logic(ETHV64API.name, ETHV64API)
         elif self.connection.has_protocol(ETHProtocolV65):
-            return self.connection.get_logic(ETHAPI.name, ETHAPI)
+            return self.connection.get_logic(ETHV65API.name, ETHV65API)
         else:
             raise Exception("Unreachable code")
 
