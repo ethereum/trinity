@@ -38,9 +38,8 @@ class NormalizerAPI(ABC, Generic[TResponseCommand, TResult]):
     # a thread to ensure it doesn't block the main loop.
     is_normalization_slow: bool
 
-    @staticmethod
     @abstractmethod
-    def normalize_result(message: TResponseCommand) -> TResult:
+    def normalize_result(self, message: TResponseCommand) -> TResult:
         """
         Convert underlying peer message to final result
         """
