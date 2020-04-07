@@ -13,6 +13,7 @@ from p2p.exchange import (
     BaseExchange,
     noop_payload_validator,
 )
+from p2p.exchange.normalizers import DefaultNormalizer
 from trinity.protocol.common.payloads import (
     BlockHeadersQuery,
 )
@@ -35,11 +36,9 @@ from .commands import (
     PooledTransactions,
 )
 from .normalizers import (
-    BlockHeadersNormalizer,
     GetBlockBodiesNormalizer,
     GetNodeDataNormalizer,
     ReceiptsNormalizer,
-    GetPooledTransactionsNormalizer,
 )
 from .trackers import (
     GetBlockHeadersTracker,
@@ -64,7 +63,7 @@ BaseGetBlockHeadersExchange = BaseExchange[
 
 
 class GetBlockHeadersExchange(BaseGetBlockHeadersExchange):
-    _normalizer = BlockHeadersNormalizer()
+    _normalizer = DefaultNormalizer(BlockHeaders, Tuple[BlockHeaderAPI, ...])
     tracker_class = GetBlockHeadersTracker
 
     _request_command_type = GetBlockHeaders
@@ -178,7 +177,7 @@ BasePooledTransactionsExchange = BaseExchange[
 
 
 class GetPooledTransactionsExchange(BasePooledTransactionsExchange):
-    _normalizer = GetPooledTransactionsNormalizer()
+    _normalizer = DefaultNormalizer(PooledTransactions, Tuple[SignedTransactionAPI, ...])
     tracker_class = GetPooledTransactionsTracker
 
     _request_command_type = GetPooledTransactions

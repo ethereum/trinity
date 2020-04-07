@@ -9,6 +9,7 @@ from eth.abc import BlockHeaderAPI
 from p2p.exchange import (
     BaseExchange,
 )
+from p2p.exchange.normalizers import DefaultNormalizer
 from trinity._utils.les import (
     gen_request_id,
 )
@@ -17,9 +18,7 @@ from .commands import (
     BlockHeaders,
     GetBlockHeaders,
 )
-from .normalizers import (
-    BlockHeadersNormalizer,
-)
+
 from .payloads import (
     BlockHeadersQuery,
     GetBlockHeadersPayload,
@@ -43,7 +42,11 @@ BaseGetBlockHeadersExchange = BaseExchange[
 
 
 class GetBlockHeadersExchange(BaseGetBlockHeadersExchange):
-    _normalizer = BlockHeadersNormalizer()
+    _normalizer = DefaultNormalizer(
+        BlockHeaders,
+        Tuple[BlockHeaderAPI, ...],
+        normalize_fn=lambda res: res.payload.headers
+    )
     tracker_class = GetBlockHeadersTracker
 
     _request_command_type = GetBlockHeaders
