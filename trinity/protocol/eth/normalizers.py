@@ -1,12 +1,11 @@
 from typing import (
     Iterable,
-    Tuple,
 )
 
 from eth_utils import (
     to_tuple,
 )
-from eth.abc import BlockHeaderAPI, UnsignedTransactionAPI
+
 from eth.db.trie import make_trie_root_and_nodes
 from eth_hash.auto import keccak
 import rlp
@@ -21,21 +20,10 @@ from trinity.protocol.common.typing import (
 )
 
 from .commands import (
-    BlockHeaders,
     BlockBodies,
     NodeData,
     Receipts,
-    PooledTransactions,
 )
-
-
-BaseBlockHeadersNormalizer = BaseNormalizer[BlockHeaders, Tuple[BlockHeaderAPI, ...]]
-
-
-class BlockHeadersNormalizer(BaseBlockHeadersNormalizer):
-    @staticmethod
-    def normalize_result(cmd: BlockHeaders) -> Tuple[BlockHeaderAPI, ...]:
-        return cmd.payload
 
 
 class GetNodeDataNormalizer(BaseNormalizer[NodeData, NodeDataBundles]):
@@ -67,16 +55,3 @@ class GetBlockBodiesNormalizer(BaseNormalizer[BlockBodies, BlockBodyBundles]):
             uncle_hashes = keccak(rlp.encode(body.uncles))
             transaction_root_and_nodes = make_trie_root_and_nodes(body.transactions)
             yield body, transaction_root_and_nodes, uncle_hashes
-
-
-BaseGetPooledTransactionsNormalizer = BaseNormalizer[
-    PooledTransactions,
-    Tuple[UnsignedTransactionAPI, ...]
-]
-
-
-class GetPooledTransactionsNormalizer(BaseGetPooledTransactionsNormalizer):
-    @staticmethod
-    def normalize_result(
-            cmd: PooledTransactions) -> Tuple[UnsignedTransactionAPI, ...]:
-        return cmd.payload
