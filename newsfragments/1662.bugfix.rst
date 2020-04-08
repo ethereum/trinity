@@ -1,0 +1,1 @@
+Fix sync bug on non-linux machines when metrics are enabled.
