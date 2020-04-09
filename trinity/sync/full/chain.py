@@ -141,7 +141,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
         self._header_syncer = header_syncer
 
         # queue up any idle peers, in order of how fast they return block bodies
-        self._body_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.BlockBodies)
+        self._body_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.BlockBodiesV65)
 
         # Track incomplete block body download tasks
         # - arbitrarily allow several requests-worth of headers queued up
@@ -591,7 +591,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         super().__init__(chain, db, peer_pool, header_syncer, token)
 
         # queue up any idle peers, in order of how fast they return receipts
-        self._receipt_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.Receipts)
+        self._receipt_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.ReceiptsV65)
 
         # Track receipt download tasks
         # - arbitrarily allow several requests-worth of headers queued up

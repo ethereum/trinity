@@ -89,7 +89,7 @@ class Transactions(BaseCommand[Tuple[BaseTransactionFields, ...]]):
     )
 
 
-GET_BLOCK_HEADERS_STRUCTURE = sedes.List((
+GET_BLOCK_HEADERS_V65_STRUCTURE = sedes.List((
     HashOrNumber(),
     sedes.big_endian_int,
     sedes.big_endian_int,
@@ -97,28 +97,28 @@ GET_BLOCK_HEADERS_STRUCTURE = sedes.List((
 ))
 
 
-class GetBlockHeaders(BaseCommand[BlockHeadersQuery]):
+class GetBlockHeadersV65(BaseCommand[BlockHeadersQuery]):
     protocol_command_id = 3
     serialization_codec: RLPCodec[BlockHeadersQuery] = RLPCodec(
-        sedes=GET_BLOCK_HEADERS_STRUCTURE,
+        sedes=GET_BLOCK_HEADERS_V65_STRUCTURE,
         process_inbound_payload_fn=lambda args: BlockHeadersQuery(*args),
     )
 
 
-BLOCK_HEADERS_STRUCTURE = sedes.CountableList(BlockHeader)
+BLOCK_HEADERS_V65_STRUCTURE = sedes.CountableList(BlockHeader)
 
 
-class BlockHeaders(BaseCommand[Tuple[BlockHeaderAPI, ...]]):
+class BlockHeadersV65(BaseCommand[Tuple[BlockHeaderAPI, ...]]):
     protocol_command_id = 4
     serialization_codec: RLPCodec[Tuple[BlockHeaderAPI, ...]] = RLPCodec(
-        sedes=BLOCK_HEADERS_STRUCTURE,
+        sedes=BLOCK_HEADERS_V65_STRUCTURE,
     )
 
 
 GET_BLOCK_BODIES_STRUCTURE = sedes.CountableList(hash_sedes)
 
 
-class GetBlockBodies(BaseCommand[Tuple[Hash32, ...]]):
+class GetBlockBodiesV65(BaseCommand[Tuple[Hash32, ...]]):
     protocol_command_id = 5
     serialization_codec: RLPCodec[Tuple[Hash32, ...]] = RLPCodec(
         sedes=GET_BLOCK_BODIES_STRUCTURE,
@@ -128,7 +128,7 @@ class GetBlockBodies(BaseCommand[Tuple[Hash32, ...]]):
 BLOCK_BODIES_STRUCTURE = sedes.CountableList(BlockBody)
 
 
-class BlockBodies(BaseCommand[Tuple[BlockBody, ...]]):
+class BlockBodiesV65(BaseCommand[Tuple[BlockBody, ...]]):
     protocol_command_id = 6
     serialization_codec: RLPCodec[Tuple[BlockBody, ...]] = RLPCodec(
         sedes=BLOCK_BODIES_STRUCTURE,
@@ -166,14 +166,14 @@ class NewPooledTransactionHashes(BaseCommand[Tuple[Hash32, ...]]):
     )
 
 
-class GetPooledTransactions(BaseCommand[Tuple[Hash32, ...]]):
+class GetPooledTransactionsV65(BaseCommand[Tuple[Hash32, ...]]):
     protocol_command_id = 9
     serialization_codec: RLPCodec[Tuple[Hash32, ...]] = RLPCodec(
         sedes=sedes.CountableList(hash_sedes),
     )
 
 
-class PooledTransactions(BaseCommand[Tuple[SignedTransactionAPI, ...]]):
+class PooledTransactionsV65(BaseCommand[Tuple[SignedTransactionAPI, ...]]):
     protocol_command_id = 10
     serialization_codec: RLPCodec[Tuple[SignedTransactionAPI, ...]] = RLPCodec(
         sedes=sedes.CountableList(SignedTransactionAPI),
@@ -183,7 +183,7 @@ class PooledTransactions(BaseCommand[Tuple[SignedTransactionAPI, ...]]):
 GET_NODE_DATA_STRUCTURE = sedes.CountableList(hash_sedes)
 
 
-class GetNodeData(BaseCommand[Tuple[Hash32, ...]]):
+class GetNodeDataV65(BaseCommand[Tuple[Hash32, ...]]):
     protocol_command_id = 13
     serialization_codec: RLPCodec[Tuple[Hash32, ...]] = RLPCodec(
         sedes=GET_NODE_DATA_STRUCTURE,
@@ -193,7 +193,7 @@ class GetNodeData(BaseCommand[Tuple[Hash32, ...]]):
 NODE_DATA_STRUCTURE = sedes.CountableList(sedes.binary)
 
 
-class NodeData(BaseCommand[Tuple[bytes, ...]]):
+class NodeDataV65(BaseCommand[Tuple[bytes, ...]]):
     protocol_command_id = 14
     serialization_codec: RLPCodec[Tuple[bytes, ...]] = RLPCodec(
         sedes=NODE_DATA_STRUCTURE,
@@ -203,7 +203,7 @@ class NodeData(BaseCommand[Tuple[bytes, ...]]):
 GET_RECEIPTS_STRUCTURE = sedes.CountableList(hash_sedes)
 
 
-class GetReceipts(BaseCommand[Tuple[Hash32, ...]]):
+class GetReceiptsV65(BaseCommand[Tuple[Hash32, ...]]):
     protocol_command_id = 15
     serialization_codec: RLPCodec[Tuple[Hash32, ...]] = RLPCodec(
         sedes=GET_RECEIPTS_STRUCTURE,
@@ -213,7 +213,7 @@ class GetReceipts(BaseCommand[Tuple[Hash32, ...]]):
 RECEIPTS_STRUCTURE = sedes.CountableList(sedes.CountableList(Receipt))
 
 
-class Receipts(BaseCommand[Tuple[Tuple[ReceiptAPI, ...], ...]]):
+class ReceiptsV65(BaseCommand[Tuple[Tuple[ReceiptAPI, ...], ...]]):
     protocol_command_id = 16
     serialization_codec: RLPCodec[Tuple[Tuple[ReceiptAPI, ...], ...]] = RLPCodec(
         sedes=RECEIPTS_STRUCTURE,

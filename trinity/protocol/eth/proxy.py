@@ -30,12 +30,12 @@ from trinity.protocol.common.typing import (
 from trinity.rlp.block_body import BlockBody
 
 from .commands import (
-    BlockBodies,
-    BlockHeaders,
-    NodeData,
-    Receipts,
+    BlockBodiesV65,
+    BlockHeadersV65,
+    NodeDataV65,
+    ReceiptsV65,
     Transactions,
-    PooledTransactions,
+    PooledTransactionsV65,
 )
 from .events import (
     GetBlockBodiesRequest,
@@ -205,14 +205,14 @@ class ProxyETHAPI:
 
     def send_pooled_transactions(self,
                                  txns: Sequence[SignedTransactionAPI]) -> None:
-        command = PooledTransactions(tuple(txns))
+        command = PooledTransactionsV65(tuple(txns))
         self._event_bus.broadcast_nowait(
             SendPooledTransactionsEvent(self.session, command),
             self._broadcast_config,
         )
 
     def send_block_headers(self, headers: Sequence[BlockHeaderAPI]) -> None:
-        command = BlockHeaders(tuple(headers))
+        command = BlockHeadersV65(tuple(headers))
         self._event_bus.broadcast_nowait(
             SendBlockHeadersEvent(self.session, command),
             self._broadcast_config,
@@ -223,21 +223,21 @@ class ProxyETHAPI:
             BlockBody(block.transactions, block.uncles)
             for block in blocks
         )
-        command = BlockBodies(block_bodies)
+        command = BlockBodiesV65(block_bodies)
         self._event_bus.broadcast_nowait(
             SendBlockBodiesEvent(self.session, command),
             self._broadcast_config,
         )
 
     def send_receipts(self, receipts: Sequence[Sequence[ReceiptAPI]]) -> None:
-        command = Receipts(tuple(map(tuple, receipts)))
+        command = ReceiptsV65(tuple(map(tuple, receipts)))
         self._event_bus.broadcast_nowait(
             SendReceiptsEvent(self.session, command),
             self._broadcast_config,
         )
 
     def send_node_data(self, nodes: Sequence[bytes]) -> None:
-        command = NodeData(tuple(nodes))
+        command = NodeDataV65(tuple(nodes))
         self._event_bus.broadcast_nowait(
             SendNodeDataEvent(self.session, command),
             self._broadcast_config,

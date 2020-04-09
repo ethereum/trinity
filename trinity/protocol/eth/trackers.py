@@ -15,22 +15,22 @@ from trinity.protocol.common.typing import (
 from trinity._utils.headers import sequence_builder
 
 from .commands import (
-    GetBlockBodies,
-    GetBlockHeaders,
-    GetNodeData,
-    GetReceipts,
-    GetPooledTransactions,
+    GetBlockBodiesV65,
+    GetBlockHeadersV65,
+    GetNodeDataV65,
+    GetReceiptsV65,
+    GetPooledTransactionsV65,
 )
 
 
 BaseGetBlockHeadersTracker = BasePerformanceTracker[
-    GetBlockHeaders,
+    GetBlockHeadersV65,
     Tuple[BlockHeaderAPI, ...],
 ]
 
 
 class GetBlockHeadersTracker(BaseGetBlockHeadersTracker):
-    def _get_request_size(self, request: GetBlockHeaders) -> int:
+    def _get_request_size(self, request: GetBlockHeadersV65) -> int:
         payload = request.payload
         if isinstance(payload.block_number_or_hash, int):
             return len(sequence_builder(
@@ -49,8 +49,8 @@ class GetBlockHeadersTracker(BaseGetBlockHeadersTracker):
         return len(result)
 
 
-class GetBlockBodiesTracker(BasePerformanceTracker[GetBlockBodies, BlockBodyBundles]):
-    def _get_request_size(self, request: GetBlockBodies) -> Optional[int]:
+class GetBlockBodiesTracker(BasePerformanceTracker[GetBlockBodiesV65, BlockBodyBundles]):
+    def _get_request_size(self, request: GetBlockBodiesV65) -> Optional[int]:
         return len(request.payload)
 
     def _get_result_size(self, result: BlockBodyBundles) -> int:
@@ -64,8 +64,8 @@ class GetBlockBodiesTracker(BasePerformanceTracker[GetBlockBodies, BlockBodyBund
         )
 
 
-class GetReceiptsTracker(BasePerformanceTracker[GetReceipts, ReceiptsBundles]):
-    def _get_request_size(self, request: GetReceipts) -> Optional[int]:
+class GetReceiptsTracker(BasePerformanceTracker[GetReceiptsV65, ReceiptsBundles]):
+    def _get_request_size(self, request: GetReceiptsV65) -> Optional[int]:
         return len(request.payload)
 
     def _get_result_size(self, result: ReceiptsBundles) -> int:
@@ -79,8 +79,8 @@ class GetReceiptsTracker(BasePerformanceTracker[GetReceipts, ReceiptsBundles]):
         )
 
 
-class GetNodeDataTracker(BasePerformanceTracker[GetNodeData, NodeDataBundles]):
-    def _get_request_size(self, request: GetNodeData) -> Optional[int]:
+class GetNodeDataTracker(BasePerformanceTracker[GetNodeDataV65, NodeDataBundles]):
+    def _get_request_size(self, request: GetNodeDataV65) -> Optional[int]:
         return len(request.payload)
 
     def _get_result_size(self, result: NodeDataBundles) -> int:
@@ -91,14 +91,14 @@ class GetNodeDataTracker(BasePerformanceTracker[GetNodeData, NodeDataBundles]):
 
 
 BaseGetPooledTransactionsTracker = BasePerformanceTracker[
-    GetPooledTransactions,
+    GetPooledTransactionsV65,
     Tuple[SignedTransactionAPI, ...]
 ]
 
 
 class GetPooledTransactionsTracker(BaseGetPooledTransactionsTracker):
 
-    def _get_request_size(self, request: GetPooledTransactions) -> Optional[int]:
+    def _get_request_size(self, request: GetPooledTransactionsV65) -> Optional[int]:
         return len(request.payload)
 
     def _get_result_size(self, result: Sequence[SignedTransactionAPI]) -> int:

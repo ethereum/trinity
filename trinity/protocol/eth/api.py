@@ -20,29 +20,29 @@ from p2p.qualifiers import HasProtocol
 from trinity.protocol.common.abc import HeadInfoAPI
 from trinity.protocol.common.payloads import BlockHeadersQuery
 from trinity.protocol.eth.commands import (
-    BlockBodies,
-    BlockHeaders,
-    GetBlockBodies,
-    GetBlockHeaders,
-    GetNodeData,
-    GetReceipts,
+    BlockBodiesV65,
+    BlockHeadersV65,
+    GetBlockBodiesV65,
+    GetBlockHeadersV65,
+    GetNodeDataV65,
+    GetReceiptsV65,
     NewBlock,
     NewBlockHashes,
-    NodeData,
-    Receipts,
+    NodeDataV65,
+    ReceiptsV65,
     StatusV63,
     Transactions,
     Status,
-    GetPooledTransactions,
+    GetPooledTransactionsV65,
 )
 from trinity.rlp.block_body import BlockBody
 
 from .exchanges import (
-    GetBlockBodiesExchange,
-    GetBlockHeadersExchange,
-    GetNodeDataExchange,
-    GetReceiptsExchange,
-    GetPooledTransactionsExchange,
+    GetBlockBodiesV65Exchange,
+    GetBlockHeadersV65Exchange,
+    GetNodeDataV65Exchange,
+    GetReceiptsV65Exchange,
+    GetPooledTransactionsV65Exchange,
 )
 from .handshaker import ETHV63HandshakeReceipt, ETHHandshakeReceipt, BaseETHHandshakeReceipt
 from .payloads import (
@@ -116,21 +116,21 @@ class BaseETHAPI(Application):
     name = 'eth'
     head_info_tracker_cls = BaseHeadInfoTracker[THandshakeReceipt]
 
-    get_block_bodies: GetBlockBodiesExchange
-    get_block_headers: GetBlockHeadersExchange
-    get_node_data: GetNodeDataExchange
-    get_receipts: GetReceiptsExchange
-    get_pooled_transactions: GetPooledTransactionsExchange
+    get_block_bodies: GetBlockBodiesV65Exchange
+    get_block_headers: GetBlockHeadersV65Exchange
+    get_node_data: GetNodeDataV65Exchange
+    get_receipts: GetReceiptsV65Exchange
+    get_pooled_transactions: GetPooledTransactionsV65Exchange
 
     def __init__(self) -> None:
         self.head_info = self.head_info_tracker_cls()
         self.add_child_behavior(self.head_info.as_behavior())
 
         # Request/Response API
-        self.get_block_bodies = GetBlockBodiesExchange()
-        self.get_block_headers = GetBlockHeadersExchange()
-        self.get_node_data = GetNodeDataExchange()
-        self.get_receipts = GetReceiptsExchange()
+        self.get_block_bodies = GetBlockBodiesV65Exchange()
+        self.get_block_headers = GetBlockHeadersV65Exchange()
+        self.get_node_data = GetNodeDataV65Exchange()
+        self.get_receipts = GetReceiptsV65Exchange()
 
         self.add_child_behavior(ExchangeLogic(self.get_block_bodies).as_behavior())
         self.add_child_behavior(ExchangeLogic(self.get_block_headers).as_behavior())
@@ -171,10 +171,10 @@ class BaseETHAPI(Application):
         return self.receipt.genesis_hash
 
     def send_get_node_data(self, node_hashes: Sequence[Hash32]) -> None:
-        self.protocol.send(GetNodeData(tuple(node_hashes)))
+        self.protocol.send(GetNodeDataV65(tuple(node_hashes)))
 
     def send_node_data(self, nodes: Sequence[bytes]) -> None:
-        self.protocol.send(NodeData(tuple(nodes)))
+        self.protocol.send(NodeDataV65(tuple(nodes)))
 
     def send_get_block_headers(
             self,
@@ -188,26 +188,26 @@ class BaseETHAPI(Application):
             skip=skip,
             reverse=reverse
         )
-        self.protocol.send(GetBlockHeaders(payload))
+        self.protocol.send(GetBlockHeadersV65(payload))
 
     def send_block_headers(self, headers: Sequence[BlockHeaderAPI]) -> None:
-        self.protocol.send(BlockHeaders(tuple(headers)))
+        self.protocol.send(BlockHeadersV65(tuple(headers)))
 
     def send_get_block_bodies(self, block_hashes: Sequence[Hash32]) -> None:
-        self.protocol.send(GetBlockBodies(tuple(block_hashes)))
+        self.protocol.send(GetBlockBodiesV65(tuple(block_hashes)))
 
     def send_block_bodies(self, blocks: Sequence[BlockAPI]) -> None:
         block_bodies = tuple(
             BlockBody(block.transactions, block.uncles)
             for block in blocks
         )
-        self.protocol.send(BlockBodies(block_bodies))
+        self.protocol.send(BlockBodiesV65(block_bodies))
 
     def send_get_receipts(self, block_hashes: Sequence[Hash32]) -> None:
-        self.protocol.send(GetReceipts(tuple(block_hashes)))
+        self.protocol.send(GetReceiptsV65(tuple(block_hashes)))
 
     def send_receipts(self, receipts: Sequence[Sequence[ReceiptAPI]]) -> None:
-        self.protocol.send(Receipts(tuple(map(tuple, receipts))))
+        self.protocol.send(ReceiptsV65(tuple(map(tuple, receipts))))
 
     def send_transactions(self, transactions: Sequence[SignedTransactionAPI]) -> None:
         self.protocol.send(Transactions(tuple(transactions)))
@@ -266,11 +266,11 @@ class ETHV65API(ETHV64API):
         super().__init__()
 
         # Request/Response API
-        self.get_pooled_transactions = GetPooledTransactionsExchange()
+        self.get_pooled_transactions = GetPooledTransactionsV65Exchange()
         self.add_child_behavior(ExchangeLogic(self.get_pooled_transactions).as_behavior())
 
     def send_get_pooled_transactions(self, transaction_hashes: Sequence[Hash32]) -> None:
-        self.protocol.send(GetPooledTransactions(tuple(transaction_hashes)))
+        self.protocol.send(GetPooledTransactionsV65(tuple(transaction_hashes)))
 
 
 AnyETHAPI = Union[ETHV63API, ETHV64API, ETHV65API]

@@ -9,22 +9,22 @@ from eth_utils import get_extended_debug_logger
 from p2p.protocol import BaseProtocol
 
 from .commands import (
-    BlockBodies,
-    BlockHeaders,
-    GetBlockBodies,
-    GetBlockHeaders,
-    GetNodeData,
-    GetReceipts,
+    BlockBodiesV65,
+    BlockHeadersV65,
+    GetBlockBodiesV65,
+    GetBlockHeadersV65,
+    GetNodeDataV65,
+    GetReceiptsV65,
     NewBlock,
     NewBlockHashes,
-    NodeData,
-    Receipts,
+    NodeDataV65,
+    ReceiptsV65,
     Transactions,
     StatusV63,
     Status,
     NewPooledTransactionHashes,
-    GetPooledTransactions,
-    PooledTransactions,
+    GetPooledTransactionsV65,
+    PooledTransactionsV65,
 )
 
 if TYPE_CHECKING:
@@ -42,11 +42,11 @@ class ETHProtocolV63(BaseETHProtocol):
         StatusV63,
         NewBlockHashes,
         Transactions,
-        GetBlockHeaders, BlockHeaders,
-        GetBlockBodies, BlockBodies,
+        GetBlockHeadersV65, BlockHeadersV65,
+        GetBlockBodiesV65, BlockBodiesV65,
         NewBlock,
-        GetNodeData, NodeData,
-        GetReceipts, Receipts,
+        GetNodeDataV65, NodeDataV65,
+        GetReceiptsV65, ReceiptsV65,
     )
     command_length = 17
 
@@ -60,11 +60,11 @@ class ETHProtocolV64(BaseETHProtocol):
         Status,
         NewBlockHashes,
         Transactions,
-        GetBlockHeaders, BlockHeaders,
-        GetBlockBodies, BlockBodies,
+        GetBlockHeadersV65, BlockHeadersV65,
+        GetBlockBodiesV65, BlockBodiesV65,
         NewBlock,
-        GetNodeData, NodeData,
-        GetReceipts, Receipts,
+        GetNodeDataV65, NodeDataV65,
+        GetReceiptsV65, ReceiptsV65,
     )
     command_length = 17
 
@@ -78,15 +78,16 @@ class ETHProtocolV65(BaseETHProtocol):
         Status,
         NewBlockHashes,
         Transactions,
-        GetBlockHeaders, BlockHeaders,
-        GetBlockBodies, BlockBodies,
+        GetBlockHeadersV65, BlockHeadersV65,
+        GetBlockBodiesV65, BlockBodiesV65,
         NewBlock,
-        NewPooledTransactionHashes, GetPooledTransactions, PooledTransactions,
-        GetNodeData, NodeData,
-        GetReceipts, Receipts,
+        NewPooledTransactionHashes,
+        GetPooledTransactionsV65, PooledTransactionsV65,
+        GetNodeDataV65, NodeDataV65,
+        GetReceiptsV65, ReceiptsV65,
     )
     command_length = 20
 
-    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocol')
+    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocolV65')
 
     status_command_type = Status

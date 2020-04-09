@@ -17,8 +17,8 @@ from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.exceptions import WrongForkIDFailure
 from trinity.protocol.eth.api import ETHV65API, ETHV63API, ETHV64API
 from trinity.protocol.eth.commands import (
-    GetBlockHeaders,
-    GetNodeData,
+    GetBlockHeadersV65,
+    GetNodeDataV65,
     NewBlock,
     Status,
     StatusV63,
@@ -232,11 +232,11 @@ async def test_eth_api_send_get_node_data(alice, bob):
     async def _handle_cmd(connection, cmd):
         command_fut.set_result(cmd)
 
-    bob.connection.add_command_handler(GetNodeData, _handle_cmd)
+    bob.connection.add_command_handler(GetNodeDataV65, _handle_cmd)
     alice.eth_api.send_get_node_data(payload)
 
     result = await asyncio.wait_for(command_fut, timeout=1)
-    assert isinstance(result, GetNodeData)
+    assert isinstance(result, GetNodeDataV65)
     assert_type_equality(payload, result.payload)
 
 
@@ -249,7 +249,7 @@ async def test_eth_api_send_get_block_headers(alice, bob):
     async def _handle_cmd(connection, cmd):
         command_fut.set_result(cmd)
 
-    bob.connection.add_command_handler(GetBlockHeaders, _handle_cmd)
+    bob.connection.add_command_handler(GetBlockHeadersV65, _handle_cmd)
     alice.eth_api.send_get_block_headers(
         block_number_or_hash=payload.block_number_or_hash,
         max_headers=payload.block_number_or_hash,
@@ -258,7 +258,7 @@ async def test_eth_api_send_get_block_headers(alice, bob):
     )
 
     result = await asyncio.wait_for(command_fut, timeout=1)
-    assert isinstance(result, GetBlockHeaders)
+    assert isinstance(result, GetBlockHeadersV65)
     assert_type_equality(payload, result.payload)
 
 
