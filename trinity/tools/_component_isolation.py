@@ -62,10 +62,15 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         cls.logger.debug('Entered `do_run`')
         service = AsyncioComponentService(event_bus)
-        async with background_asyncio_service(service) as manager:
-            cls.logger.debug('Running service')
-            try:
-                await manager.wait_finished()
-            finally:
-                cls.logger.debug('Exiting `do_run`')
-        cls.logger.debug('Finished: `do_run`')
+        try:
+            async with background_asyncio_service(service) as manager:
+                cls.logger.debug('Running service')
+                try:
+                    await manager.wait_finished()
+                finally:
+                    cls.logger.debug('Exiting `do_run`')
+        finally:
+            # XXX: We never reach this line, so if you run test_isolated_component.py by itself it
+            # will pass but hang forever after pytest reports success.
+            # Figuring this out is probably the key to fixing our shutdown.
+            cls.logger.debug('Finished: `do_run`')
