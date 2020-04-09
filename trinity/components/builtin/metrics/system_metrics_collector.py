@@ -49,9 +49,14 @@ class SystemStats(NamedTuple):
 
 def read_cpu_stats() -> CpuStats:
     stats = psutil.cpu_times()
+    try:
+        # iowait is only available with linux
+        iowait = stats.iowait
+    except AttributeError:
+        iowait = 0
     return CpuStats(
         global_time=int(stats.user + stats.nice + stats.system),
-        global_wait_io=int(stats.iowait),
+        global_wait_io=int(iowait),
     )
 
 
