@@ -20,34 +20,34 @@ from trinity.protocol.common.typing import (
 )
 
 from .commands import (
-    BlockBodies,
-    NodeData,
-    Receipts,
+    BlockBodiesV65,
+    NodeDataV65,
+    ReceiptsV65,
 )
 
 
-class GetNodeDataNormalizer(BaseNormalizer[NodeData, NodeDataBundles]):
+class GetNodeDataNormalizer(BaseNormalizer[NodeDataV65, NodeDataBundles]):
     is_normalization_slow = True
 
-    def normalize_result(self, cmd: NodeData) -> NodeDataBundles:
+    def normalize_result(self, cmd: NodeDataV65) -> NodeDataBundles:
         node_keys = map(keccak, cmd.payload)
         result = tuple(zip(node_keys, cmd.payload))
         return result
 
 
-class ReceiptsNormalizer(BaseNormalizer[Receipts, ReceiptsBundles]):
+class ReceiptsNormalizer(BaseNormalizer[ReceiptsV65, ReceiptsBundles]):
     is_normalization_slow = True
 
-    def normalize_result(self, cmd: Receipts) -> ReceiptsBundles:
+    def normalize_result(self, cmd: ReceiptsV65) -> ReceiptsBundles:
         trie_roots_and_data = map(make_trie_root_and_nodes, cmd.payload)
         return tuple(zip(cmd.payload, trie_roots_and_data))
 
 
-class GetBlockBodiesNormalizer(BaseNormalizer[BlockBodies, BlockBodyBundles]):
+class GetBlockBodiesNormalizer(BaseNormalizer[BlockBodiesV65, BlockBodyBundles]):
     is_normalization_slow = True
 
     @to_tuple
-    def normalize_result(self, cmd: BlockBodies) -> Iterable[BlockBodyBundle]:
+    def normalize_result(self, cmd: BlockBodiesV65) -> Iterable[BlockBodyBundle]:
         for body in cmd.payload:
             uncle_hashes = keccak(rlp.encode(body.uncles))
             transaction_root_and_nodes = make_trie_root_and_nodes(body.transactions)

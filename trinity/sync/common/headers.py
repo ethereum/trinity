@@ -51,7 +51,7 @@ from p2p.service import BaseService
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.protocol.eth.commands import BlockHeaders as ETHBlockHeaders
+from trinity.protocol.eth.commands import BlockHeadersV65 as ETHBlockHeaders
 from trinity.protocol.les.commands import BlockHeaders as LESBlockHEaders
 from trinity.protocol.common.monitors import BaseChainTipMonitor
 from trinity.protocol.common.peer import BaseChainPeer, BaseChainPeerPool

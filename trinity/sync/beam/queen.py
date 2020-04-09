@@ -12,7 +12,7 @@ from p2p.exceptions import (
 from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
 from p2p.service import BaseService
-from trinity.protocol.eth.commands import NodeData
+from trinity.protocol.eth.commands import NodeDataV65
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import NON_IDEAL_RESPONSE_PENALTY
 from trinity.sync.common.peers import WaitingPeers
@@ -56,7 +56,7 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
     def __init__(self, peer_pool: ETHPeerPool, token: CancelToken = None) -> None:
         super().__init__(token=token)
         self._peer_pool = peer_pool
-        self._waiting_peers = WaitingPeers(NodeData)
+        self._waiting_peers = WaitingPeers(NodeDataV65)
 
     async def _run(self) -> None:
         with self.subscribe(self._peer_pool):

@@ -39,15 +39,15 @@ from . import forkid
 
 from .api import ETHV63API, ETHV65API, AnyETHAPI, ETHV64API
 from .commands import (
-    GetBlockHeaders,
-    GetBlockBodies,
-    GetReceipts,
-    GetNodeData,
+    GetBlockHeadersV65,
+    GetBlockBodiesV65,
+    GetReceiptsV65,
+    GetNodeDataV65,
     NewBlock,
     NewBlockHashes,
     Transactions,
     NewPooledTransactionHashes,
-    GetPooledTransactions,
+    GetPooledTransactionsV65,
 )
 from .constants import MAX_HEADERS_FETCH
 from .events import (
@@ -185,15 +185,15 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
     """
 
     subscription_msg_types = frozenset({
-        GetBlockHeaders,
-        GetBlockBodies,
-        GetReceipts,
-        GetNodeData,
+        GetBlockHeadersV65,
+        GetBlockBodiesV65,
+        GetReceiptsV65,
+        GetNodeDataV65,
         Transactions,
         NewBlockHashes,
         NewBlock,
         NewPooledTransactionHashes,
-        GetPooledTransactions,
+        GetPooledTransactionsV65,
     })
 
     # SendX events that need to be forwarded to peer.sub_proto.send(event.command)
@@ -275,22 +275,22 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
         # These are broadcasted without a specific target. We shouldn't worry if they are consumed
         # or not (e.g. transaction pool is enabled or disabled etc)
-        if isinstance(cmd, GetBlockHeaders):
+        if isinstance(cmd, GetBlockHeadersV65):
             await self.event_bus.broadcast(
                 GetBlockHeadersEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
             )
-        elif isinstance(cmd, GetBlockBodies):
+        elif isinstance(cmd, GetBlockBodiesV65):
             await self.event_bus.broadcast(
                 GetBlockBodiesEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
             )
-        elif isinstance(cmd, GetReceipts):
+        elif isinstance(cmd, GetReceiptsV65):
             await self.event_bus.broadcast(
                 GetReceiptsEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
             )
-        elif isinstance(cmd, GetNodeData):
+        elif isinstance(cmd, GetNodeDataV65):
             await self.event_bus.broadcast(
                 GetNodeDataEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
@@ -315,7 +315,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
                 NewPooledTransactionHashesEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING
             )
-        elif isinstance(cmd, GetPooledTransactions):
+        elif isinstance(cmd, GetPooledTransactionsV65):
             await self.event_bus.broadcast(
                 GetPooledTransactionsEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING
