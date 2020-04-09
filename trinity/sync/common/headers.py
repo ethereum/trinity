@@ -50,7 +50,10 @@ from p2p.peer import BasePeer, PeerSubscriber
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.protocol.eth.commands import BlockHeadersV65 as ETHBlockHeaders
+from trinity.protocol.eth.commands import (
+    BlockHeadersV65 as ETHV65BlockHeaders,
+    BlockHeadersV66 as ETHV66BlockHeaders
+)
 from trinity.protocol.les.commands import BlockHeaders as LESBlockHEaders
 from trinity.protocol.common.monitors import BaseChainTipMonitor
 from trinity.protocol.common.peer import BaseChainPeer, BaseChainPeerPool
@@ -573,7 +576,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
 
         # queue up idle peers, ordered by speed that they return block bodies
         self._waiting_peers: WaitingPeers[TChainPeer] = WaitingPeers(
-            (ETHBlockHeaders, LESBlockHEaders),
+            (ETHV66BlockHeaders, ETHV65BlockHeaders, LESBlockHEaders),
         )
         self._peer_pool = peer_pool
         self.sync_progress: SyncProgress = None

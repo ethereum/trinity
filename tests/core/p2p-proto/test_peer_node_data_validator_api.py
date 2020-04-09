@@ -8,13 +8,25 @@ from eth_utils import (
     keccak,
 )
 
-from trinity.tools.factories import LatestETHPeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory, ETHV65PeerPairFactory
 
 
-@pytest.fixture
-async def eth_peer_and_remote():
-    async with LatestETHPeerPairFactory() as (peer, remote):
+@pytest.fixture(
+    params=(
+        ETHV65PeerPairFactory,
+        LatestETHPeerPairFactory,
+    )
+)
+async def eth_peer_and_remote(request):
+    async with request.param() as (peer, remote):
         yield peer, remote
+
+
+def get_request_id_or_none(request):
+    try:
+        return request.payload.request_id
+    except AttributeError:
+        return None
 
 
 def mk_node():
@@ -50,13 +62,13 @@ async def test_eth_peer_get_node_data_round_trip(eth_peer_and_remote, node_keys,
     peer, remote = eth_peer_and_remote
     node_data = tuple(zip(node_keys, nodes))
 
-    async def send_node_data():
-        remote.eth_api.send_node_data(nodes)
+    async def send_node_data(_, cmd):
+        remote.eth_api.send_node_data(nodes, get_request_id_or_none(cmd))
+
+    remote.connection.add_msg_handler(send_node_data)
 
     request = asyncio.ensure_future(peer.eth_api.get_node_data(node_keys))
-    asyncio.ensure_future(send_node_data())
     response = await request
-
     assert len(response) == len(node_keys)
     assert response == node_data
 
@@ -68,13 +80,13 @@ async def test_eth_peer_get_headers_round_trip_partial_response(eth_peer_and_rem
     node_keys, nodes = mk_node_data(32)
     node_data = tuple(zip(node_keys, nodes))
 
-    async def send_responses():
+    async def send_responses(_, cmd):
         remote.eth_api.send_transactions([])
         await asyncio.sleep(0)
-        remote.eth_api.send_node_data(nodes[:10])
+        remote.eth_api.send_node_data(nodes[:10], get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
-    asyncio.ensure_future(send_responses())
+    remote.connection.add_msg_handler(send_responses)
     response = await peer.eth_api.get_node_data(node_keys)
 
     assert len(response) == 10
@@ -88,13 +100,13 @@ async def test_eth_peer_get_headers_round_trip_with_noise(eth_peer_and_remote):
     node_keys, nodes = mk_node_data(32)
     node_data = tuple(zip(node_keys, nodes))
 
-    async def send_responses():
+    async def send_responses(_, cmd):
         remote.eth_api.send_transactions([])
         await asyncio.sleep(0)
-        remote.eth_api.send_node_data(nodes)
+        remote.eth_api.send_node_data(nodes, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
-    asyncio.ensure_future(send_responses())
+    remote.connection.add_msg_handler(send_responses)
     response = await peer.eth_api.get_node_data(node_keys)
 
     assert len(response) == len(nodes)
@@ -110,15 +122,15 @@ async def test_eth_peer_get_headers_round_trip_does_not_match_invalid_response(e
 
     wrong_nodes = tuple(set(mk_node() for _ in range(32)).difference(nodes))
 
-    async def send_responses():
-        remote.eth_api.send_node_data(wrong_nodes)
+    async def send_responses(_, cmd):
+        remote.eth_api.send_node_data(wrong_nodes, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
         remote.eth_api.send_transactions([])
         await asyncio.sleep(0)
-        remote.eth_api.send_node_data(nodes)
+        remote.eth_api.send_node_data(nodes, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
-    asyncio.ensure_future(send_responses())
+    remote.connection.add_msg_handler(send_responses)
     response = await peer.eth_api.get_node_data(node_keys)
 
     assert len(response) == len(nodes)

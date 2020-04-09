@@ -7,7 +7,7 @@ from p2p.disconnect import DisconnectReason
 from trinity.protocol.eth.peer import ETHPeer
 from trinity.protocol.eth.proto import (
     ETHProtocolV63,
-    ETHProtocolV65,
+    ETHProtocolV66,
 )
 from trinity.protocol.les.peer import LESPeer
 from trinity.protocol.les.proto import (
@@ -63,8 +63,8 @@ async def test_ETH_peers():
         assert isinstance(alice, ETHPeer)
         assert isinstance(bob, ETHPeer)
 
-        assert isinstance(alice.sub_proto, ETHProtocolV65)
-        assert isinstance(bob.sub_proto, ETHProtocolV65)
+        assert isinstance(alice.sub_proto, ETHProtocolV66)
+        assert isinstance(bob.sub_proto, ETHProtocolV66)
 
 
 @pytest.mark.asyncio

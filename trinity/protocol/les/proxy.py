@@ -10,13 +10,11 @@ from lahja import (
 
 from p2p.abc import SessionAPI
 
-from trinity._utils.les import (
-    gen_request_id,
-)
 from trinity._utils.errors import (
     SupportsError,
 )
 from trinity._utils.logging import get_logger
+from trinity._utils.requests import gen_request_id
 
 from .commands import (
     BlockHeaders,

@@ -10,13 +10,25 @@ from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 
-from trinity.tools.factories import LatestETHPeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory, ETHV65PeerPairFactory
 
 
-@pytest.fixture
-async def eth_peer_and_remote():
-    async with LatestETHPeerPairFactory() as (peer, remote):
+@pytest.fixture(
+    params=(
+        ETHV65PeerPairFactory,
+        LatestETHPeerPairFactory,
+    )
+)
+async def eth_peer_and_remote(request):
+    async with request.param() as (peer, remote):
         yield peer, remote
+
+
+def get_request_id_or_none(request):
+    try:
+        return request.payload.request_id
+    except AttributeError:
+        return None
 
 
 @to_tuple
@@ -57,12 +69,11 @@ async def test_eth_peer_get_receipts_round_trip_with_full_response(eth_peer_and_
     headers, receipts, trie_roots_and_data = zip(*headers_bundle)
     receipts_bundle = tuple(zip(receipts, trie_roots_and_data))
 
-    async def send_receipts():
-        remote.eth_api.send_receipts(receipts)
-        await asyncio.sleep(0)
+    async def send_receipts(_, cmd):
+        remote.eth_api.send_receipts(receipts, get_request_id_or_none(cmd))
 
+    remote.connection.add_msg_handler(send_receipts)
     get_receipts_task = asyncio.ensure_future(peer.eth_api.get_receipts(headers))
-    asyncio.ensure_future(send_receipts())
 
     response = await get_receipts_task
 
@@ -78,12 +89,13 @@ async def test_eth_peer_get_receipts_round_trip_with_partial_response(eth_peer_a
     headers, receipts, trie_roots_and_data = zip(*headers_bundle)
     receipts_bundle = tuple(zip(receipts, trie_roots_and_data))
 
-    async def send_receipts():
-        remote.eth_api.send_receipts((receipts[2], receipts[1], receipts[4]))
-        await asyncio.sleep(0)
+    async def send_receipts(_, cmd):
+        remote.eth_api.send_receipts(
+            (receipts[2], receipts[1], receipts[4]), get_request_id_or_none(cmd)
+        )
 
+    remote.connection.add_msg_handler(send_receipts)
     get_receipts_task = asyncio.ensure_future(peer.eth_api.get_receipts(headers))
-    asyncio.ensure_future(send_receipts())
 
     response = await get_receipts_task
 
@@ -99,16 +111,16 @@ async def test_eth_peer_get_receipts_round_trip_with_noise(eth_peer_and_remote):
     headers, receipts, trie_roots_and_data = zip(*headers_bundle)
     receipts_bundle = tuple(zip(receipts, trie_roots_and_data))
 
-    async def send_receipts():
+    async def send_receipts(_, cmd):
         remote.eth_api.send_transactions([])
         await asyncio.sleep(0)
-        remote.eth_api.send_receipts(receipts)
+        remote.eth_api.send_receipts(receipts, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
         remote.eth_api.send_transactions([])
         await asyncio.sleep(0)
 
+    remote.connection.add_msg_handler(send_receipts)
     get_receipts_task = asyncio.ensure_future(peer.eth_api.get_receipts(headers))
-    asyncio.ensure_future(send_receipts())
 
     response = await get_receipts_task
 
@@ -127,14 +139,14 @@ async def test_eth_peer_get_receipts_round_trip_no_match_invalid_response(eth_pe
     wrong_headers = mk_headers(4, 3, 8)
     _, wrong_receipts, _ = zip(*wrong_headers)
 
-    async def send_receipts():
-        remote.eth_api.send_receipts(wrong_receipts)
+    async def send_receipts(_, cmd):
+        remote.eth_api.send_receipts(wrong_receipts, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
-        remote.eth_api.send_receipts(receipts)
+        remote.eth_api.send_receipts(receipts, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
+    remote.connection.add_msg_handler(send_receipts)
     get_receipts_task = asyncio.ensure_future(peer.eth_api.get_receipts(headers))
-    asyncio.ensure_future(send_receipts())
 
     response = await get_receipts_task
 

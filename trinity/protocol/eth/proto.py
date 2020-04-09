@@ -11,8 +11,10 @@ from p2p.protocol import BaseProtocol
 from .commands import (
     BlockBodiesV65,
     BlockHeadersV65,
+    BlockHeadersV66,
     GetBlockBodiesV65,
     GetBlockHeadersV65,
+    GetBlockHeadersV66,
     GetNodeDataV65,
     GetReceiptsV65,
     NewBlock,
@@ -25,7 +27,8 @@ from .commands import (
     NewPooledTransactionHashes,
     GetPooledTransactionsV65,
     PooledTransactionsV65,
-)
+    BlockBodiesV66, GetBlockBodiesV66, NodeDataV66, GetNodeDataV66, ReceiptsV66, GetReceiptsV66,
+    PooledTransactionsV66, GetPooledTransactionsV66)
 
 if TYPE_CHECKING:
     from .peer import ETHPeer  # noqa: F401
@@ -89,5 +92,26 @@ class ETHProtocolV65(BaseETHProtocol):
     command_length = 20
 
     logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocolV65')
+
+    status_command_type = Status
+
+
+class ETHProtocolV66(BaseETHProtocol):
+    version = 66
+    commands = (
+        Status,
+        NewBlockHashes,
+        Transactions,
+        GetBlockHeadersV66, BlockHeadersV66,
+        GetBlockBodiesV66, BlockBodiesV66,
+        NewBlock,
+        NewPooledTransactionHashes,
+        GetPooledTransactionsV66, PooledTransactionsV66,
+        GetNodeDataV66, NodeDataV66,
+        GetReceiptsV66, ReceiptsV66,
+    )
+    command_length = 20
+
+    logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocolV66')
 
     status_command_type = Status

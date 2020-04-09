@@ -15,9 +15,10 @@ from eth.vm.forks import MuirGlacierVM, PetersburgVM
 from trinity._utils.assertions import assert_type_equality
 from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.exceptions import WrongForkIDFailure
-from trinity.protocol.eth.api import ETHV65API, ETHV63API, ETHV64API
+from trinity.protocol.eth.api import ETHV65API, ETHV63API, ETHV64API, ETHV66API
 from trinity.protocol.eth.commands import (
     GetBlockHeadersV65,
+    GetBlockHeadersV66,
     GetNodeDataV65,
     NewBlock,
     Status,
@@ -28,6 +29,7 @@ from trinity.protocol.eth.proto import (
     ETHProtocolV63,
     ETHProtocolV64,
     ETHProtocolV65,
+    ETHProtocolV66,
 )
 
 from trinity.tools.factories.common import (
@@ -43,6 +45,13 @@ from trinity.tools.factories import (
     LatestETHPeerPairFactory,
     ALL_PEER_PAIR_FACTORIES,
 )
+
+
+def get_highest_eth_protocol_version(client):
+    return max(
+        protocol.as_capability()[1] for protocol in client.connection.get_protocols()
+        if protocol.as_capability()[0] == 'eth'
+    )
 
 
 @pytest.fixture
@@ -118,6 +127,8 @@ def protocol_specific_classes(alice):
         return ETHV64API, ETHHandshakeReceipt, Status, StatusPayloadFactory
     elif alice.connection.has_protocol(ETHProtocolV65):
         return ETHV65API, ETHHandshakeReceipt, Status, StatusPayloadFactory
+    elif alice.connection.has_protocol(ETHProtocolV66):
+        return ETHV66API, ETHHandshakeReceipt, Status, StatusPayloadFactory
     else:
         raise Exception("No ETH protocol found")
 
@@ -225,6 +236,9 @@ async def test_eth_api_send_status(alice, bob, StatusPayloadFactory_class, Statu
 
 @pytest.mark.asyncio
 async def test_eth_api_send_get_node_data(alice, bob):
+    if get_highest_eth_protocol_version(alice) > ETHProtocolV65.version:
+        pytest.skip("Test not applicable above eth/65")
+
     payload = tuple(BlockHashFactory.create_batch(5))
 
     command_fut = asyncio.Future()
@@ -242,6 +256,9 @@ async def test_eth_api_send_get_node_data(alice, bob):
 
 @pytest.mark.asyncio
 async def test_eth_api_send_get_block_headers(alice, bob):
+    if get_highest_eth_protocol_version(alice) > ETHProtocolV65.version:
+        pytest.skip("Test not applicable above eth/65")
+
     payload = BlockHeadersQueryFactory()
 
     command_fut = asyncio.Future()
@@ -260,6 +277,32 @@ async def test_eth_api_send_get_block_headers(alice, bob):
     result = await asyncio.wait_for(command_fut, timeout=1)
     assert isinstance(result, GetBlockHeadersV65)
     assert_type_equality(payload, result.payload)
+
+
+@pytest.mark.asyncio
+async def test_eth_api_send_get_block_headers_with_request_id(alice, bob):
+    if get_highest_eth_protocol_version(alice) < ETHProtocolV66.version:
+        pytest.skip("Test not applicable below eth/66")
+
+    payload = BlockHeadersQueryFactory()
+
+    command_fut = asyncio.Future()
+
+    async def _handle_cmd(connection, cmd):
+        command_fut.set_result(cmd)
+
+    bob.connection.add_command_handler(GetBlockHeadersV66, _handle_cmd)
+    request_id = alice.eth_api.send_get_block_headers(
+        block_number_or_hash=payload.block_number_or_hash,
+        max_headers=payload.block_number_or_hash,
+        skip=payload.skip,
+        reverse=payload.reverse,
+    )
+
+    result = await asyncio.wait_for(command_fut, timeout=1)
+    assert isinstance(result, GetBlockHeadersV66)
+    assert_type_equality(payload, result.payload.query)
+    assert result.payload.request_id == request_id
 
 
 @pytest.mark.asyncio

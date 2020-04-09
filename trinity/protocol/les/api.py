@@ -20,8 +20,8 @@ from p2p.exchange import ExchangeAPI, ExchangeLogic
 from p2p.logic import Application, CommandHandler
 from p2p.qualifiers import HasProtocol
 
-from trinity._utils.les import gen_request_id
 from trinity.protocol.common.abc import HeadInfoAPI
+from trinity._utils.requests import gen_request_id
 
 from .constants import (
     MAX_BODIES_FETCH,

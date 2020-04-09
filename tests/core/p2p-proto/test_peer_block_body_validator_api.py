@@ -19,7 +19,7 @@ from eth.rlp.transactions import BaseTransactionFields
 
 from trinity.rlp.block_body import BlockBody
 
-from trinity.tools.factories import LatestETHPeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory, ETHV65PeerPairFactory
 
 
 def mk_uncle(block_number):
@@ -73,10 +73,22 @@ def mk_headers(*counts):
         yield mk_header_and_body(idx, num_transactions, num_uncles)
 
 
-@pytest.fixture
-async def eth_peer_and_remote():
-    async with LatestETHPeerPairFactory() as (peer, remote):
+@pytest.fixture(
+    params=(
+        ETHV65PeerPairFactory,
+        LatestETHPeerPairFactory,
+    )
+)
+async def eth_peer_and_remote(request):
+    async with request.param() as (peer, remote):
         yield peer, remote
+
+
+def get_request_id_or_none(request):
+    try:
+        return request.payload.request_id
+    except AttributeError:
+        return None
 
 
 @pytest.mark.asyncio
@@ -86,12 +98,11 @@ async def test_eth_peer_get_block_bodies_round_trip_with_empty_response(eth_peer
     headers_bundle = mk_headers((2, 3), (8, 4), (0, 1), (0, 0))
     headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(*headers_bundle)
 
-    async def send_block_bodies():
-        remote.eth_api.send_block_bodies([])
-        await asyncio.sleep(0)
+    async def send_block_bodies(_, cmd):
+        remote.eth_api.send_block_bodies([], get_request_id_or_none(cmd))
 
+    remote.connection.add_msg_handler(send_block_bodies)
     get_bodies_task = asyncio.ensure_future(peer.eth_api.get_block_bodies(headers))
-    asyncio.ensure_future(send_block_bodies())
 
     response = await get_bodies_task
 
@@ -105,15 +116,15 @@ async def test_eth_peer_get_block_bodies_round_trip_with_full_response(eth_peer_
     headers_bundle = mk_headers((2, 3), (8, 4), (0, 1), (0, 0))
     headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(*headers_bundle)
 
-    async def send_block_bodies():
-        remote.eth_api.send_block_bodies(bodies)
-        await asyncio.sleep(0)
+    async def send_block_bodies(_, cmd):
+        remote.eth_api.send_block_bodies(bodies, get_request_id_or_none(cmd))
+
+    remote.connection.add_msg_handler(send_block_bodies)
 
     transactions_bundles = tuple(zip(transactions_roots, trie_data_dicts))
     bodies_bundle = tuple(zip(bodies, transactions_bundles, uncles_hashes))
 
     get_bodies_task = asyncio.ensure_future(peer.eth_api.get_block_bodies(headers))
-    asyncio.ensure_future(send_block_bodies())
 
     response = await get_bodies_task
 
@@ -128,15 +139,15 @@ async def test_eth_peer_get_block_bodies_round_trip_with_partial_response(eth_pe
     headers_bundle = mk_headers((2, 3), (8, 4), (0, 1), (0, 0))
     headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(*headers_bundle)
 
-    async def send_block_bodies():
-        remote.eth_api.send_block_bodies(bodies[1:])
+    async def send_block_bodies(_, cmd):
+        remote.eth_api.send_block_bodies(bodies[1:], get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
+    remote.connection.add_msg_handler(send_block_bodies)
     transactions_bundles = tuple(zip(transactions_roots, trie_data_dicts))
     bodies_bundle = tuple(zip(bodies, transactions_bundles, uncles_hashes))
 
     get_bodies_task = asyncio.ensure_future(peer.eth_api.get_block_bodies(headers))
-    asyncio.ensure_future(send_block_bodies())
 
     response = await get_bodies_task
 
@@ -151,19 +162,19 @@ async def test_eth_peer_get_block_bodies_round_trip_with_noise(eth_peer_and_remo
     headers_bundle = mk_headers((2, 3), (8, 4), (0, 1), (0, 0))
     headers, bodies, transactions_roots, trie_data_dicts, uncles_hashes = zip(*headers_bundle)
 
-    async def send_block_bodies():
-        remote.eth_api.send_node_data((b'', b'arst'))
+    async def send_block_bodies(_, cmd):
+        remote.eth_api.send_node_data((b'', b'arst'), get_request_id_or_none(cmd))
         await asyncio.sleep(0)
-        remote.eth_api.send_block_bodies(bodies)
+        remote.eth_api.send_block_bodies(bodies, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
-        remote.eth_api.send_node_data((b'', b'arst'))
+        remote.eth_api.send_node_data((b'', b'arst'), get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
+    remote.connection.add_msg_handler(send_block_bodies)
     transactions_bundles = tuple(zip(transactions_roots, trie_data_dicts))
     bodies_bundle = tuple(zip(bodies, transactions_bundles, uncles_hashes))
 
     get_bodies_task = asyncio.ensure_future(peer.eth_api.get_block_bodies(headers))
-    asyncio.ensure_future(send_block_bodies())
 
     response = await get_bodies_task
 
@@ -181,17 +192,17 @@ async def test_eth_peer_get_block_bodies_round_trip_no_match_invalid_response(et
     wrong_headers_bundle = mk_headers((4, 1), (3, 5), (2, 0), (7, 3))
     _, wrong_bodies, _, _, _ = zip(*wrong_headers_bundle)
 
-    async def send_block_bodies():
-        remote.eth_api.send_block_bodies(wrong_bodies)
+    async def send_block_bodies(_, cmd):
+        remote.eth_api.send_block_bodies(wrong_bodies, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
-        remote.eth_api.send_block_bodies(bodies)
+        remote.eth_api.send_block_bodies(bodies, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
+    remote.connection.add_msg_handler(send_block_bodies)
     transactions_bundles = tuple(zip(transactions_roots, trie_data_dicts))
     bodies_bundle = tuple(zip(bodies, transactions_bundles, uncles_hashes))
 
     get_bodies_task = asyncio.ensure_future(peer.eth_api.get_block_bodies(headers))
-    asyncio.ensure_future(send_block_bodies())
 
     response = await get_bodies_task
 

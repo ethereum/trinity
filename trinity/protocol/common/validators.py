@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import collections
 from typing import (
+    Any,
     Sequence,
     Tuple,
     cast,
@@ -19,6 +20,7 @@ from eth_utils import (
 )
 
 from p2p.exchange import ValidatorAPI
+from p2p.exchange.typing import TResponseCommand
 
 from trinity._utils.headers import sequence_builder
 from trinity._utils.humanize import humanize_integer_sequence
@@ -155,3 +157,8 @@ class BaseBlockHeadersValidator(ValidatorAPI[Tuple[BlockHeaderAPI, ...]]):
                 'Duplicate headers returned.\n'
                 f'- duplicates: {humanize_integer_sequence(sorted(duplicates))}\n'
             )
+
+
+def match_payload_request_id(request_payload: Any, response: TResponseCommand) -> None:
+    if request_payload.request_id != response.payload.request_id:
+        raise ValidationError("Request `id` does not match")

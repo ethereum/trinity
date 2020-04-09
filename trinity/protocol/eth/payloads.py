@@ -1,4 +1,8 @@
-from typing import NamedTuple, Tuple
+
+from typing import (
+    NamedTuple,
+    Tuple,
+)
 
 from eth_typing import BlockNumber, Hash32
 

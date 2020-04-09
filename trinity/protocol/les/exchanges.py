@@ -10,9 +10,7 @@ from p2p.exchange import (
     BaseExchange,
 )
 from p2p.exchange.normalizers import DefaultNormalizer
-from trinity._utils.les import (
-    gen_request_id,
-)
+from trinity._utils.requests import gen_request_id
 
 from .commands import (
     BlockHeaders,
@@ -28,8 +26,8 @@ from .trackers import (
 )
 from .validators import (
     GetBlockHeadersValidator,
-    match_payload_request_id,
 )
+from ..common.validators import match_payload_request_id
 
 TResult = TypeVar('TResult')
 

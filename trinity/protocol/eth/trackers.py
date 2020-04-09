@@ -4,34 +4,42 @@ from typing import (
     Sequence)
 
 from eth.abc import BlockHeaderAPI, SignedTransactionAPI
+from eth_typing import Hash32
 
 from p2p.exchange import BasePerformanceTracker
 
+from trinity.protocol.common.payloads import (
+    BlockHeadersQuery,
+    get_cmd_payload,
+)
 from trinity.protocol.common.typing import (
     BlockBodyBundles,
     NodeDataBundles,
     ReceiptsBundles,
 )
+
 from trinity._utils.headers import sequence_builder
 
 from .commands import (
-    GetBlockBodiesV65,
-    GetBlockHeadersV65,
-    GetNodeDataV65,
-    GetReceiptsV65,
-    GetPooledTransactionsV65,
+    AnyGetBlockHeaders,
+    AnyGetBlockBodies,
+    AnyGetNodeData,
+    AnyGetReceipts,
+    AnyGetPooledTransactions,
 )
 
 
 BaseGetBlockHeadersTracker = BasePerformanceTracker[
-    GetBlockHeadersV65,
+    AnyGetBlockHeaders,
     Tuple[BlockHeaderAPI, ...],
 ]
 
 
 class GetBlockHeadersTracker(BaseGetBlockHeadersTracker):
-    def _get_request_size(self, request: GetBlockHeadersV65) -> int:
-        payload = request.payload
+
+    def _get_request_size(self, request: AnyGetBlockHeaders) -> int:
+        payload: BlockHeadersQuery = get_cmd_payload(request)
+
         if isinstance(payload.block_number_or_hash, int):
             return len(sequence_builder(
                 start_number=payload.block_number_or_hash,
@@ -49,9 +57,10 @@ class GetBlockHeadersTracker(BaseGetBlockHeadersTracker):
         return len(result)
 
 
-class GetBlockBodiesTracker(BasePerformanceTracker[GetBlockBodiesV65, BlockBodyBundles]):
-    def _get_request_size(self, request: GetBlockBodiesV65) -> Optional[int]:
-        return len(request.payload)
+class GetBlockBodiesTracker(BasePerformanceTracker[AnyGetBlockBodies, BlockBodyBundles]):
+    def _get_request_size(self, request: AnyGetBlockBodies) -> Optional[int]:
+        payload: Tuple[Hash32, ...] = get_cmd_payload(request)
+        return len(payload)
 
     def _get_result_size(self, result: BlockBodyBundles) -> int:
         return len(result)
@@ -64,9 +73,10 @@ class GetBlockBodiesTracker(BasePerformanceTracker[GetBlockBodiesV65, BlockBodyB
         )
 
 
-class GetReceiptsTracker(BasePerformanceTracker[GetReceiptsV65, ReceiptsBundles]):
-    def _get_request_size(self, request: GetReceiptsV65) -> Optional[int]:
-        return len(request.payload)
+class GetReceiptsTracker(BasePerformanceTracker[AnyGetReceipts, ReceiptsBundles]):
+    def _get_request_size(self, request: AnyGetReceipts) -> Optional[int]:
+        payload: Tuple[Hash32, ...] = get_cmd_payload(request)
+        return len(payload)
 
     def _get_result_size(self, result: ReceiptsBundles) -> int:
         return len(result)
@@ -79,9 +89,10 @@ class GetReceiptsTracker(BasePerformanceTracker[GetReceiptsV65, ReceiptsBundles]
         )
 
 
-class GetNodeDataTracker(BasePerformanceTracker[GetNodeDataV65, NodeDataBundles]):
-    def _get_request_size(self, request: GetNodeDataV65) -> Optional[int]:
-        return len(request.payload)
+class GetNodeDataTracker(BasePerformanceTracker[AnyGetNodeData, NodeDataBundles]):
+    def _get_request_size(self, request: AnyGetNodeData) -> Optional[int]:
+        payload: Tuple[Hash32, ...] = get_cmd_payload(request)
+        return len(payload)
 
     def _get_result_size(self, result: NodeDataBundles) -> int:
         return len(result)
@@ -91,15 +102,16 @@ class GetNodeDataTracker(BasePerformanceTracker[GetNodeDataV65, NodeDataBundles]
 
 
 BaseGetPooledTransactionsTracker = BasePerformanceTracker[
-    GetPooledTransactionsV65,
+    AnyGetPooledTransactions,
     Tuple[SignedTransactionAPI, ...]
 ]
 
 
 class GetPooledTransactionsTracker(BaseGetPooledTransactionsTracker):
 
-    def _get_request_size(self, request: GetPooledTransactionsV65) -> Optional[int]:
-        return len(request.payload)
+    def _get_request_size(self, request: AnyGetPooledTransactions) -> Optional[int]:
+        payload: Tuple[Hash32, ...] = get_cmd_payload(request)
+        return len(payload)
 
     def _get_result_size(self, result: Sequence[SignedTransactionAPI]) -> int:
         return len(result)

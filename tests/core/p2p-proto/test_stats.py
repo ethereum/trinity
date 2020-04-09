@@ -52,14 +52,14 @@ async def test_eth_get_headers_empty_stats():
 @pytest.mark.asyncio
 async def test_eth_get_headers_stats():
     async with LatestETHPeerPairFactory() as (peer, remote):
-        async def send_headers():
-            remote.eth_api.send_block_headers(mk_header_chain(1))
+        async def send_headers(_, cmd):
+            remote.eth_api.send_block_headers(mk_header_chain(1), cmd.payload.request_id)
 
+        remote.connection.add_msg_handler(send_headers)
         for idx in range(1, 5):
             get_headers_task = asyncio.ensure_future(
                 peer.eth_api.get_block_headers(0, 1, 0, False)
             )
-            asyncio.ensure_future(send_headers())
 
             await get_headers_task
 

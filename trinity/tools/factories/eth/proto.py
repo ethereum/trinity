@@ -191,4 +191,5 @@ ALL_PEER_PAIR_FACTORIES = (
     ETHV63PeerPairFactory,
     ETHV64PeerPairFactory,
     ETHV65PeerPairFactory,
+    LatestETHPeerPairFactory,
 )

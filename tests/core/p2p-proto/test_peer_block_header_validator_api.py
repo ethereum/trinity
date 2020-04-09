@@ -25,6 +25,13 @@ class RequestIDMonitor(PeerSubscriber):
         return msg.command.payload.request_id
 
 
+def get_request_id_or_none(request):
+    try:
+        return request.payload.request_id
+    except AttributeError:
+        return None
+
+
 @to_tuple
 def mk_header_chain(length):
     assert length >= 1
@@ -72,11 +79,11 @@ async def test_eth_peer_get_headers_round_trip(eth_peer_and_remote,
                                                headers):
     peer, remote = eth_peer_and_remote
 
-    async def send_headers():
-        remote.eth_api.send_block_headers(headers)
+    async def send_headers(_, cmd):
+        remote.eth_api.send_block_headers(headers, get_request_id_or_none(cmd))
 
+    remote.connection.add_msg_handler(send_headers)
     get_headers_task = asyncio.ensure_future(peer.chain_api.get_block_headers(*params))
-    asyncio.ensure_future(send_headers())
 
     response = await get_headers_task
 
@@ -90,13 +97,11 @@ async def test_eth_peer_get_headers_round_trip_concurrent_requests(eth_peer_and_
     peer, remote = eth_peer_and_remote
     headers = mk_header_chain(1)
 
-    async def send_headers():
+    async def send_headers(_, cmd):
         await asyncio.sleep(0.01)
-        remote.eth_api.send_block_headers(headers)
-        await asyncio.sleep(0.01)
-        remote.eth_api.send_block_headers(headers)
-        await asyncio.sleep(0.01)
-        remote.eth_api.send_block_headers(headers)
+        remote.eth_api.send_block_headers(headers, get_request_id_or_none(cmd))
+
+    remote.connection.add_msg_handler(send_headers)
 
     params = (0, 1, 0, False)
 
@@ -105,7 +110,7 @@ async def test_eth_peer_get_headers_round_trip_concurrent_requests(eth_peer_and_
         asyncio.ensure_future(peer.chain_api.get_block_headers(*params)),
         asyncio.ensure_future(peer.chain_api.get_block_headers(*params)),
     ]
-    asyncio.ensure_future(send_headers())
+
     results = await asyncio.gather(*tasks)
 
     for response in results:
@@ -148,14 +153,14 @@ async def test_eth_peer_get_headers_round_trip_with_noise(eth_peer_and_remote):
 
     headers = mk_header_chain(10)
 
-    async def send_responses():
-        remote.eth_api.send_node_data([b'arst', b'tsra'])
+    async def send_responses(_, cmd):
+        remote.eth_api.send_node_data([b'arst', b'tsra'], get_request_id_or_none(cmd))
         await asyncio.sleep(0)
-        remote.eth_api.send_block_headers(headers)
+        remote.eth_api.send_block_headers(headers, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
+    remote.connection.add_msg_handler(send_responses)
     get_headers_task = asyncio.ensure_future(peer.chain_api.get_block_headers(0, 10, 0, False))
-    asyncio.ensure_future(send_responses())
 
     response = await get_headers_task
 
@@ -172,16 +177,16 @@ async def test_eth_peer_get_headers_round_trip_does_not_match_invalid_response(e
 
     wrong_headers = mk_header_chain(10)[3:8]
 
-    async def send_responses():
-        remote.eth_api.send_node_data([b'arst', b'tsra'])
+    async def send_responses(_, cmd):
+        remote.eth_api.send_node_data([b'arst', b'tsra'], get_request_id_or_none(cmd))
         await asyncio.sleep(0)
-        remote.eth_api.send_block_headers(wrong_headers)
+        remote.eth_api.send_block_headers(wrong_headers, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
-        remote.eth_api.send_block_headers(headers)
+        remote.eth_api.send_block_headers(headers, get_request_id_or_none(cmd))
         await asyncio.sleep(0)
 
+    remote.connection.add_msg_handler(send_responses)
     get_headers_task = asyncio.ensure_future(peer.chain_api.get_block_headers(0, 5, 0, False))
-    asyncio.ensure_future(send_responses())
 
     response = await get_headers_task
 

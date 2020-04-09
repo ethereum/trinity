@@ -18,6 +18,7 @@ from p2p.abc import SessionAPI
 
 from trinity._utils.bloom import RollingBloom
 from trinity._utils.logging import get_logger
+from trinity.protocol.eth.commands import GetPooledTransactionsV66
 from trinity.protocol.eth.events import (
     TransactionsEvent,
     GetPooledTransactionsEvent,
@@ -113,7 +114,13 @@ class TxPool(Service):
 
         async for event in self._event_bus.stream(GetPooledTransactionsEvent):
             asking_peer = await self._peer_pool.ensure_proxy_peer(event.session)
-            asking_peer.eth_api.send_pooled_transactions([])
+
+            if isinstance(event.command, GetPooledTransactionsV66):
+                request_id = event.command.payload.request_id
+            else:
+                request_id = None
+
+            asking_peer.eth_api.send_pooled_transactions([], request_id)
 
     async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SignedTransactionAPI]) -> None:
 

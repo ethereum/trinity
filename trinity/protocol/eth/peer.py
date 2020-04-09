@@ -37,9 +37,10 @@ from trinity.protocol.common.typing import (
 )
 from . import forkid
 
-from .api import ETHV63API, ETHV65API, AnyETHAPI, ETHV64API
+from .api import ETHV63API, AnyETHAPI, ETHV64API, ETHV65API, ETHV66API
 from .commands import (
     GetBlockHeadersV65,
+    GetBlockHeadersV66,
     GetBlockBodiesV65,
     GetReceiptsV65,
     GetNodeDataV65,
@@ -48,7 +49,7 @@ from .commands import (
     Transactions,
     NewPooledTransactionHashes,
     GetPooledTransactionsV65,
-)
+    GetBlockBodiesV66, GetNodeDataV66, GetReceiptsV66, GetPooledTransactionsV66)
 from .constants import MAX_HEADERS_FETCH
 from .events import (
     SendBlockHeadersEvent,
@@ -73,7 +74,7 @@ from .events import (
     SendTransactionsEvent,
 )
 from .payloads import StatusV63Payload, StatusPayload
-from .proto import ETHProtocolV63, ETHProtocolV64, ETHProtocolV65, BaseETHProtocol
+from .proto import ETHProtocolV63, ETHProtocolV64, ETHProtocolV65, ETHProtocolV66, BaseETHProtocol
 from .proxy import ProxyETHAPI
 from .handshaker import ETHV63Handshaker, ETHHandshaker
 
@@ -84,7 +85,8 @@ class ETHPeer(BaseChainPeer):
     supported_sub_protocols: Tuple[Type[BaseETHProtocol], ...] = (
         ETHProtocolV63,
         ETHProtocolV64,
-        ETHProtocolV65
+        ETHProtocolV65,
+        ETHProtocolV66,
     )
     sub_proto: BaseETHProtocol = None
 
@@ -92,17 +94,20 @@ class ETHPeer(BaseChainPeer):
         return super().get_behaviors() + (
             ETHV63API().as_behavior(),
             ETHV64API().as_behavior(),
-            ETHV65API().as_behavior()
+            ETHV65API().as_behavior(),
+            ETHV66API().as_behavior()
         )
 
     @cached_property
     def eth_api(self) -> AnyETHAPI:
         if self.connection.has_protocol(ETHProtocolV63):
             return self.connection.get_logic(ETHV63API.name, ETHV63API)
-        if self.connection.has_protocol(ETHProtocolV64):
+        elif self.connection.has_protocol(ETHProtocolV64):
             return self.connection.get_logic(ETHV64API.name, ETHV64API)
         elif self.connection.has_protocol(ETHProtocolV65):
             return self.connection.get_logic(ETHV65API.name, ETHV65API)
+        elif self.connection.has_protocol(ETHProtocolV66):
+            return self.connection.get_logic(ETHV66API.name, ETHV66API)
         else:
             raise Exception("Unreachable code")
 
@@ -165,7 +170,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
             total_difficulty=total_difficulty,
             genesis_hash=genesis_hash,
             network_id=self.context.network_id,
-            version=ETHProtocolV65.version,
+            version=ETHProtocolV66.version,
             fork_id=our_forkid
         )
 
@@ -191,14 +196,19 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     subscription_msg_types = frozenset({
         GetBlockHeadersV65,
+        GetBlockHeadersV66,
         GetBlockBodiesV65,
+        GetBlockBodiesV66,
         GetReceiptsV65,
+        GetReceiptsV66,
         GetNodeDataV65,
+        GetNodeDataV66,
         Transactions,
         NewBlockHashes,
         NewBlock,
         NewPooledTransactionHashes,
         GetPooledTransactionsV65,
+        GetPooledTransactionsV66,
     })
 
     # SendX events that need to be forwarded to peer.sub_proto.send(event.command)
@@ -231,6 +241,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
             self,
             event: GetBlockHeadersRequest) -> Tuple[BlockHeaderAPI, ...]:
         peer = self.get_peer(event.session)
+
         return await peer.eth_api.get_block_headers(
             event.block_number_or_hash,
             event.max_headers,
@@ -280,22 +291,22 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
         # These are broadcasted without a specific target. We shouldn't worry if they are consumed
         # or not (e.g. transaction pool is enabled or disabled etc)
-        if isinstance(cmd, GetBlockHeadersV65):
+        if isinstance(cmd, GetBlockHeadersV65) or isinstance(cmd, GetBlockHeadersV66):
             await self.event_bus.broadcast(
                 GetBlockHeadersEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
             )
-        elif isinstance(cmd, GetBlockBodiesV65):
+        elif isinstance(cmd, GetBlockBodiesV65) or isinstance(cmd, GetBlockBodiesV66):
             await self.event_bus.broadcast(
                 GetBlockBodiesEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
             )
-        elif isinstance(cmd, GetReceiptsV65):
+        elif isinstance(cmd, GetReceiptsV65) or isinstance(cmd, GetReceiptsV66):
             await self.event_bus.broadcast(
                 GetReceiptsEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
             )
-        elif isinstance(cmd, GetNodeDataV65):
+        elif isinstance(cmd, GetNodeDataV65) or isinstance(cmd, GetNodeDataV66):
             await self.event_bus.broadcast(
                 GetNodeDataEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING,
@@ -320,7 +331,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
                 NewPooledTransactionHashesEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING
             )
-        elif isinstance(cmd, GetPooledTransactionsV65):
+        elif isinstance(cmd, GetPooledTransactionsV65) or isinstance(cmd, GetPooledTransactionsV66):
             await self.event_bus.broadcast(
                 GetPooledTransactionsEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING

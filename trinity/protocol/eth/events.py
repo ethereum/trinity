@@ -33,20 +33,20 @@ from trinity.protocol.common.typing import (
 )
 
 from .commands import (
-    BlockBodiesV65,
-    BlockHeadersV65,
-    GetBlockBodiesV65,
-    GetBlockHeadersV65,
-    GetNodeDataV65,
-    GetReceiptsV65,
+    AnyGetBlockBodies,
+    AnyGetBlockHeaders,
+    AnyGetNodeData,
+    AnyGetPooledTransactions,
+    AnyGetReceipts,
+    AnyBlockHeaders,
+    AnyBlockBodies,
+    AnyPooledTransactions,
+    AnyReceipts,
+    AnyNodeData,
     NewBlock,
     NewBlockHashes,
-    NodeDataV65,
-    ReceiptsV65,
     Transactions,
     NewPooledTransactionHashes,
-    GetPooledTransactionsV65,
-    PooledTransactionsV65,
 )
 
 
@@ -57,7 +57,7 @@ class GetBlockHeadersEvent(PeerPoolMessageEvent):
     Event to carry a ``GetBlockHeaders`` command from the peer pool to any process that
     subscribes the event through the event bus.
     """
-    command: GetBlockHeadersV65
+    command: AnyGetBlockHeaders
 
 
 class GetBlockBodiesEvent(PeerPoolMessageEvent):
@@ -65,7 +65,7 @@ class GetBlockBodiesEvent(PeerPoolMessageEvent):
     Event to carry a ``GetBlockBodies`` command from the peer pool to any process that
     subscribes the event through the event bus.
     """
-    command: GetBlockBodiesV65
+    command: AnyGetBlockBodies
 
 
 class GetReceiptsEvent(PeerPoolMessageEvent):
@@ -73,7 +73,7 @@ class GetReceiptsEvent(PeerPoolMessageEvent):
     Event to carry a ``GetReceipts`` command from the peer pool to any process that
     subscribes the event through the event bus.
     """
-    command: GetReceiptsV65
+    command: AnyGetReceipts
 
 
 class GetNodeDataEvent(PeerPoolMessageEvent):
@@ -81,7 +81,7 @@ class GetNodeDataEvent(PeerPoolMessageEvent):
     Event to carry a ``GetNodeData`` command from the peer pool to any process that
     subscribes the event through the event bus.
     """
-    command: GetNodeDataV65
+    command: AnyGetNodeData
 
 
 class TransactionsEvent(PeerPoolMessageEvent):
@@ -121,7 +121,7 @@ class GetPooledTransactionsEvent(PeerPoolMessageEvent):
     Event to carry a ``GetPooledTransactions`` command from the peer pool to any process that
     subscribes the event through the event bus.
     """
-    command: GetPooledTransactionsV65
+    command: AnyGetPooledTransactions
 
 
 class PooledTransactionsEvent(PeerPoolMessageEvent):
@@ -129,7 +129,7 @@ class PooledTransactionsEvent(PeerPoolMessageEvent):
     Event to carry a ``PooledTransactions`` command from the peer pool to any process that
     subscribes the event through the event bus.
     """
-    command: PooledTransactionsV65
+    command: AnyPooledTransactions
 
 
 # Events flowing from Proxy to PeerPool
@@ -142,7 +142,7 @@ class SendBlockHeadersEvent(PeerPoolMessageEvent):
     peer that sits in the peer pool.
     """
     session: SessionAPI
-    command: BlockHeadersV65
+    command: AnyBlockHeaders
 
 
 @dataclass
@@ -152,7 +152,7 @@ class SendBlockBodiesEvent(PeerPoolMessageEvent):
     peer that sits in the peer pool.
     """
     session: SessionAPI
-    command: BlockBodiesV65
+    command: AnyBlockBodies
 
 
 @dataclass
@@ -162,7 +162,7 @@ class SendNodeDataEvent(PeerPoolMessageEvent):
     peer that sits in the peer pool.
     """
     session: SessionAPI
-    command: NodeDataV65
+    command: AnyNodeData
 
 
 @dataclass
@@ -172,7 +172,7 @@ class SendReceiptsEvent(PeerPoolMessageEvent):
     peer that sits in the peer pool.
     """
     session: SessionAPI
-    command: ReceiptsV65
+    command: AnyReceipts
 
 
 @dataclass
@@ -192,7 +192,7 @@ class SendPooledTransactionsEvent(PeerPoolMessageEvent):
     the actual peer that sits in the peer pool.
     """
     session: SessionAPI
-    command: PooledTransactionsV65
+    command: AnyPooledTransactions
 
 # EXCHANGE HANDLER REQUEST / RESPONSE PAIRS
 

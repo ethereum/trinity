@@ -678,7 +678,7 @@ async def test_admin_peers(
             def to_remote_address(session):
                 return f"{session.remote.address.ip}:{session.remote.address.tcp_port}"
 
-            assert json_bob['caps'] == ['eth/63', 'eth/65']
+            assert json_bob['caps'] == ['eth/63', 'eth/66']
             assert json_bob['enode'] == alice.connection.session.remote.uri()
             assert json_bob['id'] == str(alice.connection.session.id)
             assert json_bob['name'] == 'bob'
@@ -687,7 +687,7 @@ async def test_admin_peers(
             assert bob_network['localAddress'] == '0.0.0.0:30303'
             assert bob_network['remoteAddress'] == to_remote_address(alice.connection.session)
 
-            assert json_alice['caps'] == ['eth/63', 'eth/65']
+            assert json_alice['caps'] == ['eth/63', 'eth/66']
             assert json_alice['enode'] == bob.connection.session.remote.uri()
             assert json_alice['id'] == str(bob.connection.session.id)
             assert json_alice['name'] == 'alice'
