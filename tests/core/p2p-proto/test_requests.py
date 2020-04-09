@@ -16,11 +16,12 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
     ETHPeerPoolEventServer,
 )
+from trinity.protocol.eth.proto import ETHProtocolV65
 from trinity.protocol.eth.servers import ETHRequestServer
 
 from trinity.tools.factories import (
     ChainContextFactory,
-    ETHPeerPairFactory,
+    ALL_PEER_PAIR_FACTORIES,
 )
 
 from tests.core.integration_test_helpers import (
@@ -31,9 +32,18 @@ from tests.core.peer_helpers import (
 )
 
 
-@pytest.fixture
-async def client_and_server(chaindb_fresh, chaindb_20):
-    peer_pair = ETHPeerPairFactory(
+def get_highest_eth_protocol_version(client):
+    return max(
+        protocol.as_capability()[1] for protocol in client.connection.get_protocols()
+        if protocol.as_capability()[0] == 'eth'
+    )
+
+
+@pytest.fixture(
+    params=ALL_PEER_PAIR_FACTORIES
+)
+async def client_and_server(chaindb_fresh, chaindb_20, request):
+    peer_pair = request.param(
         alice_peer_context=ChainContextFactory(headerdb__db=chaindb_fresh.db),
         bob_peer_context=ChainContextFactory(headerdb__db=chaindb_20.db),
     )
@@ -108,6 +118,9 @@ async def test_get_pooled_transactions_request(request,
     server_event_bus = event_bus
     client_event_bus = other_event_bus
     client_peer, server_peer = client_and_server
+
+    if get_highest_eth_protocol_version(client_peer) < ETHProtocolV65.version:
+        pytest.skip("Test not applicable below eth/65")
 
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)

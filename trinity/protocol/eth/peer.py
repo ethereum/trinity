@@ -1,6 +1,8 @@
+import operator
 from typing import (
     Any,
     Tuple,
+    Type,
 )
 
 from cached_property import cached_property
@@ -71,7 +73,7 @@ from .events import (
     SendTransactionsEvent,
 )
 from .payloads import StatusV63Payload, StatusPayload
-from .proto import ETHProtocolV63, ETHProtocolV64, ETHProtocolV65
+from .proto import ETHProtocolV63, ETHProtocolV64, ETHProtocolV65, BaseETHProtocol
 from .proxy import ProxyETHAPI
 from .handshaker import ETHV63Handshaker, ETHHandshaker
 
@@ -79,8 +81,12 @@ from .handshaker import ETHV63Handshaker, ETHHandshaker
 class ETHPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
-    supported_sub_protocols = (ETHProtocolV63, ETHProtocolV64, ETHProtocolV65)
-    sub_proto: ETHProtocolV65 = None
+    supported_sub_protocols: Tuple[Type[BaseETHProtocol], ...] = (
+        ETHProtocolV63,
+        ETHProtocolV64,
+        ETHProtocolV65
+    )
+    sub_proto: BaseETHProtocol = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
         return super().get_behaviors() + (
@@ -163,9 +169,13 @@ class ETHPeerFactory(BaseChainPeerFactory):
             fork_id=our_forkid
         )
 
+        highest_eth_protocol = max(
+            self.peer_class.supported_sub_protocols, key=operator.attrgetter('version')
+        )
+
         return (
             ETHV63Handshaker(handshake_v63_params),
-            ETHHandshaker(handshake_params, head.block_number, fork_blocks),
+            ETHHandshaker(handshake_params, head.block_number, fork_blocks, highest_eth_protocol)
         )
 
 

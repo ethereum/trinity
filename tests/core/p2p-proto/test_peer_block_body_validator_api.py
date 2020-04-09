@@ -19,7 +19,7 @@ from eth.rlp.transactions import BaseTransactionFields
 
 from trinity.rlp.block_body import BlockBody
 
-from trinity.tools.factories import ETHPeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory
 
 
 def mk_uncle(block_number):
@@ -75,7 +75,7 @@ def mk_headers(*counts):
 
 @pytest.fixture
 async def eth_peer_and_remote():
-    async with ETHPeerPairFactory() as (peer, remote):
+    async with LatestETHPeerPairFactory() as (peer, remote):
         yield peer, remote
 
 

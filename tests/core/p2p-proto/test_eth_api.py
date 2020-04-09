@@ -40,9 +40,8 @@ from trinity.tools.factories.eth import (
 from trinity.tools.factories import (
     BlockHashFactory,
     ChainContextFactory,
-    ETHPeerPairFactory,
-    ETHV63PeerPairFactory,
-    ETHV64PeerPairFactory,
+    LatestETHPeerPairFactory,
+    ALL_PEER_PAIR_FACTORIES,
 )
 
 
@@ -85,7 +84,9 @@ def alice_chain_on_fork(bob_chain):
     return chain
 
 
-@pytest.fixture(params=(ETHV63PeerPairFactory, ETHV64PeerPairFactory, ETHPeerPairFactory))
+@pytest.fixture(
+    params=ALL_PEER_PAIR_FACTORIES
+)
 async def alice_and_bob(alice_chain, bob_chain, request):
     pair_factory = request.param(
         alice_client_version='alice',
@@ -269,7 +270,7 @@ async def test_handshake_with_incompatible_fork_id(alice_chain, bob_chain):
         mine_block()
     )
 
-    pair_factory = ETHPeerPairFactory(
+    pair_factory = LatestETHPeerPairFactory(
         alice_peer_context=ChainContextFactory(
             headerdb=AsyncHeaderDB(alice_chain.headerdb.db),
             vm_configuration=((1, PetersburgVM), (2, MuirGlacierVM))

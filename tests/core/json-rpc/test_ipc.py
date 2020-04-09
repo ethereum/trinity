@@ -36,7 +36,7 @@ from trinity.sync.common.types import (
     SyncProgress
 )
 from trinity.tools.event_bus import mock_request_response
-from trinity.tools.factories import ETHPeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory
 
 from trinity._utils.version import construct_trinity_client_identifier
 
@@ -657,7 +657,7 @@ async def test_admin_peers(
         event_bus,
         ipc_server):
 
-    async with ETHPeerPairFactory() as (alice, bob):
+    async with LatestETHPeerPairFactory() as (alice, bob):
         peer_pool = MockPeerPoolWithConnectedPeers([alice, bob], event_bus=event_bus)
 
         async with run_peer_pool_event_server(event_bus, peer_pool):
