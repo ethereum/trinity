@@ -24,7 +24,7 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
     ETHPeerPoolEventServer
 )
-from trinity.tools.factories import ETHPeerPairFactory, ChainContextFactory
+from trinity.tools.factories import LatestETHPeerPairFactory, ChainContextFactory
 
 from tests.core.integration_test_helpers import run_peer_pool_event_server
 from tests.core.peer_helpers import MockPeerPoolWithConnectedPeers
@@ -52,7 +52,7 @@ def tx_validator(chain_with_block_validation):
 
 @pytest.fixture
 async def client_and_server():
-    peer_pair = ETHPeerPairFactory(
+    peer_pair = LatestETHPeerPairFactory(
         alice_peer_context=ChainContextFactory(),
         bob_peer_context=ChainContextFactory(),
     )

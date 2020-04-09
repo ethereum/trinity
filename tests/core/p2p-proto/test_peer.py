@@ -16,7 +16,7 @@ from trinity.protocol.les.proto import (
 )
 
 from trinity.tools.factories import (
-    ETHPeerPairFactory,
+    LatestETHPeerPairFactory,
     LESV1PeerPairFactory,
     LESV2PeerPairFactory,
 )
@@ -59,7 +59,7 @@ async def test_ETH_v63_peers():
 
 @pytest.mark.asyncio
 async def test_ETH_peers():
-    async with ETHPeerPairFactory() as (alice, bob):
+    async with LatestETHPeerPairFactory() as (alice, bob):
         assert isinstance(alice, ETHPeer)
         assert isinstance(bob, ETHPeer)
 
@@ -69,9 +69,9 @@ async def test_ETH_peers():
 
 @pytest.mark.asyncio
 async def test_peer_pool_iter(event_loop):
-    factory_a = ETHPeerPairFactory()
-    factory_b = ETHPeerPairFactory()
-    factory_c = ETHPeerPairFactory()
+    factory_a = LatestETHPeerPairFactory()
+    factory_b = LatestETHPeerPairFactory()
+    factory_c = LatestETHPeerPairFactory()
     async with factory_a as (peer1, _), factory_b as (peer2, _), factory_c as (peer3, _):
         pool = MockPeerPoolWithConnectedPeers([peer1, peer2, peer3])
         peers = list([peer async for peer in pool])
@@ -100,7 +100,7 @@ async def test_remote_dao_fork_validation_skipped_on_eth64(monkeypatch):
         nonlocal dao_fork_validator_called
         dao_fork_validator_called = True
 
-    async with ETHPeerPairFactory() as (alice, _):
+    async with LatestETHPeerPairFactory() as (alice, _):
         boot_manager = alice.get_boot_manager()
         monkeypatch.setattr(
             boot_manager, 'validate_remote_dao_fork_block', validate_remote_dao_fork_block)

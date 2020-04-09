@@ -6,5 +6,5 @@ from .payloads import (  # noqa: F401
 )
 from .proto import (  # noqa: F401
     ETHHandshakerFactory,
-    ETHPeerPairFactory,
+    ETHV65PeerPairFactory,
 )

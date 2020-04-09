@@ -9,7 +9,7 @@ import pytest
 
 from trinity.protocol.les.commands import GetBlockHeaders
 
-from trinity.tools.factories import ETHPeerPairFactory, LESV2PeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory, LESV2PeerPairFactory
 
 
 class RequestIDMonitor(PeerSubscriber):
@@ -43,7 +43,7 @@ def mk_header_chain(length):
 
 @pytest.mark.asyncio
 async def test_eth_get_headers_empty_stats():
-    async with ETHPeerPairFactory() as (peer, remote):
+    async with LatestETHPeerPairFactory() as (peer, remote):
         stats = peer.eth_api.get_extra_stats()
         assert all('None' in line for line in stats)
         assert any('BlockHeader' in line for line in stats)
@@ -51,7 +51,7 @@ async def test_eth_get_headers_empty_stats():
 
 @pytest.mark.asyncio
 async def test_eth_get_headers_stats():
-    async with ETHPeerPairFactory() as (peer, remote):
+    async with LatestETHPeerPairFactory() as (peer, remote):
         async def send_headers():
             remote.eth_api.send_block_headers(mk_header_chain(1))
 

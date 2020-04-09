@@ -15,9 +15,11 @@ from .les.proto import (  # noqa: F401
 )
 from .eth.proto import (  # noqa: F401
     ETHHandshakerFactory,
-    ETHPeerPairFactory,
+    ETHV65PeerPairFactory,
     ETHV63PeerPairFactory,
     ETHV64PeerPairFactory,
+    LatestETHPeerPairFactory,
+    ALL_PEER_PAIR_FACTORIES,
 )
 from .headers import BlockHeaderFactory  # noqa: F401
 from .receipts import ReceiptFactory  # noqa: F401

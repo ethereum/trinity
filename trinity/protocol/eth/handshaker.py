@@ -23,8 +23,7 @@ from trinity.exceptions import (
 from .commands import StatusV63, Status
 from .forkid import ForkID, ForkIDHandshakeCheck, validate_forkid
 from .payloads import StatusV63Payload, StatusPayload
-from .proto import ETHProtocolV63, ETHProtocolV65
-
+from .proto import ETHProtocolV63, BaseETHProtocol
 
 THandshakeParams = TypeVar("THandshakeParams", bound=Union[StatusPayload, StatusV63Payload])
 
@@ -124,20 +123,21 @@ class ETHV63Handshaker(Handshaker[ETHProtocolV63]):
         return receipt
 
 
-class ETHHandshaker(Handshaker[ETHProtocolV65]):
-    protocol_class = ETHProtocolV65
+class ETHHandshaker(Handshaker[BaseETHProtocol]):
 
     def __init__(self,
                  handshake_params: StatusPayload,
                  head_number: BlockNumber,
-                 fork_blocks: Tuple[BlockNumber, ...]) -> None:
+                 fork_blocks: Tuple[BlockNumber, ...],
+                 highest_supported_protocol: Type[BaseETHProtocol]) -> None:
         self.handshake_params = handshake_params
         self.head_number = head_number
         self.fork_blocks = fork_blocks
+        self.protocol_class = highest_supported_protocol
 
     async def do_handshake(self,
                            multiplexer: MultiplexerAPI,
-                           protocol: ETHProtocolV65) -> ETHHandshakeReceipt:
+                           protocol: BaseETHProtocol) -> ETHHandshakeReceipt:
         """
         Perform the handshake for the sub-protocol agreed with the remote peer.
 

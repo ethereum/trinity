@@ -39,7 +39,7 @@ from trinity.sync.light.chain import LightChainSyncer
 
 from trinity.tools.factories import (
     ChainContextFactory,
-    ETHPeerPairFactory,
+    LatestETHPeerPairFactory,
     LESV2PeerPairFactory,
 )
 from trinity.tools.chain import (
@@ -73,7 +73,7 @@ async def test_skeleton_syncer(request, event_loop, event_bus, chaindb_fresh, ch
 
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
     server_context = ChainContextFactory(headerdb__db=chaindb_1000.db)
-    peer_pair = ETHPeerPairFactory(
+    peer_pair = LatestETHPeerPairFactory(
         alice_peer_context=client_context,
         bob_peer_context=server_context,
         event_bus=event_bus,
@@ -176,7 +176,7 @@ async def test_beam_syncer(
 
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
     server_context = ChainContextFactory(headerdb__db=chaindb_churner.db)
-    peer_pair = ETHPeerPairFactory(
+    peer_pair = LatestETHPeerPairFactory(
         alice_peer_context=client_context,
         bob_peer_context=server_context,
         event_bus=event_bus,
@@ -255,7 +255,7 @@ async def test_beam_syncer(
 async def test_regular_syncer(request, event_loop, event_bus, chaindb_fresh, chaindb_20):
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
     server_context = ChainContextFactory(headerdb__db=chaindb_20.db)
-    peer_pair = ETHPeerPairFactory(
+    peer_pair = LatestETHPeerPairFactory(
         alice_peer_context=client_context,
         bob_peer_context=server_context,
         event_bus=event_bus,
@@ -377,7 +377,7 @@ async def test_regular_syncer_fallback(request, event_loop, event_bus, chaindb_f
     """
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
     server_context = ChainContextFactory(headerdb__db=chaindb_20.db)
-    peer_pair = ETHPeerPairFactory(
+    peer_pair = LatestETHPeerPairFactory(
         alice_peer_context=client_context,
         bob_peer_context=server_context,
         event_bus=event_bus,

@@ -10,7 +10,7 @@ import pytest
 from trinity.protocol.les.commands import GetBlockHeaders
 
 from trinity.tools.factories import (
-    ETHPeerPairFactory,
+    LatestETHPeerPairFactory,
     LESV1PeerPairFactory,
     LESV2PeerPairFactory,
 )
@@ -47,7 +47,7 @@ def mk_header_chain(length):
 
 @pytest.fixture
 async def eth_peer_and_remote():
-    async with ETHPeerPairFactory() as (peer, remote):
+    async with LatestETHPeerPairFactory() as (peer, remote):
         yield peer, remote
 
 

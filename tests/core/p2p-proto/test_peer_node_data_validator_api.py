@@ -8,12 +8,12 @@ from eth_utils import (
     keccak,
 )
 
-from trinity.tools.factories import ETHPeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory
 
 
 @pytest.fixture
 async def eth_peer_and_remote():
-    async with ETHPeerPairFactory() as (peer, remote):
+    async with LatestETHPeerPairFactory() as (peer, remote):
         yield peer, remote
 
 

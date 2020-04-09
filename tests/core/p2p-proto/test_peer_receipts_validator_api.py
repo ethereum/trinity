@@ -10,12 +10,12 @@ from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 
-from trinity.tools.factories import ETHPeerPairFactory
+from trinity.tools.factories import LatestETHPeerPairFactory
 
 
 @pytest.fixture
 async def eth_peer_and_remote():
-    async with ETHPeerPairFactory() as (peer, remote):
+    async with LatestETHPeerPairFactory() as (peer, remote):
         yield peer, remote
 
 
