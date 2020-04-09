@@ -72,6 +72,9 @@ from eth2.beacon.typing import (
 from eth2.configs import (
     Eth2Config,
 )
+from eth2.genesis import (
+    generate_genesis_config,
+)
 from p2p.kademlia import (
     Node as KademliaNode,
 )
@@ -724,15 +727,21 @@ class BeaconChainConfig:
         Construct an instance of ``cls`` reading the genesis configuration
         data under the local data directory.
         """
-        with open(_get_eth2_genesis_config_file_path()) as config_file:
-            config = json.load(config_file)
-            genesis_eth2_config = Eth2Config.from_formatted_dict(config["eth2_config"])
-            # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
-            override_lengths(genesis_eth2_config)
+        try:
+            with open(_get_eth2_genesis_config_file_path()) as config_file:
+                genesis_config = json.load(config_file)
+        except FileNotFoundError:
+            genesis_config = generate_genesis_config("minimal")
 
-            genesis_state = from_formatted_dict(config["genesis_state"], BeaconState)
-            genesis_validator_key_map = load_genesis_key_map(config["genesis_validator_key_pairs"])
-            return cls(genesis_state, genesis_eth2_config, genesis_validator_key_map)
+        eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
+        # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
+        override_lengths(eth2_config)
+
+        genesis_state = from_formatted_dict(genesis_config["genesis_state"], BeaconState)
+        genesis_validator_key_map = load_genesis_key_map(
+            genesis_config["genesis_validator_key_pairs"]
+        )
+        return cls(genesis_state, eth2_config, genesis_validator_key_map)
 
     @classmethod
     def get_genesis_config_file_path(cls) -> Path:

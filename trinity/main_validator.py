@@ -11,6 +11,7 @@ from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 from eth2.configs import Eth2Config
+from eth2.genesis import generate_genesis_config
 from eth2.validator_client.cli_parser import parse_cli_args
 from eth2.validator_client.config import Config
 from eth2.validator_client.tools.directory import create_dir_if_missing
@@ -55,9 +56,13 @@ def main_validator() -> None:
     root_dir = validator_client_app_config.root_dir
     create_dir_if_missing(root_dir)
 
-    genesis_config = _load_genesis_config_at(
-        validator_client_app_config.genesis_config_path
-    )
+    try:
+        genesis_config = _load_genesis_config_at(
+            validator_client_app_config.genesis_config_path
+        )
+    except FileNotFoundError:
+        genesis_config = generate_genesis_config("minimal")
+
     eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
     override_lengths(eth2_config)
     key_pairs = load_genesis_key_map(genesis_config["genesis_validator_key_pairs"])
