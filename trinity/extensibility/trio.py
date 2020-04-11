@@ -31,6 +31,8 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
         - _do_run -> do_run
             * sets up event bus and then enters user function.
         """
+        # FIXME: Use subprocess.Popen() so that we can make every process be its own process group
+        # leader, like in AsyncioIsolatedComponent.
         process = ctx.Process(
             target=self.run_process,
             args=(self._boot_info,),

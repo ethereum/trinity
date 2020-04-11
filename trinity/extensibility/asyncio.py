@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import os
 from typing import Optional
 
 from asyncio_run_in_process import open_in_process
@@ -19,9 +20,17 @@ logger = get_logger('trinity.extensibility.asyncio.AsyncioIsolatedComponent')
 
 
 class AsyncioIsolatedComponent(BaseIsolatedComponent):
+
     def get_subprocess_kwargs(self) -> Optional[SubprocessKwargs]:
-        # Note that this method currently only exist to facilitate testing.
-        return None
+        # By default we want every child process its own process group leader as we don't want a
+        # Ctrl-C in the terminal to send a SIGINT to each one of our process, as that is already
+        # handled by open_in_process().
+        start_new_session = True
+        if os.getenv('TRINITY_SINGLE_PROCESS_GROUP') == "1":
+            # This is needed because some of our integration tests rely on all processes being in
+            # a single process group.
+            start_new_session = False
+        return {'start_new_session': start_new_session}
 
     async def run(self) -> None:
         proc_ctx = open_in_process(

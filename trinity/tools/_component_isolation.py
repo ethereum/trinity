@@ -11,6 +11,8 @@ from async_service import Service
 from async_service import background_asyncio_service
 from asyncio_run_in_process.typing import SubprocessKwargs
 
+from eth_utils.toolz import merge
+
 from lahja import EndpointAPI, BaseEvent
 
 from trinity.boot_info import BootInfo
@@ -48,11 +50,14 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
     logger = logging.getLogger('trinity.testing.ComponentForTest')
 
     def get_subprocess_kwargs(self) -> SubprocessKwargs:
-        return {
-            'stdin': subprocess.PIPE,
-            'stdout': subprocess.PIPE,
-            'stderr': subprocess.PIPE,
-        }
+        return merge(
+            super().get_subprocess_kwargs(),
+            {
+                'stdin': subprocess.PIPE,
+                'stdout': subprocess.PIPE,
+                'stderr': subprocess.PIPE,
+            }
+        )
 
     @property
     def is_enabled(self) -> bool:
