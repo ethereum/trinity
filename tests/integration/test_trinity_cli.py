@@ -40,6 +40,11 @@ MAINNET_GENESIS_HASH = '0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c
 #         assert await contains_all(runner.stdout, {'bytes from'})
 
 
+@pytest.fixture(autouse=True)
+def single_process_group(monkeypatch):
+    monkeypatch.setenv('TRINITY_SINGLE_PROCESS_GROUP', 1)
+
+
 def amend_command_for_unused_port(command, unused_tcp_port):
     # use a random port each time, in case a previous run went awry and left behind a
     # trinity instance

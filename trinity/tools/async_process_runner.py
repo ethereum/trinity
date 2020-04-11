@@ -15,6 +15,8 @@ from async_timeout import timeout
 
 
 class AsyncProcessRunner():
+    # Note: This relies on trinity using a single process group for all its sub processes, which
+    # is achieved by setting the env var TRINITY_SINGLE_PROCESS_GROUP=1.
     logger = logging.getLogger("trinity.tools.async_process_runner.AsyncProcessRunner")
     proc: asyncio.subprocess.Process
 
