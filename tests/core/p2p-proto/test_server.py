@@ -1,6 +1,8 @@
 import asyncio
 import pytest
 
+from async_service.asyncio import background_asyncio_service
+
 from eth_keys import keys
 
 from cancel_token import CancelToken
@@ -12,7 +14,6 @@ from eth.db.chain import ChainDB
 from p2p.auth import HandshakeInitiator, _handshake
 from p2p.connection import Connection
 from p2p.handshake import negotiate_protocol_handshakes
-from p2p.service import run_service
 from p2p.tools.factories import (
     get_open_port,
     DevP2PHandshakeParamsFactory,
@@ -63,6 +64,7 @@ def get_server(privkey, address, event_bus):
     chaindb = ChainDB(base_db)
     chaindb.persist_header(ROPSTEN_GENESIS_HEADER)
     chain = RopstenChain(base_db)
+    token = CancelToken("server")
     server = ParagonServer(
         privkey=privkey,
         port=address.tcp_port,
@@ -71,6 +73,7 @@ def get_server(privkey, address, event_bus):
         headerdb=headerdb,
         base_db=base_db,
         network_id=NETWORK_ID,
+        token=token,
         event_bus=event_bus,
     )
     return server
@@ -87,15 +90,16 @@ def receiver_remote():
 @pytest.fixture
 async def server(event_bus, receiver_remote):
     server = get_server(RECEIVER_PRIVKEY, receiver_remote.address, event_bus)
-    async with run_service(server):
-        # wait for the tcp server to start listening
-        for _ in range(50):
-            if server._tcp_listener is not None and server._tcp_listener.is_serving():
-                break
-            await asyncio.sleep(0.01)
-        else:
-            raise AssertionError("Never got listener")
-        yield server
+    async with background_asyncio_service(server):
+        try:
+            yield server
+        finally:
+            # XXX: Need to manually cancel the token here but in production the server's caller
+            # would do that.
+            server.cancel_token.trigger()
+    # Now that the server is finished, sleep a bit to give old-style services a chance to detect
+    # the token was triggered and finish their cleanup.
+    await asyncio.sleep(0.1)
 
 
 @pytest.mark.asyncio
@@ -206,14 +210,14 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remot
 
 
 @pytest.mark.asyncio
-async def test_peer_pool_answers_connect_commands(event_loop, event_bus, server, receiver_remote):
+async def test_peer_pool_answers_connect_commands(event_bus, server, receiver_remote):
     # This is the PeerPool which will accept our message and try to connect to {server}
     initiator_peer_pool = ParagonPeerPool(
         privkey=INITIATOR_PRIVKEY,
         context=ParagonContext(),
         event_bus=event_bus,
     )
-    asyncio.ensure_future(initiator_peer_pool.run(), loop=event_loop)
+    asyncio.ensure_future(initiator_peer_pool.run())
     await initiator_peer_pool.events.started.wait()
     async with run_peer_pool_event_server(
         event_bus,
