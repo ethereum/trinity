@@ -276,7 +276,7 @@ class BaseService(CancellableMixin, AsyncioServiceAPI):
                 for child_service in self._child_services
             )
             await asyncio.gather(*wait_for_clean_up_tasks)
-            self.logger.debug("All child services finished")
+            self.logger.debug("%s: All child services finished", self)
         if self._tasks:
             self._log_tasks("Waiting for tasks")
             await asyncio.gather(*self._tasks)
