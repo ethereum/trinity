@@ -136,7 +136,7 @@ class BaseServer(Service, Generic[TPeerPool]):
         self.logger.info('peers: max_peers=%s', self.max_peers)
 
         async with self.tcp_listener():
-            self.manager.run_daemon_child_service(self.peer_pool.as_new_service())
+            self.manager.run_daemon_child_service(self.peer_pool)
             await self.manager.wait_finished()
 
     async def receive_handshake(
@@ -221,9 +221,9 @@ class FullServer(BaseServer[ETHPeerPool]):
         )
         return ETHPeerPool(
             privkey=self.privkey,
-            max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
+            max_peers=self.max_peers,
             event_bus=self.event_bus,
             metrics_registry=self.metrics_registry,
         )
@@ -242,9 +242,9 @@ class LightServer(BaseServer[LESPeerPool]):
         )
         return LESPeerPool(
             privkey=self.privkey,
-            max_peers=self.max_peers,
             context=context,
             token=self.cancel_token,
+            max_peers=self.max_peers,
             event_bus=self.event_bus,
             metrics_registry=self.metrics_registry,
         )

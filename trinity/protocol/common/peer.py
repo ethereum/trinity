@@ -176,12 +176,12 @@ class BaseChainPeerPool(BasePeerPool):
         # entries) we use the less restrictive filter function and get as many connection
         # candidates as possible.
         last_candidates_count = 0
-        while self.is_operational:
+        while self.manager.is_running:
             if self.is_full:
-                await self.sleep(PEER_CONNECT_INTERVAL)
+                await asyncio.sleep(PEER_CONNECT_INTERVAL)
                 continue
 
-            await self.wait(rate_limiter.take())
+            await rate_limiter.take()
 
             if last_candidates_count >= self.available_slots:
                 head = await self.get_chain_head()
@@ -221,12 +221,11 @@ class BaseChainPeerPool(BasePeerPool):
         return self.context.vm_configuration
 
     async def get_chain_head(self) -> BlockHeader:
-        return await self.wait(self.context.headerdb.coro_get_canonical_head())
+        return await self.context.headerdb.coro_get_canonical_head()
 
     async def get_genesis_hash(self) -> Hash32:
-        return await self.wait(
-            self.context.headerdb.coro_get_canonical_block_hash(BlockNumber(GENESIS_BLOCK_NUMBER))
-        )
+        return await self.context.headerdb.coro_get_canonical_block_hash(
+            BlockNumber(GENESIS_BLOCK_NUMBER))
 
     @property
     def highest_td_peer(self) -> BaseChainPeer:

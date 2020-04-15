@@ -448,4 +448,9 @@ class WrappedLegacyService(Service):
 
     async def run(self) -> None:
         async with run_service(self._service):
-            await self._service.cancellation()
+            try:
+                await self._service.cancellation()
+            except OperationCancelled:
+                # We must not let an OperationCancelled bubble because asyncio-service's
+                # run_task() & co don't handle those like BaseService methods.
+                pass

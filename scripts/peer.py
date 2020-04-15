@@ -14,6 +14,8 @@ from typing import (
     Union,
 )
 
+from cancel_token.token import CancelToken
+
 from eth_typing import BlockNumber
 from eth_utils import DEBUG2_LEVEL_NUM
 
@@ -84,10 +86,11 @@ def _main() -> None:
     peer_pool = pool_class(
         privkey=ecies.generate_privkey(),
         context=context,
+        token=CancelToken("peer-script"),
     )
 
     asyncio.ensure_future(peer_pool.run())
-    peer_pool.run_task(connect_to_peers_loop(peer_pool, nodes))
+    peer_pool.manager.run_task(connect_to_peers_loop(peer_pool, nodes))
 
     async def request_stuff() -> None:
         # Request some stuff from ropsten's block 2440319
@@ -117,7 +120,7 @@ def _main() -> None:
 
     async def exit_on_sigint() -> None:
         await sigint_received.wait()
-        await peer_pool.cancel()
+        await peer_pool.manager.stop()
         loop.stop()
 
     asyncio.ensure_future(exit_on_sigint())

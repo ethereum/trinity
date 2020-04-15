@@ -15,6 +15,8 @@ from typing import (
 
 from cached_property import cached_property
 
+from cancel_token.exceptions import OperationCancelled
+
 from eth_keys import keys
 
 from p2p.abc import (
@@ -133,6 +135,11 @@ class Connection(ConnectionAPI, BaseService):
                     self.run_daemon_task(self._feed_protocol_handlers(protocol))
 
                 await self.cancellation()
+        except OperationCancelled:
+            # XXX: We must not let an OperationCancelled bubble because all services above us are
+            # new-style and don't know how to handle that. This should be removed once we are
+            # converted into a new-style service as well.
+            pass
         except (PeerConnectionLost, asyncio.CancelledError):
             pass
         except (MalformedMessage,) as err:
