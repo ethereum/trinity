@@ -193,20 +193,17 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remot
     initiator_peer_pool = ParagonPeerPool(
         privkey=INITIATOR_PRIVKEY,
         context=ParagonContext(),
+        token=CancelToken("test_peer_pool_connect")
     )
     nodes = [receiver_remote]
-    asyncio.ensure_future(initiator_peer_pool.run(), loop=event_loop)
-    await initiator_peer_pool.events.started.wait()
-    await initiator_peer_pool.connect_to_nodes(nodes)
-    # Give the receiver_server a chance to ack the handshake.
-    await asyncio.sleep(0.2)
+    async with background_asyncio_service(initiator_peer_pool) as manager:
+        await manager.wait_started()
+        await initiator_peer_pool.connect_to_nodes(nodes)
+        # Give the receiver_server a chance to ack the handshake.
+        await asyncio.sleep(0.2)
 
-    assert len(started_peers) == 1
-    assert len(initiator_peer_pool.connected_nodes) == 1
-
-    # Stop our peer to make sure its pending asyncio tasks are cancelled.
-    await list(initiator_peer_pool.connected_nodes.values())[0].cancel()
-    await initiator_peer_pool.cancel()
+        assert len(started_peers) == 1
+        assert len(initiator_peer_pool.connected_nodes) == 1
 
 
 @pytest.mark.asyncio
@@ -216,25 +213,21 @@ async def test_peer_pool_answers_connect_commands(event_bus, server, receiver_re
         privkey=INITIATOR_PRIVKEY,
         context=ParagonContext(),
         event_bus=event_bus,
+        token=CancelToken("test_peer_pool_answers_connect_commands")
     )
-    asyncio.ensure_future(initiator_peer_pool.run())
-    await initiator_peer_pool.events.started.wait()
-    async with run_peer_pool_event_server(
-        event_bus,
-        initiator_peer_pool,
-    ):
+    async with background_asyncio_service(initiator_peer_pool) as manager:
+        await manager.wait_started()
+        async with run_peer_pool_event_server(event_bus, initiator_peer_pool):
 
-        assert len(server.peer_pool.connected_nodes) == 0
+            assert len(server.peer_pool.connected_nodes) == 0
 
-        await event_bus.wait_until_any_endpoint_subscribed_to(ConnectToNodeCommand)
-        await event_bus.broadcast(
-            ConnectToNodeCommand(receiver_remote),
-            TO_NETWORKING_BROADCAST_CONFIG
-        )
+            await event_bus.wait_until_any_endpoint_subscribed_to(ConnectToNodeCommand)
+            await event_bus.broadcast(
+                ConnectToNodeCommand(receiver_remote),
+                TO_NETWORKING_BROADCAST_CONFIG
+            )
 
-        # This test was maybe 30% flaky at 0.1 sleep
-        await asyncio.sleep(0.2)
+            # This test was maybe 30% flaky at 0.1 sleep
+            await asyncio.sleep(0.2)
 
-        assert len(server.peer_pool.connected_nodes) == 1
-
-        await initiator_peer_pool.cancel()
+            assert len(server.peer_pool.connected_nodes) == 1

@@ -6,6 +6,8 @@ from typing import (
 
 from cached_property import cached_property
 
+from cancel_token.token import CancelToken
+
 from p2p.abc import HandshakerAPI, MultiplexerAPI
 from p2p.handshake import Handshaker
 from p2p.receipt import HandshakeReceipt
@@ -69,12 +71,13 @@ class ParagonPeerPool(BasePeerPool):
     context: ParagonContext
 
     async def maybe_connect_more_peers(self) -> None:
-        await self.cancellation()
+        await self.manager.wait_finished()
 
 
 class ParagonMockPeerPoolWithConnectedPeers(ParagonPeerPool):
     def __init__(self, peers: Iterable[ParagonPeer]) -> None:
-        super().__init__(privkey=None, context=None)
+        super().__init__(
+            privkey=None, context=None, token=CancelToken("ParagonMockPeerPoolWithConnectedPeers"))
         for peer in peers:
             self.connected_nodes[peer.session] = peer
 

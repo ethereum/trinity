@@ -191,7 +191,7 @@ async def test_does_not_propagate_invalid_tx(two_connected_tx_pools,
     await alice_tx_pool._handle_tx(bob.session, txs_broadcasted_by_alice)
 
     # Check that Bob received only the second tx which is valid
-    await asyncio.wait_for(bob_got_tx.wait(), timeout=0.01)
+    await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
     assert len(bob_incoming_tx) == 1
     assert bob_incoming_tx[0].as_dict() == txs_broadcasted_by_alice[1].as_dict()
 

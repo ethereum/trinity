@@ -13,6 +13,8 @@ from typing import (
     Union,
 )
 
+from cancel_token.token import CancelToken
+
 from eth_typing import BlockNumber
 
 from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
@@ -98,7 +100,7 @@ def _test() -> None:
         p2p_version=DEVP2P_V5,
     )
 
-    peer_pool = peer_pool_class(privkey=privkey, context=context)
+    peer_pool = peer_pool_class(privkey=privkey, context=context, token=CancelToken("chainsync"))
 
     if args.enode:
         nodes = tuple([Node.from_uri(args.enode)])
@@ -106,7 +108,7 @@ def _test() -> None:
         nodes = DEFAULT_PREFERRED_NODES[chain_id]
 
     asyncio.ensure_future(peer_pool.run())
-    peer_pool.run_task(connect_to_peers_loop(peer_pool, nodes))
+    peer_pool.manager.run_task(connect_to_peers_loop(peer_pool, nodes))
     chain = chain_class(base_db)
     syncer: BaseService = None
     if args.light:
@@ -121,7 +123,7 @@ def _test() -> None:
 
     async def exit_on_sigint() -> None:
         await sigint_received.wait()
-        await peer_pool.cancel()
+        await peer_pool.manager.stop()
         await syncer.cancel()
         loop.stop()
 
