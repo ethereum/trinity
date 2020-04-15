@@ -65,6 +65,7 @@ class Connection(ConnectionAPI, Service):
         Set[HandlerFn]
     ]
     _logics: Dict[str, LogicAPI]
+    _disabled_logics: Set[str]
 
     def __init__(self,
                  multiplexer: MultiplexerAPI,
@@ -88,6 +89,7 @@ class Connection(ConnectionAPI, Service):
         self._handlers_ready = asyncio.Event()
 
         self._logics = {}
+        self._disabled_logics = set()
 
     def __str__(self) -> str:
         return f"Connection-{self.session}"
@@ -247,16 +249,21 @@ class Connection(ConnectionAPI, Service):
         return Subscription(cancel_fn)
 
     def remove_logic(self, name: str) -> None:
+        self._disabled_logics.add(name)
         self._logics.pop(name)
 
     def has_logic(self, name: str) -> bool:
         if self.is_closing:
             raise PeerConnectionLost("Cannot look up subprotocol when connection is closing")
-        return name in self._logics
+        else:
+            return name in self._logics
 
     def get_logic(self, name: str, logic_type: Type[TLogic]) -> TLogic:
         if not self.has_logic(name):
-            raise UnknownAPI(f"No API registered for the name '{name}'")
+            if name in self._disabled_logics:
+                raise PeerConnectionLost(f"Subprotocol {name} has been disabled on the peer")
+            else:
+                raise UnknownAPI(f"No API registered for the name '{name}'")
         logic = self._logics[name]
         if isinstance(logic, logic_type):
             return logic

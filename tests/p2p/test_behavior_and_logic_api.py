@@ -5,13 +5,17 @@ from async_generator import asynccontextmanager
 
 from eth_utils import ValidationError
 
-from p2p.p2p_proto import Ping
 from p2p.behaviors import Behavior
+from p2p.exceptions import (
+    PeerConnectionLost,
+    UnknownAPI,
+)
 from p2p.logic import (
     BaseLogic,
     Application,
     CommandHandler,
 )
+from p2p.p2p_proto import Ping
 from p2p.qualifiers import always
 
 from p2p.tools.factories import ConnectionPairFactory
@@ -145,6 +149,11 @@ async def test_behavior_application():
     async with ConnectionPairFactory() as (alice, bob):
         # ensure the API isn't already registered
         assert not alice.has_logic('app-name')
+
+        # When an API is not registered yet, it's considered Unknown
+        with pytest.raises(UnknownAPI):
+            alice.get_logic('app-name', MyApp)
+
         async with MyApp().as_behavior().apply(alice):
             # ensure it registers with the connect
             assert alice.has_logic('app-name')
@@ -152,3 +161,7 @@ async def test_behavior_application():
             assert isinstance(my_app, MyApp)
         # ensure it removes itself from the API on exit
         assert not alice.has_logic('app-name')
+
+        # if the logic was there, but now gone, consider it a PeerConnectionLost
+        with pytest.raises(PeerConnectionLost):
+            alice.get_logic('app-name', MyApp)
