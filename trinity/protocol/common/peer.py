@@ -6,7 +6,7 @@ import random
 from typing import (
     Container,
     Dict,
-    List,
+    Iterator,
     Tuple,
     Type,
 )
@@ -17,6 +17,9 @@ from lahja import EndpointAPI
 
 from cancel_token import CancelToken, OperationCancelled
 
+from eth_utils import (
+    to_list,
+)
 from eth_utils.toolz import (
     excepts,
     groupby,
@@ -242,12 +245,24 @@ class BaseChainPeerPool(BasePeerPool):
         max_td = max(peers_by_td.keys())
         return random.choice(peers_by_td[max_td])
 
-    def get_peers(self, min_td: int) -> List[BaseChainPeer]:
+    @to_list
+    def get_peers(self, min_td: int) -> Iterator[BaseChainPeer]:
         # TODO: Consider turning this into a method that returns an AsyncIterator, to make it
         # harder for callsites to get a list of peers while making blocking calls, as those peers
         # might disconnect in the meantime.
         peers = tuple(self.connected_nodes.values())
-        return [peer for peer in peers if peer.head_info.head_td >= min_td]
+        for peer in peers:
+            try:
+                peer_td = peer.head_info.head_td
+            except PeerConnectionLost as err:
+                self.logger.debug(
+                    "Skipping %s in peer list because connection is gone: %s",
+                    peer,
+                    err,
+                )
+            else:
+                if peer_td >= min_td:
+                    yield peer
 
     def setup_connection_tracker(self) -> BaseConnectionTracker:
         if self.has_event_bus:
