@@ -51,6 +51,7 @@ from p2p.exceptions import (
     BadLESResponse,
     NoConnectedPeers,
     NoEligiblePeers,
+    PeerConnectionLost,
 )
 from p2p.commands import BaseCommand
 from p2p.constants import (
@@ -383,6 +384,13 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
                 self.logger.warning("Disconnecting from peer, because: %s", exc)
                 await peer.disconnect(DisconnectReason.SUBPROTOCOL_ERROR)
                 # reattempt after removing this peer from our pool
+            except PeerConnectionLost:
+                self.logger.debug("%s disconnected during LES request, moving on...", peer)
+                # Let the event loop cycle, then try again
+                await self.sleep(0)
+                # This is critical, because `highest_td_peer` is not awaitable, so it can
+                #   get caught in an infinite loop of getting the same "lost connection"
+                #   peer without the pool getting a chance to update.
 
         raise asyncio.TimeoutError(
             f"Could not complete peer request in {MAX_REQUEST_ATTEMPTS} attempts"

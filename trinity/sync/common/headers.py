@@ -648,8 +648,6 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
             self._filler_header_tasks.complete(batch_id, tuple())
 
         peer = await self._waiting_peers.get_fastest()
-        if not self.sync_progress:
-            await self._init_sync_progress(parent_header, peer)
 
         def complete_task() -> None:
             self._filler_header_tasks.complete(batch_id, (
@@ -709,6 +707,12 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
             raise ValidationError(
                 f"Can't request {length} headers, because peer maximum is {peer.max_headers_fetch}"
             )
+        try:
+            if not self.sync_progress:
+                await self._init_sync_progress(parent_header, peer)
+        except PeerConnectionLost:
+            self.logger.debug("Skipping %s header fetch: conn lost during sync setup", peer)
+            return tuple()
 
         headers = await self._request_headers(
             peer,
@@ -785,6 +789,9 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
             raise
 
     async def _init_sync_progress(self, parent_header: BlockHeader, peer: TChainPeer) -> None:
+        """
+        :raises: PeerConnectionLost
+        """
         try:
             latest_block_number = peer.head_info.head_number
         except AttributeError:
@@ -892,12 +899,26 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
                 self._buffer_capacity.set()
 
     def get_target_header_hash(self) -> Hash32:
-        if not self._is_syncing_skeleton and self._last_target_header_hash is None:
-            raise ValidationError("Cannot check the target hash before the first sync has started")
-        elif self._is_syncing_skeleton:
-            return self._skeleton.peer.head_info.head_hash
-        else:
+        """
+        :raises: PeerConnectionLost
+        """
+        # If peer is selected, get latest hash from peer
+        if self._is_syncing_skeleton:
+            try:
+                target_hash = self._skeleton.peer.head_info.head_hash
+            except PeerConnectionLost:
+                # Oops, peer is actually gone. Treat as having no peer selected, below.
+                pass
+            else:
+                # Save target to use later when peer disconnects
+                self._last_target_header_hash = target_hash
+                return target_hash
+
+        # No peer selected, use last saved target
+        if self._last_target_header_hash is not None:
             return self._last_target_header_hash
+        else:
+            raise ValidationError("Cannot check the target hash before the first sync has started")
 
     @property
     @abstractmethod
@@ -918,8 +939,15 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
         async for peer in self._tip_monitor.wait_tip_info():
             try:
                 await self._validate_peer_is_ahead(peer)
+
+                # Set the starting target header from the peer. This is only used as a
+                # backup after the peer disconnects. We prefer to get the most recent
+                # head hash on demand, when it is available.
+                self._last_target_header_hash = peer.head_info.head_hash
+            except PeerConnectionLost:
+                self.logger.debug("%s connection dropped, skipping skeleton sync", peer)
             except _PeerBehind:
-                self.logger.debug("At or behind peer %s, skipping skeleton sync", peer)
+                self.logger.debug("%s is at/behind local chain, skipping skeleton sync", peer)
             else:
                 async with self._get_skeleton_syncer(peer) as syncer:
                     await self._full_skeleton_sync(syncer)
@@ -948,7 +976,6 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
                 await self._skeleton.cancel()
         finally:
             self.logger.debug2("Skeleton sync with %s ended", peer)
-            self._last_target_header_hash = peer.head_info.head_hash
             self._skeleton = None
 
     @property
@@ -1011,6 +1038,9 @@ class BaseHeaderChainSyncer(BaseService, HeaderSyncerAPI, Generic[TChainPeer]):
             await self._buffer_capacity.wait()
 
     async def _validate_peer_is_ahead(self, peer: BaseChainPeer) -> None:
+        """
+        :raises: PeerConnectionLost
+        """
         head = await self._db.coro_get_canonical_head()
         head_td = await self._db.coro_get_score(head.hash)
         if peer.head_info.head_td <= head_td:
