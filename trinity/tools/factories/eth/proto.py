@@ -15,8 +15,6 @@ from typing import (
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
-
 from eth_typing import BlockNumber
 
 from eth_keys import keys
@@ -85,7 +83,6 @@ def ETHPeerPairFactory(alice_peer_context: ChainContext = None,
                        bob_remote: kademlia.Node = None,
                        bob_private_key: keys.PrivateKey = None,
                        bob_client_version: str = 'bob',
-                       cancel_token: CancelToken = None,
                        event_bus: EndpointAPI = None,
                        peer_factory_class: Type[ETHPeerFactory] = ETHPeerFactory,
                        ) -> AsyncContextManager[Tuple[ETHPeer, ETHPeer]]:
@@ -111,7 +108,6 @@ def ETHPeerPairFactory(alice_peer_context: ChainContext = None,
         bob_remote=bob_remote,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
-        cancel_token=cancel_token,
         event_bus=event_bus,
     ))
 
@@ -125,7 +121,6 @@ def ETHV63PeerPairFactory(*,
                           bob_remote: kademlia.Node = None,
                           bob_private_key: keys.PrivateKey = None,
                           bob_client_version: str = 'bob',
-                          cancel_token: CancelToken = None,
                           event_bus: EndpointAPI = None,
                           peer_factory_class: Type[ETHPeerFactory] = ETHV63PeerFactory,
                           ) -> AsyncContextManager[Tuple[ETHPeer, ETHPeer]]:
@@ -138,7 +133,6 @@ def ETHV63PeerPairFactory(*,
         bob_remote=bob_remote,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
-        cancel_token=cancel_token,
         event_bus=event_bus,
         peer_factory_class=peer_factory_class
     )
@@ -153,7 +147,6 @@ def ETHV64PeerPairFactory(*,
                           bob_remote: kademlia.Node = None,
                           bob_private_key: keys.PrivateKey = None,
                           bob_client_version: str = 'bob',
-                          cancel_token: CancelToken = None,
                           event_bus: EndpointAPI = None,
                           peer_factory_class: Type[ETHPeerFactory] = ETHV64PeerFactory,
                           ) -> AsyncContextManager[Tuple[ETHPeer, ETHPeer]]:
@@ -166,7 +159,6 @@ def ETHV64PeerPairFactory(*,
         bob_remote=bob_remote,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
-        cancel_token=cancel_token,
         event_bus=event_bus,
         peer_factory_class=peer_factory_class
     )

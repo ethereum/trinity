@@ -18,8 +18,6 @@ from cached_property import cached_property
 
 from async_generator import asynccontextmanager
 
-from cancel_token import CancelToken
-
 from eth_utils import ValidationError
 from eth_utils.toolz import cons
 import rlp
@@ -33,7 +31,6 @@ from p2p.abc import (
     TransportAPI,
     TProtocol,
 )
-from p2p.cancellable import CancellableMixin
 from p2p.exceptions import (
     CorruptTransport,
     UnknownProtocol,
@@ -48,7 +45,6 @@ from p2p._utils import get_logger
 async def stream_transport_messages(transport: TransportAPI,
                                     base_protocol: BaseP2PProtocol,
                                     *protocols: ProtocolAPI,
-                                    token: CancelToken = None,
                                     ) -> AsyncIterator[Tuple[ProtocolAPI, CommandAPI[Any]]]:
     """
     Streams 2-tuples of (Protocol, Command) over the provided `Transport`
@@ -58,7 +54,7 @@ async def stream_transport_messages(transport: TransportAPI,
     command_id_cache: Dict[int, ProtocolAPI] = {}
 
     while not transport.is_closing:
-        msg = await transport.recv(token)
+        msg = await transport.recv()
         command_id = msg.command_id
 
         if msg.command_id not in command_id_cache:
@@ -98,9 +94,7 @@ async def stream_transport_messages(transport: TransportAPI,
         await asyncio.sleep(0)
 
 
-class Multiplexer(CancellableMixin, MultiplexerAPI):
-
-    _multiplex_token: CancelToken
+class Multiplexer(MultiplexerAPI):
 
     _transport: TransportAPI
     _msg_counts: DefaultDict[Type[CommandAPI[Any]], int]
@@ -113,20 +107,8 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                  transport: TransportAPI,
                  base_protocol: BaseP2PProtocol,
                  protocols: Sequence[ProtocolAPI],
-                 token: CancelToken = None,
                  max_queue_size: int = 4096) -> None:
         self.logger = get_logger('p2p.multiplexer.Multiplexer')
-        if token is None:
-            loop = None
-        else:
-            loop = token.loop
-        base_token = CancelToken(f'multiplexer[{transport.remote}]', loop=loop)
-
-        if token is None:
-            self.cancel_token = base_token
-        else:
-            self.cancel_token = base_token.chain(token)
-
         self._transport = transport
         # the base `p2p` protocol instance.
         self._base_protocol = base_protocol
@@ -201,7 +183,6 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
 
     async def close(self) -> None:
         await self._transport.close()
-        self.cancel_token.trigger()
 
     #
     # Protocol API
@@ -284,18 +265,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         elif not self._multiplex_lock.locked():
             raise Exception("Not multiplexed.")
 
-        # Mostly a sanity check but this ensures we do better than accidentally
-        # raising an attribute error in whatever race conditions or edge cases
-        # potentially make the `_multiplex_token` unavailable.
-        if not hasattr(self, '_multiplex_token'):
-            raise Exception("No cancel token found for multiplexing.")
-
-        # We do the wait_iter here so that the call sites in the handshakers
-        # that use this don't need to be aware of cancellation tokens.
-        return self.wait_iter(
-            self._stream_protocol_messages(protocol_class),
-            token=self._multiplex_token,
-        )
+        return self._stream_protocol_messages(protocol_class)
 
     async def _stream_protocol_messages(self,
                                         protocol_class: Type[ProtocolAPI],
@@ -305,11 +275,7 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         """
         async with self._protocol_locks[protocol_class]:
             msg_queue = self._protocol_queues[protocol_class]
-            if not hasattr(self, '_multiplex_token'):
-                raise Exception("Multiplexer is not multiplexed")
-            token = self._multiplex_token
-
-            while not self.is_closing and not token.triggered:
+            while not self.is_closing:
                 try:
                     # We use an optimistic strategy here of using
                     # `get_nowait()` to reduce the number of times we yield to
@@ -330,18 +296,9 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
         queues that allows each individual protocol to stream only its own
         messages.
         """
-        # We generate a new token for each time the multiplexer is used to
-        # multiplex so that we can reliably cancel it without requiring the
-        # master token for the multiplexer to be cancelled.
         async with self._multiplex_lock:
-            multiplex_token = CancelToken(
-                'multiplex',
-                loop=self.cancel_token.loop,
-            ).chain(self.cancel_token)
-
             stop = asyncio.Event()
-            self._multiplex_token = multiplex_token
-            fut = asyncio.ensure_future(self._do_multiplexing(stop, multiplex_token))
+            fut = asyncio.ensure_future(self._do_multiplexing(stop))
             # wait for the multiplexing to actually start
             try:
                 yield
@@ -381,12 +338,10 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                         self.logger.error("Corrupt transport, waiting on body %s: %r", self, exc)
                         self.logger.debug("Corrupt transport, body trace: %s", self, exc_info=True)
 
-                # After giving the transport an opportunity to shutdown
-                # cleanly, we issue a hard shutdown, first via cancellation and
-                # then via the cancel token.  This should only end up
-                # corrupting the transport in the case where the header data is
-                # read but the body data takes too long to arrive which should
-                # be very rare and would likely indicate a malicious or broken
+                # After giving the transport an opportunity to shutdown cleanly, we issue a hard
+                # shutdown via cancellation. This should only end up corrupting the transport in
+                # the case where the header data is read but the body data takes too long to
+                # arrive which should be very rare and would likely indicate a malicious or broken
                 # peer.
                 if fut.done():
                     fut.result()
@@ -397,20 +352,16 @@ class Multiplexer(CancellableMixin, MultiplexerAPI):
                     except asyncio.CancelledError:
                         pass
 
-                multiplex_token.trigger()
-                del self._multiplex_token
-
-    async def _do_multiplexing(self, stop: asyncio.Event, token: CancelToken) -> None:
+    async def _do_multiplexing(self, stop: asyncio.Event) -> None:
         """
         Background task that reads messages from the transport and feeds them
         into individual queues for each of the protocols.
         """
-        msg_stream = self.wait_iter(stream_transport_messages(
+        msg_stream = stream_transport_messages(
             self._transport,
             self._base_protocol,
             *self._protocols,
-            token=token,
-        ), token=token)
+        )
         try:
             await self._handle_commands(msg_stream, stop)
         except asyncio.TimeoutError as exc:

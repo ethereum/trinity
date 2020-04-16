@@ -5,8 +5,6 @@ from async_generator import asynccontextmanager
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
-
 from eth_keys import keys
 
 from p2p.abc import NodeAPI
@@ -14,7 +12,6 @@ from p2p.peer import BasePeer, BasePeerContext, BasePeerFactory
 
 from p2p.tools.paragon import ParagonPeer, ParagonContext, ParagonPeerFactory
 
-from .cancel_token import CancelTokenFactory
 from .connection import ConnectionPairFactory
 
 
@@ -32,24 +29,17 @@ async def PeerPairFactory(*,
                           bob_private_key: keys.PrivateKey = None,
                           bob_client_version: str = 'bob',
                           bob_p2p_version: int = 5,
-                          cancel_token: CancelToken = None,
                           event_bus: EndpointAPI = None,
                           ) -> AsyncIterator[Tuple[BasePeer, BasePeer]]:
-    # Setup a cancel token for the two peers.
-    if cancel_token is None:
-        cancel_token = CancelTokenFactory()
-
     # Setup their PeerFactory instances.
     alice_factory = alice_peer_factory_class(
         privkey=alice_private_key,
         context=alice_peer_context,
-        token=cancel_token,
         event_bus=event_bus,
     )
     bob_factory = bob_peer_factory_class(
         privkey=bob_private_key,
         context=bob_peer_context,
-        token=cancel_token,
         event_bus=event_bus,
     )
 
@@ -67,7 +57,6 @@ async def PeerPairFactory(*,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
         bob_p2p_version=bob_p2p_version,
-        cancel_token=cancel_token,
     )
 
     async with connection_pair as (alice_connection, bob_connection):
@@ -90,7 +79,6 @@ def ParagonPeerPairFactory(*,
                            bob_remote: NodeAPI = None,
                            bob_private_key: keys.PrivateKey = None,
                            bob_client_version: str = 'bob',
-                           cancel_token: CancelToken = None,
                            event_bus: EndpointAPI = None,
                            ) -> AsyncContextManager[Tuple[ParagonPeer, ParagonPeer]]:
     if alice_peer_context is None:
@@ -109,6 +97,5 @@ def ParagonPeerPairFactory(*,
         bob_remote=bob_remote,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
-        cancel_token=cancel_token,
         event_bus=event_bus,
     ))

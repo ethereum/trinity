@@ -120,7 +120,7 @@ class PeerHeaderSyncer(BaseService):
         # again.
         start_at = BlockNumber(max(GENESIS_BLOCK_NUMBER + 1, head.block_number - MAX_REORG_DEPTH))
         while self.is_operational:
-            if not peer.is_operational:
+            if not peer.manager.is_running:
                 self.logger.info("%s disconnected, aborting sync", peer)
                 break
 

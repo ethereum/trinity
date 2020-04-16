@@ -20,7 +20,7 @@ from typing import (
 )
 import uuid
 
-from async_service import ServiceAPI
+from async_service.abc import ServiceAPI
 from cancel_token import CancelToken
 from eth.abc import DatabaseAPI
 
@@ -266,7 +266,7 @@ class TransportAPI(ABC):
         ...
 
     @abstractmethod
-    async def read(self, n: int, token: CancelToken) -> bytes:
+    async def read(self, n: int) -> bytes:
         ...
 
     @abstractmethod
@@ -274,7 +274,7 @@ class TransportAPI(ABC):
         ...
 
     @abstractmethod
-    async def recv(self, token: CancelToken) -> MessageAPI:
+    async def recv(self) -> MessageAPI:
         ...
 
     @abstractmethod
@@ -328,7 +328,6 @@ TProtocol = TypeVar('TProtocol', bound=ProtocolAPI)
 
 
 class MultiplexerAPI(ABC):
-    cancel_token: CancelToken
 
     #
     # Transport API
@@ -574,8 +573,9 @@ class SubscriptionAPI(ContextManager['SubscriptionAPI']):
 HandlerFn = Callable[['ConnectionAPI', CommandAPI[Any]], Awaitable[Any]]
 
 
-class ConnectionAPI(AsyncioServiceAPI):
+class ConnectionAPI(ServiceAPI):
     protocol_receipts: Tuple[HandshakeReceiptAPI, ...]
+    logger: ExtendedDebugLogger
 
     #
     # Primary properties of the connection

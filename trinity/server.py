@@ -15,7 +15,6 @@ from async_service import Service
 from lahja import EndpointAPI
 
 from eth_keys import datatypes
-from cancel_token import CancelToken, OperationCancelled
 from eth_typing import BlockNumber
 
 from eth.abc import AtomicDatabaseAPI, VirtualMachineAPI
@@ -69,16 +68,11 @@ class BaseServer(Service, Generic[TPeerPool]):
                  headerdb: BaseAsyncHeaderDB,
                  base_db: AtomicDatabaseAPI,
                  network_id: int,
-                 token: CancelToken,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  event_bus: EndpointAPI = None,
                  metrics_registry: MetricsRegistry = None,
                  ) -> None:
         self.logger = get_logger(self.__module__ + '.' + self.__class__.__name__)
-        # This token is passed to us by our caller (Node), which also takes care of cancelling it
-        # when appropriate, so we just need to pass it on to the PeerPool (until it gets converted
-        # into a new-style service).
-        self.cancel_token = token
         # cross process event bus
         self.event_bus = event_bus
         self.metrics_registry = metrics_registry
@@ -156,8 +150,6 @@ class BaseServer(Service, Generic[TPeerPool]):
         except asyncio.CancelledError:
             # This exception should just bubble.
             raise
-        except OperationCancelled:
-            pass
         except Exception:
             peername = writer.get_extra_info("peername")
             self.logger.exception("Unexpected error handling handshake with %s", peername)
@@ -172,7 +164,6 @@ class BaseServer(Service, Generic[TPeerPool]):
             private_key=self.privkey,
             p2p_handshake_params=self.p2p_handshake_params,
             protocol_handshakers=handshakers,
-            token=self.cancel_token,
         )
 
         async with self.peer_pool.lock_node_for_handshake(connection.remote):
@@ -222,7 +213,6 @@ class FullServer(BaseServer[ETHPeerPool]):
         return ETHPeerPool(
             privkey=self.privkey,
             context=context,
-            token=self.cancel_token,
             max_peers=self.max_peers,
             event_bus=self.event_bus,
             metrics_registry=self.metrics_registry,
@@ -243,7 +233,6 @@ class LightServer(BaseServer[LESPeerPool]):
         return LESPeerPool(
             privkey=self.privkey,
             context=context,
-            token=self.cancel_token,
             max_peers=self.max_peers,
             event_bus=self.event_bus,
             metrics_registry=self.metrics_registry,

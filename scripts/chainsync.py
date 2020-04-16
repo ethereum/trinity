@@ -13,8 +13,6 @@ from typing import (
     Union,
 )
 
-from cancel_token.token import CancelToken
-
 from eth_typing import BlockNumber
 
 from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
@@ -100,7 +98,7 @@ def _test() -> None:
         p2p_version=DEVP2P_V5,
     )
 
-    peer_pool = peer_pool_class(privkey=privkey, context=context, token=CancelToken("chainsync"))
+    peer_pool = peer_pool_class(privkey=privkey, context=context)
 
     if args.enode:
         nodes = tuple([Node.from_uri(args.enode)])

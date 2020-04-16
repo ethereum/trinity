@@ -154,7 +154,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
             )
             raise PeerConnectionLost(f"Peer at {session} is gone from the pool")
         else:
-            if not peer.is_operational:
+            if not peer.manager.is_running:
                 self.logger.debug("Peer %s is not operational when selecting from pool", peer)
                 raise PeerConnectionLost(f"{peer} is no longer operational")
             else:

@@ -12,7 +12,6 @@ from p2p.p2p_proto import (
     P2PProtocolV5,
 )
 from p2p.tools.factories import (
-    CancelTokenFactory,
     HelloPayloadFactory,
     MemoryTransportPairFactory,
 )
@@ -81,7 +80,7 @@ async def test_round_trip_over_wire(command_type_and_payload, snappy_support, pr
     cmd = command_type(payload)
     alice_p2p_proto.send(cmd)
 
-    msg = await bob.recv(CancelTokenFactory())
+    msg = await bob.recv()
     assert msg.command_id == command_type.protocol_command_id
     result = command_type.decode(msg, snappy_support=snappy_support)
     assert isinstance(result, command_type)

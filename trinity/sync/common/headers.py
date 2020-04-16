@@ -436,7 +436,7 @@ class SkeletonSyncer(BaseService, Generic[TChainPeer]):
             max_headers: int = None,
             skip: int = None) -> Tuple[BlockHeader, ...]:
 
-        if not peer.is_operational:
+        if not peer.manager.is_running:
             self.logger.info("%s disconnected while fetching headers", peer)
             return tuple()
 
@@ -655,7 +655,8 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
             self._filler_header_tasks.complete(batch_id, (
                 (parent_header, gap, skeleton_peer),
             ))
-        self.run_task(self._run_fetch_segment(peer, parent_header, gap, complete_task, fail_task))
+        peer.manager.run_task(
+            self._run_fetch_segment, peer, parent_header, gap, complete_task, fail_task)
 
     async def _run_fetch_segment(
             self,
@@ -665,7 +666,7 @@ class HeaderMeatSyncer(BaseService, PeerSubscriber, Generic[TChainPeer]):
             complete_task_fn: Callable[[], None],
             fail_task_fn: Callable[[], None]) -> None:
         try:
-            completed_headers = await peer.wait(self._fetch_segment(peer, parent_header, length))
+            completed_headers = await self._fetch_segment(peer, parent_header, length)
         except BaseP2PError as exc:
             self.logger.info("Unexpected p2p err while downloading headers from %s: %s", peer, exc)
             self.logger.debug("Problem downloading headers from peer, dropping...", exc_info=True)

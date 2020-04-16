@@ -14,7 +14,7 @@ class MemoryProtocol(asyncio.Protocol):
         await self._closed_event.wait()
 
 
-class MemoryTransport(asyncio.WriteTransport):
+class MemoryWriteTransport(asyncio.WriteTransport):
     """
     A fake version of the ``asyncio.BaseTransport``:
 
@@ -38,7 +38,7 @@ class MemoryTransport(asyncio.WriteTransport):
         self._is_closing = True
 
     def is_closing(self) -> bool:
-        return self._is_closing or self._reader.at_eof()
+        return self._is_closing
 
     #
     # WriteTransport methods
@@ -71,13 +71,12 @@ TConnectedStreams = Tuple[
 
 
 def get_directly_connected_streams(alice_extra_info: Dict[str, Any] = None,
-                                   bob_extra_info: Dict[str, Any] = None,
-                                   loop: asyncio.AbstractEventLoop = None) -> TConnectedStreams:
+                                   bob_extra_info: Dict[str, Any] = None) -> TConnectedStreams:
     alice_reader = asyncio.StreamReader()
     bob_reader = asyncio.StreamReader()
 
-    alice_transport = MemoryTransport(bob_reader, extra=alice_extra_info)
-    bob_transport = MemoryTransport(alice_reader, extra=bob_extra_info)
+    alice_transport = MemoryWriteTransport(bob_reader, extra=alice_extra_info)
+    bob_transport = MemoryWriteTransport(alice_reader, extra=bob_extra_info)
 
     alice_protocol = MemoryProtocol()
     bob_protocol = MemoryProtocol()

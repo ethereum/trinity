@@ -14,8 +14,6 @@ from typing import (
     Union,
 )
 
-from cancel_token.token import CancelToken
-
 from eth_typing import BlockNumber
 from eth_utils import DEBUG2_LEVEL_NUM
 
@@ -83,11 +81,7 @@ def _main() -> None:
         listen_port=30309,
         p2p_version=DEVP2P_V5,
     )
-    peer_pool = pool_class(
-        privkey=ecies.generate_privkey(),
-        context=context,
-        token=CancelToken("peer-script"),
-    )
+    peer_pool = pool_class(privkey=ecies.generate_privkey(), context=context)
 
     asyncio.ensure_future(peer_pool.run())
     peer_pool.manager.run_task(connect_to_peers_loop(peer_pool, nodes))

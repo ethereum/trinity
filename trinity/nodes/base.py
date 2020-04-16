@@ -6,7 +6,7 @@ from typing import (
 )
 
 from async_service import Service, ServiceAPI
-from cancel_token import CancelToken
+from cancel_token.token import CancelToken
 from lahja import EndpointAPI
 
 from eth.abc import AtomicDatabaseAPI
