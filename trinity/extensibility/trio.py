@@ -7,8 +7,7 @@ from async_service import background_trio_service
 
 from lahja import EndpointAPI
 
-from trinity._utils.ipc import kill_process_gracefully
-from trinity._utils.logging import child_process_logging, get_logger
+from trinity._utils.logging import child_process_logging
 from trinity._utils.mp import ctx
 from trinity._utils.profiling import profiler
 from trinity.boot_info import BootInfo
@@ -42,10 +41,14 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
         try:
             await loop.run_in_executor(None, process.join)
         finally:
-            kill_process_gracefully(
-                process,
-                get_logger('trinity.extensibility.TrioIsolatedComponent'),
-            )
+            # XXX: Disabling this for now as our trio-based components currently run in the same
+            # process group (see comment above) as the main process and because of that they
+            # already get a SIGINT from the terminal.
+            # kill_process_gracefully(
+            #     process,
+            #     get_logger('trinity.extensibility.TrioIsolatedComponent'),
+            # )
+            pass
 
     @classmethod
     def run_process(cls, boot_info: BootInfo) -> None:
