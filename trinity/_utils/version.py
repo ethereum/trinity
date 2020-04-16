@@ -9,7 +9,7 @@ def construct_trinity_client_identifier() -> str:
     """
     Constructs the client identifier string
 
-    e.g. 'Trinity/v1.2.3/darwin-amd64/python3.6.5'
+    e.g. 'Trinity/v1.2.3/darwin-amd64/python3.7.3'
     """
     return (
         "Trinity/"
