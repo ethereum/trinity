@@ -188,7 +188,7 @@ setup(
     url='https://github.com/ethereum/trinity',
     include_package_data=True,
     py_modules=['trinity', 'p2p', 'eth2'],
-    python_requires=">=3.6,<4",
+    python_requires=">=3.7,<4",
     install_requires=install_requires,
     extras_require=deps,
     license='MIT',
@@ -200,7 +200,7 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ],
     # trinity
     entry_points={

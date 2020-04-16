@@ -12,8 +12,8 @@ To develop on top of Trinity or to contribute to the project, check out the
 Installing on Ubuntu
 --------------------
 
-Trinity requires Python 3.6 as well as some tools to compile its dependencies. On Ubuntu, the
-``python3.6-dev`` package contains everything we need. Run the following command to install it.
+Trinity requires Python 3.7 as well as some tools to compile its dependencies. On Ubuntu, the
+``python3.7-dev`` package contains everything we need. Run the following command to install it.
 
 .. code:: sh
 
