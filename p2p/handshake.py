@@ -12,8 +12,6 @@ from typing import (
 
 from cached_property import cached_property
 
-from cancel_token import CancelToken
-
 from eth_utils import (
     ExtendedDebugLogger,
     to_tuple,
@@ -125,7 +123,7 @@ async def _do_p2p_handshake(transport: TransportAPI,
                             capabilities: Capabilities,
                             p2p_handshake_params: DevP2PHandshakeParams,
                             base_protocol: BaseP2PProtocol,
-                            token: CancelToken) -> Tuple[DevP2PReceipt, BaseP2PProtocol]:
+                            ) -> Tuple[DevP2PReceipt, BaseP2PProtocol]:
     client_version_string, listen_port, p2p_version = p2p_handshake_params
     base_protocol.send(Hello(HelloPayload(
         client_version_string=client_version_string,
@@ -137,7 +135,7 @@ async def _do_p2p_handshake(transport: TransportAPI,
 
     # The base `p2p` protocol handshake directly streams the messages as it has
     # strict requirements about receiving the `Hello` message first.
-    async for _, cmd in stream_transport_messages(transport, base_protocol, token=token):
+    async for _, cmd in stream_transport_messages(transport, base_protocol):
         if isinstance(cmd, Disconnect):
             if cmd.payload == DisconnectReason.TOO_MANY_PEERS:
                 raise HandshakeFailureTooManyPeers(f"Peer disconnected because it is already full")
@@ -187,7 +185,6 @@ async def _do_p2p_handshake(transport: TransportAPI,
 async def negotiate_protocol_handshakes(transport: TransportAPI,
                                         p2p_handshake_params: DevP2PHandshakeParams,
                                         protocol_handshakers: Sequence[HandshakerAPI[ProtocolAPI]],
-                                        token: CancelToken,
                                         ) -> Tuple[MultiplexerAPI, DevP2PReceipt, Tuple[HandshakeReceiptAPI, ...]]:  # noqa: E501
     """
     Negotiate the handshakes for both the base `p2p` protocol and the
@@ -234,7 +231,6 @@ async def negotiate_protocol_handshakes(transport: TransportAPI,
         local_capabilities,
         p2p_handshake_params,
         ephemeral_base_protocol,
-        token,
     )
 
     # This data structure is simply for easy retrieval of the proper
@@ -278,7 +274,7 @@ async def negotiate_protocol_handshakes(transport: TransportAPI,
     )
     # Create `Multiplexer` to abstract all of the protocols into a single
     # interface to stream only messages relevant to the given protocol.
-    multiplexer = Multiplexer(transport, base_protocol, selected_protocols, token=token)
+    multiplexer = Multiplexer(transport, base_protocol, selected_protocols)
 
     # This context manager runs a background task which reads messages off of
     # the `Transport` and feeds them into protocol specific queues.  Each
@@ -302,7 +298,7 @@ async def dial_out(remote: NodeAPI,
                    private_key: keys.PrivateKey,
                    p2p_handshake_params: DevP2PHandshakeParams,
                    protocol_handshakers: Sequence[HandshakerAPI[ProtocolAPI]],
-                   token: CancelToken) -> ConnectionAPI:
+                   ) -> ConnectionAPI:
     """
     Perform the auth and P2P handshakes with the given remote.
 
@@ -316,7 +312,6 @@ async def dial_out(remote: NodeAPI,
     transport = await Transport.connect(
         remote,
         private_key,
-        token,
     )
 
     transport.logger.debug2("Initiating p2p handshake with %s", remote)
@@ -325,7 +320,6 @@ async def dial_out(remote: NodeAPI,
             transport=transport,
             p2p_handshake_params=p2p_handshake_params,
             protocol_handshakers=protocol_handshakers,
-            token=token,
         )
     except Exception:
         # Note: This is one of two places where we manually handle closing the
@@ -353,19 +347,17 @@ async def receive_dial_in(reader: asyncio.StreamReader,
                           private_key: keys.PrivateKey,
                           p2p_handshake_params: DevP2PHandshakeParams,
                           protocol_handshakers: Sequence[HandshakerAPI[ProtocolAPI]],
-                          token: CancelToken) -> Connection:
+                          ) -> Connection:
     transport = await Transport.receive_connection(
         reader=reader,
         writer=writer,
         private_key=private_key,
-        token=token,
     )
     try:
         multiplexer, devp2p_receipt, protocol_receipts = await negotiate_protocol_handshakes(
             transport=transport,
             p2p_handshake_params=p2p_handshake_params,
             protocol_handshakers=protocol_handshakers,
-            token=token,
         )
     except Exception:
         # Note: This is one of two places where we manually handle closing the

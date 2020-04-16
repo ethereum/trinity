@@ -13,9 +13,9 @@ from typing import (
     Union,
 )
 
-from cached_property import cached_property
+from async_service import Service
 
-from cancel_token.exceptions import OperationCancelled
+from cached_property import cached_property
 
 from eth_keys import keys
 
@@ -46,15 +46,15 @@ from p2p.exceptions import (
     UnknownProtocolCommand,
 )
 from p2p.subscription import Subscription
-from p2p.service import BaseService
 from p2p.p2p_proto import BaseP2PProtocol, DevP2PReceipt, Disconnect
 from p2p.typing import Capabilities
+from p2p._utils import get_logger
 
 if TYPE_CHECKING:
     from p2p.peer import BasePeer  # noqa: F401
 
 
-class Connection(ConnectionAPI, BaseService):
+class Connection(ConnectionAPI, Service):
     _protocol_handlers: DefaultDict[
         Type[ProtocolAPI],
         Set[HandlerFn]
@@ -71,7 +71,7 @@ class Connection(ConnectionAPI, BaseService):
                  devp2p_receipt: DevP2PReceipt,
                  protocol_receipts: Sequence[HandshakeReceiptAPI],
                  is_dial_out: bool) -> None:
-        super().__init__(token=multiplexer.cancel_token, loop=multiplexer.cancel_token.loop)
+        self.logger = get_logger('p2p.connection.Connection')
         self._multiplexer = multiplexer
         self._devp2p_receipt = devp2p_receipt
         self.protocol_receipts = tuple(protocol_receipts)
@@ -105,9 +105,9 @@ class Connection(ConnectionAPI, BaseService):
         A peer must always run as a child of the connection so that it has an open connection
         until it finishes its cleanup.
         """
-        self.run_child_service(peer)
-        await self.wait(peer.events.started.wait(), timeout=PEER_READY_TIMEOUT)
-        await self.wait(peer.ready.wait(), timeout=PEER_READY_TIMEOUT)
+        self.manager.run_daemon_child_service(peer)
+        await asyncio.wait_for(peer.manager.wait_started(), timeout=PEER_READY_TIMEOUT)
+        await asyncio.wait_for(peer.ready.wait(), timeout=PEER_READY_TIMEOUT)
 
     #
     # Primary properties of the connection
@@ -128,19 +128,14 @@ class Connection(ConnectionAPI, BaseService):
     def is_closing(self) -> bool:
         return self._multiplexer.is_closing
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         try:
             async with self._multiplexer.multiplex():
                 for protocol in self._multiplexer.get_protocols():
-                    self.run_daemon_task(self._feed_protocol_handlers(protocol))
+                    self.manager.run_daemon_task(self._feed_protocol_handlers, protocol)
 
-                await self.cancellation()
-        except OperationCancelled:
-            # XXX: We must not let an OperationCancelled bubble because all services above us are
-            # new-style and don't know how to handle that. This should be removed once we are
-            # converted into a new-style service as well.
-            pass
-        except (PeerConnectionLost, asyncio.CancelledError):
+                await self.manager.wait_finished()
+        except PeerConnectionLost:
             pass
         except (MalformedMessage,) as err:
             self.logger.debug(
@@ -155,10 +150,8 @@ class Connection(ConnectionAPI, BaseService):
                     "%s went away while trying to disconnect for MalformedMessage",
                     self,
                 )
-            pass
-
-    async def _cleanup(self) -> None:
-        await self._multiplexer.close()
+        finally:
+            await self._multiplexer.close()
 
     #
     # Subscriptions/Handler API
@@ -189,7 +182,7 @@ class Connection(ConnectionAPI, BaseService):
                     protocol,
                     type(cmd),
                 )
-                self.run_task(proto_handler_fn(self, cmd))
+                self.manager.run_task(proto_handler_fn, self, cmd)
             command_handlers = set(self._command_handlers[type(cmd)])
             command_handlers.update(self._msg_handlers)
             for cmd_handler_fn in command_handlers:
@@ -199,7 +192,7 @@ class Connection(ConnectionAPI, BaseService):
                     protocol,
                     type(cmd),
                 )
-                self.run_task(cmd_handler_fn(self, cmd))
+                self.manager.run_task(cmd_handler_fn, self, cmd)
 
     def add_protocol_handler(self,
                              protocol_class: Type[ProtocolAPI],

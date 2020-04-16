@@ -1,8 +1,6 @@
 import asyncio
 from typing import Tuple
 
-from cancel_token import CancelToken
-
 from eth_keys import keys
 
 from p2p import auth
@@ -12,7 +10,6 @@ from p2p.transport import Transport
 from p2p.tools.asyncio_streams import get_directly_connected_streams
 from p2p.tools.memory_transport import MemoryTransport
 
-from .cancel_token import CancelTokenFactory
 from .kademlia import NodeFactory
 from .keys import PrivateKeyFactory
 
@@ -22,12 +19,8 @@ async def TransportPairFactory(*,
                                alice_private_key: keys.PrivateKey = None,
                                bob_remote: NodeAPI = None,
                                bob_private_key: keys.PrivateKey = None,
-                               token: CancelToken = None,
                                use_eip8: bool = False,
                                ) -> Tuple[TransportAPI, TransportAPI]:
-    if token is None:
-        token = CancelTokenFactory(name='TransportPairFactory')
-
     if alice_private_key is None:
         alice_private_key = PrivateKeyFactory()
     if alice_remote is None:
@@ -42,7 +35,7 @@ async def TransportPairFactory(*,
     assert bob_private_key.public_key == bob_remote.pubkey
     assert alice_private_key != bob_private_key
 
-    initiator = auth.HandshakeInitiator(bob_remote, alice_private_key, use_eip8, token)
+    initiator = auth.HandshakeInitiator(bob_remote, alice_private_key, use_eip8)
 
     bob_peername = (bob_remote.address.ip, bob_remote.address.udp_port, bob_remote.address.tcp_port)
     alice_peername = (alice_remote.address.ip, alice_remote.address.udp_port, alice_remote.address.tcp_port)  # noqa: E501
@@ -57,7 +50,7 @@ async def TransportPairFactory(*,
 
     async def establish_transport() -> TransportAPI:
         aes_secret, mac_secret, egress_mac, ingress_mac = await auth._handshake(
-            initiator, alice_reader, alice_writer, token)
+            initiator, alice_reader, alice_writer)
 
         transport = Transport(
             remote=alice_remote,
@@ -78,7 +71,6 @@ async def TransportPairFactory(*,
             reader=bob_reader,
             writer=bob_writer,
             private_key=bob_private_key,
-            token=token,
         ),
     ), timeout=1)
 

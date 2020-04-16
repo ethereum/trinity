@@ -3,8 +3,10 @@ import asyncio
 import collections
 import contextlib
 import functools
+import time
 from typing import (
     Any,
+    Callable,
     cast,
     Dict,
     Iterator,
@@ -18,6 +20,8 @@ from typing import (
 
 from async_exit_stack import AsyncExitStack
 
+from async_service import Service
+
 from lahja import EndpointAPI
 
 from cached_property import cached_property
@@ -29,8 +33,6 @@ from eth_utils import (
 )
 
 from eth_keys import datatypes
-
-from cancel_token import CancelToken
 
 from p2p.abc import (
     BehaviorAPI,
@@ -53,7 +55,6 @@ from p2p.handshake import (
     dial_out,
     DevP2PHandshakeParams,
 )
-from p2p.service import BaseService
 from p2p.p2p_api import P2PAPI
 from p2p.p2p_proto import BaseP2PProtocol, Disconnect
 from p2p.tracking.connection import (
@@ -66,16 +67,16 @@ if TYPE_CHECKING:
     from p2p.peer_pool import BasePeerPool  # noqa: F401
 
 
-class BasePeerBootManager(BaseService):
+class BasePeerBootManager(Service):
     """
     The default boot manager does nothing, simply serving as a hook for other
     protocols which need to perform more complex boot check.
     """
     def __init__(self, peer: 'BasePeer') -> None:
-        super().__init__(token=peer.cancel_token, loop=peer.cancel_token.loop)
+        self.logger = get_logger('p2p.peer.BasePeerBootManager')
         self.peer = peer
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         pass
 
 
@@ -93,13 +94,15 @@ class BasePeerContext:
         self.p2p_version = p2p_version
 
 
-class BasePeer(BaseService):
+class BasePeer(Service):
     """
     The base Peer implementation.
 
     A peer must always run as a child of the connection so that it has an open connection
     until it finishes its cleanup. Use the Connection.run_peer() method for that.
     """
+    _start_time: float = None
+    _finished_callbacks: List[Callable[['BasePeer'], None]]
     # Must be defined in subclasses. All items here must be Protocol classes representing
     # different versions of the same P2P sub-protocol (e.g. ETH, LES, etc).
     supported_sub_protocols: Tuple[Type[ProtocolAPI], ...] = ()
@@ -118,8 +121,8 @@ class BasePeer(BaseService):
                  context: BasePeerContext,
                  event_bus: EndpointAPI = None,
                  ) -> None:
-        super().__init__(token=connection.cancel_token, loop=connection.cancel_token.loop)
-
+        self.logger = get_logger('p2p.peer.BasePeer')
+        self._finished_callbacks = []
         # Peer context object
         self.context = context
 
@@ -161,6 +164,16 @@ class BasePeer(BaseService):
         # `peer.connection.get_logic` APIs can wait until the logic APIs have
         # been installed to the connection.
         self.ready = asyncio.Event()
+
+    @property
+    def uptime(self) -> float:
+        if self._start_time is None:
+            return 0.0
+        else:
+            return time.monotonic() - self._start_time
+
+    def add_finished_callback(self, finished_callback: Callable[['BasePeer'], None]) -> None:
+        self._finished_callbacks.append(finished_callback)
 
     def process_handshake_receipts(self) -> None:
         """
@@ -231,16 +244,6 @@ class BasePeer(BaseService):
         if subscriber in self._subscribers:
             self._subscribers.remove(subscriber)
 
-    async def _cleanup(self) -> None:
-        if (self.p2p_api.local_disconnect_reason is None and
-                self.p2p_api.remote_disconnect_reason is None):
-            self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
-        # We run as a child service of the connection, but we don't want to leave a connection
-        # open if somebody cancels just us, so this ensures the connection gets closed as well.
-        if not self.connection.is_cancelled:
-            self.logger.debug("Connection hasn't been cancelled yet, doing so now")
-            self.connection.cancel_nowait()
-
     def setup_protocol_handlers(self) -> None:
         """
         Hook for subclasses to setup handlers for protocols specific messages.
@@ -249,33 +252,48 @@ class BasePeer(BaseService):
 
     async def _handle_disconnect(self, connection: ConnectionAPI, cmd: Disconnect) -> None:
         self.p2p_api.remote_disconnect_reason = cmd.payload
-        if not self.is_cancelled:
-            self.cancel_nowait()
+        # We run as a daemon child of the connection, so cancel the connection instead of
+        # ourselves to ensure asyncio-service doesn't think we're exiting when the connection is
+        # still active, as that would cause a DaemonTaskExit.
+        self.connection.get_manager().cancel()
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
+        self._start_time = time.monotonic()
         self.connection.add_command_handler(Disconnect, cast(HandlerFn, self._handle_disconnect))
-        async with AsyncExitStack() as stack:
-            await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
-            self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
+        try:
+            async with AsyncExitStack() as stack:
+                await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
+                self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
 
-            for behavior in self.get_behaviors():
-                if behavior.should_apply_to(self.connection):
-                    await stack.enter_async_context(behavior.apply(self.connection))
+                for behavior in self.get_behaviors():
+                    if behavior.should_apply_to(self.connection):
+                        await stack.enter_async_context(behavior.apply(self.connection))
 
-            self.connection.add_msg_handler(self._handle_subscriber_message)
+                self.connection.add_msg_handler(self._handle_subscriber_message)
 
-            self.setup_protocol_handlers()
+                self.setup_protocol_handlers()
 
-            # The `boot` process is run in the background to allow the `run` loop
-            # to continue so that all of the Peer APIs can be used within the
-            # `boot` task.
-            self.run_child_service(self.boot_manager)
+                # The `boot` process is run in the background to allow the `run` loop
+                # to continue so that all of the Peer APIs can be used within the
+                # `boot` task.
+                self.manager.run_child_service(self.boot_manager)
 
-            # Trigger the connection to start feeding messages though the handlers
-            self.connection.start_protocol_streams()
-            self.ready.set()
+                # Trigger the connection to start feeding messages though the handlers
+                self.connection.start_protocol_streams()
+                self.ready.set()
 
-            await self.cancellation()
+                await self.manager.wait_finished()
+        finally:
+            for callback in self._finished_callbacks:
+                callback(self)
+            if (self.p2p_api.local_disconnect_reason is None and
+                    self.p2p_api.remote_disconnect_reason is None):
+                self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
+            # We run as a child service of the connection, but we don't want to leave a connection
+            # open if somebody cancels just us, so this ensures the connection gets closed as well.
+            if not self.connection.get_manager().is_cancelled:
+                self.logger.debug("Connection hasn't been cancelled yet, doing so now")
+                self.connection.get_manager().cancel()
 
     async def _handle_subscriber_message(self,
                                          connection: ConnectionAPI,
@@ -291,10 +309,7 @@ class BasePeer(BaseService):
         """
         self.disconnect_nowait(reason)
 
-        if self.is_operational:
-            await self.cancel()
-
-        await self.events.finished.wait()
+        await self.manager.stop()
 
     def disconnect_nowait(self, reason: DisconnectReason) -> None:
         if reason is DisconnectReason.BAD_PROTOCOL:
@@ -481,11 +496,9 @@ class BasePeerFactory(ABC):
     def __init__(self,
                  privkey: datatypes.PrivateKey,
                  context: BasePeerContext,
-                 token: CancelToken,
                  event_bus: EndpointAPI = None) -> None:
         self.privkey = privkey
         self.context = context
-        self.cancel_token = token
         self.event_bus = event_bus
 
     @abstractmethod
@@ -504,7 +517,6 @@ class BasePeerFactory(ABC):
             private_key=self.privkey,
             p2p_handshake_params=p2p_handshake_params,
             protocol_handshakers=handshakers,
-            token=self.cancel_token
         )
         return self.create_peer(connection)
 

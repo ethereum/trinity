@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class DAOCheckBootManager(BasePeerBootManager):
     peer: 'BaseChainPeer'
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         try:
             await self.ensure_same_side_on_dao_fork()
         except DAOForkCheckFailure as err:

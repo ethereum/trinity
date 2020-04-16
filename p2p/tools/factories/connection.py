@@ -3,7 +3,7 @@ from typing import AsyncIterator, Tuple
 
 from async_generator import asynccontextmanager
 
-from cancel_token import CancelToken
+from async_service import background_asyncio_service
 
 from eth_keys import keys
 
@@ -14,9 +14,7 @@ from p2p.handshake import (
     DevP2PReceipt,
     negotiate_protocol_handshakes,
 )
-from p2p.service import run_service
 
-from .cancel_token import CancelTokenFactory
 from .multiplexer import MultiplexerPairFactory
 from .p2p_proto import DevP2PHandshakeParamsFactory
 from .transport import MemoryTransportPairFactory
@@ -34,7 +32,6 @@ async def ConnectionPairFactory(*,
                                 bob_private_key: keys.PrivateKey = None,
                                 bob_client_version: str = 'bob',
                                 bob_p2p_version: int = DEVP2P_V5,
-                                cancel_token: CancelToken = None,
                                 start_streams: bool = True,
                                 ) -> AsyncIterator[Tuple[ConnectionAPI, ConnectionAPI]]:
     alice_connection, bob_connection = await ConnectionPairFactoryNotRunning(
@@ -48,10 +45,9 @@ async def ConnectionPairFactory(*,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
         bob_p2p_version=bob_p2p_version,
-        cancel_token=cancel_token,
         start_streams=start_streams
     )
-    async with run_service(alice_connection), run_service(bob_connection):
+    async with background_asyncio_service(alice_connection), background_asyncio_service(bob_connection):  # noqa: E501
         if start_streams:
             alice_connection.start_protocol_streams()
             bob_connection.start_protocol_streams()
@@ -70,7 +66,6 @@ async def ConnectionPairFactoryNotRunning(
         bob_private_key: keys.PrivateKey = None,
         bob_client_version: str = 'bob',
         bob_p2p_version: int = DEVP2P_V5,
-        cancel_token: CancelToken = None,
         start_streams: bool = True,
 ) -> Tuple[ConnectionAPI, ConnectionAPI]:
     if alice_handshakers or bob_handshakers:
@@ -94,9 +89,6 @@ async def ConnectionPairFactoryNotRunning(
             version=bob_p2p_version,
         )
 
-        if cancel_token is None:
-            cancel_token = CancelTokenFactory()
-
         (
             (alice_multiplexer, alice_p2p_receipt, alice_protocol_receipts),
             (bob_multiplexer, bob_p2p_receipt, bob_protocol_receipts),
@@ -105,13 +97,11 @@ async def ConnectionPairFactoryNotRunning(
                 alice_transport,
                 alice_devp2p_params,
                 alice_handshakers,
-                cancel_token,
             ),
             negotiate_protocol_handshakes(
                 bob_transport,
                 bob_devp2p_params,
                 bob_handshakers,
-                cancel_token,
             ),
         )
     else:
@@ -124,7 +114,6 @@ async def ConnectionPairFactoryNotRunning(
             bob_remote=bob_remote,
             bob_private_key=bob_private_key,
             bob_p2p_version=bob_p2p_version,
-            cancel_token=cancel_token,
         )
         alice_p2p_receipt = DevP2PReceipt(
             protocol=alice_multiplexer.get_base_protocol(),

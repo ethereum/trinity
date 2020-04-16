@@ -138,13 +138,10 @@ class ETHPeerFactory(BaseChainPeerFactory):
 
     async def get_handshakers(self) -> Tuple[HandshakerAPI[Any], ...]:
         headerdb = self.context.headerdb
-        wait = self.cancel_token.cancellable_wait
-
-        head = await wait(headerdb.coro_get_canonical_head())
-        total_difficulty = await wait(headerdb.coro_get_score(head.hash))
-        genesis_hash = await wait(
-            headerdb.coro_get_canonical_block_hash(BlockNumber(GENESIS_BLOCK_NUMBER))
-        )
+        head = await headerdb.coro_get_canonical_head()
+        total_difficulty = await headerdb.coro_get_score(head.hash)
+        genesis_hash = await headerdb.coro_get_canonical_block_hash(
+            BlockNumber(GENESIS_BLOCK_NUMBER))
 
         handshake_v63_params = StatusV63Payload(
             head_hash=head.hash,

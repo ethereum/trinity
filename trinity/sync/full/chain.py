@@ -275,7 +275,7 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
             batch_id, headers = await self.wait(self._block_body_tasks.get(MAX_BODIES_FETCH))
 
             # schedule the body download and move on
-            peer.run_task(self._run_body_download_batch(peer, batch_id, headers))
+            peer.manager.run_task(self._run_body_download_batch, peer, batch_id, headers)
 
     async def _block_body_bundle_processing(self, bundles: Tuple[BlockBodyBundle, ...]) -> None:
         """
@@ -311,9 +311,8 @@ class BaseBodyChainSyncer(BaseService, PeerSubscriber):
 
         try:
             if non_trivial_headers:
-                bundles, received_headers = await peer.wait(
-                    self._get_block_bodies(peer, non_trivial_headers)
-                )
+                bundles, received_headers = await self._get_block_bodies(
+                    peer, non_trivial_headers)
                 await self._block_body_bundle_processing(bundles)
                 completed_headers = trivial_headers + received_headers
 
@@ -777,7 +776,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             batch_id, headers = await self.wait(self._receipt_tasks.get(MAX_RECEIPTS_FETCH))
 
             # schedule the receipt download and move on
-            peer.run_task(self._run_receipt_download_batch(peer, batch_id, headers))
+            peer.manager.run_task(self._run_receipt_download_batch, peer, batch_id, headers)
 
     def _mark_body_download_complete(
             self,
@@ -802,7 +801,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         # with no headers collected:
         completed_headers: Tuple[BlockHeaderAPI, ...] = tuple()
         try:
-            completed_headers = await peer.wait(self._process_receipts(peer, headers))
+            completed_headers = await self._process_receipts(peer, headers)
 
             self._block_persist_tracker.finish_prereq(
                 BlockPersistPrereqs.STORE_RECEIPTS,

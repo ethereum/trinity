@@ -54,7 +54,6 @@ class FullNode(Node[ETHPeer]):
                 headerdb=self.headerdb,
                 base_db=self._base_db,
                 network_id=self._network_id,
-                token=self.master_cancel_token,
                 max_peers=self._max_peers,
                 event_bus=self.event_bus,
                 metrics_registry=self.metrics_service.registry,

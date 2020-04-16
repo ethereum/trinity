@@ -5,8 +5,6 @@ from async_service.asyncio import background_asyncio_service
 
 from eth_keys import keys
 
-from cancel_token import CancelToken
-
 from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER
 from eth.db.atomic import AtomicDB
 from eth.db.chain import ChainDB
@@ -53,7 +51,6 @@ class ParagonServer(BaseServer):
         return ParagonPeerPool(
             privkey=self.privkey,
             context=ParagonContext(),
-            token=self.cancel_token,
             event_bus=self.event_bus,
         )
 
@@ -64,7 +61,6 @@ def get_server(privkey, address, event_bus):
     chaindb = ChainDB(base_db)
     chaindb.persist_header(ROPSTEN_GENESIS_HEADER)
     chain = RopstenChain(base_db)
-    token = CancelToken("server")
     server = ParagonServer(
         privkey=privkey,
         port=address.tcp_port,
@@ -73,7 +69,6 @@ def get_server(privkey, address, event_bus):
         headerdb=headerdb,
         base_db=base_db,
         network_id=NETWORK_ID,
-        token=token,
         event_bus=event_bus,
     )
     return server
@@ -91,15 +86,7 @@ def receiver_remote():
 async def server(event_bus, receiver_remote):
     server = get_server(RECEIVER_PRIVKEY, receiver_remote.address, event_bus)
     async with background_asyncio_service(server):
-        try:
-            yield server
-        finally:
-            # XXX: Need to manually cancel the token here but in production the server's caller
-            # would do that.
-            server.cancel_token.trigger()
-    # Now that the server is finished, sleep a bit to give old-style services a chance to detect
-    # the token was triggered and finish their cleanup.
-    await asyncio.sleep(0.1)
+        yield server
 
 
 @pytest.mark.asyncio
@@ -109,8 +96,7 @@ async def test_server_incoming_connection(monkeypatch,
                                           receiver_remote,
                                           ):
     use_eip8 = False
-    token = CancelToken("initiator")
-    initiator = HandshakeInitiator(receiver_remote, INITIATOR_PRIVKEY, use_eip8, token)
+    initiator = HandshakeInitiator(receiver_remote, INITIATOR_PRIVKEY, use_eip8)
     initiator_remote = NodeFactory(
         pubkey=INITIATOR_PUBKEY,
         address__ip='127.0.0.1',
@@ -128,7 +114,7 @@ async def test_server_incoming_connection(monkeypatch,
         raise AssertionError("Unable to connect within 10 loops")
     # Send auth init message to the server, then read and decode auth ack
     aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
-        initiator, reader, writer, token)
+        initiator, reader, writer)
 
     transport = Transport(
         remote=receiver_remote,
@@ -144,7 +130,6 @@ async def test_server_incoming_connection(monkeypatch,
     factory = ParagonPeerFactory(
         initiator.privkey,
         context=ParagonContext(),
-        token=token,
     )
     handshakers = await factory.get_handshakers()
     devp2p_handshake_params = DevP2PHandshakeParamsFactory(
@@ -155,7 +140,6 @@ async def test_server_incoming_connection(monkeypatch,
         transport=transport,
         p2p_handshake_params=devp2p_handshake_params,
         protocol_handshakers=handshakers,
-        token=token,
     )
     connection = Connection(
         multiplexer=multiplexer,
@@ -193,7 +177,6 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remot
     initiator_peer_pool = ParagonPeerPool(
         privkey=INITIATOR_PRIVKEY,
         context=ParagonContext(),
-        token=CancelToken("test_peer_pool_connect")
     )
     nodes = [receiver_remote]
     async with background_asyncio_service(initiator_peer_pool) as manager:
@@ -213,7 +196,6 @@ async def test_peer_pool_answers_connect_commands(event_bus, server, receiver_re
         privkey=INITIATOR_PRIVKEY,
         context=ParagonContext(),
         event_bus=event_bus,
-        token=CancelToken("test_peer_pool_answers_connect_commands")
     )
     async with background_asyncio_service(initiator_peer_pool) as manager:
         await manager.wait_started()

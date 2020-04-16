@@ -1,4 +1,4 @@
-import asyncio
+from async_service.asyncio import background_asyncio_service
 
 import pytest
 
@@ -82,7 +82,7 @@ async def test_peer_pool_iter(event_loop):
         assert peer3 in peers
 
         peers = []
-        asyncio.ensure_future(peer2.disconnect(DisconnectReason.DISCONNECT_REQUESTED))
+        await peer2.disconnect(DisconnectReason.DISCONNECT_REQUESTED)
         async for peer in pool:
             peers.append(peer)
 
@@ -104,7 +104,8 @@ async def test_remote_dao_fork_validation_skipped_on_eth64(monkeypatch):
         boot_manager = alice.get_boot_manager()
         monkeypatch.setattr(
             boot_manager, 'validate_remote_dao_fork_block', validate_remote_dao_fork_block)
-        await boot_manager.run()
+        async with background_asyncio_service(boot_manager) as manager:
+            await manager.wait_finished()
         assert not dao_fork_validator_called
 
 
@@ -120,5 +121,6 @@ async def test_remote_dao_fork_validation_on_eth63(monkeypatch):
         boot_manager = alice.get_boot_manager()
         monkeypatch.setattr(
             boot_manager, 'validate_remote_dao_fork_block', validate_remote_dao_fork_block)
-        await boot_manager.run()
+        async with background_asyncio_service(boot_manager) as manager:
+            await manager.wait_finished()
         assert dao_fork_validator_called

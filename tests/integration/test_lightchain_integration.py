@@ -9,8 +9,6 @@ import time
 
 from async_service.asyncio import background_asyncio_service
 
-from cancel_token.token import CancelToken
-
 import pytest
 import rlp
 from eth_utils import (
@@ -182,7 +180,6 @@ async def test_lightchain_integration(
     peer_pool = LESPeerPool(
         privkey=ecies.generate_privkey(),
         context=context,
-        token=CancelToken("test_lightchain_integration"),
     )
     chain = AsyncRopstenChain(base_db)
     syncer = LightChainSyncer(chain, chaindb, peer_pool)

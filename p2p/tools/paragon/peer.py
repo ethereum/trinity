@@ -6,8 +6,6 @@ from typing import (
 
 from cached_property import cached_property
 
-from cancel_token.token import CancelToken
-
 from p2p.abc import HandshakerAPI, MultiplexerAPI
 from p2p.handshake import Handshaker
 from p2p.receipt import HandshakeReceipt
@@ -76,10 +74,9 @@ class ParagonPeerPool(BasePeerPool):
 
 class ParagonMockPeerPoolWithConnectedPeers(ParagonPeerPool):
     def __init__(self, peers: Iterable[ParagonPeer]) -> None:
-        super().__init__(
-            privkey=None, context=None, token=CancelToken("ParagonMockPeerPoolWithConnectedPeers"))
+        super().__init__(privkey=None, context=None)
         for peer in peers:
             self.connected_nodes[peer.session] = peer
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         raise NotImplementedError("This is a mock PeerPool implementation, you must not _run() it")

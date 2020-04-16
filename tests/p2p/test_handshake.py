@@ -2,7 +2,6 @@ import asyncio
 import pytest
 
 from p2p.tools.factories import (
-    CancelTokenFactory,
     MemoryTransportPairFactory,
     ProtocolFactory,
     DevP2PHandshakeParamsFactory,
@@ -17,7 +16,6 @@ from p2p.tools.handshake import NoopHandshaker
 
 @pytest.mark.asyncio
 async def test_handshake_with_v4_and_v5_disables_snappy():
-    token = CancelTokenFactory()
     alice_transport, bob_transport = MemoryTransportPairFactory()
 
     alice_p2p_params = DevP2PHandshakeParamsFactory(
@@ -36,13 +34,11 @@ async def test_handshake_with_v4_and_v5_disables_snappy():
         alice_transport,
         alice_p2p_params,
         (NoopHandshaker(protocol_class),),
-        token=token,
     )
     bob_coro = negotiate_protocol_handshakes(
         bob_transport,
         bob_p2p_params,
         (NoopHandshaker(protocol_class),),
-        token=token,
     )
 
     alice_result, bob_result = await asyncio.gather(alice_coro, bob_coro)
@@ -62,7 +58,6 @@ async def test_handshake_with_v4_and_v5_disables_snappy():
 
 @pytest.mark.asyncio
 async def test_handshake_with_single_protocol():
-    token = CancelTokenFactory()
     alice_transport, bob_transport = MemoryTransportPairFactory()
 
     alice_p2p_params = DevP2PHandshakeParamsFactory(
@@ -80,13 +75,11 @@ async def test_handshake_with_single_protocol():
         alice_transport,
         alice_p2p_params,
         (NoopHandshaker(protocol_class),),
-        token=token,
     )
     bob_coro = negotiate_protocol_handshakes(
         bob_transport,
         bob_p2p_params,
         (NoopHandshaker(protocol_class),),
-        token=token,
     )
 
     alice_result, bob_result = await asyncio.gather(alice_coro, bob_coro)
@@ -139,7 +132,6 @@ async def test_handshake_with_multiple_protocols():
     alice_handshakers = tuple(map(NoopHandshaker, alice_protos))
     bob_handshakers = tuple(map(NoopHandshaker, bob_protos))
 
-    token = CancelTokenFactory()
     alice_transport, bob_transport = MemoryTransportPairFactory()
 
     alice_p2p_params = DevP2PHandshakeParamsFactory(
@@ -155,13 +147,11 @@ async def test_handshake_with_multiple_protocols():
         alice_transport,
         alice_p2p_params,
         alice_handshakers,
-        token=token,
     )
     bob_coro = negotiate_protocol_handshakes(
         bob_transport,
         bob_p2p_params,
         bob_handshakers,
-        token=token,
     )
 
     alice_result, bob_result = await asyncio.gather(alice_coro, bob_coro)

@@ -2,8 +2,6 @@ import asyncio
 
 import pytest
 
-from cancel_token.exceptions import OperationCancelled
-
 from p2p.disconnect import DisconnectReason
 from p2p.p2p_proto import Pong, Ping
 from p2p.p2p_api import DisconnectIfIdle, P2PAPI
@@ -89,8 +87,8 @@ async def test_DisconnectIfIdle_sends_ping_when_conn_idle(bob, alice):
     async with DisconnectIfIdle(idle_timeout).apply(bob):
         alice.add_command_handler(Ping, _handle_ping)
         await asyncio.wait_for(got_ping.wait(), timeout=0.5)
-        assert bob.is_operational
-        assert alice.is_operational
+        assert bob.manager.is_running
+        assert alice.manager.is_running
 
 
 @pytest.mark.asyncio
@@ -99,8 +97,5 @@ async def test_DisconnectIfIdle_cancels_after_idle_timeout(bob, alice, monkeypat
     async with DisconnectIfIdle(idle_timeout).apply(bob):
         alice_transport = alice.get_multiplexer().get_transport()
         monkeypatch.setattr(alice_transport, 'write', lambda data: None)  # Mute alice.
-        with pytest.raises(OperationCancelled):
-            # bob.connection.cancellation() should raise OperationCancelled when the connection is
-            # cancelled.
-            await asyncio.wait_for(bob.cancellation(), timeout=0.5)
-        assert bob.is_cancelled
+        await asyncio.wait_for(bob.manager.wait_finished(), timeout=0.5)
+        assert bob.manager.is_cancelled

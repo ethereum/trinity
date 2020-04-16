@@ -5,8 +5,6 @@ from async_generator import asynccontextmanager
 
 from cached_property import cached_property
 
-from cancel_token import OperationCancelled
-
 from async_service import (
     background_asyncio_service,
     Service,
@@ -47,28 +45,26 @@ class PingAndDisconnectIfIdle(Service):
         conn = self.connection
         half_timeout = self.idle_timeout / 2
         with conn.add_msg_handler(cast(HandlerFn, set_msg_received)):
-            while conn.is_operational:
+            while conn.get_manager().is_running:
                 try:
-                    await conn.wait_first(msg_received.wait(), asyncio.sleep(half_timeout))
-                except OperationCancelled:
-                    return
-                if msg_received.is_set():
+                    await asyncio.wait_for(msg_received.wait(), timeout=half_timeout)
                     conn.logger.debug2("Received msg on %s, restarting idle monitor", conn)
                     msg_received.clear()
                     continue
+                except asyncio.TimeoutError:
+                    pass
                 _send_ping(conn)
                 try:
-                    await conn.wait_first(msg_received.wait(), asyncio.sleep(half_timeout))
-                except OperationCancelled:
-                    return
-                if msg_received.is_set():
+                    await asyncio.wait_for(msg_received.wait(), timeout=half_timeout)
                     conn.logger.debug2("Received msg on %s, restarting idle monitor", conn)
                     msg_received.clear()
                     continue
+                except asyncio.TimeoutError:
+                    pass
 
                 conn.logger.info(
                     "Reached idle limit (%.2f) on %s, disconnecting", half_timeout * 2, conn)
-                conn.cancel_nowait()
+                conn.get_manager().cancel()
                 return
 
 
