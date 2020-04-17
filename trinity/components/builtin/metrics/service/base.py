@@ -20,17 +20,19 @@ class BaseMetricsService(Service, MetricsServiceAPI):
                  influx_password: str,
                  influx_database: str,
                  host: str,
+                 port: int = 8086,
+                 protocol: str = 'http',
                  reporting_frequency: int = 10):
         self._influx_server = influx_server
         self._reporting_frequency = reporting_frequency
         self._registry = HostMetricsRegistry(host)
         self._reporter = InfluxReporter(
             registry=self._registry,
-            protocol='https',
-            port=443,
             database=influx_database,
             username=influx_user,
             password=influx_password,
+            protocol=protocol,
+            port=port,
             server=influx_server
         )
 
