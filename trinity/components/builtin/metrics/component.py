@@ -15,6 +15,9 @@ from lahja import EndpointAPI
 from trinity.boot_info import BootInfo
 from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.components.builtin.metrics.service.trio import TrioMetricsService
+from trinity.components.builtin.metrics.blockchain_metrics_collector import (
+    collect_blockchain_metrics,
+)
 from trinity.components.builtin.metrics.system_metrics_collector import collect_process_metrics
 
 from trinity.extensibility import (
@@ -141,7 +144,18 @@ class MetricsComponent(TrioIsolatedComponent):
             frequency_seconds=boot_info.args.metrics_system_collector_frequency
         )
 
-        services_to_exit = (metrics_service, system_metrics_collector,)
+        # types ignored due to https://github.com/ethereum/async-service/issues/5
+        blockchain_metrics_collector = collect_blockchain_metrics(  # type: ignore
+            boot_info.trinity_config,
+            metrics_service.registry,
+            frequency_seconds=boot_info.args.metrics_system_collector_frequency
+        )
+
+        services_to_exit = (
+            metrics_service,
+            system_metrics_collector,
+            blockchain_metrics_collector,
+        )
 
         async with AsyncExitStack() as stack:
             managers = tuple([
