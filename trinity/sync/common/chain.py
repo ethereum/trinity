@@ -11,6 +11,7 @@ from cancel_token import (
     OperationCancelled,
 )
 
+from eth.abc import BlockImportResult
 from eth.constants import GENESIS_BLOCK_NUMBER
 from eth.exceptions import (
     HeaderNotFound,
@@ -255,7 +256,7 @@ class BaseBlockImporter(ABC):
     @abstractmethod
     async def import_block(
             self,
-            block: BlockAPI) -> Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]:
+            block: BlockAPI) -> BlockImportResult:
         ...
 
     async def preview_transactions(
@@ -287,7 +288,7 @@ class SimpleBlockImporter(BaseBlockImporter):
 
     async def import_block(
             self,
-            block: BlockAPI) -> Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]:
+            block: BlockAPI) -> BlockImportResult:
         return await self._chain.coro_import_block(block, perform_validation=True)
 
 

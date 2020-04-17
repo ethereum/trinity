@@ -13,15 +13,14 @@ from typing import (
     Type,
 )
 
-from eth_utils import ValidationError
 from eth_utils.toolz import partition
 
 from eth.abc import (
     AtomicDatabaseAPI,
-    DatabaseAPI,
 )
-from eth.db.backends.base import BaseDB, BaseAtomicDB
-from eth.db.diff import DBDiffTracker, DBDiff, DiffMissingError
+from eth.db.atomic import AtomicDBWriteBatch
+from eth.db.backends.base import BaseAtomicDB
+from eth.db.diff import DBDiff
 
 from trinity._utils.ipc import wait_for_ipc
 from trinity._utils.socket import BufferedSocket, IPCSocketServer
@@ -245,6 +244,24 @@ class DBManager(IPCSocketServer):
         sock.sendall(SUCCESS_BYTE)
 
 
+class AtomicBatch(AtomicDBWriteBatch):
+    """
+    This is returned by a DBClient during an atomic_batch, to provide a temporary view
+    of the database, before commit.
+
+    The main difference is that it offers a "finalize" option. This way of
+    closing the batch does not immediately commit to a target database. It lets
+    the caller decide how to commit the data from the diff.
+    """
+    logger = logging.getLogger("trinity.db.manager.AtomicBatch")
+
+    def finalize(self) -> DBDiff:
+        diff = self._diff()
+        self._track_diff = None
+        self._write_target_db = None
+        return diff
+
+
 class DBClient(BaseAtomicDB):
     logger = logging.getLogger('trinity.db.client.DBClient')
 
@@ -307,7 +324,7 @@ class DBClient(BaseAtomicDB):
             raise Exception(f"Unknown result byte: {result_byte.hex}")
 
     @contextlib.contextmanager
-    def atomic_batch(self) -> Iterator['AtomicBatch']:
+    def atomic_batch(self) -> Iterator[AtomicBatch]:
         batch = AtomicBatch(self)
         yield batch
         diff = batch.finalize()
@@ -354,60 +371,6 @@ class DBClient(BaseAtomicDB):
         cls.logger.debug("Opened connection to %s: %s", path, s)
         s.connect(str(path))
         return cls(s)
-
-
-class AtomicBatch(BaseDB):
-    """
-    This is returned by a DBClient during an atomic_batch, to provide a temporary view
-    of the database, before commit.
-    """
-    logger = logging.getLogger("trinity.db.manager.AtomicBatch")
-
-    _write_target_db: BaseDB = None
-    _diff: DBDiffTracker = None
-
-    def __init__(self, db: DatabaseAPI) -> None:
-        self._db = db
-        self._track_diff = DBDiffTracker()
-
-    def __getitem__(self, key: bytes) -> bytes:
-        if self._track_diff is None:
-            raise ValidationError("Cannot get data from a write batch, out of context")
-
-        try:
-            value = self._track_diff[key]
-        except DiffMissingError as missing:
-            if missing.is_deleted:
-                raise KeyError(key)
-            else:
-                return self._db[key]
-        else:
-            return value
-
-    def __setitem__(self, key: bytes, value: bytes) -> None:
-        if self._track_diff is None:
-            raise ValidationError("Cannot set data from a write batch, out of context")
-
-        self._track_diff[key] = value
-
-    def __delitem__(self, key: bytes) -> None:
-        if key not in self:
-            raise KeyError(key)
-        del self._track_diff[key]
-
-    def _exists(self, key: bytes) -> bool:
-        try:
-            self[key]
-        except KeyError:
-            return False
-        else:
-            return True
-
-    def finalize(self) -> DBDiff:
-        diff = self._track_diff.diff()
-        self._track_diff = None
-        self._db = None
-        return diff
 
 
 def _run() -> None:

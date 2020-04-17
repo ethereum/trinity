@@ -7,6 +7,7 @@ from typing import (
     Type,
 )
 
+from eth.abc import BlockImportResult
 from eth.rlp.blocks import BaseBlock
 from eth.rlp.headers import BlockHeader
 from eth.rlp.transactions import BaseTransaction
@@ -126,9 +127,8 @@ class StatelessBlockImportDone(BaseEvent):
 
     block: BaseBlock
     completed: bool
-    result: Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]
-    # flake8 gets confused by the Tuple syntax above
-    exception: BaseException  # noqa: E701
+    result: BlockImportResult
+    exception: BaseException
 
 
 @dataclass

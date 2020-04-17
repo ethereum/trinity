@@ -7,6 +7,7 @@ from eth.abc import (
     BlockAPI,
     ChainAPI,
     BlockHeaderAPI,
+    BlockImportResult,
     ReceiptAPI,
     SignedTransactionAPI,
 )
@@ -19,7 +20,7 @@ class AsyncChainAPI(ChainAPI):
     async def coro_import_block(self,
                                 block: BlockHeaderAPI,
                                 perform_validation: bool = True,
-                                ) -> Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]:
+                                ) -> BlockImportResult:
         ...
 
     @abstractmethod
