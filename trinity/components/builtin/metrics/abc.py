@@ -13,6 +13,8 @@ class MetricsServiceAPI(ServiceAPI):
                  influx_password: str,
                  influx_database: str,
                  host: str,
+                 port: int,
+                 protocol: str,
                  reporting_frequency: int) -> None:
         ...
 
