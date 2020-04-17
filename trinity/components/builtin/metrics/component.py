@@ -31,6 +31,8 @@ def metrics_service_from_args(
         influx_password=args.metrics_influx_password,
         influx_database=args.metrics_influx_database,
         host=args.metrics_host,
+        port=args.metrics_influx_port,
+        protocol=args.metrics_influx_protocol,
         reporting_frequency=args.metrics_reporting_frequency,
     )
 
@@ -60,7 +62,7 @@ class MetricsComponent(TrioIsolatedComponent):
 
         metrics_parser.add_argument(
             '--metrics-host',
-            help='Host name to tag the metrics data (e.g. trinity-bootnode-europe-pt',
+            help='Host name to tag the metrics data (e.g. trinity-bootnode-europe-pt)',
             default=os.environ.get('TRINITY_METRICS_HOST'),
         )
 
@@ -86,6 +88,21 @@ class MetricsComponent(TrioIsolatedComponent):
             '--metrics-influx-server',
             help='Influx DB server. Defaults to ENV var TRINITY_METRICS_INFLUX_DB_SERVER',
             default=os.environ.get('TRINITY_METRICS_INFLUX_DB_SERVER'),
+        )
+
+        metrics_parser.add_argument(
+            '--metrics-influx-port',
+            help='Influx DB port. Defaults to ENV var TRINITY_METRICS_INFLUX_DB_PORT or 8086',
+            default=os.environ.get('TRINITY_METRICS_INFLUX_DB_PORT'),
+        )
+
+        metrics_parser.add_argument(
+            '--metrics-influx-protocol',
+            help=(
+                'Influx DB protocol. Defaults to ENV var '
+                'TRINITY_METRICS_INFLUX_DB_PROTOCOL or http'
+            ),
+            default=os.environ.get('TRINITY_METRICS_INFLUX_DB_PROTOCOL'),
         )
 
         metrics_parser.add_argument(
