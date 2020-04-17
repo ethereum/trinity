@@ -42,7 +42,7 @@ deps = {
         # idna 2.7 is not supported by requests 2.18
         "requests>=2.20,<3",
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
-        "plyvel==1.1.0",
+        "plyvel==1.2.0",
         PYEVM_DEPENDENCY,
         "web3>=5.10.0,<6",
         "lahja>=0.16.0,<0.17",
@@ -52,7 +52,7 @@ deps = {
         "jsonschema==3.0.1",
         "mypy-extensions>=0.4.3,<0.5.0",
         "typing_extensions>=3.7.4,<4.0.0",
-        "ruamel.yaml==0.15.98",
+        "ruamel.yaml==0.16.10",
         "argcomplete>=1.10.0,<2",
         "multiaddr>=0.0.8,<0.1.0",
         "prometheus-client==0.7.1",
@@ -76,7 +76,7 @@ deps = {
         # xdist pinned at <1.29 due to: https://github.com/pytest-dev/pytest-xdist/issues/472
         "pytest-xdist>=1.29.0,<1.30",
         # only for eth2
-        "ruamel.yaml==0.15.98",
+        "ruamel.yaml==0.16.10",
         "eth-tester==0.4.0b2",
     ],
     # We have to keep some separation between trio and asyncio based tests
@@ -125,7 +125,7 @@ deps = {
         "eth-keyfile",  # validator client
     ],
     'eth2-extra': [
-        "milagro-bls-binding==0.1.3",
+        "milagro-bls-binding==0.1.4",
     ],
     'eth2-lint': [
         "black==19.3b0",
