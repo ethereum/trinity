@@ -113,12 +113,24 @@ eth2_fixtures: &eth2_fixtures
           - ./eth2-fixtures
         key: cache-v3-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum "./.circleci/get_eth2_fixtures.sh" }}-{{ checksum "./.circleci/build_geth.sh" }}
 jobs:
+  py38-lint:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-lint
   py37-lint:
     <<: *common
     docker:
       - image: circleci/python:3.7
         environment:
           TOXENV: py37-lint
+  py38-lint-eth2:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-lint-eth2
   py37-lint-eth2:
     <<: *common
     docker:
@@ -126,82 +138,148 @@ jobs:
         environment:
           TOXENV: py37-lint-eth2
 
-  py37-docs:
+  py38-docs:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-docs
+          TOXENV: py38-docs
 
-  py37-rpc-state-byzantium:
+  py38-rpc-state-byzantium:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-byzantium
-  py37-rpc-state-constantinople:
+          TOXENV: py38-rpc-state-byzantium
+  py38-rpc-state-constantinople:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-constantinople
-  py37-rpc-state-frontier:
+          TOXENV: py38-rpc-state-constantinople
+  py38-rpc-state-frontier:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-frontier
-  py37-rpc-state-homestead:
+          TOXENV: py38-rpc-state-frontier
+  py38-rpc-state-homestead:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-homestead
-  py37-rpc-state-istanbul:
+          TOXENV: py38-rpc-state-homestead
+  py38-rpc-state-istanbul:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-istanbul
-  py37-rpc-state-petersburg:
+          TOXENV: py38-rpc-state-istanbul
+  py38-rpc-state-petersburg:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-petersburg
+          TOXENV: py38-rpc-state-petersburg
 
-  py37-rpc-state-tangerine_whistle:
+  py38-rpc-state-tangerine_whistle:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-tangerine_whistle
-  py37-rpc-state-spurious_dragon:
+          TOXENV: py38-rpc-state-tangerine_whistle
+  py38-rpc-state-spurious_dragon:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-state-spurious_dragon
-  py37-rpc-blockchain:
+          TOXENV: py38-rpc-state-spurious_dragon
+  py38-rpc-blockchain:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-rpc-blockchain
+          TOXENV: py38-rpc-blockchain
 
-  py37-lightchain_integration:
+  py38-eth1-core:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-eth1-core
+  py38-integration:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-integration
+  py38-lightchain_integration:
     <<: *geth_steps
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-lightchain_integration
+          TOXENV: py38-lightchain_integration
           GETH_VERSION: v1.8.22
-  py37-long_run_integration:
+  py38-long_run_integration:
     <<: *common
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.8
         environment:
-          TOXENV: py37-long_run_integration
+          TOXENV: py38-long_run_integration
+  py38-p2p:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-p2p
+  py38-p2p-trio:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-p2p-trio
+  py38-eth2-core:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-eth2-core
+  py38-eth2-utils:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-eth2-utils
+  py38-eth2-fixtures:
+    <<: *eth2_fixtures
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-eth2-fixtures
+  py38-eth2-integration:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-eth2-integration
+  py38-wheel-cli:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-wheel-cli
+  py38-eth1-components:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-eth1-components
+  py38-eth2-trio:
+    <<: *common
+    docker:
+      - image: circleci/python:3.8
+        environment:
+          TOXENV: py38-eth2-trio
 
   py37-rpc-state-quadratic:
     <<: *common
@@ -320,14 +398,16 @@ workflows:
   test:
     jobs:
       # These tests are long, so should be started first to optimize for total suite run time
-      - py37-integration
+      - py38-integration
+      - py38-wheel-cli
       - py37-wheel-cli
-      - py37-long_run_integration
+      - py38-long_run_integration
       - py37-rpc-state-sstore
+      - py38-eth2-core
       - py37-eth2-core
       - py37-libp2p
 
-      - py37-docs
+      - py38-docs
 
       - py37-eth1-core
       - py37-p2p
@@ -342,17 +422,28 @@ workflows:
       - py37-rpc-state-quadratic
       - py37-rpc-state-zero_knowledge
 
-      - py37-rpc-state-byzantium
-      - py37-rpc-state-constantinople
-      - py37-rpc-state-frontier
-      - py37-rpc-state-homestead
-      - py37-rpc-state-petersburg
-      - py37-rpc-state-spurious_dragon
-      - py37-rpc-state-tangerine_whistle
-      - py37-rpc-blockchain
+      - py38-rpc-state-byzantium
+      - py38-rpc-state-constantinople
+      - py38-rpc-state-frontier
+      - py38-rpc-state-homestead
+      - py38-rpc-state-petersburg
+      - py38-rpc-state-spurious_dragon
+      - py38-rpc-state-tangerine_whistle
+      - py38-rpc-blockchain
 
-      - py37-lightchain_integration
+      - py38-eth1-core
+      - py38-p2p
+      - py38-p2p-trio
+      - py38-eth2-utils
+      - py38-eth2-fixtures
+      - py38-eth2-integration
+      - py38-eth1-components
+      - py38-eth2-trio
 
+      - py38-lightchain_integration
+
+      - py38-lint
+      - py38-lint-eth2
       - py37-lint
       - py37-lint-eth2
 
