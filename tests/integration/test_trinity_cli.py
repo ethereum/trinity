@@ -352,15 +352,12 @@ async def test_logger_configuration(command,
 @pytest.mark.parametrize(
     'command',
     (
-        ('trinity', ),
+        # This should also cover beam sync but currently shutting down from beam sync causes errors.
+        ('trinity', '--sync-mode=full', ),
     )
 )
 @pytest.mark.asyncio
-# The test ensures Trinity shuts down without reporting any errors. It is currently skipped because
-# Trinity shuts down with errors *most* of the time but often enough shuts down cleanly. This leaves
-# us in a state where we can neither activate the test nor mark it as xfail.
-# See: https://github.com/ethereum/trinity/issues/1307
-@pytest.mark.skip("Currently unreliable")
+# The test ensures Trinity shuts down without reporting any errors.
 async def test_shutdown_does_not_throw_errors(command, unused_tcp_port):
 
     command = amend_command_for_unused_port(command, unused_tcp_port)
