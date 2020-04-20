@@ -224,7 +224,7 @@ async def _run_standalone_component(
     boot_info = BootInfo(
         args=args,
         trinity_config=trinity_config,
-        child_process_log_level=None,
+        min_log_level=None,
         logger_levels=None,
         profile=False,
     )

@@ -219,12 +219,12 @@ def child_process_logging(boot_info: BootInfo) -> Iterator[None]:
     # We get the root logger here to ensure that all logs are given a chance to
     # pass through this handler
     logger = logging.getLogger()
-    logger.setLevel(boot_info.child_process_log_level)
+    logger.setLevel(boot_info.min_log_level)
 
     set_logger_levels(boot_info.logger_levels)
 
     ipc_handler = IPCHandler.connect(boot_info.trinity_config.logging_ipc_path)
-    ipc_handler.setLevel(boot_info.child_process_log_level)
+    ipc_handler.setLevel(boot_info.min_log_level)
 
     logger.addHandler(ipc_handler)
 
