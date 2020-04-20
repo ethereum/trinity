@@ -8,5 +8,5 @@ class BootInfo(NamedTuple):
     args: Namespace
     trinity_config: TrinityConfig
     profile: bool
-    child_process_log_level: int
+    min_log_level: int
     logger_levels: Dict[str, int]

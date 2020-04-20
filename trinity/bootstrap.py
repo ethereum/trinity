@@ -194,9 +194,16 @@ def main_entry(trinity_boot: BootFn,
     logger_levels = {} if args.log_levels is None else args.log_levels
     set_logger_levels(logger_levels)
 
-    # get the root logger and set it to the level of the stderr logger.
+    min_log_level = min(
+        stderr_logger_level,
+        file_logger_level,
+        *logger_levels.values(),
+    )
+    # We need to use our minimum level on the root logger to ensure anything logged via a
+    # sub-logger using the default level will reach all our handlers. The handlers will then filter
+    # those based on their configured levels.
     logger = logging.getLogger()
-    logger.setLevel(stderr_logger_level)
+    logger.setLevel(min_log_level)
 
     # This prints out the ASCII "trinity" header in the terminal
     display_launch_logs(trinity_config)
@@ -205,16 +212,10 @@ def main_entry(trinity_boot: BootFn,
     log_listener = IPCListener(handler_stderr, handler_file)
 
     # Determine what logging level child processes should use.
-    child_process_log_level = min(
-        stderr_logger_level,
-        file_logger_level,
-        *logger_levels.values(),
-    )
-
     boot_info = BootInfo(
         args=args,
         trinity_config=trinity_config,
-        child_process_log_level=child_process_log_level,
+        min_log_level=min_log_level,
         logger_levels=logger_levels,
         profile=bool(args.profile),
     )

@@ -31,7 +31,7 @@ def boot_info(trinity_config):
         args=Namespace(),
         trinity_config=trinity_config,
         profile=False,
-        child_process_log_level=logging.DEBUG,
+        min_log_level=logging.DEBUG,
         logger_levels={},
     )
 
