@@ -4,7 +4,7 @@ from argparse import (
 )
 import logging
 
-from async_service import run_asyncio_service
+from async_service import background_asyncio_service
 from eth_utils import ValidationError
 from eth.chains.mainnet import ISTANBUL_MAINNET_BLOCK
 from eth.chains.ropsten import ISTANBUL_ROPSTEN_BLOCK
@@ -94,7 +94,5 @@ class TxComponent(AsyncioIsolatedComponent):
 
             tx_pool = TxPool(event_bus, proxy_peer_pool, validator)
 
-            try:
-                await run_asyncio_service(tx_pool)
-            finally:
-                cls.logger.info("Stopping Tx Pool...")
+            async with background_asyncio_service(tx_pool) as manager:
+                await manager.wait_finished()

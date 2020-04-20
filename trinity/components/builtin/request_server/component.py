@@ -3,7 +3,7 @@ from argparse import (
     _SubParsersAction,
 )
 
-from async_service import Service, run_asyncio_service
+from async_service import Service, background_asyncio_service
 from lahja import EndpointAPI
 
 from eth.db.backends.base import BaseAtomicDB
@@ -55,7 +55,8 @@ class RequestServerComponent(AsyncioIsolatedComponent):
             else:
                 raise Exception("Trinity config must have eth1 config")
 
-            await run_asyncio_service(server)
+            async with background_asyncio_service(server) as manager:
+                await manager.wait_finished()
 
     @classmethod
     def make_eth1_request_server(cls,
