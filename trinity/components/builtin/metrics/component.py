@@ -120,6 +120,12 @@ class MetricsComponent(TrioIsolatedComponent):
             default=3,
         )
 
+        metrics_parser.add_argument(
+            '--metrics-blockchain-collector-frequency',
+            help='The frequency in seconds at which blockchain metrics are collected',
+            default=15,
+        )
+
     @classmethod
     def validate_cli(cls, boot_info: BootInfo) -> None:
         args = boot_info.args
@@ -146,9 +152,10 @@ class MetricsComponent(TrioIsolatedComponent):
 
         # types ignored due to https://github.com/ethereum/async-service/issues/5
         blockchain_metrics_collector = collect_blockchain_metrics(  # type: ignore
-            boot_info.trinity_config,
+            boot_info,
+            event_bus,
             metrics_service.registry,
-            frequency_seconds=boot_info.args.metrics_system_collector_frequency
+            frequency_seconds=boot_info.args.metrics_blockchain_collector_frequency
         )
 
         services_to_exit = (
