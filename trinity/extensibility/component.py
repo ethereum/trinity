@@ -78,12 +78,6 @@ class BaseComponent(ComponentAPI):
             raise AttributeError(f"No name attribute defined for {self.__class__}")
         self._boot_info = boot_info
 
-    def __str__(self) -> str:
-        return f"<Component[{self.name}]>"
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(boot_info={self._boot_info})"
-
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:
         pass
@@ -144,12 +138,13 @@ async def _run_asyncio_component_in_proc(
     """
     Run the given AsyncioIsolatedComponent in the same process as ourselves.
     """
-    task = asyncio.ensure_future(component_type.do_run(boot_info, event_bus))
-    logger.info("Starting component: %s", component_type.name)
+    component = component_type(boot_info)
+    task = asyncio.ensure_future(component.do_run(boot_info, event_bus))
+    logger.info("Starting component: %s", component.name)
     try:
         yield
     finally:
-        await _cleanup_component_task(component_type.name, task)
+        await _cleanup_component_task(component.name, task)
 
 
 @asynccontextmanager
