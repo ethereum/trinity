@@ -41,10 +41,9 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
         async with proc_ctx as proc:
             await proc.wait_result_or_raise()
 
-    @classmethod
-    async def _do_run(cls, boot_info: BootInfo) -> None:
+    async def _do_run(self, boot_info: BootInfo) -> None:
         with child_process_logging(boot_info):
-            endpoint_name = cls.get_endpoint_name()
+            endpoint_name = self.get_endpoint_name()
             event_bus_service = AsyncioEventBusService(
                 boot_info.trinity_config,
                 endpoint_name,
@@ -54,16 +53,15 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
 
                 try:
                     if boot_info.profile:
-                        with profiler(f'profile_{cls.get_endpoint_name()}'):
-                            await cls.do_run(boot_info, event_bus)
+                        with profiler(f'profile_{self.get_endpoint_name()}'):
+                            await self.do_run(boot_info, event_bus)
                     else:
-                        await cls.do_run(boot_info, event_bus)
+                        await self.do_run(boot_info, event_bus)
                 except KeyboardInterrupt:
                     return
 
-    @classmethod
     @abstractmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         """
         Define the entry point of the component. Should be overwritten in subclasses.
         """
