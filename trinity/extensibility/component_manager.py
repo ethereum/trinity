@@ -101,8 +101,16 @@ class ComponentManager(Service):
         self._trigger_component_exit.set()
 
     async def _handle_shutdown_request(self) -> None:
-        req = await self._endpoint.wait_for(ShutdownRequest)
-        self.shutdown(req.reason)
+        shutdown_request_received = False
+        # We need to run in a loop because we're a daemon.
+        while self.manager.is_running:
+            req = await self._endpoint.wait_for(ShutdownRequest)
+            self.logger.info("Received shutdown request: %s", req)
+            if shutdown_request_received:
+                self.logger.warning("Received multiple shutdown requests, ignoring")
+                continue
+            shutdown_request_received = True
+            self.shutdown(req.reason)
 
     _available_endpoints: Tuple[ConnectionConfig, ...] = ()
 

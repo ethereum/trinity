@@ -137,4 +137,5 @@ class Node(Service, Generic[TPeer]):
                 await self.manager.wait_finished()
             finally:
                 self.master_cancel_token.trigger()
-                await self.event_bus.broadcast(ShutdownRequest("Node exiting. Triggering shutdown"))
+                self.event_bus.broadcast_nowait(
+                    ShutdownRequest("Node exiting. Triggering shutdown"))

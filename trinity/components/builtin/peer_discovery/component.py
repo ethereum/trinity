@@ -100,7 +100,7 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             with db:
                 await async_service.run_trio_service(discovery_service)
         except Exception:
-            await event_bus.broadcast(ShutdownRequest("Discovery ended unexpectedly"))
+            event_bus.broadcast_nowait(ShutdownRequest("Discovery ended unexpectedly"))
             raise
 
 

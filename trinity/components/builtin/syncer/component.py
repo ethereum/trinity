@@ -341,7 +341,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
 
         if strategy.shutdown_node_on_halt:
             cls.logger.error("Sync ended unexpectedly. Shutting down trinity")
-            await event_bus.broadcast(ShutdownRequest("Sync ended unexpectedly"))
+            event_bus.broadcast_nowait(ShutdownRequest("Sync ended unexpectedly"))
 
 
 if __name__ == "__main__":
