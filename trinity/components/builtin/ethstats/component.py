@@ -6,7 +6,7 @@ from argparse import (
     _SubParsersAction,
 )
 
-from async_service import run_asyncio_service
+from async_service import background_asyncio_service
 from eth_utils import ValidationError
 
 from lahja.base import EndpointAPI
@@ -121,4 +121,5 @@ class EthstatsComponent(AsyncioIsolatedComponent):
             args.ethstats_interval,
         )
 
-        await run_asyncio_service(service)
+        async with background_asyncio_service(service) as manager:
+            await manager.wait_finished()

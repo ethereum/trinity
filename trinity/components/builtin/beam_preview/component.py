@@ -1,6 +1,6 @@
 import asyncio
 
-from async_service import run_asyncio_service
+from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
@@ -60,7 +60,8 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
 
             preview_server = BlockPreviewServer(event_bus, beam_chain, cls.shard_num)
 
-            await run_asyncio_service(preview_server)
+            async with background_asyncio_service(preview_server) as manager:
+                await manager.wait_finished()
 
 
 class BeamChainPreviewComponent0(BeamChainPreviewComponent):

@@ -1,6 +1,6 @@
 import asyncio
 
-from async_service import run_asyncio_service
+from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
@@ -53,4 +53,5 @@ class BeamChainExecutionComponent(AsyncioIsolatedComponent):
 
             import_server = BlockImportServer(event_bus, beam_chain)
 
-            await run_asyncio_service(import_server)
+            async with background_asyncio_service(import_server) as manager:
+                await manager.wait_finished()
