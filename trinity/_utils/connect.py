@@ -1,4 +1,4 @@
-from typing import Iterator, Type
+from typing import Iterator
 import contextlib
 
 from eth.abc import ChainAPI
@@ -11,7 +11,6 @@ from trinity.chains.light_eventbus import (
 )
 from trinity.config import (
     Eth1AppConfig,
-    TAppConfig,
 )
 from trinity.constants import (
     SYNC_LIGHT,
