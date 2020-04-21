@@ -10,13 +10,10 @@ from lahja import EndpointAPI
 
 from eth.abc import ChainAPI
 
-from trinity.config import (
-    Eth1AppConfig,
-)
 from trinity.constants import (
     TO_NETWORKING_BROADCAST_CONFIG,
 )
-from trinity._utils.connect import get_chain as get_connected_chain
+from trinity._utils.connect import get_eth1_chain_with_remote_db
 from trinity._utils.version import (
     construct_trinity_client_identifier,
 )
@@ -148,4 +145,4 @@ class EthstatsService(Service):
         }
 
     def get_chain(self) -> ContextManager[ChainAPI]:
-        return get_connected_chain(Eth1AppConfig, self.boot_info, self.event_bus)
+        return get_eth1_chain_with_remote_db(self.boot_info, self.event_bus)

@@ -9,7 +9,10 @@ from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.chains.light_eventbus import (
     EventBusLightPeerChain,
 )
-from trinity.config import TAppConfig
+from trinity.config import (
+    Eth1AppConfig,
+    TAppConfig,
+)
 from trinity.constants import (
     SYNC_LIGHT,
 )
@@ -17,12 +20,10 @@ from trinity.db.manager import DBClient
 
 
 @contextlib.contextmanager
-def get_chain(app_config_type: Type[TAppConfig],
-              boot_info: BootInfo,
-              event_bus: EndpointAPI) -> Iterator[ChainAPI]:
-    app_config = boot_info.trinity_config.get_app_config(app_config_type)
-    # ignore b/c TAppConfig has no attribute get_chain_config
-    chain_config = app_config.get_chain_config()  # type: ignore
+def get_eth1_chain_with_remote_db(boot_info: BootInfo,
+                                  event_bus: EndpointAPI) -> Iterator[ChainAPI]:
+    app_config = boot_info.trinity_config.get_app_config(Eth1AppConfig)
+    chain_config = app_config.get_chain_config()
 
     chain: ChainAPI
     base_db = DBClient.connect(boot_info.trinity_config.database_ipc_path)
