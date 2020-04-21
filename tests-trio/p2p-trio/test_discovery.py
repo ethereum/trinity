@@ -43,7 +43,7 @@ from p2p.tools.factories import (
     PrivateKeyFactory,
 )
 
-from trinity.components.builtin.upnp.events import NewUPnPMapping
+from trinity.components.builtin.upnp.events import UPnPMapping
 
 
 # Force our tests to fail quickly if they accidentally get stuck waiting for a response that will
@@ -349,8 +349,8 @@ async def test_handle_new_upnp_mapping(manually_driven_discovery, endpoint_serve
 
     await trio.hazmat.checkpoint()
     external_ip = '43.248.27.0'
-    await endpoint_server.wait_until_any_endpoint_subscribed_to(NewUPnPMapping)
-    await endpoint_server.broadcast(NewUPnPMapping(external_ip))
+    await endpoint_server.wait_until_any_endpoint_subscribed_to(UPnPMapping)
+    await endpoint_server.broadcast(UPnPMapping(external_ip))
 
     with trio.fail_after(0.5):
         while True:

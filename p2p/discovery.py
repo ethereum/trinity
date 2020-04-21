@@ -223,8 +223,8 @@ class DiscoveryService(Service):
             await self.consume_datagram()
 
     async def handle_new_upnp_mapping(self) -> None:
-        from trinity.components.builtin.upnp.events import NewUPnPMapping
-        async for event in self._event_bus.stream(NewUPnPMapping):
+        from trinity.components.builtin.upnp.events import UPnPMapping
+        async for event in self._event_bus.stream(UPnPMapping):
             external_ip = event.ip
             self.logger.debug(
                 "Got new external IP address via UPnP mapping: %s", external_ip)
