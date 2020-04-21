@@ -74,7 +74,7 @@ def read_network_stats() -> NetworkStats:
     stats = psutil.net_io_counters()
     return NetworkStats(
         in_packets=stats.packets_recv,
-        out_packets=stats.packets_sent
+        out_packets=stats.packets_sent,
     )
 
 
