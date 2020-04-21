@@ -173,6 +173,11 @@ class ETHPeerFactory(BaseChainPeerFactory):
             self.peer_class.supported_sub_protocols, key=operator.attrgetter('version')
         )
 
+        # ETHV63Handshaker is only used for V63 as it uses a different Status command.
+        # ETHHandshaker is used for all other protocol versions above V63 that we currently
+        # support. The `highest_eth_protocol` is what the handshake will report to the other peer
+        # as our highest supported version. We need to pass this as a parameter to ensure the
+        # handshake reports the version that is configured on the ETHPeer class.
         return (
             ETHV63Handshaker(handshake_v63_params),
             ETHHandshaker(handshake_params, head.block_number, fork_blocks, highest_eth_protocol)
