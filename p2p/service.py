@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import asyncio
 import concurrent
+import contextlib
 import functools
 import time
 from typing import (
@@ -15,7 +16,6 @@ from typing import (
 from weakref import WeakSet
 
 from async_service import Service, ServiceAPI
-from async_generator import asynccontextmanager
 
 from cancel_token import CancelToken, OperationCancelled
 from eth_utils import (
@@ -423,7 +423,7 @@ class EmptyService(BaseService):
 TService = TypeVar('TService', bound=AsyncioServiceAPI)
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def run_service(service: TService) -> AsyncIterator[TService]:
     task = asyncio.ensure_future(service.run())
     await service.events.started.wait()

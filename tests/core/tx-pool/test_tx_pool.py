@@ -1,8 +1,8 @@
 import asyncio
+import contextlib
 import pytest
 import uuid
 
-from async_exit_stack import AsyncExitStack
 from async_service import background_asyncio_service
 from eth._utils.address import (
     force_bytes_to_address
@@ -74,7 +74,7 @@ async def two_connected_tx_pools(event_bus,
     bob_peer_pool = MockPeerPoolWithConnectedPeers([bob], event_bus=bob_event_bus)
     alice_peer_pool = MockPeerPoolWithConnectedPeers([alice], event_bus=alice_event_bus)
 
-    async with AsyncExitStack() as stack:
+    async with contextlib.AsyncExitStack() as stack:
         await stack.enter_async_context(run_peer_pool_event_server(
             bob_event_bus, bob_peer_pool, handler_type=ETHPeerPoolEventServer
         ))

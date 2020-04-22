@@ -6,7 +6,6 @@ import contextlib
 from typing import Iterator, Tuple, Union
 
 from async_service import background_asyncio_service, Service
-from async_exit_stack import AsyncExitStack
 
 from lahja import EndpointAPI
 
@@ -147,7 +146,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
                 )
                 services_to_exit += (http_server,)
 
-            async with AsyncExitStack() as stack:
+            async with contextlib.AsyncExitStack() as stack:
                 managers = tuple([
                     await stack.enter_async_context(background_asyncio_service(service))
                     for service in services_to_exit

@@ -1,12 +1,10 @@
 import asyncio
+import contextlib
 from enum import Enum
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
-from async_generator import (
-    asynccontextmanager,
-)
 from async_service import background_asyncio_service
 from cancel_token import OperationCancelled
 from eth_keys import keys
@@ -93,7 +91,7 @@ def load_fixture_db(db_fixture, db_class=LevelDB):
         yield db_class(Path(tmpdir) / db_fixture.value)
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def run_peer_pool_event_server(event_bus, peer_pool, handler_type=None):
 
     handler_type = DefaultPeerPoolEventServer if handler_type is None else handler_type

@@ -1,7 +1,6 @@
 import asyncio
+import contextlib
 from typing import Any, AsyncIterator, cast
-
-from async_generator import asynccontextmanager
 
 from cached_property import cached_property
 
@@ -91,7 +90,7 @@ class DisconnectIfIdle(BaseLogic):
     def __init__(self, idle_timeout: float) -> None:
         self.idle_timeout = idle_timeout
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
         service = PingAndDisconnectIfIdle(connection, self.idle_timeout)
         async with background_asyncio_service(service):

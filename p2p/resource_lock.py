@@ -1,9 +1,8 @@
 import asyncio
 from collections import defaultdict
 from collections.abc import Hashable
+import contextlib
 from typing import AsyncIterator, DefaultDict, Dict, Generic, TypeVar
-
-from async_generator import asynccontextmanager
 
 
 TResource = TypeVar('TResource', bound=Hashable)
@@ -20,7 +19,7 @@ class ResourceLock(Generic[TResource]):
         self._locks = {}
         self._reference_counts = defaultdict(int)
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def lock(self, resource: TResource) -> AsyncIterator[None]:
         if resource not in self._locks:
             self._locks[resource] = asyncio.Lock()

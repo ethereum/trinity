@@ -9,8 +9,6 @@ PYEVM_DEPENDENCY = "py-evm==0.3.0a15"
 
 deps = {
     'p2p': [
-        "async-exit-stack==1.0.1",
-        "async-generator==1.10",
         "async-service==0.1.0a8",
         "asyncio-cancel-token>=0.2,<0.3",
         "async_lru>=0.1.0,<1.0.0",
@@ -34,7 +32,6 @@ deps = {
         "bloom-filter==1.3",
         "cachetools>=3.1.0,<4.0.0",
         "coincurve>=10.0.0,<11.0.0",
-        "dataclasses>=0.6, <1;python_version<'3.7'",
         "eth-utils>=1.8.4,<2",
         # Fixing this dependency due to: requests 2.20.1 has requirement
         # idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.

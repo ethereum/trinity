@@ -1,9 +1,8 @@
+import contextlib
 import logging
 
 import trio
 import pytest_trio
-
-from async_generator import asynccontextmanager
 
 from async_service import background_trio_service
 
@@ -38,7 +37,7 @@ async def socket_pair():
     return sending_socket, receiving_socket
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def _manually_driven_discovery(seed, socket, nursery):
     _, port = socket.getsockname()
     discovery = ManuallyDrivenDiscoveryService(

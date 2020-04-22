@@ -1,11 +1,10 @@
 import asyncio
+import contextlib
 import json
 import os
 import pytest
 import time
 from typing import Dict
-
-from async_generator import asynccontextmanager
 
 from eth_hash.auto import keccak
 from eth_utils.toolz import (
@@ -158,7 +157,7 @@ def ipc_request(jsonrpc_ipc_pipe_path, event_loop, event_bus, ipc_server):
 
 @pytest.fixture
 def fake_beam_syncer(chain, event_bus):
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def fake_beam_sync(removed_nodes: Dict):
         # beam sync starts, it fetches requested nodes from remote peers
 

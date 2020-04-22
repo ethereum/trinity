@@ -29,8 +29,6 @@ from typing import (
     TypeVar,
 )
 
-from async_generator import aclosing
-
 import trio
 
 import eth_utils.toolz
@@ -82,7 +80,7 @@ from p2p.exceptions import (
 )
 from p2p.kademlia import (
     Address, Node, check_relayed_addr, create_stub_enr, sort_by_distance, KademliaRoutingTable)
-from p2p._utils import get_logger
+from p2p._utils import get_logger, aclosing
 from p2p import trio_utils
 
 # V4 handler are async methods that take a Node, payload and msg_hash as arguments.
