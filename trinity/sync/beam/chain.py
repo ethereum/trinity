@@ -6,12 +6,10 @@ from typing import (
     Tuple,
 )
 
+from async_service import Service, background_asyncio_service
+
 from lahja import EndpointAPI
 
-from cancel_token import (
-    CancelToken,
-    OperationCancelled,
-)
 from eth.abc import AtomicDatabaseAPI, DatabaseAPI
 from eth.constants import GENESIS_PARENT_HASH
 from eth.exceptions import (
@@ -28,8 +26,6 @@ from eth_utils import (
     ValidationError,
 )
 import rlp
-
-from p2p.service import BaseService
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.constants import FIRE_AND_FORGET_BROADCASTING
@@ -85,7 +81,7 @@ from .backfill import BeamStateBackfill
 STATS_DISPLAY_PERIOD = 10
 
 
-class BeamSyncer(BaseService):
+class BeamSyncer(Service):
     """
     Organizes several moving parts to coordinate beam sync. Roughly:
 
@@ -111,10 +107,8 @@ class BeamSyncer(BaseService):
             peer_pool: ETHPeerPool,
             event_bus: EndpointAPI,
             checkpoint: Checkpoint = None,
-            force_beam_block_number: BlockNumber = None,
-            token: CancelToken = None) -> None:
-        super().__init__(token=token)
-
+            force_beam_block_number: BlockNumber = None) -> None:
+        self.logger = get_logger('trinity.sync.beam.chain.BeamSyncer')
         if checkpoint is None:
             self._launch_strategy: SyncLaunchStrategyAPI = FromGenesisLaunchStrategy(
                 chain_db,
@@ -133,29 +127,25 @@ class BeamSyncer(BaseService):
             chain_db,
             peer_pool,
             self._launch_strategy,
-            self.cancel_token
         )
         self._header_persister = HeaderOnlyPersist(
             self._header_syncer,
             chain_db,
             force_beam_block_number,
             self._launch_strategy,
-            self.cancel_token,
         )
 
-        self._backfiller = BeamStateBackfill(db, peer_pool, token=self.cancel_token)
+        self._backfiller = BeamStateBackfill(db, peer_pool)
 
         self._state_downloader = BeamDownloader(
             db,
             peer_pool,
             self._backfiller,
             event_bus,
-            self.cancel_token,
         )
         self._data_hunter = MissingDataEventHandler(
             self._state_downloader,
             event_bus,
-            token=self.cancel_token,
         )
 
         self._block_importer = BeamBlockImporter(
@@ -164,7 +154,6 @@ class BeamSyncer(BaseService):
             self._state_downloader,
             self._backfiller,
             event_bus,
-            self.cancel_token,
         )
         self._checkpoint_header_syncer = HeaderCheckpointSyncer(self._header_syncer)
         self._body_syncer = RegularChainBodySyncer(
@@ -173,7 +162,6 @@ class BeamSyncer(BaseService):
             peer_pool,
             self._checkpoint_header_syncer,
             self._block_importer,
-            self.cancel_token,
         )
 
         self._manual_header_syncer = ManualHeaderSyncer()
@@ -182,35 +170,37 @@ class BeamSyncer(BaseService):
             chain_db,
             peer_pool,
             self._manual_header_syncer,
-            self.cancel_token,
         )
 
         self._chain = chain
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
 
         try:
-            await self.wait(self._launch_strategy.fulfill_prerequisites())
+            await self._launch_strategy.fulfill_prerequisites()
         except asyncio.TimeoutError as exc:
             self.logger.exception(
                 "Timed out while trying to fulfill prerequisites of "
                 f"sync launch strategy: {exc} from {self._launch_strategy}"
             )
-            self.cancel_nowait()
+            self.manager.cancel()
+            return
 
-        self.run_daemon(self._header_syncer)
+        self.manager.run_daemon_child_service(self._block_importer)
+        self.manager.run_daemon_child_service(self._header_syncer)
 
         # Kick off the body syncer early (it hangs on the checkpoint header syncer anyway)
         # It needs to start early because we want to "re-run" the header at the tip,
         # which it gets grumpy about. (it doesn't want to receive the canonical header tip
         # as a header to process)
-        self.run_daemon(self._body_syncer)
+        self.manager.run_daemon_child_service(self._body_syncer)
 
         # Launch the state syncer endpoint early
-        self.run_daemon(self._data_hunter)
+        self.manager.run_daemon_child_service(self._data_hunter)
 
         # Only persist headers at start
-        await self.wait(self._header_persister.run())
+        async with background_asyncio_service(self._header_persister) as manager:
+            await manager.wait_finished()
         # When header store exits, we have caught up
 
         # We want to trigger beam sync on the last block received,
@@ -218,7 +208,7 @@ class BeamSyncer(BaseService):
         final_headers = self._header_persister.get_final_headers()
 
         # First, download block bodies for previous 6 blocks, for validation
-        await self.wait(self._download_blocks(final_headers[0]))
+        await self._download_blocks(final_headers[0])
 
         # Now, tell the MissingDataEventHandler about the minimum acceptable block number for
         # data requests. This helps during pivots to quickly reject requests from old block imports
@@ -231,13 +221,13 @@ class BeamSyncer(BaseService):
 
         # TODO wait until first header with a body comes in?...
         # Start state downloader service
-        self.run_daemon(self._state_downloader)
+        self.manager.run_daemon_child_service(self._state_downloader)
 
         # Start state background service
-        self.run_daemon(self._backfiller)
+        self.manager.run_daemon_child_service(self._backfiller)
 
         # run sync until cancelled
-        await self.cancellation()
+        await self.manager.wait_finished()
 
     def get_block_count_lag(self) -> int:
         """
@@ -289,7 +279,8 @@ class BeamSyncer(BaseService):
 
             # run the fast syncer (which downloads block bodies and then exits)
             self.logger.info("Getting recent block data for uncle validation")
-            await self._fast_syncer.run()
+            async with background_asyncio_service(self._fast_syncer) as manager:
+                await manager.wait_finished()
 
         # When this completes, we have all the uncles needed to validate
         self.logger.info("Have all data needed for Beam validation, continuing...")
@@ -402,7 +393,7 @@ class HeaderCheckpointSyncer(HeaderSyncerAPI):
         return self._real_syncer.get_target_header_hash()
 
 
-class HeaderOnlyPersist(BaseService):
+class HeaderOnlyPersist(Service):
     """
     Store all headers returned by the header syncer, until the target is reached, then exit.
     """
@@ -410,19 +401,18 @@ class HeaderOnlyPersist(BaseService):
                  header_syncer: ETHHeaderChainSyncer,
                  db: BaseAsyncHeaderDB,
                  force_end_block_number: int = None,
-                 launch_strategy: SyncLaunchStrategyAPI = None,
-                 token: CancelToken = None) -> None:
-        super().__init__(token=token)
+                 launch_strategy: SyncLaunchStrategyAPI = None) -> None:
+        self.logger = get_logger('trinity.sync.beam.chain.HeaderOnlyPersist')
         self._db = db
         self._header_syncer = header_syncer
         self._final_headers: Tuple[BlockHeader, ...] = None
         self._force_end_block_number = force_end_block_number
         self._launch_strategy = launch_strategy
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self._persist_headers_if_tip_too_old())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self._persist_headers_if_tip_too_old)
         # run sync until cancelled
-        await self.cancellation()
+        await self.manager.wait_finished()
 
     def _is_header_eligible_to_beam_sync(self, header: BlockHeader) -> bool:
         time_gap = time.time() - header.timestamp
@@ -436,7 +426,7 @@ class HeaderOnlyPersist(BaseService):
         else:
             self.logger.warning("Tip %s is too far behind to Beam Sync, skipping ahead...", tip)
 
-        await self.wait(self._persist_headers())
+        await self._persist_headers()
 
     async def _persist_headers(self) -> None:
         async for headers in self._header_syncer.new_sync_headers(HEADER_QUEUE_SIZE_TARGET):
@@ -449,11 +439,9 @@ class HeaderOnlyPersist(BaseService):
             if exited:
                 break
 
-            new_canon_headers, old_canon_headers = await self.wait(
-                self._db.coro_persist_header_chain(headers)
-            )
+            new_canon_headers, old_canon_headers = await self._db.coro_persist_header_chain(headers)
 
-            head = await self.wait(self._db.coro_get_canonical_head())
+            head = await self._db.coro_get_canonical_head()
 
             self.logger.info(
                 "Imported %d headers in %0.2f seconds, new head: %s",
@@ -518,9 +506,8 @@ class HeaderOnlyPersist(BaseService):
                 # We have not reached the header syncer's target, continue normally
                 return False
 
-        new_canon_headers, old_canon_headers = await self.wait(
-            self._db.coro_persist_header_chain(persist_headers)
-        )
+        new_canon_headers, old_canon_headers = await self._db.coro_persist_header_chain(
+            persist_headers)
 
         if persist_headers:
             self.logger.debug(
@@ -537,7 +524,7 @@ class HeaderOnlyPersist(BaseService):
             self.logger.debug("Final header import before checkpoint: None")
 
         self._final_headers = final_headers
-        await self.cancel()
+        self.manager.cancel()
 
         return True
 
@@ -553,7 +540,7 @@ class HeaderOnlyPersist(BaseService):
             return self._final_headers
 
 
-class BeamBlockImporter(BaseBlockImporter, BaseService):
+class BeamBlockImporter(BaseBlockImporter, Service):
     """
     Block Importer that emits DoStatelessBlockImport and waits on the event bus for a
     StatelessBlockImportDone to show that the import is complete.
@@ -567,10 +554,8 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
             db: DatabaseAPI,
             state_getter: BeamDownloader,
             backfiller: BeamStateBackfill,
-            event_bus: EndpointAPI,
-            token: CancelToken = None) -> None:
-        super().__init__(token=token)
-
+            event_bus: EndpointAPI) -> None:
+        self.logger = get_logger('trinity.sync.beam.chain.BeamBlockImporter')
         self._chain = chain
         self._db = db
         self._state_downloader = state_getter
@@ -620,7 +605,7 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
             parent_state_root: Hash32,
             lagging: bool = True) -> None:
 
-        self.run_task(self._preview_address_load(header, parent_state_root, transactions))
+        self.manager.run_task(self._preview_address_load, header, parent_state_root, transactions)
 
         # This is a hack, so that preview executions can load ancestor block-hashes
         self._db[header.hash] = rlp.encode(header)
@@ -662,12 +647,12 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
         """
 
         address_timer = Timer()
-        num_accounts, new_account_nodes = await self.wait(self._request_address_nodes(
+        num_accounts, new_account_nodes = await self._request_address_nodes(
             header,
             parent_state_root,
             transactions,
             urgent,
-        ))
+        )
         collection_time = address_timer.elapsed
 
         self.logger.debug(
@@ -723,22 +708,18 @@ class BeamBlockImporter(BaseBlockImporter, BaseService):
         )
         return len(addresses), collected_nodes
 
-    async def _run(self) -> None:
-        await self.cancellation()
+    async def run(self) -> None:
+        await self.manager.wait_finished()
 
 
-class MissingDataEventHandler(BaseService):
+class MissingDataEventHandler(Service):
     """
     Listen to event bus requests for missing account, storage and bytecode.
     Request the data on demand, and reply when it is available.
     """
 
-    def __init__(
-            self,
-            state_downloader: BeamDownloader,
-            event_bus: EndpointAPI,
-            token: CancelToken = None) -> None:
-        super().__init__(token=token)
+    def __init__(self, state_downloader: BeamDownloader, event_bus: EndpointAPI) -> None:
+        self.logger = get_logger('trinity.sync.beam.chain.MissingDataEventHandler')
         self._state_downloader = state_downloader
         self._event_bus = event_bus
         self._minimum_beam_block_number = 0
@@ -761,20 +742,20 @@ class MissingDataEventHandler(BaseService):
         else:
             self._minimum_beam_block_number = new_minimum
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         await self._launch_server()
-        await self.cancellation()
+        await self.manager.wait_finished()
 
     async def _launch_server(self) -> None:
-        self.run_daemon_task(self._provide_missing_account_tries())
-        self.run_daemon_task(self._provide_missing_bytecode())
-        self.run_daemon_task(self._provide_missing_storage())
+        self.manager.run_daemon_task(self._provide_missing_account_tries)
+        self.manager.run_daemon_task(self._provide_missing_bytecode)
+        self.manager.run_daemon_task(self._provide_missing_storage)
 
     async def _provide_missing_account_tries(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(CollectMissingAccount)):
+        async for event in self._event_bus.stream(CollectMissingAccount):
             # If a request is coming in from an import on a block that's too old, cancel it
             if event.block_number >= self.minimum_beam_block_number:
-                self.run_task(self._hang_until_account_served(event))
+                self.manager.run_task(self._hang_until_account_served, event)
             else:
                 await self._event_bus.broadcast(
                     MissingAccountResult(is_retry_acceptable=False),
@@ -782,9 +763,9 @@ class MissingDataEventHandler(BaseService):
                 )
 
     async def _provide_missing_bytecode(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(CollectMissingBytecode)):
+        async for event in self._event_bus.stream(CollectMissingBytecode):
             if event.block_number >= self.minimum_beam_block_number:
-                self.run_task(self._hang_until_bytecode_served(event))
+                self.manager.run_task(self._hang_until_bytecode_served, event)
             else:
                 await self._event_bus.broadcast(
                     MissingBytecodeResult(is_retry_acceptable=False),
@@ -792,9 +773,9 @@ class MissingDataEventHandler(BaseService):
                 )
 
     async def _provide_missing_storage(self) -> None:
-        async for event in self.wait_iter(self._event_bus.stream(CollectMissingStorage)):
+        async for event in self._event_bus.stream(CollectMissingStorage):
             if event.block_number >= self.minimum_beam_block_number:
-                self.run_task(self._hang_until_storage_served(event))
+                self.manager.run_task(self._hang_until_storage_served, event)
             else:
                 await self._event_bus.broadcast(
                     MissingStorageResult(is_retry_acceptable=False),
@@ -803,8 +784,8 @@ class MissingDataEventHandler(BaseService):
 
     async def _hang_until_account_served(self, event: CollectMissingAccount) -> None:
         try:
-            await self.wait(self._serve_account(event))
-        except OperationCancelled:
+            await self._serve_account(event)
+        except asyncio.CancelledError:
             # Beam sync is shutting down, probably either because the node is closing, or
             #   a pivot is required. So communicate that import should stop.
             await self._event_bus.broadcast(
@@ -815,8 +796,8 @@ class MissingDataEventHandler(BaseService):
 
     async def _hang_until_bytecode_served(self, event: CollectMissingBytecode) -> None:
         try:
-            await self.wait(self._serve_bytecode(event))
-        except OperationCancelled:
+            await self._serve_bytecode(event)
+        except asyncio.CancelledError:
             await self._event_bus.broadcast(
                 MissingBytecodeResult(is_retry_acceptable=False),
                 event.broadcast_config(),
@@ -825,8 +806,8 @@ class MissingDataEventHandler(BaseService):
 
     async def _hang_until_storage_served(self, event: CollectMissingStorage) -> None:
         try:
-            await self.wait(self._serve_storage(event))
-        except OperationCancelled:
+            await self._serve_storage(event)
+        except asyncio.CancelledError:
             await self._event_bus.broadcast(
                 MissingStorageResult(is_retry_acceptable=False),
                 event.broadcast_config(),

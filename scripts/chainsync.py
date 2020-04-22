@@ -13,6 +13,8 @@ from typing import (
     Union,
 )
 
+from async_service import Service, background_asyncio_service
+
 from eth_typing import BlockNumber
 
 from eth.chains.ropsten import RopstenChain, ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
@@ -24,7 +26,6 @@ from eth.exceptions import HeaderNotFound
 from p2p import ecies
 from p2p.constants import DEVP2P_V5
 from p2p.kademlia import Node
-from p2p.service import BaseService
 
 from trinity.constants import DEFAULT_PREFERRED_NODES
 from trinity.db.eth1.chain import AsyncChainDB
@@ -42,7 +43,7 @@ from trinity._utils.version import construct_trinity_client_identifier
 from tests.core.integration_test_helpers import connect_to_peers_loop
 
 
-def _test() -> None:
+async def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('-db', type=str, required=True)
     parser.add_argument('-light', action="store_true")
@@ -105,47 +106,31 @@ def _test() -> None:
     else:
         nodes = DEFAULT_PREFERRED_NODES[chain_id]
 
-    asyncio.ensure_future(peer_pool.run())
-    peer_pool.manager.run_task(connect_to_peers_loop(peer_pool, nodes))
-    chain = chain_class(base_db)
-    syncer: BaseService = None
-    if args.light:
-        syncer = LightChainSyncer(chain, headerdb, cast(LESPeerPool, peer_pool))
-    else:
-        syncer = RegularChainSyncer(chain, chaindb, cast(ETHPeerPool, peer_pool))
-    syncer.logger.setLevel(log_level)
+    async with background_asyncio_service(peer_pool) as manager:
+        manager.run_task(connect_to_peers_loop(peer_pool, nodes))  # type: ignore
+        chain = chain_class(base_db)
+        syncer: Service = None
+        if args.light:
+            syncer = LightChainSyncer(chain, headerdb, cast(LESPeerPool, peer_pool))
+        else:
+            syncer = RegularChainSyncer(chain, chaindb, cast(ETHPeerPool, peer_pool))
+        logging.getLogger().setLevel(log_level)
 
-    sigint_received = asyncio.Event()
-    for sig in [signal.SIGINT, signal.SIGTERM]:
-        loop.add_signal_handler(sig, sigint_received.set)
+        sigint_received = asyncio.Event()
+        for sig in [signal.SIGINT, signal.SIGTERM]:
+            loop.add_signal_handler(sig, sigint_received.set)
 
-    async def exit_on_sigint() -> None:
-        await sigint_received.wait()
-        await peer_pool.manager.stop()
-        await syncer.cancel()
-        loop.stop()
+        async def exit_on_sigint() -> None:
+            await sigint_received.wait()
+            syncer.get_manager().cancel()
 
-    async def run() -> None:
-        await syncer.run()
-        syncer.logger.info("run() finished, exiting")
-        sigint_received.set()
+        asyncio.ensure_future(exit_on_sigint())
 
-    # loop.set_debug(True)
-    asyncio.ensure_future(exit_on_sigint())
-    asyncio.ensure_future(run())
-    loop.run_forever()
-    loop.close()
-
-
-def _run_test(profile: bool) -> None:
-    import cProfile, pstats  # noqa
-
-    if profile:
-        cProfile.run('_test()', 'stats')
-        pstats.Stats('stats').strip_dirs().sort_stats('cumulative').print_stats(50)
-    else:
-        _test()
+        async with background_asyncio_service(syncer) as syncer_manager:
+            await syncer_manager.wait_finished()
 
 
 if __name__ == "__main__":
-    _run_test(profile=False)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_main())
+    loop.close()

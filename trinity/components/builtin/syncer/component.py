@@ -195,10 +195,10 @@ class BeamSyncStrategy(BaseSyncStrategy):
             event_bus,
             args.beam_from_checkpoint,
             args.force_beam_block_number,
-            cancel_token,
         )
 
-        await syncer.run()
+        async with background_asyncio_service(syncer) as manager:
+            await manager.wait_finished()
 
 
 class LightSyncStrategy(BaseSyncStrategy):
@@ -220,10 +220,10 @@ class LightSyncStrategy(BaseSyncStrategy):
             chain,
             AsyncHeaderDB(base_db),
             cast(LESPeerPool, peer_pool),
-            cancel_token,
         )
 
-        await syncer.run()
+        async with background_asyncio_service(syncer) as manager:
+            await manager.wait_finished()
 
 
 class SyncerComponent(AsyncioIsolatedComponent):

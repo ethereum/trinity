@@ -8,18 +8,20 @@ from typing import (
     Tuple,
 )
 
-from cancel_token import CancelToken, OperationCancelled
+from async_service import Service
+
+from cancel_token import OperationCancelled
 from eth.abc import AtomicDatabaseAPI
 from eth_typing import Hash32
 import rlp
 
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
-from p2p.service import BaseService
 
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import (
     GAP_BETWEEN_TESTS,
 )
+from trinity._utils.logging import get_logger
 
 from .queen import (
     QueeningQueue,
@@ -29,7 +31,7 @@ from .queen import (
 REQUEST_SIZE = 16
 
 
-class BeamStateBackfill(BaseService, QueenTrackerAPI):
+class BeamStateBackfill(Service, QueenTrackerAPI):
     """
     Use a very simple strategy to fill in state in the background.
 
@@ -47,15 +49,8 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
 
     _num_requests_by_peer: typing.Counter[ETHPeer]
 
-    def __init__(
-            self,
-            db: AtomicDatabaseAPI,
-            peer_pool: ETHPeerPool,
-            token: CancelToken) -> None:
-
-        # Init the superclass
-        super().__init__(token=token)
-
+    def __init__(self, db: AtomicDatabaseAPI, peer_pool: ETHPeerPool) -> None:
+        self.logger = get_logger('trinity.sync.beam.backfill.BeamStateBackfill')
         self._db = db
 
         # Pending nodes to download
@@ -67,7 +62,7 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
 
         self._num_requests_by_peer = Counter()
 
-        self._queening_queue = QueeningQueue(peer_pool, token=token)
+        self._queening_queue = QueeningQueue(peer_pool)
 
     async def get_queen_peer(self) -> ETHPeer:
         return await self._queening_queue.get_queen_peer()
@@ -75,15 +70,15 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
     def penalize_queen(self, peer: ETHPeer) -> None:
         self._queening_queue.penalize_queen(peer)
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self._periodically_report_progress())
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self._periodically_report_progress)
 
-        self.run_daemon(self._queening_queue)
-
-        await self.wait(self._run_backfill())
+        queening_manager = self.manager.run_daemon_child_service(self._queening_queue)
+        await queening_manager.wait_started()
+        await self._run_backfill()
 
     async def _run_backfill(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             peer = await self._queening_queue.pop_fastest_peasant()
 
             # collect node hashes that might be missing
@@ -98,10 +93,10 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
                 # Nothing left to request, break and wait for new data to come in
                 self._queening_queue.readd_peasant(peer)
                 self.logger.debug("Backfill is waiting for more hashes to arrive")
-                await self.sleep(2)
+                await asyncio.sleep(2)
                 continue
 
-            self.run_task(self._make_request(peer, on_deck))
+            self.manager.run_task(self._make_request, peer, on_deck)
 
     async def _make_request(self, peer: ETHPeer, request_hashes: Tuple[Hash32, ...]) -> None:
         self._num_requests_by_peer[peer] += 1
@@ -167,7 +162,7 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
                 except KeyError:
                     self._is_missing.add(node_hash)
                     # release the event loop, because doing a bunch of db reads is slow
-                    await self.sleep(0)
+                    await asyncio.sleep(0)
                     continue
                 else:
                     # found a node to expand out
@@ -184,7 +179,7 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
             self._node_hashes.extend(self._get_children(encoded_node))
 
             # Release the event loop, because this could be long
-            await self.sleep(0)
+            await asyncio.sleep(0)
 
             # Continue until the pending stack is big enough
 
@@ -210,8 +205,8 @@ class BeamStateBackfill(BaseService, QueenTrackerAPI):
             self._node_hashes.append(root_hash)
 
     async def _periodically_report_progress(self) -> None:
-        while self.is_operational:
-            await self.sleep(self._report_interval)
+        while self.manager.is_running:
+            await asyncio.sleep(self._report_interval)
 
             if len(self._node_hashes) == 0:
                 self.logger.debug("Beam-Backfill: waiting for new state root")

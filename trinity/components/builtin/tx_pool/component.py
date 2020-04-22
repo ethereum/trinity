@@ -91,8 +91,7 @@ class TxComponent(AsyncioIsolatedComponent):
                 raise Exception("This code path should not be reachable")
 
             proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-
-            tx_pool = TxPool(event_bus, proxy_peer_pool, validator)
-
-            async with background_asyncio_service(tx_pool) as manager:
-                await manager.wait_finished()
+            async with background_asyncio_service(proxy_peer_pool):
+                tx_pool = TxPool(event_bus, proxy_peer_pool, validator)
+                async with background_asyncio_service(tx_pool) as manager:
+                    await manager.wait_finished()

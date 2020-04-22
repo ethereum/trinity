@@ -2,14 +2,13 @@ import asyncio
 import logging
 import uuid
 
-from async_service import background_asyncio_service
+from async_service import Service, background_asyncio_service
 from eth.consensus import ConsensusContext
 from eth.db.atomic import AtomicDB
 from eth.exceptions import HeaderNotFound
 from eth.vm.forks.petersburg import PetersburgVM
 from eth_utils import decode_hex
 from lahja import ConnectionConfig, AsyncioEndpoint
-from p2p.service import BaseService
 import pytest
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
@@ -93,7 +92,8 @@ async def test_skeleton_syncer(request, event_loop, event_bus, chaindb_fresh, ch
             client_peer.logger.info("%s is serving 1000 blocks", client_peer)
             server_peer.logger.info("%s is syncing up 1000 blocks", server_peer)
 
-            await asyncio.wait_for(client.run(), timeout=20)
+            async with background_asyncio_service(client) as manager:
+                await asyncio.wait_for(manager.wait_finished(), timeout=20)
 
             head = chaindb_fresh.get_canonical_head()
             assert head == chaindb_1000.get_canonical_head()
@@ -232,23 +232,18 @@ async def test_beam_syncer(
             )
             async with background_asyncio_service(import_server):
                 await pausing_endpoint.connect_to_endpoints(gatherer_config)
-                asyncio.ensure_future(client.run())
-
-                # We can sync at least 10 blocks in 1s at current speeds, (or
-                # reach the current one) Trying to keep the tests short-ish. A
-                # fuller test could always set the target header to the
-                # chaindb_churner canonical head, and increase the timeout
-                # significantly
-                target_block_number = min(beam_to_block + 10, 129)
-                target_head = chaindb_churner.get_canonical_block_header_by_number(
-                    target_block_number,
-                )
-                await wait_for_head(chaindb_fresh, target_head, sync_timeout=10)
-                assert target_head.state_root in chaindb_fresh.db
-
-            # The import server stops when the context block above exits
-            # ensureing that it doesn't hang waiting for state data
-            await client.cancel()
+                async with background_asyncio_service(client):
+                    # We can sync at least 10 blocks in 1s at current speeds, (or
+                    # reach the current one) Trying to keep the tests short-ish. A
+                    # fuller test could always set the target header to the
+                    # chaindb_churner canonical head, and increase the timeout
+                    # significantly
+                    target_block_number = min(beam_to_block + 10, 129)
+                    target_head = chaindb_churner.get_canonical_block_header_by_number(
+                        target_block_number,
+                    )
+                    await wait_for_head(chaindb_fresh, target_head, sync_timeout=10)
+                    assert target_head.state_root in chaindb_fresh.db
 
 
 @pytest.mark.asyncio
@@ -279,21 +274,13 @@ async def test_regular_syncer(request, event_loop, event_bus, chaindb_fresh, cha
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
             client_peer.logger.info("%s is syncing up 20", client_peer)
 
-            def finalizer():
-                event_loop.run_until_complete(client.cancel())
-                # Yield control so that client/server.run() returns, otherwise
-                # asyncio will complain.
-                event_loop.run_until_complete(asyncio.sleep(0.1))
-            request.addfinalizer(finalizer)
-
-            asyncio.ensure_future(client.run())
-
-            await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
-            head = chaindb_fresh.get_canonical_head()
-            assert head.state_root in chaindb_fresh.db
+            async with background_asyncio_service(client):
+                await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
+                head = chaindb_fresh.get_canonical_head()
+                assert head.state_root in chaindb_fresh.db
 
 
-class FallbackTesting_RegularChainSyncer(BaseService):
+class FallbackTesting_RegularChainSyncer(Service):
     class HeaderSyncer_OnlyOne:
         def __init__(self, real_syncer):
             self._real_syncer = real_syncer
@@ -301,8 +288,8 @@ class FallbackTesting_RegularChainSyncer(BaseService):
         async def new_sync_headers(self, max_batch_size):
             async for headers in self._real_syncer.new_sync_headers(1):
                 yield headers
-                await self._real_syncer.sleep(1)
-                raise Exception("This should always get cancelled quickly, say within 1s")
+                await asyncio.sleep(2)
+                raise Exception("This should always get cancelled quickly, say within 2s")
 
     class HeaderSyncer_PauseThenRest:
         def __init__(self, real_syncer):
@@ -322,10 +309,9 @@ class FallbackTesting_RegularChainSyncer(BaseService):
         async def until_headers_requested(self):
             await self._headers_requested.wait()
 
-    def __init__(self, chain, db, peer_pool, token=None) -> None:
-        super().__init__(token=token)
+    def __init__(self, chain, db, peer_pool) -> None:
         self._chain = chain
-        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool, token=self.cancel_token)
+        self._header_syncer = ETHHeaderChainSyncer(chain, db, peer_pool)
         self._single_header_syncer = self.HeaderSyncer_OnlyOne(self._header_syncer)
         self._paused_header_syncer = self.HeaderSyncer_PauseThenRest(self._header_syncer)
         self._draining_syncer = RegularChainBodySyncer(
@@ -334,7 +320,6 @@ class FallbackTesting_RegularChainSyncer(BaseService):
             peer_pool,
             self._single_header_syncer,
             SimpleBlockImporter(chain),
-            self.cancel_token,
         )
         self._body_syncer = RegularChainBodySyncer(
             chain,
@@ -342,32 +327,29 @@ class FallbackTesting_RegularChainSyncer(BaseService):
             peer_pool,
             self._paused_header_syncer,
             SimpleBlockImporter(chain),
-            self.cancel_token,
         )
 
-    async def _run(self) -> None:
-        self.run_daemon(self._header_syncer)
+    async def run(self) -> None:
+        self.manager.run_daemon_child_service(self._header_syncer)
         starting_header = await self._chain.coro_get_canonical_head()
 
         # want body_syncer to start early so that it thinks the genesis is the canonical head
-        self.run_child_service(self._body_syncer)
+        self.manager.run_child_service(self._body_syncer)
         await self._paused_header_syncer.until_headers_requested()
 
         # now drain out the first header and save it to db
-        self.run_child_service(self._draining_syncer)
-
-        # wait until first syncer saves to db, then cancel it
-        latest_header = starting_header
-        while starting_header == latest_header:
-            latest_header = await self._chain.coro_get_canonical_head()
-            await self.sleep(0.03)
-        await self._draining_syncer.cancel()
+        async with background_asyncio_service(self._draining_syncer):
+            # Run until first header is saved to db, then exit
+            latest_header = starting_header
+            while starting_header == latest_header:
+                await asyncio.sleep(0.03)
+                latest_header = await self._chain.coro_get_canonical_head()
 
         # now permit the next syncer to begin
         self._paused_header_syncer.unpause()
 
         # run regular sync until cancelled
-        await self.events.cancelled.wait()
+        await self.manager.wait_finished()
 
 
 @pytest.mark.asyncio
@@ -401,18 +383,10 @@ async def test_regular_syncer_fallback(request, event_loop, event_bus, chaindb_f
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
             client_peer.logger.info("%s is syncing up 20", client_peer)
 
-            def finalizer():
-                event_loop.run_until_complete(client.cancel())
-                # Yield control so that client/server.run() returns, otherwise
-                # asyncio will complain.
-                event_loop.run_until_complete(asyncio.sleep(0.1))
-            request.addfinalizer(finalizer)
-
-            asyncio.ensure_future(client.run())
-
-            await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
-            head = chaindb_fresh.get_canonical_head()
-            assert head.state_root in chaindb_fresh.db
+            async with background_asyncio_service(client):
+                await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
+                head = chaindb_fresh.get_canonical_head()
+                assert head.state_root in chaindb_fresh.db
 
 
 @pytest.mark.asyncio
@@ -446,16 +420,8 @@ async def test_light_syncer(request,
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
             client_peer.logger.info("%s is syncing up 20", client_peer)
 
-            def finalizer():
-                event_loop.run_until_complete(client.cancel())
-                # Yield control so that client/server.run() returns, otherwise
-                # asyncio will complain.
-                event_loop.run_until_complete(asyncio.sleep(0.1))
-            request.addfinalizer(finalizer)
-
-            asyncio.ensure_future(client.run())
-
-            await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
+            async with background_asyncio_service(client):
+                await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
 
 
 @pytest.fixture

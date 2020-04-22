@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -69,11 +70,18 @@ from trinity._utils.filesystem import (
 def pytest_addoption(parser):
     parser.addoption("--enode", type=str, required=False)
     parser.addoption("--integration", action="store_true", default=False)
+    parser.addoption("--silence_async_service", action="store_true", default=False)
     parser.addoption("--fork", type=str, required=False)
 
 
 class TestAsyncChain(Chain, AsyncChainMixin):
     pass
+
+
+@pytest.fixture(scope='session', autouse=True)
+def silence_loggers(request):
+    if request.config.getoption("--silence_async_service"):
+        logging.getLogger("async_service").setLevel(logging.INFO)
 
 
 @pytest.fixture(autouse=True)

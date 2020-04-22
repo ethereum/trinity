@@ -1,6 +1,5 @@
 from abc import abstractmethod
 import asyncio
-import logging
 from typing import (
     Any,
     AsyncIterator,
@@ -26,64 +25,13 @@ from lahja import (
 )
 
 from p2p.abc import CommandAPI, SessionAPI
-from p2p.peer import (
-    BasePeer,
-    PeerSubscriber,
-)
 
 from trinity._utils.headers import sequence_builder
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.protocol.common.peer import BasePeerPool
 from trinity.protocol.common.payloads import BlockHeadersQuery
 from trinity._utils.logging import get_logger
 
 from .events import PeerPoolMessageEvent
-
-
-class BaseRequestServer(Service, PeerSubscriber):
-    """
-    Monitor commands from peers, to identify inbound requests that should receive a response.
-    Handle those inbound requests by querying our local database and replying.
-    """
-    # This is a rather arbitrary value, but when the sync is operating normally we never see
-    # the msg queue grow past a few hundred items, so this should be a reasonable limit for
-    # now.
-    msg_queue_maxsize = 2000
-
-    logger = logging.getLogger('trinity.protocol.common.RequestServer')
-
-    def __init__(self, peer_pool: BasePeerPool) -> None:
-        self._peer_pool = peer_pool
-
-    async def _run(self) -> None:
-        self.manager.run_daemon_task(self._handle_msg_loop)
-        with self.subscribe(self._peer_pool):
-            await self.manager.wait_finished()
-
-    async def _handle_msg_loop(self) -> None:
-        while self.manager.is_running:
-            peer, cmd = await self.msg_queue.get()
-            self.manager.run_task(self._quiet_handle_msg, peer, cmd)
-
-    async def _quiet_handle_msg(
-            self,
-            peer: BasePeer,
-            cmd: CommandAPI[Any]) -> None:
-        try:
-            await self._handle_msg(peer, cmd)
-        except asyncio.CancelledError:
-            # catch and re-raise to avoid reporting via the except below and
-            # treated as unexpected.
-            raise
-        except Exception:
-            self.logger.exception("Unexpected error when processing msg from %s", peer)
-
-    @abstractmethod
-    async def _handle_msg(self, peer: BasePeer, cmd: CommandAPI[Any]) -> None:
-        """
-        Identify the command, and react appropriately.
-        """
-        ...
 
 
 class BaseIsolatedRequestServer(Service):

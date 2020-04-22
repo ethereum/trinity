@@ -1,11 +1,11 @@
+import asyncio
+
+from async_service import Service
 from lahja import EndpointAPI
-from cancel_token import CancelToken
 
 from eth_typing import BlockNumber
 
 from eth.abc import AtomicDatabaseAPI
-
-from p2p.service import BaseService
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.chain import BaseAsyncChainDB
@@ -15,11 +15,12 @@ from trinity.sync.beam.constants import (
     PREDICTED_BLOCK_TIME,
 )
 from trinity.sync.common.checkpoint import Checkpoint
+from trinity._utils.logging import get_logger
 
 from .chain import BeamSyncer
 
 
-class BeamSyncService(BaseService):
+class BeamSyncService(Service):
 
     def __init__(
             self,
@@ -29,9 +30,8 @@ class BeamSyncService(BaseService):
             peer_pool: ETHPeerPool,
             event_bus: EndpointAPI,
             checkpoint: Checkpoint = None,
-            force_beam_block_number: BlockNumber = None,
-            token: CancelToken = None) -> None:
-        super().__init__(token)
+            force_beam_block_number: BlockNumber = None) -> None:
+        self.logger = get_logger('trinity.sync.beam.service.BeamSyncService')
         self.chain = chain
         self.chaindb = chaindb
         self.base_db = base_db
@@ -40,8 +40,8 @@ class BeamSyncService(BaseService):
         self.checkpoint = checkpoint
         self.force_beam_block_number = force_beam_block_number
 
-    async def _run(self) -> None:
-        head = await self.wait(self.chaindb.coro_get_canonical_head())
+    async def run(self) -> None:
+        head = await self.chaindb.coro_get_canonical_head()
 
         if self.checkpoint is not None:
             self.logger.info(
@@ -55,7 +55,7 @@ class BeamSyncService(BaseService):
         await self._pivot_loop()
 
     async def _pivot_loop(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             beam_syncer = BeamSyncer(
                 self.chain,
                 self.base_db,
@@ -64,9 +64,8 @@ class BeamSyncService(BaseService):
                 self.event_bus,
                 self.checkpoint,
                 self.force_beam_block_number,
-                token=self.cancel_token,
             )
-            self.run_child_service(beam_syncer)
+            self.manager.run_child_service(beam_syncer)
             do_pivot = await self._monitor_for_pivot(beam_syncer)
             if do_pivot:
                 self.logger.info("Pivoting Beam Sync to a newer header...")
@@ -78,9 +77,9 @@ class BeamSyncService(BaseService):
         """
         :return: True if Beam Sync should be restarted on exit
         """
-        while self.is_operational:
-            await self.sleep(PREDICTED_BLOCK_TIME)
-            if not beam_syncer.is_operational:
+        while self.manager.is_running:
+            await asyncio.sleep(PREDICTED_BLOCK_TIME)
+            if not beam_syncer.get_manager().is_running:
                 # If the syncer exits normally, do not pivot
                 return False
             else:
@@ -90,7 +89,7 @@ class BeamSyncService(BaseService):
                         "Beam Sync is lagging by %d blocks. Pivoting...",
                         lag,
                     )
-                    beam_syncer.cancel_nowait()
+                    beam_syncer.get_manager().cancel()
                     return True
                 else:
                     if lag >= ESTIMATED_BEAMABLE_BLOCKS * 0.8:
