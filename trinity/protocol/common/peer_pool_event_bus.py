@@ -16,7 +16,6 @@ from typing import (
 )
 
 from async_service import Service
-from cancel_token import CancelToken
 
 from lahja import (
     BaseEvent,
@@ -32,7 +31,6 @@ from p2p.peer import (
     PeerSubscriber,
 )
 from p2p.peer_pool import BasePeerPool
-from p2p.service import BaseService
 
 from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity._utils.logging import get_logger
@@ -272,18 +270,15 @@ class DefaultPeerPoolEventServer(PeerPoolEventServer[BasePeer]):
 TProxyPeer = TypeVar('TProxyPeer', bound=BaseProxyPeer)
 
 
-class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
+class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
     """
     Base class for peer pools that can be used from any process instead of the actual peer pool
     that runs in another process. Eventually, every process that needs to interact with the peer
     pool should be able to use a proxy peer pool for all peer pool interactions.
     """
 
-    def __init__(self,
-                 event_bus: EndpointAPI,
-                 broadcast_config: BroadcastConfig,
-                 token: CancelToken = None):
-        super().__init__(token)
+    def __init__(self, event_bus: EndpointAPI, broadcast_config: BroadcastConfig) -> None:
+        self.logger = get_logger('trinity.protocol.common.BaseProxyPeerPool')
         self.event_bus = event_bus
         self.broadcast_config = broadcast_config
         self.connected_peers: Dict[SessionAPI, TProxyPeer] = dict()
@@ -292,34 +287,32 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
         for proxy_peer in await self.get_peers():
             yield proxy_peer
 
-        async for new_proxy_peer in self.wait_iter(self.stream_peers_joining()):
-            yield new_proxy_peer
+        async for proxy_peer in self.stream_peers_joining():
+            yield proxy_peer
 
     # TODO: PeerJoinedEvent/PeerLeftEvent should probably include a session id
     async def stream_peers_joining(self) -> AsyncIterator[TProxyPeer]:
-        async for ev in self.wait_iter(self.event_bus.stream(PeerJoinedEvent)):
+        async for ev in self.event_bus.stream(PeerJoinedEvent):
             yield await self.ensure_proxy_peer(ev.session)
 
     async def handle_joining_peers(self) -> None:
-        async for peer in self.wait_iter(self.stream_peers_joining()):
+        async for peer in self.stream_peers_joining():
             # We just want to consume the AsyncIterator
             self.logger.info("New Proxy Peer joined %s", peer)
 
     async def handle_leaving_peers(self) -> None:
-        async for ev in self.wait_iter(self.event_bus.stream(PeerLeftEvent)):
+        async for ev in self.event_bus.stream(PeerLeftEvent):
             if ev.session not in self.connected_peers:
                 self.logger.warning("Wanted to remove peer but it is missing %s", ev.session)
             else:
                 proxy_peer = self.connected_peers.pop(ev.session)
                 # TODO: Double check based on some session id if we are indeed
                 # removing the right peer
-                await proxy_peer.cancel()
+                await proxy_peer.manager.stop()
                 self.logger.warning("Removed proxy peer from proxy pool %s", ev.session)
 
     async def fetch_initial_peers(self) -> Tuple[TProxyPeer, ...]:
-        response = await self.wait(
-            self.event_bus.request(GetConnectedPeersRequest(), self.broadcast_config)
-        )
+        response = await self.event_bus.request(GetConnectedPeersRequest(), self.broadcast_config)
 
         return tuple([
             await self.ensure_proxy_peer(peer_info.session)
@@ -356,12 +349,12 @@ class BaseProxyPeerPool(BaseService, Generic[TProxyPeer]):
                 self.broadcast_config
             )
             self.connected_peers[session] = proxy_peer
-            self.run_child_service(proxy_peer)
-            await proxy_peer.events.started.wait()
+            self.manager.run_child_service(proxy_peer)
+            await proxy_peer.manager.wait_started()
 
         return self.connected_peers[session]
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self.handle_joining_peers())
-        self.run_daemon_task(self.handle_leaving_peers())
-        await self.cancellation()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self.handle_joining_peers)
+        self.manager.run_daemon_task(self.handle_leaving_peers)
+        await self.manager.wait_finished()

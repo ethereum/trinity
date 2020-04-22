@@ -11,11 +11,13 @@ from typing import (
     Type,
 )
 
+from async_service import Service
+
 from cached_property import cached_property
 
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken, OperationCancelled
+from cancel_token import OperationCancelled
 
 from eth_utils.toolz import (
     excepts,
@@ -51,7 +53,6 @@ from p2p.peer_backend import (
 from p2p.peer_pool import (
     BasePeerPool,
 )
-from p2p.service import BaseService
 from p2p.token_bucket import TokenBucket
 from p2p.tracking.connection import (
     BaseConnectionTracker,
@@ -125,26 +126,22 @@ class BaseChainPeer(BasePeer):
             return NoopConnectionTracker()
 
 
-class BaseProxyPeer(BaseService):
+class BaseProxyPeer(Service):
     """
     Base class for peers that can be used from any process where the actual peer is not available.
     """
 
-    def __init__(self,
-                 session: SessionAPI,
-                 event_bus: EndpointAPI,
-                 token: CancelToken = None):
-
+    def __init__(self, session: SessionAPI, event_bus: EndpointAPI) -> None:
+        self.logger = get_logger('trinity.protocol.common.BaseProxyPeer')
         self.event_bus = event_bus
         self.session = session
-        super().__init__(token)
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__} {self.session}"
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         self.logger.debug("Starting Proxy Peer %s", self)
-        await self.cancellation()
+        await self.manager.wait_finished()
 
     async def disconnect(self, reason: DisconnectReason) -> None:
         self.logger.debug("Forwarding `disconnect()` call from proxy to actual peer: %s", self)
@@ -152,7 +149,7 @@ class BaseProxyPeer(BaseService):
             DisconnectPeerEvent(self.session, reason),
             TO_NETWORKING_BROADCAST_CONFIG,
         )
-        await self.cancel()
+        await self.manager.stop()
 
 
 class BaseChainPeerFactory(BasePeerFactory):
@@ -206,6 +203,8 @@ class BaseChainPeerPool(BasePeerPool):
                 ))
                 last_candidates_count = sum(candidate_counts)
             except OperationCancelled:
+                # FIXME: We may no longer need this; need to confirm that none of the tasks we
+                # create use BaseService.
                 break
             except asyncio.CancelledError:
                 # no need to log this exception, this is expected
