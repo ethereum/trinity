@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -10,7 +11,6 @@ from typing import (
     Tuple,
 )
 
-from async_generator import asynccontextmanager
 from async_timeout import timeout
 
 
@@ -21,7 +21,7 @@ class AsyncProcessRunner():
     proc: asyncio.subprocess.Process
 
     @classmethod
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def run(cls,
                   cmds: Tuple[str, ...],
                   timeout_sec: int = 10) -> AsyncIterator['AsyncProcessRunner']:

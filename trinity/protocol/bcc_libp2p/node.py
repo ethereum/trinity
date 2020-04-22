@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 from dataclasses import dataclass
 import logging
 import operator
@@ -152,7 +153,6 @@ from .utils import (
     get_requested_beacon_blocks,
     get_beacon_blocks_by_root,
 )
-from async_generator import asynccontextmanager
 
 from trinity.metrics.events import (
     Libp2pPeersRequest,
@@ -547,7 +547,7 @@ class Node(BaseService):
     async def new_stream(self, peer_id: ID, protocol: TProtocol) -> INetStream:
         return await self.host.new_stream(peer_id, [protocol])
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def new_handshake_interaction(self, stream: INetStream) -> AsyncIterator[Interaction]:
         try:
             async with Interaction(stream) as interaction:
@@ -567,7 +567,7 @@ class Node(BaseService):
             )
             raise HandshakeFailure from error
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def post_handshake_handler_interaction(
         self,
         stream: INetStream
@@ -585,7 +585,7 @@ class Node(BaseService):
             await stream.reset()
             return
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def my_request_interaction(self, stream: INetStream) -> AsyncIterator[Interaction]:
         try:
             async with Interaction(stream) as interaction:

@@ -1,7 +1,6 @@
 import asyncio
+import contextlib
 from typing import AsyncIterator, Tuple
-
-from async_generator import asynccontextmanager
 
 from async_service import background_asyncio_service
 
@@ -20,7 +19,7 @@ from .p2p_proto import DevP2PHandshakeParamsFactory
 from .transport import MemoryTransportPairFactory
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def ConnectionPairFactory(*,
                                 alice_handshakers: Tuple[HandshakerAPI[ProtocolAPI], ...] = (),
                                 bob_handshakers: Tuple[HandshakerAPI[ProtocolAPI], ...] = (),

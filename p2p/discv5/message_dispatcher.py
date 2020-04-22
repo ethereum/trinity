@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import random
 from types import (
@@ -13,8 +14,6 @@ from typing import (
     Type,
     TypeVar,
 )
-
-from async_generator import asynccontextmanager
 
 import trio
 from trio.abc import (
@@ -289,7 +288,7 @@ class MessageDispatcher(Service, MessageDispatcherAPI):
 
         return Endpoint(ip_address, udp_port)
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def request_response_subscription(self,
                                             receiver_node_id: NodeID,
                                             message: BaseMessage,

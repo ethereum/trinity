@@ -4,10 +4,10 @@ from argparse import (
     _SubParsersAction,
 )
 import asyncio
+import contextlib
 import logging
 from typing import ClassVar, Iterable
 
-from async_exit_stack import AsyncExitStack
 from async_service import background_asyncio_service, Service
 from eth_utils import ValidationError, to_tuple
 from lahja import EndpointAPI
@@ -240,7 +240,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         except BadDatabaseError as err:
             cls.logger.exception(f"Unrecoverable error in Network Component: {err}")
 
-        async with AsyncExitStack() as stack:
+        async with contextlib.AsyncExitStack() as stack:
             tracker_managers = tuple([
                 await stack.enter_async_context(background_asyncio_service(service))
                 for service in tracker_services

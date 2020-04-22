@@ -1,8 +1,8 @@
 import asyncio
+import contextlib
 
 import pytest
 
-from async_exit_stack import AsyncExitStack
 from async_service import background_asyncio_service
 from eth_utils import decode_hex
 
@@ -64,7 +64,7 @@ async def test_proxy_peer_requests(request,
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
 
-    async with AsyncExitStack() as stack:
+    async with contextlib.AsyncExitStack() as stack:
         await stack.enter_async_context(run_peer_pool_event_server(
             client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
@@ -124,7 +124,7 @@ async def test_get_pooled_transactions_request(request,
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
 
-    async with AsyncExitStack() as stack:
+    async with contextlib.AsyncExitStack() as stack:
         await stack.enter_async_context(run_peer_pool_event_server(
             client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
@@ -171,7 +171,7 @@ async def test_proxy_peer_requests_with_timeouts(request,
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
 
-    async with AsyncExitStack() as stack:
+    async with contextlib.AsyncExitStack() as stack:
         await stack.enter_async_context(run_peer_pool_event_server(
             client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
@@ -221,7 +221,7 @@ async def test_requests_when_peer_in_client_vanishs(request,
     client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=client_event_bus)
     server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=server_event_bus)
 
-    async with AsyncExitStack() as stack:
+    async with contextlib.AsyncExitStack() as stack:
         await stack.enter_async_context(run_peer_pool_event_server(
             client_event_bus, client_peer_pool, handler_type=ETHPeerPoolEventServer
         ))

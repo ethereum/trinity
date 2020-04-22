@@ -1,7 +1,6 @@
 import asyncio
+import contextlib
 import pytest
-
-from async_generator import asynccontextmanager
 
 from eth_utils import ValidationError
 
@@ -18,7 +17,7 @@ from p2p.tools.factories import ConnectionPairFactory
 
 
 class SimpleLogic(BaseLogic):
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def apply(self, connection):
         yield
 

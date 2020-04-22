@@ -18,8 +18,6 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from async_exit_stack import AsyncExitStack
-
 from async_service import Service
 
 from lahja import EndpointAPI
@@ -261,7 +259,7 @@ class BasePeer(Service):
         self._start_time = time.monotonic()
         self.connection.add_command_handler(Disconnect, cast(HandlerFn, self._handle_disconnect))
         try:
-            async with AsyncExitStack() as stack:
+            async with contextlib.AsyncExitStack() as stack:
                 await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
                 self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
 

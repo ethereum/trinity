@@ -1,6 +1,5 @@
+import contextlib
 import pytest
-
-from async_generator import asynccontextmanager
 
 from p2p.abc import ConnectionAPI, LogicAPI
 from p2p.logic import BaseLogic
@@ -18,7 +17,7 @@ from p2p.tools.paragon import ParagonProtocol, BroadcastData
 
 
 class SimpleLogic(BaseLogic):
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def apply(self, connection):
         yield
 

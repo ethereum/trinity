@@ -1,6 +1,5 @@
+import contextlib
 from typing import Any, AsyncIterator
-
-from async_generator import asynccontextmanager
 
 from p2p.abc import ConnectionAPI, LogicAPI
 from p2p.exceptions import UnknownProtocol
@@ -29,7 +28,7 @@ class ExchangeLogic(BaseLogic):
         else:
             return protocol.supports_command(self.exchange.get_response_cmd_type())
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
         async with self.exchange.run_exchange(connection):
             yield
