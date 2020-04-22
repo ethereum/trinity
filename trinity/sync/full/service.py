@@ -1,3 +1,4 @@
+from async_service import background_asyncio_service
 from cancel_token import CancelToken
 
 from eth.abc import AtomicDatabaseAPI
@@ -40,6 +41,6 @@ class FullChainSyncer(BaseService):
 
         # Now, loop forever, fetching missing blocks and applying them.
         self.logger.info("Starting regular sync; current head: %s", head)
-        regular_syncer = RegularChainSyncer(
-            self.chain, self.chaindb, self.peer_pool, self.cancel_token)
-        await regular_syncer.run()
+        regular_syncer = RegularChainSyncer(self.chain, self.chaindb, self.peer_pool)
+        async with background_asyncio_service(regular_syncer) as manager:
+            await manager.wait_finished()

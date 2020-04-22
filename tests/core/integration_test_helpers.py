@@ -37,7 +37,7 @@ async def connect_to_peers_loop(peer_pool, nodes):
         try:
             if not peer_pool.is_full:
                 await peer_pool.connect_to_nodes(nodes)
-            await asyncio.wait(asyncio.sleep(2))
+            await asyncio.sleep(2)
         except OperationCancelled:
             break
 

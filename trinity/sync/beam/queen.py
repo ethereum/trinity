@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+import asyncio
+import functools
 from typing import Any, FrozenSet, Optional, Type
 
-from cancel_token import CancelToken, OperationCancelled
+from async_service import Service
+
 from eth_utils import ValidationError
 
 from p2p.abc import CommandAPI
@@ -11,11 +14,11 @@ from p2p.exceptions import (
 )
 from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
-from p2p.service import BaseService
 from trinity.protocol.eth.commands import NodeDataV65
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import NON_IDEAL_RESPONSE_PENALTY
 from trinity.sync.common.peers import WaitingPeers
+from trinity._utils.logging import get_logger
 
 
 def queen_peer_performance_sort(tracker: PerformanceAPI) -> float:
@@ -39,7 +42,7 @@ class QueenTrackerAPI(ABC):
         ...
 
 
-class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
+class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
     # The best peer gets skipped for backfill, because we prefer to use it for
     #   urgent beam sync nodes
     _queen_peer: ETHPeer = None
@@ -53,14 +56,14 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
     # now.
     msg_queue_maxsize: int = 2000
 
-    def __init__(self, peer_pool: ETHPeerPool, token: CancelToken = None) -> None:
-        super().__init__(token=token)
+    def __init__(self, peer_pool: ETHPeerPool) -> None:
+        self.logger = get_logger('trinity.sync.beam.queen.QueeningQueue')
         self._peer_pool = peer_pool
         self._waiting_peers = WaitingPeers(NodeDataV65)
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         with self.subscribe(self._peer_pool):
-            await self.cancellation()
+            await self.manager.wait_finished()
 
     def register_peer(self, peer: BasePeer) -> None:
         super().register_peer(peer)
@@ -77,7 +80,7 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
         Wait until a queen peer is designated, then return it.
         """
         while self._queen_peer is None:
-            peer = await self.wait(self._waiting_peers.get_fastest())
+            peer = await self._waiting_peers.get_fastest()
             self._update_queen(peer)
 
         return self._queen_peer
@@ -93,8 +96,8 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
         """
         Get the fastest peer that is not the queen.
         """
-        while self.is_operational:
-            peer = await self.wait(self._waiting_peers.get_fastest())
+        while self.manager.is_running:
+            peer = await self._waiting_peers.get_fastest()
             if not peer.manager.is_running:
                 # drop any peers that aren't alive anymore
                 self.logger.info("Dropping %s from beam peers, as no longer active", peer)
@@ -117,15 +120,21 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
                 if peer_is_requesting_nodes:
                     # skip the peer if there's an active request
                     self.logger.debug("QueenQueuer is skipping active peer %s", peer)
-                    self.call_later(10, self._waiting_peers.put_nowait, peer)
+                    loop = asyncio.get_event_loop()
+                    loop.call_later(10, functools.partial(self._waiting_peers.put_nowait, peer))
                     continue
 
             return peer
-        raise OperationCancelled("Service ended before a queen peer could be elected")
+        # This should never happen as we run as a daemon and if we return before our caller it'd
+        # raise a DaemonTaskExit, but just in case we raise a CancelledError() to ensure our
+        # caller realizes we've stopped.
+        self.logger.error("Service ended before a queen peer could be elected")
+        raise asyncio.CancelledError()
 
     def readd_peasant(self, peer: ETHPeer, delay: float = 0) -> None:
         if delay > 0:
-            self.call_later(delay, self._waiting_peers.put_nowait, peer)
+            loop = asyncio.get_event_loop()
+            loop.call_later(delay, functools.partial(self._waiting_peers.put_nowait, peer))
         else:
             self._waiting_peers.put_nowait(peer)
 
@@ -139,7 +148,8 @@ class QueeningQueue(BaseService, PeerSubscriber, QueenTrackerAPI):
                 peer,
                 delay,
             )
-            self.call_later(delay, self._waiting_peers.put_nowait, peer)
+            loop = asyncio.get_event_loop()
+            loop.call_later(delay, functools.partial(self._waiting_peers.put_nowait, peer))
 
     def _update_queen(self, peer: ETHPeer) -> None:
         '''
