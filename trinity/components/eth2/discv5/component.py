@@ -34,9 +34,8 @@ from p2p.identity_schemes import default_identity_scheme_registry
 from p2p.kademlia import KademliaRoutingTable
 from p2p.node_db import NodeDB
 from trinity.boot_info import BootInfo
+from trinity.constants import NODE_DB_DIR as DEFAULT_NODEDB_DIR_NAME
 from trinity.extensibility import TrioIsolatedComponent
-
-DEFAULT_NODEDB_DIR_NAME = "nodes"
 
 logger = logging.getLogger("trinity.components.eth2.discv5.DiscV5Component")
 
