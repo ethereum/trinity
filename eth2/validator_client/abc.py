@@ -6,8 +6,8 @@ from eth_typing import BLSPubkey, BLSSignature
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock
 from eth2.beacon.typing import CommitteeIndex, Epoch, Operation, SignedOperation, Slot
+from eth2.clock import Tick
 from eth2.validator_client.duty import Duty
-from eth2.validator_client.tick import Tick
 from eth2.validator_client.typing import BLSPrivateKey
 
 

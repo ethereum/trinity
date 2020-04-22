@@ -5,8 +5,7 @@ from typing import AsyncIterable, AsyncIterator, Callable, Tuple
 import trio
 
 from eth2.beacon.typing import Epoch, Slot
-from eth2.validator_client.config import Config
-from eth2.validator_client.tick import Tick
+from eth2.clock.tick import Tick
 
 TICKS_PER_SLOT = 2
 DEFAULT_EPOCH_LOOKAHEAD = 1
@@ -60,18 +59,6 @@ class Clock(AsyncIterable[Tick]):
         self._slots_per_epoch = slots_per_epoch
         self._seconds_per_epoch = seconds_per_epoch
 
-    @classmethod
-    def from_config(
-        cls, config: Config, time_provider: TimeProvider = _get_unix_time
-    ) -> "Clock":
-        return cls(
-            config.seconds_per_slot,
-            config.genesis_time,
-            config.slots_per_epoch,
-            config.seconds_per_epoch,
-            time_provider=time_provider,
-        )
-
     def _compute_slot_and_alignment(self, t: float) -> Tuple[Slot, bool]:
         """
         Compute the slot corresponding to a time ``t``.
@@ -112,8 +99,15 @@ class Clock(AsyncIterable[Tick]):
         """
         genesis_time = self._genesis_time
         start_time = genesis_time - (with_epoch_lookahead * self._seconds_per_epoch)
+        now = int(self._time_provider())
+
+        if start_time <= now:
+            return
+
         self.logger.info(
-            "...blocking until unix time %s which is %d epochs before the genesis time %d",
+            "...blocking for %d seconds until unix time %s which is %d epoch(s)"
+            " before the genesis time %d",
+            start_time - now,
             start_time,
             with_epoch_lookahead,
             genesis_time,
@@ -146,7 +140,6 @@ class Clock(AsyncIterable[Tick]):
 
         while True:
             tick = self._compute_current_tick()
-            self.logger.debug("%s", tick)
             if tick.is_at_genesis(self._genesis_time):
                 self.logger.warning("Network genesis time is now!")
             yield tick

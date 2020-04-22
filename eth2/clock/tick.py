@@ -28,3 +28,6 @@ class Tick:
 
     def is_at_genesis(self, genesis_time: int) -> bool:
         return int(self.t) == genesis_time and self.count == 0
+
+    def slot_in_epoch(self, slots_per_epoch: Slot) -> Slot:
+        return Slot(self.slot % slots_per_epoch)

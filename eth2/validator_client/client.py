@@ -6,6 +6,7 @@ from eth_typing import BLSPubkey
 import trio
 from trio.abc import ReceiveChannel, SendChannel
 
+from eth2.clock import Tick
 from eth2.validator_client.abc import BeaconNodeAPI, KeyStoreAPI, SignatoryDatabaseAPI
 from eth2.validator_client.duty import Duty
 from eth2.validator_client.duty_scheduler import (
@@ -16,7 +17,6 @@ from eth2.validator_client.duty_store import DutyStore
 from eth2.validator_client.randao import mk_randao_provider
 from eth2.validator_client.signatory import sign_and_broadcast_operation_if_valid
 from eth2.validator_client.signatory_db import InMemorySignatoryDB
-from eth2.validator_client.tick import Tick
 from eth2.validator_client.typing import (
     PrivateKeyProvider,
     RandaoProvider,

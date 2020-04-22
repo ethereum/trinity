@@ -4,8 +4,8 @@ from typing import Collection, Dict, Tuple
 import trio
 
 from eth2.beacon.typing import Slot
+from eth2.clock import Tick
 from eth2.validator_client.duty import Duty
-from eth2.validator_client.tick import Tick
 
 
 class DutyStore:
