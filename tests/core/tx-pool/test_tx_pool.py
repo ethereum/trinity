@@ -8,8 +8,6 @@ from eth._utils.address import (
     force_bytes_to_address
 )
 
-from p2p.service import run_service
-
 from trinity.components.builtin.tx_pool.pool import (
     TxPool,
 )
@@ -85,25 +83,25 @@ async def two_connected_tx_pools(event_bus,
             alice_event_bus, alice_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
 
+        bob_proxy_peer_pool = ETHProxyPeerPool(bob_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(background_asyncio_service(bob_proxy_peer_pool))
+
+        alice_proxy_peer_pool = ETHProxyPeerPool(alice_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
+        await stack.enter_async_context(background_asyncio_service(alice_proxy_peer_pool))
+
         alice_tx_pool = TxPool(
             alice_event_bus,
-            ETHProxyPeerPool(alice_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
+            alice_proxy_peer_pool,
             tx_validator,
         )
         await stack.enter_async_context(background_asyncio_service(alice_tx_pool))
 
         bob_tx_pool = TxPool(
             bob_event_bus,
-            ETHProxyPeerPool(bob_event_bus, TO_NETWORKING_BROADCAST_CONFIG),
+            bob_proxy_peer_pool,
             tx_validator,
         )
         await stack.enter_async_context(background_asyncio_service(bob_tx_pool))
-
-        bob_proxy_peer_pool = ETHProxyPeerPool(bob_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(bob_proxy_peer_pool))
-
-        alice_proxy_peer_pool = ETHProxyPeerPool(alice_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        await stack.enter_async_context(run_service(alice_proxy_peer_pool))
 
         yield (alice, alice_event_bus, alice_tx_pool, ), (bob, bob_event_bus, bob_tx_pool)
 

@@ -1,9 +1,9 @@
 import asyncio
 import pytest
 
-from p2p.tools.factories import SessionFactory
+from async_service import background_asyncio_service
 
-from p2p.service import run_service
+from p2p.tools.factories import SessionFactory
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.common.events import (
@@ -38,7 +38,7 @@ async def test_fetch_initial_peers(event_bus, response, expected_count):
     async with do_mock:
         proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
 
-        async with run_service(proxy_peer_pool):
+        async with background_asyncio_service(proxy_peer_pool):
             peers = await proxy_peer_pool.fetch_initial_peers()
             assert len(peers) == expected_count
 
@@ -56,7 +56,7 @@ async def test_get_peers(event_bus, response, expected_count):
 
     async with do_mock:
         proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        async with run_service(proxy_peer_pool):
+        async with background_asyncio_service(proxy_peer_pool):
             peers = await proxy_peer_pool.get_peers()
             assert len(peers) == expected_count
 
@@ -71,7 +71,7 @@ async def test_adds_new_peers(event_bus):
     )
     async with do_mock:
         proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        async with run_service(proxy_peer_pool):
+        async with background_asyncio_service(proxy_peer_pool):
 
             assert len(await proxy_peer_pool.get_peers()) == 1
 
@@ -92,7 +92,7 @@ async def test_removes_peers(event_bus):
 
     async with do_mock:
         proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
-        async with run_service(proxy_peer_pool):
+        async with background_asyncio_service(proxy_peer_pool):
 
             assert len(await proxy_peer_pool.get_peers()) == 2
 
