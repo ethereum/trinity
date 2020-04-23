@@ -12,11 +12,6 @@ def get_trio_time():
 async def test_beacon_node_can_count_slots(
     autojump_clock, node_key, eth2_config, chain_config, database_dir, chain_class
 ):
-    # NOTE: overwrite to sync with trio's time
-    chain_config._genesis_state.genesis_time = (
-        get_trio_time() - 10 * eth2_config.SECONDS_PER_SLOT
-    )
-
     node = BeaconNode(
         node_key, eth2_config, chain_config, database_dir, chain_class, get_trio_time
     )
