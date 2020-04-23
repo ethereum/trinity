@@ -8,9 +8,9 @@ from eth2.beacon.db.chain import BeaconChainDB
 from trinity._utils.trio_utils import wait_for_interrupts
 from trinity.boot_info import BootInfo
 from trinity.bootstrap import construct_boot_info, display_launch_logs
+from trinity.components.registry import get_components_for_trio_beacon_client
 from trinity.config import BaseAppConfig, BeaconAppConfig
 from trinity.constants import APP_IDENTIFIER_BEACON
-from trinity.components.registry import get_components_for_trio_beacon_client
 from trinity.extensibility import BaseComponentAPI
 from trinity.extensibility.trio import TrioComponent
 from trinity.initialization import (
