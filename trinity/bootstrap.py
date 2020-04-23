@@ -8,6 +8,7 @@ import shutil
 import signal
 from typing import (
     Callable,
+    Dict,
     Iterable,
     Sequence,
     Tuple,
@@ -16,6 +17,7 @@ from typing import (
 
 from async_service import AsyncioManager
 from eth_utils import ValidationError
+from eth_utils.toolz import curry
 
 from trinity.exceptions import (
     AmbigiousFileSystem,
@@ -116,17 +118,14 @@ def ensure_data_dir_is_initialized(trinity_config: TrinityConfig) -> None:
             )
 
 
-def main_entry(trinity_boot: BootFn,
-               app_identifier: str,
-               component_types: Tuple[Type[BaseComponentAPI], ...],
-               sub_configs: Sequence[Type[BaseAppConfig]]) -> None:
-    if is_prerelease():
-        # this modifies the asyncio logger, but will be overridden by any custom settings below
-        enable_warnings_by_default()
-
+def configure_parsers(parser: argparse.ArgumentParser,
+                      subparser: argparse._SubParsersAction,
+                      component_types: Tuple[Type[BaseComponentAPI], ...]) -> None:
     for component_cls in component_types:
         component_cls.configure_parser(parser, subparser)
 
+
+def parse_and_validate_cli() -> argparse.Namespace:
     argcomplete.autocomplete(parser)
 
     args = parser.parse_args()
@@ -139,6 +138,10 @@ def main_entry(trinity_boot: BootFn,
             "directory with `--data-dir path/to/data/directory`"
         )
 
+    return args
+
+
+def resolve_common_log_level_or_error(args: argparse.Namespace) -> str:
     # The `common_log_level` is derived from `--log-level <Level>` / `-l <Level>` without
     # specifying any module. If present, it is used for both `stderr` and `file` logging.
     common_log_level = args.log_levels and args.log_levels.get(None)
@@ -162,18 +165,16 @@ def main_entry(trinity_boot: BootFn,
             flags to share one single log level across both handlers.
             """
         )
+    else:
+        return common_log_level
 
-    trinity_config = load_trinity_config_from_parser_args(parser,
-                                                          args,
-                                                          app_identifier,
-                                                          sub_configs)
 
-    ensure_data_dir_is_initialized(trinity_config)
+LoggingResult = Tuple[Tuple[logging.Handler, ...], int, Dict[str, int]]
 
-    # +---------------+
-    # | LOGGING SETUP |
-    # +---------------+
 
+def install_logging(args: argparse.Namespace,
+                    trinity_config: TrinityConfig,
+                    common_log_level: str) -> LoggingResult:
     # Setup logging to stderr
     stderr_logger_level = (
         args.stderr_log_level
@@ -205,13 +206,101 @@ def main_entry(trinity_boot: BootFn,
     logger = logging.getLogger()
     logger.setLevel(min_log_level)
 
-    # This prints out the ASCII "trinity" header in the terminal
-    display_launch_logs(trinity_config)
+    return (handler_stderr, handler_file), min_log_level, logger_levels
 
-    # Setup the log listener which child processes relay their logs through
-    log_listener = IPCListener(handler_stderr, handler_file)
 
-    # Determine what logging level child processes should use.
+def validate_component_cli(component_types: Tuple[Type[BaseComponentAPI], ...],
+                           boot_info: BootInfo) -> None:
+    # Let the components do runtime validation
+    for component_cls in component_types:
+        try:
+            component_cls.validate_cli(boot_info)
+        except ValidationError as exc:
+            parser.exit(message=str(exc))
+
+
+@curry
+def kill_trinity_with_reason(trinity_config: TrinityConfig,
+                             processes: Tuple[multiprocessing.Process, ...],
+                             reason: str) -> None:
+    logger = logging.getLogger()
+    kill_trinity_gracefully(
+        trinity_config,
+        logger,
+        processes,
+        reason=reason
+    )
+
+
+def _run_asyncio_components(component_types: Tuple[Type[BaseComponentAPI], ...],
+                            boot_info: BootInfo,
+                            processes: Tuple[multiprocessing.Process, ...]) -> None:
+    runtime_component_types = tuple(
+        component_cls
+        for component_cls in component_types
+        if issubclass(component_cls, ComponentAPI)
+    )
+
+    trinity_config = boot_info.trinity_config
+
+    component_manager_service = ComponentManager(
+        boot_info,
+        runtime_component_types,
+    )
+    manager = AsyncioManager(component_manager_service)
+
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(
+        signal.SIGTERM,
+        manager.cancel,
+        'SIGTERM',
+    )
+    loop.add_signal_handler(
+        signal.SIGINT,
+        component_manager_service.shutdown,
+        'CTRL+C',
+    )
+
+    try:
+        loop.run_until_complete(manager.run())
+    except BaseException as err:
+        logger = logging.getLogger()
+        logger.error("Error during trinity run: %r", err)
+        raise
+    finally:
+        kill_trinity_with_reason(trinity_config, processes, component_manager_service.reason)
+        if trinity_config.trinity_tmp_root_dir:
+            shutil.rmtree(trinity_config.trinity_root_dir)
+
+
+BootPrologueData = Tuple[BootInfo, Tuple[logging.Handler, ...]]
+
+
+def construct_boot_info(app_identifier: str,
+                        component_types: Tuple[Type[BaseComponentAPI], ...],
+                        sub_configs: Sequence[Type[BaseAppConfig]]) -> BootPrologueData:
+    if is_prerelease():
+        # this modifies the asyncio logger, but will be overridden by any custom settings below
+        enable_warnings_by_default()
+
+    configure_parsers(parser, subparser, component_types)
+
+    args = parse_and_validate_cli()
+
+    common_log_level = resolve_common_log_level_or_error(args)
+
+    trinity_config = load_trinity_config_from_parser_args(parser,
+                                                          args,
+                                                          app_identifier,
+                                                          sub_configs)
+
+    ensure_data_dir_is_initialized(trinity_config)
+    handlers, min_log_level, logger_levels = install_logging(
+        args,
+        trinity_config,
+        common_log_level
+    )
+
     boot_info = BootInfo(
         args=args,
         trinity_config=trinity_config,
@@ -220,12 +309,18 @@ def main_entry(trinity_boot: BootFn,
         profile=bool(args.profile),
     )
 
-    # Let the components do runtime validation
-    for component_cls in component_types:
-        try:
-            component_cls.validate_cli(boot_info)
-        except ValidationError as exc:
-            parser.exit(message=str(exc))
+    validate_component_cli(component_types, boot_info)
+
+    return boot_info, handlers
+
+
+def main_entry(trinity_boot: BootFn,
+               app_identifier: str,
+               component_types: Tuple[Type[BaseComponentAPI], ...],
+               sub_configs: Sequence[Type[BaseAppConfig]]) -> None:
+    boot_info, handlers = construct_boot_info(app_identifier, component_types, sub_configs)
+    args = boot_info.args
+    trinity_config = boot_info.trinity_config
 
     # Components can provide a subcommand with a `func` which does then control
     # the entire process from here.
@@ -233,52 +328,13 @@ def main_entry(trinity_boot: BootFn,
         args.func(args, trinity_config)
         return
 
-    runtime_component_types = tuple(
-        component_cls
-        for component_cls in component_types
-        if issubclass(component_cls, ComponentAPI)
-    )
+    # This prints out the ASCII "trinity" header in the terminal
+    display_launch_logs(trinity_config)
 
-    with log_listener.run(trinity_config.logging_ipc_path):
-
+    # Setup the log listener which child processes relay their logs through
+    with IPCListener(*handlers).run(trinity_config.logging_ipc_path):
         processes = trinity_boot(boot_info)
-
-        loop = asyncio.get_event_loop()
-
-        def kill_trinity_with_reason(reason: str) -> None:
-            kill_trinity_gracefully(
-                trinity_config,
-                logger,
-                processes,
-                reason=reason
-            )
-
-        component_manager_service = ComponentManager(
-            boot_info,
-            runtime_component_types,
-        )
-        manager = AsyncioManager(component_manager_service)
-
-        loop.add_signal_handler(
-            signal.SIGTERM,
-            manager.cancel,
-            'SIGTERM',
-        )
-        loop.add_signal_handler(
-            signal.SIGINT,
-            component_manager_service.shutdown,
-            'CTRL+C',
-        )
-
-        try:
-            loop.run_until_complete(manager.run())
-        except BaseException as err:
-            logger.error("Error during trinity run: %r", err)
-            raise
-        finally:
-            kill_trinity_with_reason(component_manager_service.reason)
-            if trinity_config.trinity_tmp_root_dir:
-                shutil.rmtree(trinity_config.trinity_root_dir)
+        _run_asyncio_components(component_types, boot_info, processes)
 
 
 def display_launch_logs(trinity_config: TrinityConfig) -> None:
