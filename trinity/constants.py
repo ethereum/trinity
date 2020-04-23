@@ -47,6 +47,8 @@ FIRE_AND_FORGET_BROADCASTING = BroadcastConfig(require_subscriber=False)
 MAINNET_NETWORK_ID = 1
 ROPSTEN_NETWORK_ID = 3
 GOERLI_NETWORK_ID = 5
+# TODO: integrate in a way that won't collide with eth1
+BEACON_TESTNET_NETWORK_ID = 99
 
 # Default preferred enodes
 DEFAULT_PREFERRED_NODES: Dict[int, Tuple[Node, ...]] = {
