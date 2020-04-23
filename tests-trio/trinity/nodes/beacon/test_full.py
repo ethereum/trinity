@@ -21,11 +21,9 @@ async def test_beacon_node_can_count_slots(
         node_key, eth2_config, chain_config, database_dir, chain_class, get_trio_time
     )
 
-    current_tick = node._current_tick
-
     some_slots = 10
-    a_future_slot = current_tick.slot + some_slots
+    a_future_slot = node.current_tick.slot + some_slots
     seconds = some_slots * eth2_config.SECONDS_PER_SLOT
     with trio.move_on_after(seconds):
         await node.run()
-    assert node._current_tick.slot == a_future_slot
+    assert node.current_tick.slot == a_future_slot

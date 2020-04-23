@@ -9,7 +9,7 @@ import trio
 
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.db.chain import BeaconChainDB
-from eth2.clock import Clock, TimeProvider, get_unix_time
+from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
 from trinity.config import BeaconChainConfig
 from trinity.initialization import (
@@ -45,8 +45,6 @@ class BeaconNode:
         self._eth2_config = eth2_config
 
         self._clock = _mk_clock(eth2_config, chain_config.genesis_time, time_provider)
-        self._tick_lock = trio.Lock()
-        self._current_tick = self._clock.compute_current_tick()
 
         self._base_db = LevelDB(db_path=database_dir)
         self._chain_db = BeaconChainDB(self._base_db, eth2_config)
@@ -66,10 +64,12 @@ class BeaconNode:
             config.chain_class,
         )
 
+    @property
+    def current_tick(self) -> Tick:
+        return self._clock.compute_current_tick()
+
     async def _iterate_clock(self):
         async for tick in self._clock:
-            async with self._tick_lock:
-                self._current_tick = tick
             self.logger.debug(
                 "slot %d [number %d in epoch %d] (tick %d)",
                 tick.slot,
@@ -78,17 +78,9 @@ class BeaconNode:
                 tick.count,
             )
 
-    def _stop(self):
-        # NOTE: update the node's internal state in the event that the
-        # node is canceled while having cached a previous tick
-        self._current_tick = self._clock.compute_current_tick()
-
     async def run(self):
         tasks = (self._iterate_clock,)
 
-        try:
-            async with trio.open_nursery() as nursery:
-                for task in tasks:
-                    nursery.start_soon(task)
-        finally:
-            self._stop()
+        async with trio.open_nursery() as nursery:
+            for task in tasks:
+                nursery.start_soon(task)
