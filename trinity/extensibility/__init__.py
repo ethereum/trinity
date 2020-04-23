@@ -12,5 +12,6 @@ from trinity.extensibility.component_manager import (  # noqa: F401
     ComponentManager,
 )
 from trinity.extensibility.trio import (  # noqa: F401
+    TrioComponent,
     TrioIsolatedComponent,
 )
