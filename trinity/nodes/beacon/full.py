@@ -19,7 +19,9 @@ from trinity.initialization import (
 from trinity.nodes.beacon.config import BeaconNodeConfig
 
 
-def _mk_clock(config: Eth2Config, genesis_time: int, time_provider: TimeProvider):
+def _mk_clock(
+    config: Eth2Config, genesis_time: int, time_provider: TimeProvider
+) -> Clock:
     return Clock(
         config.SECONDS_PER_SLOT,
         genesis_time,
@@ -68,7 +70,7 @@ class BeaconNode:
     def current_tick(self) -> Tick:
         return self._clock.compute_current_tick()
 
-    async def _iterate_clock(self):
+    async def _iterate_clock(self) -> None:
         async for tick in self._clock:
             self.logger.debug(
                 "slot %d [number %d in epoch %d] (tick %d)",
@@ -78,7 +80,7 @@ class BeaconNode:
                 tick.count,
             )
 
-    async def run(self):
+    async def run(self) -> None:
         tasks = (self._iterate_clock,)
 
         async with trio.open_nursery() as nursery:

@@ -41,7 +41,7 @@ class Clock(AsyncIterable[Tick]):
         self,
         seconds_per_slot: int,
         genesis_time: int,
-        slots_per_epoch: Slot,
+        slots_per_epoch: int,
         seconds_per_epoch: int,
         time_provider: TimeProvider = get_unix_time,
         ticks_per_slot: int = TICKS_PER_SLOT,
