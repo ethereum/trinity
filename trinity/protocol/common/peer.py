@@ -16,6 +16,7 @@ from async_service import Service
 from cached_property import cached_property
 
 from lahja import EndpointAPI
+from pyformance.meters import SimpleGauge
 
 from cancel_token import OperationCancelled
 
@@ -42,6 +43,9 @@ from p2p.exceptions import (
     NoConnectedPeers,
     PeerConnectionLost,
     UnknownAPI,
+)
+from p2p.metrics import (
+    PeerReporterRegistry,
 )
 from p2p.peer import (
     BasePeer,
@@ -152,6 +156,34 @@ class BaseProxyPeer(Service):
         await self.manager.stop()
 
 
+class BaseChainPeerReporterRegistry(PeerReporterRegistry[BaseChainPeer]):
+    def reset_peer_meters(self, peer_id: int) -> None:
+        head_gauge = self._get_blockheight_gauge(peer_id)
+        td_gauge = self._get_td_gauge(peer_id)
+        head_gauge.set_value(0)
+        td_gauge.set_value(0)
+
+    def make_periodic_update(self, peer: BaseChainPeer, peer_id: int) -> None:
+        head_gauge = self._get_blockheight_gauge(peer_id)
+        td_gauge = self._get_td_gauge(peer_id)
+        # set to 0 if head_number unavailable on head_info
+        try:
+            head_gauge.set_value(peer.head_info.head_number)
+        except AttributeError:
+            head_gauge.set_value(0)
+        # set to 0 if head_td unavailable on head_info
+        try:
+            td_gauge.set_value(peer.head_info.head_td)
+        except AttributeError:
+            td_gauge.set_value(0)
+
+    def _get_blockheight_gauge(self, peer_id: int) -> SimpleGauge:
+        return self.metrics_registry.gauge(f"trinity.p2p/peer_{peer_id}_blockheight.gauge")
+
+    def _get_td_gauge(self, peer_id: int) -> SimpleGauge:
+        return self.metrics_registry.gauge(f"trinity.p2p/peer_{peer_id}_total_difficulty.gauge")
+
+
 class BaseChainPeerFactory(BasePeerFactory):
     context: ChainContext
     peer_class: Type[BaseChainPeer]
@@ -162,6 +194,7 @@ class BaseChainPeerPool(BasePeerPool):
     connected_nodes: Dict[NodeAPI, BaseChainPeer]  # type: ignore
     peer_factory_class: Type[BaseChainPeerFactory]
     peer_tracker: BaseEth1PeerTracker
+    peer_reporter_registry_class = BaseChainPeerReporterRegistry
 
     async def maybe_connect_more_peers(self) -> None:
         rate_limiter = TokenBucket(
