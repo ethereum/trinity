@@ -3,18 +3,18 @@ from argparse import (
     _SubParsersAction,
 )
 
-from async_service import background_asyncio_service
+from async_service import background_trio_service
 from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
 from trinity.extensibility import (
-    AsyncioIsolatedComponent,
+    TrioIsolatedComponent,
 )
 from trinity.components.builtin.upnp.nat import UPnPService
 from trinity.constants import UPNP_EVENTBUS_ENDPOINT
 
 
-class UpnpComponent(AsyncioIsolatedComponent):
+class UpnpComponent(TrioIsolatedComponent):
     """
     Continously try to map external to internal ip address/port using the
     Universal Plug 'n' Play (upnp) standard.
@@ -41,10 +41,10 @@ class UpnpComponent(AsyncioIsolatedComponent):
         port = boot_info.trinity_config.port
         upnp_service = UPnPService(port, event_bus)
 
-        async with background_asyncio_service(upnp_service) as manager:
+        async with background_trio_service(upnp_service) as manager:
             await manager.wait_finished()
 
 
 if __name__ == "__main__":
-    from trinity.extensibility.component import run_asyncio_eth1_component
-    run_asyncio_eth1_component(UpnpComponent)
+    from trinity.extensibility.component import run_trio_eth1_component
+    run_trio_eth1_component(UpnpComponent)

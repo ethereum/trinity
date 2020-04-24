@@ -4,5 +4,5 @@ from lahja import BaseEvent
 
 
 @dataclass
-class NewUPnPMapping(BaseEvent):
+class UPnPMapping(BaseEvent):
     ip: str

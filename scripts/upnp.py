@@ -5,7 +5,7 @@ import trio
 
 from lahja import ConnectionConfig, TrioEndpoint
 
-from trinity.components.builtin.upnp.events import NewUPnPMapping
+from trinity.components.builtin.upnp.events import UPnPMapping
 from trinity.constants import UPNP_EVENTBUS_ENDPOINT
 
 
@@ -19,11 +19,11 @@ async def main() -> None:
         with trio.fail_after(1):
             await client.connect_to_endpoints(connection_config)
 
-        async for event in client.stream(NewUPnPMapping):
+        async for event in client.stream(UPnPMapping):
             external_ip = event.ip
             print("Got new UPnP mapping:", external_ip)
 
 
 if __name__ == "__main__":
-    # Connect to a running UPnPService and prints any NewUPnPMapping it broadcasts.
+    # Connect to a running UPnPService and prints any UPnPMapping it broadcasts.
     trio.run(main)
