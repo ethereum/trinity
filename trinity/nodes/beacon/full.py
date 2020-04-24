@@ -11,6 +11,7 @@ from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
+from trinity._utils.trio_utils import JSONHTTPServer
 from trinity.config import BeaconChainConfig
 from trinity.initialization import (
     initialize_beacon_database,
@@ -31,6 +32,11 @@ def _mk_clock(
     )
 
 
+def _mk_validator_api_server(validator_api_port: int) -> JSONHTTPServer:
+    handlers = {}
+    return JSONHTTPServer(handlers, validator_api_port)
+
+
 class BeaconNode:
     logger = logging.getLogger("trinity.nodes.beacon.full.BeaconNode")
 
@@ -41,12 +47,14 @@ class BeaconNode:
         chain_config: BeaconChainConfig,
         database_dir: Path,
         chain_class: Type[BaseBeaconChain],
+        validator_api_port: int,
         time_provider: TimeProvider = get_unix_time,
     ) -> None:
         self._local_key_pair = create_new_key_pair(local_node_key.to_bytes())
         self._eth2_config = eth2_config
 
         self._clock = _mk_clock(eth2_config, chain_config.genesis_time, time_provider)
+        self._validator_api_server = _mk_validator_api_server(validator_api_port)
 
         self._base_db = LevelDB(db_path=database_dir)
         self._chain_db = BeaconChainDB(self._base_db, eth2_config)
@@ -64,6 +72,7 @@ class BeaconNode:
             config.chain_config,
             config.database_dir,
             config.chain_class,
+            config.validator_api_port,
         )
 
     @property
@@ -80,8 +89,13 @@ class BeaconNode:
                 tick.count,
             )
 
+    async def _run_validator_api(self) -> None:
+        server = self._validator_api_server
+        self.logger.info("validator HTTP API server listening on %d", server.port)
+        await server.serve()
+
     async def run(self) -> None:
-        tasks = (self._iterate_clock,)
+        tasks = (self._iterate_clock, self._run_validator_api)
 
         async with trio.open_nursery() as nursery:
             for task in tasks:

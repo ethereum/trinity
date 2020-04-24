@@ -12,8 +12,15 @@ def get_trio_time():
 async def test_beacon_node_can_count_slots(
     autojump_clock, node_key, eth2_config, chain_config, database_dir, chain_class
 ):
+    validator_api_port = 5005
     node = BeaconNode(
-        node_key, eth2_config, chain_config, database_dir, chain_class, get_trio_time
+        node_key,
+        eth2_config,
+        chain_config,
+        database_dir,
+        chain_class,
+        validator_api_port,
+        get_trio_time,
     )
 
     some_slots = 10
