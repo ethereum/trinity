@@ -401,11 +401,12 @@ async def send_json_response(
 class JSONHTTPServer:
     logger = logging.getLogger("trinity._utils.trio_utils.JSONHTTPServer")
 
-    def __init__(self, handlers: Handlers):
+    def __init__(self, handlers: Handlers, port: int = 0):
         router = make_router(handlers)
         self.handler = http_serve_json_api(router)
+        self.port = port
 
-    async def serve(self, port: int = 0) -> None:
+    async def serve(self) -> None:
         # NOTE: `mypy` complains unless we explicitly pass the ``task_status``
         # even though it is a default argument in ``trio.serve_tcp``.
-        await trio.serve_tcp(self.handler, port, task_status=trio.TASK_STATUS_IGNORED)
+        await trio.serve_tcp(self.handler, self.port, task_status=trio.TASK_STATUS_IGNORED)
