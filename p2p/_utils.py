@@ -6,6 +6,28 @@ import rlp
 import eth_utils
 
 
+# Try to import a snappy exception from a few places
+try:
+    # This is largely a cargo-cult incantation, inspired by:
+    # https://github.com/andrix/python-snappy/blob/602e9c10d743f71bef0bac5e4c4dffa17340d7b3/snappy/snappy.py#L47-L52  # noqa: E501
+    from snappy._snappy import CompressedLengthError as snappy_CompressedLengthError
+except (ImportError, ModuleNotFoundError):
+    try:
+        # According to the python-snappy structure, one these should be capable of
+        #   importing the exception. But since it digs into the internals,
+        #   it could be yanked away from us at any moment, so wrap it in another try:
+        from snappy.snappy_cffi import CompressedLengthError as snappy_CompressedLengthError
+    except (ImportError, ModuleNotFoundError):
+        # As a last resort, we can just treat it as some unknown exception. A "try/catch" will
+        #   miss the exception, but that's an acceptable way to find out that the API
+        #   has changed.
+        class _NewException(Exception):
+            pass
+
+        # Trying to name the class snappy_CompressedLengthError confuses mypy, hence the rename
+        snappy_CompressedLengthError = _NewException
+
+
 def get_logger(name: str) -> eth_utils.ExtendedDebugLogger:
     # Just a local wrapper around trinity's get_logger() as we need to delay the import to avoid
     # cyclical imports ar parse time.

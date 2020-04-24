@@ -13,7 +13,6 @@ from typing import (
     Union,
 )
 
-import snappy
 from cached_property import cached_property
 
 from async_generator import asynccontextmanager
@@ -39,7 +38,10 @@ from p2p.exceptions import (
 )
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p.transport_state import TransportState
-from p2p._utils import get_logger
+from p2p._utils import (
+    get_logger,
+    snappy_CompressedLengthError,
+)
 
 
 async def stream_transport_messages(transport: TransportAPI,
@@ -84,7 +86,7 @@ async def stream_transport_messages(transport: TransportAPI,
 
         try:
             cmd = command_type.decode(msg, msg_proto.snappy_support)
-        except (rlp.exceptions.DeserializationError, snappy.CompressedLengthError) as err:
+        except (rlp.exceptions.DeserializationError, snappy_CompressedLengthError) as err:
             raise MalformedMessage(f"Failed to decode {msg} for {command_type}") from err
 
         yield msg_proto, cmd
