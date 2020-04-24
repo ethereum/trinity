@@ -199,7 +199,7 @@ class TrioHTTPWrapper:
 
     def info(self, *args: Any) -> None:
         encoded_args = map(str, args)
-        self.logger.info("conn %d: %s", self._obj_id, " ".join(encoded_args))
+        self.logger.debug("conn %d: %s", self._obj_id, " ".join(encoded_args))
 
 
 ################################################################
