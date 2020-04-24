@@ -11,7 +11,7 @@ TICKS_PER_SLOT = 2
 DEFAULT_EPOCH_LOOKAHEAD = 1
 
 
-def _get_unix_time() -> float:
+def get_unix_time() -> float:
     return time.time()
 
 
@@ -41,9 +41,9 @@ class Clock(AsyncIterable[Tick]):
         self,
         seconds_per_slot: int,
         genesis_time: int,
-        slots_per_epoch: Slot,
+        slots_per_epoch: int,
         seconds_per_epoch: int,
-        time_provider: TimeProvider = _get_unix_time,
+        time_provider: TimeProvider = get_unix_time,
         ticks_per_slot: int = TICKS_PER_SLOT,
     ) -> None:
         self._time_provider = time_provider
@@ -72,7 +72,7 @@ class Clock(AsyncIterable[Tick]):
     def _compute_epoch(self, slot: Slot) -> Epoch:
         return Epoch(slot // self._slots_per_epoch)
 
-    def _compute_current_tick(self) -> Tick:
+    def compute_current_tick(self) -> Tick:
         t = self._time_provider()
         slot, aligned = self._compute_slot_and_alignment(t)
         epoch = self._compute_epoch(slot)
@@ -139,7 +139,7 @@ class Clock(AsyncIterable[Tick]):
         await self._wait_for_genesis_with_lookahead()
 
         while True:
-            tick = self._compute_current_tick()
+            tick = self.compute_current_tick()
             if tick.is_at_genesis(self._genesis_time):
                 self.logger.warning("Network genesis time is now!")
             yield tick

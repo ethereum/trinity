@@ -120,19 +120,19 @@ class BeaconState(HashableContainer):
 
         if config:
             # try to provide sane defaults
-            if block_roots == default_tuple:
+            if block_roots == default_block_roots:
                 block_roots = default_tuple_of_size(
                     config.SLOTS_PER_HISTORICAL_ROOT, ZERO_ROOT
                 )
-            if state_roots == default_tuple:
+            if state_roots == default_state_roots:
                 state_roots = default_tuple_of_size(
                     config.SLOTS_PER_HISTORICAL_ROOT, ZERO_HASH32
                 )
-            if randao_mixes == default_tuple:
+            if randao_mixes == default_randao_mixes:
                 randao_mixes = default_tuple_of_size(
                     config.EPOCHS_PER_HISTORICAL_VECTOR, ZERO_HASH32
                 )
-            if slashings == default_tuple:
+            if slashings == default_slashings:
                 slashings = default_tuple_of_size(
                     config.EPOCHS_PER_SLASHINGS_VECTOR, Gwei(0)
                 )

@@ -140,8 +140,12 @@ def _load_preconfigured_genesis_config(network_id: int) -> Dict[str, Any]:
     if network_id not in PRECONFIGURED_NETWORKS:
         raise TypeError(f"Unknown or unsupported `network_id`: {network_id}")
     else:
-        with _get_assets_path(network_id).open('r') as genesis_file:
-            return json.load(genesis_file)
+        try:
+            with _get_assets_path(network_id).open('r') as genesis_file:
+                return json.load(genesis_file)
+        except FileNotFoundError:
+            # NOTE: this code path exists to shim eth2 into eth1
+            return {}
 
 
 def _get_preconfigured_chain_name(network_id: int) -> str:
