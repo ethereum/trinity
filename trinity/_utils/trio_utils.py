@@ -237,8 +237,9 @@ Method = str
 
 TContext = TypeVar("TContext")
 
-Request = Dict[str, Any]
-Response = Union[Dict[str, Any], str, int]
+JSON = Union[Dict[str, Any], str, int]
+Request = JSON
+Response = JSON
 Handler = Callable[[TContext, Request], Awaitable[Response]]
 Router = Callable[[Method, Path], Handler[TContext]]
 

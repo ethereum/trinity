@@ -1,4 +1,3 @@
-from enum import Enum, unique
 import logging
 import random
 from types import TracebackType
@@ -14,6 +13,7 @@ from ssz.tools.parse import from_formatted_dict
 import trio
 
 from eth2._utils.humanize import humanize_bytes
+from eth2.api.http.validator import Paths as BeaconNodePath
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
@@ -30,16 +30,6 @@ from eth2.validator_client.duty import (
 
 SYNCING_POLL_INTERVAL = 10  # seconds
 CONNECTION_RETRY_INTERVAL = 5  # seconds
-
-
-@unique
-class BeaconNodePath(Enum):
-    node_version = "/node/version"
-    genesis_time = "/node/genesis_time"
-    sync_status = "/node/syncing"
-    validator_duties = "/validator/duties"
-    block_proposal = "/validator/block"
-    attestation = "/validator/attestation"
 
 
 async def _get_node_version(session: Session, url: str) -> str:
