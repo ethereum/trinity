@@ -54,7 +54,6 @@ class LightNode(Node[LESPeer]):
         self._peer_chain = LightPeerChain(
             self.headerdb,
             cast(LESPeerPool, self.get_peer_pool()),
-            token=self.master_cancel_token,
         )
 
     @property
@@ -62,7 +61,7 @@ class LightNode(Node[LESPeer]):
         return self.chain_config.light_chain_class
 
     async def run(self) -> None:
-        self.manager.run_daemon_child_service(self._peer_chain.as_new_service())
+        self.manager.run_daemon_child_service(self._peer_chain)
         await super().run()
 
     def get_chain(self) -> LightDispatchChain:

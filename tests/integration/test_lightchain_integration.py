@@ -136,13 +136,7 @@ def wait_for_socket(ipc_path, timeout=10):
 
 
 @pytest.mark.asyncio
-async def test_lightchain_integration(
-        request,
-        event_loop,
-        caplog,
-        geth_ipc_path,
-        enode,
-        geth_process):
+async def test_lightchain_integration(request, caplog, geth_ipc_path, enode, geth_process):
     """Test LightChainSyncer/LightPeerChain against a running geth instance.
 
     In order to run this manually, you can use `tox -e py36-lightchain_integration` or:
@@ -186,15 +180,15 @@ async def test_lightchain_integration(
     syncer.min_peers_to_sync = 1
     peer_chain = LightPeerChain(headerdb, peer_pool)
 
-    def finalizer():
-        event_loop.run_until_complete(peer_chain.cancel())
-
     async with background_asyncio_service(peer_pool) as manager:
         await manager.wait_started()
         asyncio.ensure_future(connect_to_peers_loop(peer_pool, tuple([remote])))
-        asyncio.ensure_future(peer_chain.run())
-        request.addfinalizer(finalizer)
-        async with background_asyncio_service(syncer) as syncer_manager:
+        async with background_asyncio_service(
+            syncer
+        ) as syncer_manager, background_asyncio_service(
+            peer_chain
+        ) as chain_manager:
+            await chain_manager.wait_started()
             await syncer_manager.wait_started()
 
             n = 11

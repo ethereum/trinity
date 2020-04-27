@@ -6,7 +6,6 @@ from typing import (
 )
 
 from async_service import Service, ServiceAPI
-from cancel_token.token import CancelToken
 from lahja import EndpointAPI
 
 from eth.abc import AtomicDatabaseAPI
@@ -61,7 +60,6 @@ class Node(Service, Generic[TPeer]):
 
         self.event_bus = event_bus
         self.metrics_service = metrics_service
-        self.master_cancel_token = CancelToken(type(self).__name__)
 
     async def handle_network_id_requests(self) -> None:
         async for req in self.event_bus.stream(NetworkIdRequest):
@@ -136,6 +134,5 @@ class Node(Service, Generic[TPeer]):
             try:
                 await self.manager.wait_finished()
             finally:
-                self.master_cancel_token.trigger()
                 self.event_bus.broadcast_nowait(
                     ShutdownRequest("Node exiting. Triggering shutdown"))

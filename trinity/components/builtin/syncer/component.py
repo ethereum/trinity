@@ -18,7 +18,6 @@ from typing import (
 from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
-from cancel_token import CancelToken
 from eth.abc import AtomicDatabaseAPI
 from eth_utils import (
     to_tuple,
@@ -99,8 +98,7 @@ class BaseSyncStrategy(ABC):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
         ...
 
 
@@ -120,8 +118,7 @@ class NoopSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         logger.info("Node running without sync (--sync-mode=%s)", self.get_sync_mode())
 
@@ -138,15 +135,13 @@ class FullSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         syncer = FullChainSyncer(
             chain,
             AsyncChainDB(base_db),
             base_db,
             cast(ETHPeerPool, peer_pool),
-            cancel_token,
         )
 
         await syncer.run()
@@ -184,8 +179,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         syncer = BeamSyncService(
             chain,
@@ -213,8 +207,7 @@ class LightSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI,
-                   cancel_token: CancelToken) -> None:
+                   event_bus: EndpointAPI) -> None:
 
         syncer = LightChainSyncer(
             chain,
@@ -336,7 +329,6 @@ class SyncerComponent(AsyncioIsolatedComponent):
             node.base_db,
             node.get_peer_pool(),
             event_bus,
-            node.master_cancel_token
         )
 
         if strategy.shutdown_node_on_halt:
