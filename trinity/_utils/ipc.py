@@ -61,42 +61,6 @@ def kill_process_gracefully(
     kill_process_id_gracefully(process.pid, process.join, logger, SIGINT_timeout, SIGTERM_timeout)
 
 
-def kill_processes_gracefully(
-        processes: Iterable[Process],
-        logger: Logger,
-        SIGINT_timeout: int = DEFAULT_SIGINT_TIMEOUT,
-        SIGTERM_timeout: int = DEFAULT_SIGTERM_TIMEOUT) -> None:
-
-    # Send SIGINT to each process without blocking
-    for process in processes:
-        sigint_process_id(process.pid, lambda _: None, logger, SIGINT_timeout)
-
-    # Now block on each process as long as we have time left in the budget
-    sigint_at = time.time()
-    for process in processes:
-        waited_sec = time.time() - sigint_at
-        if waited_sec >= SIGINT_timeout:
-            logger.debug("Waited %d on SIGINT, moving on", waited_sec)
-            break
-        process.join(SIGINT_timeout)
-
-    # Send SIGTERM to each process without blocking
-    for process in processes:
-        sigterm_process_id(process.pid, lambda _: None, logger, SIGTERM_timeout)
-
-    # Now block on each process as long as we have time left in the budget
-    sigterm_at = time.time()
-    for process in processes:
-        waited_sec = time.time() - sigterm_at
-        if waited_sec >= SIGTERM_timeout:
-            logger.debug("Waited %d on SIGINT, moving on", waited_sec)
-            break
-        process.join(SIGTERM_timeout)
-
-    for process in processes:
-        sigkill_process_id(process.pid, logger)
-
-
 def kill_popen_gracefully(
         popen: 'subprocess.Popen[Any]',
         logger: Logger,
