@@ -7,16 +7,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from async_service import Service
-from async_service import background_asyncio_service
+from async_service import Service, background_asyncio_service, background_trio_service
 from asyncio_run_in_process.typing import SubprocessKwargs
-
 from eth_utils.toolz import merge
-
 from lahja import EndpointAPI, BaseEvent
 
 from trinity.boot_info import BootInfo
-from trinity.extensibility import AsyncioIsolatedComponent
+from trinity.extensibility import AsyncioIsolatedComponent, TrioIsolatedComponent
 
 
 class IsStarted(BaseEvent):
@@ -24,15 +21,15 @@ class IsStarted(BaseEvent):
         self.path = path
 
 
-class AsyncioComponentService(Service):
+class ComponentTestService(Service):
     logger = logging.getLogger('trinity.testing.ServiceForTest')
 
     def __init__(self, event_bus: EndpointAPI) -> None:
         self.event_bus = event_bus
 
     async def run(self) -> None:
-        self.logger.debug('Broadcasting `IsStarted`')
         path = Path(tempfile.NamedTemporaryFile().name)
+        self.logger.debug('Broadcasting `IsStarted(%s)`', path)
         try:
             await self.event_bus.broadcast(IsStarted(path))
             self.logger.debug('Waiting for cancellation')
@@ -66,7 +63,7 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         cls.logger.debug('Entered `do_run`')
-        service = AsyncioComponentService(event_bus)
+        service = ComponentTestService(event_bus)
         try:
             async with background_asyncio_service(service) as manager:
                 cls.logger.debug('Running service')
@@ -78,4 +75,27 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
             # XXX: We never reach this line, so if you run test_isolated_component.py by itself it
             # will pass but hang forever after pytest reports success.
             # Figuring this out is probably the key to fixing our shutdown.
+            cls.logger.debug('Finished: `do_run`')
+
+
+class TrioComponentForTest(TrioIsolatedComponent):
+    name = "component-test-trio"
+    endpoint_name = 'component-test-trio'
+
+    @property
+    def is_enabled(self) -> bool:
+        return True
+
+    @classmethod
+    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        cls.logger.debug('Entered `do_run`')
+        service = ComponentTestService(event_bus)
+        try:
+            async with background_trio_service(service) as manager:
+                cls.logger.debug('Running service')
+                try:
+                    await manager.wait_finished()
+                finally:
+                    cls.logger.debug('Exiting `do_run`')
+        finally:
             cls.logger.debug('Finished: `do_run`')

@@ -6,14 +6,16 @@ import os
 from async_service import background_asyncio_service
 import pytest
 
-from trinity._utils.chains import (
-    get_local_data_dir,
-)
+from trinity._utils.chains import get_local_data_dir
 from trinity._utils.logging import IPCListener
 from trinity.boot_info import BootInfo
 from trinity.config import TrinityConfig
 from trinity.extensibility import ComponentManager
-from trinity.tools._component_isolation import IsStarted, AsyncioComponentForTest
+from trinity.tools._component_isolation import (
+    AsyncioComponentForTest,
+    IsStarted,
+    TrioComponentForTest,
+)
 
 
 @pytest.fixture
@@ -46,12 +48,12 @@ def log_listener(trinity_config):
         yield
 
 
+@pytest.mark.parametrize("component", (AsyncioComponentForTest, TrioComponentForTest))
 @pytest.mark.asyncio
-async def test_asyncio_isolated_component(boot_info,
-                                          log_listener):
+async def test_isolated_component(boot_info, log_listener, component):
     # Test the lifecycle management for isolated process components to be sure
     # they start and stop as expected
-    component_manager = ComponentManager(boot_info, (AsyncioComponentForTest,))
+    component_manager = ComponentManager(boot_info, (component,))
 
     async with background_asyncio_service(component_manager):
         event_bus = await component_manager.get_event_bus()
