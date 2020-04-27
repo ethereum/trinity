@@ -5,6 +5,7 @@ from abc import (
 import asyncio
 from functools import (
     partial,
+    wraps,
 )
 from typing import (
     Any,
@@ -17,6 +18,8 @@ from typing import (
     Type,
 )
 import weakref
+
+from async_service import Service, ServiceAPI
 
 from async_lru import alru_cache
 
@@ -35,8 +38,6 @@ from eth_utils import (
 
 from trie import HexaryTrie
 from trie.exceptions import BadTrieProof
-
-from cancel_token import CancelToken
 
 from eth.exceptions import (
     BlockNotFound,
@@ -61,15 +62,31 @@ from p2p.constants import (
 )
 from p2p.disconnect import DisconnectReason
 from p2p.peer import PeerSubscriber
-from p2p.service import (
-    BaseService,
-    service_timeout,
-)
 
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.les.peer import LESPeer, LESPeerPool
 from trinity.protocol.les.commands import ProofsV1, ProofsV2
 from trinity.rlp.block_body import BlockBody
+from trinity._utils.logging import get_logger
+
+
+def service_timeout(timeout: int) -> Callable[..., Any]:
+    """
+    Decorator to time out a method call.
+
+    :param timeout: seconds to wait before raising a timeout exception
+
+    :raise asyncio.TimeoutError: if the call is not complete before timeout seconds
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(func)
+        async def wrapped(service: ServiceAPI, *args: Any, **kwargs: Any) -> Any:
+            return await asyncio.wait_for(
+                func(service, *args, **kwargs),
+                timeout=timeout,
+            )
+        return wrapped
+    return decorator
 
 
 class BaseLightPeerChain(ABC):
@@ -95,18 +112,14 @@ class BaseLightPeerChain(ABC):
         ...
 
 
-class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
+class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
     reply_timeout = REPLY_TIMEOUT
     headerdb: BaseAsyncHeaderDB = None
     _pending_replies: "weakref.WeakValueDictionary[int, asyncio.Future[CommandAPI[Any]]]"
 
-    def __init__(
-            self,
-            headerdb: BaseAsyncHeaderDB,
-            peer_pool: LESPeerPool,
-            token: CancelToken = None) -> None:
+    def __init__(self, headerdb: BaseAsyncHeaderDB, peer_pool: LESPeerPool) -> None:
         PeerSubscriber.__init__(self)
-        BaseService.__init__(self, token)
+        self.logger = get_logger('trinity.sync.light.LightPeerChain')
         self.headerdb = headerdb
         self.peer_pool = peer_pool
         self._pending_replies = weakref.WeakValueDictionary()
@@ -118,10 +131,10 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
     # to be handled by the chain syncer), so our queue should never grow too much.
     msg_queue_maxsize = 500
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         with self.subscribe(self.peer_pool):
-            while self.is_operational:
-                peer, cmd = await self.wait(self.msg_queue.get())
+            while self.manager.is_running:
+                peer, cmd = await self.msg_queue.get()
                 request_id = getattr(cmd.payload, 'request_id', None)
                 # request_id can be None here because not all LES messages include one. For
                 # instance, the Announce msg doesn't.
@@ -135,7 +148,7 @@ class LightPeerChain(PeerSubscriber, BaseService, BaseLightPeerChain):
         fut: 'asyncio.Future[CommandAPI[Any]]' = asyncio.Future()
 
         self._pending_replies[request_id] = fut
-        return await self.wait(fut, timeout=self.reply_timeout)
+        return await asyncio.wait_for(fut, timeout=self.reply_timeout)
 
     @alru_cache(maxsize=1024, cache_exceptions=False)
     @service_timeout(COMPLETION_TIMEOUT)
