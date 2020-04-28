@@ -330,7 +330,10 @@ class Transport(TransportAPI):
 
         This will cause the peer to stop in case it is running.
         """
-        await self._writer.drain()
+        try:
+            await self._writer.drain()
+        except (ConnectionResetError, BrokenPipeError) as e:
+            self.logger.debug("Could not drain writer (%s), closing transport writer anyway", e)
         self._writer.close()
 
     @property
