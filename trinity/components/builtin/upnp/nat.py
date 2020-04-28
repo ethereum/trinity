@@ -66,7 +66,7 @@ class UPnPService(Service):
                             "NAT portmap created, broadcasting UPnPMapping event: %s", event)
                         await self.event_bus.broadcast(event, FIRE_AND_FORGET_BROADCASTING)
                     except PortMapFailed as err:
-                        self.logger.error("Failed to setup NAP portmap: %s", err)
+                        self.logger.error("Failed to setup NAT portmap: %s", err)
                     except Exception:
                         self.logger.exception("Error setuping NAT portmap")
 
