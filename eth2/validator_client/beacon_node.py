@@ -205,7 +205,7 @@ class BeaconNode(BeaconNodeAPI):
         self._session = Session()
         self._connection_lock = trio.Lock()
         self._is_connected = False
-        self.client_version = None
+        self.client_version: Optional[str] = None
 
     @classmethod
     def from_config(cls, config: Config) -> "BeaconNode":

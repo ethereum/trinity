@@ -2,13 +2,24 @@ from itertools import count
 import json
 import logging
 import signal
-from typing import Any, Awaitable, Callable, Dict, Generic, Tuple, TypeVar, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Generic,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 from urllib.parse import urlparse
 from wsgiref.handlers import format_date_time
 
 from eth_utils.toolz import curry
 import h11
 import trio
+from trio_typing import TaskStatus
 
 
 async def wait_for_interrupts() -> None:
@@ -418,8 +429,14 @@ class JSONHTTPServer(Generic[TContext]):
         self.handler = http_serve_json_api(router, context)
         self.port = port
 
-    async def serve(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
+    async def serve(
+        self, task_status: TaskStatus[int] = trio.TASK_STATUS_IGNORED
+    ) -> None:
         async with trio.open_nursery() as nursery:
-            listeners = await nursery.start(trio.serve_tcp, self.handler, self.port)
-            self.port = listeners[0].socket.getsockname()[1]
+            # NOTE: `mypy` does not like the typing here but this
+            # should type check...
+            listeners: Sequence[trio.SocketListener] = await nursery.start(
+                trio.serve_tcp, self.handler, self.port  # type: ignore
+            )
+            self.port = int(listeners[0].socket.getsockname()[1])
             task_status.started(self.port)

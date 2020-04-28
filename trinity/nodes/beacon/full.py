@@ -6,6 +6,7 @@ from eth.db.backends.level import LevelDB
 from eth_keys.datatypes import PrivateKey
 from libp2p.crypto.secp256k1 import create_new_key_pair
 import trio
+from trio_typing import TaskStatus
 
 from eth2.api.http.validator import Context
 from eth2.api.http.validator import ServerHandlers as ValidatorAPIHandlers
@@ -95,7 +96,9 @@ class BeaconNode:
     def current_tick(self) -> Tick:
         return self._clock.compute_current_tick()
 
-    async def _iterate_clock(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
+    async def _iterate_clock(
+        self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
+    ) -> None:
         task_status.started()
         async for tick in self._clock:
             self.logger.debug(
@@ -106,7 +109,9 @@ class BeaconNode:
                 tick.count,
             )
 
-    async def _run_validator_api(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
+    async def _run_validator_api(
+        self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
+    ) -> None:
         server = self._validator_api_server
         async with trio.open_nursery() as nursery:
             self.validator_api_port = await nursery.start(server.serve)
@@ -115,7 +120,9 @@ class BeaconNode:
             )
             task_status.started()
 
-    async def run(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
+    async def run(
+        self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
+    ) -> None:
         tasks = (self._iterate_clock, self._run_validator_api)
 
         async with trio.open_nursery() as nursery:
