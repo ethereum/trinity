@@ -15,7 +15,7 @@ async def test_beacon_node_can_count_slots(
     chain_class,
     get_trio_time,
 ):
-    validator_api_port = 5005
+    validator_api_port = 0
     client_id = construct_trinity_client_identifier()
     node = BeaconNode(
         node_key,
