@@ -418,9 +418,8 @@ class JSONHTTPServer(Generic[TContext]):
         self.handler = http_serve_json_api(router, context)
         self.port = port
 
-    async def serve(self) -> None:
-        # NOTE: `mypy` complains unless we explicitly pass the ``task_status``
-        # even though it is a default argument in ``trio.serve_tcp``.
-        await trio.serve_tcp(
-            self.handler, self.port, task_status=trio.TASK_STATUS_IGNORED
-        )
+    async def serve(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
+        async with trio.open_nursery() as nursery:
+            listeners = await nursery.start(trio.serve_tcp, self.handler, self.port)
+            self.port = listeners[0].socket.getsockname()[1]
+            task_status.started(self.port)

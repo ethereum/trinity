@@ -66,6 +66,7 @@ class BeaconNode:
         self._clock = _mk_clock(eth2_config, chain_config.genesis_time, time_provider)
 
         api_context = Context(client_identifier)
+        self._validator_api_port = validator_api_port
         self._validator_api_server = _mk_validator_api_server(
             validator_api_port, api_context
         )
@@ -94,7 +95,8 @@ class BeaconNode:
     def current_tick(self) -> Tick:
         return self._clock.compute_current_tick()
 
-    async def _iterate_clock(self) -> None:
+    async def _iterate_clock(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
+        task_status.started()
         async for tick in self._clock:
             self.logger.debug(
                 "slot %d [number %d in epoch %d] (tick %d)",
@@ -104,14 +106,19 @@ class BeaconNode:
                 tick.count,
             )
 
-    async def _run_validator_api(self) -> None:
+    async def _run_validator_api(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
         server = self._validator_api_server
-        self.logger.info("validator HTTP API server listening on %d", server.port)
-        await server.serve()
+        async with trio.open_nursery() as nursery:
+            self.validator_api_port = await nursery.start(server.serve)
+            self.logger.info(
+                "validator HTTP API server listening on %d", self.validator_api_port
+            )
+            task_status.started()
 
-    async def run(self) -> None:
+    async def run(self, task_status=trio.TASK_STATUS_IGNORED) -> None:
         tasks = (self._iterate_clock, self._run_validator_api)
 
         async with trio.open_nursery() as nursery:
             for task in tasks:
-                nursery.start_soon(task)
+                await nursery.start(task)
+            task_status.started()
