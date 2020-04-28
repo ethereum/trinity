@@ -298,7 +298,7 @@ class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
     async def handle_joining_peers(self) -> None:
         async for peer in self.stream_peers_joining():
             # We just want to consume the AsyncIterator
-            self.logger.info("New Proxy Peer joined %s", peer)
+            self.logger.debug("New Proxy Peer joined %s", peer)
 
     async def handle_leaving_peers(self) -> None:
         async for ev in self.event_bus.stream(PeerLeftEvent):
@@ -309,7 +309,7 @@ class BaseProxyPeerPool(Service, Generic[TProxyPeer]):
                 # TODO: Double check based on some session id if we are indeed
                 # removing the right peer
                 await proxy_peer.manager.stop()
-                self.logger.warning("Removed proxy peer from proxy pool %s", ev.session)
+                self.logger.debug("Removed proxy peer from proxy pool %s", ev.session)
 
     async def fetch_initial_peers(self) -> Tuple[TProxyPeer, ...]:
         response = await self.event_bus.request(GetConnectedPeersRequest(), self.broadcast_config)

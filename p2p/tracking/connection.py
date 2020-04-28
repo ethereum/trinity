@@ -12,6 +12,7 @@ from p2p.exceptions import (
     BaseP2PError,
     HandshakeFailure,
     HandshakeFailureTooManyPeers,
+    MalformedMessage,
 )
 from p2p.typing import NodeID
 
@@ -27,6 +28,8 @@ def register_error(exception: Type[BaseP2PError], timeout_seconds: int) -> None:
 
 register_error(HandshakeFailure, 10)  # 10 seconds
 register_error(HandshakeFailureTooManyPeers, 60)  # one minute
+# A MalformedMessage is usually not a transient issue, so blacklist the remote for a long time.
+register_error(MalformedMessage, 3600)  # 1 hour
 
 
 def get_timeout_for_failure(failure: BaseP2PError) -> int:
