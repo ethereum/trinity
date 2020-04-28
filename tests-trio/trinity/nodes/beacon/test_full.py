@@ -5,13 +5,15 @@ from trinity._utils.version import construct_trinity_client_identifier
 from trinity.nodes.beacon.full import BeaconNode
 
 
-def get_trio_time():
-    return trio.current_time()
-
-
 @pytest.mark.trio
 async def test_beacon_node_can_count_slots(
-    autojump_clock, node_key, eth2_config, chain_config, database_dir, chain_class
+    autojump_clock,
+    node_key,
+    eth2_config,
+    chain_config,
+    database_dir,
+    chain_class,
+    get_trio_time,
 ):
     validator_api_port = 5005
     client_id = construct_trinity_client_identifier()
