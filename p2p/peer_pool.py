@@ -346,13 +346,14 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             # dump the full stacktrace in the debug logs
             self.logger.debug('Got bad auth ack from %r', remote, exc_info=True)
             raise
-        except MalformedMessage:
+        except MalformedMessage as e:
             # This is kept separate from the
             # `COMMON_PEER_CONNECTION_EXCEPTIONS` to be sure that we aren't
             # silencing an error in how we decode messages during handshake.
             self.logger.error('Got malformed response from %r during handshake', remote)
             # dump the full stacktrace in the debug logs
             self.logger.debug('Got malformed response from %r', remote, exc_info=True)
+            self.connection_tracker.record_failure(remote, e)
             raise
         except HandshakeFailure as e:
             self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
