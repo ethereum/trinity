@@ -56,6 +56,8 @@ def trinity_boot(boot_info: BootInfo) -> Tuple[multiprocessing.Process]:
     logger = logging.getLogger('trinity')
 
     # First initialize the database process.
+    # FIXME: Use subprocess.Popen() so that we can make the process be its own process group
+    # leader and avoid the hack below to ignore the first SIGINT.
     database_server_process: multiprocessing.Process = ctx.Process(
         name="DB",
         target=run_database_process,
@@ -82,6 +84,7 @@ def trinity_boot(boot_info: BootInfo) -> Tuple[multiprocessing.Process]:
 
 
 def run_database_process(boot_info: BootInfo, db_class: Type[LevelDB]) -> None:
+    logger = logging.getLogger('trinity')
     with child_process_logging(boot_info):
         trinity_config = boot_info.trinity_config
 
@@ -100,4 +103,14 @@ def run_database_process(boot_info: BootInfo, db_class: Type[LevelDB]) -> None:
                 try:
                     manager.wait_stopped()
                 except KeyboardInterrupt:
-                    pass
+                    # NOTE: When there's a Ctrl-C in the terminal we'll get a SIGINT immediately
+                    # as we run in the same process group of the main process, and that would
+                    # cause us to terminate before the other components that depend on the DB.
+                    # Until we address the FIXME above so that we run in our own process group, we
+                    # ignore the first SIGINT to avoid terminating too early.
+                    logger.info(
+                        "DB process ignored first KeyboardInterrupt, will stop on the next one")
+                    try:
+                        manager.wait_stopped()
+                    except KeyboardInterrupt:
+                        pass
