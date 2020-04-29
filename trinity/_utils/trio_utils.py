@@ -248,7 +248,7 @@ Method = str
 
 TContext = TypeVar("TContext")
 
-JSON = Union[Dict[str, Any], str, int]
+JSON = Union[Dict[str, Any], str, int, bool, Sequence[Any]]
 Request = JSON
 Response = JSON
 Handler = Callable[[TContext, Request], Awaitable[Response]]
