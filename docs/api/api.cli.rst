@@ -27,7 +27,7 @@ We can also generate an always up-to-date version of them by running ``trinity -
                   [--ethstats-interval ETHSTATS_INTERVAL]
                   [--disable-request-server]
                   [--force-beam-block-number FORCE_BEAM_BLOCK_NUMBER]
-                  [--beam-from-checkpoint BEAM_FROM_CHECKPOINT]
+                  [--sync-from-checkpoint SYNC_FROM_CHECKPOINT]
                   [--sync-mode {full,beam,light,none}] [--disable-tx-pool]
                   {attach,db-shell,fix-unclean-shutdown,remove-network-db,export,import}
                   ...
@@ -58,7 +58,7 @@ We can also generate an always up-to-date version of them by running ``trinity -
       --force-beam-block-number FORCE_BEAM_BLOCK_NUMBER
                             Force beam sync to activate on a specific block number
                             (for testing)
-      --beam-from-checkpoint BEAM_FROM_CHECKPOINT
+      --sync-from-checkpoint SYNC_FROM_CHECKPOINT
                             Start beam sync from a trusted checkpoint specified
                             using URI syntax:By specific block,
                             eth://block/byhash/<hash>?score=<score>Let etherscan

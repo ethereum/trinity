@@ -1,0 +1,1 @@
+Rename ``--beam-from-checkpoint`` to ``--sync-from-checkpoint``
