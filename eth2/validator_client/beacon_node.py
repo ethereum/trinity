@@ -1,4 +1,3 @@
-from enum import Enum, unique
 import logging
 import random
 from types import TracebackType
@@ -14,6 +13,7 @@ from ssz.tools.parse import from_formatted_dict
 import trio
 
 from eth2._utils.humanize import humanize_bytes
+from eth2.api.http.validator import Paths as BeaconNodePath
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
@@ -32,18 +32,8 @@ SYNCING_POLL_INTERVAL = 10  # seconds
 CONNECTION_RETRY_INTERVAL = 5  # seconds
 
 
-@unique
-class BeaconNodePath(Enum):
-    node_version = "/node/version"
-    genesis_time = "/node/genesis_time"
-    sync_status = "/node/syncing"
-    validator_duties = "/validator/duties"
-    block_proposal = "/validator/block"
-    attestation = "/validator/attestation"
-
-
 async def _get_node_version(session: Session, url: str) -> str:
-    return (await session.get(url)).text
+    return (await session.get(url)).json()
 
 
 async def _get_syncing_status(session: Session, url: str) -> bool:
@@ -215,6 +205,7 @@ class BeaconNode(BeaconNodeAPI):
         self._session = Session()
         self._connection_lock = trio.Lock()
         self._is_connected = False
+        self.client_version: Optional[str] = None
 
     @classmethod
     def from_config(cls, config: Config) -> "BeaconNode":
@@ -246,7 +237,7 @@ class BeaconNode(BeaconNodeAPI):
         beacon node, ensuring it is up-to-date and reachable.
         """
         try:
-            await self._ping_beacon_node()
+            await self.load_client_version()
             await self._wait_for_synced_beacon_node()
             await self._validate_genesis_time()
             self._is_connected = True
@@ -263,14 +254,16 @@ class BeaconNode(BeaconNodeAPI):
                 self.logger.error(e)
                 raise
 
-    async def _ping_beacon_node(self) -> None:
+    async def load_client_version(self) -> None:
         """
-        To "ping" a beacon node, the ``BeaconNode`` instance attempts to query
-        some endpoint which should not fail and get back a successful response.
+        Reads the client version of the connected beacon node.
+        Can be used for "ping"/"poke" methodology.
         """
         url = self._url_for(BeaconNodePath.node_version)
-        version = await _get_node_version(self._session, url)
-        self.logger.info("Connected to a node with version identifier: %s", version)
+        self.client_version = await _get_node_version(self._session, url)
+        self.logger.info(
+            "Connected to a node with version identifier: %s", self.client_version
+        )
 
     async def _get_syncing_status(self) -> bool:
         url = self._url_for(BeaconNodePath.sync_status)

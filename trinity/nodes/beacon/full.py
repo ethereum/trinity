@@ -6,11 +6,15 @@ from eth.db.backends.level import LevelDB
 from eth_keys.datatypes import PrivateKey
 from libp2p.crypto.secp256k1 import create_new_key_pair
 import trio
+from trio_typing import TaskStatus
 
+from eth2.api.http.validator import Context
+from eth2.api.http.validator import ServerHandlers as ValidatorAPIHandlers
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
+from trinity._utils.trio_utils import JSONHTTPServer
 from trinity.config import BeaconChainConfig
 from trinity.initialization import (
     initialize_beacon_database,
@@ -31,6 +35,18 @@ def _mk_clock(
     )
 
 
+def _mk_validator_api_server(
+    validator_api_port: int, context: Context
+) -> JSONHTTPServer[Context]:
+    # NOTE: `mypy` claims the handlers are not typed correctly although it does determine
+    # the async callable to be a subtype of the declared type so it seems like a bug
+    # and we will ignore for now...
+    # See https://mypy.readthedocs.io/en/stable/more_types.html#typing-async-await
+    return JSONHTTPServer(
+        ValidatorAPIHandlers, context, validator_api_port  # type: ignore
+    )
+
+
 class BeaconNode:
     logger = logging.getLogger("trinity.nodes.beacon.full.BeaconNode")
 
@@ -41,12 +57,20 @@ class BeaconNode:
         chain_config: BeaconChainConfig,
         database_dir: Path,
         chain_class: Type[BaseBeaconChain],
+        validator_api_port: int,
+        client_identifier: str,
         time_provider: TimeProvider = get_unix_time,
     ) -> None:
         self._local_key_pair = create_new_key_pair(local_node_key.to_bytes())
         self._eth2_config = eth2_config
 
         self._clock = _mk_clock(eth2_config, chain_config.genesis_time, time_provider)
+
+        api_context = Context(client_identifier)
+        self._validator_api_port = validator_api_port
+        self._validator_api_server = _mk_validator_api_server(
+            validator_api_port, api_context
+        )
 
         self._base_db = LevelDB(db_path=database_dir)
         self._chain_db = BeaconChainDB(self._base_db, eth2_config)
@@ -64,13 +88,18 @@ class BeaconNode:
             config.chain_config,
             config.database_dir,
             config.chain_class,
+            config.validator_api_port,
+            config.client_identifier,
         )
 
     @property
     def current_tick(self) -> Tick:
         return self._clock.compute_current_tick()
 
-    async def _iterate_clock(self) -> None:
+    async def _iterate_clock(
+        self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
+    ) -> None:
+        task_status.started()
         async for tick in self._clock:
             self.logger.debug(
                 "slot %d [number %d in epoch %d] (tick %d)",
@@ -80,9 +109,23 @@ class BeaconNode:
                 tick.count,
             )
 
-    async def run(self) -> None:
-        tasks = (self._iterate_clock,)
+    async def _run_validator_api(
+        self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
+    ) -> None:
+        server = self._validator_api_server
+        async with trio.open_nursery() as nursery:
+            self.validator_api_port = await nursery.start(server.serve)
+            self.logger.info(
+                "validator HTTP API server listening on %d", self.validator_api_port
+            )
+            task_status.started()
+
+    async def run(
+        self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
+    ) -> None:
+        tasks = (self._iterate_clock, self._run_validator_api)
 
         async with trio.open_nursery() as nursery:
             for task in tasks:
-                nursery.start_soon(task)
+                await nursery.start(task)
+            task_status.started()

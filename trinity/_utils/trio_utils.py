@@ -2,13 +2,24 @@ from itertools import count
 import json
 import logging
 import signal
-from typing import Any, Awaitable, Callable, Dict, Tuple
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Generic,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 from urllib.parse import urlparse
 from wsgiref.handlers import format_date_time
 
 from eth_utils.toolz import curry
 import h11
 import trio
+from trio_typing import TaskStatus
 
 
 async def wait_for_interrupts() -> None:
@@ -199,7 +210,7 @@ class TrioHTTPWrapper:
 
     def info(self, *args: Any) -> None:
         encoded_args = map(str, args)
-        self.logger.info("conn %d: %s", self._obj_id, " ".join(encoded_args))
+        self.logger.debug("conn %d: %s", self._obj_id, " ".join(encoded_args))
 
 
 ################################################################
@@ -235,14 +246,19 @@ class TrioHTTPWrapper:
 Path = str
 Method = str
 
-Request = Dict[str, Any]
-Response = Dict[str, Any]
-Handler = Callable[[Request], Awaitable[Response]]
-Router = Callable[[Method, Path], Handler]
+TContext = TypeVar("TContext")
+
+JSON = Union[Dict[str, Any], str, int]
+Request = JSON
+Response = JSON
+Handler = Callable[[TContext, Request], Awaitable[Response]]
+Router = Callable[[Method, Path], Handler[TContext]]
 
 
 @curry
-async def http_serve_json_api(router: Router, stream: trio.SocketStream) -> None:
+async def http_serve_json_api(
+    router: Router[TContext], context: TContext, stream: trio.SocketStream
+) -> None:
     wrapper = TrioHTTPWrapper(stream)
     wrapper.info("Got new connection")
     while True:
@@ -254,7 +270,7 @@ async def http_serve_json_api(router: Router, stream: trio.SocketStream) -> None
                 event = await wrapper.next_event()
                 wrapper.info("Server main loop got event:", event)
                 if type(event) is h11.Request:
-                    await send_json_response(router, wrapper, event)
+                    await send_json_response(router, wrapper, event, context)
         except Exception as exc:
             wrapper.info("Error during response handler: {!r}".format(exc))
             await maybe_send_error_response(wrapper, exc)
@@ -347,11 +363,11 @@ class MethodNotAllowedException(Exception):
     error_status_hint = 405
 
 
-Handlers = Dict[Path, Dict[Method, Handler]]
+Handlers = Dict[Path, Dict[Method, Handler[TContext]]]
 
 
-def make_router(handlers: Handlers) -> Router:
-    def _router(path: Path, method: Method) -> Handler:
+def make_router(handlers: Handlers[TContext]) -> Router[TContext]:
+    def _router(path: Path, method: Method) -> Handler[TContext]:
         if path not in handlers:
             raise ResourceNotFoundException()
         handlers_for_path = handlers[path]
@@ -366,7 +382,10 @@ def make_router(handlers: Handlers) -> Router:
 
 
 async def send_json_response(
-    router: Router, wrapper: TrioHTTPWrapper, request: h11._events._EventBundle
+    router: Router[TContext],
+    wrapper: TrioHTTPWrapper,
+    request: h11._events._EventBundle,
+    context: TContext,
 ) -> None:
     if request.method not in {b"GET", b"POST"}:
         # Laziness: we should send a proper 405 Method Not Allowed with the
@@ -390,7 +409,11 @@ async def send_json_response(
     #     (name.decode("ascii"), value.decode("ascii"))
     #     for (name, value) in request.headers
     # )
-    response = await handler(json.loads(body.decode("ascii")))
+    if body:
+        json_body = json.loads(body.decode("ascii"))
+    else:
+        json_body = {}
+    response = await handler(context, json_body)
     response_body_unicode = json.dumps(response)
     response_body_bytes = response_body_unicode.encode("utf-8")
     await send_simple_response(
@@ -398,14 +421,22 @@ async def send_json_response(
     )
 
 
-class JSONHTTPServer:
+class JSONHTTPServer(Generic[TContext]):
     logger = logging.getLogger("trinity._utils.trio_utils.JSONHTTPServer")
 
-    def __init__(self, handlers: Handlers):
+    def __init__(self, handlers: Handlers[TContext], context: TContext, port: int = 0):
         router = make_router(handlers)
-        self.handler = http_serve_json_api(router)
+        self.handler = http_serve_json_api(router, context)
+        self.port = port
 
-    async def serve(self, port: int = 0) -> None:
-        # NOTE: `mypy` complains unless we explicitly pass the ``task_status``
-        # even though it is a default argument in ``trio.serve_tcp``.
-        await trio.serve_tcp(self.handler, port, task_status=trio.TASK_STATUS_IGNORED)
+    async def serve(
+        self, task_status: TaskStatus[int] = trio.TASK_STATUS_IGNORED
+    ) -> None:
+        async with trio.open_nursery() as nursery:
+            # NOTE: `mypy` does not like the typing here but this
+            # should type check...
+            listeners: Sequence[trio.SocketListener] = await nursery.start(
+                trio.serve_tcp, self.handler, self.port  # type: ignore
+            )
+            self.port = int(listeners[0].socket.getsockname()[1])
+            task_status.started(self.port)
