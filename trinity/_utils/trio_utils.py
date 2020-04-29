@@ -13,7 +13,7 @@ from typing import (
     TypeVar,
     Union,
 )
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qsl
 from wsgiref.handlers import format_date_time
 
 from eth_utils.toolz import curry
@@ -410,10 +410,10 @@ async def send_json_response(
     #     for (name, value) in request.headers
     # )
     if body:
-        json_body = json.loads(body.decode("ascii"))
+        request_body = json.loads(body.decode("ascii"))
     else:
-        json_body = {}
-    response = await handler(context, json_body)
+        request_body = dict(parse_qsl(target.query))
+    response = await handler(context, request_body)
     response_body_unicode = json.dumps(response)
     response_body_bytes = response_body_unicode.encode("utf-8")
     await send_simple_response(
