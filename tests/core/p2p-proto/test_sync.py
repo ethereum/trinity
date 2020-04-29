@@ -34,6 +34,7 @@ from trinity.protocol.les.peer import (
 from trinity.sync.beam.chain import (
     BeamSyncer,
 )
+from trinity.sync.header.chain import HeaderChainSyncer
 from trinity.sync.light.chain import LightChainSyncer
 
 from trinity.tools.factories import (
@@ -387,6 +388,41 @@ async def test_regular_syncer_fallback(request, event_loop, event_bus, chaindb_f
                 await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
                 head = chaindb_fresh.get_canonical_head()
                 assert head.state_root in chaindb_fresh.db
+
+
+@pytest.mark.asyncio
+async def test_header_syncer(request,
+                             event_loop,
+                             event_bus,
+                             chaindb_fresh,
+                             chaindb_20):
+    client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
+    server_context = ChainContextFactory(headerdb__db=chaindb_20.db)
+    peer_pair = LatestETHPeerPairFactory(
+        alice_peer_context=client_context,
+        bob_peer_context=server_context,
+        event_bus=event_bus,
+    )
+    async with peer_pair as (client_peer, server_peer):
+
+        client = HeaderChainSyncer(
+            LatestTestChain(chaindb_fresh.db),
+            chaindb_fresh,
+            MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
+        )
+        server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+
+        async with run_peer_pool_event_server(
+            event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db),
+        )):
+
+            server_peer.logger.info("%s is serving 20 blocks", server_peer)
+            client_peer.logger.info("%s is syncing up 20", client_peer)
+
+            async with background_asyncio_service(client):
+                await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,7 @@ from abc import (
     abstractmethod,
 )
 from argparse import (
+    ArgumentError,
     ArgumentParser,
     Namespace,
     _ArgumentGroup,
@@ -64,6 +65,7 @@ from trinity.sync.full.service import (
 from trinity.sync.beam.service import (
     BeamSyncService,
 )
+from trinity.sync.header.chain import HeaderChainSyncer
 from trinity.sync.light.chain import (
     LightChainSyncer,
 )
@@ -71,16 +73,26 @@ from trinity.components.builtin.syncer.cli import NormalizeCheckpointURI
 
 
 def add_sync_from_checkpoint_arg(arg_parser: _ArgumentGroup) -> None:
-    arg_parser.add_argument(
-        '--sync-from-checkpoint',
-        action=NormalizeCheckpointURI,
-        help=(
-            "Start syncing from a trusted checkpoint specified using URI syntax:"
-            "By specific block, eth://block/byhash/<hash>?score=<score>"
-            "Let etherscan pick a block near the tip, eth://block/byetherscan/latest"
-        ),
-        default=None,
-    )
+    try:
+        arg_parser.add_argument(
+            '--sync-from-checkpoint',
+            action=NormalizeCheckpointURI,
+            help=(
+                "Start syncing from a trusted checkpoint specified using URI syntax:"
+                "By specific block, eth://block/byhash/<hash>?score=<score>"
+                "Let etherscan pick a block near the tip, eth://block/byetherscan/latest"
+            ),
+            default=None,
+        )
+    except ArgumentError as err:
+        if "conflicting option string: --sync-from-checkpoint" in str(err):
+            # --sync-from-checkpoint is used for multiple strategies but only one of them can
+            # add the flag. We do not want strategies to rely on other strategies to add the flag
+            # so we have to catch the error and silence it.
+            pass
+        else:
+            # Re-raise in case we caught a different error than we expected.
+            raise
 
 
 class BaseSyncStrategy(ABC):
@@ -200,6 +212,35 @@ class BeamSyncStrategy(BaseSyncStrategy):
             await manager.wait_finished()
 
 
+class HeaderSyncStrategy(BaseSyncStrategy):
+
+    @classmethod
+    def get_sync_mode(cls) -> str:
+        return 'header'
+
+    @classmethod
+    def configure_parser(cls, arg_parser: _ArgumentGroup) -> None:
+        add_sync_from_checkpoint_arg(arg_parser)
+
+    async def sync(self,
+                   args: Namespace,
+                   logger: logging.Logger,
+                   chain: AsyncChainAPI,
+                   base_db: AtomicDatabaseAPI,
+                   peer_pool: BasePeerPool,
+                   event_bus: EndpointAPI) -> None:
+
+        syncer = HeaderChainSyncer(
+            chain,
+            AsyncChainDB(base_db),
+            cast(ETHPeerPool, peer_pool),
+            args.sync_from_checkpoint,
+        )
+
+        async with background_asyncio_service(syncer) as manager:
+            await manager.wait_finished()
+
+
 class LightSyncStrategy(BaseSyncStrategy):
 
     @classmethod
@@ -227,6 +268,7 @@ class LightSyncStrategy(BaseSyncStrategy):
 class SyncerComponent(AsyncioIsolatedComponent):
     default_strategy = BeamSyncStrategy()
     strategies: Tuple[BaseSyncStrategy, ...] = (
+        HeaderSyncStrategy(),
         FullSyncStrategy(),
         default_strategy,
         LightSyncStrategy(),
