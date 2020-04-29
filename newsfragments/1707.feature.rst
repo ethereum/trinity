@@ -1,1 +1,6 @@
 Rename ``--beam-from-checkpoint`` to ``--sync-from-checkpoint``
+
+Ensure sync related flags show up under ``--sync-mode`` section in ``--help``
+
+Add new ``--sync-mode header`` to only sync the header chain on the ETH network.
+This does also support launching from a checkpoint via ``--sync-from-checkpoint`` flag.

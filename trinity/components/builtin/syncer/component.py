@@ -5,6 +5,7 @@ from abc import (
 from argparse import (
     ArgumentParser,
     Namespace,
+    _ArgumentGroup,
     _SubParsersAction,
 )
 import logging
@@ -69,7 +70,7 @@ from trinity.sync.light.chain import (
 from trinity.components.builtin.syncer.cli import NormalizeCheckpointURI
 
 
-def add_sync_from_checkpoint_arg(arg_parser: ArgumentParser):
+def add_sync_from_checkpoint_arg(arg_parser: _ArgumentGroup) -> None:
     arg_parser.add_argument(
         '--sync-from-checkpoint',
         action=NormalizeCheckpointURI,
@@ -80,6 +81,7 @@ def add_sync_from_checkpoint_arg(arg_parser: ArgumentParser):
         ),
         default=None,
     )
+
 
 class BaseSyncStrategy(ABC):
 
@@ -92,7 +94,7 @@ class BaseSyncStrategy(ABC):
         return True
 
     @classmethod
-    def configure_parser(cls, arg_parser: ArgumentParser) -> None:
+    def configure_parser(cls, arg_group: _ArgumentGroup) -> None:
         """
         Configure the argument parser for the specific sync strategy.
         """
@@ -166,15 +168,15 @@ class BeamSyncStrategy(BaseSyncStrategy):
         return SYNC_BEAM
 
     @classmethod
-    def configure_parser(cls, arg_parser: ArgumentParser) -> None:
-        arg_parser.add_argument(
+    def configure_parser(cls, arg_group: _ArgumentGroup) -> None:
+        arg_group.add_argument(
             '--force-beam-block-number',
             type=int,
             help="Force beam sync to activate on a specific block number (for testing)",
             default=None,
         )
 
-        add_sync_from_checkpoint_arg(arg_parser)
+        add_sync_from_checkpoint_arg(arg_group)
 
     async def sync(self,
                    args: Namespace,
@@ -246,9 +248,6 @@ class SyncerComponent(AsyncioIsolatedComponent):
         if type(cls.default_strategy) not in cls.extract_strategy_types():
             raise ValidationError(f"Default strategy {cls.default_strategy} not in strategies")
 
-        for sync_strategy in cls.strategies:
-            sync_strategy.configure_parser(arg_parser)
-
         syncing_parser = arg_parser.add_argument_group('sync mode')
         mode_parser = syncing_parser.add_mutually_exclusive_group()
         mode_parser.add_argument(
@@ -256,6 +255,9 @@ class SyncerComponent(AsyncioIsolatedComponent):
             choices=cls.extract_modes(),
             default=cls.default_strategy.get_sync_mode(),
         )
+
+        for sync_strategy in cls.strategies:
+            sync_strategy.configure_parser(syncing_parser)
 
     @classmethod
     def validate_cli(cls, boot_info: BootInfo) -> None:
