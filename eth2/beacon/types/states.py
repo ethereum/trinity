@@ -1,14 +1,22 @@
-from typing import Sequence, Type, TypeVar
+from typing import Optional, Sequence, Type, TypeVar
 
 from eth.constants import ZERO_HASH32
-from eth_typing import Hash32
+from eth_typing import BLSPubkey, Hash32
 from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 
 from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_ROOT
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.typing import Bitfield, Epoch, Gwei, Root, Slot, Timestamp
+from eth2.beacon.typing import (
+    Bitfield,
+    Epoch,
+    Gwei,
+    Root,
+    Slot,
+    Timestamp,
+    ValidatorIndex,
+)
 from eth2.configs import Eth2Config
 
 from .block_headers import BeaconBlockHeader, default_beacon_block_header
@@ -181,3 +189,12 @@ class BeaconState(HashableContainer):
 
     def next_epoch(self, slots_per_epoch: int) -> Epoch:
         return Epoch(self.current_epoch(slots_per_epoch) + 1)
+
+    def get_validator_index_for_public_key(
+        self, public_key: BLSPubkey
+    ) -> Optional[ValidatorIndex]:
+        for index, validator in enumerate(self.validators):
+            if validator.pubkey == public_key:
+                return ValidatorIndex(index)
+        else:
+            return None

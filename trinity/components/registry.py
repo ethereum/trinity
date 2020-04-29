@@ -49,7 +49,6 @@ from trinity.components.builtin.syncer.component import (
 from trinity.components.builtin.upnp.component import (
     UpnpComponent,
 )
-from trinity.components.eth2.beacon.component import BeaconNodeComponent
 from trinity.components.eth2.beacon_trio.component import (
     BeaconNodeComponent as TrioBeaconNodeComponent,
 )
@@ -71,7 +70,6 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
 )
 
 BEACON_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
-    BeaconNodeComponent,
     NetworkGeneratorComponent,
     DiscV5Component,
     FixUncleanShutdownComponent,

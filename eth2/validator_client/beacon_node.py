@@ -17,7 +17,14 @@ from eth2.api.http.validator import Paths as BeaconNodePath
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
-from eth2.beacon.typing import CommitteeIndex, Epoch, Operation, SignedOperation, Slot
+from eth2.beacon.typing import (
+    CommitteeIndex,
+    Epoch,
+    Operation,
+    Root,
+    SignedOperation,
+    Slot,
+)
 from eth2.clock import TICKS_PER_SLOT, Tick
 from eth2.validator_client.abc import BeaconNodeAPI
 from eth2.validator_client.config import Config
@@ -53,9 +60,9 @@ async def _get_duties_from_beacon_node(
         await session.get(
             url,
             params={
-                "validator_pubkeys": [
+                "validator_pubkeys": ",".join(
                     encode_hex(public_key) for public_key in public_keys
-                ],
+                ),
                 "epoch": epoch,
             },
         )
@@ -87,8 +94,7 @@ def _parse_attestation_duty(
         validator_public_key=validator_public_key,
         tick_for_execution=target_tick,
         discovered_at_tick=current_tick,
-        # TODO update field name
-        committee_index=CommitteeIndex(duty_data["attestation_shard"]),
+        committee_index=CommitteeIndex(duty_data["committee_index"]),
     )
 
 
@@ -174,11 +180,10 @@ async def _get_attestation_from_beacon_node(
 async def _get_block_proposal_from_beacon_node(
     session: Session, url: str, slot: Slot, randao_reveal: BLSSignature
 ) -> BeaconBlock:
-    block_proposal_response = (
-        await session.get(
-            url, params={"slot": slot, "randao_reveal": encode_hex(randao_reveal)}
-        )
-    ).json()
+    response = await session.get(
+        url, params={"slot": slot, "randao_reveal": encode_hex(randao_reveal)}
+    )
+    block_proposal_response = response.json()
     return from_formatted_dict(block_proposal_response, BeaconBlock)
 
 
@@ -206,6 +211,8 @@ class BeaconNode(BeaconNodeAPI):
         self._connection_lock = trio.Lock()
         self._is_connected = False
         self.client_version: Optional[str] = None
+        # NOTE: this facilitates testing, may remove in the future...
+        self._broadcast_operations: Set[Root] = set()
 
     @classmethod
     def from_config(cls, config: Config) -> "BeaconNode":
@@ -338,6 +345,7 @@ class BeaconNode(BeaconNodeAPI):
         else:
             raise NotImplementedError(f"unrecognized duty type in duty {duty}")
 
+        self._broadcast_operations.add(signed_operation.hash_tree_root)
         await _post_signed_operation_to_beacon_node(
             self._session, url, signed_operation, sedes
         )

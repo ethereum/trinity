@@ -21,7 +21,7 @@ from eth2.beacon.types.blocks import (
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import FromBlockParams, Slot, ValidatorIndex
+from eth2.beacon.typing import FromBlockParams, Root, Slot, ValidatorIndex
 from eth2.configs import Eth2Config
 
 
@@ -64,6 +64,25 @@ def validate_proposer_index(
 
     if validator_index != beacon_proposer_index:
         raise ProposerIndexError
+
+
+def create_block_proposal(
+    slot: Slot,
+    parent_root: Root,
+    randao_reveal: BLSSignature,
+    state: BeaconState,
+    state_machine: BaseBeaconStateMachine,
+) -> BeaconBlock:
+    proposal = BeaconBlock.create(
+        slot=slot,
+        parent_root=parent_root,
+        body=BeaconBlockBody.create(randao_reveal=randao_reveal),
+    )
+    signed_block = SignedBeaconBlock.create(message=proposal, signature=EMPTY_SIGNATURE)
+    post_state, signed_block = state_machine.import_block(
+        signed_block, state, check_proposer_signature=False
+    )
+    return signed_block.message
 
 
 def create_unsigned_block_on_state(

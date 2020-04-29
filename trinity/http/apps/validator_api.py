@@ -11,7 +11,7 @@ from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.types.attestations import Attestation, AttestationData
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.typing import Bitfield, CommitteeIndex, Slot
-from eth2.validator_client.beacon_node import BeaconNodePath as APIEndpoint
+from eth2.api.http.validator import Paths as APIEndpoint
 from trinity._utils.version import construct_trinity_client_identifier
 from trinity.http.apps.base_handler import BaseHandler, get, post
 

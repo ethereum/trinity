@@ -12,7 +12,7 @@ from eth2.beacon.state_machines.state_transitions import (  # noqa: F401
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
 from eth2.beacon.types.states import BeaconState  # noqa: F401
-from eth2.beacon.typing import Timestamp
+from eth2.clock import Tick
 
 from .blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
 from .configs import SERENITY_CONFIG
@@ -75,8 +75,8 @@ class SerenityStateMachine(BeaconStateMachine):
     def get_fork_choice_scoring(self) -> BaseForkChoiceScoring:
         return self.fork_choice_scoring
 
-    def on_tick(self, time: Timestamp) -> None:
-        self._fork_choice_store.on_tick(time)
+    def on_tick(self, tick: Tick) -> None:
+        self._fork_choice_store.on_tick(tick)
 
     def on_block(self, block: BaseBeaconBlock) -> None:
         self._fork_choice_store.on_block(block)

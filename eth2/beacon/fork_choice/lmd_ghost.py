@@ -22,6 +22,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, Root, Slot, Timestamp, ValidatorIndex
+from eth2.clock import Tick
 from eth2.configs import Eth2Config
 
 LMD_GHOST_SCORE_DATA_LENGTH = 2
@@ -251,10 +252,10 @@ class Store:
         )
         return justified_ancestor == justified_root
 
-    def on_tick(self, time: Timestamp) -> None:
+    def on_tick(self, tick: Tick) -> None:
         previous_slot = self.get_current_slot()
 
-        self._context.time = time
+        self._context.time = Timestamp(int(tick.t))
 
         current_slot = self.get_current_slot()
 

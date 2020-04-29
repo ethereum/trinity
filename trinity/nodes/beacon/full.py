@@ -10,8 +10,10 @@ from trio_typing import TaskStatus
 
 from eth2.api.http.validator import Context
 from eth2.api.http.validator import ServerHandlers as ValidatorAPIHandlers
+from eth2.api.http.validator import SyncerAPI, SyncStatus
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.db.chain import BeaconChainDB
+from eth2.beacon.typing import Slot
 from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
 from trinity._utils.trio_utils import JSONHTTPServer
@@ -33,6 +35,14 @@ def _mk_clock(
         config.SECONDS_PER_SLOT * config.SLOTS_PER_EPOCH,
         time_provider,
     )
+
+
+def _mk_syncer() -> SyncerAPI:
+    class _sync(SyncerAPI):
+        async def get_status(self) -> SyncStatus:
+            return SyncStatus(False, Slot(0), Slot(0), Slot(0))
+
+    return _sync()
 
 
 def _mk_validator_api_server(
@@ -57,20 +67,16 @@ class BeaconNode:
         chain_config: BeaconChainConfig,
         database_dir: Path,
         chain_class: Type[BaseBeaconChain],
+        clock: Clock,
         validator_api_port: int,
         client_identifier: str,
-        time_provider: TimeProvider = get_unix_time,
     ) -> None:
         self._local_key_pair = create_new_key_pair(local_node_key.to_bytes())
         self._eth2_config = eth2_config
 
-        self._clock = _mk_clock(eth2_config, chain_config.genesis_time, time_provider)
+        self._clock = clock
 
-        api_context = Context(client_identifier)
-        self._validator_api_port = validator_api_port
-        self._validator_api_server = _mk_validator_api_server(
-            validator_api_port, api_context
-        )
+        self._syncer = _mk_syncer()
 
         self._base_db = LevelDB(db_path=database_dir)
         self._chain_db = BeaconChainDB(self._base_db, eth2_config)
@@ -80,14 +86,34 @@ class BeaconNode:
 
         self._chain = chain_class(self._base_db, eth2_config)
 
+        api_context = Context(
+            client_identifier,
+            chain_config.genesis_time,
+            eth2_config,
+            self._syncer,
+            self._chain,
+            self._clock,
+        )
+        self._api_context = api_context
+        self._validator_api_port = validator_api_port
+        self._validator_api_server = _mk_validator_api_server(
+            validator_api_port, api_context
+        )
+
     @classmethod
-    def from_config(cls, config: BeaconNodeConfig) -> "BeaconNode":
+    def from_config(
+        cls, config: BeaconNodeConfig, time_provider: TimeProvider = get_unix_time
+    ) -> "BeaconNode":
+        clock = _mk_clock(
+            config.eth2_config, config.chain_config.genesis_time, time_provider
+        )
         return cls(
             config.local_node_key,
             config.eth2_config,
             config.chain_config,
             config.database_dir,
             config.chain_class,
+            clock,
             config.validator_api_port,
             config.client_identifier,
         )
@@ -108,6 +134,7 @@ class BeaconNode:
                 tick.epoch,
                 tick.count,
             )
+            self._chain.on_tick(tick)
 
     async def _run_validator_api(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
