@@ -605,6 +605,10 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             parent_state_root: Hash32,
             lagging: bool = True) -> None:
 
+        if not self.manager.is_running:
+            # If the service is shutting down, we can ignore preview requests
+            return
+
         self.manager.run_task(self._preview_address_load, header, parent_state_root, transactions)
 
         # This is a hack, so that preview executions can load ancestor block-hashes
