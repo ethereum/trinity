@@ -8,7 +8,6 @@ import logging
 from cancel_token import OperationCancelled
 from eth_typing import (
     BlockNumber,
-    Hash32,
 )
 from eth_utils import (
     humanize_seconds,
@@ -20,7 +19,6 @@ from eth.abc import (
 )
 from eth.constants import (
     GENESIS_BLOCK_NUMBER,
-    GENESIS_PARENT_HASH,
 )
 from eth.exceptions import (
     HeaderNotFound,
@@ -55,10 +53,6 @@ class SyncLaunchStrategyAPI(ABC):
         ...
 
     @abstractmethod
-    def get_genesis_parent_hash(self) -> Hash32:
-        ...
-
-    @abstractmethod
     async def get_starting_block_number(self) -> BlockNumber:
         ...
 
@@ -71,9 +65,6 @@ class FromGenesisLaunchStrategy(SyncLaunchStrategyAPI):
 
     async def fulfill_prerequisites(self) -> None:
         pass
-
-    def get_genesis_parent_hash(self) -> Hash32:
-        return GENESIS_PARENT_HASH
 
     async def get_starting_block_number(self) -> BlockNumber:
         head = await self._db.coro_get_canonical_head()
@@ -254,9 +245,6 @@ class FromCheckpointLaunchStrategy(SyncLaunchStrategyAPI):
         raise asyncio.TimeoutError(
             f"Failed to get checkpoint header within {max_attempts} attempts"
         )
-
-    def get_genesis_parent_hash(self) -> Hash32:
-        return self._checkpoint.block_hash
 
     async def get_starting_block_number(self) -> BlockNumber:
         block_number = await self._genesis_strategy.get_starting_block_number()
