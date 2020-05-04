@@ -4,8 +4,8 @@ from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.protocol.les.peer import LESPeerPool
 from trinity.protocol.les.sync import LightHeaderChainSyncer
-from trinity._utils.timer import Timer
 from trinity._utils.logging import get_logger
+from trinity.sync.common.headers import persist_headers
 
 
 class LightChainSyncer(Service):
@@ -24,14 +24,4 @@ class LightChainSyncer(Service):
         await self.manager.wait_finished()
 
     async def _persist_headers(self) -> None:
-        async for headers in self._header_syncer.new_sync_headers():
-
-            self._header_syncer._chain.validate_chain_extension(headers)
-
-            timer = Timer()
-            await self._db.coro_persist_header_chain(headers)
-
-            head = await self._db.coro_get_canonical_head()
-            self.logger.info(
-                "Imported %d headers in %0.2f seconds, new head: %s",
-                len(headers), timer.elapsed, head)
+        await persist_headers(self.logger, self._db, self._header_syncer)

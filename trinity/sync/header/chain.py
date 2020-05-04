@@ -5,9 +5,9 @@ from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
-from trinity._utils.timer import Timer
 from trinity._utils.logging import get_logger
 from trinity.sync.common.checkpoint import Checkpoint
+from trinity.sync.common.headers import persist_headers
 from trinity.sync.common.strategies import (
     FromCheckpointLaunchStrategy,
     FromGenesisLaunchStrategy,
@@ -68,18 +68,4 @@ class HeaderChainSyncer(Service):
         await self.manager.wait_finished()
 
     async def _persist_headers(self) -> None:
-        async for headers in self._header_syncer.new_sync_headers():
-
-            self._header_syncer._chain.validate_chain_extension(headers)
-
-            timer = Timer()
-            new_canonical_headers, _ = await self._db.coro_persist_header_chain(headers)
-
-            if len(new_canonical_headers) > 0:
-                head = new_canonical_headers[-1]
-            else:
-                head = await self._db.coro_get_canonical_head()
-
-            self.logger.info(
-                "Imported %d headers in %0.2f seconds, new head: %s",
-                len(headers), timer.elapsed, head)
+        await persist_headers(self.logger, self._db, self._header_syncer)
