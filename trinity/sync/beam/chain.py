@@ -3,6 +3,7 @@ import time
 from typing import (
     AsyncIterator,
     Iterable,
+    Sequence,
     Tuple,
 )
 
@@ -57,6 +58,7 @@ from trinity.sync.common.events import (
 from trinity.sync.common.headers import (
     HeaderSyncerAPI,
     ManualHeaderSyncer,
+    persist_headers,
 )
 from trinity.sync.common.strategies import (
     FromCheckpointLaunchStrategy,
@@ -66,9 +68,6 @@ from trinity.sync.common.strategies import (
 from trinity.sync.full.chain import (
     FastChainBodySyncer,
     RegularChainBodySyncer,
-)
-from trinity.sync.full.constants import (
-    HEADER_QUEUE_SIZE_TARGET,
 )
 from trinity.sync.beam.state import (
     BeamDownloader,
@@ -428,37 +427,9 @@ class HeaderOnlyPersist(Service):
         await self._persist_headers()
 
     async def _persist_headers(self) -> None:
-        async for headers in self._header_syncer.new_sync_headers(HEADER_QUEUE_SIZE_TARGET):
+        await persist_headers(self.logger, self._db, self._header_syncer, self._exit_if_checkpoint)
 
-            self._header_syncer._chain.validate_chain_extension(headers)
-
-            timer = Timer()
-
-            exited = await self._exit_if_checkpoint(headers)
-            if exited:
-                break
-
-            new_canon_headers, old_canon_headers = await self._db.coro_persist_header_chain(headers)
-
-            head = await self._db.coro_get_canonical_head()
-
-            self.logger.info(
-                "Imported %d headers in %0.2f seconds, new head: %s",
-                len(headers),
-                timer.elapsed,
-                head,
-            )
-            self.logger.debug(
-                "Header import details: %s..%s, old canon: %s..%s, new canon: %s..%s",
-                headers[0],
-                headers[-1],
-                old_canon_headers[0] if len(old_canon_headers) else None,
-                old_canon_headers[-1] if len(old_canon_headers) else None,
-                new_canon_headers[0] if len(new_canon_headers) else None,
-                new_canon_headers[-1] if len(new_canon_headers) else None,
-            )
-
-    async def _exit_if_checkpoint(self, headers: Tuple[BlockHeader, ...]) -> bool:
+    async def _exit_if_checkpoint(self, headers: Sequence[BlockHeader]) -> bool:
         """
         Determine if the supplied headers have reached the end of headers-only persist.
         This might be in the form of a forced checkpoint, or because we caught up to
@@ -500,7 +471,7 @@ class HeaderOnlyPersist(Service):
 
                 # We have reached the header syncer's target
                 # Only sync against the most recent header
-                persist_headers, final_headers = headers[:-1], headers[-1:]
+                persist_headers, final_headers = tuple(headers[:-1]), tuple(headers[-1:])
             else:
                 # We have not reached the header syncer's target, continue normally
                 return False

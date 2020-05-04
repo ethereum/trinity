@@ -77,7 +77,7 @@ from trinity.sync.common.constants import (
 )
 from trinity.sync.common.headers import HeaderSyncerAPI
 from trinity.sync.common.peers import WaitingPeers
-from trinity.sync.full.constants import (
+from trinity.sync.common.constants import (
     HEADER_QUEUE_SIZE_TARGET,
     BLOCK_QUEUE_SIZE_TARGET,
     BLOCK_IMPORT_QUEUE_SIZE,

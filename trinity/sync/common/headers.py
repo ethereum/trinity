@@ -8,6 +8,7 @@ from random import randrange
 from typing import (
     Any,
     AsyncIterator,
+    Awaitable,
     Callable,
     FrozenSet,
     Generic,
@@ -20,12 +21,15 @@ from typing import (
 
 from async_service import Service, background_asyncio_service
 
+from eth.abc import BlockHeaderAPI
+
 from eth_typing import (
     BlockIdentifier,
     BlockNumber,
     Hash32,
 )
 from eth_utils import (
+    ExtendedDebugLogger,
     humanize_hash,
     ValidationError,
 )
@@ -47,6 +51,7 @@ from p2p.abc import CommandAPI
 from p2p.constants import SEAL_CHECK_RANDOM_SAMPLE_RATE
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
+from trinity._utils.timer import Timer
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.header import BaseAsyncHeaderDB
@@ -59,6 +64,7 @@ from trinity.protocol.eth.constants import (
 )
 from trinity.sync.common.constants import (
     EMPTY_PEER_RESPONSE_PENALTY,
+    HEADER_QUEUE_SIZE_TARGET,
     MAX_SKELETON_REORG_DEPTH,
 )
 from trinity.sync.common.events import SyncingRequest, SyncingResponse
@@ -1031,3 +1037,47 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
                 SyncingResponse(*self._get_sync_status()),
                 req.broadcast_config()
             )
+
+
+async def _always_false(headers: Sequence[BlockHeaderAPI]) -> bool:
+    return False
+
+
+async def persist_headers(
+        logger: ExtendedDebugLogger,
+        db: BaseAsyncHeaderDB,
+        syncer: BaseHeaderChainSyncer[TChainPeer],
+        exit_condition: Callable[[Sequence[BlockHeaderAPI]], Awaitable[bool]] = _always_false
+) -> None:
+    async for headers in syncer.new_sync_headers(HEADER_QUEUE_SIZE_TARGET):
+
+        syncer._chain.validate_chain_extension(headers)
+
+        timer = Timer()
+
+        should_stop = await exit_condition(headers)
+        if should_stop:
+            break
+
+        new_canon_headers, old_canon_headers = await db.coro_persist_header_chain(headers)
+
+        if len(new_canon_headers):
+            head = new_canon_headers[-1]
+        else:
+            head = await db.coro_get_canonical_head()
+
+        logger.info(
+            "Imported %d headers in %0.2f seconds, new head: %s",
+            len(headers),
+            timer.elapsed,
+            head,
+        )
+        logger.debug(
+            "Header import details: %s..%s, old canon: %s..%s, new canon: %s..%s",
+            headers[0],
+            headers[-1],
+            old_canon_headers[0] if len(old_canon_headers) else None,
+            old_canon_headers[-1] if len(old_canon_headers) else None,
+            new_canon_headers[0] if len(new_canon_headers) else None,
+            new_canon_headers[-1] if len(new_canon_headers) else None,
+        )
