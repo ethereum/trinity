@@ -1,0 +1,1 @@
+Report trinity process and thread count to grafana.
