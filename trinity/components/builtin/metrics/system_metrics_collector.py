@@ -1,7 +1,6 @@
 from typing import (
     Iterator,
     NamedTuple,
-    Optional,
 )
 
 from async_service import (
@@ -14,6 +13,7 @@ import psutil
 from p2p import trio_utils
 
 from trinity.components.builtin.metrics.registry import HostMetricsRegistry
+from trinity.exceptions import MetricsReportingError
 
 
 class CpuStats(NamedTuple):
@@ -89,36 +89,31 @@ def read_network_stats() -> NetworkStats:
 
 @to_tuple
 def get_all_python_processes() -> Iterator[psutil.Process]:
-    for p in psutil.process_iter():
+    for process in psutil.process_iter():
         try:
-            p.cmdline()
+            process.cmdline()
         except psutil.AccessDenied:
             continue
         except psutil.ZombieProcess:
             continue
-        if 'python' in p.name():
-            yield p
+        if 'python' in process.name():
+            yield process
 
 
-def get_main_trinity_process() -> Optional[psutil.Process]:
+def get_main_trinity_process() -> psutil.Process:
     python_processes = get_all_python_processes()
-    for p in python_processes:
-        if 'trinity' in p.cmdline():
-            return p
-    return None
+    for process in python_processes:
+        if 'trinity' in process.cmdline():
+            return process
+    raise MetricsReportingError("No 'trinity' process found.")
 
 
 def read_process_stats() -> ProcessStats:
-    trinity_main_process = get_main_trinity_process()
-    if not trinity_main_process:
-        num_processes = 0
-        num_threads = 0
-    else:
-        child_processes = trinity_main_process.children(recursive=True)
-        num_processes = len(child_processes) + 1
-        num_child_threads = sum([p.num_threads() for p in child_processes])
-        num_threads = num_child_threads + trinity_main_process.num_threads()
-
+    main_trinity_process = get_main_trinity_process()
+    child_processes = main_trinity_process.children(recursive=True)
+    num_processes = len(child_processes) + 1
+    num_child_threads = sum([process.num_threads() for process in child_processes])
+    num_threads = num_child_threads + main_trinity_process.num_threads()
     return ProcessStats(
         process_count=num_processes,
         thread_count=num_threads,

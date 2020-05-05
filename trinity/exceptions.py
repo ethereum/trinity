@@ -141,3 +141,10 @@ class ENRMissingForkID(BaseTrinityError):
     Raised when a peer sends us an ENR without a ForkID.
     """
     pass
+
+
+class MetricsReportingError(BaseTrinityError):
+    """
+    Raised when there is an error while reporting metrics.
+    """
+    pass
