@@ -1,4 +1,5 @@
 from typing import (
+    Iterator,
     NamedTuple,
 )
 
@@ -6,11 +7,13 @@ from async_service import (
     as_service,
     ManagerAPI,
 )
+from eth_utils import to_tuple
 import psutil
 
 from p2p import trio_utils
 
 from trinity.components.builtin.metrics.registry import HostMetricsRegistry
+from trinity.exceptions import MetricsReportingError
 
 
 class CpuStats(NamedTuple):
@@ -41,10 +44,16 @@ class NetworkStats(NamedTuple):
     in_packets: int
 
 
+class ProcessStats(NamedTuple):
+    process_count: int
+    thread_count: int
+
+
 class SystemStats(NamedTuple):
     cpu_stats: CpuStats
     disk_stats: DiskStats
     network_stats: NetworkStats
+    process_stats: ProcessStats
 
 
 def read_cpu_stats() -> CpuStats:
@@ -78,6 +87,39 @@ def read_network_stats() -> NetworkStats:
     )
 
 
+@to_tuple
+def get_all_python_processes() -> Iterator[psutil.Process]:
+    for process in psutil.process_iter():
+        try:
+            process.cmdline()
+        except psutil.AccessDenied:
+            continue
+        except psutil.ZombieProcess:
+            continue
+        if 'python' in process.name():
+            yield process
+
+
+def get_main_trinity_process() -> psutil.Process:
+    python_processes = get_all_python_processes()
+    for process in python_processes:
+        if 'trinity' in process.cmdline():
+            return process
+    raise MetricsReportingError("No 'trinity' process found.")
+
+
+def read_process_stats() -> ProcessStats:
+    main_trinity_process = get_main_trinity_process()
+    child_processes = main_trinity_process.children(recursive=True)
+    num_processes = len(child_processes) + 1
+    num_child_threads = sum([process.num_threads() for process in child_processes])
+    num_threads = num_child_threads + main_trinity_process.num_threads()
+    return ProcessStats(
+        process_count=num_processes,
+        thread_count=num_threads,
+    )
+
+
 @as_service
 async def collect_process_metrics(manager: ManagerAPI,
                                   registry: HostMetricsRegistry,
@@ -94,11 +136,15 @@ async def collect_process_metrics(manager: ManagerAPI,
     network_in_packets_meter = registry.meter('trinity.network/in/packets/total.meter')
     network_out_packets_meter = registry.meter('trinity.network/out/packets/total.meter')
 
+    process_count_gauge = registry.gauge('trinity.system/processes/count.gauge')
+    thread_count_gauge = registry.gauge('trinity.system/threads/count.gauge')
+
     async for _ in trio_utils.every(frequency_seconds):
         current = SystemStats(
             cpu_stats=read_cpu_stats(),
             disk_stats=read_disk_stats(),
             network_stats=read_network_stats(),
+            process_stats=read_process_stats(),
         )
 
         if previous is not None:
@@ -118,5 +164,8 @@ async def collect_process_metrics(manager: ManagerAPI,
             network_in_packets_meter.mark(in_packets)
             out_packets = current.network_stats.out_packets - previous.network_stats.out_packets
             network_out_packets_meter.mark(out_packets)
+
+            process_count_gauge.set_value(current.process_stats.process_count)
+            thread_count_gauge.set_value(current.process_stats.thread_count)
 
         previous = current
