@@ -105,6 +105,7 @@ class AddressAPI(ABC):
 
 
 TNode = TypeVar('TNode', bound='NodeAPI')
+TPeer = TypeVar('TPeer', bound='BasePeer')
 
 
 class NodeAPI(ABC):

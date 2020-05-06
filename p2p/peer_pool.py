@@ -3,6 +3,7 @@ import asyncio
 import functools
 import operator
 from typing import (
+    Any,
     AsyncContextManager,
     AsyncIterator,
     AsyncIterable,
@@ -57,6 +58,7 @@ from p2p.exceptions import (
     UnknownAPI,
     UnreachablePeer,
 )
+from p2p.metrics import PeerReporterRegistry
 from p2p.peer import (
     BasePeer,
     BasePeerFactory,
@@ -102,11 +104,13 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
     """
     PeerPool maintains connections to up-to max_peers on a given network.
     """
-    _report_interval = 60
+    _report_stats_interval = 60
+    _report_metrics_interval = 15  # for influxdb/grafana reporting
     _peer_boot_timeout = DEFAULT_PEER_BOOT_TIMEOUT
     _event_bus: EndpointAPI = None
 
     _handshake_locks: ResourceLock[NodeAPI]
+    peer_reporter_registry_class: Type[PeerReporterRegistry[Any]] = PeerReporterRegistry[BasePeer]
 
     def __init__(self,
                  privkey: datatypes.PrivateKey,
@@ -131,6 +135,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             # This is so that we don't need to pass a MetricsRegistry in tests and mocked pools.
             metrics_registry = MetricsRegistry()
         self._active_peer_counter = metrics_registry.counter('trinity.p2p/peers.counter')
+        self._peer_reporter_registry = self.get_peer_reporter_registry(metrics_registry)
 
         # Restricts the number of concurrent connection attempts can be made
         self._connection_attempt_lock = asyncio.BoundedSemaphore(MAX_CONCURRENT_CONNECTION_ATTEMPTS)
@@ -230,6 +235,11 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             event_bus=self._event_bus,
         )
 
+    def get_peer_reporter_registry(
+        self, metrics_registry: MetricsRegistry
+    ) -> PeerReporterRegistry[BasePeer]:
+        return self.peer_reporter_registry_class(metrics_registry)
+
     async def get_protocol_capabilities(self) -> Tuple[Tuple[str, int], ...]:
         return tuple(
             (handshaker.protocol_class.name, handshaker.protocol_class.version)
@@ -303,6 +313,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         logger("Adding %s to pool", peer)
         self.connected_nodes[peer.session] = peer
         self._active_peer_counter.inc()
+        self._peer_reporter_registry.assign_peer_reporter(peer)
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
             subscriber.register_peer(peer)
@@ -319,6 +330,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             self.manager.run_daemon_task(self.maybe_connect_more_peers)
 
         self.manager.run_daemon_task(self._periodically_report_stats)
+        self.manager.run_daemon_task(self._periodically_report_metrics)
         await self.manager.wait_finished()
 
     async def connect(self, remote: NodeAPI) -> BasePeer:
@@ -478,6 +490,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             subscriber.deregister_peer(peer)
 
         self._active_peer_counter.dec()
+        self._peer_reporter_registry.unassign_peer_reporter(peer)
 
     async def __aiter__(self) -> AsyncIterator[BasePeer]:
         for peer in tuple(self.connected_nodes.values()):
@@ -486,6 +499,11 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             await asyncio.sleep(0)
             if peer.get_manager().is_running and not peer.is_closing:
                 yield peer
+
+    async def _periodically_report_metrics(self) -> None:
+        while self.manager.is_running:
+            self._peer_reporter_registry.trigger_peer_reports()
+            await asyncio.sleep(self._report_metrics_interval)
 
     async def _periodically_report_stats(self) -> None:
         while self.manager.is_running:
@@ -526,4 +544,4 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
                     self.logger.debug("    Failure during stats lookup: %r", exc)
 
             self.logger.debug("== End peer details == ")
-            await asyncio.sleep(self._report_interval)
+            await asyncio.sleep(self._report_stats_interval)

@@ -220,3 +220,10 @@ class CorruptTransport(BaseP2PError):
     and terminate the peer connection, when this exception is raised.
     """
     pass
+
+
+class PeerReporterRegistryError(BaseP2PError):
+    """
+    Raised when there is an error assigning or unassigning peers in the PeerReporterRegistry.
+    """
+    pass
