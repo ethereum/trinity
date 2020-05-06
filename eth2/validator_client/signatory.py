@@ -68,7 +68,7 @@ async def sign_and_broadcast_operation_if_valid(
     try:
         await _validate_duty(duty, operation, signature_store)
     except ValidationError as e:
-        logger.warn("a duty %s was not valid: %s", duty, e)
+        logger.warning("a duty %s was not valid: %s", duty, e)
         return
     else:
         logger.debug(
