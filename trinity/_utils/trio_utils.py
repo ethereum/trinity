@@ -413,7 +413,10 @@ async def send_json_response(
         request_body = json.loads(body.decode("ascii"))
     else:
         request_body = dict(parse_qsl(target.query))
-    response = await handler(context, request_body)
+    try:
+        response = await handler(context, request_body)
+    except Exception as e:
+        response = {"error": str(e)}
     response_body_unicode = json.dumps(response)
     response_body_bytes = response_body_unicode.encode("utf-8")
     await send_simple_response(
