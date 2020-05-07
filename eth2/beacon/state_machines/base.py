@@ -9,7 +9,7 @@ from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Timestamp
+from eth2.clock import Tick
 from eth2.configs import Eth2Config
 
 from .state_transitions import BaseStateTransition
@@ -65,7 +65,7 @@ class BaseBeaconStateMachine(Configurable, ABC):
         ...
 
     @abstractmethod
-    def on_tick(self, time: Timestamp) -> None:
+    def on_tick(self, tick: Tick) -> None:
         ...
 
     @abstractmethod
@@ -136,7 +136,7 @@ class BeaconStateMachine(BaseBeaconStateMachine):
     def get_fork_choice_scoring_class(cls) -> Type[BaseForkChoiceScoring]:
         return cls.fork_choice_scoring_class
 
-    def on_tick(self, time: Timestamp) -> None:
+    def on_tick(self, tick: Tick) -> None:
         pass
 
     def on_block(self, block: BaseBeaconBlock) -> None:

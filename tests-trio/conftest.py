@@ -9,12 +9,16 @@ from lahja.trio.endpoint import TrioEndpoint
 import pytest
 import trio
 
+from eth2._utils.bls import Eth2BLS, bls
 from eth2.beacon.chains.testnet import SkeletonLakeChain
+from eth2.beacon.constants import FAR_FUTURE_EPOCH
 from eth2.beacon.state_machines.forks.skeleton_lake.config import (
     MINIMAL_SERENITY_CONFIG,
 )
+from eth2.beacon.tools.builder.initializer import create_key_pairs_for
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.validators import Validator
 from trinity.config import BeaconChainConfig
 
 # Fixtures below are copied from https://github.com/ethereum/lahja/blob/f0b7ead13298de82c02ed92cfb2d32a8bc00b42a/tests/core/trio/conftest.py  # noqa: E501
@@ -78,8 +82,11 @@ def genesis_time(current_time, eth2_config):
 
 
 @pytest.fixture
-def genesis_state(eth2_config, genesis_time):
-    state = BeaconState.create(config=eth2_config)
+def genesis_state(eth2_config, genesis_time, genesis_validators):
+    balances = tuple(validator.effective_balance for validator in genesis_validators)
+    state = BeaconState.create(
+        validators=genesis_validators, balances=balances, config=eth2_config
+    )
     state.genesis_time = genesis_time
     return state
 
@@ -103,4 +110,51 @@ def chain_class():
 def get_trio_time():
     def _f():
         return trio.current_time()
+
     return _f
+
+
+@pytest.fixture
+def seconds_per_epoch(eth2_config):
+    return eth2_config.SECONDS_PER_SLOT * eth2_config.SLOTS_PER_EPOCH
+
+
+@pytest.fixture
+def sample_bls_private_key():
+    return 42
+
+
+@pytest.fixture
+def sample_bls_public_key(sample_bls_private_key):
+    return bls.privtopub(sample_bls_private_key)
+
+
+@pytest.fixture
+def validator_count():
+    return 16
+
+
+@pytest.fixture
+def genesis_validators(eth2_config, sample_bls_key_pairs):
+    return tuple(
+        Validator.create(
+            pubkey=public_key,
+            effective_balance=eth2_config.MAX_EFFECTIVE_BALANCE,
+            exit_epoch=FAR_FUTURE_EPOCH,
+            withdrawable_epoch=FAR_FUTURE_EPOCH,
+        )
+        for public_key in sample_bls_key_pairs
+    )
+
+
+@pytest.fixture
+def sample_bls_key_pairs(validator_count):
+    return create_key_pairs_for(validator_count)
+
+
+@pytest.fixture
+def no_op_bls():
+    """
+    Disables BLS cryptography across the entire process.
+    """
+    Eth2BLS.use_noop_backend()

@@ -1,6 +1,7 @@
 import pytest
 import trio
 
+from eth2.clock import Clock
 from trinity._utils.version import construct_trinity_client_identifier
 from trinity.nodes.beacon.full import BeaconNode
 
@@ -14,7 +15,15 @@ async def test_beacon_node_can_count_slots(
     database_dir,
     chain_class,
     get_trio_time,
+    seconds_per_epoch,
 ):
+    clock = Clock(
+        eth2_config.SECONDS_PER_SLOT,
+        chain_config.genesis_time,
+        eth2_config.SLOTS_PER_EPOCH,
+        seconds_per_epoch,
+        time_provider=get_trio_time,
+    )
     validator_api_port = 0
     client_id = construct_trinity_client_identifier()
     node = BeaconNode(
@@ -23,9 +32,9 @@ async def test_beacon_node_can_count_slots(
         chain_config,
         database_dir,
         chain_class,
+        clock,
         validator_api_port,
         client_id,
-        get_trio_time,
     )
 
     some_slots = 10

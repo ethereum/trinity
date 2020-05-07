@@ -19,12 +19,13 @@ async def post_increment_handler(_context, request):
 
 
 async def get_info_handler(context, request):
-    return context.some_info
+    return context.some_info + request["some-param"]
 
 
 @pytest.mark.trio
 async def test_trio_http_json_server_GET():
     method = "GET"
+    some_param = 33
     path = "/info"
     api_handlers = {path: {method: get_info_handler}}
     context = TestContext()
@@ -37,14 +38,16 @@ async def test_trio_http_json_server_GET():
             )
             client_stream = await open_stream_to_socket_listener(listeners[0])
 
-            request = (f"{method} {path} HTTP/1.0\r\n\r\n").encode()
+            request = (
+                f"{method} {path}?some-param={some_param} HTTP/1.0\r\n\r\n"
+            ).encode()
             await client_stream.send_all(request)
             response = bytes()
             async for chunk in client_stream:
                 response += chunk
             response_body = response.decode("utf-8").split("\r\n\r\n")[-1]
             result = json.loads(response_body)
-            assert result == SOME_INFO
+            assert result == SOME_INFO + str(some_param)
             nursery.cancel_scope.cancel()
 
 

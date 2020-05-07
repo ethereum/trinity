@@ -47,15 +47,14 @@ def _mk_duty_fetcher(public_key, slots_per_epoch, seconds_per_slot):
 
 
 @pytest.mark.trio
-async def test_client_works(
-    autojump_clock, sample_bls_key_pairs, seconds_per_slot, slots_per_epoch
-):
+async def test_client_works(autojump_clock, sample_bls_key_pairs, eth2_config):
     """
     This test constructs a ``Client`` with enough known inputs to compute an expected set of
     signatures after running for a given amount of time. The test fails if the expected signatures
     are not observed as outputs of the client.
     """
-    slots_per_epoch = 4
+    seconds_per_slot = eth2_config.SECONDS_PER_SLOT
+    slots_per_epoch = eth2_config.SLOTS_PER_EPOCH
     # NOTE: start 2 epochs ahead of genesis to emulate the client
     # waiting to the time it can start polling the beacon node
     # and the getting duties in the first epoch in the epoch prior to genesis

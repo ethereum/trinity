@@ -18,7 +18,8 @@ from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Root, Slot, Timestamp
+from eth2.beacon.typing import Root, Slot
+from eth2.clock import Tick
 from eth2.configs import Eth2Config
 
 if TYPE_CHECKING:
@@ -90,7 +91,7 @@ class BaseBeaconChain(Configurable, ABC):
         ...
 
     @abstractmethod
-    def on_tick(self, time: Timestamp, slot: Slot = None) -> None:
+    def on_tick(self, tick: Tick) -> None:
         ...
 
     @abstractmethod
@@ -118,6 +119,12 @@ class BaseBeaconChain(Configurable, ABC):
 
     @abstractmethod
     def get_head_state(self) -> BeaconState:
+        ...
+
+    @abstractmethod
+    def advance_state_to_slot(
+        self, target_slot: Slot, state: BeaconState = None
+    ) -> BeaconState:
         ...
 
     @abstractmethod
@@ -293,9 +300,10 @@ class BeaconChain(BaseBeaconChain):
         return cls.sm_configuration[0][1]
 
     # TODO how to handle the current slot in fork choice handlers
-    def on_tick(self, time: Timestamp, slot: Slot = None) -> None:
-        state_machine = self.get_state_machine(at_slot=slot)
-        state_machine.on_tick(time)
+    def on_tick(self, tick: Tick) -> None:
+        state_machine = self.get_state_machine(at_slot=tick.slot)
+        state_machine.on_tick(tick)
+        # self._advance_to_slot(tick.slot)
 
     def on_block(self, block: BaseSignedBeaconBlock, slot: Slot = None) -> None:
         state_machine = self.get_state_machine(at_slot=slot)
@@ -346,6 +354,26 @@ class BeaconChain(BaseBeaconChain):
                 raise StateNotFound(f"No state root for slot #{slot})")
 
         return self.chaindb.get_state_by_root(state_root, state_class)
+
+    def advance_state_to_slot(
+        self, target_slot: Slot, state: BeaconState = None
+    ) -> BeaconState:
+        """
+        NOTE: this method is a bit of a utility and it isn't clear it should live here indefinitely.
+        See the comment in ``get_state_by_slot`` about DoS vectors on rolling these
+        semantics into that method.
+        """
+        if state is None:
+            state = self.get_head_state()
+
+        current_slot = state.slot
+        for slot in range(current_slot, target_slot + 1):
+            slot = Slot(slot)
+            state_machine = self.get_state_machine(at_slot=slot)
+            state = state_machine.state_transition.apply_state_transition(
+                state, future_slot=slot
+            )
+        return state
 
     def get_head_state_slot(self) -> Slot:
         return self.chaindb.get_head_state_slot()
