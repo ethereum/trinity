@@ -13,6 +13,7 @@ from async_service import (
 from p2p.abc import CommandAPI, ConnectionAPI, HandlerFn
 from p2p import constants
 from p2p.disconnect import DisconnectReason
+from p2p.exceptions import PeerConnectionLost
 from p2p.logic import Application, BaseLogic, CommandHandler
 from p2p.p2p_proto import Disconnect, Ping, Pong
 from p2p.qualifiers import always
@@ -53,7 +54,13 @@ class PingAndDisconnectIfIdle(Service):
                     continue
                 except asyncio.TimeoutError:
                     pass
-                _send_ping(conn)
+
+                try:
+                    _send_ping(conn)
+                except PeerConnectionLost:
+                    conn.get_manager.cancel()
+                    return
+
                 try:
                     await asyncio.wait_for(msg_received.wait(), timeout=half_timeout)
                     conn.logger.debug2("Received msg on %s, restarting idle monitor", conn)
