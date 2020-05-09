@@ -29,22 +29,22 @@ class ComponentTestService(Service):
 
     async def run(self) -> None:
         path = Path(tempfile.NamedTemporaryFile().name)
-        self.logger.debug('Broadcasting `IsStarted(%s)`', path)
+        self.logger.info('Broadcasting `IsStarted(%s)`', path)
         try:
             await self.event_bus.broadcast(IsStarted(path))
-            self.logger.debug('Waiting for cancellation')
+            self.logger.info('Waiting for cancellation')
             await self.manager.wait_finished()
         except BaseException as err:
-            self.logger.debug('Exiting due to error: `%r`', err)
+            self.logger.info('Exiting due to error: `%r`', err)
         finally:
-            self.logger.debug('Got cancellation: touching `%s`', path)
+            self.logger.info('Got cancellation: touching `%s`', path)
             path.touch()
 
 
 class AsyncioComponentForTest(AsyncioIsolatedComponent):
-    name = "component-test"
-    endpoint_name = 'component-test'
-    logger = logging.getLogger('trinity.testing.ComponentForTest')
+    name = "component-test-asyncio"
+    endpoint_name = 'component-test-asyncio'
+    logger = logging.getLogger('trinity.testing.AsyncioComponentForTest')
 
     def get_subprocess_kwargs(self) -> SubprocessKwargs:
         return merge(
@@ -62,20 +62,20 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
 
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        cls.logger.debug('Entered `do_run`')
+        cls.logger.info('Entered `do_run`')
         service = ComponentTestService(event_bus)
         try:
             async with background_asyncio_service(service) as manager:
-                cls.logger.debug('Running service')
+                cls.logger.info('Running service')
                 try:
                     await manager.wait_finished()
                 finally:
-                    cls.logger.debug('Exiting `do_run`')
+                    cls.logger.info('Exiting `do_run`')
         finally:
             # XXX: We never reach this line, so if you run test_isolated_component.py by itself it
             # will pass but hang forever after pytest reports success.
             # Figuring this out is probably the key to fixing our shutdown.
-            cls.logger.debug('Finished: `do_run`')
+            cls.logger.info('Finished: `do_run`')
 
 
 class TrioComponentForTest(TrioIsolatedComponent):
@@ -88,14 +88,14 @@ class TrioComponentForTest(TrioIsolatedComponent):
 
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        cls.logger.debug('Entered `do_run`')
+        cls.logger.info('Entered `do_run`')
         service = ComponentTestService(event_bus)
         try:
             async with background_trio_service(service) as manager:
-                cls.logger.debug('Running service')
+                cls.logger.info('Running service')
                 try:
                     await manager.wait_finished()
                 finally:
-                    cls.logger.debug('Exiting `do_run`')
+                    cls.logger.info('Exiting `do_run`')
         finally:
-            cls.logger.debug('Finished: `do_run`')
+            cls.logger.info('Finished: `do_run`')

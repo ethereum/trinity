@@ -48,14 +48,18 @@ def log_listener(trinity_config):
         yield
 
 
+# XXX: This test only completes/passes when using AsyncioComponentForTest because
+# asyncio-run-in-process sends a SIGINT followed by a SIGTERM to the subprocess running our
+# component. The SIGTERM should not be needed as our components should exit cleanly after a
+# SIGINT, but currently that's not the case: https://github.com/ethereum/trinity/issues/1711.
 @pytest.mark.parametrize("component", (AsyncioComponentForTest, TrioComponentForTest))
 @pytest.mark.asyncio
-async def test_isolated_component(boot_info, log_listener, component):
+async def test_isolated_component(boot_info, log_listener, component, request):
     # Test the lifecycle management for isolated process components to be sure
     # they start and stop as expected
     component_manager = ComponentManager(boot_info, (component,))
 
-    async with background_asyncio_service(component_manager):
+    async with background_asyncio_service(component_manager) as cm_manager:
         event_bus = await component_manager.get_event_bus()
 
         got_started = asyncio.Future()
@@ -63,13 +67,14 @@ async def test_isolated_component(boot_info, log_listener, component):
         event_bus.subscribe(IsStarted, lambda ev: got_started.set_result(ev.path))
 
         touch_path = await asyncio.wait_for(got_started, timeout=10)
+
+        def delete_touch_path():
+            if touch_path.exists():
+                touch_path.unlink()
+
+        request.addfinalizer(delete_touch_path)
         assert not touch_path.exists()
         component_manager.shutdown('exiting component manager')
+        await cm_manager.wait_finished()
 
-    for _ in range(10000):
-        if not touch_path.exists():
-            await asyncio.sleep(0.001)
-        else:
-            break
-    else:
-        assert touch_path.exists()
+    assert touch_path.exists()
