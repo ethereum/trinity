@@ -15,7 +15,6 @@ from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.typing import Slot
 from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
-from trinity._utils.trio_utils import JSONHTTPServer
 from trinity.config import BeaconChainConfig
 from trinity.initialization import (
     initialize_beacon_database,
