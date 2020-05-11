@@ -47,6 +47,8 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
     logger = logging.getLogger('trinity.testing.AsyncioComponentForTest')
 
     def get_subprocess_kwargs(self) -> SubprocessKwargs:
+        # This is needed so that pytest can capture the subproc's output. Otherwise it will crash
+        # with a "io.UnsupportedOperation: redirected stdin is pseudofile, has no fileno()" error.
         return merge(
             super().get_subprocess_kwargs(),
             {
@@ -60,42 +62,52 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
     def is_enabled(self) -> bool:
         return True
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        cls.logger.info('Entered `do_run`')
+    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        self.logger.info('Entered `do_run`')
         service = ComponentTestService(event_bus)
         try:
             async with background_asyncio_service(service) as manager:
-                cls.logger.info('Running service')
+                self.logger.info('Running service')
                 try:
                     await manager.wait_finished()
                 finally:
-                    cls.logger.info('Exiting `do_run`')
+                    self.logger.info('Exiting `do_run`')
         finally:
             # XXX: We never reach this line, so if you run test_isolated_component.py by itself it
             # will pass but hang forever after pytest reports success.
             # Figuring this out is probably the key to fixing our shutdown.
-            cls.logger.info('Finished: `do_run`')
+            self.logger.info('Finished: `do_run`')
 
 
 class TrioComponentForTest(TrioIsolatedComponent):
     name = "component-test-trio"
     endpoint_name = 'component-test-trio'
 
+    def get_subprocess_kwargs(self) -> SubprocessKwargs:
+        # This is needed so that pytest can capture the subproc's output. Otherwise it will crash
+        # with a "io.UnsupportedOperation: redirected stdin is pseudofile, has no fileno()" error.
+        return merge(
+            super().get_subprocess_kwargs(),
+            {
+                'stdin': subprocess.PIPE,
+                'stdout': subprocess.PIPE,
+                'stderr': subprocess.PIPE,
+            }
+        )
+
     @property
     def is_enabled(self) -> bool:
         return True
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        cls.logger.info('Entered `do_run`')
+    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        self.logger.info('Entered `do_run`')
         service = ComponentTestService(event_bus)
         try:
             async with background_trio_service(service) as manager:
-                cls.logger.info('Running service')
+                self.logger.info('Running service')
                 try:
                     await manager.wait_finished()
                 finally:
-                    cls.logger.info('Exiting `do_run`')
+                    self.logger.info('Exiting `do_run`')
         finally:
-            cls.logger.info('Finished: `do_run`')
+            self.logger.info('Finished: `do_run`')

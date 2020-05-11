@@ -1,9 +1,6 @@
 from abc import abstractmethod
-import os
-from typing import Optional
 
 from asyncio_run_in_process import open_in_process
-from asyncio_run_in_process.typing import SubprocessKwargs
 from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
@@ -21,17 +18,6 @@ logger = get_logger('trinity.extensibility.asyncio.AsyncioIsolatedComponent')
 
 class AsyncioIsolatedComponent(BaseIsolatedComponent):
 
-    def get_subprocess_kwargs(self) -> Optional[SubprocessKwargs]:
-        # By default we want every child process its own process group leader as we don't want a
-        # Ctrl-C in the terminal to send a SIGINT to each one of our process, as that is already
-        # handled by open_in_process().
-        start_new_session = True
-        if os.getenv('TRINITY_SINGLE_PROCESS_GROUP') == "1":
-            # This is needed because some of our integration tests rely on all processes being in
-            # a single process group.
-            start_new_session = False
-        return {'start_new_session': start_new_session}
-
     async def run(self) -> None:
         proc_ctx = open_in_process(
             self._do_run,
@@ -45,7 +31,10 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             # Right now, when we shutdown trinity, all our components terminate with a 15
             # returncode (SIGTERM), but ideally they should terminate with a 2 (SIGINT). See the
             # comment below for why that is.
-            logger.debug("%s terminated: returncode=%s", self, proc.returncode)
+            # Only attempt to log the proc's returncode if we succesfully entered the context
+            # manager above.
+            if 'proc' in locals():
+                logger.debug("%s terminated: returncode=%s", self, proc.returncode)
 
     async def _do_run(self, boot_info: BootInfo) -> None:
         with child_process_logging(boot_info):
