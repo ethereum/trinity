@@ -8,9 +8,8 @@ from libp2p.crypto.secp256k1 import create_new_key_pair
 import trio
 from trio_typing import TaskStatus
 
-from eth2.api.http.validator import Context
-from eth2.api.http.validator import ServerHandlers as ValidatorAPIHandlers
-from eth2.api.http.validator import SyncerAPI, SyncStatus
+from eth2.api.http.ir import app
+from eth2.api.http.ir import Context, SyncerAPI, SyncStatus
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.typing import Slot
@@ -43,18 +42,6 @@ def _mk_syncer() -> SyncerAPI:
             return SyncStatus(False, Slot(0), Slot(0), Slot(0))
 
     return _sync()
-
-
-def _mk_validator_api_server(
-    validator_api_port: int, context: Context
-) -> JSONHTTPServer[Context]:
-    # NOTE: `mypy` claims the handlers are not typed correctly although it does determine
-    # the async callable to be a subtype of the declared type so it seems like a bug
-    # and we will ignore for now...
-    # See https://mypy.readthedocs.io/en/stable/more_types.html#typing-async-await
-    return JSONHTTPServer(
-        ValidatorAPIHandlers, context, validator_api_port  # type: ignore
-    )
 
 
 class BeaconNode:
@@ -96,9 +83,6 @@ class BeaconNode:
         )
         self._api_context = api_context
         self._validator_api_port = validator_api_port
-        self._validator_api_server = _mk_validator_api_server(
-            validator_api_port, api_context
-        )
 
     @classmethod
     def from_config(
@@ -139,13 +123,9 @@ class BeaconNode:
     async def _run_validator_api(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
     ) -> None:
-        server = self._validator_api_server
-        async with trio.open_nursery() as nursery:
-            self.validator_api_port = await nursery.start(server.serve)
-            self.logger.info(
-                "validator HTTP API server listening on %d", self.validator_api_port
-            )
-            task_status.started()
+        app.config["context"] = self._api_context
+        task_status.started()
+        await app.run_task(port=self._validator_api_port)
 
     async def run(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED

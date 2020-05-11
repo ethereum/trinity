@@ -123,6 +123,7 @@ deps = {
         "ssz==0.2.4",
         "asks>=2.3.6,<3",  # validator client
         "eth-keyfile",  # validator client
+        "Quart-Trio>=0.5.1,<0.6",
     ],
     'eth2-extra': [
         "milagro-bls-binding==0.1.3",
