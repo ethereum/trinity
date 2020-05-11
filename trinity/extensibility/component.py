@@ -8,11 +8,13 @@ from argparse import (
 )
 import asyncio
 import logging
+import os
 import pathlib
 import signal
-from typing import AsyncIterator, Type, TYPE_CHECKING, Union
+from typing import AsyncIterator, Optional, Type, TYPE_CHECKING, Union
 
 from async_generator import asynccontextmanager
+from asyncio_run_in_process.typing import SubprocessKwargs
 
 from lahja import AsyncioEndpoint, ConnectionConfig, EndpointAPI, TrioEndpoint
 
@@ -98,6 +100,17 @@ class BaseIsolatedComponent(BaseComponent):
     It is up to the component to handle these signals accordingly.
     """
     endpoint_name: str = None
+
+    def get_subprocess_kwargs(self) -> Optional[SubprocessKwargs]:
+        # By default we want every child process its own process group leader as we don't want a
+        # Ctrl-C in the terminal to send a SIGINT to each one of our process, as that is already
+        # handled by open_in_process().
+        start_new_session = True
+        if os.getenv('TRINITY_SINGLE_PROCESS_GROUP') == "1":
+            # This is needed because some of our integration tests rely on all processes being in
+            # a single process group.
+            start_new_session = False
+        return {'start_new_session': start_new_session}
 
     @classmethod
     def get_endpoint_name(cls) -> str:
