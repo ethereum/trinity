@@ -58,7 +58,11 @@ class PingAndDisconnectIfIdle(Service):
                 try:
                     _send_ping(conn)
                 except PeerConnectionLost:
-                    conn.get_manager.cancel()
+                    conn.logger.debug(
+                        "Lost peer connection to %s while sending ping to check idle connection",
+                        conn,
+                    )
+                    conn.get_manager().cancel()
                     return
 
                 try:
