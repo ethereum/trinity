@@ -1,0 +1,1 @@
+Squash some deprecation warnings, by upgrading eth-keys & eth-tester
