@@ -5,7 +5,6 @@ import argcomplete
 from async_service.trio import background_trio_service
 
 from eth2.clock import Clock
-from eth2.validator_client.beacon_node import MockBeaconNode as BeaconNode
 from eth2.validator_client.client import Client
 from eth2.validator_client.config import Config
 from eth2.validator_client.key_store import KeyStore

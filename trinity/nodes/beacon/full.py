@@ -8,7 +8,7 @@ from libp2p.crypto.secp256k1 import create_new_key_pair
 import trio
 from trio_typing import TaskStatus
 
-from eth2.api.http.ir import app
+from eth2.api.http.app import app
 from eth2.api.http.ir import Context, SyncerAPI, SyncStatus
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.db.chain import BeaconChainDB
