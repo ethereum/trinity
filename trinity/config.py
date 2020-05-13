@@ -14,6 +14,7 @@ import json
 from pathlib import (
     Path,
 )
+import time
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -736,7 +737,8 @@ class BeaconChainConfig:
             with open(_get_eth2_genesis_config_file_path()) as config_file:
                 genesis_config = json.load(config_file)
         except FileNotFoundError:
-            genesis_config = generate_genesis_config("minimal")
+            genesis_time = Timestamp(int(time.time()))
+            genesis_config = generate_genesis_config("minimal", genesis_time)
 
         eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
         # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
