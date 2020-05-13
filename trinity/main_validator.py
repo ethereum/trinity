@@ -1,4 +1,5 @@
 import json
+import time
 import logging
 from pathlib import Path
 from typing import Any, Dict
@@ -9,7 +10,7 @@ import trio
 from eth2.beacon.tools.builder.initializer import load_genesis_key_map
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Slot
+from eth2.beacon.typing import Slot, Timestamp
 from eth2.configs import Eth2Config
 from eth2.genesis import generate_genesis_config
 from eth2.validator_client.cli_parser import parse_cli_args
@@ -61,7 +62,8 @@ def main_validator() -> None:
             validator_client_app_config.genesis_config_path
         )
     except FileNotFoundError:
-        genesis_config = generate_genesis_config("minimal")
+        genesis_time = Timestamp(int(time.time()))
+        genesis_config = generate_genesis_config("minimal", genesis_time)
 
     eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
     override_lengths(eth2_config)

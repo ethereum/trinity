@@ -1,6 +1,7 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from eth.constants import ZERO_HASH32
+from eth_utils import encode_hex
 from ssz.tools.dump import to_formatted_dict
 from typing_extensions import Literal
 
@@ -21,8 +22,7 @@ from eth2.configs import Eth2Config
 
 
 def generate_genesis_config(
-    config_profile: Literal["minimal", "mainnet"],
-    genesis_time: Optional[Timestamp] = None,
+    config_profile: Literal["minimal", "mainnet"], genesis_time: Timestamp
 ) -> Dict[str, Any]:
     eth2_config = _get_eth2_config(config_profile)
     override_lengths(eth2_config)
@@ -45,15 +45,15 @@ def generate_genesis_config(
         config=eth2_config,
     )
 
-    if genesis_time:
-        initial_state.set("genesis_time", genesis_time)
+    genesis_state = initial_state.set("genesis_time", genesis_time)
 
     return {
         "eth2_config": eth2_config.to_formatted_dict(),
         "genesis_validator_key_pairs": mk_genesis_key_map(
-            validator_key_pairs, initial_state
+            validator_key_pairs, genesis_state
         ),
-        "genesis_state": to_formatted_dict(initial_state),
+        "genesis_state_root": encode_hex(genesis_state.hash_tree_root),
+        "genesis_state": to_formatted_dict(genesis_state),
     }
 
 

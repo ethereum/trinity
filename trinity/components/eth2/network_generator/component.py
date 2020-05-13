@@ -4,8 +4,6 @@ import logging
 import pathlib
 import time
 
-from eth_utils import humanize_hash
-
 from eth2.genesis import generate_genesis_config
 from trinity.config import BeaconChainConfig, TrinityConfig
 from trinity.extensibility import Application
@@ -51,15 +49,19 @@ class NetworkGeneratorComponent(Application):
             default=_get_network_config_path_from(),
         )
         genesis_time_group = network_generator_parser.add_mutually_exclusive_group(
-            required=False
+            required=True
         )
         genesis_time_group.add_argument(
-            "--genesis-time", type=int, help="Unix timestamp to use as the genesis time"
+            "--genesis-time",
+            type=int,
+            help="Unix timestamp to use as the genesis time",
+            default=int(time.time()),
         )
         genesis_time_group.add_argument(
             "--genesis-delay",
             type=int,
             help="Delay in seconds to use as the genesis time from time of execution",
+            default=0,
         )
 
         network_generator_parser.set_defaults(func=cls._generate_network_as_json)
@@ -70,19 +72,18 @@ class NetworkGeneratorComponent(Application):
     ) -> None:
         if args.genesis_time:
             genesis_time = args.genesis_time
-        elif args.genesis_delay:
-            genesis_time = int(time.time()) + args.genesis_delay
         else:
-            genesis_time = None
+            # this arm is guaranteed given the argparse config...
+            genesis_time = int(time.time()) + args.genesis_delay
 
         genesis_config = generate_genesis_config(args.config_profile, genesis_time)
-
         output_file_path = args.output
         cls.logger.info(
-            "configuration generated; genesis state has root %s with genesis time %d; "
+            "configuration generated; genesis state has root %s with genesis time %d (%s); "
             "writing to '%s'",
-            humanize_hash(genesis_config["genesis_state"].hash_tree_root),
-            genesis_config["genesis_state"].genesis_time,
+            genesis_config["genesis_state_root"],
+            genesis_time,
+            time.strftime("%Y-%m-%d %I:%M%z", time.localtime(genesis_time)),
             output_file_path,
         )
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
