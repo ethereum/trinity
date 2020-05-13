@@ -19,7 +19,7 @@ deps = {
         # cryptography does not use semver and allows breaking changes within `0.3` version bumps.
         "cryptography>=2.5,<2.7",
         "eth-hash>=0.1.4,<1",
-        "eth-keys>=0.2.4,<0.3.0",
+        "eth-keys>=0.3.3,<0.4.0",
         "netifaces>=0.10.7<1",
         "pysha3>=1.0.0,<2.0.0",
         "python-snappy>=0.5.3",
@@ -77,7 +77,7 @@ deps = {
         "pytest-xdist>=1.29.0,<1.30",
         # only for eth2
         "ruamel.yaml==0.15.98",
-        "eth-tester==0.2.0b3",
+        "eth-tester==0.4.0b2",
     ],
     # We have to keep some separation between trio and asyncio based tests
     # because `pytest-asyncio` is greedy and tries to run all asyncio fixtures.
