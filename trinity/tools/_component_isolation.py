@@ -111,3 +111,34 @@ class TrioComponentForTest(TrioIsolatedComponent):
                     self.logger.info('Exiting `do_run`')
         finally:
             self.logger.info('Finished: `do_run`')
+
+
+class IdleService(Service):
+    def __init__(self, event_bus: EndpointAPI) -> None:
+        self.event_bus = event_bus
+
+    async def run(self) -> None:
+        await self.event_bus.broadcast(IsStarted(None))
+        await self.manager.wait_finished()
+
+
+class ComponentException(Exception):
+    pass
+
+
+class AsyncioBrokenComponent(AsyncioComponentForTest):
+    name = "component-test-asyncio-broken"
+    endpoint_name = 'component-test-asyncio-broken'
+
+    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        async with background_asyncio_service(IdleService(event_bus)):
+            raise ComponentException("This is a component that crashes after starting a service")
+
+
+class TrioBrokenComponent(TrioComponentForTest):
+    name = "component-test-trio-broken"
+    endpoint_name = 'component-test-trio-broken'
+
+    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+        async with background_trio_service(IdleService(event_bus)):
+            raise ComponentException("This is a component that crashes after starting a service")

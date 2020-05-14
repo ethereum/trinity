@@ -123,8 +123,17 @@ class BaseIsolatedComponent(BaseComponent):
 async def _cleanup_component_task(component_name: str, task: "asyncio.Future[None]") -> None:
     logger.debug("Stopping component: %s", component_name)
     if not task.done():
-        logger.debug("Cancelling component: %s", component_name)
+        # XXX: This could be a component that crashed and sent a ShutdownRequest to trinity, and
+        # in that case by cancelling it we will throw away the exception that caused it to crash.
+        # Unfortunately there's no way to distinguish between a component that crashed and just
+        # hasn't terminated yet and one that is still running, as in both cases all we have is a
+        # task that is not done(), so the best thing we can do is make sure our *Component base
+        # classes log any exceptions coming from subclasses (i.e. the do_run() method) before
+        # propagating them.
+        logger.debug("%s component not done yet, cancelling it", component_name)
         task.cancel()
+    else:
+        logger.debug("%s component already done", component_name)
     try:
         await task
     except asyncio.CancelledError:
