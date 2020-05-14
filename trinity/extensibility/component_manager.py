@@ -27,6 +27,16 @@ from trinity.extensibility import (
 
 
 class ComponentManager(Service):
+    """
+    Run the given components and wait for a ShutdownRequest event.
+
+    When a ShutdownRequest is received, we cancel and wait for all components to terminate.
+
+    Notice that an unhandled exception from a component is only detected/reported when we leave
+    the AsyncContextGroup context (in the run() method), so components must send us a
+    ShutdownRequest if they want us to terminate.
+    """
+
     logger = logging.getLogger('trinity.extensibility.component_manager.ComponentManager')
 
     _endpoint: EndpointAPI
@@ -97,6 +107,7 @@ class ComponentManager(Service):
                 self.manager.cancel()
 
     def shutdown(self, reason: str) -> None:
+        self.logger.info("Shutting down, reason: %s", reason)
         self.reason = reason
         self._trigger_component_exit.set()
 
@@ -105,7 +116,7 @@ class ComponentManager(Service):
         # We need to run in a loop because we're a daemon.
         while self.manager.is_running:
             req = await self._endpoint.wait_for(ShutdownRequest)
-            self.logger.info("Received shutdown request: %s", req)
+            self.logger.info("Received shutdown request: %s", req.reason)
             if shutdown_request_received:
                 self.logger.warning("Received multiple shutdown requests, ignoring")
                 continue

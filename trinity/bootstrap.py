@@ -313,7 +313,7 @@ def run(component_types: Tuple[Type[BaseComponentAPI], ...],
     finally:
         reason = component_manager_service.reason
         hint = f" ({reason})" if reason else f""
-        logger.info('Shutting down Trinity%s', reason)
+        logger.info('Shutting down Trinity%s', hint)
         remove_dangling_ipc_files(logger, trinity_config.ipc_dir)
         argparse.ArgumentParser().exit(message=f"Trinity shutdown complete{hint}\n")
         if trinity_config.trinity_tmp_root_dir:
