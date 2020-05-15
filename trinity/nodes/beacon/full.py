@@ -89,6 +89,7 @@ class BeaconNode:
         self._chain = chain_class(self._base_db, eth2_config)
 
         self._block_pool: Set[SignedBeaconBlock] = set()
+        self._slashable_block_pool: Set[SignedBeaconBlock] = set()
 
         api_context = Context(
             client_identifier,
@@ -191,6 +192,7 @@ class BeaconNode:
         # NOTE: chain will write the block in ``import_block`` but not the block's state
         # See the place that exception is raised for further rationale.
         # TODO: pipe to "slasher" software...
+        self._slashable_block_pool.add(block)
 
     async def run(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
