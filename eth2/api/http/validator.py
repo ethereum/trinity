@@ -108,7 +108,11 @@ class Context:
                 continue
 
             if is_proposer(state, validator_index, self.eth2_config):
-                block_proposal_slot = state.slot
+                # TODO (ralexstokes) clean this up!
+                if state.slot != 0:
+                    block_proposal_slot = state.slot
+                else:
+                    block_proposal_slot = Slot((1 << 64) - 1)
             else:
                 # NOTE: temporary sentinel value for "no slot"
                 # The API has since been updated w/ much better ergonomics
