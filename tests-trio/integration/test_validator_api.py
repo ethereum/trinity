@@ -1,3 +1,5 @@
+import platform
+
 from async_service.trio import background_trio_service
 import pytest
 import trio
@@ -8,6 +10,12 @@ from eth2.validator_client.client import Client as ValidatorClient
 from eth2.validator_client.key_store import KeyStore
 from trinity._utils.version import construct_trinity_client_identifier
 from trinity.nodes.beacon.full import BeaconNode
+
+# NOTE: seeing differences in ability to connect depending on platform.
+# This could be specific to our trio HTTP server (somehow...) so try removing after deprecation...
+local_host_name = "127.0.0.1"  # linux default
+if platform.system() == "Darwin":
+    local_host_name = "localhost"  # macOS variant
 
 
 @pytest.mark.trio
@@ -50,7 +58,7 @@ async def test_beacon_node_and_validator_client_can_talk(
 
         api_client = BeaconNodeClient(
             chain_config.genesis_time,
-            f"http://127.0.0.1:{node.validator_api_port}",
+            f"http://{local_host_name}:{node.validator_api_port}",
             eth2_config.SECONDS_PER_SLOT,
         )
         async with api_client:
