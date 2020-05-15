@@ -4,6 +4,7 @@ This module contains the eth2 HTTP validator API connecting a validator client t
 from abc import ABC
 from dataclasses import asdict, dataclass, field
 from enum import Enum, unique
+import logging
 from typing import Collection, Iterable, Set
 
 from eth.exceptions import BlockNotFound
@@ -29,6 +30,8 @@ from eth2.beacon.typing import Bitfield, CommitteeIndex, Epoch, Root, Slot
 from eth2.clock import Clock
 from eth2.configs import Eth2Config
 from trinity._utils.trio_utils import Request, Response
+
+logger = logging.getLogger("eth2.api.http.validator")
 
 
 def _get_target_checkpoint(
@@ -129,12 +132,10 @@ class Context:
             slot, parent_block_root, randao_reveal, parent_state, state_machine
         )
 
-    async def broadcast_block(self, signed_block: SignedBeaconBlock) -> bool:
-        # self.logger.info(
-        #     "broadcasting block with root %s", humanize_hash(block.hash_tree_root)
-        #   )
         # TODO the actual brodcast
-        self._broadcast_operations.add(signed_block.hash_tree_root)
+    async def broadcast_block(self, block: SignedBeaconBlock) -> bool:
+        logger.warning("broadcasting block with root %s", block.hash_tree_root.hex())
+        self._broadcast_operations.add(block.hash_tree_root)
         return True
 
     def get_attestation(
@@ -174,7 +175,7 @@ class Context:
         return Attestation.create(aggregation_bits=aggregation_bits, data=data)
 
     async def broadcast_attestation(self, attestation: Attestation) -> bool:
-        # self.logger.info(
+        # logger.info(
         #     "broadcasting attestation with root %s",
         #     humanize_hash(attestation.hash_tree_root),
         # )
