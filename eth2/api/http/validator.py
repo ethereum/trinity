@@ -127,11 +127,12 @@ class Context:
     def get_block_proposal(
         self, slot: Slot, randao_reveal: BLSSignature
     ) -> BeaconBlock:
-        target_slot = Slot(max(slot - 1, 0))
-        head_state = self.chain.get_head_state()
-        parent_state = self.chain.advance_state_to_slot(target_slot, head_state)
-        parent_block_root = parent_state.latest_block_header.hash_tree_root
-        state_machine = self.chain.get_state_machine(at_slot=target_slot)
+        parent_slot = Slot(max(slot - 1, 0))
+        parent = self.chain.get_canonical_head()
+        parent_block_root = parent.message.hash_tree_root
+        head_state = self.chain.get_state_by_root(parent.message.state_root)
+        parent_state = self.chain.advance_state_to_slot(parent_slot, head_state)
+        state_machine = self.chain.get_state_machine(at_slot=slot)
         return create_block_proposal(
             slot, parent_block_root, randao_reveal, parent_state, state_machine
         )
