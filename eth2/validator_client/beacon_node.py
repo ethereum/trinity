@@ -250,7 +250,7 @@ class BeaconNode(BeaconNodeAPI):
             self._is_connected = True
         except OSError as e:
             if retry:
-                self.logger.warn(
+                self.logger.warning(
                     "could not connect to beacon node at %s; retrying connection in %d seconds",
                     self._beacon_node_endpoint,
                     CONNECTION_RETRY_INTERVAL,
