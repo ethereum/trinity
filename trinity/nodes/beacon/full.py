@@ -187,7 +187,7 @@ class BeaconNode:
     def _on_slashable_block(
         self, block: SignedBeaconBlock, exc: SlashableBlockError
     ) -> None:
-        self.logger.warn("failed to import block %s: %s", block, exc)
+        self.logger.warning("failed to import block %s: %s", block, exc)
         # NOTE: chain will write the block in ``import_block`` but not the block's state
         # See the place that exception is raised for further rationale.
         # TODO: pipe to "slasher" software...
