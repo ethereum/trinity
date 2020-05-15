@@ -10,7 +10,7 @@ from async_service import Service, background_asyncio_service
 
 from lahja import EndpointAPI
 
-from eth.abc import AtomicDatabaseAPI, DatabaseAPI
+from eth.abc import AtomicDatabaseAPI, BlockImportResult, DatabaseAPI
 from eth.constants import GENESIS_PARENT_HASH
 from eth.exceptions import (
     HeaderNotFound,
@@ -572,7 +572,7 @@ class BeamBlockImporter(BaseBlockImporter, Service):
 
     async def import_block(
             self,
-            block: BaseBlock) -> Tuple[BaseBlock, Tuple[BaseBlock, ...], Tuple[BaseBlock, ...]]:
+            block: BaseBlock) -> BlockImportResult:
         self.logger.info("Beam importing %s (%d txns) ...", block.header, len(block.transactions))
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)

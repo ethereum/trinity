@@ -1160,8 +1160,9 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         # Log the latest import block so that we can accurately report lag
         self._latest_block_number = block.number
 
-        _, new_canonical_blocks, old_canonical_blocks = await self._block_importer.import_block(
-            block)
+        import_result = await self._block_importer.import_block(block)
+        new_canonical_blocks = import_result.new_canonical_blocks
+        old_canonical_blocks = import_result.old_canonical_blocks
 
         # How much is the imported block's header behind the current time?
         lag = time.time() - block.header.timestamp

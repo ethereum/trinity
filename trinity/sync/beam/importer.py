@@ -18,6 +18,7 @@ from eth.abc import (
     AtomicDatabaseAPI,
     BlockAPI,
     BlockHeaderAPI,
+    BlockImportResult,
     ConsensusContextAPI,
     SignedTransactionAPI,
     StateAPI,
@@ -65,8 +66,6 @@ from trinity.sync.common.events import (
     StatelessBlockImportDone,
 )
 from trinity._utils.logging import get_logger
-
-ImportBlockType = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
 
 
 class BeamStats:
@@ -397,7 +396,7 @@ def _broadcast_import_complete(
         event_bus: EndpointAPI,
         block: BlockAPI,
         broadcast_config: BroadcastConfig,
-        future: 'asyncio.Future[ImportBlockType]') -> None:
+        future: 'asyncio.Future[BlockImportResult]') -> None:
     completed = not future.cancelled()
     event_bus.broadcast_nowait(
         StatelessBlockImportDone(
@@ -412,11 +411,11 @@ def _broadcast_import_complete(
 
 def partial_import_block(beam_chain: BeamChain,
                          block: BlockAPI,
-                         ) -> Callable[[], Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]]:  # noqa: E501
+                         ) -> Callable[[], BlockImportResult]:  # noqa: E501
     """
     Get an argument-free function that will import the given block.
     """
-    def _import_block() -> Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]:
+    def _import_block() -> BlockImportResult:
         t = Timer()
         beam_chain.clear_first_vm()
         try:
