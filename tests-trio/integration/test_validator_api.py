@@ -53,6 +53,9 @@ async def test_beacon_node_and_validator_client_can_talk(
         client_id,
     )
 
+    starting_head_slot = node._chain.get_canonical_head().message.slot
+    assert starting_head_slot == eth2_config.GENESIS_SLOT
+
     async with trio.open_nursery() as nursery:
         await nursery.start(node.run)
 
@@ -68,15 +71,21 @@ async def test_beacon_node_and_validator_client_can_talk(
             key_store = KeyStore(sample_bls_key_pairs)
             validator = ValidatorClient(key_store, clock, api_client)
 
-            with trio.move_on_after(seconds_per_epoch * 2):
+            with trio.move_on_after(seconds_per_epoch):
                 async with background_trio_service(validator):
-                    await trio.sleep(seconds_per_epoch * 3)
+                    await trio.sleep(seconds_per_epoch * 2)
             nursery.cancel_scope.cancel()
     sent_operations_for_broadcast = api_client._broadcast_operations
     received_operations_for_broadcast = node._api_context._broadcast_operations
+
+    # temporary until we update to the new API
+    # NOTE: with new API, remove assertion and deletion
+    assert validator._duty_store._store[((1 << 64) - 1, 0)]
+    del validator._duty_store._store[((1 << 64) - 1, 0)]
 
     # NOTE: this is the easiest condition to pass while suggesting this is working
     # As the other parts of the project shore up, we should do stricter testing to ensure
     # the operations we expect (and that they exist...) get across the gap from
     # validator to beacon node
     assert received_operations_for_broadcast.issubset(sent_operations_for_broadcast)
+    assert node._chain.get_canonical_head().slot > starting_head_slot
