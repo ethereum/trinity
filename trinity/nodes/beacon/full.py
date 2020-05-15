@@ -166,9 +166,8 @@ class BeaconNode:
     def _try_import_orphan(self, imported_parent_root: Root) -> None:
         for orphan in self._block_pool:
             if orphan.message.parent_root == imported_parent_root:
-                break
-        self._block_pool.discard(orphan)
-        self.on_block(orphan)
+                self._block_pool.discard(orphan)
+                return self.on_block(orphan)
 
     def _on_block_imported(self, block: SignedBeaconBlock) -> None:
         self.logger.debug("successfully imported block %s", block)
