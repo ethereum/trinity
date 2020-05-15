@@ -71,6 +71,11 @@ class SyncerAPI(ABC):
         ...
 
 
+class BlockBroadcasterAPI(ABC):
+    async def broadcast_block(self, block: SignedBeaconBlock) -> None:
+        ...
+
+
 @dataclass
 class ValidatorDuty:
     validator_pubkey: BLSPubkey
@@ -87,6 +92,7 @@ class Context:
     syncer: SyncerAPI
     chain: BaseBeaconChain
     clock: Clock
+    block_broadcaster: BlockBroadcasterAPI
     _broadcast_operations: Set[Root] = field(default_factory=set)
 
     async def get_sync_status(self) -> SyncStatus:
@@ -137,9 +143,9 @@ class Context:
             slot, parent_block_root, randao_reveal, parent_state, state_machine
         )
 
-        # TODO the actual brodcast
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:
         logger.warning("broadcasting block with root %s", block.hash_tree_root.hex())
+        await self.block_broadcaster.broadcast_block(block)
         self._broadcast_operations.add(block.hash_tree_root)
         return True
 
