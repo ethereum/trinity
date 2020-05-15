@@ -17,6 +17,7 @@ from eth2.beacon.state_machines.forks.skeleton_lake.config import (
 )
 from eth2.beacon.tools.builder.initializer import create_key_pairs_for
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
+from eth2.beacon.types.blocks import BeaconBlockBody, BeaconBlockHeader
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from trinity.config import BeaconChainConfig
@@ -85,7 +86,12 @@ def genesis_time(current_time, eth2_config):
 def genesis_state(eth2_config, genesis_time, genesis_validators):
     balances = tuple(validator.effective_balance for validator in genesis_validators)
     state = BeaconState.create(
-        validators=genesis_validators, balances=balances, config=eth2_config
+        latest_block_header=BeaconBlockHeader.create(
+            body_root=BeaconBlockBody.create().hash_tree_root
+        ),
+        validators=genesis_validators,
+        balances=balances,
+        config=eth2_config,
     )
     state.genesis_time = genesis_time
     return state
