@@ -63,6 +63,10 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
+    def write_signed_block(self, block: BaseSignedBeaconBlock) -> None:
+        ...
+
+    @abstractmethod
     def get_canonical_block_root(self, slot: Slot) -> Root:
         ...
 
@@ -467,6 +471,16 @@ class BeaconChainDB(BaseBeaconChainDB):
         self.__class__._set_block_score_to_db(self.db, block, score)
 
     @classmethod
+    def _write_signed_block(cls, db: DatabaseAPI, block: BaseSignedBeaconBlock) -> None:
+        # TODO key by block root or signed block root?
+        db.set(block.message.hash_tree_root, ssz.encode(block))
+        cls._add_block_root_to_slot_lookup(db, block)
+        cls._add_attestations_root_to_block_lookup(db, block.message)
+
+    def write_signed_block(self, block: BaseSignedBeaconBlock) -> None:
+        self.__class__._write_signed_block(self.db, block)
+
+    @classmethod
     def _persist_block_chain(
         cls,
         db: DatabaseAPI,
@@ -506,10 +520,8 @@ class BeaconChainDB(BaseBeaconChainDB):
         score = first_scoring.score(first_block.message)
 
         curr_block_head = first_block
-        db.set(curr_block_head.message.hash_tree_root, ssz.encode(curr_block_head))
-        cls._add_block_root_to_slot_lookup(db, curr_block_head)
+        cls._write_signed_block(db, curr_block_head)
         cls._set_block_score_to_db(db, curr_block_head, score)
-        cls._add_attestations_root_to_block_lookup(db, curr_block_head)
 
         orig_blocks_seq = concat([(first_block,), blocks_iterator])
 
@@ -524,9 +536,7 @@ class BeaconChainDB(BaseBeaconChainDB):
                 )
 
             curr_block_head = child
-            db.set(curr_block_head.message.hash_tree_root, ssz.encode(curr_block_head))
-            cls._add_block_root_to_slot_lookup(db, curr_block_head)
-            cls._add_attestations_root_to_block_lookup(db, curr_block_head)
+            cls._write_signed_block(db, curr_block_head)
 
             # NOTE: len(scorings_iterator) should equal len(blocks_iterator)
             try:
@@ -854,7 +864,7 @@ class BeaconChainDB(BaseBeaconChainDB):
     def _add_attestations_root_to_block_lookup(
         db: DatabaseAPI, block: BaseBeaconBlock
     ) -> None:
-        root = block.message.hash_tree_root
+        root = block.hash_tree_root
         for index, attestation in enumerate(block.body.attestations):
             attestation_key = AttestationKey(root, index)
             db.set(

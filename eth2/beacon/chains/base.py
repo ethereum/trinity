@@ -9,6 +9,7 @@ from eth.validation import validate_word
 from eth_utils import ValidationError, humanize_hash
 
 from eth2._utils.ssz import validate_imported_block_unchanged
+from eth2.beacon.chains.exceptions import ParentNotFoundError, SlashableBlockError
 from eth2.beacon.db.chain import BaseBeaconChainDB, BeaconChainDB, StateNotFound
 from eth2.beacon.exceptions import BlockClassError, StateMachineNotFound
 from eth2.beacon.fork_choice.constant import ConstantScoring
@@ -471,14 +472,29 @@ class BeaconChain(BaseBeaconChain):
         try:
             parent_block = self.get_block_by_root(block.parent_root)
         except BlockNotFound:
-            raise ValidationError(
-                "Attempt to import block #{}.  Cannot import block {} before importing "
-                "its parent block at {}".format(
-                    block.slot,
-                    humanize_hash(block.message.hash_tree_root),
-                    humanize_hash(block.parent_root),
-                )
+            raise ParentNotFoundError(
+                f"attempt to import block {block} but missing parent block"
             )
+
+        try:
+            existing_block = self.get_canonical_block_by_slot(block.slot)
+            if existing_block != block:
+                # NOTE: we want to keep the block but avoid heavy state transition for now...
+                # Rationale: this block may simply be a slashable block. It could also be on
+                # a fork. Choose to defer the state materialization until we re-org via fork choice.
+                self.chaindb.write_signed_block(block)
+
+                raise SlashableBlockError(
+                    block,
+                    f"attempt to import {block} but canonical chain"
+                    " already has a block at this slot",
+                )
+            else:
+                # NOTE: block already imported!
+                return block, (), ()
+        except BlockNotFound:
+            # NOTE: block has not been imported for ``block.slot``
+            pass
 
         state_machine = self.get_state_machine(at_slot=parent_block.slot)
         state_class = state_machine.get_state_class()
