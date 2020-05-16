@@ -308,6 +308,12 @@ class BeaconNode(BeaconNodeAPI):
         public_keys: Collection[BLSPubkey],
         target_epoch: Epoch,
     ) -> Collection[Duty]:
+        if target_epoch < 0:  # GENESIS_EPOCH == 0
+            # avoid fetching duties before genesis
+            # NOTE: we do want to fetch duties from the genesis epoch
+            # with at least 1 epoch of lookahead.
+            return ()
+
         url = self._url_for(BeaconNodePath.validator_duties)
         duties_data = await _get_duties_from_beacon_node(
             self._session, url, public_keys, target_epoch

@@ -102,6 +102,9 @@ class Context:
     def get_validator_duties(
         self, public_keys: Collection[BLSPubkey], epoch: Epoch
     ) -> Iterable[ValidatorDuty]:
+        if epoch < self.eth2_config.GENESIS_EPOCH:
+            return ()
+
         current_tick = self.clock.compute_current_tick()
         state = self.chain.advance_state_to_slot(current_tick.slot)
         for public_key in public_keys:
