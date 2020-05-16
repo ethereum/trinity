@@ -50,7 +50,6 @@ async def _dispatch_duties_for(
 ) -> None:
     duties = await duty_store.duties_at_tick(tick)
     if not duties:
-        logger.debug("%s: no duties found", tick)
         return
     logger.debug("%s: got duties %s to execute", tick, duties)
     for duty in duties:
@@ -78,7 +77,7 @@ async def _fetch_latest_duties(
     if not latest_duties:
         return
 
-    logger.debug("%s: found duties %s", tick, latest_duties)
+    logger.debug("%s: found %d duties", tick, len(latest_duties))
 
     # TODO manage duties correctly, accounting for re-orgs, etc.
     # NOTE: the naive strategy is likely "last write wins"

@@ -186,9 +186,8 @@ class Context:
         return Attestation.create(aggregation_bits=aggregation_bits, data=data)
 
     async def broadcast_attestation(self, attestation: Attestation) -> bool:
-        # logger.info(
-        #     "broadcasting attestation with root %s",
-        #     humanize_hash(attestation.hash_tree_root),
+        # logger.debug(
+        #     "broadcasting attestation with root %s", attestation.hash_tree_root.hex()
         # )
         # TODO the actual brodcast
         self._broadcast_operations.add(attestation.hash_tree_root)
