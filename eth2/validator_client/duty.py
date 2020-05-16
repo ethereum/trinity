@@ -47,10 +47,9 @@ class AttestationDuty(Duty):
 
     def __repr__(self) -> str:
         return (
-            f"AttestationDuty(validator_public_key={humanize_bytes(self.validator_public_key)},"
-            f" tick_for_execution={self.tick_for_execution},"
-            f" discovered_at_tick={self.discovered_at_tick},"
-            f" committee_index={self.committee_index})"
+            f"AttestationDuty(for {humanize_bytes(self.validator_public_key)}"
+            f" at slot {self.tick_for_execution.slot})"
+            f" in committee with index {self.committee_index})"
         )
 
 
@@ -64,7 +63,6 @@ class BlockProposalDuty(Duty):
 
     def __repr__(self) -> str:
         return (
-            f"BlockProposalDuty(validator_public_key={humanize_bytes(self.validator_public_key)},"
-            f" tick_for_execution={self.tick_for_execution},"
-            f" discovered_at_tick={self.discovered_at_tick}"
+            f"BlockProposalDuty(for {humanize_bytes(self.validator_public_key)}"
+            f" at slot {self.tick_for_execution.slot})"
         )
