@@ -139,8 +139,17 @@ class Context:
         head_state = self.chain.get_state_by_root(parent.message.state_root)
         parent_state = self.chain.advance_state_to_slot(parent_slot, head_state)
         state_machine = self.chain.get_state_machine(at_slot=slot)
+
+        # TODO: query for latest eth1 data...
+        eth1_data = parent_state.eth1_data
+
         return create_block_proposal(
-            slot, parent_block_root, randao_reveal, parent_state, state_machine
+            slot,
+            parent_block_root,
+            randao_reveal,
+            eth1_data,
+            parent_state,
+            state_machine,
         )
 
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:
