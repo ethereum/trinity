@@ -45,6 +45,7 @@ class Clock(AsyncIterable[Tick]):
         seconds_per_epoch: int,
         time_provider: TimeProvider = get_unix_time,
         ticks_per_slot: int = TICKS_PER_SLOT,
+        genesis_lookahead: int = DEFAULT_EPOCH_LOOKAHEAD,
     ) -> None:
         self._time_provider = time_provider
         self.logger.setLevel(logging.DEBUG)
@@ -58,6 +59,7 @@ class Clock(AsyncIterable[Tick]):
         self._genesis_time = genesis_time
         self._slots_per_epoch = slots_per_epoch
         self._seconds_per_epoch = seconds_per_epoch
+        self._genesis_lookahead = genesis_lookahead
 
     def _compute_slot_and_alignment(self, t: float) -> Tuple[Slot, bool]:
         """
@@ -87,9 +89,7 @@ class Clock(AsyncIterable[Tick]):
         duration = max(target_t - t, 0)
         await trio.sleep(duration)
 
-    async def _wait_for_genesis_with_lookahead(
-        self, with_epoch_lookahead: int = DEFAULT_EPOCH_LOOKAHEAD
-    ) -> None:
+    async def _wait_for_genesis_with_lookahead(self,) -> None:
         """
         Sleep the clock until the time is ``with_epoch_lookahead`` epoch(s)
         of slots ahead of the genesis time.
@@ -98,7 +98,7 @@ class Clock(AsyncIterable[Tick]):
         meaningful from a honest beacon node.
         """
         genesis_time = self._genesis_time
-        start_time = genesis_time - (with_epoch_lookahead * self._seconds_per_epoch)
+        start_time = genesis_time - (self._genesis_lookahead * self._seconds_per_epoch)
         now = int(self._time_provider())
 
         if start_time <= now:
@@ -106,11 +106,12 @@ class Clock(AsyncIterable[Tick]):
 
         self.logger.info(
             "...blocking for %d seconds until unix time %s which is %d epoch(s)"
-            " before the genesis time %d",
+            " before the genesis time %d (%s)",
             start_time - now,
             start_time,
-            with_epoch_lookahead,
+            self._genesis_lookahead,
             genesis_time,
+            time.strftime("%Y-%m-%d %I:%M%z", time.localtime(genesis_time)),
         )
         await self._wait_until(start_time)
 

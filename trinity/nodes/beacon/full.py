@@ -36,6 +36,8 @@ def _mk_clock(
         config.SLOTS_PER_EPOCH,
         config.SECONDS_PER_SLOT * config.SLOTS_PER_EPOCH,
         time_provider,
+        # node can wait until genesis
+        genesis_lookahead=0,
     )
 
 
