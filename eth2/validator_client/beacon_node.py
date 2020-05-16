@@ -157,6 +157,13 @@ def _parse_duties(
     return duties
 
 
+def _is_current_duty(duty: Duty) -> bool:
+    # NOTE: there is an argument to be made for the validator that tries to
+    # service _all_ duties with in the current epoch to play "catch up" but
+    # it is simpler to just discard things we missed...
+    return duty.tick_for_execution.slot >= duty.discovered_at_tick.slot
+
+
 async def _get_attestation_from_beacon_node(
     session: Session,
     url: str,
@@ -250,7 +257,7 @@ class BeaconNode(BeaconNodeAPI):
             self._is_connected = True
         except OSError as e:
             if retry:
-                self.logger.warn(
+                self.logger.warning(
                     "could not connect to beacon node at %s; retrying connection in %d seconds",
                     self._beacon_node_endpoint,
                     CONNECTION_RETRY_INTERVAL,
@@ -306,16 +313,19 @@ class BeaconNode(BeaconNodeAPI):
             self._session, url, public_keys, target_epoch
         )
         return tuple(
-            mapcat(
-                lambda data: _parse_duties(
-                    data,
-                    current_tick,
-                    target_epoch,
-                    self._genesis_time,
-                    self._seconds_per_slot,
-                    self._ticks_per_slot,
+            filter(
+                _is_current_duty,
+                mapcat(
+                    lambda data: _parse_duties(
+                        data,
+                        current_tick,
+                        target_epoch,
+                        self._genesis_time,
+                        self._seconds_per_slot,
+                        self._ticks_per_slot,
+                    ),
+                    duties_data,
                 ),
-                duties_data,
             )
         )
 

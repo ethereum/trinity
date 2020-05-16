@@ -8,7 +8,7 @@ from libp2p.crypto.secp256k1 import create_new_key_pair
 import trio
 from trio_typing import TaskStatus
 
-from eth2.api.http.validator import Context
+from eth2.api.http.validator import BlockBroadcasterAPI, Context
 from eth2.api.http.validator import ServerHandlers as ValidatorAPIHandlers
 from eth2.api.http.validator import SyncerAPI, SyncStatus
 from eth2.beacon.chains.base import BaseBeaconChain
@@ -98,6 +98,7 @@ class BeaconNode:
             self._syncer,
             self._chain,
             self._clock,
+            _mk_block_broadcaster(self),
         )
         self._api_context = api_context
         self._validator_api_port = validator_api_port
@@ -203,3 +204,13 @@ class BeaconNode:
             for task in tasks:
                 await nursery.start(task)
             task_status.started()
+
+
+def _mk_block_broadcaster(node: BeaconNode) -> BlockBroadcasterAPI:
+    class _broadcast(BlockBroadcasterAPI):
+        async def broadcast_block(self, block: SignedBeaconBlock) -> None:
+            # TODO / NOTE: in the future, pipe into external facing block import
+            # to collect same validations as blocks from other sources, not just validator client
+            node.on_block(block)
+
+    return _broadcast()
