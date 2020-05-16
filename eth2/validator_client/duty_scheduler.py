@@ -27,7 +27,8 @@ async def resolve_duty(
             duty.tick_for_execution.slot,
             duty.committee_index,
         )
-        await resolved_duties.send((duty, attestation))
+        if attestation:
+            await resolved_duties.send((duty, attestation))
     elif duty.duty_type == DutyType.BlockProposal:
         randao_reveal = randao_provider(
             duty.validator_public_key, duty.tick_for_execution.epoch
@@ -35,7 +36,8 @@ async def resolve_duty(
         block_proposal = await beacon_node.fetch_block_proposal(
             duty.tick_for_execution.slot, randao_reveal
         )
-        await resolved_duties.send((duty, block_proposal))
+        if block_proposal:
+            await resolved_duties.send((duty, block_proposal))
     else:
         raise NotImplementedError(
             "request to resolve a non-supported type of duty: %s", duty
