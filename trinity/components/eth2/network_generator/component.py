@@ -52,16 +52,12 @@ class NetworkGeneratorComponent(Application):
             required=True
         )
         genesis_time_group.add_argument(
-            "--genesis-time",
-            type=int,
-            help="Unix timestamp to use as the genesis time",
-            default=int(time.time()),
+            "--genesis-time", type=int, help="Unix timestamp to use as the genesis time"
         )
         genesis_time_group.add_argument(
             "--genesis-delay",
             type=int,
             help="Delay in seconds to use as the genesis time from time of execution",
-            default=0,
         )
 
         network_generator_parser.set_defaults(func=cls._generate_network_as_json)
@@ -72,9 +68,13 @@ class NetworkGeneratorComponent(Application):
     ) -> None:
         if args.genesis_time:
             genesis_time = args.genesis_time
+            cls.logger.info("genesis time specified from config: %d", genesis_time)
         else:
             # this arm is guaranteed given the argparse config...
             genesis_time = int(time.time()) + args.genesis_delay
+            cls.logger.info(
+                "genesis delay specified from config: %d", args.genesis_delay
+            )
 
         genesis_config = generate_genesis_config(args.config_profile, genesis_time)
         output_file_path = args.output
