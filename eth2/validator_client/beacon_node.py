@@ -38,35 +38,51 @@ from eth2.validator_client.duty import (
 SYNCING_POLL_INTERVAL = 10  # seconds
 CONNECTION_RETRY_INTERVAL = 1  # second(s)
 
+logger = logging.getLogger("eth2.validator_client.beacon_node")
+
+
+# NOTE: this code is likely temporary so just use ``Any`` type for now
+async def _get_json(session: Session, url: str, params: Any = None) -> Any:
+    if not params:
+        params = {}
+    try:
+        return (await session.get(url, params=params)).json()
+    except OSError:
+        raise
+    except Exception as e:
+        logger.exception(e)
+
+
+async def _post_json(session: Session, url: str, json: Any) -> None:
+    await session.post(url, json=json)
+
 
 async def _get_node_version(session: Session, url: str) -> str:
-    return (await session.get(url)).json()
+    return await _get_json(session, url)
 
 
 async def _get_syncing_status(session: Session, url: str) -> bool:
-    status_response = await session.get(url)
-    status = status_response.json()
+    status = await _get_json(session, url)
     return status["is_syncing"]
 
 
 async def _get_genesis_time(session: Session, url: str) -> int:
-    return (await session.get(url)).json()
+    return await _get_json(session, url)
 
 
 async def _get_duties_from_beacon_node(
     session: Session, url: str, public_keys: Collection[BLSPubkey], epoch: Epoch
 ) -> Tuple[Dict[str, Any]]:
-    return (
-        await session.get(
-            url,
-            params={
-                "validator_pubkeys": ",".join(
-                    encode_hex(public_key) for public_key in public_keys
-                ),
-                "epoch": epoch,
-            },
-        )
-    ).json()
+    return await _get_json(
+        session,
+        url,
+        {
+            "validator_pubkeys": ",".join(
+                encode_hex(public_key) for public_key in public_keys
+            ),
+            "epoch": epoch,
+        },
+    )
 
 
 def _parse_bls_pubkey(encoded_public_key: str) -> BLSPubkey:
@@ -170,34 +186,40 @@ async def _get_attestation_from_beacon_node(
     public_key: BLSPubkey,
     slot: Slot,
     committee_index: CommitteeIndex,
-) -> Attestation:
-    attestation_response = (
-        await session.get(
-            url,
-            params={
-                "validator_pubkey": encode_hex(public_key),
-                "slot": slot,
-                "committee_index": committee_index,
-            },
-        )
-    ).json()
-    return from_formatted_dict(attestation_response, Attestation)
+) -> Optional[Attestation]:
+    attestation_response = await _get_json(
+        session,
+        url,
+        {
+            "validator_pubkey": encode_hex(public_key),
+            "slot": slot,
+            "committee_index": committee_index,
+        },
+    )
+    try:
+        return from_formatted_dict(attestation_response, Attestation)
+    except Exception as e:
+        logger.exception(e)
+        return None
 
 
 async def _get_block_proposal_from_beacon_node(
     session: Session, url: str, slot: Slot, randao_reveal: BLSSignature
-) -> BeaconBlock:
-    response = await session.get(
-        url, params={"slot": slot, "randao_reveal": encode_hex(randao_reveal)}
+) -> Optional[BeaconBlock]:
+    block_proposal_response = await _get_json(
+        session, url, {"slot": slot, "randao_reveal": encode_hex(randao_reveal)}
     )
-    block_proposal_response = response.json()
-    return from_formatted_dict(block_proposal_response, BeaconBlock)
+    try:
+        return from_formatted_dict(block_proposal_response, BeaconBlock)
+    except Exception as e:
+        logger.exception(e)
+        return None
 
 
 async def _post_signed_operation_to_beacon_node(
     session: Session, url: str, signed_operation: Operation, sedes: ssz.BaseSedes
 ) -> None:
-    await session.post(url, json=to_formatted_dict(signed_operation, sedes))
+    await _post_json(session, url, to_formatted_dict(signed_operation, sedes))
 
 
 def _normalize_url(url: str) -> str:
