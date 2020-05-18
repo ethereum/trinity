@@ -1,0 +1,2 @@
+Squash some deprecation warnings, by upgrading to eth-keys v0.3.3, eth-tester v0.4.0-beta.2,
+and web3.py v5.9.0
