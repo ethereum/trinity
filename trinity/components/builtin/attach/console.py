@@ -16,6 +16,8 @@ from eth.chains.base import MiningChain
 from eth.db.chain import ChainDB
 from eth.db.backends.level import LevelDB
 
+from web3.types import RPCEndpoint, RPCResponse
+
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.types.blocks import BeaconBlock
 
@@ -95,7 +97,7 @@ def console(ipc_path: Path,
     w3 = web3.Web3(ipc_provider)
 
     # Allow omitting params by defaulting to `None`
-    def rpc(method: str, params: Dict[str, Any] = None) -> str:
+    def rpc(method: RPCEndpoint, params: Dict[str, Any] = None) -> RPCResponse:
         return ipc_provider.make_request(method, params)
 
     namespace = merge({'w3': w3, 'rpc': rpc}, env)

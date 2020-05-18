@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 import time
-from typing import Any, Dict, NamedTuple, Optional, Tuple, Union
+from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 from eth.exceptions import BlockNotFound
 from eth_typing import Address, BlockNumber, BLSPubkey, BLSSignature, Hash32
 from eth_utils import encode_hex, event_abi_to_log_topic
-from web3 import Web3
+import web3
 
 from eth2.beacon.constants import GWEI_PER_ETH
 from eth2.beacon.tools.builder.validator import (
@@ -55,7 +55,7 @@ def convert_deposit_log_to_deposit_data(deposit_log: DepositLog) -> DepositData:
 
 class BaseEth1DataProvider(ABC):
     @abstractmethod
-    def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
+    def get_block(self, arg: web3.types.BlockIdentifier) -> Optional[Eth1Block]:
         ...
 
     @abstractmethod
@@ -73,15 +73,15 @@ class BaseEth1DataProvider(ABC):
 
 class Web3Eth1DataProvider(BaseEth1DataProvider):
 
-    w3: Web3
+    w3: web3.Web3
 
-    _deposit_contract: "Web3.eth.contract"
+    _deposit_contract: web3.contract.Contract
     _deposit_event_abi: Dict[str, Any]
     _deposit_event_topic: str
 
     def __init__(
         self,
-        w3: Web3,
+        w3: web3.Web3,
         deposit_contract_address: Address,
         deposit_contract_abi: Dict[str, Any],
     ) -> None:
@@ -96,7 +96,7 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
             event_abi_to_log_topic(self._deposit_event_abi)
         )
 
-    def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
+    def get_block(self, arg: web3.types.BlockIdentifier) -> Optional[Eth1Block]:
         block_dict = self.w3.eth.getBlock(arg)
         if block_dict is None:
             raise BlockNotFound
@@ -178,7 +178,7 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             + (block_number - self.start_block_number) * AVERAGE_BLOCK_TIME
         )
 
-    def get_block(self, arg: Union[Hash32, int, str]) -> Optional[Eth1Block]:
+    def get_block(self, arg: web3.types.BlockIdentifier) -> Optional[Eth1Block]:
         # If `arg` is block number
         if isinstance(arg, int):
             block_time = self._get_block_time(BlockNumber(arg))
@@ -189,7 +189,9 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
             )
         # If `arg` is block hash
         elif isinstance(arg, bytes):
-            block_number = int.from_bytes(arg, byteorder="big")
+            block_hash = Hash32(arg)
+            # Why are we interpreting the block hash as a block number here?
+            block_number = int.from_bytes(block_hash, byteorder="big")
             latest_block_number = self._get_latest_block_number()
             # Block that's way in the future is presumed to be fake eth1 block in genesis state.
             # Return the block at `start_block_number` in this case.
@@ -204,18 +206,23 @@ class FakeEth1DataProvider(BaseEth1DataProvider):
                 )
             block_time = self._get_block_time(BlockNumber(block_number))
             return Eth1Block(
-                block_hash=arg,
+                block_hash=block_hash,
                 number=BlockNumber(block_number),
                 timestamp=Timestamp(block_time),
             )
-        else:
-            # Assume `arg` == 'latest'
+        elif arg == "latest":
             latest_block_number = self._get_latest_block_number()
             block_time = self._get_block_time(latest_block_number)
             return Eth1Block(
                 block_hash=Hash32(latest_block_number.to_bytes(32, byteorder="big")),
                 number=BlockNumber(latest_block_number),
                 timestamp=block_time,
+            )
+        elif isinstance(arg, str):
+            raise NotImplementedError(f"get_block({arg!r}) is not implemented")
+        else:
+            raise TypeError(
+                f"Argument {arg!r} to get_block was an unexpected type: {type(arg)}"
             )
 
     def get_logs(self, block_number: BlockNumber) -> Tuple[DepositLog, ...]:

@@ -44,7 +44,7 @@ deps = {
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
         "plyvel==1.1.0",
         PYEVM_DEPENDENCY,
-        "web3>=5.9.0,<6",
+        "web3>=5.10.0,<6",
         "lahja>=0.16.0,<0.17",
         "termcolor>=1.1.0,<2.0.0",
         "uvloop==0.14.0;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
