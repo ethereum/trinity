@@ -4,7 +4,6 @@ from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 from eth.exceptions import BlockNotFound
 from eth_typing import Address, BlockNumber, BLSPubkey, BLSSignature, Hash32
-from eth_utils import encode_hex, event_abi_to_log_topic
 import web3
 
 from eth2.beacon.constants import GWEI_PER_ETH
@@ -76,8 +75,6 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
     w3: web3.Web3
 
     _deposit_contract: web3.contract.Contract
-    _deposit_event_abi: Dict[str, Any]
-    _deposit_event_topic: str
 
     def __init__(
         self,
@@ -88,12 +85,6 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
         self.w3 = w3
         self._deposit_contract = self.w3.eth.contract(
             address=deposit_contract_address, abi=deposit_contract_abi
-        )
-        self._deposit_event_abi = (
-            self._deposit_contract.events.DepositEvent._get_event_abi()
-        )
-        self._deposit_event_topic = encode_hex(
-            event_abi_to_log_topic(self._deposit_event_abi)
         )
 
     def get_block(self, arg: web3.types.BlockIdentifier) -> Optional[Eth1Block]:
@@ -111,16 +102,8 @@ class Web3Eth1DataProvider(BaseEth1DataProvider):
         # this if we had a transaction receipt or transaction hash instead;
         # however, that only makes sense when monitoring unmined txs: it's
         # otherwise easier to process entire blocks of deposits as batches
-        logs = self.w3.eth.getLogs(
-            {
-                "fromBlock": block_number,
-                "toBlock": block_number,
-                "address": self._deposit_contract.address,
-                "topics": [self._deposit_event_topic],
-            }
-        )
-        processed_logs = tuple(
-            self._deposit_contract.events.DepositEvent().processLog(log) for log in logs
+        processed_logs = self._deposit_contract.events.DepositEvent.getLogs(
+            fromBlock=block_number, toBlock=block_number
         )
         parsed_logs = tuple(
             DepositLog.from_contract_log_dict(log) for log in processed_logs
