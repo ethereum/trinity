@@ -374,9 +374,7 @@ class Eth1Monitor(Service):
                 for i in range(1, self._num_blocks_confirmed + 1):
                     lookback_number = block_number - i
                     if lookback_number < 0:
-                        raise ValueError(
-                            f"These shifted block numbers must be >=0, got {lookback_number}"
-                        )
+                        break
                     else:
                         shifted_block = BlockNumber(lookback_number)
                     block = self._eth1_data_provider.get_block(shifted_block)
