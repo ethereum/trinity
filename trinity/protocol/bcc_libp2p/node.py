@@ -46,9 +46,6 @@ from eth2.beacon.typing import (
     SubnetId,
 )
 
-from libp2p import (
-    initialize_default_swarm,
-)
 from libp2p.typing import TProtocol
 
 from libp2p.crypto.keys import (
@@ -63,6 +60,7 @@ from libp2p.host.exceptions import (
 from libp2p.network.network_interface import (
     INetwork,
 )
+from libp2p.network.swarm import Swarm
 from libp2p.security.secio.transport import ID as SecIOID
 from libp2p.security.secio.transport import Transport as SecIOTransport
 from libp2p.network.stream.net_stream_interface import (
@@ -78,6 +76,7 @@ from libp2p.peer.peerinfo import (
 from libp2p.peer.peerstore import (
     PeerStore,
 )
+from libp2p.peer.peerstore_interface import IPeerStore
 from libp2p.pubsub.pubsub import (
     Pubsub,
 )
@@ -87,6 +86,9 @@ from libp2p.pubsub.gossipsub import (
 from libp2p.security.base_transport import BaseSecureTransport
 from libp2p.stream_muxer.abc import IMuxedConn
 from libp2p.stream_muxer.mplex.mplex import MPLEX_PROTOCOL_ID, Mplex
+from libp2p.transport.upgrader import TransportUpgrader
+from libp2p.transport.tcp.tcp import TCP
+from libp2p.transport.typing import TMuxerOptions, TSecurityOptions
 
 from multiaddr import (
     Multiaddr,
@@ -175,6 +177,53 @@ REQ_RESP_BEACON_BLOCKS_BY_ROOT_SSZ = make_rpc_v1_ssz_protocol_id(
     REQ_RESP_BEACON_BLOCKS_BY_ROOT
 )
 NEXT_UPDATE_INTERVAL = 10
+
+
+def generate_peer_id_from(key_pair: KeyPair) -> ID:
+    public_key = key_pair.public_key
+    return ID.from_pubkey(public_key)
+
+
+def initialize_default_swarm(
+    key_pair: KeyPair,
+    id_opt: ID = None,
+    transport_opt: Sequence[str] = None,
+    muxer_opt: TMuxerOptions = None,
+    sec_opt: TSecurityOptions = None,
+    peerstore_opt: IPeerStore = None,
+) -> Swarm:
+    """
+    NOTE: cribbed from an older version of libp2p
+
+    initialize swarm when no swarm is passed in.
+    :param id_opt: optional id for host
+    :param transport_opt: optional choice of transport upgrade
+    :param muxer_opt: optional choice of stream muxer
+    :param sec_opt: optional choice of security upgrade
+    :param peerstore_opt: optional peerstore
+    :return: return a default swarm instance
+    """
+
+    if not id_opt:
+        id_opt = generate_peer_id_from(key_pair)
+
+    # TODO: Parse `transport_opt` to determine transport
+    transport = TCP()
+
+    muxer_transports_by_protocol = muxer_opt or {MPLEX_PROTOCOL_ID: Mplex}
+    security_transports_by_protocol = sec_opt or {
+        TProtocol(SecIOID): SecIOTransport(key_pair),
+    }
+    upgrader = TransportUpgrader(
+        security_transports_by_protocol, muxer_transports_by_protocol
+    )
+
+    peerstore = peerstore_opt or PeerStore()
+    # Store our key pair in peerstore
+    peerstore.add_key_pair(id_opt, key_pair)
+
+    # TODO: Initialize discovery if not presented
+    return Swarm(id_opt, peerstore, upgrader, transport)
 
 
 @dataclass
@@ -333,7 +382,6 @@ class Node(BaseService):
         self.pubsub = Pubsub(
             host=self.host,
             router=gossipsub_router,
-            my_id=self.peer_id,
         )
 
         self.chain = chain

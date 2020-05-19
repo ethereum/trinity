@@ -9,6 +9,7 @@ from eth2.beacon.typing import (  # noqa: F401
     default_committee_index,
     default_epoch,
     default_gwei,
+    default_root,
     default_second,
     default_slot,
     default_timestamp,

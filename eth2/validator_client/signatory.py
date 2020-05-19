@@ -82,7 +82,7 @@ async def sign_and_broadcast_operation_if_valid(
 
     operation_with_signature = _attach_signature(duty, operation, signature)
 
-    logger.info(
+    logger.debug(
         "got signature %s for duty %s with (signed) hash tree root %s",
         humanize_bytes(signature),
         duty,
