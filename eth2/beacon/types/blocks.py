@@ -71,12 +71,13 @@ class BeaconBlockBody(HashableContainer):
     def __str__(self) -> str:
         return (
             f"randao_reveal={humanize_hash(self.randao_reveal)},"
-            f" graffiti={humanize_hash(self.graffiti)},"
-            f" proposer_slashings={self.proposer_slashings},"
-            f" attester_slashings={self.attester_slashings},"
-            f" attestations={self.attestations},"
-            f" deposits={self.deposits},"
-            f" voluntary_exits={self.voluntary_exits},"
+            f" eth1_data=({self.eth1_data}),"
+            f" graffiti={self.graffiti.hex()},"
+            f" proposer_slashings={tuple(slashing for slashing in self.proposer_slashings)},"
+            f" attester_slashings={tuple(slashing for slashing in self.attester_slashings)},"
+            f" attestations={tuple(attestation for attestation in self.attestations)},"
+            f" deposits={tuple(deposit for deposit in self.deposits)},"
+            f" voluntary_exits={tuple(exit for exit in self.voluntary_exits)},"
         )
 
     def __repr__(self) -> str:
