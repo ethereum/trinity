@@ -70,13 +70,14 @@ def create_block_proposal(
     slot: Slot,
     parent_root: Root,
     randao_reveal: BLSSignature,
+    eth1_data: Eth1Data,
     state: BeaconState,
     state_machine: BaseBeaconStateMachine,
 ) -> BeaconBlock:
     proposal = BeaconBlock.create(
         slot=slot,
         parent_root=parent_root,
-        body=BeaconBlockBody.create(randao_reveal=randao_reveal),
+        body=BeaconBlockBody.create(randao_reveal=randao_reveal, eth1_data=eth1_data),
     )
     signed_block = SignedBeaconBlock.create(message=proposal, signature=EMPTY_SIGNATURE)
     post_state, signed_block = state_machine.import_block(

@@ -145,7 +145,6 @@ class TrioHTTPWrapper:
 
     async def _read_from_peer(self) -> None:
         if self.conn.they_are_waiting_for_100_continue:
-            self.info("Sending 100 Continue")
             go_ahead = h11.InformationalResponse(
                 status_code=100, headers=self.basic_headers()
             )
@@ -260,32 +259,25 @@ async def http_serve_json_api(
     router: Router[TContext], context: TContext, stream: trio.SocketStream
 ) -> None:
     wrapper = TrioHTTPWrapper(stream)
-    wrapper.info("Got new connection")
     while True:
         assert wrapper.conn.states == {h11.CLIENT: h11.IDLE, h11.SERVER: h11.IDLE}
 
         try:
             with trio.fail_after(TIMEOUT):
-                wrapper.info("Server main loop waiting for request")
                 event = await wrapper.next_event()
-                wrapper.info("Server main loop got event:", event)
                 if type(event) is h11.Request:
                     await send_json_response(router, wrapper, event, context)
         except Exception as exc:
-            wrapper.info("Error during response handler: {!r}".format(exc))
             await maybe_send_error_response(wrapper, exc)
 
         if wrapper.conn.our_state is h11.MUST_CLOSE:
-            wrapper.info("connection is not reusable, so shutting down")
             await wrapper.shutdown_and_clean_up()
             return
         else:
             try:
-                wrapper.info("trying to re-use connection")
                 wrapper.conn.start_next_cycle()
             except h11.ProtocolError:
                 states = wrapper.conn.states
-                wrapper.info("unexpected state", states, "-- bailing out")
                 await maybe_send_error_response(
                     wrapper, RuntimeError("unexpected state {}".format(states))
                 )
@@ -305,7 +297,6 @@ async def send_simple_response(
     body: bytes,
     response_headers: Tuple[Tuple[str, str], ...] = None,
 ) -> None:
-    wrapper.info("Sending", status_code, "response with", len(body), "bytes")
     headers = wrapper.basic_headers()
     headers += (("Content-Type", content_type),)
     headers += (("Content-Length", str(len(body))),)
@@ -319,9 +310,7 @@ async def send_simple_response(
 
 async def maybe_send_error_response(wrapper: TrioHTTPWrapper, exc: Exception) -> None:
     # If we can't send an error, oh well, nothing to be done
-    wrapper.info("trying to send error response...")
     if wrapper.conn.our_state not in {h11.IDLE, h11.SEND_RESPONSE}:
-        wrapper.info("...but I can't, because our state is", wrapper.conn.our_state)
         return
     try:
         if isinstance(exc, h11.RemoteProtocolError):
@@ -416,6 +405,7 @@ async def send_json_response(
     try:
         response = await handler(context, request_body)
     except Exception as e:
+        wrapper.info("Exception during handler processing of", method, target.path, ":", str(e))
         response = {"error": str(e)}
     response_body_unicode = json.dumps(response)
     response_body_bytes = response_body_unicode.encode("utf-8")

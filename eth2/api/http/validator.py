@@ -102,6 +102,9 @@ class Context:
     def get_validator_duties(
         self, public_keys: Collection[BLSPubkey], epoch: Epoch
     ) -> Iterable[ValidatorDuty]:
+        if epoch < self.eth2_config.GENESIS_EPOCH:
+            return ()
+
         current_tick = self.clock.compute_current_tick()
         state = self.chain.advance_state_to_slot(current_tick.slot)
         for public_key in public_keys:
@@ -139,8 +142,17 @@ class Context:
         head_state = self.chain.get_state_by_root(parent.message.state_root)
         parent_state = self.chain.advance_state_to_slot(parent_slot, head_state)
         state_machine = self.chain.get_state_machine(at_slot=slot)
+
+        # TODO: query for latest eth1 data...
+        eth1_data = parent_state.eth1_data
+
         return create_block_proposal(
-            slot, parent_block_root, randao_reveal, parent_state, state_machine
+            slot,
+            parent_block_root,
+            randao_reveal,
+            eth1_data,
+            parent_state,
+            state_machine,
         )
 
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:
@@ -186,9 +198,8 @@ class Context:
         return Attestation.create(aggregation_bits=aggregation_bits, data=data)
 
     async def broadcast_attestation(self, attestation: Attestation) -> bool:
-        # logger.info(
-        #     "broadcasting attestation with root %s",
-        #     humanize_hash(attestation.hash_tree_root),
+        # logger.debug(
+        #     "broadcasting attestation with root %s", attestation.hash_tree_root.hex()
         # )
         # TODO the actual brodcast
         self._broadcast_operations.add(attestation.hash_tree_root)

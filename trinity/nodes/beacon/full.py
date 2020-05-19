@@ -36,6 +36,8 @@ def _mk_clock(
         config.SLOTS_PER_EPOCH,
         config.SECONDS_PER_SLOT * config.SLOTS_PER_EPOCH,
         time_provider,
+        # node can wait until genesis
+        genesis_lookahead=0,
     )
 
 
@@ -133,13 +135,13 @@ class BeaconNode:
     ) -> None:
         task_status.started()
         async for tick in self._clock:
-            self.logger.debug(
-                "slot %d [number %d in epoch %d] (tick %d)",
-                tick.slot,
-                tick.slot_in_epoch(self._eth2_config.SLOTS_PER_EPOCH),
-                tick.epoch,
-                tick.count,
-            )
+            if tick.count == 0:
+                self.logger.debug(
+                    "slot %d [number %d in epoch %d]",
+                    tick.slot,
+                    tick.slot_in_epoch(self._eth2_config.SLOTS_PER_EPOCH),
+                    tick.epoch,
+                )
             self._chain.on_tick(tick)
 
     async def _run_validator_api(
