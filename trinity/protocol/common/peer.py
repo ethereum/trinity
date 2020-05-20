@@ -166,17 +166,28 @@ class BaseChainPeerReporterRegistry(PeerReporterRegistry[BaseChainPeer]):
     def make_periodic_update(self, peer: BaseChainPeer, peer_id: int) -> None:
         head_gauge = self._get_blockheight_gauge(peer_id)
         td_gauge = self._get_td_gauge(peer_id)
-        expected_errors = (AttributeError, PeerConnectionLost)
-        # set to 0 if head_number unavailable on head_info
+
         try:
-            head_gauge.set_value(peer.head_info.head_number)
-        except expected_errors:
+            head_info = peer.head_info
+        except PeerConnectionLost:
             head_gauge.set_value(0)
-        # set to 0 if head_td unavailable on head_info
-        try:
-            td_gauge.set_value(peer.head_info.head_td)
-        except expected_errors:
             td_gauge.set_value(0)
+        else:
+            try:
+                head_number = head_info.head_number
+            except AttributeError:
+                # set to 0 if head_number unavailable on head_info
+                head_gauge.set_value(0)
+            else:
+                head_gauge.set_value(head_number)
+
+            try:
+                head_td = head_info.head_td
+            except AttributeError:
+                # set to 0 if head_td unavailable on head_info
+                td_gauge.set_value(0)
+            else:
+                td_gauge.set_value(head_td)
 
     def _get_blockheight_gauge(self, peer_id: int) -> SimpleGauge:
         return self.metrics_registry.gauge(f"trinity.p2p/peer_{peer_id}_blockheight.gauge")
