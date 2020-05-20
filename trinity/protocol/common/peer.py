@@ -166,15 +166,16 @@ class BaseChainPeerReporterRegistry(PeerReporterRegistry[BaseChainPeer]):
     def make_periodic_update(self, peer: BaseChainPeer, peer_id: int) -> None:
         head_gauge = self._get_blockheight_gauge(peer_id)
         td_gauge = self._get_td_gauge(peer_id)
+        expected_errors = (AttributeError, PeerConnectionLost)
         # set to 0 if head_number unavailable on head_info
         try:
             head_gauge.set_value(peer.head_info.head_number)
-        except AttributeError:
+        except expected_errors:
             head_gauge.set_value(0)
         # set to 0 if head_td unavailable on head_info
         try:
             td_gauge.set_value(peer.head_info.head_td)
-        except AttributeError:
+        except expected_errors:
             td_gauge.set_value(0)
 
     def _get_blockheight_gauge(self, peer_id: int) -> SimpleGauge:
