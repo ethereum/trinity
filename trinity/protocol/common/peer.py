@@ -173,6 +173,8 @@ class BaseChainPeerReporterRegistry(PeerReporterRegistry[BaseChainPeer]):
             head_gauge.set_value(0)
             td_gauge.set_value(0)
         else:
+            td_gauge.set_value(head_info.head_td)
+
             try:
                 head_number = head_info.head_number
             except AttributeError:
@@ -180,14 +182,6 @@ class BaseChainPeerReporterRegistry(PeerReporterRegistry[BaseChainPeer]):
                 head_gauge.set_value(0)
             else:
                 head_gauge.set_value(head_number)
-
-            try:
-                head_td = head_info.head_td
-            except AttributeError:
-                # set to 0 if head_td unavailable on head_info
-                td_gauge.set_value(0)
-            else:
-                td_gauge.set_value(head_td)
 
     def _get_blockheight_gauge(self, peer_id: int) -> SimpleGauge:
         return self.metrics_registry.gauge(f"trinity.p2p/peer_{peer_id}_blockheight.gauge")
