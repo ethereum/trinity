@@ -96,7 +96,7 @@ class MetricsComponent(TrioIsolatedComponent):
         metrics_parser.add_argument(
             '--metrics-influx-port',
             help='Influx DB port. Defaults to ENV var TRINITY_METRICS_INFLUX_DB_PORT or 8086',
-            default=os.environ.get('TRINITY_METRICS_INFLUX_DB_PORT'),
+            default=os.environ.get('TRINITY_METRICS_INFLUX_DB_PORT', 8086),
         )
 
         metrics_parser.add_argument(
@@ -105,7 +105,7 @@ class MetricsComponent(TrioIsolatedComponent):
                 'Influx DB protocol. Defaults to ENV var '
                 'TRINITY_METRICS_INFLUX_DB_PROTOCOL or http'
             ),
-            default=os.environ.get('TRINITY_METRICS_INFLUX_DB_PROTOCOL'),
+            default=os.environ.get('TRINITY_METRICS_INFLUX_DB_PROTOCOL', 'http'),
         )
 
         metrics_parser.add_argument(
