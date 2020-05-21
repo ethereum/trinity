@@ -285,7 +285,7 @@ class Transport(TransportAPI):
                 "Bad message header from peer %s: Error: %r",
                 self, err,
             )
-            raise MalformedMessage from err
+            raise MalformedMessage(*err.args) from err
         # TODO: use `int.from_bytes(...)`
         frame_size = self._get_frame_size(padded_header)
         # The frame_size specified in the header does not include the padding to 16-byte boundary,
@@ -299,7 +299,7 @@ class Transport(TransportAPI):
                 "Bad message body from peer %s: Error: %r",
                 self, err,
             )
-            raise MalformedMessage from err
+            raise MalformedMessage(*err.args) from err
 
         # Reset status back to IDLE
         self.read_state = TransportState.IDLE
@@ -308,7 +308,7 @@ class Transport(TransportAPI):
         try:
             header_data = _decode_header_data(padded_header[3:])
         except rlp.exceptions.DeserializationError as err:
-            raise MalformedMessage from err
+            raise MalformedMessage(*err.args) from err
 
         header = padded_header[:3] + rlp.encode(header_data)
 
