@@ -13,6 +13,7 @@ from typing import (
     Type,
     Union,
 )
+from async_service.asyncio import background_asyncio_service
 
 from eth_typing import BlockNumber
 from eth_utils import DEBUG2_LEVEL_NUM
@@ -32,10 +33,8 @@ from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.les.peer import LESPeer, LESPeerPool
 from trinity._utils.version import construct_trinity_client_identifier
 
-from tests.core.integration_test_helpers import connect_to_peers_loop
 
-
-def _main() -> None:
+async def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('-enode', type=str, help="The enode we should connect to", required=True)
     parser.add_argument('-mainnet', action='store_true')
@@ -68,10 +67,18 @@ def _main() -> None:
         vm_config = ROPSTEN_VM_CONFIGURATION
         genesis = ROPSTEN_GENESIS_HEADER
 
+    # XXX: Temporary hack
+    if args.enode == "all":
+        # from p2p.constants import MAINNET_BOOTNODES
+        # nodes = [Node.from_uri(enode) for enode in MAINNET_BOOTNODES]
+        from p2p.constants import ROPSTEN_BOOTNODES
+        nodes = [Node.from_uri(enode) for enode in ROPSTEN_BOOTNODES]
+    else:
+        nodes = [Node.from_uri(args.enode)]
+
     headerdb = AsyncHeaderDB(AtomicDB(MemoryDB()))
     headerdb.persist_header(genesis)
     loop = asyncio.get_event_loop()
-    nodes = [Node.from_uri(args.enode)]
 
     context = ChainContext(
         headerdb=headerdb,
@@ -83,46 +90,40 @@ def _main() -> None:
     )
     peer_pool = pool_class(privkey=ecies.generate_privkey(), context=context)
 
-    asyncio.ensure_future(peer_pool.run())
-    peer_pool.manager.run_task(connect_to_peers_loop(peer_pool, nodes))
-
     async def request_stuff() -> None:
+        nonlocal peer_pool
+        return
         # Request some stuff from ropsten's block 2440319
         # (https://ropsten.etherscan.io/block/2440319), just as a basic test.
-        nonlocal peer_pool
-        while not peer_pool.connected_nodes:
-            peer_pool.logger.info("Waiting for peer connection...")
-            await asyncio.sleep(0.2)
         peer = peer_pool.highest_td_peer
-        headers = await cast(ETHPeer, peer).eth_api.get_block_headers(
-            BlockNumber(2440319),
-            max_headers=100
-        )
-        hashes = tuple(header.hash for header in headers)
         if peer_class == ETHPeer:
             peer = cast(ETHPeer, peer)
+            headers = await peer.eth_api.get_block_headers(BlockNumber(2440319), max_headers=100)
+            hashes = tuple(header.hash for header in headers)
             peer.eth_api.send_get_block_bodies(hashes)
             peer.eth_api.send_get_receipts(hashes)
         else:
             peer = cast(LESPeer, peer)
+            headers = await peer.les_api.get_block_headers(BlockNumber(2440319), max_headers=100)
             peer.les_api.send_get_block_bodies(list(hashes))
             peer.les_api.send_get_receipts(hashes[0])
 
-    sigint_received = asyncio.Event()
-    for sig in [signal.SIGINT, signal.SIGTERM]:
-        loop.add_signal_handler(sig, sigint_received.set)
+    async with background_asyncio_service(peer_pool) as manager:
+        for sig in [signal.SIGINT, signal.SIGTERM]:
+            loop.add_signal_handler(sig, manager.cancel)
 
-    async def exit_on_sigint() -> None:
-        await sigint_received.wait()
-        await peer_pool.manager.stop()
-        loop.stop()
+        await peer_pool.connect_to_nodes(nodes)
+        await asyncio.sleep(1)
+        if len(peer_pool) == 0:
+            peer_pool.logger.error(f"Unable to connect to any of {nodes}")
+            return
 
-    asyncio.ensure_future(exit_on_sigint())
-    asyncio.ensure_future(request_stuff())
-    loop.set_debug(True)
-    loop.run_forever()
-    loop.close()
+        try:
+            await asyncio.wait_for(request_stuff(), timeout=2)
+        except asyncio.TimeoutError:
+            peer_pool.logger.error("Timeout waiting for replies")
+        await manager.wait_finished()
 
 
 if __name__ == "__main__":
-    _main()
+    asyncio.run(_main())

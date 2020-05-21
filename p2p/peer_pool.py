@@ -12,6 +12,7 @@ from typing import (
     Dict,
     Iterator,
     List,
+    Sequence,
     Tuple,
     Type,
 )
@@ -217,7 +218,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
                 candidates,
             )
             if candidates:
-                await self.connect_to_nodes(iter(candidates))
+                await self.connect_to_nodes(candidates)
             return len(candidates)
 
     def __len__(self) -> int:
@@ -385,7 +386,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             except (Exception, asyncio.CancelledError):
                 pass
 
-    async def connect_to_nodes(self, nodes: Iterator[NodeAPI]) -> None:
+    async def connect_to_nodes(self, nodes: Sequence[NodeAPI]) -> None:
         # create an generator for the nodes
         nodes_iter = iter(nodes)
 
