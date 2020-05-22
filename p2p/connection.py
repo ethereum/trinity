@@ -130,19 +130,22 @@ class Connection(ConnectionAPI, Service):
 
     async def run(self) -> None:
         try:
-            async with self._multiplexer.multiplex():
+            async with self._multiplexer.multiplex() as multiplex_finished:
                 for protocol in self._multiplexer.get_protocols():
                     self.manager.run_daemon_task(self._feed_protocol_handlers, protocol)
 
-                await self.manager.wait_finished()
+                await asyncio.wait(
+                    [self.manager.wait_finished(), multiplex_finished.wait()],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
         except PeerConnectionLost:
             pass
         except MalformedMessage as err:
-            self.logger.debug(
-                "Disconnecting peer %s for sending MalformedMessage: %s",
+            self.logger.warning(
+                "Disconnecting peer %s (cancelled=%s) for sending MalformedMessage: %s",
                 self.remote,
+                self.manager.is_cancelled,
                 err,
-                exc_info=True,
             )
             try:
                 self.get_base_protocol().send(Disconnect(DisconnectReason.BAD_PROTOCOL))
@@ -152,6 +155,7 @@ class Connection(ConnectionAPI, Service):
                     self,
                 )
         finally:
+            self.manager.cancel()
             await self._multiplexer.close()
 
     #

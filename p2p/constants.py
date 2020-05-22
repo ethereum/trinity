@@ -51,6 +51,8 @@ MAINNET_BOOTNODES = (
     'enode://78de8a0916848093c73790ead81d1928bec737d565119932b98c6b100d944b7a95e94f847f689fc723399d2e31129d182f7ef3863f2b4c820abbf3ab2722344d@191.235.84.50:30303',  # noqa: E501
     'enode://158f8aab45f6d19c6cbf4a089c2670541a8da11978a2f90dbf6a502a4a3bab80d288afdbeb7ec0ef6d92de563767f3b1ea9e8e334ca711e9f8e2df5a0385e8e6@13.75.154.138:30303',  # noqa: E501
     'enode://1118980bf48b0a3640bdba04e0fe78b1add18e1cd99bf22d53daac1fd9972ad650df52176e7c7d89d1114cfef2bc23a2959aa54998a46afcf7d91809f0855082@52.74.57.123:30303',   # noqa: E501
+    # XXX: Not to be merged
+    'enode://53797cf519c130d317f5c22b18b4497eda6bcddef626595486613e1ddc51b2bf0eaaaad50f07e7096b1960fe4fb88a10d2a1ec415e22a99940f42fd1dff79a18@47.96.30.166:30303',  # noqa: E501
 
     # Geth Bootnodes
     # from https://github.com/ethereum/go-ethereum/blob/1bed5afd92c22a5001aff01620671caccd94a6f8/params/bootnodes.go#L22  # noqa: E501

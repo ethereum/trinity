@@ -34,12 +34,9 @@ ZIPPED_FIXTURES_PATH = Path(__file__).parent.parent / 'integration' / 'fixtures'
 async def connect_to_peers_loop(peer_pool, nodes):
     """Loop forever trying to connect to one of the given nodes if the pool is not yet full."""
     while peer_pool.manager.is_running:
-        try:
-            if not peer_pool.is_full:
-                await peer_pool.connect_to_nodes(nodes)
-            await asyncio.sleep(2)
-        except OperationCancelled:
-            break
+        if not peer_pool.is_full:
+            await peer_pool.connect_to_nodes(nodes)
+        await asyncio.sleep(2)
 
 
 FUNDED_ACCT = keys.PrivateKey(

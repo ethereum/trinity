@@ -300,6 +300,7 @@ class BasePeer(Service):
                                          cmd: CommandAPI[Any]) -> None:
         subscriber_msg = PeerMessage(self, cmd)
         for subscriber in self._subscribers:
+            # TODO: Use the return value to log something
             subscriber.add_msg(subscriber_msg)
 
     async def disconnect(self, reason: DisconnectReason) -> None:

@@ -292,18 +292,29 @@ class Multiplexer(MultiplexerAPI):
     # Message reading and streaming API
     #
     @asynccontextmanager
-    async def multiplex(self) -> AsyncIterator[None]:
+    async def multiplex(self) -> AsyncIterator[asyncio.Event]:
         """
         API for running the background task that feeds individual protocol
         queues that allows each individual protocol to stream only its own
         messages.
         """
+        stop = asyncio.Event()
+        finished = asyncio.Event()
+
+        async def _do_multiplexing_wrapper():
+            try:
+                await self._do_multiplexing(stop)
+            finally:
+                stop.set()
+                await asyncio.sleep(0.1)
+                finished.set()
+
         async with self._multiplex_lock:
-            stop = asyncio.Event()
-            fut = asyncio.ensure_future(self._do_multiplexing(stop))
+            fut = asyncio.ensure_future(_do_multiplexing_wrapper())
+            # fut = asyncio.ensure_future(self._do_multiplexing(stop))
             # wait for the multiplexing to actually start
             try:
-                yield
+                yield finished
             finally:
                 #
                 # Prevent corruption of the Transport:
@@ -383,6 +394,9 @@ class Multiplexer(MultiplexerAPI):
             stop: asyncio.Event) -> None:
 
         async for protocol, cmd in msg_stream:
+            self.logger.info(
+                "Received %s (proto=%s) from %s", cmd.__class__.__name__, protocol,
+                self._transport.remote)
             self._last_msg_time = time.monotonic()
             # track total number of messages received for each command type.
             self._msg_counts[type(cmd)] += 1

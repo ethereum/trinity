@@ -129,6 +129,11 @@ class BaseServer(Service, Generic[TPeerPool]):
         self.logger.info('network: %s', self.network_id)
         self.logger.info('peers: max_peers=%s', self.max_peers)
 
+        # XXX: Here I think it's ok to not require a return value
+        # But could be rewritten as
+        # async with asyncio.start_server(..., start_serving=False) as listener:
+        #    ...
+        #    await listener.serve_forever()
         async with self.tcp_listener():
             self.manager.run_daemon_child_service(self.peer_pool)
             await self.manager.wait_finished()

@@ -1,10 +1,24 @@
 import pytest
 
 from p2p.constants import DEVP2P_V4, DEVP2P_V5
-from p2p.p2p_proto import P2PProtocolV4, P2PProtocolV5
+from p2p.disconnect import DisconnectReason
+from p2p.p2p_proto import Disconnect, P2PProtocolV4, P2PProtocolV5
 from p2p.tools.factories import ConnectionPairFactory, ProtocolFactory
 from p2p.tools.connection import do_ping_pong_test
 from p2p.tools.handshake import NoopHandshaker
+
+
+@pytest.mark.asyncio
+async def test_foo():
+    async with ConnectionPairFactory() as (alice, bob):
+        # alice.get_base_protocol().send(Disconnect(DisconnectReason.CLIENT_QUITTING))
+        alice._multiplexer._transport._writer.write_eof()
+        import asyncio
+        asyncio.sleep(0.1)
+
+        # from p2p.p2p_proto import Ping
+        # bob.get_base_protocol().send(Ping(None))
+        await asyncio.sleep(0.5)
 
 
 @pytest.mark.asyncio

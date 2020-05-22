@@ -61,6 +61,15 @@ async def test_transport_pair_factories(transport_pair, snappy_support):
 
 
 @pytest.mark.asyncio
+async def test_foo():
+    alice, bob = await TransportPairFactory()
+    alice._writer.write_eof()
+    await alice._writer.drain()
+    await asyncio.sleep(0.2)
+    await bob._reader.read()
+
+
+@pytest.mark.asyncio
 async def test_closing_one_end_does_not_close_the_other(transport_pair):
     # This is to ensure closing one end of a directly linked transport pair does not cause the
     # other end to be closed as well. That is a problem, for example, when a test (like in

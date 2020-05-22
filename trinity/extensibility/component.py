@@ -268,6 +268,7 @@ def run_asyncio_eth1_component(component_type: Type['AsyncioIsolatedComponent'])
     loop.add_signal_handler(signal.SIGTERM, got_sigint.set)
 
     async def run() -> None:
+        # XXX: What happens if the component crashes? I bet we'd hang until a Ctrl-C
         async with _run_standalone_component(component_type, APP_IDENTIFIER_ETH1):
             await got_sigint.wait()
 
