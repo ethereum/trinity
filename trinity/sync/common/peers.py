@@ -53,7 +53,7 @@ class WaitingPeers(Generic[TChainPeer]):
 
         if isinstance(response_command_type, type):
             self._response_command_type = (response_command_type,)
-        elif isinstance(response_command_type, collections.Sequence):
+        elif isinstance(response_command_type, collections.abc.Sequence):
             self._response_command_type = tuple(response_command_type)
         else:
             raise TypeError(f"Unsupported value: {response_command_type}")

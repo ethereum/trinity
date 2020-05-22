@@ -12,7 +12,6 @@ from async_service.asyncio import background_asyncio_service
 import pytest
 import rlp
 from eth_utils import (
-    decode_hex,
     encode_hex,
     to_text,
 )
@@ -24,24 +23,21 @@ from eth.chains.ropsten import (
     ROPSTEN_VM_CONFIGURATION,
 )
 from eth.db.atomic import AtomicDB
+from eth.rlp.receipts import Receipt
+from eth.rlp.transactions import BaseTransactionFields
 
 from p2p import ecies
 from p2p.constants import DEVP2P_V5
 from p2p.kademlia import Node
 
 from trinity._utils.ipc import kill_popen_gracefully
+from trinity.config import Eth1ChainConfig
 from trinity.constants import ROPSTEN_NETWORK_ID
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.protocol.common.context import ChainContext
-from trinity.protocol.les.peer import LESPeerPool
-from trinity.sync.light.chain import LightChainSyncer
-from trinity.sync.light.service import LightPeerChain
-from trinity.tools.chain import AsyncRopstenChain
-
-from tests.core.integration_test_helpers import (
-    connect_to_peers_loop,
-)
+from trinity.protocol.eth.peer import ETHPeerPool
+from trinity.sync.full.chain import RegularChainSyncer
 
 
 @pytest.fixture
@@ -89,7 +85,6 @@ def geth_command_arguments(geth_binary, geth_ipc_path, geth_datadir, geth_port):
         '--testnet',
         '--datadir', str(geth_datadir),
         '--ipcpath', geth_ipc_path,
-        '--lightserv', '90',
         '--nodiscover',
         '--fakepow',
         '--port', str(geth_port),
@@ -110,7 +105,7 @@ def geth_process(geth_command_arguments):
         yield proc
     finally:
         logging.warning('shutting down geth')
-        kill_popen_gracefully(proc, logging.getLogger('tests.integration.lightchain'))
+        kill_popen_gracefully(proc, logging.getLogger('tests.integration.sync'))
         output, errors = proc.communicate()
         logging.warning(
             "Geth Process Exited:\n"
@@ -136,12 +131,12 @@ def wait_for_socket(ipc_path, timeout=10):
 
 
 @pytest.mark.asyncio
-async def test_lightchain_integration(request, caplog, geth_ipc_path, enode, geth_process):
-    """Test LightChainSyncer/LightPeerChain against a running geth instance.
+async def test_sync_integration(request, caplog, geth_ipc_path, enode, geth_process):
+    """Test a regular chain sync against a running geth instance.
 
-    In order to run this manually, you can use `tox -e py36-lightchain_integration` or:
+    In order to run this manually, you can use `tox -e py37-sync_integration` or:
 
-        pytest --integration --capture=no tests/integration/test_lightchain_integration.py
+        pytest --integration --capture=no tests/integration/test_sync.py
 
     The fixture for this test was generated with:
 
@@ -163,6 +158,8 @@ async def test_lightchain_integration(request, caplog, geth_ipc_path, enode, get
     chaindb = AsyncChainDB(base_db)
     chaindb.persist_header(ROPSTEN_GENESIS_HEADER)
     headerdb = AsyncHeaderDB(base_db)
+    chain_config = Eth1ChainConfig.from_preconfigured_network(ROPSTEN_NETWORK_ID)
+    chain = chain_config.initialize_chain(base_db)
     context = ChainContext(
         headerdb=headerdb,
         network_id=ROPSTEN_NETWORK_ID,
@@ -171,57 +168,32 @@ async def test_lightchain_integration(request, caplog, geth_ipc_path, enode, get
         listen_port=30303,
         p2p_version=DEVP2P_V5,
     )
-    peer_pool = LESPeerPool(
-        privkey=ecies.generate_privkey(),
-        context=context,
-    )
-    chain = AsyncRopstenChain(base_db)
-    syncer = LightChainSyncer(chain, chaindb, peer_pool)
-    syncer.min_peers_to_sync = 1
-    peer_chain = LightPeerChain(headerdb, peer_pool)
+    peer_pool = ETHPeerPool(privkey=ecies.generate_privkey(), context=context)
+    syncer = RegularChainSyncer(chain, chaindb, peer_pool)
 
     async with background_asyncio_service(peer_pool) as manager:
         await manager.wait_started()
-        asyncio.ensure_future(connect_to_peers_loop(peer_pool, tuple([remote])))
-        async with background_asyncio_service(
-            syncer
-        ) as syncer_manager, background_asyncio_service(
-            peer_chain
-        ) as chain_manager:
-            await chain_manager.wait_started()
+        await peer_pool.connect_to_nodes([remote])
+        assert len(peer_pool) == 1
+
+        async with background_asyncio_service(syncer) as syncer_manager:
             await syncer_manager.wait_started()
 
             n = 11
 
-            # Wait for the chain to sync a few headers.
+            manager.logger.info(f"Waiting for the chain to sync {n} blocks")
+
             async def wait_for_header_sync(block_number):
-                while headerdb.get_canonical_head().block_number < block_number:
+                while chaindb.get_canonical_head().block_number < block_number:
                     await asyncio.sleep(0.1)
             await asyncio.wait_for(wait_for_header_sync(n), 5)
 
             # https://ropsten.etherscan.io/block/11
-            header = headerdb.get_canonical_block_header_by_number(n)
-            body = await peer_chain.coro_get_block_body_by_hash(header.hash)
-            assert len(body['transactions']) == 15
+            header = chaindb.get_canonical_block_header_by_number(n)
+            transactions = chaindb.get_block_transactions(header, BaseTransactionFields)
+            assert len(transactions) == 15
 
-            receipts = await peer_chain.coro_get_receipts(header.hash)
+            receipts = chaindb.get_receipts(header, Receipt)
             assert len(receipts) == 15
             assert encode_hex(keccak(rlp.encode(receipts[0]))) == (
                 '0xf709ed2c57efc18a1675e8c740f3294c9e2cb36ba7bb3b89d3ab4c8fef9d8860')
-
-            assert len(peer_pool) == 1
-            peer = peer_pool.highest_td_peer
-            head = await peer_chain.coro_get_block_header_by_hash(peer.head_info.head_hash)
-
-            # In order to answer queries for contract code, geth needs the state trie entry for
-            # the block we specify in the query, but because of fast sync we can only assume it
-            # has that for recent blocks, so we use the current head to lookup the code for the
-            # contract below.
-            # https://ropsten.etherscan.io/address/0x95a48dca999c89e4e284930d9b9af973a7481287
-            contract_addr = decode_hex('0x8B09D9ac6A4F7778fCb22852e879C7F3B2bEeF81')
-            contract_code = await peer_chain.coro_get_contract_code(head.hash, contract_addr)
-            assert encode_hex(contract_code) == '0x600060006000600060006000356000f1'
-
-            account = await peer_chain.coro_get_account(head.hash, contract_addr)
-            assert account.code_hash == keccak(contract_code)
-            assert account.balance == 0

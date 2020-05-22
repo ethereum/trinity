@@ -213,13 +213,13 @@ jobs:
       - image: circleci/python:3.8
         environment:
           TOXENV: py38-integration
-  py37-lightchain_integration:
+  py37-sync_integration:
     <<: *geth_steps
     docker:
       - image: circleci/python:3.7
         environment:
-          TOXENV: py37-lightchain_integration
-          GETH_VERSION: v1.8.22
+          TOXENV: py37-sync_integration
+          GETH_VERSION: v1.9.6
   py37-long_run_integration:
     <<: *common
     docker:
@@ -435,7 +435,7 @@ workflows:
       - py38-eth1-components
       - py38-eth2-trio
 
-      - py37-lightchain_integration
+      - py37-sync_integration
 
       - py38-lint
       - py38-lint-eth2

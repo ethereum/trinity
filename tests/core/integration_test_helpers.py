@@ -1,4 +1,3 @@
-import asyncio
 import contextlib
 from enum import Enum
 from pathlib import Path
@@ -6,7 +5,6 @@ from tempfile import TemporaryDirectory
 from zipfile import ZipFile
 
 from async_service import background_asyncio_service
-from cancel_token import OperationCancelled
 from eth_keys import keys
 from eth_utils import decode_hex
 
@@ -27,17 +25,6 @@ from trinity.tools.chain import AsyncMiningChain
 
 
 ZIPPED_FIXTURES_PATH = Path(__file__).parent.parent / 'integration' / 'fixtures'
-
-
-async def connect_to_peers_loop(peer_pool, nodes):
-    """Loop forever trying to connect to one of the given nodes if the pool is not yet full."""
-    while peer_pool.manager.is_running:
-        try:
-            if not peer_pool.is_full:
-                await peer_pool.connect_to_nodes(nodes)
-            await asyncio.sleep(2)
-        except OperationCancelled:
-            break
 
 
 FUNDED_ACCT = keys.PrivateKey(
