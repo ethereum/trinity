@@ -27,6 +27,7 @@ from p2p import ecies
 from p2p.constants import DEVP2P_V5
 from p2p.kademlia import Node
 
+from trinity.config import Eth1ChainConfig
 from trinity.constants import DEFAULT_PREFERRED_NODES
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.db.eth1.header import AsyncHeaderDB
@@ -36,11 +37,8 @@ from trinity.protocol.les.peer import LESPeerPool
 
 from trinity.sync.full.chain import RegularChainSyncer
 from trinity.sync.light.chain import LightChainSyncer
-from trinity.tools.chain import AsyncMainnetChain, AsyncRopstenChain
 from trinity._utils.chains import load_nodekey
 from trinity._utils.version import construct_trinity_client_identifier
-
-from tests.core.integration_test_helpers import connect_to_peers_loop
 
 
 async def _main() -> None:
@@ -73,15 +71,12 @@ async def _main() -> None:
     if args.light:
         peer_pool_class = LESPeerPool
 
-    chain_class: Union[Type[AsyncRopstenChain], Type[AsyncMainnetChain]]
     if genesis.hash == ROPSTEN_GENESIS_HEADER.hash:
         chain_id = RopstenChain.chain_id
         vm_config = ROPSTEN_VM_CONFIGURATION
-        chain_class = AsyncRopstenChain
     elif genesis.hash == MAINNET_GENESIS_HEADER.hash:
         chain_id = MainnetChain.chain_id
         vm_config = MAINNET_VM_CONFIGURATION  # type: ignore
-        chain_class = AsyncMainnetChain
     else:
         raise RuntimeError("Unknown genesis: %s", genesis)
 
@@ -90,6 +85,8 @@ async def _main() -> None:
     else:
         privkey = ecies.generate_privkey()
 
+    chain_config = Eth1ChainConfig.from_preconfigured_network(chain_id)
+    chain = chain_config.initialize_chain(base_db)
     context = ChainContext(
         headerdb=headerdb,
         network_id=chain_id,
@@ -106,9 +103,9 @@ async def _main() -> None:
     else:
         nodes = DEFAULT_PREFERRED_NODES[chain_id]
 
-    async with background_asyncio_service(peer_pool) as manager:
-        manager.run_task(connect_to_peers_loop(peer_pool, nodes))  # type: ignore
-        chain = chain_class(base_db)
+    async with background_asyncio_service(peer_pool):
+        await peer_pool.connect_to_nodes(nodes)
+        assert len(peer_pool) == 1
         syncer: Service = None
         if args.light:
             syncer = LightChainSyncer(chain, headerdb, cast(LESPeerPool, peer_pool))
@@ -116,21 +113,12 @@ async def _main() -> None:
             syncer = RegularChainSyncer(chain, chaindb, cast(ETHPeerPool, peer_pool))
         logging.getLogger().setLevel(log_level)
 
-        sigint_received = asyncio.Event()
-        for sig in [signal.SIGINT, signal.SIGTERM]:
-            loop.add_signal_handler(sig, sigint_received.set)
-
-        async def exit_on_sigint() -> None:
-            await sigint_received.wait()
-            syncer.get_manager().cancel()
-
-        asyncio.ensure_future(exit_on_sigint())
-
         async with background_asyncio_service(syncer) as syncer_manager:
+            for sig in [signal.SIGINT, signal.SIGTERM]:
+                loop.add_signal_handler(sig, syncer_manager.cancel)
+
             await syncer_manager.wait_finished()
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(_main())
-    loop.close()
+    asyncio.run(_main())
