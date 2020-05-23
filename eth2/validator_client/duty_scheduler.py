@@ -22,13 +22,19 @@ async def resolve_duty(
 ) -> None:
     if duty.duty_type == DutyType.Attestation:
         duty = cast(AttestationDuty, duty)
-        attestation = await beacon_node.fetch_attestation(
-            duty.validator_public_key,
-            duty.tick_for_execution.slot,
-            duty.committee_index,
-        )
-        if attestation:
-            await resolved_duties.send((duty, attestation))
+
+        try:
+            attestation = await beacon_node.fetch_attestation(
+                duty.validator_public_key,
+                duty.tick_for_execution.slot,
+                duty.committee_index,
+            )
+        except OSError as err:
+            logger.warning("could not fetch attestation from beacon node: %s", err)
+        else:
+            if attestation:
+                await resolved_duties.send((duty, attestation))
+
     elif duty.duty_type == DutyType.BlockProposal:
         randao_reveal = randao_provider(
             duty.validator_public_key, duty.tick_for_execution.epoch
@@ -67,23 +73,29 @@ async def _fetch_latest_duties(
     current_epoch = tick.epoch
     next_epoch = Epoch(current_epoch + 1)
 
-    current_duties = await beacon_node.fetch_duties(
-        tick, validator_public_keys, current_epoch
-    )
-    upcoming_duties = await beacon_node.fetch_duties(
-        tick, validator_public_keys, next_epoch
-    )
-    latest_duties = cast(Tuple[Duty, ...], current_duties) + cast(
-        Tuple[Duty, ...], upcoming_duties
-    )
-    if not latest_duties:
-        return
+    try:
+        current_duties = await beacon_node.fetch_duties(
+            tick, validator_public_keys, current_epoch
+        )
+        upcoming_duties = await beacon_node.fetch_duties(
+            tick, validator_public_keys, next_epoch
+        )
+    except OSError as err:
+        logger.warning(
+            "could not fetch latest duties from beacon node at %s: %s", tick, err
+        )
+    else:
+        latest_duties = cast(Tuple[Duty, ...], current_duties) + cast(
+            Tuple[Duty, ...], upcoming_duties
+        )
+        if not latest_duties:
+            return
 
-    logger.debug("%s: found %d duties", tick, len(latest_duties))
+        logger.debug("%s: found %d duties", tick, len(latest_duties))
 
-    # TODO manage duties correctly, accounting for re-orgs, etc.
-    # NOTE: the naive strategy is likely "last write wins"
-    await duty_store.add_duties(*latest_duties)
+        # TODO manage duties correctly, accounting for re-orgs, etc.
+        # NOTE: the naive strategy is likely "last write wins"
+        await duty_store.add_duties(*latest_duties)
 
 
 async def schedule_and_dispatch_duties_at_tick(

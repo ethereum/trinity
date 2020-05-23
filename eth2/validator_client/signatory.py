@@ -88,4 +88,7 @@ async def sign_and_broadcast_operation_if_valid(
         duty,
         humanize_bytes(operation_with_signature.hash_tree_root),
     )
-    await beacon_node.publish(duty, operation_with_signature)
+    try:
+        await beacon_node.publish(duty, operation_with_signature)
+    except OSError as err:
+        logger.warning("could not publish opperation to beacon node: %s", err)
