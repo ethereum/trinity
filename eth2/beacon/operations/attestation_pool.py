@@ -2,14 +2,13 @@ from typing import Tuple
 
 from eth_utils import ValidationError
 
+from eth2.beacon.hashable_container_pool import HashableContainerPool
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_attestation_slot,
 )
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.typing import CommitteeIndex, Root, Slot
 from eth2.configs import Eth2Config
-
-from .pool import OperationPool
 
 
 def is_valid_slot(
@@ -28,7 +27,7 @@ def is_valid_slot(
         return True
 
 
-class AttestationPool(OperationPool[Attestation]):
+class AttestationPool(HashableContainerPool[Attestation]):
     def get_valid_attestation_by_current_slot(
         self, slot: Slot, config: Eth2Config
     ) -> Tuple[Attestation, ...]:

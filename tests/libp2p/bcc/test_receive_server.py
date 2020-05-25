@@ -156,11 +156,11 @@ def test_orphan_block_pool():
     b2 = SignedBeaconBlockFactory(parent=b0, message__state_root=b"\x11" * 32)
     # test: add
     pool.add(b1)
-    assert b1 in pool._pool
-    assert len(pool._pool) == 1
+    assert b1 in pool
+    assert len(pool) == 1
     # test: add: no side effect for adding twice
     pool.add(b1)
-    assert len(pool._pool) == 1
+    assert len(pool) == 1
     # test: `__contains__`
     assert b1 in pool
     assert b1.message.hash_tree_root in pool
@@ -169,17 +169,17 @@ def test_orphan_block_pool():
     assert b2.message.hash_tree_root not in pool
     # test: add: two blocks
     pool.add(b2)
-    assert len(pool._pool) == 2
+    assert len(pool) == 2
     # test: get
     assert pool.get(b1.message.hash_tree_root) == b1
     assert pool.get(b2.message.hash_tree_root) == b2
     # test: pop_children
     b2_children = pool.pop_children(b2.message.hash_tree_root)
     assert len(b2_children) == 0
-    assert len(pool._pool) == 2
+    assert len(pool) == 2
     b0_children = pool.pop_children(b0.message.hash_tree_root)
     assert len(b0_children) == 2 and (b1 in b0_children) and (b2 in b0_children)
-    assert len(pool._pool) == 0
+    assert len(pool) == 0
 
 
 @pytest.mark.asyncio

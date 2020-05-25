@@ -8,7 +8,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Union,
 )
 
 from cancel_token import (
@@ -56,58 +55,28 @@ from .configs import (
     PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION,
 )
 
+from eth2.beacon.hashable_container_pool import HashableContainerPool
+
 PROCESS_ORPHAN_BLOCKS_PERIOD = 10.0
 
 
-class OrphanBlockPool:
-    """
-    Store the orphan blocks(the blocks who arrive before their parents).
-    """
-    # TODO: can probably use lru-cache or even database
-    _pool: Set[BaseSignedBeaconBlock]
+class OrphanBlockPool(HashableContainerPool[BaseSignedBeaconBlock]):
 
-    def __init__(self) -> None:
-        self._pool = set()
-
-    def __len__(self) -> int:
-        return len(self._pool)
-
-    def __contains__(self, block_or_block_root: Union[BaseSignedBeaconBlock, Root]) -> bool:
-        block_root: Root
-        if isinstance(block_or_block_root, BaseSignedBeaconBlock):
-            block_root = block_or_block_root.message.hash_tree_root
-        elif isinstance(block_or_block_root, bytes):
-            block_root = block_or_block_root
-        else:
-            raise TypeError("`block_or_block_root` should be `BaseSignedBeaconBlock` or `Root`")
-        try:
-            self.get(block_root)
-            return True
-        except BlockNotFound:
-            return False
-
-    def to_list(self) -> List[BaseSignedBeaconBlock]:
-        return list(self._pool)
-
-    def get(self, block_root: Root) -> BaseSignedBeaconBlock:
-        for block in self._pool:
-            if block.message.hash_tree_root == block_root:
-                return block
-        raise BlockNotFound(f"No block with message.hash_tree_root {block_root.hex()} is found")
-
-    def add(self, block: BaseSignedBeaconBlock) -> None:
-        if block in self._pool:
-            return
-        self._pool.add(block)
+    def _get_root(self, block: BaseSignedBeaconBlock) -> Root:
+        return block.message.hash_tree_root
 
     def pop_children(self, block_root: Root) -> Tuple[BaseSignedBeaconBlock, ...]:
         children = tuple(
             orphan_block
-            for orphan_block in self._pool
+            for orphan_block in self.get_all()
             if orphan_block.parent_root == block_root
         )
-        self._pool.difference_update(children)
+
+        self.batch_remove(children)
         return children
+
+    def to_list(self) -> List[BaseSignedBeaconBlock]:
+        return list(self.get_all())
 
 
 class BCCReceiveServer(BaseService):
