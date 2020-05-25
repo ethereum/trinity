@@ -29,7 +29,7 @@ async def resolve_duty(
                 duty.tick_for_execution.slot,
                 duty.committee_index,
             )
-        except OSError as err:
+        except TimeoutError as err:
             logger.warning("could not fetch attestation from beacon node: %s", err)
         else:
             if attestation:
@@ -80,7 +80,7 @@ async def _fetch_latest_duties(
         upcoming_duties = await beacon_node.fetch_duties(
             tick, validator_public_keys, next_epoch
         )
-    except OSError as err:
+    except TimeoutError as err:
         logger.warning(
             "could not fetch latest duties from beacon node at %s: %s", tick, err
         )

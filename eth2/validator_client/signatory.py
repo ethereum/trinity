@@ -90,5 +90,5 @@ async def sign_and_broadcast_operation_if_valid(
     )
     try:
         await beacon_node.publish(duty, operation_with_signature)
-    except OSError as err:
+    except TimeoutError as err:
         logger.warning("could not publish opperation to beacon node: %s", err)

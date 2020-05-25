@@ -47,14 +47,19 @@ async def _get_json(session: Session, url: str, params: Any = None) -> Any:
         params = {}
     try:
         return (await session.get(url, params=params)).json()
-    except OSError:
-        raise
-    except Exception as e:
-        logger.exception(e)
+    except OSError as err:
+        raise TimeoutError(err)
+    except Exception as err:
+        logger.exception(err)
 
 
 async def _post_json(session: Session, url: str, json: Any) -> None:
-    await session.post(url, json=json)
+    try:
+        await session.post(url, json=json)
+    except OSError as err:
+        raise TimeoutError(err)
+    except Exception as err:
+        logger.exception(err)
 
 
 async def _get_node_version(session: Session, url: str) -> str:
