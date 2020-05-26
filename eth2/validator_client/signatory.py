@@ -14,6 +14,7 @@ from eth2.beacon.typing import Operation, SignedOperation
 from eth2.validator_client.abc import BeaconNodeAPI, SignatoryDatabaseAPI
 from eth2.validator_client.duty import Duty, DutyType
 from eth2.validator_client.typing import PrivateKeyProvider
+from trinity.exceptions import BeaconNodeRequestFailure
 
 logger = logging.getLogger("eth2.validator_client.signatory")
 
@@ -90,5 +91,5 @@ async def sign_and_broadcast_operation_if_valid(
     )
     try:
         await beacon_node.publish(duty, operation_with_signature)
-    except TimeoutError as err:
+    except BeaconNodeRequestFailure as err:
         logger.warning("could not publish opperation to beacon node: %s", err)

@@ -10,6 +10,7 @@ from eth2.validator_client.abc import BeaconNodeAPI
 from eth2.validator_client.duty import AttestationDuty, Duty, DutyType
 from eth2.validator_client.duty_store import DutyStore
 from eth2.validator_client.typing import RandaoProvider, ResolvedDuty
+from trinity.exceptions import BeaconNodeRequestFailure
 
 logger = logging.getLogger("eth2.validator_client.duty_scheduler")
 
@@ -29,7 +30,7 @@ async def resolve_duty(
                 duty.tick_for_execution.slot,
                 duty.committee_index,
             )
-        except TimeoutError as err:
+        except BeaconNodeRequestFailure as err:
             logger.warning("could not fetch attestation from beacon node: %s", err)
         else:
             if attestation:
@@ -80,7 +81,7 @@ async def _fetch_latest_duties(
         upcoming_duties = await beacon_node.fetch_duties(
             tick, validator_public_keys, next_epoch
         )
-    except TimeoutError as err:
+    except BeaconNodeRequestFailure as err:
         logger.warning(
             "could not fetch latest duties from beacon node at %s: %s", tick, err
         )

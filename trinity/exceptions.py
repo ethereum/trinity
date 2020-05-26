@@ -148,3 +148,10 @@ class MetricsReportingError(BaseTrinityError):
     Raised when there is an error while reporting metrics.
     """
     pass
+
+
+class BeaconNodeRequestFailure(BaseTrinityError):
+    """
+    Raised when a request made to a Beacon Node fails.
+    """
+    pass

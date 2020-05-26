@@ -34,6 +34,7 @@ from eth2.validator_client.duty import (
     Duty,
     DutyType,
 )
+from trinity.exceptions import BeaconNodeRequestFailure
 
 SYNCING_POLL_INTERVAL = 10  # seconds
 CONNECTION_RETRY_INTERVAL = 1  # second(s)
@@ -48,7 +49,7 @@ async def _get_json(session: Session, url: str, params: Any = None) -> Any:
     try:
         return (await session.get(url, params=params)).json()
     except OSError as err:
-        raise TimeoutError(err)
+        raise BeaconNodeRequestFailure(err)
     except Exception as err:
         logger.exception(err)
 
@@ -57,7 +58,7 @@ async def _post_json(session: Session, url: str, json: Any) -> None:
     try:
         await session.post(url, json=json)
     except OSError as err:
-        raise TimeoutError(err)
+        raise BeaconNodeRequestFailure(err)
     except Exception as err:
         logger.exception(err)
 
