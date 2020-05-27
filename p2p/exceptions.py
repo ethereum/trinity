@@ -213,15 +213,6 @@ class CouldNotRetrieveENR(BaseP2PError):
     pass
 
 
-class CorruptTransport(BaseP2PError):
-    """
-    We lost our place in the stream due to a read operation being interrupted at some point.
-    This isn't recoverable at the moment, so typically this means we should close the transport
-    and terminate the peer connection, when this exception is raised.
-    """
-    pass
-
-
 class PeerReporterRegistryError(BaseP2PError):
     """
     Raised when there is an error assigning or unassigning peers in the PeerReporterRegistry.

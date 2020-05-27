@@ -210,7 +210,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     # Bob will now consume one datagram containing the ENR_REQUEST from alice, and as part of that
     # will send an ENR_RESPONSE, which will then be consumed by alice, and as part of that it will
     # be fed into the request_enr() task we're running the background.
-    with trio.fail_after(0.1):
+    with trio.fail_after(0.5):
         await bob.consume_datagram()
         await alice.consume_datagram()
 
@@ -235,7 +235,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
     received_enr = None
     got_new_enr = trio.Event()
     nursery.start_soon(fetch_enr, got_new_enr)
-    with trio.fail_after(0.1):
+    with trio.fail_after(0.5):
         await bob.consume_datagram()
         await alice.consume_datagram()
 

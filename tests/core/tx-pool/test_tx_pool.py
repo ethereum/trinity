@@ -126,7 +126,7 @@ async def test_tx_propagation(two_connected_tx_pools,
     # Alice sends some txs (Important we let the TxPool send them to feed the bloom)
     await alice_tx_pool._handle_tx(bob.session, txs_broadcasted_by_alice)
 
-    await asyncio.wait_for(bob_got_tx.wait(), timeout=0.01)
+    await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
     assert len(bob_incoming_tx) == 1
 
     assert bob_incoming_tx[0].as_dict() == txs_broadcasted_by_alice[0].as_dict()
@@ -140,7 +140,7 @@ async def test_tx_propagation(two_connected_tx_pools,
 
     # Check that Bob doesn't receive them again
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(bob_got_tx.wait(), timeout=0.01)
+        await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
     assert len(bob_incoming_tx) == 0
 
     # Bob sends exact same txs back (Important we let the TxPool send them to feed the bloom)
@@ -148,7 +148,7 @@ async def test_tx_propagation(two_connected_tx_pools,
 
     # Check that Alice won't get them as that is where they originally came from
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(alice_got_tx.wait(), timeout=0.01)
+        await asyncio.wait_for(alice_got_tx.wait(), timeout=0.2)
     assert len(alice_incoming_tx) == 0
 
     txs_broadcasted_by_bob = [
@@ -159,7 +159,7 @@ async def test_tx_propagation(two_connected_tx_pools,
     # Bob sends old + new tx
     await bob_tx_pool._handle_tx(alice.session, txs_broadcasted_by_bob)
 
-    await asyncio.wait_for(alice_got_tx.wait(), timeout=0.01)
+    await asyncio.wait_for(alice_got_tx.wait(), timeout=0.2)
 
     # Check that Alice receives only the one tx that it didn't know about
     assert alice_incoming_tx[0].as_dict() == txs_broadcasted_by_bob[0].as_dict()

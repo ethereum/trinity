@@ -132,6 +132,10 @@ async def ConnectionPairFactoryNotRunning(
         )
         alice_protocol_receipts = ()
         bob_protocol_receipts = ()
+        # Here we need to manually start the multiplexers as we don't use
+        # negotiate_protocol_handshakes() as above.
+        await alice_multiplexer.stream_in_background()
+        await bob_multiplexer.stream_in_background()
 
     alice_connection = Connection(
         multiplexer=alice_multiplexer,

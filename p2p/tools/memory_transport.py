@@ -11,7 +11,6 @@ from p2p.exceptions import PeerConnectionLost
 from p2p.message import Message
 from p2p.session import Session
 from p2p.tools.asyncio_streams import get_directly_connected_streams
-from p2p.transport_state import TransportState
 from p2p._utils import get_logger
 
 
@@ -23,7 +22,6 @@ CONNECTION_LOST_ERRORS = (
 
 
 class MemoryTransport(TransportAPI):
-    read_state = TransportState.IDLE
 
     def __init__(self,
                  remote: NodeAPI,
@@ -72,17 +70,10 @@ class MemoryTransport(TransportAPI):
         self._writer.write(data)
 
     async def recv(self) -> MessageAPI:
-        self.read_state = TransportState.HEADER
-        try:
-            encoded_sizes = await self.read(8)
-        except asyncio.CancelledError:
-            self.read_state = TransportState.IDLE
-            raise
+        encoded_sizes = await self.read(8)
         header_size, body_size = struct.unpack('>II', encoded_sizes)
-        self.read_state = TransportState.BODY
         header = await self.read(header_size)
         body = await self.read(body_size)
-        self.read_state = TransportState.IDLE
         return Message(header, body)
 
     def send(self, message: MessageAPI) -> None:
