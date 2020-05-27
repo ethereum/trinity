@@ -417,9 +417,9 @@ async def validate_transaction_receipt(rpc, tx_hash, block_fixture, transaction_
     assert error is None
     header_fixture = fixture_block_in_rpc_format(block_fixture['blockHeader'])
     tx_index = to_int(hexstr=result['transactionIndex'])
-    tx_fixture = block_fixture['transactions'][tx_index]
+    tx_fixture = fixture_transaction_in_rpc_format(block_fixture['transactions'][tx_index])
 
-    assert result['to'] == add_0x_prefix(tx_fixture['to'])
+    assert result['to'] == tx_fixture['to']
     assert result['blockHash'] == header_fixture['hash']
     assert result['blockNumber'] == header_fixture['number']
 
