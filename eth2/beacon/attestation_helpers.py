@@ -35,7 +35,6 @@ def validate_indexed_attestation_aggregate_signature(
 def validate_indexed_attestation(
     state: BeaconState,
     indexed_attestation: IndexedAttestation,
-    max_validators_per_committee: int,
     slots_per_epoch: int,
     validate_signature: bool = True,
 ) -> None:
@@ -45,12 +44,6 @@ def validate_indexed_attestation(
     Option ``validate_signature`` is used in some testing scenarios, like some fork choice tests.
     """
     attesting_indices = indexed_attestation.attesting_indices
-
-    if len(attesting_indices) > max_validators_per_committee:
-        raise ValidationError(
-            f"Require no more than {max_validators_per_committee} validators per attestation,"
-            f" but have {len(attesting_indices)} validators."
-        )
 
     if list(attesting_indices) != sorted(set(attesting_indices)):
         raise ValidationError(
