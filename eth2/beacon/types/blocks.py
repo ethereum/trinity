@@ -9,12 +9,12 @@ from ssz.hashable_container import HashableContainer
 from ssz.sedes import List, bytes32, bytes96, uint64
 
 from eth2.beacon.constants import EMPTY_SIGNATURE, GENESIS_PARENT_ROOT, ZERO_ROOT
-from eth2.beacon.typing import FromBlockParams, Root, Slot
+from eth2.beacon.typing import FromBlockParams, Root, Slot, ValidatorIndex
 
 from .attestations import Attestation
 from .attester_slashings import AttesterSlashing
 from .block_headers import BeaconBlockHeader, SignedBeaconBlockHeader
-from .defaults import default_slot, default_tuple
+from .defaults import default_slot, default_tuple, default_validator_index
 from .deposits import Deposit
 from .eth1_data import Eth1Data, default_eth1_data
 from .proposer_slashings import ProposerSlashing
@@ -93,6 +93,7 @@ TBaseBeaconBlock = TypeVar("TBaseBeaconBlock", bound="BaseBeaconBlock")
 class BaseBeaconBlock(HashableContainer, Configurable, ABC):
     fields = [
         ("slot", uint64),
+        ("proposer_index", uint64),
         ("parent_root", bytes32),
         ("state_root", bytes32),
         ("body", BeaconBlockBody),
@@ -103,18 +104,20 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
         cls: Type[TBaseBeaconBlock],
         *,
         slot: Slot = default_slot,
+        proposer_index: ValidatorIndex = default_validator_index,
         parent_root: Root = ZERO_ROOT,
         state_root: Hash32 = ZERO_HASH32,
         body: BeaconBlockBody = default_beacon_block_body,
     ) -> TBaseBeaconBlock:
         return super().create(
-            slot=slot, parent_root=parent_root, state_root=state_root, body=body
+            slot=slot, proposer_index=proposer_index, parent_root=parent_root, state_root=state_root, body=body
         )
 
     def __str__(self) -> str:
         return (
             f"[hash_tree_root]={humanize_hash(self.hash_tree_root)},"
             f" slot={self.slot},"
+            f" proposer_index={self.proposer_index},"
             f" parent_root={humanize_hash(self.parent_root)},"
             f" state_root={humanize_hash(self.state_root)},"
             f" body=({self.body})"
