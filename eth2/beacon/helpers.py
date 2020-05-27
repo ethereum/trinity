@@ -156,17 +156,19 @@ def get_seed(
 
 
 def get_total_balance(
-    state: "BeaconState", validator_indices: Set[ValidatorIndex]
+    state: "BeaconState", validator_indices: Set[ValidatorIndex], config: Eth2Config
 ) -> Gwei:
     """
-    Return the combined effective balance of an array of validators.
+    Return the combined effective balance of the ``indices``.
+    ``EFFECTIVE_BALANCE_INCREMENT`` Gwei minimum to avoid divisions by zero.
+    Math safe up to ~10B ETH, afterwhich this overflows uint64.
     """
     return Gwei(
         max(
             sum(
                 state.validators[index].effective_balance for index in validator_indices
             ),
-            1,
+            config.EFFECTIVE_BALANCE_INCREMENT,
         )
     )
 
