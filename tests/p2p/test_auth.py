@@ -164,20 +164,23 @@ async def test_handshake():
         remote_public_key=responder.privkey.public_key.to_bytes(),
     )))
 
-    async with initiator_multiplexer.multiplex():
-        async with responder_multiplexer.multiplex():
-            initiator_stream = initiator_multiplexer.stream_protocol_messages(
-                initiator_p2p_protocol,
-            )
-            responder_stream = responder_multiplexer.stream_protocol_messages(
-                responder_p2p_protocol,
-            )
+    await initiator_multiplexer.stream_in_background()
+    await responder_multiplexer.stream_in_background()
 
-            initiator_hello = await asyncio.wait_for(initiator_stream.asend(None), timeout=0.1)
-            responder_hello = await asyncio.wait_for(responder_stream.asend(None), timeout=0.1)
+    initiator_stream = initiator_multiplexer.stream_protocol_messages(
+        initiator_p2p_protocol,
+    )
+    responder_stream = responder_multiplexer.stream_protocol_messages(
+        responder_p2p_protocol,
+    )
 
-            await initiator_stream.aclose()
-            await responder_stream.aclose()
+    initiator_hello = await asyncio.wait_for(initiator_stream.asend(None), timeout=0.1)
+    responder_hello = await asyncio.wait_for(responder_stream.asend(None), timeout=0.1)
+
+    await initiator_stream.aclose()
+    await responder_stream.aclose()
+    await initiator_multiplexer.stop_streaming()
+    await responder_multiplexer.stop_streaming()
 
     assert isinstance(responder_hello, Hello)
     assert isinstance(initiator_hello, Hello)
@@ -300,20 +303,23 @@ async def test_handshake_eip8():
         remote_public_key=responder.privkey.public_key.to_bytes(),
     )))
 
-    async with initiator_multiplexer.multiplex():
-        async with responder_multiplexer.multiplex():
-            initiator_stream = initiator_multiplexer.stream_protocol_messages(
-                initiator_p2p_protocol,
-            )
-            responder_stream = responder_multiplexer.stream_protocol_messages(
-                responder_p2p_protocol,
-            )
+    await initiator_multiplexer.stream_in_background()
+    await responder_multiplexer.stream_in_background()
 
-            initiator_hello = await initiator_stream.asend(None)
-            responder_hello = await responder_stream.asend(None)
+    initiator_stream = initiator_multiplexer.stream_protocol_messages(
+        initiator_p2p_protocol,
+    )
+    responder_stream = responder_multiplexer.stream_protocol_messages(
+        responder_p2p_protocol,
+    )
 
-            await initiator_stream.aclose()
-            await responder_stream.aclose()
+    initiator_hello = await initiator_stream.asend(None)
+    responder_hello = await responder_stream.asend(None)
+
+    await initiator_stream.aclose()
+    await responder_stream.aclose()
+    await initiator_multiplexer.stop_streaming()
+    await responder_multiplexer.stop_streaming()
 
     assert isinstance(responder_hello, Hello)
     assert isinstance(initiator_hello, Hello)

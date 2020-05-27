@@ -35,7 +35,6 @@ from p2p.typing import (
     Capability,
     TCommandPayload,
     NodeID)
-from p2p.transport_state import TransportState
 
 if TYPE_CHECKING:
     from p2p.handshake import DevP2PReceipt  # noqa: F401
@@ -253,7 +252,6 @@ TCommand = TypeVar("TCommand", bound=CommandAPI[Any])
 class TransportAPI(ABC):
     session: SessionAPI
     remote: NodeAPI
-    read_state: TransportState
     logger: ExtendedDebugLogger
 
     @property
@@ -329,6 +327,48 @@ TProtocol = TypeVar('TProtocol', bound=ProtocolAPI)
 
 
 class MultiplexerAPI(ABC):
+
+    @abstractmethod
+    async def stream_in_background(self) -> None:
+        """Start streaming of messages in the background.
+
+        Multiplexers are created and start streaming during the auth handshake, but afterwards are
+        passed to Connection instances and we need to be running in the background to ensure no
+        messages are dropped.
+        """
+        ...
+
+    @abstractmethod
+    async def wait_streaming_finished(self) -> None:
+        """Wait until the background streaming finishes or raises any exceptions."""
+        ...
+
+    @abstractmethod
+    def get_streaming_error(self) -> Optional[BaseException]:
+        """
+        Return the Exception raised by the streaming task, if any.
+
+        If streaming has not started, raise an Exception.
+
+        If streaming is not finished, return None.
+
+        If streaming was cancelled, return CancelledError.
+        """
+        ...
+
+    @abstractmethod
+    def raise_if_streaming_error(self) -> None:
+        ...
+
+    @property
+    @abstractmethod
+    def is_streaming(self) -> bool:
+        ...
+
+    @abstractmethod
+    def cancel_streaming(self) -> None:
+        """Cancel the background streaming."""
+        ...
 
     #
     # Transport API

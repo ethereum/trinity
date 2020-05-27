@@ -280,14 +280,28 @@ async def negotiate_protocol_handshakes(transport: TransportAPI,
     # the `Transport` and feeds them into protocol specific queues.  Each
     # protocol is responsible for reading its own messages from that queue via
     # the `Multiplexer.stream_protocol_messages` API.
-    async with multiplexer.multiplex():
-        # Concurrently perform the handshakes for each protocol, gathering up
-        # the returned receipts.
+    await multiplexer.stream_in_background()
+    # Concurrently perform the handshakes for each protocol, gathering up
+    # the returned receipts.
+    try:
         protocol_receipts = cast(Tuple[HandshakeReceiptAPI, ...], await asyncio.gather(*(
             handshaker.do_handshake(multiplexer, protocol)
             for handshaker, protocol
             in zip(selected_handshakers, selected_protocols)
         )))
+    except BaseException as handshake_err:
+        # If the multiplexer has a streaming error, that will certainly be the cause of
+        # whatever handshake error we got, so raise that instead.
+        multiplexer.raise_if_streaming_error()
+        # Ok, no streaming error from the multiplexer, so stop it and raise the handshake error.
+        await multiplexer.stop_streaming()
+        raise handshake_err
+    else:
+        # The handshake was successful, but there's a chance the multiplexer's streaming stopped
+        # after that, so we may raise that here to prevent an attempt to use a stopped multiplexer
+        # further.
+        multiplexer.raise_if_streaming_error()
+
     # Return the `Multiplexer` object as well as the handshake receipts.  The
     # `Multiplexer` object acts as a container for the individual protocol
     # instances.

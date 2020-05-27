@@ -89,124 +89,166 @@ async def test_multiplexer_properties():
 
 
 @pytest.mark.asyncio
-async def test_multiplexer_only_p2p_protocol():
-    alice_multiplexer, bob_multiplexer = MultiplexerPairFactory()
+async def test_stream_in_background():
+    alice, _ = MultiplexerPairFactory()
+    assert not alice.is_streaming
+    assert not alice.is_closing
+    with pytest.raises(Exception):
+        await alice.wait_streaming()
 
-    async with alice_multiplexer.multiplex():
-        async with bob_multiplexer.multiplex():
-            alice_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
-            bob_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    await alice.stream_in_background()
 
-            alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
-            bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    assert alice.is_streaming
 
-            alice_p2p_protocol.send(Ping(None))
-            cmd = await asyncio.wait_for(bob_stream.asend(None), timeout=DEFAULT_TIMEOUT)
-            assert isinstance(cmd, Ping)
+    await alice.stop_streaming()
 
-            bob_p2p_protocol.send(Pong(None))
-            cmd = await asyncio.wait_for(alice_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert not alice.is_streaming
+    assert alice.is_closing
+    assert isinstance(alice.get_streaming_error(), asyncio.CancelledError)
+
+    with pytest.raises(asyncio.CancelledError):
+        await alice.wait_streaming_finished()
+    with pytest.raises(asyncio.CancelledError):
+        alice.raise_if_streaming_error()
 
 
 @pytest.mark.asyncio
-async def test_multiplexer_p2p_and_paragon_protocol():
+async def test_streaming_error(monkeypatch):
+    alice, _ = MultiplexerPairFactory()
+
+    msg = "Multiplexing error"
+    exc = Exception(msg)
+
+    async def multiplexing():
+        alice._started_streaming.set()
+        raise exc
+
+    monkeypatch.setattr(alice, '_do_multiplexing', multiplexing)
+    await alice.stream_in_background()
+
+    with pytest.raises(Exception, match=msg):
+        await alice.wait_streaming_finished()
+    assert alice.get_streaming_error() == exc
+    with pytest.raises(Exception, match=msg):
+        alice.raise_if_streaming_error()
+
+
+@pytest.mark.asyncio
+async def test_multiplexer_only_p2p_protocol(request, event_loop):
+    alice_multiplexer, bob_multiplexer = MultiplexerPairFactory()
+    await run_multiplexers([alice_multiplexer, bob_multiplexer], request, event_loop)
+
+    alice_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    bob_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
+
+    alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
+
+    alice_p2p_protocol.send(Ping(None))
+    cmd = await asyncio.wait_for(bob_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Ping)
+
+    bob_p2p_protocol.send(Pong(None))
+    cmd = await asyncio.wait_for(alice_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_multiplexer_p2p_and_paragon_protocol(request, event_loop):
     alice_multiplexer, bob_multiplexer = MultiplexerPairFactory(
         protocol_types=(SecondProtocol,),
     )
+    await run_multiplexers([alice_multiplexer, bob_multiplexer], request, event_loop)
 
-    async with alice_multiplexer.multiplex():
-        async with bob_multiplexer.multiplex():
-            alice_p2p_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
-            bob_p2p_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
-            alice_second_stream = alice_multiplexer.stream_protocol_messages(SecondProtocol)
-            bob_second_stream = bob_multiplexer.stream_protocol_messages(SecondProtocol)
+    alice_p2p_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    bob_p2p_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    alice_second_stream = alice_multiplexer.stream_protocol_messages(SecondProtocol)
+    bob_second_stream = bob_multiplexer.stream_protocol_messages(SecondProtocol)
 
-            alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
-            alice_second_protocol = alice_multiplexer.get_protocol_by_type(SecondProtocol)
+    alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    alice_second_protocol = alice_multiplexer.get_protocol_by_type(SecondProtocol)
 
-            bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
-            bob_second_protocol = bob_multiplexer.get_protocol_by_type(SecondProtocol)
+    bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    bob_second_protocol = bob_multiplexer.get_protocol_by_type(SecondProtocol)
 
-            alice_second_protocol.send(CommandA(None))
-            alice_p2p_protocol.send(Ping(None))
-            alice_second_protocol.send(CommandB(None))
-            cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
-            assert isinstance(cmd, Ping)
+    alice_second_protocol.send(CommandA(None))
+    alice_p2p_protocol.send(Ping(None))
+    alice_second_protocol.send(CommandB(None))
+    cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Ping)
 
-            bob_second_protocol.send(CommandA(None))
-            bob_p2p_protocol.send(Pong(None))
-            bob_second_protocol.send(CommandB(None))
+    bob_second_protocol.send(CommandA(None))
+    bob_p2p_protocol.send(Pong(None))
+    bob_second_protocol.send(CommandB(None))
 
-            cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
-            assert isinstance(cmd, Pong)
+    cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Pong)
 
-            cmd_1 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_2 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_3 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_4 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_1 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_2 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_3 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_4 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
 
-            assert isinstance(cmd_1, CommandA)
-            assert isinstance(cmd_2, CommandB)
-            assert isinstance(cmd_3, CommandA)
-            assert isinstance(cmd_4, CommandB)
+    assert isinstance(cmd_1, CommandA)
+    assert isinstance(cmd_2, CommandB)
+    assert isinstance(cmd_3, CommandA)
+    assert isinstance(cmd_4, CommandB)
 
 
 @pytest.mark.asyncio
-async def test_multiplexer_p2p_and_two_more_protocols():
+async def test_multiplexer_p2p_and_two_more_protocols(request, event_loop):
     alice_multiplexer, bob_multiplexer = MultiplexerPairFactory(
         protocol_types=(SecondProtocol, ThirdProtocol),
     )
+    await run_multiplexers([alice_multiplexer, bob_multiplexer], request, event_loop)
 
-    async with alice_multiplexer.multiplex():
-        async with bob_multiplexer.multiplex():
-            alice_p2p_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
-            bob_p2p_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
-            alice_second_stream = alice_multiplexer.stream_protocol_messages(SecondProtocol)
-            bob_second_stream = bob_multiplexer.stream_protocol_messages(SecondProtocol)
-            alice_third_stream = alice_multiplexer.stream_protocol_messages(ThirdProtocol)
-            bob_third_stream = bob_multiplexer.stream_protocol_messages(ThirdProtocol)
+    alice_p2p_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    bob_p2p_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    alice_second_stream = alice_multiplexer.stream_protocol_messages(SecondProtocol)
+    bob_second_stream = bob_multiplexer.stream_protocol_messages(SecondProtocol)
+    alice_third_stream = alice_multiplexer.stream_protocol_messages(ThirdProtocol)
+    bob_third_stream = bob_multiplexer.stream_protocol_messages(ThirdProtocol)
 
-            alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
-            alice_second_protocol = alice_multiplexer.get_protocol_by_type(SecondProtocol)
-            alice_third_protocol = alice_multiplexer.get_protocol_by_type(ThirdProtocol)
+    alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    alice_second_protocol = alice_multiplexer.get_protocol_by_type(SecondProtocol)
+    alice_third_protocol = alice_multiplexer.get_protocol_by_type(ThirdProtocol)
 
-            bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
-            bob_second_protocol = bob_multiplexer.get_protocol_by_type(SecondProtocol)
-            bob_third_protocol = bob_multiplexer.get_protocol_by_type(ThirdProtocol)
+    bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    bob_second_protocol = bob_multiplexer.get_protocol_by_type(SecondProtocol)
+    bob_third_protocol = bob_multiplexer.get_protocol_by_type(ThirdProtocol)
 
-            alice_second_protocol.send(CommandA(None))
-            alice_third_protocol.send(CommandC(None))
-            alice_p2p_protocol.send(Ping(None))
-            alice_second_protocol.send(CommandB(None))
-            alice_third_protocol.send(CommandD(None))
-            cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
-            assert isinstance(cmd, Ping)
+    alice_second_protocol.send(CommandA(None))
+    alice_third_protocol.send(CommandC(None))
+    alice_p2p_protocol.send(Ping(None))
+    alice_second_protocol.send(CommandB(None))
+    alice_third_protocol.send(CommandD(None))
+    cmd = await asyncio.wait_for(bob_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Ping)
 
-            bob_second_protocol.send(CommandA(None))
-            bob_third_protocol.send(CommandC(None))
-            bob_p2p_protocol.send(Pong(None))
-            bob_second_protocol.send(CommandB(None))
-            bob_third_protocol.send(CommandD(None))
-            cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
-            assert isinstance(cmd, Pong)
+    bob_second_protocol.send(CommandA(None))
+    bob_third_protocol.send(CommandC(None))
+    bob_p2p_protocol.send(Pong(None))
+    bob_second_protocol.send(CommandB(None))
+    bob_third_protocol.send(CommandD(None))
+    cmd = await asyncio.wait_for(alice_p2p_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Pong)
 
-            cmd_1 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_2 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_3 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_4 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_5 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_6 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_7 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
-            cmd_8 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_1 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_2 = await asyncio.wait_for(bob_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_3 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_4 = await asyncio.wait_for(bob_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_5 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_6 = await asyncio.wait_for(alice_third_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_7 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
+    cmd_8 = await asyncio.wait_for(alice_second_stream.asend(None), timeout=DEFAULT_TIMEOUT)  # noqa: E501
 
-            assert isinstance(cmd_1, CommandC)
-            assert isinstance(cmd_2, CommandD)
-            assert isinstance(cmd_3, CommandA)
-            assert isinstance(cmd_4, CommandB)
-            assert isinstance(cmd_5, CommandC)
-            assert isinstance(cmd_6, CommandD)
-            assert isinstance(cmd_7, CommandA)
-            assert isinstance(cmd_8, CommandB)
+    assert isinstance(cmd_1, CommandC)
+    assert isinstance(cmd_2, CommandD)
+    assert isinstance(cmd_3, CommandA)
+    assert isinstance(cmd_4, CommandB)
+    assert isinstance(cmd_5, CommandC)
+    assert isinstance(cmd_6, CommandD)
+    assert isinstance(cmd_7, CommandA)
+    assert isinstance(cmd_8, CommandB)
 
 
 class SharedProtocol(BaseProtocol):
@@ -238,28 +280,38 @@ async def test_connection_get_protocol_for_command_type():
 
 
 @pytest.mark.asyncio
-async def test_last_msg_time(monkeypatch):
+async def test_last_msg_time(monkeypatch, request, event_loop):
     alice_multiplexer, bob_multiplexer = MultiplexerPairFactory()
+    await run_multiplexers([alice_multiplexer, bob_multiplexer], request, event_loop)
 
-    async with alice_multiplexer.multiplex():
-        async with bob_multiplexer.multiplex():
-            assert alice_multiplexer.last_msg_time == 0
-            assert bob_multiplexer.last_msg_time == 0
-            alice_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
-            bob_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    assert alice_multiplexer.last_msg_time == 0
+    assert bob_multiplexer.last_msg_time == 0
+    alice_stream = alice_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    bob_stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
 
-            alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
-            bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    bob_p2p_protocol = bob_multiplexer.get_protocol_by_type(P2PProtocolV5)
 
-            now = time.monotonic()
-            monkeypatch.setattr(time, 'monotonic', lambda: now)
+    now = time.monotonic()
+    monkeypatch.setattr(time, 'monotonic', lambda: now)
 
-            alice_p2p_protocol.send(Ping(None))
-            cmd = await asyncio.wait_for(bob_stream.asend(None), timeout=DEFAULT_TIMEOUT)
-            assert isinstance(cmd, Ping)
-            assert bob_multiplexer.last_msg_time == now
+    alice_p2p_protocol.send(Ping(None))
+    cmd = await asyncio.wait_for(bob_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Ping)
+    assert bob_multiplexer.last_msg_time == now
 
-            bob_p2p_protocol.send(Pong(None))
-            cmd = await asyncio.wait_for(alice_stream.asend(None), timeout=DEFAULT_TIMEOUT)
-            assert isinstance(cmd, Pong)
-            assert alice_multiplexer.last_msg_time == now
+    bob_p2p_protocol.send(Pong(None))
+    cmd = await asyncio.wait_for(alice_stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Pong)
+    assert alice_multiplexer.last_msg_time == now
+
+
+async def run_multiplexers(multiplexers, request, event_loop):
+    for multiplexer in multiplexers:
+        await multiplexer.stream_in_background()
+
+    def cancel_multiplexers():
+        for multiplexer in multiplexers:
+            event_loop.run_until_complete(multiplexer.stop_streaming())
+
+    request.addfinalizer(cancel_multiplexers)
