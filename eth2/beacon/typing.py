@@ -34,6 +34,7 @@ DomainType = NewType("DomainType", bytes)  # bytes of length 4
 
 Root = NewType("Root", Hash32)  # a Merkle root
 
+Domain = NewType("Domain", Hash32)  # a signature domain
 
 #
 #  Networkinig
