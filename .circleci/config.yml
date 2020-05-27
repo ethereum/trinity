@@ -138,68 +138,68 @@ jobs:
         environment:
           TOXENV: py37-lint-eth2
 
-  py38-docs:
+  py37-docs:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-docs
+          TOXENV: py37-docs
 
-  py38-rpc-state-byzantium:
+  py37-rpc-state-byzantium:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-byzantium
-  py38-rpc-state-constantinople:
+          TOXENV: py37-rpc-state-byzantium
+  py37-rpc-state-constantinople:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-constantinople
-  py38-rpc-state-frontier:
+          TOXENV: py37-rpc-state-constantinople
+  py37-rpc-state-frontier:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-frontier
-  py38-rpc-state-homestead:
+          TOXENV: py37-rpc-state-frontier
+  py37-rpc-state-homestead:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-homestead
-  py38-rpc-state-istanbul:
+          TOXENV: py37-rpc-state-homestead
+  py37-rpc-state-istanbul:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-istanbul
-  py38-rpc-state-petersburg:
+          TOXENV: py37-rpc-state-istanbul
+  py37-rpc-state-petersburg:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-petersburg
+          TOXENV: py37-rpc-state-petersburg
 
-  py38-rpc-state-tangerine_whistle:
+  py37-rpc-state-tangerine_whistle:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-tangerine_whistle
-  py38-rpc-state-spurious_dragon:
+          TOXENV: py37-rpc-state-tangerine_whistle
+  py37-rpc-state-spurious_dragon:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-state-spurious_dragon
-  py38-rpc-blockchain:
+          TOXENV: py37-rpc-state-spurious_dragon
+  py37-rpc-blockchain:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-rpc-blockchain
+          TOXENV: py37-rpc-blockchain
 
   py38-eth1-core:
     <<: *common
@@ -213,19 +213,19 @@ jobs:
       - image: circleci/python:3.8
         environment:
           TOXENV: py38-integration
-  py38-lightchain_integration:
+  py37-lightchain_integration:
     <<: *geth_steps
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-lightchain_integration
+          TOXENV: py37-lightchain_integration
           GETH_VERSION: v1.8.22
-  py38-long_run_integration:
+  py37-long_run_integration:
     <<: *common
     docker:
-      - image: circleci/python:3.8
+      - image: circleci/python:3.7
         environment:
-          TOXENV: py38-long_run_integration
+          TOXENV: py37-long_run_integration
   py38-p2p:
     <<: *common
     docker:
@@ -399,15 +399,16 @@ workflows:
     jobs:
       # These tests are long, so should be started first to optimize for total suite run time
       - py38-integration
+      - py37-integration
       - py38-wheel-cli
       - py37-wheel-cli
-      - py38-long_run_integration
+      - py37-long_run_integration
       - py37-rpc-state-sstore
       - py38-eth2-core
       - py37-eth2-core
       - py37-libp2p
 
-      - py38-docs
+      - py37-docs
 
       - py37-eth1-core
       - py37-p2p
@@ -422,14 +423,14 @@ workflows:
       - py37-rpc-state-quadratic
       - py37-rpc-state-zero_knowledge
 
-      - py38-rpc-state-byzantium
-      - py38-rpc-state-constantinople
-      - py38-rpc-state-frontier
-      - py38-rpc-state-homestead
-      - py38-rpc-state-petersburg
-      - py38-rpc-state-spurious_dragon
-      - py38-rpc-state-tangerine_whistle
-      - py38-rpc-blockchain
+      - py37-rpc-state-byzantium
+      - py37-rpc-state-constantinople
+      - py37-rpc-state-frontier
+      - py37-rpc-state-homestead
+      - py37-rpc-state-petersburg
+      - py37-rpc-state-spurious_dragon
+      - py37-rpc-state-tangerine_whistle
+      - py37-rpc-blockchain
 
       - py38-eth1-core
       - py38-p2p
@@ -440,7 +441,7 @@ workflows:
       - py38-eth1-components
       - py38-eth2-trio
 
-      - py38-lightchain_integration
+      - py37-lightchain_integration
 
       - py38-lint
       - py38-lint-eth2
