@@ -68,7 +68,6 @@ def to_receipt_response(receipt: ReceiptAPI,
     block_number = hex(header.block_number)
     receipt_and_transaction_index = hex(index)
     transaction_hash = encode_hex(transaction.hash)
-
     return {
         "blockHash": block_hash,
         "blockNumber": block_number,
@@ -96,7 +95,11 @@ def to_receipt_response(receipt: ReceiptAPI,
         ],
         "logsBloom": format_bloom(receipt.bloom),
         "root": encode_hex(receipt.state_root),
-        "to": encode_hex(transaction.to),
+        "to": apply_formatter_if(
+            is_address,
+            to_checksum_address,
+            encode_hex(transaction.to)
+        ),
         "transactionHash": transaction_hash,
         "transactionIndex": receipt_and_transaction_index,
     }
