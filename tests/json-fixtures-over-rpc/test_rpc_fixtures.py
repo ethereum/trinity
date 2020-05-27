@@ -51,6 +51,7 @@ from trinity.rpc import RPCServer
 from trinity.rpc.format import (
     empty_to_0x,
     remove_leading_zeros,
+    to_lower,
 )
 from trinity.rpc.modules import (
     initialize_eth1_modules,
@@ -172,7 +173,10 @@ def map_0x_to_0x0(value):
 
 RPC_STATE_NORMALIZERS = {
     'balance': remove_leading_zeros,
-    'code': empty_to_0x,
+    'code': compose(
+        empty_to_0x,
+        to_lower,
+    ),
     'nonce': remove_leading_zeros,
     'storage': pad32_dict_values
 }
@@ -204,7 +208,10 @@ RPC_TRANSACTION_NORMALIZERS = {
     'gasLimit': remove_leading_zeros,
     'gasPrice': remove_leading_zeros,
     'value': compose(remove_leading_zeros, map_0x_to_0x0),
-    'data': empty_to_0x,
+    'data': compose(
+        empty_to_0x,
+        to_lower
+    ),
     'to': compose(
         apply_formatter_if(is_address, to_checksum_address),
         add_0x_prefix
@@ -385,6 +392,7 @@ def validate_rpc_transaction_vs_fixture(transaction, fixture):
         'hash',
         'from',
     )
+
     assert actual_transaction == expected
 
 
