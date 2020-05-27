@@ -229,4 +229,8 @@ def empty_to_0x(val: str) -> str:
         return '0x'
 
 
+def to_lower(val: str) -> str:
+    return val.lower()
+
+
 remove_leading_zeros = compose(hex, functools.partial(int, base=16))
