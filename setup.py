@@ -15,7 +15,7 @@ deps = {
         "cached-property>=1.5.1,<2",
         "coincurve>=10.0.0,<11.0.0",
         # cryptography does not use semver and allows breaking changes within `0.3` version bumps.
-        "cryptography>=2.5,<2.7",
+        "cryptography>=2.5,<2.9",
         "eth-hash>=0.1.4,<1",
         "eth-keys>=0.3.3,<0.4.0",
         "netifaces>=0.10.7<1",
@@ -56,7 +56,7 @@ deps = {
         "pyformance==0.4",
         "pymultihash>=0.8.2",
         "psutil>=5.7.0, <6",
-        "libp2p==0.1.4",
+        "libp2p==0.1.5",
         # The direct dependency resolves a version conflict between multiaddr and libp2p
         "base58>=1.0.3,<2.0.0",
     ],

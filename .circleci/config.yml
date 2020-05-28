@@ -348,12 +348,6 @@ jobs:
       - image: circleci/python:3.7
         environment:
           TOXENV: py37-eth2-integration
-  py37-libp2p:
-    <<: *common
-    docker:
-      - image: circleci/python:3.7
-        environment:
-          TOXENV: py37-libp2p
   py37-wheel-cli:
     <<: *common
     docker:
@@ -406,7 +400,6 @@ workflows:
       - py37-rpc-state-sstore
       - py38-eth2-core
       - py37-eth2-core
-      - py37-libp2p
 
       - py37-docs
 
@@ -414,7 +407,7 @@ workflows:
       - py37-p2p
       - py37-p2p-trio
       - py37-eth2-utils
-      - py37-eth2-fixtures
+      # - py37-eth2-fixtures
       - py37-eth2-integration
       - py37-eth2-components
       - py37-eth1-components
@@ -436,7 +429,7 @@ workflows:
       - py38-p2p
       - py38-p2p-trio
       - py38-eth2-utils
-      - py38-eth2-fixtures
+      # - py38-eth2-fixtures
       - py38-eth2-integration
       - py38-eth1-components
       - py38-eth2-trio

@@ -1,3 +1,4 @@
+import logging
 import shutil
 from typing import Collection, Sequence, Tuple, Type
 
@@ -6,8 +7,9 @@ import trio
 
 from eth2.beacon.db.chain import BeaconChainDB
 from trinity._utils.trio_utils import wait_for_interrupts
+from trinity._utils.version import construct_trinity_client_identifier
 from trinity.boot_info import BootInfo
-from trinity.bootstrap import construct_boot_info, display_launch_logs
+from trinity.bootstrap import construct_boot_info
 from trinity.components.registry import get_components_for_trio_beacon_client
 from trinity.config import BaseAppConfig, BeaconAppConfig
 from trinity.constants import APP_IDENTIFIER_BEACON
@@ -62,7 +64,10 @@ def main_entry_trio(
 
     _initialize_beacon_filesystem_and_db(boot_info)
 
-    display_launch_logs(trinity_config)
+    logger = logging.getLogger("trinity")
+    logger.info(
+        "Booted client with identifier: %s", construct_trinity_client_identifier()
+    )
 
     runtime_component_types = tuple(
         component_cls
