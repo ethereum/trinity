@@ -203,6 +203,7 @@ RPC_TRANSACTION_REMAPPERS = {
     'gasLimit': 'gas',
 }
 
+
 RPC_TRANSACTION_NORMALIZERS = {
     'nonce': remove_leading_zeros,
     'gasLimit': remove_leading_zeros,
@@ -214,7 +215,10 @@ RPC_TRANSACTION_NORMALIZERS = {
     ),
     'to': compose(
         apply_formatter_if(is_address, to_checksum_address),
-        add_0x_prefix
+        add_0x_prefix,
+        # sometimes the fixture addresses contain random upper case letters but are NOT valid
+        # checksum addresses which tricks `is_address` return `False` on an otherwise valid address
+        to_lower,
     ),
     'r': remove_leading_zeros,
     's': remove_leading_zeros,
@@ -392,7 +396,6 @@ def validate_rpc_transaction_vs_fixture(transaction, fixture):
         'hash',
         'from',
     )
-
     assert actual_transaction == expected
 
 
