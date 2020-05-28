@@ -15,6 +15,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockBody
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
+from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import calculate_effective_balance
 from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex
@@ -38,9 +39,9 @@ def is_genesis_trigger(
     return active_validator_count == config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
 
 
-def _genesis_time_from_eth1_timestamp(eth1_timestamp: Timestamp) -> Timestamp:
+def _genesis_time_from_eth1_timestamp(eth1_timestamp: Timestamp, genesis_delay: int) -> Timestamp:
     return Timestamp(
-        eth1_timestamp - eth1_timestamp % 0 + 2 * 0
+        eth1_timestamp - eth1_timestamp % genesis_delay + 2 * genesis_delay
     )
 
 
@@ -51,8 +52,15 @@ def initialize_beacon_state_from_eth1(
     deposits: Sequence[Deposit],
     config: Eth2Config
 ) -> BeaconState:
+    fork = Fork(
+        previous_version=config.GENESIS_FORK_VERSION,
+        current_version=config.GENESIS_FORK_VERSION,
+        epoch=config.GENESIS_EPOCH,
+    )
+
     state = BeaconState.create(
-        genesis_time=_genesis_time_from_eth1_timestamp(eth1_timestamp),
+        genesis_time=_genesis_time_from_eth1_timestamp(eth1_timestamp, config.MIN_GENESIS_DELAY),
+        fork=fork,
         eth1_data=Eth1Data.create(
             block_hash=eth1_block_hash, deposit_count=len(deposits)
         ),
