@@ -1,11 +1,10 @@
 import asyncio
+import contextlib
 import json
 import os
 import pytest
 import time
 from typing import Dict
-
-from async_generator import asynccontextmanager
 
 from eth_hash.auto import keccak
 from eth_utils.toolz import (
@@ -80,13 +79,13 @@ async def get_ipc_response(
 
     assert wait_for(jsonrpc_ipc_pipe_path), "IPC server did not successfully start with IPC file"
 
-    reader, writer = await asyncio.open_unix_connection(str(jsonrpc_ipc_pipe_path), loop=event_loop)
+    reader, writer = await asyncio.open_unix_connection(str(jsonrpc_ipc_pipe_path))
 
     writer.write(request_msg)
     await writer.drain()
     result_bytes = b''
     while not can_decode_json(result_bytes):
-        result_bytes += await asyncio.tasks.wait_for(reader.readuntil(b'}'), 0.25, loop=event_loop)
+        result_bytes += await asyncio.tasks.wait_for(reader.readuntil(b'}'), 0.25)
 
     writer.close()
     return json.loads(result_bytes.decode())
@@ -158,7 +157,7 @@ def ipc_request(jsonrpc_ipc_pipe_path, event_loop, event_bus, ipc_server):
 
 @pytest.fixture
 def fake_beam_syncer(chain, event_bus):
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def fake_beam_sync(removed_nodes: Dict):
         # beam sync starts, it fetches requested nodes from remote peers
 

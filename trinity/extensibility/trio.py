@@ -40,7 +40,8 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
             # Only attempt to log the proc's returncode if we succesfully entered the context
             # manager above.
             if 'proc' in locals():
-                self.logger.debug("%s terminated: returncode=%s", self.name, proc.returncode)
+                returncode = getattr(proc, 'returncode', 'unset')
+                self.logger.debug("%s terminated: returncode=%s", self.name, returncode)
 
     async def run_process(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         try:

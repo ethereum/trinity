@@ -1,11 +1,11 @@
 import asyncio
+import contextlib
 from typing import AsyncIterator, Type
 
-from async_generator import asynccontextmanager
 from lahja import BaseEvent, EndpointAPI
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def mock_request_response(request_type: Type[BaseEvent],
                                 response: BaseEvent,
                                 event_bus: EndpointAPI) -> AsyncIterator[None]:

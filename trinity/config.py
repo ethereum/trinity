@@ -67,6 +67,7 @@ from eth2.beacon.genesis import (
 from eth2.beacon.tools.builder.initializer import load_genesis_key_map
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.typing import (
     Timestamp,
 )
@@ -156,9 +157,8 @@ def _get_preconfigured_chain_name(network_id: int) -> str:
         return PRECONFIGURED_NETWORKS[network_id].chain_name
 
 
-def _get_eth2_genesis_config_file_path() -> Path:
-    # TODO(ralexstokes): allow user to select config profile
-    return ASSETS_DIR / 'eth2' / 'minimal' / 'genesis_config.json'
+def _get_eth2_genesis_config_file_path(profile: str) -> Path:
+    return ASSETS_DIR / 'eth2' / profile / 'genesis_config.json'
 
 
 class Eth1ChainConfig:
@@ -734,7 +734,7 @@ class BeaconChainConfig:
         data under the local data directory.
         """
         try:
-            with open(_get_eth2_genesis_config_file_path()) as config_file:
+            with open(_get_eth2_genesis_config_file_path("minimal")) as config_file:
                 genesis_config = json.load(config_file)
         except FileNotFoundError:
             genesis_time = Timestamp(int(time.time()))
@@ -751,52 +751,63 @@ class BeaconChainConfig:
         return cls(genesis_state, eth2_config, genesis_validator_key_map)
 
     @classmethod
-    def get_genesis_config_file_path(cls) -> Path:
-        return _get_eth2_genesis_config_file_path()
+    def get_genesis_config_file_path(cls, profile: str) -> Path:
+        return _get_eth2_genesis_config_file_path(profile)
+
+    def get_genesis_block(self) -> BaseBeaconBlock:
+        chain_class = self.beacon_chain_class
+        genesis_state_machine_class = chain_class.get_genesis_state_machine_class()
+        return get_genesis_block(
+            genesis_state_root=self._genesis_state.hash_tree_root,
+            block_class=genesis_state_machine_class.block_class,
+        )
 
     def initialize_chain(self,
                          base_db: AtomicDatabaseAPI) -> 'BaseBeaconChain':
-        chain_class = self.beacon_chain_class
-        state = self._genesis_state
-        genesis_state_machine_class = chain_class.get_genesis_state_machine_class()
-        block = get_genesis_block(
-            genesis_state_root=state.hash_tree_root,
-            block_class=genesis_state_machine_class.block_class,
-        )
-        return chain_class.from_genesis(
+        block = self.get_genesis_block()
+        return self.beacon_chain_class.from_genesis(
             base_db=base_db,
-            genesis_state=state,
+            genesis_state=self._genesis_state,
             genesis_block=block,
             genesis_config=self._eth2_config,
         )
 
 
 class BeaconAppConfig(BaseEth2AppConfig):
-    def __init__(self, config: TrinityConfig) -> None:
+    def __init__(
+        self,
+        config: TrinityConfig,
+        p2p_maddr: Multiaddr,
+        orchestration_profile: str,
+        bootstrap_nodes: Tuple[Multiaddr, ...] = (),
+        preferred_nodes: Tuple[Multiaddr, ...] = (),
+    ) -> None:
         super().__init__(config)
+        self.p2p_maddr = p2p_maddr
         self.bootstrap_nodes = config.bootstrap_nodes
         self.preferred_nodes = config.preferred_nodes
         self.client_identifier = construct_trinity_client_identifier()
+        self.orchestration_profile = orchestration_profile
 
     @classmethod
-    def from_parser_args(cls,
-                         args: argparse.Namespace,
-                         trinity_config: TrinityConfig) -> 'BaseAppConfig':
+    def from_parser_args(
+        cls, args: argparse.Namespace, trinity_config: TrinityConfig
+    ) -> "BaseAppConfig":
         """
         Initialize from the namespace object produced by
         an ``argparse.ArgumentParser`` and the :class:`~trinity.config.TrinityConfig`
         """
-        if args is not None:
-            # This is quick and dirty way to get bootstrap_nodes
-            if 'bootstrap_nodes' in args:
-                trinity_config.bootstrap_nodes = tuple(
-                    Multiaddr(maddr.strip()) for maddr in args.bootstrap_nodes.split(',') if maddr
-                ) if args.bootstrap_nodes is not None else tuple()
-            if 'preferred_nodes' in args:
-                trinity_config.preferred_nodes = tuple(
-                    Multiaddr(maddr.strip()) for maddr in args.preferred_nodes.split(',') if maddr
-                ) if args.preferred_nodes is not None else tuple()
-        return cls(trinity_config)
+        bootstrap_nodes = args.bootstrap_nodes
+        preferred_nodes = args.preferred_nodes
+        p2p_maddr = args.p2p_maddr
+
+        return cls(
+            trinity_config,
+            p2p_maddr,
+            args.orchestration_profile,
+            bootstrap_nodes,
+            preferred_nodes
+        )
 
     @property
     def database_dir(self) -> Path:
@@ -806,7 +817,7 @@ class BeaconAppConfig(BaseEth2AppConfig):
         This is resolved relative to the ``data_dir``
         """
         path = self.trinity_config.data_dir / DATABASE_DIR_NAME
-        return self.trinity_config.with_app_suffix(path) / "full"
+        return self.trinity_config.with_app_suffix(path) / f"full_{self.orchestration_profile}"
 
     def get_chain_config(self) -> BeaconChainConfig:
         """
@@ -837,4 +848,4 @@ class ValidatorClientAppConfig(BaseEth2AppConfig):
 
     @property
     def genesis_config_path(self) -> Path:
-        return _get_eth2_genesis_config_file_path()
+        return _get_eth2_genesis_config_file_path("minimal")

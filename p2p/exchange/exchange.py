@@ -1,11 +1,11 @@
 from functools import partial
+import contextlib
 from typing import (
     AsyncIterator,
     Callable,
     Type,
 )
 
-from async_generator import asynccontextmanager
 from async_service import background_asyncio_service
 
 from p2p.abc import ConnectionAPI
@@ -25,7 +25,7 @@ class BaseExchange(ExchangeAPI[TRequestCommand, TResponseCommand, TResult]):
     def __init__(self) -> None:
         self.tracker = self.tracker_class()
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def run_exchange(self, connection: ConnectionAPI) -> AsyncIterator[None]:
         protocol = connection.get_protocol_for_command_type(self.get_request_cmd_type())
 

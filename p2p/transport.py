@@ -44,13 +44,11 @@ from p2p.exceptions import (
     DecryptionError,
     MalformedMessage,
     PeerConnectionLost,
-    CorruptTransport,
     UnreachablePeer,
 )
 from p2p.kademlia import Address, Node
 from p2p.message import Message
 from p2p.session import Session
-from p2p.transport_state import TransportState
 
 
 HEADER_DATA_SEDES = rlp.sedes.List((rlp.sedes.big_endian_int, rlp.sedes.big_endian_int))
@@ -64,12 +62,6 @@ def _decode_header_data(data: ByteString) -> Tuple[int, int]:
 
 class Transport(TransportAPI):
     logger = get_extended_debug_logger('p2p.transport.Transport')
-
-    # This status flag allows those managing a `Transport` to determine the
-    # proper cancellation strategy if the transport is mid-read.  Hard
-    # cancellations are allowed for both `IDLE` and `HEADER`.  A hard
-    # cancellation during `BODY` will leave the transport in a corrupt state.
-    read_state: TransportState = TransportState.IDLE
 
     def __init__(self,
                  remote: NodeAPI,
@@ -107,11 +99,6 @@ class Transport(TransportAPI):
     @classmethod
     async def connect(cls, remote: NodeAPI, private_key: datatypes.PrivateKey) -> TransportAPI:
         """Perform the auth handshake with the given remote.
-
-        Return an instance of the given peer_class (must be a subclass of
-        BasePeer) connected to that remote in case both handshakes are
-        successful and at least one of the sub-protocols supported by
-        peer_class is also supported by the remote.
 
         Raises UnreachablePeer if we cannot connect to the peer or
         HandshakeFailure if the remote disconnects before completing the
@@ -254,30 +241,7 @@ class Transport(TransportAPI):
         self._writer.write(data)
 
     async def recv(self) -> MessageAPI:
-        # Check that Transport read state is IDLE.
-        if self.read_state is not TransportState.IDLE:
-            # This is logged at INFO level because it indicates we are not
-            # properly managing the Transport and are interrupting it mid-read
-            # somewhere.
-            self.logger.info(
-                'Corrupted transport: %s - state=%s',
-                self,
-                self.read_state.name,
-            )
-            raise CorruptTransport(f"Corrupted transport: {self} - state={self.read_state.name}")
-
-        # Set status to indicate we are waiting to read the message header
-        self.read_state = TransportState.HEADER
-
-        try:
-            header_bytes = await self.read(HEADER_LEN + MAC_LEN)
-        except asyncio.CancelledError:
-            self.logger.debug('Transport cancelled during header read. resetting to IDLE state')
-            self.read_state = TransportState.IDLE
-            raise
-
-        # Set status to indicate we are waiting to read the message body
-        self.read_state = TransportState.BODY
+        header_bytes = await self.read(HEADER_LEN + MAC_LEN)
         try:
             padded_header = self._decrypt_header(header_bytes)
         except DecryptionError as err:
@@ -285,7 +249,7 @@ class Transport(TransportAPI):
                 "Bad message header from peer %s: Error: %r",
                 self, err,
             )
-            raise MalformedMessage from err
+            raise MalformedMessage(*err.args) from err
         # TODO: use `int.from_bytes(...)`
         frame_size = self._get_frame_size(padded_header)
         # The frame_size specified in the header does not include the padding to 16-byte boundary,
@@ -299,16 +263,13 @@ class Transport(TransportAPI):
                 "Bad message body from peer %s: Error: %r",
                 self, err,
             )
-            raise MalformedMessage from err
-
-        # Reset status back to IDLE
-        self.read_state = TransportState.IDLE
+            raise MalformedMessage(*err.args) from err
 
         # Decode the header data and re-encode to recover the unpadded header size.
         try:
             header_data = _decode_header_data(padded_header[3:])
         except rlp.exceptions.DeserializationError as err:
-            raise MalformedMessage from err
+            raise MalformedMessage(*err.args) from err
 
         header = padded_header[:3] + rlp.encode(header_data)
 

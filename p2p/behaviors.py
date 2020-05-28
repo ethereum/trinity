@@ -1,8 +1,7 @@
+import contextlib
 from typing import (
     AsyncIterator,
 )
-
-from async_generator import asynccontextmanager
 
 from eth_utils import ValidationError
 
@@ -36,7 +35,7 @@ class Behavior(BehaviorAPI):
         # mypy bug: https://github.com/python/mypy/issues/708
         return self.qualifier(connection, self.logic)  # type: ignore
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
         if self._applied_to is not None:
             raise ValidationError(

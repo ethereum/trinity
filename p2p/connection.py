@@ -72,7 +72,11 @@ class Connection(ConnectionAPI, Service):
                  protocol_receipts: Sequence[HandshakeReceiptAPI],
                  is_dial_out: bool) -> None:
         self.logger = get_logger('p2p.connection.Connection')
+        # The multiplexer passed to us will have been started when performing the handshake, so it
+        # is already reading messages from the transport and storing them in per-protocol queues.
         self._multiplexer = multiplexer
+        # Stop early in case the multiplexer is no longer streaming.
+        self._multiplexer.raise_if_streaming_error()
         self._devp2p_receipt = devp2p_receipt
         self.protocol_receipts = tuple(protocol_receipts)
         self.is_dial_out = is_dial_out
@@ -128,20 +132,31 @@ class Connection(ConnectionAPI, Service):
     def is_closing(self) -> bool:
         return self._multiplexer.is_closing
 
-    async def run(self) -> None:
-        try:
-            async with self._multiplexer.multiplex():
-                for protocol in self._multiplexer.get_protocols():
-                    self.manager.run_daemon_task(self._feed_protocol_handlers, protocol)
+    def __del__(self) -> None:
+        # This is necessary because the multiplexer passed to our constructor will be streaming,
+        # and if for some reason our run() method is not called, we'd leave the multiplexer
+        # streaming indefinitely. We might still get ayncio warnings (about a task being destroyed
+        # while still pending) if that happens, but this is the best we can do.
+        self._multiplexer.cancel_streaming()
 
-                await self.manager.wait_finished()
+    async def run(self) -> None:
+        # Our multiplexer will already be streaming in the background (as it was used during
+        # handshake), so we do this to ensure we only start if it is still running.
+        self._multiplexer.raise_if_streaming_error()
+
+        for protocol in self._multiplexer.get_protocols():
+            self.manager.run_daemon_task(self._feed_protocol_handlers, protocol)
+
+        try:
+            await self._multiplexer.wait_streaming_finished()
         except PeerConnectionLost:
             pass
-        except (MalformedMessage,) as err:
+        except MalformedMessage as err:
             self.logger.debug(
                 "Disconnecting peer %s for sending MalformedMessage: %s",
                 self.remote,
                 err,
+                exc_info=True,
             )
             try:
                 self.get_base_protocol().send(Disconnect(DisconnectReason.BAD_PROTOCOL))
@@ -150,8 +165,6 @@ class Connection(ConnectionAPI, Service):
                     "%s went away while trying to disconnect for MalformedMessage",
                     self,
                 )
-        finally:
-            await self._multiplexer.close()
 
     #
     # Subscriptions/Handler API
@@ -169,8 +182,6 @@ class Connection(ConnectionAPI, Service):
                 "`Connection.start_protocol_streams()` is being called"
             ) from err
 
-        # we don't need to use wait_iter here because the multiplexer does it
-        # for us.
         async for cmd in self._multiplexer.stream_protocol_messages(protocol):
             self.logger.debug2('Handling command: %s', type(cmd))
             # local copy to prevent multation while iterating

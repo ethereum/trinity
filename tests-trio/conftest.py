@@ -6,6 +6,9 @@ import uuid
 from eth_keys.datatypes import PrivateKey
 from lahja import ConnectionConfig
 from lahja.trio.endpoint import TrioEndpoint
+from libp2p.crypto.secp256k1 import create_new_key_pair
+from libp2p.peer.id import ID as PeerID
+from multiaddr import Multiaddr
 import pytest
 import trio
 
@@ -17,10 +20,18 @@ from eth2.beacon.state_machines.forks.skeleton_lake.config import (
 )
 from eth2.beacon.tools.builder.initializer import create_key_pairs_for
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
-from eth2.beacon.types.blocks import BeaconBlockBody, BeaconBlockHeader
+from eth2.beacon.types.blocks import BeaconBlockBody, BeaconBlockHeader, BeaconBlock
+from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
+from eth2.beacon.typing import ForkDigest
+from eth2.clock import Clock
+from trinity._utils.version import construct_trinity_client_identifier
 from trinity.config import BeaconChainConfig
+from trinity.nodes.beacon.full import BeaconNode
+from trinity.nodes.beacon.host import Host
+from trinity.nodes.beacon.metadata import MetaData, SeqNumber
+from trinity.nodes.beacon.status import Status
 
 # Fixtures below are copied from https://github.com/ethereum/lahja/blob/f0b7ead13298de82c02ed92cfb2d32a8bc00b42a/tests/core/trio/conftest.py  # noqa: E501
 
@@ -98,6 +109,11 @@ def genesis_state(eth2_config, genesis_time, genesis_validators):
 
 
 @pytest.fixture
+def genesis_block(genesis_state):
+    return get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
+
+
+@pytest.fixture
 def chain_config(genesis_state, eth2_config):
     return BeaconChainConfig(genesis_state, eth2_config, {})
 
@@ -164,3 +180,104 @@ def no_op_bls():
     Disables BLS cryptography across the entire process.
     """
     Eth2BLS.use_noop_backend()
+
+
+@pytest.fixture
+def clock(eth2_config, chain_config, seconds_per_epoch, get_trio_time):
+    return Clock(
+        eth2_config.SECONDS_PER_SLOT,
+        chain_config.genesis_time,
+        eth2_config.SLOTS_PER_EPOCH,
+        seconds_per_epoch,
+        time_provider=get_trio_time,
+    )
+
+
+@pytest.fixture
+def client_id():
+    return construct_trinity_client_identifier()
+
+
+@pytest.fixture
+def p2p_maddr():
+    return Multiaddr("/ip4/127.0.0.1/tcp/13000")
+
+
+@pytest.fixture
+def beacon_node(
+    eth2_config,
+    chain_config,
+    node_key,
+    database_dir,
+    chain_class,
+    clock,
+    client_id,
+    p2p_maddr,
+):
+    validator_api_port = 0
+    return BeaconNode(
+        node_key,
+        eth2_config,
+        chain_config,
+        database_dir,
+        chain_class,
+        clock,
+        validator_api_port,
+        client_id,
+        p2p_maddr,
+        "a",
+        (),
+    )
+
+
+def node_key_pair(seed=b""):
+    if isinstance(seed, str):
+        seed = seed.encode()
+    return create_new_key_pair(seed.rjust(32, b"\x00"))
+
+
+def node_peer_id(node_key_pair):
+    return PeerID.from_pubkey(node_key_pair.public_key)
+
+
+async def _null_peer_updates(peer_id, update) -> None:
+    return
+
+
+@pytest.fixture
+def host_factory(eth2_config, genesis_block):
+    def _factory(seed, block_pool):
+        key_pair = node_key_pair(seed)
+        peer_id = node_peer_id(key_pair)
+        listen_maddr = Multiaddr(
+            f"/ip4/127.0.0.1/tcp/13{ord(seed[:1]) % 1000}/p2p/{peer_id}"
+        )
+
+        def _block_by_slot(slot):
+            for block in block_pool:
+                if block.slot == slot:
+                    return block
+            return None
+
+        def _block_by_root(root):
+            for block in block_pool:
+                if block.message.hash_tree_root == root:
+                    return block
+            return None
+
+        host = Host(
+            key_pair,
+            peer_id,
+            _null_peer_updates,
+            lambda: Status.create(),
+            lambda _epoch: genesis_block.hash_tree_root,
+            _block_by_slot,
+            _block_by_root,
+            lambda: MetaData.create(seq_number=SeqNumber(ord(seed[:1]))),
+            lambda: ForkDigest(b"\x00\x00\x00\x00"),
+            eth2_config,
+        )
+
+        return host, listen_maddr
+
+    return _factory

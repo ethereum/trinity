@@ -7,6 +7,7 @@ from typing import (
     cast,
     DefaultDict,
     Dict,
+    Optional,
     Sequence,
     Tuple,
     Type,
@@ -14,8 +15,6 @@ from typing import (
 )
 
 from cached_property import cached_property
-
-from async_generator import asynccontextmanager
 
 from eth_utils import ValidationError
 from eth_utils.toolz import cons
@@ -31,13 +30,11 @@ from p2p.abc import (
     TProtocol,
 )
 from p2p.exceptions import (
-    CorruptTransport,
     UnknownProtocol,
     UnknownProtocolCommand,
     MalformedMessage,
 )
 from p2p.p2p_proto import BaseP2PProtocol
-from p2p.transport_state import TransportState
 from p2p._utils import (
     get_logger,
     snappy_CompressedLengthError,
@@ -118,9 +115,7 @@ class Multiplexer(MultiplexerAPI):
         # the sub-protocol instances
         self._protocols = protocols
 
-        # Lock to ensure that multiple call sites cannot concurrently stream
-        # messages.
-        self._multiplex_lock = asyncio.Lock()
+        self._streaming_task: asyncio.Future[None] = None
 
         # Lock management on a per-protocol basis to ensure we only have one
         # stream consumer for each protocol.
@@ -140,6 +135,7 @@ class Multiplexer(MultiplexerAPI):
 
         self._msg_counts = collections.defaultdict(int)
         self._last_msg_time = 0
+        self._started_streaming = asyncio.Event()
 
     def __str__(self) -> str:
         protocol_infos = ','.join(tuple(
@@ -264,8 +260,6 @@ class Multiplexer(MultiplexerAPI):
 
         if self._protocol_locks[protocol_class].locked():
             raise Exception(f"Streaming lock for {protocol_class} is not free.")
-        elif not self._multiplex_lock.locked():
-            raise Exception("Not multiplexed.")
 
         return self._stream_protocol_messages(protocol_class)
 
@@ -276,8 +270,9 @@ class Multiplexer(MultiplexerAPI):
         Stream the messages for the specified protocol.
         """
         async with self._protocol_locks[protocol_class]:
+            self.raise_if_streaming_error()
             msg_queue = self._protocol_queues[protocol_class]
-            while not self.is_closing:
+            while self.is_streaming:
                 try:
                     # We use an optimistic strategy here of using
                     # `get_nowait()` to reduce the number of times we yield to
@@ -291,96 +286,56 @@ class Multiplexer(MultiplexerAPI):
     #
     # Message reading and streaming API
     #
-    @asynccontextmanager
-    async def multiplex(self) -> AsyncIterator[None]:
-        """
-        API for running the background task that feeds individual protocol
-        queues that allows each individual protocol to stream only its own
-        messages.
-        """
-        async with self._multiplex_lock:
-            stop = asyncio.Event()
-            fut = asyncio.ensure_future(self._do_multiplexing(stop))
-            # wait for the multiplexing to actually start
-            try:
-                yield
-            finally:
-                #
-                # Prevent corruption of the Transport:
-                #
-                # On exit the `Transport` can be in a few states:
-                #
-                # 1. IDLE: between reads
-                # 2. HEADER: waiting to read the bytes for the message header
-                # 3. BODY: already read the header, waiting for body bytes.
-                #
-                # In the IDLE case we get a clean shutdown by simply signaling
-                # to `_do_multiplexing` that it should exit which is done with
-                # an `asyncio.EVent`
-                #
-                # In the HEADER case we can issue a hard stop either via
-                # cancellation or the cancel token.  The read *should* be
-                # interrupted without consuming any bytes from the
-                # `StreamReader`.
-                #
-                # In the BODY case we want to give the `Transport.recv` call a
-                # moment to finish reading the body after which it will be IDLE
-                # and will exit via the IDLE exit mechanism.
-                stop.set()
+    async def stream_in_background(self) -> None:
+        self._streaming_task = asyncio.ensure_future(self._do_multiplexing())
+        await self._started_streaming.wait()
 
-                # If the transport is waiting to read the body of the message
-                # we want to give it a moment to finish that read.  Otherwise
-                # this leaves the transport in a corrupt state.
-                if self._transport.read_state is TransportState.BODY:
-                    try:
-                        await asyncio.wait_for(fut, timeout=1)
-                    except asyncio.TimeoutError:
-                        pass
-                    except CorruptTransport as exc:
-                        self.logger.error("Corrupt transport, waiting on body %s: %r", self, exc)
-                        self.logger.debug("Corrupt transport, body trace: %s", self, exc_info=True)
+    @property
+    def is_streaming(self) -> bool:
+        return self._streaming_task is not None and not self._streaming_task.done()
 
-                # After giving the transport an opportunity to shutdown cleanly, we issue a hard
-                # shutdown via cancellation. This should only end up corrupting the transport in
-                # the case where the header data is read but the body data takes too long to
-                # arrive which should be very rare and would likely indicate a malicious or broken
-                # peer.
-                if fut.done():
-                    fut.result()
-                else:
-                    fut.cancel()
-                    try:
-                        await fut
-                    except asyncio.CancelledError:
-                        pass
+    async def wait_streaming_finished(self) -> None:
+        if self._streaming_task is None:
+            raise Exception("Multiplexer has not started streaming")
+        await self._streaming_task
 
-    async def _do_multiplexing(self, stop: asyncio.Event) -> None:
+    def get_streaming_error(self) -> Optional[BaseException]:
+        if self._streaming_task is None:
+            raise Exception("Multiplexer has not started streaming")
+        elif self._streaming_task.cancelled():
+            return asyncio.CancelledError()
+        elif not self._streaming_task.done():
+            return None
+        return self._streaming_task.exception()
+
+    def raise_if_streaming_error(self) -> None:
+        err = self.get_streaming_error()
+        if err:
+            raise err
+
+    async def _do_multiplexing(self) -> None:
         """
         Background task that reads messages from the transport and feeds them
         into individual queues for each of the protocols.
         """
+        self._started_streaming.set()
         msg_stream = stream_transport_messages(
             self._transport,
             self._base_protocol,
             *self._protocols,
         )
         try:
-            await self._handle_commands(msg_stream, stop)
+            await self._handle_commands(msg_stream)
         except asyncio.TimeoutError as exc:
             self.logger.warning(
-                "Timed out waiting for command from %s, Stop: %r, exiting...",
-                self,
-                stop.is_set(),
-            )
+                "Timed out waiting for command from %s, exiting...", self,)
             self.logger.debug("Timeout %r: %s", self, exc, exc_info=True)
-        except CorruptTransport as exc:
-            self.logger.error("Corrupt transport, while multiplexing %s: %r", self, exc)
-            self.logger.debug("Corrupt transport, multiplexing trace: %s", self, exc_info=True)
+        finally:
+            await self.close()
 
     async def _handle_commands(
             self,
-            msg_stream: AsyncIterator[Tuple[ProtocolAPI, CommandAPI[Any]]],
-            stop: asyncio.Event) -> None:
+            msg_stream: AsyncIterator[Tuple[ProtocolAPI, CommandAPI[Any]]]) -> None:
 
         async for protocol, cmd in msg_stream:
             self._last_msg_time = time.monotonic()
@@ -403,5 +358,13 @@ class Multiplexer(MultiplexerAPI):
                     cmd,
                 )
 
-            if stop.is_set():
-                break
+    def cancel_streaming(self) -> None:
+        if self._streaming_task is not None and not self._streaming_task.done():
+            self._streaming_task.cancel()
+
+    async def stop_streaming(self) -> None:
+        self.cancel_streaming()
+        try:
+            await self._streaming_task
+        except asyncio.CancelledError:
+            pass

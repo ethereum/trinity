@@ -26,6 +26,12 @@ def _setup_logging() -> logging.Logger:
     logger = logging.getLogger("eth2.validator_client")
     logger.setLevel(logging.DEBUG)
 
+    # TODO: ergonomic logging config...
+    logging.getLogger("eth2.validator_client.client").setLevel(logging.INFO)
+    logging.getLogger("eth2.validator_client.duty_scheduler").setLevel(logging.INFO)
+    logging.getLogger("eth2.validator_client.signatory").setLevel(logging.INFO)
+    logging.getLogger("eth2.validator_client.signatory_db").setLevel(logging.INFO)
+
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(LOG_FORMATTER)

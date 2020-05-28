@@ -94,7 +94,7 @@ def initialize_beacon_state_from_eth1(
                 ("validators", validator_index), activated_validator
             )
 
-    return state
+    return state.set("genesis_validators_root", state.validators.hash_tree_root)
 
 
 def is_valid_genesis_state(state: BeaconState, config: Eth2Config) -> bool:

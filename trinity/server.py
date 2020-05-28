@@ -1,5 +1,6 @@
 from abc import abstractmethod
 import asyncio
+import contextlib
 from typing import (
     AsyncIterator,
     Generic,
@@ -8,7 +9,6 @@ from typing import (
     TypeVar,
 )
 
-from async_generator import asynccontextmanager
 
 from async_service import Service
 
@@ -103,7 +103,7 @@ class BaseServer(Service, Generic[TPeerPool]):
     def _make_peer_pool(self) -> TPeerPool:
         ...
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def tcp_listener(self) -> AsyncIterator[None]:
         # TODO: Support IPv6 addresses as well.
         tcp_listener = await asyncio.start_server(

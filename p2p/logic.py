@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import contextlib
 from typing import (
     cast,
     AsyncIterator,
@@ -6,9 +7,6 @@ from typing import (
     Tuple,
     Type,
 )
-
-from async_generator import asynccontextmanager
-from async_exit_stack import AsyncExitStack
 
 from p2p.abc import (
     BehaviorAPI,
@@ -49,7 +47,7 @@ class CommandHandler(BaseLogic, Generic[TCommand]):
     def qualifier(self) -> QualifierFn:  # type: ignore
         return HasCommand(self.command_type)
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
         self.connection = connection
 
@@ -76,11 +74,11 @@ class Application(BaseLogic):
     def add_child_behavior(self, behavior: BehaviorAPI) -> None:
         self._behaviors += (behavior,)
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
         self.connection = connection
 
-        async with AsyncExitStack() as stack:
+        async with contextlib.AsyncExitStack() as stack:
             # First apply all the child behaviors
             for behavior in self._behaviors:
                 if behavior.should_apply_to(connection):

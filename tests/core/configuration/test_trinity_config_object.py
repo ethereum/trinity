@@ -17,7 +17,6 @@ from trinity._utils.chains import (
 )
 from trinity.config import (
     TrinityConfig,
-    BeaconAppConfig,
 )
 from trinity.constants import (
     IPC_DIR,
@@ -117,12 +116,3 @@ def test_trinity_config_explictely_provided_nodekey(nodekey_bytes, as_bytes):
     )
 
     assert trinity_config.nodekey.to_bytes() == nodekey_bytes
-
-
-def test_trinity_config_sub_configs():
-    trinity_config = TrinityConfig(network_id=1)
-    trinity_config.initialize_app_configs(None, (BeaconAppConfig,))
-
-    assert trinity_config.has_app_config(BeaconAppConfig)
-    beacon_config = trinity_config.get_app_config(BeaconAppConfig)
-    assert type(beacon_config) is BeaconAppConfig

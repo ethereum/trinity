@@ -1,9 +1,9 @@
 from argparse import ArgumentParser, _SubParsersAction
 import asyncio
+import contextlib
 import logging
 from typing import Set, Tuple
 
-from async_exit_stack import AsyncExitStack
 from lahja import EndpointAPI
 from libp2p.crypto.keys import KeyPair
 from libp2p.crypto.secp256k1 import create_new_key_pair
@@ -174,7 +174,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             if boot_info.args.bn_only:
                 services += (chain_maintainer, validator_handler)
 
-            async with AsyncExitStack() as stack:
+            async with contextlib.AsyncExitStack() as stack:
                 for service in services:
                     await stack.enter_async_context(run_service(service))
 

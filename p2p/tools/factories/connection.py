@@ -1,7 +1,6 @@
 import asyncio
+import contextlib
 from typing import AsyncIterator, Tuple
-
-from async_generator import asynccontextmanager
 
 from async_service import background_asyncio_service
 
@@ -20,7 +19,7 @@ from .p2p_proto import DevP2PHandshakeParamsFactory
 from .transport import MemoryTransportPairFactory
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def ConnectionPairFactory(*,
                                 alice_handshakers: Tuple[HandshakerAPI[ProtocolAPI], ...] = (),
                                 bob_handshakers: Tuple[HandshakerAPI[ProtocolAPI], ...] = (),
@@ -133,6 +132,10 @@ async def ConnectionPairFactoryNotRunning(
         )
         alice_protocol_receipts = ()
         bob_protocol_receipts = ()
+        # Here we need to manually start the multiplexers as we don't use
+        # negotiate_protocol_handshakes() as above.
+        await alice_multiplexer.stream_in_background()
+        await bob_multiplexer.stream_in_background()
 
     alice_connection = Connection(
         multiplexer=alice_multiplexer,

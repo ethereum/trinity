@@ -6,11 +6,13 @@ from py_ecc.bls.typing import Domain
 
 from eth2._utils.hash import hash_eth2
 from eth2.beacon.signature_domain import SignatureDomain
+from eth2.beacon.types.fork_data import ForkData
 from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import (
     DomainType,
     Epoch,
+    ForkDigest,
     Gwei,
     Root,
     Slot,
@@ -208,3 +210,17 @@ def get_domain(
     )
     fork_version = _get_fork_version(state.fork, epoch)
     return compute_domain(signature_domain, fork_version)
+
+
+def compute_fork_data_root(
+    current_version: Version, genesis_validators_root: Root
+) -> Root:
+    return ForkData.create(current_version, genesis_validators_root).hash_tree_root
+
+
+def compute_fork_digest(
+    current_version: Version, genesis_validators_root: Root
+) -> ForkDigest:
+    return ForkDigest(
+        compute_fork_data_root(current_version, genesis_validators_root)[:4]
+    )
