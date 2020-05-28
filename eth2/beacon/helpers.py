@@ -18,7 +18,7 @@ from eth2.beacon.typing import (
     Slot,
     ValidatorIndex,
     Version,
-    default_version,
+    default_version, default_root,
 )
 from eth2.configs import Eth2Config
 
@@ -188,14 +188,17 @@ def signature_domain_to_domain_type(s: SignatureDomain) -> DomainType:
 
 
 def compute_domain(
-    signature_domain: SignatureDomain, fork_version: Version = default_version
+    signature_domain: SignatureDomain,
+    fork_version: Version = default_version,
+    genesis_validators_root: Root = default_root,
 ) -> Domain:
     """
     NOTE: we deviate from the spec here by taking the enum ``SignatureDomain`` and
     converting before creating the domain.
     """
     domain_type = signature_domain_to_domain_type(signature_domain)
-    return Domain(domain_type + fork_version)
+    fork_data_root = compute_fork_data_root(fork_version, genesis_validators_root)
+    return Domain(domain_type + fork_data_root[:28])
 
 
 def get_domain(
@@ -211,7 +214,7 @@ def get_domain(
         state.current_epoch(slots_per_epoch) if message_epoch is None else message_epoch
     )
     fork_version = _get_fork_version(state.fork, epoch)
-    return compute_domain(signature_domain, fork_version)
+    return compute_domain(signature_domain, fork_version, state.genesis_validators_root)
 
 
 def compute_fork_data_root(
