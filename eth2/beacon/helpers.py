@@ -3,11 +3,13 @@ from typing import TYPE_CHECKING, Callable, Sequence, Set, Tuple
 from eth_typing import Hash32
 from eth_utils import ValidationError
 from py_ecc.bls.typing import Domain
+from ssz.hashable_container import HashableContainer
 
 from eth2._utils.hash import hash_eth2
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.fork_data import ForkData
 from eth2.beacon.types.forks import Fork
+from eth2.beacon.types.signing_root import SigningRoot
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import (
     DomainType,
@@ -229,3 +231,14 @@ def compute_fork_digest(
     return ForkDigest(
         compute_fork_data_root(current_version, genesis_validators_root)[:4]
     )
+
+
+def compute_signing_root(container: HashableContainer, domain: Domain) -> Root:
+    """
+    Return the signing root of an object by calculating the root of the object-domain tree.
+    """
+    domain_wrapped_object = SigningRoot(
+        object_root=container,
+        domain=domain,
+    )
+    return domain_wrapped_object.hash_tree_root
