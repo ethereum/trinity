@@ -518,6 +518,7 @@ def chain_fixture(fixture_data):
 
 class MainnetFullChain(FullChain):
     vm_configuration = MainnetChain.vm_configuration
+    chain_id = MainnetChain.chain_id
 
 
 async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
