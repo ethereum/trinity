@@ -3,8 +3,9 @@ from eth2._utils.numeric import bitwise_xor
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.helpers import get_randao_mix
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
-    validate_randao_reveal,
+    validate_randao_reveal, validate_block_is_new,
 )
+from eth2.beacon.tools.builder.proposer import validate_proposer_index
 from eth2.beacon.types.block_headers import BeaconBlockHeader
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
@@ -22,6 +23,8 @@ def process_block_header(
     state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
 ) -> BeaconState:
     validate_block_slot(state, block)
+    validate_block_is_new(state, block)
+    validate_proposer_index(state, block, config)
     validate_block_parent_root(state, block)
     validate_proposer_is_not_slashed(state, block.hash_tree_root, config)
 
@@ -29,6 +32,7 @@ def process_block_header(
         "latest_block_header",
         BeaconBlockHeader.create(
             slot=block.slot,
+            proposer_index=block.proposer_index,
             parent_root=block.parent_root,
             # `state_root` is zeroed and overwritten in the next `process_slot` call
             body_root=block.body.hash_tree_root,

@@ -61,6 +61,24 @@ def validate_block_slot(state: BeaconState, block: BaseBeaconBlock) -> None:
         )
 
 
+def validate_block_is_new(state: BeaconState, block: BaseBeaconBlock) -> None:
+    if block.slot <= state.latest_block_header.slot:
+        raise ValidationError(
+            f"block.slot ({block.slot}) is not newer than the latest block header ({state.slot})"
+        )
+
+
+def validate_correct_proposer(
+        state: BeaconState,
+        block: BaseBeaconBlock,
+        config: Eth2Config
+) -> None:
+    if block.proposer != get_beacon_proposer_index(state, config):
+        raise ValidationError(
+            f"block.slot ({block.slot}) proposer index is not the correct index ({state.slot})"
+        )
+
+
 def validate_block_parent_root(state: BeaconState, block: BaseBeaconBlock) -> None:
     expected_root = state.latest_block_header.hash_tree_root
     parent_root = block.parent_root
