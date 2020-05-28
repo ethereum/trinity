@@ -1,6 +1,6 @@
 import asyncio
+import contextlib
 
-from async_generator import asynccontextmanager
 import pytest
 
 from trinity.tools.bcc_factories import (
@@ -11,7 +11,7 @@ from trinity.tools.bcc_factories import (
 )
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def get_sync_setup(
     request,
     event_loop,

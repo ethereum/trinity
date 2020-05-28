@@ -1,10 +1,9 @@
 import asyncio
+import contextlib
 
 import pytest
 
 from trio import MultiError
-
-from async_generator import asynccontextmanager
 
 from trinity.contextgroup import AsyncContextGroup
 
@@ -13,7 +12,7 @@ from trinity.contextgroup import AsyncContextGroup
 async def test_basic():
     exit_count = 0
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def ctx(v):
         nonlocal exit_count
         await asyncio.sleep(0)
@@ -32,7 +31,7 @@ async def test_basic():
 async def test_exception_entering_context():
     exit_count = 0
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def ctx(should_raise=False):
         nonlocal exit_count
         await asyncio.sleep(0)
@@ -64,7 +63,7 @@ async def test_exception_inside_context_block():
         if should_raise:
             raise ValueError()
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def ctx(should_raise=False):
         nonlocal exit_count
         await asyncio.sleep(0)
@@ -87,7 +86,7 @@ async def test_exception_inside_context_block():
 async def test_exception_exiting():
     exit_count = 0
 
-    @asynccontextmanager
+    @contextlib.asynccontextmanager
     async def ctx(should_raise=False):
         nonlocal exit_count
         await asyncio.sleep(0)

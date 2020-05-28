@@ -9,15 +9,13 @@ PYEVM_DEPENDENCY = "py-evm==0.3.0a15"
 
 deps = {
     'p2p': [
-        "async-exit-stack==1.0.1",
-        "async-generator==1.10",
         "async-service==0.1.0a8",
         "asyncio-cancel-token>=0.2,<0.3",
         "async_lru>=0.1.0,<1.0.0",
         "cached-property>=1.5.1,<2",
         "coincurve>=10.0.0,<11.0.0",
         # cryptography does not use semver and allows breaking changes within `0.3` version bumps.
-        "cryptography>=2.5,<2.7",
+        "cryptography>=2.5,<2.9",
         "eth-hash>=0.1.4,<1",
         "eth-keys>=0.3.3,<0.4.0",
         "netifaces>=0.10.7<1",
@@ -34,7 +32,6 @@ deps = {
         "bloom-filter==1.3",
         "cachetools>=3.1.0,<4.0.0",
         "coincurve>=10.0.0,<11.0.0",
-        "dataclasses>=0.6, <1;python_version<'3.7'",
         "eth-utils>=1.8.4,<2",
         # Fixing this dependency due to: requests 2.20.1 has requirement
         # idna<2.8,>=2.5, but you'll have idna 2.8 which is incompatible.
@@ -42,7 +39,7 @@ deps = {
         # idna 2.7 is not supported by requests 2.18
         "requests>=2.20,<3",
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
-        "plyvel==1.1.0",
+        "plyvel==1.2.0",
         PYEVM_DEPENDENCY,
         "web3>=5.10.0,<6",
         "lahja>=0.16.0,<0.17",
@@ -52,14 +49,14 @@ deps = {
         "jsonschema==3.0.1",
         "mypy-extensions>=0.4.3,<0.5.0",
         "typing_extensions>=3.7.4,<4.0.0",
-        "ruamel.yaml==0.15.98",
+        "ruamel.yaml==0.16.10",
         "argcomplete>=1.10.0,<2",
         "multiaddr>=0.0.8,<0.1.0",
         "prometheus-client==0.7.1",
         "pyformance==0.4",
         "pymultihash>=0.8.2",
         "psutil>=5.7.0, <6",
-        "libp2p==0.1.4",
+        "libp2p==0.1.5",
         # The direct dependency resolves a version conflict between multiaddr and libp2p
         "base58>=1.0.3,<2.0.0",
     ],
@@ -76,7 +73,7 @@ deps = {
         # xdist pinned at <1.29 due to: https://github.com/pytest-dev/pytest-xdist/issues/472
         "pytest-xdist>=1.29.0,<1.30",
         # only for eth2
-        "ruamel.yaml==0.15.98",
+        "ruamel.yaml==0.16.10",
         "eth-tester==0.4.0b2",
     ],
     # We have to keep some separation between trio and asyncio based tests
@@ -125,7 +122,7 @@ deps = {
         "eth-keyfile",  # validator client
     ],
     'eth2-extra': [
-        "milagro-bls-binding==0.1.3",
+        "milagro-bls-binding==0.1.4",
     ],
     'eth2-lint': [
         "black==19.3b0",
@@ -188,7 +185,7 @@ setup(
     url='https://github.com/ethereum/trinity',
     include_package_data=True,
     py_modules=['trinity', 'p2p', 'eth2'],
-    python_requires=">=3.6,<4",
+    python_requires=">=3.7,<4",
     install_requires=install_requires,
     extras_require=deps,
     license='MIT',
@@ -200,7 +197,8 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
     # trinity
     entry_points={

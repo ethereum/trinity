@@ -1,5 +1,5 @@
 import collections
-from typing import Hashable, Sequence, Tuple, TypeVar
+from typing import Hashable, Sequence, Tuple, TypeVar, AsyncGenerator, Any
 
 import rlp
 
@@ -93,3 +93,18 @@ def duplicates(elements: Sequence[TValue]) -> Tuple[TValue, ...]:
         collections.Counter(elements).items()
         if count > 1
     )
+
+
+TCo = TypeVar('TCo')
+TContra = TypeVar('TContra')
+
+
+class aclosing:
+    def __init__(self, aiter: AsyncGenerator[TCo, TContra]) -> None:
+        self._aiter = aiter
+
+    async def __aenter__(self) -> AsyncGenerator[TCo, TContra]:
+        return self._aiter
+
+    async def __aexit__(self, *args: Any) -> None:
+        await self._aiter.aclose()

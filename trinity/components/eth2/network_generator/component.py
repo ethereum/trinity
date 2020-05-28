@@ -4,7 +4,7 @@ import logging
 import pathlib
 import time
 
-from eth2.genesis import generate_genesis_config
+from eth2.genesis import generate_genesis_config, update_genesis_config_with_time
 from trinity.config import BeaconChainConfig, TrinityConfig
 from trinity.extensibility import Application
 
@@ -16,8 +16,8 @@ Use this profile of configuration to determine minimal parameters in the system.
 """
 
 
-def _get_network_config_path_from() -> pathlib.Path:
-    return BeaconChainConfig.get_genesis_config_file_path()
+def _get_network_config_path_for(profile: str) -> pathlib.Path:
+    return BeaconChainConfig.get_genesis_config_file_path(profile)
 
 
 class NetworkGeneratorComponent(Application):
@@ -42,11 +42,7 @@ class NetworkGeneratorComponent(Application):
             default="minimal",
         )
         network_generator_parser.add_argument(
-            "--output",
-            required=False,
-            type=pathlib.Path,
-            help="where to save the output configuration",
-            default=_get_network_config_path_from(),
+            "--output", type=pathlib.Path, help="where to save the output configuration"
         )
         genesis_time_group = network_generator_parser.add_mutually_exclusive_group(
             required=True
@@ -76,8 +72,21 @@ class NetworkGeneratorComponent(Application):
                 "genesis delay specified from config: %d", args.genesis_delay
             )
 
-        genesis_config = generate_genesis_config(args.config_profile, genesis_time)
-        output_file_path = args.output
+        cls.logger.info("using config profile: %s", args.config_profile)
+
+        if args.output:
+            output_file_path = args.output
+        else:
+            output_file_path = _get_network_config_path_for(args.config_profile)
+
+        if output_file_path.exists():
+            with open(output_file_path, "r") as config_file:
+                existing_genesis_config = json.load(config_file)
+                genesis_config = update_genesis_config_with_time(
+                    existing_genesis_config, genesis_time
+                )
+        else:
+            genesis_config = generate_genesis_config(args.config_profile, genesis_time)
         cls.logger.info(
             "configuration generated; genesis state has root %s with genesis time %d (%s); "
             "writing to '%s'",
@@ -88,4 +97,4 @@ class NetworkGeneratorComponent(Application):
         )
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file_path, "w") as output_file:
-            output_file.write(json.dumps(genesis_config))
+            json.dump(genesis_config, output_file)

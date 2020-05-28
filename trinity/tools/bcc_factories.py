@@ -1,8 +1,7 @@
 from eth2.beacon.tools.factories import BeaconChainFactory
 import asyncio
+import contextlib
 from typing import Any, AsyncIterator, Dict, Iterable, Collection, Tuple, Type, Sequence
-
-from async_generator import asynccontextmanager
 
 from cancel_token import CancelToken
 
@@ -90,7 +89,7 @@ class PeerFactory(factory.Factory):
     head_slot = 0
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def ConnectionPairFactory(
     alice_chaindb: AsyncBeaconChainDB = None,
     alice_branch: Collection[BaseSignedBeaconBlock] = None,

@@ -28,6 +28,7 @@ Timestamp = NewType("Timestamp", int)
 Second = NewType("Second", int)
 
 Version = NewType("Version", bytes)
+ForkDigest = NewType("ForkDigest", bytes)
 
 DomainType = NewType("DomainType", bytes)  # bytes of length 4
 
@@ -64,6 +65,8 @@ default_timestamp = Timestamp(0)
 default_second = Second(0)
 default_bitfield = Bitfield(tuple())
 default_version = Version(b"\x00" * 4)
+default_fork_digest = ForkDigest(b"\x00" * 4)
+default_root = Root(Hash32(b"\x00" * 32))
 
 
 class Operation(Protocol):

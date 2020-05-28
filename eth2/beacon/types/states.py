@@ -22,6 +22,7 @@ from eth2.configs import Eth2Config
 from .block_headers import BeaconBlockHeader, default_beacon_block_header
 from .checkpoints import Checkpoint, default_checkpoint
 from .defaults import (
+    default_root,
     default_slot,
     default_timestamp,
     default_tuple,
@@ -52,6 +53,7 @@ class BeaconState(HashableContainer):
     fields = [
         # Versioning
         ("genesis_time", uint64),
+        ("genesis_validators_root", bytes32),
         ("slot", uint64),
         ("fork", Fork),
         # History
@@ -95,6 +97,7 @@ class BeaconState(HashableContainer):
         cls: Type[TBeaconState],
         *,
         genesis_time: Timestamp = default_timestamp,
+        genesis_validators_root: Root = default_root,
         slot: Slot = default_slot,
         fork: Fork = default_fork,
         latest_block_header: BeaconBlockHeader = default_beacon_block_header,
@@ -147,6 +150,7 @@ class BeaconState(HashableContainer):
 
         return super().create(
             genesis_time=genesis_time,
+            genesis_validators_root=genesis_validators_root,
             slot=slot,
             fork=fork,
             latest_block_header=latest_block_header,

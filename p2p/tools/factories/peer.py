@@ -1,7 +1,6 @@
 import asyncio
+import contextlib
 from typing import cast, AsyncContextManager, AsyncIterator, Tuple, Type
-
-from async_generator import asynccontextmanager
 
 from lahja import EndpointAPI
 
@@ -15,7 +14,7 @@ from p2p.tools.paragon import ParagonPeer, ParagonContext, ParagonPeerFactory
 from .connection import ConnectionPairFactory
 
 
-@asynccontextmanager
+@contextlib.asynccontextmanager
 async def PeerPairFactory(*,
                           alice_peer_context: BasePeerContext,
                           alice_peer_factory_class: Type[BasePeerFactory],

@@ -64,7 +64,7 @@ class RLPCodec(SerializationCodecAPI[TCommandPayload]):
                 rlp.decode(data, strict=self.decode_strict, sedes=self.sedes, recursive_cache=True)
             )
         except rlp.DecodingError as err:
-            raise MalformedMessage from err
+            raise MalformedMessage(*err.args) from err
 
 
 #

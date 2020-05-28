@@ -137,11 +137,12 @@ class Connection(ConnectionAPI, Service):
                 await self.manager.wait_finished()
         except PeerConnectionLost:
             pass
-        except (MalformedMessage,) as err:
+        except MalformedMessage as err:
             self.logger.debug(
                 "Disconnecting peer %s for sending MalformedMessage: %s",
                 self.remote,
                 err,
+                exc_info=True,
             )
             try:
                 self.get_base_protocol().send(Disconnect(DisconnectReason.BAD_PROTOCOL))

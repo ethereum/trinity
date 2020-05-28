@@ -5,7 +5,7 @@ from abc import ABC
 from dataclasses import asdict, dataclass, field
 from enum import Enum, unique
 import logging
-from typing import Collection, Iterable, Set
+from typing import Collection, Iterable, Optional, Set
 
 from eth.exceptions import BlockNotFound
 from eth_typing import BLSPubkey, BLSSignature
@@ -32,6 +32,17 @@ from eth2.configs import Eth2Config
 from trinity._utils.trio_utils import Request, Response
 
 logger = logging.getLogger("eth2.api.http.validator")
+
+# TODO what is a reasonable number here?
+MAX_SEARCH_SLOTS = 500
+
+
+class ServerError(Exception):
+    pass
+
+
+class InvalidRequest(Exception):
+    pass
 
 
 def _get_target_checkpoint(
@@ -133,14 +144,52 @@ class Context:
                 block_proposal_slot,
             )
 
+    def _search_linearly_for_parent(
+        self, target_slot: Slot
+    ) -> Optional[SignedBeaconBlock]:
+        """
+        Linear search for a canonical block in the chain starting at ``target_slot``
+        and going backwards until finding a block. This search happens when
+        there are skipped slots in the chain.
+
+        NOTE: The expected number of skipped slots during normal protocol operation is very low.
+        """
+        for _slot in range(target_slot - 1, target_slot - 1 - MAX_SEARCH_SLOTS, -1):
+            try:
+                return self.chain.get_canonical_block_by_slot(Slot(_slot))
+            except BlockNotFound:
+                continue
+        return None
+
     def get_block_proposal(
         self, slot: Slot, randao_reveal: BLSSignature
     ) -> BeaconBlock:
-        parent_slot = Slot(max(slot - 1, 0))
-        parent = self.chain.get_canonical_head()
+        if slot < 1:
+            raise InvalidRequest()
+
+        target_slot = Slot(max(slot - 1, 0))
+        try:
+            parent = self.chain.get_canonical_block_by_slot(target_slot)
+        except BlockNotFound:
+            # as an optimization, try checking the head
+            parent = self.chain.get_canonical_head()
+            if parent.slot > target_slot:
+                # NOTE: if parent.slot == target_slot, we are not under this block.
+                # NOTE: head has greater slot than the target, while it is odd
+                # a client may want a block here, let's try to satisfy the request.
+                # TODO: should we allow this behavior?
+                # TODO: consider a more sophisticated search strategy if we can detect ``slot``
+                # is far from the canonical head, e.g. binary search across slots
+                parent = self._search_linearly_for_parent(target_slot)
+                if not parent:
+                    raise ServerError()
+            else:
+                # the head is a satisfactory parent, continue!
+                pass
+
         parent_block_root = parent.message.hash_tree_root
-        head_state = self.chain.get_state_by_root(parent.message.state_root)
-        parent_state = self.chain.advance_state_to_slot(parent_slot, head_state)
+        parent_state = self.chain.get_state_by_root(parent.state_root)
+        parent_state = self.chain.advance_state_to_slot(target_slot, parent_state)
         state_machine = self.chain.get_state_machine(at_slot=slot)
 
         # TODO: query for latest eth1 data...
@@ -156,7 +205,7 @@ class Context:
         )
 
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:
-        logger.warning("broadcasting block with root %s", block.hash_tree_root.hex())
+        logger.debug("broadcasting block with root %s", block.hash_tree_root.hex())
         await self.block_broadcaster.broadcast_block(block)
         self._broadcast_operations.add(block.hash_tree_root)
         return True
@@ -198,9 +247,9 @@ class Context:
         return Attestation.create(aggregation_bits=aggregation_bits, data=data)
 
     async def broadcast_attestation(self, attestation: Attestation) -> bool:
-        # logger.debug(
-        #     "broadcasting attestation with root %s", attestation.hash_tree_root.hex()
-        # )
+        logger.debug(
+            "broadcasting attestation with root %s", attestation.hash_tree_root.hex()
+        )
         # TODO the actual brodcast
         self._broadcast_operations.add(attestation.hash_tree_root)
         return True
@@ -247,8 +296,12 @@ async def _get_block_proposal(context: Context, request: Request) -> Response:
     randao_reveal = BLSSignature(
         decode_hex(request["randao_reveal"]).ljust(96, b"\x00")
     )
-    block = context.get_block_proposal(slot, randao_reveal)
-    return to_formatted_dict(block)
+    try:
+        block = context.get_block_proposal(slot, randao_reveal)
+        return to_formatted_dict(block)
+    except Exception as e:
+        # TODO error handling...
+        return {"error": str(e)}
 
 
 async def _post_block_proposal(context: Context, request: Request) -> Response:

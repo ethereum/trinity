@@ -71,7 +71,11 @@ TConnectedStreams = Tuple[
 
 
 def get_directly_connected_streams(alice_extra_info: Dict[str, Any] = None,
-                                   bob_extra_info: Dict[str, Any] = None) -> TConnectedStreams:
+                                   bob_extra_info: Dict[str, Any] = None,
+                                   loop: asyncio.AbstractEventLoop = None) -> TConnectedStreams:
+    if loop is None:
+        loop = asyncio.get_event_loop()
+
     alice_reader = asyncio.StreamReader()
     bob_reader = asyncio.StreamReader()
 
@@ -83,8 +87,8 @@ def get_directly_connected_streams(alice_extra_info: Dict[str, Any] = None,
 
     # Link the alice's writer to the bob's reader, and the bob's writer to the
     # alice's reader.
-    bob_writer = asyncio.StreamWriter(bob_transport, bob_protocol, alice_reader, loop=None)
-    alice_writer = asyncio.StreamWriter(alice_transport, alice_protocol, bob_reader, loop=None)
+    bob_writer = asyncio.StreamWriter(bob_transport, bob_protocol, alice_reader, loop=loop)
+    alice_writer = asyncio.StreamWriter(alice_transport, alice_protocol, bob_reader, loop=loop)
     return (
         (alice_reader, alice_writer),
         (bob_reader, bob_writer),

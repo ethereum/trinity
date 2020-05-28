@@ -54,6 +54,8 @@ async def _dispatch_duties_for(
     if not duties:
         return
     logger.debug("%s: got duties %s to execute", tick, duties)
+    # TODO: improve logging here... may just remove next stmt
+    logger.info("%s: executing %d duties", tick, len(duties))
     for duty in duties:
         await duty_dispatcher.send(duty)
 

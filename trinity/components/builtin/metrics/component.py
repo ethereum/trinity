@@ -4,9 +4,9 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
+import contextlib
 from typing import Type
 
-from async_exit_stack import AsyncExitStack
 from async_service import background_trio_service
 from eth_utils import ValidationError
 
@@ -164,7 +164,7 @@ class MetricsComponent(TrioIsolatedComponent):
             blockchain_metrics_collector,
         )
 
-        async with AsyncExitStack() as stack:
+        async with contextlib.AsyncExitStack() as stack:
             managers = tuple([
                 await stack.enter_async_context(background_trio_service(service))
                 for service in services_to_exit

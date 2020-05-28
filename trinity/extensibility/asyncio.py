@@ -34,7 +34,8 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             # Only attempt to log the proc's returncode if we succesfully entered the context
             # manager above.
             if 'proc' in locals():
-                self.logger.debug("%s terminated: returncode=%s", self, proc.returncode)
+                returncode = getattr(proc, 'returncode', 'unset')
+                self.logger.debug("%s terminated: returncode=%s", self, returncode)
 
     async def _do_run(self, boot_info: BootInfo) -> None:
         with child_process_logging(boot_info):

@@ -72,7 +72,7 @@ class BeaconBlockBody(HashableContainer):
         return (
             f"randao_reveal={humanize_hash(self.randao_reveal)},"
             f" eth1_data=({self.eth1_data}),"
-            f" graffiti={self.graffiti.hex()},"
+            f" graffiti={humanize_hash(self.graffiti)},"
             f" proposer_slashings={tuple(slashing for slashing in self.proposer_slashings)},"
             f" attester_slashings={tuple(slashing for slashing in self.attester_slashings)},"
             f" attestations={tuple(attestation for attestation in self.attestations)},"
@@ -230,6 +230,10 @@ class BaseSignedBeaconBlock(HashableContainer):
         return self.message.parent_root
 
     @property
+    def state_root(self) -> Root:
+        return self.message.state_root
+
+    @property
     def is_genesis(self) -> bool:
         return self.message.is_genesis
 
@@ -243,11 +247,12 @@ class BaseSignedBeaconBlock(HashableContainer):
 
     def __str__(self) -> str:
         return (
-            f"[hash_tree_root]={humanize_hash(self.message.hash_tree_root)},"
-            f" slot={self.message.slot},"
-            f" parent_root={humanize_hash(self.message.parent_root)},"
-            f" state_root={humanize_hash(self.message.state_root)},"
-            f" body=({self.message.body})"
+            f"[hash_tree_root]={humanize_hash(self.hash_tree_root)},"
+            f" [block_root]={humanize_hash(self.message.hash_tree_root)},"
+            f" slot={self.slot},"
+            f" parent_root={humanize_hash(self.parent_root)},"
+            f" state_root={humanize_hash(self.state_root)},"
+            f" body=({self.body})"
         )
 
     def __repr__(self) -> str:
