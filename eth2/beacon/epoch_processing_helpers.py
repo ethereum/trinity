@@ -123,7 +123,7 @@ def get_matching_target_attestations(
 def get_matching_head_attestations(
     state: BeaconState, epoch: Epoch, config: Eth2Config
 ) -> Iterable[PendingAttestation]:
-    for a in get_matching_source_attestations(state, epoch, config):
+    for a in get_matching_target_attestations(state, epoch, config):
         beacon_block_root = get_block_root_at_slot(
             state, a.data.slot, config.SLOTS_PER_HISTORICAL_ROOT
         )
