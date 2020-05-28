@@ -291,13 +291,13 @@ def get_attestation_deltas(
         attesting_balance = get_total_balance(state, unslashed_attesting_indices)
         for index in eligible_validator_indices:
             if index in unslashed_attesting_indices:
+                increment = config.EFFECTIVE_BALANCE_INCREMENT
                 rewards = update_tuple_item_with_fn(
                     rewards,
                     index,
                     lambda balance, delta: balance + delta,
-                    get_base_reward(state, index, config)
-                    * attesting_balance
-                    // total_balance,
+                    (get_base_reward(state, index, config) * (attesting_balance // increment))
+                    // (total_balance // increment),
                 )
             else:
                 penalties = update_tuple_item_with_fn(
