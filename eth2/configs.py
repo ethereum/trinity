@@ -3,7 +3,7 @@ from typing import Collection, Dict, Iterable, Tuple, Union, cast
 
 from eth_utils import decode_hex, encode_hex, to_dict
 
-from eth2.beacon.typing import Epoch, Gwei, Second, Slot
+from eth2.beacon.typing import Epoch, Gwei, Second, Slot, Version
 
 ConfigTypes = Union[Gwei, Slot, Epoch, Second, bytes, int]
 EncodedConfigTypes = Union[str, int]
@@ -40,6 +40,9 @@ class Eth2Config:
     MIN_PER_EPOCH_CHURN_LIMIT: int
     CHURN_LIMIT_QUOTIENT: int
     SHUFFLE_ROUND_COUNT: int
+    HYSTERESIS_QUOTIENT: int
+    HYSTERESIS_DOWNWARD_MULTIPLIER: int
+    HYSTERESIS_UPWARD_MULTIPLIER: int
     # Genesis
     MIN_GENESIS_ACTIVE_VALIDATOR_COUNT: int
     MIN_GENESIS_TIME: int
@@ -49,20 +52,20 @@ class Eth2Config:
     EJECTION_BALANCE: Gwei
     EFFECTIVE_BALANCE_INCREMENT: Gwei
     # Initial values
-    GENESIS_SLOT: Slot
-    GENESIS_EPOCH: Epoch
+    GENESIS_FORK_VERSION: Version
     BLS_WITHDRAWAL_PREFIX: int
     # Time parameters
+    MIN_GENESIS_DELAY: int
     SECONDS_PER_SLOT: Second
     MIN_ATTESTATION_INCLUSION_DELAY: int
     SLOTS_PER_EPOCH: int
     MIN_SEED_LOOKAHEAD: int
     MAX_SEED_LOOKAHEAD: int
-    SLOTS_PER_ETH1_VOTING_PERIOD: int
+    MIN_EPOCHS_TO_INACTIVITY_PENALTY: int
+    EPOCHS_PER_ETH1_VOTING_PERIOD: int
     SLOTS_PER_HISTORICAL_ROOT: int
     MIN_VALIDATOR_WITHDRAWABILITY_DELAY: int
     PERSISTENT_COMMITTEE_PERIOD: int
-    MIN_EPOCHS_TO_INACTIVITY_PENALTY: int
     # State list lengths
     EPOCHS_PER_HISTORICAL_VECTOR: int
     EPOCHS_PER_SLASHINGS_VECTOR: int

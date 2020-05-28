@@ -5,6 +5,8 @@ from ssz.hashable_list import HashableList
 from ssz.sedes import List, uint64
 
 from eth2.beacon.constants import (
+    GENESIS_SLOT,
+    GENESIS_EPOCH,
     DEPOSIT_CONTRACT_TREE_DEPTH,
     FAR_FUTURE_EPOCH,
     GWEI_PER_ETH,
@@ -81,6 +83,21 @@ def shuffle_round_count():
 
 
 @pytest.fixture
+def hysteresis_quotient():
+    return SERENITY_CONFIG.HYSTERESIS_QUOTIENT
+
+
+@pytest.fixture
+def hysteresis_downward_multiplier():
+    return SERENITY_CONFIG.HYSTERESIS_DOWNWARD_MULTIPLIER
+
+
+@pytest.fixture
+def hysteresis_upward_multiplier():
+    return SERENITY_CONFIG.HYSTERESIS_UPWARD_MULTIPLIER
+
+
+@pytest.fixture
 def min_genesis_active_validator_count():
     return SERENITY_CONFIG.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
 
@@ -111,13 +128,18 @@ def effective_balance_increment():
 
 
 @pytest.fixture
-def genesis_slot():
-    return SERENITY_CONFIG.GENESIS_SLOT
+def genesis_fork_version():
+    return SERENITY_CONFIG.GENESIS_FORK_VERSION
 
 
 @pytest.fixture
-def genesis_epoch():
-    return SERENITY_CONFIG.GENESIS_EPOCH
+def min_genesis_delay():
+    return SERENITY_CONFIG.MIN_GENESIS_DELAY
+
+
+@pytest.fixture
+def epochs_per_eth1_voting_period():
+    return SERENITY_CONFIG.EPOCHS_PER_ETH1_VOTING_PERIOD
 
 
 @pytest.fixture
@@ -148,11 +170,6 @@ def min_seed_lookahead():
 @pytest.fixture
 def max_seed_lookahead():
     return SERENITY_CONFIG.MAX_SEED_LOOKAHEAD
-
-
-@pytest.fixture
-def slots_per_eth1_voting_period():
-    return SERENITY_CONFIG.SLOTS_PER_ETH1_VOTING_PERIOD
 
 
 @pytest.fixture
@@ -274,15 +291,12 @@ def config(
     max_effective_balance,
     ejection_balance,
     effective_balance_increment,
-    genesis_slot,
-    genesis_epoch,
     bls_withdrawal_prefix,
     seconds_per_slot,
     min_attestation_inclusion_delay,
     slots_per_epoch,
     min_seed_lookahead,
     max_seed_lookahead,
-    slots_per_eth1_voting_period,
     slots_per_historical_root,
     min_validator_withdrawability_delay,
     persistent_committee_period,
@@ -311,21 +325,24 @@ def config(
         MIN_PER_EPOCH_CHURN_LIMIT=min_per_epoch_churn_limit,
         CHURN_LIMIT_QUOTIENT=churn_limit_quotient,
         SHUFFLE_ROUND_COUNT=shuffle_round_count,
+        HYSTERESIS_QUOTIENT=hysteresis_quotient,
+        HYSTERESIS_DOWNWARD_MULTIPLIER=hysteresis_downward_multiplier,
+        HYSTERESIS_UPWARD_MULTIPLIER=hysteresis_upward_multiplier,
         MIN_GENESIS_ACTIVE_VALIDATOR_COUNT=min_genesis_active_validator_count,
         MIN_GENESIS_TIME=min_genesis_time,
         MIN_DEPOSIT_AMOUNT=min_deposit_amount,
         MAX_EFFECTIVE_BALANCE=max_effective_balance,
         EJECTION_BALANCE=ejection_balance,
         EFFECTIVE_BALANCE_INCREMENT=effective_balance_increment,
-        GENESIS_SLOT=genesis_slot,
-        GENESIS_EPOCH=genesis_epoch,
+        GENESIS_FORK_VERSION=genesis_fork_version,
         BLS_WITHDRAWAL_PREFIX=bls_withdrawal_prefix,
+        MIN_GENESIS_DELAY=min_genesis_delay,
+        EPOCHS_PER_ETH1_VOTING_PERIOD=epochs_per_eth1_voting_period,
         SECONDS_PER_SLOT=seconds_per_slot,
         MIN_ATTESTATION_INCLUSION_DELAY=min_attestation_inclusion_delay,
         SLOTS_PER_EPOCH=slots_per_epoch,
         MIN_SEED_LOOKAHEAD=min_seed_lookahead,
         MAX_SEED_LOOKAHEAD=max_seed_lookahead,
-        SLOTS_PER_ETH1_VOTING_PERIOD=slots_per_eth1_voting_period,
         SLOTS_PER_HISTORICAL_ROOT=slots_per_historical_root,
         MIN_VALIDATOR_WITHDRAWABILITY_DELAY=min_validator_withdrawability_delay,
         PERSISTENT_COMMITTEE_PERIOD=persistent_committee_period,

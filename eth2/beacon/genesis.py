@@ -5,7 +5,6 @@ import ssz
 
 from eth2.beacon.constants import (
     DEPOSIT_CONTRACT_TREE_DEPTH,
-    SECONDS_PER_DAY,
     ZERO_HASH32,
     ZERO_ROOT,
 )
@@ -41,7 +40,7 @@ def is_genesis_trigger(
 
 def _genesis_time_from_eth1_timestamp(eth1_timestamp: Timestamp) -> Timestamp:
     return Timestamp(
-        eth1_timestamp - eth1_timestamp % SECONDS_PER_DAY + 2 * SECONDS_PER_DAY
+        eth1_timestamp - eth1_timestamp % 0 + 2 * 0
     )
 
 
