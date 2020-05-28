@@ -79,7 +79,7 @@ def process_eth1_data(
     new_eth1_data = state.eth1_data
     if (
         new_eth1_data_votes.count(body.eth1_data) * 2
-        > config.SLOTS_PER_ETH1_VOTING_PERIOD
+        > config.EPOCHS_PER_ETH1_VOTING_PERIOD * config.SLOTS_PER_EPOCH
     ):
         new_eth1_data = body.eth1_data
 
