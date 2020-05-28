@@ -194,12 +194,12 @@ jobs:
       - image: circleci/python:3.7
         environment:
           TOXENV: py37-rpc-state-spurious_dragon
-  py37-rpc-blockchain:
+  py37-rpc-state-fork-transition:
     <<: *common
     docker:
       - image: circleci/python:3.7
         environment:
-          TOXENV: py37-rpc-blockchain
+          TOXENV: py37-rpc-state-fork-transition
 
   py38-eth1-core:
     <<: *common
@@ -424,7 +424,7 @@ workflows:
       - py37-rpc-state-petersburg
       - py37-rpc-state-spurious_dragon
       - py37-rpc-state-tangerine_whistle
-      - py37-rpc-blockchain
+      - py37-rpc-state-fork-transition
 
       - py38-eth1-core
       - py38-p2p
