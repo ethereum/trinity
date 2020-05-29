@@ -165,6 +165,8 @@ class Connection(ConnectionAPI, Service):
                     "%s went away while trying to disconnect for MalformedMessage",
                     self,
                 )
+        finally:
+            self.manager.cancel()
 
     #
     # Subscriptions/Handler API
@@ -204,6 +206,19 @@ class Connection(ConnectionAPI, Service):
                     type(cmd),
                 )
                 self.manager.run_task(cmd_handler_fn, self, cmd)
+
+        # XXX: This ugliness is needed because Multiplexer.stream_protocol_messages() stops as
+        # soon as the transport is closed, and that may happen immediately after we received a
+        # Disconnect+EOF from a remote, but before we've had a chance to process the disconnect,
+        # which would cause a DaemonTaskExit error
+        # (https://github.com/ethereum/trinity/issues/1733).
+        if self.is_closing:
+            try:
+                await asyncio.wait_for(self.manager.wait_finished(), timeout=2)
+            except asyncio.TimeoutError:
+                self.logger.error(
+                    "stream_protocol_messages() terminated but Connection was never cancelled, "
+                    "this will cause the Connection to crash with a DaemonTaskExit")
 
     def add_protocol_handler(self,
                              protocol_class: Type[ProtocolAPI],
