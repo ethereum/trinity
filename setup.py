@@ -4,7 +4,7 @@ import os
 import re
 from setuptools import setup, find_packages
 
-PYEVM_DEPENDENCY = "py-evm==0.3.0a15"
+PYEVM_DEPENDENCY = "py-evm==0.3.0a16"
 
 
 deps = {
