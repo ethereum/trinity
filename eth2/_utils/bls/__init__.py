@@ -34,42 +34,40 @@ class Eth2BLS:
         cls.use(NoOpBackend)
 
     @classmethod
-    def privtopub(cls, privkey: int) -> BLSPubkey:
-        validate_private_key(privkey)
-        return cls.backend.privtopub(privkey)
+    def SkToPk(cls, SK: int) -> BLSPubkey:
+        validate_private_key(SK)
+        return cls.backend.SkToPk(SK)
 
     @classmethod
-    def sign(cls, message_hash: Hash32, privkey: int, domain: Domain) -> BLSSignature:
-        validate_private_key(privkey)
-        return cls.backend.sign(message_hash, privkey, domain)
+    def Sign(cls, SK: int, message: Hash32) -> BLSSignature:
+        validate_private_key(SK)
+        return cls.backend.sign(SK, message)
 
     @classmethod
-    def aggregate_signatures(cls, signatures: Sequence[BLSSignature]) -> BLSSignature:
+    def Aggregate(cls, signatures: Sequence[BLSSignature]) -> BLSSignature:
         return cls.backend.aggregate_signatures(signatures)
 
     @classmethod
-    def aggregate_pubkeys(cls, pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
+    def _AggregatePKs(cls, pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
         return cls.backend.aggregate_pubkeys(pubkeys)
 
     @classmethod
-    def verify(
+    def Verify(
         cls,
-        message_hash: Hash32,
-        pubkey: BLSPubkey,
+        PK: BLSPubkey,
+        message: Hash32,
         signature: BLSSignature,
-        domain: Domain,
     ) -> bool:
-        return cls.backend.verify(message_hash, pubkey, signature, domain)
+        return cls.backend.verify(PK, message, signature)
 
     @classmethod
-    def verify_multiple(
+    def FastAggregateVerify(
         cls,
-        pubkeys: Sequence[BLSPubkey],
-        message_hashes: Sequence[Hash32],
+        PKs: Sequence[BLSPubkey],
+        message: Sequence[Hash32],
         signature: BLSSignature,
-        domain: Domain,
     ) -> bool:
-        return cls.backend.verify_multiple(pubkeys, message_hashes, signature, domain)
+        return cls.backend.verify_multiple(PKs, message, signature)
 
     @classmethod
     def validate(
@@ -77,40 +75,36 @@ class Eth2BLS:
         message_hash: Hash32,
         pubkey: BLSPubkey,
         signature: BLSSignature,
-        domain: Domain,
     ) -> None:
         if cls.backend != NoOpBackend:
             validate_signature(signature)
             validate_public_key(pubkey)
 
-        if not cls.verify(message_hash, pubkey, signature, domain):
+        if not cls.Verify(message_hash, pubkey, signature, domain):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
                 f"message_hash {message_hash.hex()}\n"
                 f"pubkey {pubkey.hex()}\n"
                 f"signature {signature.hex()}\n"
-                f"domain {domain.hex()}"
             )
 
     @classmethod
     def validate_multiple(
         cls,
         pubkeys: Sequence[BLSPubkey],
-        message_hashes: Sequence[Hash32],
+        message: Hash32,
         signature: BLSSignature,
-        domain: Domain,
     ) -> None:
         if cls.backend != NoOpBackend:
             validate_signature(signature)
             validate_many_public_keys(pubkeys)
 
-        if not cls.verify_multiple(pubkeys, message_hashes, signature, domain):
+        if not cls.FastAggregateVerify():
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
                 f"pubkeys {pubkeys}\n"
-                f"message_hashes {message_hashes}\n"
+                f"message_hashes {message}\n"
                 f"signature {signature.hex()}\n"
-                f"domain {domain.hex()}"
             )
 
 

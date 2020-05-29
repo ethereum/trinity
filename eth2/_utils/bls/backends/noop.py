@@ -10,32 +10,21 @@ from .base import BaseBLSBackend
 
 class NoOpBackend(BaseBLSBackend):
     @staticmethod
-    def privtopub(k: int) -> BLSPubkey:
+    def SkToPk(k: int) -> BLSPubkey:
         return BLSPubkey(k.to_bytes(48, "little"))
 
     @staticmethod
-    def sign(message_hash: Hash32, privkey: int, domain: Domain) -> BLSSignature:
+    def Sign(**kwargs) -> BLSSignature:
         return EMPTY_SIGNATURE
 
     @staticmethod
-    def verify(
-        message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, domain: Domain
-    ) -> bool:
+    def Verify(**kwargs) -> bool:
         return True
 
     @staticmethod
-    def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+    def Aggregate(**kwargs) -> BLSSignature:
         return EMPTY_SIGNATURE
 
     @staticmethod
-    def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
-        return EMPTY_PUBKEY
-
-    @staticmethod
-    def verify_multiple(
-        pubkeys: Sequence[BLSPubkey],
-        message_hashes: Sequence[Hash32],
-        signature: BLSSignature,
-        domain: Domain,
-    ) -> bool:
+    def FastAggregateVerify(**kwargs) -> bool:
         return True
