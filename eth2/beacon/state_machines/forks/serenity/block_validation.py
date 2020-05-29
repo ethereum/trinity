@@ -162,6 +162,7 @@ def validate_proposer_slashing(
     """
     proposer = state.validators[proposer_slashing.proposer_index]
 
+    # NOTE: spec has: assert header_1.slot == header_2.slot
     validate_proposer_slashing_epoch(proposer_slashing, slots_per_epoch)
 
     validate_proposer_slashing_headers(proposer_slashing)
@@ -203,6 +204,13 @@ def validate_proposer_slashing_epoch(
 def validate_proposer_slashing_headers(proposer_slashing: ProposerSlashing) -> None:
     header_1 = proposer_slashing.signed_header_1
     header_2 = proposer_slashing.signed_header_2
+
+    if header_1.proposer_index != header_2.proposer_index:
+        raise ValidationError(
+            f"proposer_slashing.signed_header_1.proposer_index ({header_1.proposer_index}) != "
+            f"proposer_slashing.signed_header_2.proposer_index ({header_2.proposer_index})"
+        )
+
     if header_1 == header_2:
         raise ValidationError(
             f"proposer_slashing.signed_header_1 ({header_1}) == "
