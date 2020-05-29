@@ -140,7 +140,7 @@ class Transport(TransportAPI):
                 timeout=REPLY_TIMEOUT,
             )
         except asyncio.IncompleteReadError as err:
-            raise HandshakeFailure from err
+            raise HandshakeFailure(*err.args) from err
 
         try:
             ephem_pubkey, initiator_nonce, initiator_pubkey = decode_authentication(
@@ -158,7 +158,7 @@ class Transport(TransportAPI):
                     timeout=REPLY_TIMEOUT,
                 )
             except asyncio.IncompleteReadError as err:
-                raise HandshakeFailure from err
+                raise HandshakeFailure(*err.args) from err
 
             try:
                 ephem_pubkey, initiator_nonce, initiator_pubkey = decode_authentication(
@@ -244,11 +244,8 @@ class Transport(TransportAPI):
         header_bytes = await self.read(HEADER_LEN + MAC_LEN)
         try:
             padded_header = self._decrypt_header(header_bytes)
-        except DecryptionError as err:
-            self.logger.debug(
-                "Bad message header from peer %s: Error: %r",
-                self, err,
-            )
+        except (ValueError, DecryptionError) as err:
+            self.logger.info("Bad message header from peer %s: Error: %r", self, err)
             raise MalformedMessage(*err.args) from err
         # TODO: use `int.from_bytes(...)`
         frame_size = self._get_frame_size(padded_header)
@@ -258,11 +255,8 @@ class Transport(TransportAPI):
         frame_data = await self.read(read_size + MAC_LEN)
         try:
             body = self._decrypt_body(frame_data, frame_size)
-        except DecryptionError as err:
-            self.logger.debug(
-                "Bad message body from peer %s: Error: %r",
-                self, err,
-            )
+        except (ValueError, DecryptionError) as err:
+            self.logger.info("Bad message body from peer %s: Error: %r", self, err)
             raise MalformedMessage(*err.args) from err
 
         # Decode the header data and re-encode to recover the unpadded header size.
