@@ -165,7 +165,7 @@ async def test_beam_syncer_with_checkpoint(
 # This test was reduced to a few cases for speed. To run the full suite, use
 # range(1, 130) for beam_to_block. (and optionally follow the instructions at target_head)
 @pytest.mark.asyncio
-@pytest.mark.parametrize('beam_to_block', [1, 66, 68, 129])
+@pytest.mark.parametrize('beam_to_block', [1, 5, 66, 68, 129])
 async def test_beam_syncer(
         request,
         event_loop,
