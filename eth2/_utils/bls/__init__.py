@@ -1,7 +1,6 @@
 from typing import Sequence, Type
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
-from py_ecc.bls.typing import Domain
 
 from eth2.beacon.exceptions import SignatureError
 
@@ -80,7 +79,7 @@ class Eth2BLS:
             validate_signature(signature)
             validate_public_key(pubkey)
 
-        if not cls.Verify(message_hash, pubkey, signature, domain):
+        if not cls.Verify(message_hash, pubkey, signature):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
                 f"message_hash {message_hash.hex()}\n"

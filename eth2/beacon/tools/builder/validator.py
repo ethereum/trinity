@@ -8,7 +8,7 @@ from eth_utils.toolz import keymap as keymapper
 from eth_utils.toolz import pipe
 
 from eth2._utils.bitfield import get_empty_bitfield, set_voted
-from eth2._utils.bls import Domain, bls
+from eth2._utils.bls import bls
 from eth2._utils.hash import hash_eth2
 from eth2._utils.merkle.common import MerkleTree, get_merkle_proof
 from eth2._utils.merkle.sparse import calc_merkle_tree_from_leaves, get_root
@@ -159,7 +159,6 @@ def mk_all_pending_attestations_with_full_participation_in_epoch(
 def verify_votes(
     message_hash: Hash32,
     votes: Iterable[Tuple[ValidatorIndex, BLSSignature, BLSPubkey]],
-    domain: Domain,
 ) -> Tuple[Tuple[BLSSignature, ...], Tuple[ValidatorIndex, ...]]:
     """
     Verify the given votes.

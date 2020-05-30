@@ -34,10 +34,3 @@ class BaseBLSBackend(ABC):
     ) -> bool:
         ...
 
-    @staticmethod
-    @abstractmethod
-    def AggregateVerify(
-            pairs: Sequence[(BLSPubkey, Hash32)],
-            signature: BLSSignature,
-    ) -> bool:
-        ...

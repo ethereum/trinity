@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, Callable, Sequence, Set, Tuple
 
 from eth_typing import Hash32
 from eth_utils import ValidationError
-from py_ecc.bls.typing import Domain
 from ssz.hashable_container import HashableContainer
 
 from eth2._utils.hash import hash_eth2
@@ -20,7 +19,7 @@ from eth2.beacon.typing import (
     Slot,
     ValidatorIndex,
     Version,
-    default_version, default_root,
+    default_version, default_root, Domain,
 )
 from eth2.configs import Eth2Config
 

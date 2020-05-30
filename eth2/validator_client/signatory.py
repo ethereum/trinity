@@ -3,7 +3,6 @@ from typing import cast
 
 from eth_typing import BLSSignature
 from eth_utils import ValidationError
-from py_ecc.bls.typing import Domain
 
 from eth2._utils.bls import bls
 from eth2._utils.humanize import humanize_bytes

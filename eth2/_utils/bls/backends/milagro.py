@@ -3,25 +3,15 @@ from typing import Iterator, Sequence, Tuple
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import to_tuple
 from milagro_bls_binding import (
-    _AggregatePKs,
     Aggregate,
     FastAggregateVerify,
     SkToPk,
     Sign,
     Verify,
 )
-from py_ecc.bls.typing import Domain
 
 from eth2._utils.bls.backends.base import BaseBLSBackend
 from eth2.beacon.constants import EMPTY_PUBKEY, EMPTY_SIGNATURE
-
-
-def to_int(domain: Domain) -> int:
-    """
-    Convert Domain to big endian int since
-    sigp/milagro_bls use big endian int on hash to g2.
-    """
-    return int.from_bytes(domain, "big")
 
 
 @to_tuple
