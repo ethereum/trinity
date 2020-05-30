@@ -109,7 +109,7 @@ class BLSKeyCache:
         """
         NOTE: this is currently our expensive function
         """
-        return bls.privtopub(privkey)
+        return bls.SkToPk(privkey)
 
     def _add_pubkey_for_privkey(self, index, privkey):
         pubkey = self._generate_pubkey(privkey)

@@ -60,7 +60,7 @@ from eth2.configs import Eth2Config
 #
 def mk_key_pair_from_seed_index(seed_index: int) -> Tuple[BLSPubkey, int]:
     privkey = int.from_bytes(hash_eth2(str(seed_index).encode("utf-8"))[:4], "big")
-    pubkey = bls.privtopub(privkey)
+    pubkey = bls.SkToPk(privkey)
     return (pubkey, privkey)
 
 

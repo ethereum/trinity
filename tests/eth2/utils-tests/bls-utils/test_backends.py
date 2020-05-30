@@ -33,13 +33,13 @@ def test_sanity(backend, domain):
     privkey_0 = 5566
     sig_0 = bls.sign(msg_0, privkey_0, domain)
     assert_signature(sig_0)
-    pubkey_0 = bls.privtopub(privkey_0)
+    pubkey_0 = bls.SkToPk(privkey_0)
     assert_pubkey(pubkey_0)
     assert bls.verify(msg_0, pubkey_0, sig_0, domain)
 
     privkey_1 = 5567
     sig_1 = bls.sign(msg_0, privkey_1, domain)
-    pubkey_1 = bls.privtopub(privkey_1)
+    pubkey_1 = bls.SkToPk(privkey_1)
     assert bls.verify(msg_0, pubkey_1, sig_1, domain)
 
     # Test: Verify signatures are correctly aggregated
@@ -58,7 +58,7 @@ def test_sanity(backend, domain):
     privkey_2 = 55688
     sig_2 = bls.sign(msg_1, privkey_2, domain)
     assert_signature(sig_2)
-    pubkey_2 = bls.privtopub(privkey_2)
+    pubkey_2 = bls.SkToPk(privkey_2)
     assert_pubkey(pubkey_2)
     sig_1_2 = bls.aggregate_signatures([sig_1, sig_2])
     assert bls.verify_multiple(
@@ -86,7 +86,7 @@ def test_bls_core_succeed(backend, privkey, domain):
     bls.use(backend)
     msg = str(privkey).encode("utf-8")
     sig = bls.sign(msg, privkey, domain=domain)
-    pub = bls.privtopub(privkey)
+    pub = bls.SkToPk(privkey)
     assert bls.verify(msg, pub, sig, domain=domain)
 
 
@@ -96,7 +96,7 @@ def test_invalid_private_key(backend, privkey, domain):
     bls.use(backend)
     msg = str(privkey).encode("utf-8")
     with pytest.raises(ValueError):
-        bls.privtopub(privkey)
+        bls.SkToPk(privkey)
     with pytest.raises(ValueError):
         bls.sign(msg, privkey, domain=domain)
 
@@ -156,7 +156,7 @@ def test_verify_empty_signatures(backend, domain):
 def test_signature_aggregation(backend, msg, privkeys, domain):
     bls.use(backend)
     sigs = [bls.sign(msg, k, domain=domain) for k in privkeys]
-    pubs = [bls.privtopub(k) for k in privkeys]
+    pubs = [bls.SkToPk(k) for k in privkeys]
     aggsig = bls.aggregate_signatures(sigs)
     aggpub = bls.aggregate_pubkeys(pubs)
     assert bls.verify(msg, aggpub, aggsig, domain=domain)
@@ -180,13 +180,13 @@ def test_multi_aggregation(backend, msg_1, msg_2, privkeys_1, privkeys_2, domain
     sigs_1 = [
         bls.sign(msg_1, k, domain=domain) for k in privkeys_1
     ]  # signatures to msg_1
-    pubs_1 = [bls.privtopub(k) for k in privkeys_1]
+    pubs_1 = [bls.SkToPk(k) for k in privkeys_1]
     aggpub_1 = bls.aggregate_pubkeys(pubs_1)  # sig_1 to msg_1
 
     sigs_2 = [
         bls.sign(msg_2, k, domain=domain) for k in privkeys_2
     ]  # signatures to msg_2
-    pubs_2 = [bls.privtopub(k) for k in privkeys_2]
+    pubs_2 = [bls.SkToPk(k) for k in privkeys_2]
     aggpub_2 = bls.aggregate_pubkeys(pubs_2)  # sig_2 to msg_2
 
     message_hashes = [msg_1, msg_2]

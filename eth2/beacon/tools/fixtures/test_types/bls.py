@@ -131,7 +131,7 @@ class PrivateToPublicKeyHandler(TestHandler[int, BLSPubkey]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.privtopub(inputs)
+        return bls.SkToPk(inputs)
 
     @staticmethod
     def condition(output: BLSPubkey, expected_output: BLSPubkey) -> None:

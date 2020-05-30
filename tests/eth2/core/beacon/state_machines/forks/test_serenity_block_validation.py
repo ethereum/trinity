@@ -38,10 +38,10 @@ def test_validate_block_slot(
     "slots_per_epoch, max_committees_per_slot,"
     "proposer_privkey, proposer_pubkey, is_valid_signature",
     (
-        (5, 5, 56, bls.privtopub(56), True),
-        (5, 5, 56, bls.privtopub(56)[1:] + b"\x01", False),
-        (5, 5, 123, bls.privtopub(123), True),
-        (5, 5, 123, bls.privtopub(123)[1:] + b"\x01", False),
+        (5, 5, 56, bls.SkToPk(56), True),
+        (5, 5, 56, bls.SkToPk(56)[1:] + b"\x01", False),
+        (5, 5, 123, bls.SkToPk(123), True),
+        (5, 5, 123, bls.SkToPk(123)[1:] + b"\x01", False),
     ),
 )
 def test_validate_proposer_signature(
