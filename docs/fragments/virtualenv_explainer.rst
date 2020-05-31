@@ -10,7 +10,7 @@ Then, we can initialize a new virtual environment ``venv``, like:
 
 .. code:: sh
 
-  virtualenv -p python3 venv
+  virtualenv -p python3.7 venv
 
 This creates a new directory ``venv`` where packages are installed isolated from any other global
 packages.

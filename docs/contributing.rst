@@ -20,7 +20,7 @@ After we have activated our virtual environment, installing all dependencies tha
 
 .. code:: sh
 
-    pip3.7 install -e .[dev]
+    pip3 install -e .[dev]
 
 
 Running the tests
