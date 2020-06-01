@@ -1,8 +1,6 @@
 from abc import abstractmethod
 import asyncio
-import contextlib
 from typing import (
-    AsyncIterator,
     Generic,
     Tuple,
     Type,
@@ -103,21 +101,6 @@ class BaseServer(Service, Generic[TPeerPool]):
     def _make_peer_pool(self) -> TPeerPool:
         ...
 
-    @contextlib.asynccontextmanager
-    async def tcp_listener(self) -> AsyncIterator[None]:
-        # TODO: Support IPv6 addresses as well.
-        tcp_listener = await asyncio.start_server(
-            self.receive_handshake,
-            host=BOUND_IP,
-            port=self.port,
-        )
-        try:
-            yield
-        finally:
-            self.logger.info("Server finished, closing TCP listener...")
-            tcp_listener.close()
-            await tcp_listener.wait_closed()
-
     async def run(self) -> None:
         self.logger.info("Running server...")
         self.logger.info(
@@ -129,9 +112,20 @@ class BaseServer(Service, Generic[TPeerPool]):
         self.logger.info('network: %s', self.network_id)
         self.logger.info('peers: max_peers=%s', self.max_peers)
 
-        async with self.tcp_listener():
-            self.manager.run_daemon_child_service(self.peer_pool)
-            await self.manager.wait_finished()
+        # TODO: Support IPv6 addresses as well.
+        tcp_listener = await asyncio.start_server(
+            self.receive_handshake,
+            host=BOUND_IP,
+            port=self.port,
+        )
+        try:
+            # mypy doesn't know that the Server returned above is an async contextmanager.
+            async with tcp_listener:  # type: ignore
+                self.manager.run_daemon_child_service(self.peer_pool)
+                await tcp_listener.serve_forever()
+        finally:
+            self.logger.info("TCP Listener finished, cancelling Server")
+            self.manager.cancel()
 
     async def receive_handshake(
             self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
