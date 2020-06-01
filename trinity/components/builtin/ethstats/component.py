@@ -102,8 +102,8 @@ class EthstatsComponent(AsyncioIsolatedComponent):
     def is_enabled(self) -> bool:
         return bool(self._boot_info.args.enable_ethstats)
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         args = boot_info.args
 
         if args.ethstats_server_url:

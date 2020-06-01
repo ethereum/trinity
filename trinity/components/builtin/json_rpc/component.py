@@ -13,7 +13,6 @@ from eth.db.header import (
     HeaderDB,
 )
 
-from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
     Eth1DbMode,
@@ -118,8 +117,8 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
             default=8545,
         )
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         trinity_config = boot_info.trinity_config
 
         with chain_for_config(trinity_config, event_bus) as chain:

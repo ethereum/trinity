@@ -343,8 +343,8 @@ class SyncerComponent(AsyncioIsolatedComponent):
         else:
             return active_strategy
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
 
         if boot_info.args.enable_metrics:
             metrics_service = metrics_service_from_args(boot_info.args, AsyncioMetricsService)
@@ -356,10 +356,10 @@ class SyncerComponent(AsyncioIsolatedComponent):
         trinity_config = boot_info.trinity_config
         NodeClass = trinity_config.get_app_config(Eth1AppConfig).node_class
         node = NodeClass(event_bus, metrics_service, trinity_config)
-        strategy = cls.get_active_strategy(boot_info)
+        strategy = self.get_active_strategy(boot_info)
 
         async with background_asyncio_service(node) as manager:
-            await cls.launch_sync(node, strategy, boot_info, event_bus)
+            await self.launch_sync(node, strategy, boot_info, event_bus)
             await manager.wait_finished()
 
     @classmethod

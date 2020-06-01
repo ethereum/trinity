@@ -71,8 +71,8 @@ class TxComponent(AsyncioIsolatedComponent):
 
         return is_enabled
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         trinity_config = boot_info.trinity_config
         db = DBClient.connect(trinity_config.database_ipc_path)
         with db:

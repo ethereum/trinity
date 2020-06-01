@@ -12,7 +12,6 @@ from asyncio_run_in_process.typing import SubprocessKwargs
 from eth_utils.toolz import merge
 from lahja import EndpointAPI, BaseEvent
 
-from trinity.boot_info import BootInfo
 from trinity.extensibility import AsyncioIsolatedComponent, TrioIsolatedComponent
 
 
@@ -62,7 +61,7 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
     def is_enabled(self) -> bool:
         return True
 
-    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
         self.logger.info('Entered `do_run`')
         service = ComponentTestService(event_bus)
         try:
@@ -99,7 +98,7 @@ class TrioComponentForTest(TrioIsolatedComponent):
     def is_enabled(self) -> bool:
         return True
 
-    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
         self.logger.info('Entered `do_run`')
         service = ComponentTestService(event_bus)
         try:
@@ -130,7 +129,7 @@ class AsyncioBrokenComponent(AsyncioComponentForTest):
     name = "component-test-asyncio-broken"
     endpoint_name = 'component-test-asyncio-broken'
 
-    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
         async with background_asyncio_service(IdleService(event_bus)):
             raise ComponentException("This is a component that crashes after starting a service")
 
@@ -139,6 +138,6 @@ class TrioBrokenComponent(TrioComponentForTest):
     name = "component-test-trio-broken"
     endpoint_name = 'component-test-trio-broken'
 
-    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
         async with background_trio_service(IdleService(event_bus)):
             raise ComponentException("This is a component that crashes after starting a service")

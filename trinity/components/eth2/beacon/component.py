@@ -10,7 +10,6 @@ from libp2p.crypto.secp256k1 import create_new_key_pair
 
 from eth2.beacon.typing import SubnetId
 from p2p.service import BaseService, run_service
-from trinity.boot_info import BootInfo
 from trinity.config import BeaconAppConfig, TrinityConfig
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient
@@ -67,8 +66,8 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
     def is_enabled(self) -> bool:
         return self._boot_info.trinity_config.has_app_config(BeaconAppConfig)
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         trinity_config = boot_info.trinity_config
         key_pair = _load_secp256k1_key_pair_from(trinity_config)
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)

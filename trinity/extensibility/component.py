@@ -12,7 +12,7 @@ import logging
 import os
 import pathlib
 import signal
-from typing import AsyncIterator, Optional, Type, TYPE_CHECKING, Union
+from typing import AsyncIterator, Optional, Tuple, Type, TYPE_CHECKING, Union
 
 from asyncio_run_in_process.typing import SubprocessKwargs
 
@@ -154,15 +154,13 @@ async def run_component(component: ComponentAPI) -> AsyncIterator[None]:
 
 @contextlib.asynccontextmanager
 async def _run_asyncio_component_in_proc(
-        component_type: Type['AsyncioIsolatedComponent'],
+        component: 'AsyncioIsolatedComponent',
         event_bus: EndpointAPI,
-        boot_info: BootInfo,
 ) -> AsyncIterator[None]:
     """
     Run the given AsyncioIsolatedComponent in the same process as ourselves.
     """
-    component = component_type(boot_info)
-    task = asyncio.ensure_future(component.do_run(boot_info, event_bus))
+    task = asyncio.ensure_future(component.do_run(event_bus))
     logger.info("Starting component: %s", component.name)
     try:
         yield
@@ -172,38 +170,25 @@ async def _run_asyncio_component_in_proc(
 
 @contextlib.asynccontextmanager
 async def _run_trio_component_in_proc(
-        component_type: Type['TrioIsolatedComponent'],
+        component: 'TrioIsolatedComponent',
         event_bus: EndpointAPI,
-        boot_info: BootInfo,
 ) -> AsyncIterator[None]:
     """
     Run the given TrioIsolatedComponent in the same process as ourselves.
     """
     import trio
-    logger.info("Starting component: %s", component_type.name)
+    logger.info("Starting component: %s", component.name)
     async with trio.open_nursery() as nursery:
-        nursery.start_soon(component_type.do_run, boot_info, event_bus)
+        nursery.start_soon(component.do_run, event_bus)
         yield
         nursery.cancel_scope.cancel()
-        logger.debug("Stopped component: %s", component_type.name)
+        logger.debug("Stopped component: %s", component.name)
 
 
-@contextlib.asynccontextmanager
-async def _run_standalone_component(
+def _setup_standalone_component(
     component_type: Union[Type['TrioIsolatedComponent'], Type['AsyncioIsolatedComponent']],
     app_identifier: str,
-) -> AsyncIterator[None]:
-    from trinity.extensibility.trio import TrioIsolatedComponent  # noqa: F811
-    from trinity.extensibility.asyncio import AsyncioIsolatedComponent  # noqa: F811
-    if issubclass(component_type, TrioIsolatedComponent):
-        endpoint_type: Union[Type[TrioEndpoint], Type[AsyncioEndpoint]] = TrioEndpoint
-        run_component_fn = _run_trio_component_in_proc
-    elif issubclass(component_type, AsyncioIsolatedComponent):
-        endpoint_type = AsyncioEndpoint
-        run_component_fn = _run_asyncio_component_in_proc
-    else:
-        raise ValueError("Unknown component type: %s", type(component_type))
-
+) -> Tuple[Union['TrioIsolatedComponent', 'AsyncioIsolatedComponent'], Tuple[str, ...]]:
     if app_identifier == APP_IDENTIFIER_ETH1:
         app_cfg: Type[BaseAppConfig] = Eth1AppConfig
     elif app_identifier == APP_IDENTIFIER_BEACON:
@@ -246,19 +231,34 @@ async def _run_standalone_component(
         logger_levels=None,
         profile=False,
     )
-    conn_config = ConnectionConfig.from_name(
-        component_type.get_endpoint_name(), trinity_config.ipc_dir)
+    return component_type(boot_info), args.connect_to_endpoints
 
+
+@contextlib.asynccontextmanager
+async def _run_eventbus_for_component(
+    component: Union['TrioIsolatedComponent', 'AsyncioIsolatedComponent'],
+    connect_to_endpoints: Tuple[str, ...],
+) -> AsyncIterator[None]:
+    from trinity.extensibility.trio import TrioIsolatedComponent
+    from trinity.extensibility.asyncio import AsyncioIsolatedComponent
+    if isinstance(component, TrioIsolatedComponent):
+        endpoint_type: Union[Type[TrioEndpoint], Type[AsyncioEndpoint]] = TrioEndpoint
+    elif isinstance(component, AsyncioIsolatedComponent):
+        endpoint_type = AsyncioEndpoint
+    else:
+        raise ValueError("Unknown component type: %s", type(component))
+    trinity_config = component._boot_info.trinity_config
+    conn_config = ConnectionConfig.from_name(
+        component.get_endpoint_name(), trinity_config.ipc_dir)
     async with endpoint_type.serve(conn_config) as event_bus:
-        for endpoint in args.connect_to_endpoints:
+        for endpoint in connect_to_endpoints:
             path = pathlib.Path(endpoint)
             if not path.is_socket():
                 raise ValueError("Invalid IPC path: {path}")
             connection_config = ConnectionConfig(name=path.stem, path=path)
             logger.info("Attempting to connect to eventbus endpoint at %s", connection_config)
             await event_bus.connect_to_endpoints(connection_config)
-        async with run_component_fn(component_type, event_bus, boot_info):
-            yield
+        yield event_bus
 
 
 def run_asyncio_eth1_component(component_type: Type['AsyncioIsolatedComponent']) -> None:
@@ -269,8 +269,14 @@ def run_asyncio_eth1_component(component_type: Type['AsyncioIsolatedComponent'])
     loop.add_signal_handler(signal.SIGTERM, got_sigint.set)
 
     async def run() -> None:
-        async with _run_standalone_component(component_type, APP_IDENTIFIER_ETH1):
-            await got_sigint.wait()
+        component, connect_to_endpoints = _setup_standalone_component(
+            component_type, APP_IDENTIFIER_ETH1)
+        async with _run_eventbus_for_component(component, connect_to_endpoints) as event_bus:
+            async with _run_asyncio_component_in_proc(component, event_bus) as task:
+                await asyncio.wait(
+                    [got_sigint.wait(), task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
 
     loop.run_until_complete(run())
 
@@ -279,10 +285,13 @@ def _run_trio_component(component_type: Type['TrioIsolatedComponent'], app_ident
     import trio
 
     async def run() -> None:
+        component, connect_to_endpoints = _setup_standalone_component(
+            component_type, app_identifier)
         with trio.open_signal_receiver(signal.SIGINT, signal.SIGTERM) as signal_aiter:
-            async with _run_standalone_component(component_type, app_identifier):
-                async for sig in signal_aiter:
-                    return
+            async with _run_eventbus_for_component(component, connect_to_endpoints) as event_bus:
+                async with _run_trio_component_in_proc(component, event_bus):
+                    async for sig in signal_aiter:
+                        return
 
     trio.run(run)
 

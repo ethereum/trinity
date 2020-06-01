@@ -139,9 +139,8 @@ class MetricsComponent(TrioIsolatedComponent):
                 'to tag the data via `--metrics-host`'
             )
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         metrics_service = metrics_service_from_args(boot_info.args)
 
         # types ignored due to https://github.com/ethereum/async-service/issues/5

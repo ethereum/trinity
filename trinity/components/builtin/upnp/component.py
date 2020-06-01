@@ -6,7 +6,6 @@ from argparse import (
 from async_service import background_trio_service
 from lahja import EndpointAPI
 
-from trinity.boot_info import BootInfo
 from trinity.extensibility import (
     TrioIsolatedComponent,
 )
@@ -36,9 +35,8 @@ class UpnpComponent(TrioIsolatedComponent):
             help="Disable upnp mapping",
         )
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        port = boot_info.trinity_config.port
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        port = self._boot_info.trinity_config.port
         upnp_service = UPnPService(port, event_bus)
 
         async with background_trio_service(upnp_service) as manager:
