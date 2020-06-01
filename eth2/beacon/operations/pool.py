@@ -21,12 +21,9 @@ class OperationPool(Generic[T]):
         if isinstance(operation_or_root, bytes):
             root = operation_or_root
         else:
-            root = self._get_root(operation_or_root)
+            root = operation_or_root.hash_tree_root
 
         return root in self._pool_storage
-
-    def _get_root(self, operation: T) -> Root:
-        return operation.hash_tree_root
 
     def get(self, hash_tree_root: Root) -> T:
         return self._pool_storage[hash_tree_root]
@@ -39,13 +36,13 @@ class OperationPool(Generic[T]):
             f(operation)
 
     def add(self, operation: T) -> None:
-        self._pool_storage[self._get_root(operation)] = operation
+        self._pool_storage[operation.hash_tree_root] = operation
 
     def batch_add(self, operations: Iterable[T]) -> None:
         self._batch_do(self.add, operations)
 
     def remove(self, operation: T) -> None:
-        root = self._get_root(operation)
+        root = operation.hash_tree_root
         if root in self._pool_storage:
             del self._pool_storage[root]
 

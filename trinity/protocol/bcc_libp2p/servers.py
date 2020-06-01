@@ -61,9 +61,6 @@ PROCESS_ORPHAN_BLOCKS_PERIOD = 10.0
 
 class OrphanBlockPool(OperationPool[BaseSignedBeaconBlock]):
 
-    def _get_root(self, block: BaseSignedBeaconBlock) -> Root:
-        return block.message.hash_tree_root
-
     def pop_children(self, block_root: Root) -> Tuple[BaseSignedBeaconBlock, ...]:
         children = tuple(
             orphan_block
