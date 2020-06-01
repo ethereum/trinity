@@ -21,7 +21,7 @@ from eth2.beacon.types.blocks import (
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import FromBlockParams, Root, Slot, ValidatorIndex
+from eth2.beacon.typing import FromBlockParams, Root, Slot, ValidatorIndex, EpochOperation
 from eth2.configs import Eth2Config
 
 
@@ -44,10 +44,8 @@ def _generate_randao_reveal(
     """
     epoch = compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH)
 
-    message_hash = ssz.get_hash_tree_root(epoch, sedes=ssz.sedes.uint64)
-
     randao_reveal = sign_transaction(
-        message_hash=message_hash,
+        operation=EpochOperation(epoch),
         privkey=privkey,
         state=state,
         slot=slot,
@@ -165,7 +163,7 @@ def create_block_on_state(
 
     # Sign
     signature = sign_transaction(
-        message_hash=signed_block.message.hash_tree_root,
+        operation=signed_block.message,
         privkey=privkey,
         state=post_state,
         slot=slot,

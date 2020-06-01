@@ -6,7 +6,7 @@ from eth_utils import ValidationError
 
 from eth2._utils.bls import bls
 from eth2._utils.humanize import humanize_bytes
-from eth2.beacon.helpers import signature_domain_to_domain_type
+from eth2.beacon.helpers import signature_domain_to_domain_type, compute_domain, compute_signing_root
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.typing import Operation, SignedOperation
@@ -33,15 +33,14 @@ async def _validate_duty(
 def sign(
     duty: Duty, operation: Operation, private_key_provider: PrivateKeyProvider
 ) -> BLSSignature:
-    message = operation.hash_tree_root
-    private_key = private_key_provider(duty.validator_public_key)
+    privkey = private_key_provider(duty.validator_public_key)
     # TODO use correct ``domain`` value
     # NOTE currently only uses part of the domain value
     # need to get fork from the state and compute the full domain value locally
-    domain = Domain(
-        b"\x00" * 4 + signature_domain_to_domain_type(duty.signature_domain)
-    )
-    return bls.sign(message, private_key, domain)
+    domain = compute_domain(duty.signature_domain)
+    signing_root = compute_signing_root(operation, domain)
+
+    return bls.Sign(privkey, signing_root)
 
 
 def _attach_signature(

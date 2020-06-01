@@ -24,7 +24,7 @@ from eth2.beacon.helpers import (
     compute_start_slot_at_epoch,
     get_block_root,
     get_block_root_at_slot,
-    get_domain,
+    get_domain, compute_signing_root,
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
@@ -50,7 +50,7 @@ from eth2.beacon.typing import (
     default_bitfield,
     default_committee_index,
     default_epoch,
-    default_slot,
+    default_slot, Operation,
 )
 from eth2.configs import Eth2Config
 
@@ -204,16 +204,18 @@ def aggregate_votes(
 def sign_proof_of_possession(
     deposit_message: DepositMessage, privkey: int
 ) -> BLSSignature:
-    return bls.sign(
-        message_hash=deposit_message.hash_tree_root,
-        privkey=privkey,
-        domain=compute_domain(SignatureDomain.DOMAIN_DEPOSIT),
+
+    domain = get_domain()
+
+    return bls.Sign(
+        privkey,
+        deposit_message,
     )
 
 
 def sign_transaction(
     *,
-    message_hash: Hash32,
+    operation: Operation,
     privkey: int,
     state: BeaconState,
     slot: Slot,
@@ -226,7 +228,9 @@ def sign_transaction(
         slots_per_epoch,
         message_epoch=compute_epoch_at_slot(slot, slots_per_epoch),
     )
-    return bls.sign(message_hash=message_hash, privkey=privkey, domain=domain)
+    signing_root = compute_signing_root(operation, domain)
+
+    return bls.Sign(privkey, signing_root)
 
 
 SAMPLE_HASH_1 = Root(Hash32(b"\x11" * 32))
@@ -248,7 +252,7 @@ def create_block_header_with_signature(
         body_root=body_root,
     )
     block_header_signature = sign_transaction(
-        message_hash=block_header.hash_tree_root,
+        operation=block_header,
         privkey=privkey,
         state=state,
         slot=block_header.slot,
@@ -362,11 +366,10 @@ def create_mock_slashable_attestation(
         ),
     )
 
-    message_hash = attestation_data.hash_tree_root
     attesting_indices = _get_mock_attesting_indices(committee, num_voted_attesters=1)
 
     signature = sign_transaction(
-        message_hash=message_hash,
+        operation=attestation_data,
         privkey=keymap[state.validators[attesting_indices[0]].pubkey],
         state=state,
         slot=attestation_slot,
@@ -488,7 +491,6 @@ def _create_mock_signed_attestation(
     """
     Create a mocking attestation of the given ``attestation_data`` slot with ``keymap``.
     """
-    message_hash = attestation_data.hash_tree_root
 
     if is_for_simulation:
         simulation_attesting_indices = _get_mock_attesting_indices(
@@ -504,7 +506,7 @@ def _create_mock_signed_attestation(
     # Use privkeys to sign the attestation
     signatures = [
         sign_transaction(
-            message_hash=message_hash,
+            operation=attestation_data,
             privkey=privkey,
             state=state,
             slot=attestation_slot,
@@ -713,7 +715,7 @@ def create_mock_voluntary_exit(
     return SignedVoluntaryExit.create(
         message=voluntary_exit,
         signature=sign_transaction(
-            message_hash=voluntary_exit.hash_tree_root,
+            operation=voluntary_exit,
             privkey=keymap[state.validators[validator_index].pubkey],
             state=state,
             slot=compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH),

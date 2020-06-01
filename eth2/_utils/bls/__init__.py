@@ -40,7 +40,7 @@ class Eth2BLS:
     @classmethod
     def Sign(cls, SK: int, message: Hash32) -> BLSSignature:
         validate_private_key(SK)
-        return cls.backend.sign(SK, message)
+        return cls.backend.Sign(SK, message)
 
     @classmethod
     def Aggregate(cls, signatures: Sequence[BLSSignature]) -> BLSSignature:

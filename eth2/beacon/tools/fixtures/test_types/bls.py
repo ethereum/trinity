@@ -160,10 +160,9 @@ class SignMessageHandler(TestHandler[SignatureDescriptor, BLSSignature]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.sign(
-            cast(Hash32, inputs["message_hash"]),
+        return bls.Sign(
             int(inputs["privkey"]),
-            cast(Domain, (inputs["domain"])),
+            cast(Hash32, inputs["signing_root"]),
         )
 
     @staticmethod

@@ -26,11 +26,11 @@ def filter_non_empty_pair(
 class MilagroBackend(BaseBLSBackend):
     @staticmethod
     def SkToPk(SK: int) -> BLSPubkey:
-        return SkToPk(SK.to_bytes(48, "big"))
+        return SkToPk(SK.to_bytes(32, "big"))
 
     @staticmethod
     def Sign(SK: int, message: Hash32) -> BLSSignature:
-        return Sign(SK.to_bytes(48, "big"), message)
+        return Sign(SK.to_bytes(32, "big"), message)
 
     @staticmethod
     def Verify(PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:

@@ -11,7 +11,7 @@ from eth2.beacon.attestation_helpers import (
     validate_indexed_attestation,
     validate_indexed_attestation_aggregate_signature,
 )
-from eth2.beacon.helpers import get_domain
+from eth2.beacon.helpers import get_domain, compute_signing_root
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import IndexedAttestation
@@ -61,7 +61,7 @@ def test_verify_indexed_attestation_signature(
         )
 
 
-def _get_indices_and_signatures(validator_count, state, config, message_hash, privkeys):
+def _get_indices_and_signatures(validator_count, state, config, operation, privkeys):
     num_indices = 5
     assert validator_count >= num_indices
     indices = random.sample(range(validator_count), num_indices)
@@ -74,7 +74,9 @@ def _get_indices_and_signatures(validator_count, state, config, message_hash, pr
         signature_domain=signature_domain,
         slots_per_epoch=config.SLOTS_PER_EPOCH,
     )
-    signatures = tuple(map(lambda key: bls.sign(message_hash, key, domain), privkeys))
+    signing_root = compute_signing_root(operation, domain)
+
+    signatures = tuple(map(lambda key: bls.Sign(key, signing_root), privkeys))
     return (indices, signatures)
 
 

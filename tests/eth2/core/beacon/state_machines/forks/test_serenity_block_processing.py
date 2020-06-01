@@ -4,7 +4,7 @@ from eth_utils.toolz import concat, first, mapcat
 import pytest
 
 from eth2._utils.bls import bls
-from eth2.beacon.helpers import compute_start_slot_at_epoch, get_domain
+from eth2.beacon.helpers import compute_start_slot_at_epoch, get_domain, compute_signing_root
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.serenity.block_processing import (
     process_eth1_data,
@@ -17,6 +17,7 @@ from eth2.beacon.tools.builder.proposer import _generate_randao_reveal
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import EpochOperation
 
 
 def test_randao_processing(
@@ -88,9 +89,9 @@ def test_randao_processing_validates_randao_reveal(
     )
 
     epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    message_hash = (epoch + 1).to_bytes(32, byteorder="little")
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, config.SLOTS_PER_EPOCH)
-    randao_reveal = bls.sign(message_hash, proposer_privkey, domain)
+    signing_root = compute_signing_root(EpochOperation(epoch + 1), domain)
+    randao_reveal = bls.Sign(proposer_privkey, signing_root)
 
     block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
         "randao_reveal", randao_reveal

@@ -1,6 +1,7 @@
 from typing import Any, NamedTuple, NewType, Sequence, Tuple
 
 from eth_typing import BLSSignature, Hash32
+from ssz import get_hash_tree_root, uint64
 from typing_extensions import Protocol
 
 Slot = NewType("Slot", int)  # uint64
@@ -76,3 +77,17 @@ class Operation(Protocol):
 
 class SignedOperation(Operation):
     signature: BLSSignature
+
+
+class SlotOperation(Operation):
+    hash_tree_root: Root
+
+    def __init__(self, slot: Slot):
+        self.hash_tree_root = get_hash_tree_root(slot, sedes=uint64)
+
+
+class EpochOperation(Operation):
+    hash_tree_root: Root
+
+    def __init__(self, epoch: Epoch):
+        self.hash_tree_root = get_hash_tree_root(epoch, sedes=uint64)

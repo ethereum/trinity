@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, Callable, Sequence, Set, Tuple
 
 from eth_typing import Hash32
 from eth_utils import ValidationError
-from ssz.hashable_container import HashableContainer
 
 from eth2._utils.hash import hash_eth2
 from eth2.beacon.signature_domain import SignatureDomain
@@ -19,7 +18,7 @@ from eth2.beacon.typing import (
     Slot,
     ValidatorIndex,
     Version,
-    default_version, default_root, Domain,
+    default_version, default_root, Domain, Operation,
 )
 from eth2.configs import Eth2Config
 
@@ -232,12 +231,12 @@ def compute_fork_digest(
     )
 
 
-def compute_signing_root(container: HashableContainer, domain: Domain) -> Root:
+def compute_signing_root(operation: Operation, domain: Domain) -> Root:
     """
     Return the signing root of an object by calculating the root of the object-domain tree.
     """
     domain_wrapped_object = SigningRoot(
-        object_root=container,
+        object_root=operation,
         domain=domain,
     )
     return domain_wrapped_object.hash_tree_root

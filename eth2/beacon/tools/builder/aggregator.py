@@ -14,12 +14,12 @@ from eth2.beacon.epoch_processing_helpers import (
     get_attesting_indices,
     get_indexed_attestation,
 )
-from eth2.beacon.helpers import compute_epoch_at_slot, get_domain
+from eth2.beacon.helpers import compute_epoch_at_slot, get_domain, compute_signing_root
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Bitfield, CommitteeIndex, Slot
+from eth2.beacon.typing import Bitfield, CommitteeIndex, Slot, Operation, Root, SlotOperation
 from eth2.configs import Eth2Config
 
 # TODO: TARGET_AGGREGATORS_PER_COMMITTEE is not in Eth2Config now.
@@ -38,7 +38,8 @@ def get_slot_signature(
         config.SLOTS_PER_EPOCH,
         message_epoch=compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH),
     )
-    return bls.sign(get_hash_tree_root(slot, sedes=uint64), privkey, domain)
+    signing_root = compute_signing_root(SlotOperation(slot), domain)
+    return bls.Sign(privkey, signing_root)
 
 
 def is_aggregator(
