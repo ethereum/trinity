@@ -26,6 +26,7 @@ import ssz
 
 from libp2p.pubsub.pb import rpc_pb2
 
+from eth2.beacon.operations.pool import OperationPool
 from p2p.service import BaseService
 
 from eth2.beacon.chains.base import (
@@ -55,12 +56,10 @@ from .configs import (
     PUBSUB_TOPIC_COMMITTEE_BEACON_ATTESTATION,
 )
 
-from eth2.beacon.hashable_container_pool import HashableContainerPool
-
 PROCESS_ORPHAN_BLOCKS_PERIOD = 10.0
 
 
-class OrphanBlockPool(HashableContainerPool[BaseSignedBeaconBlock]):
+class OrphanBlockPool(OperationPool[BaseSignedBeaconBlock]):
 
     def _get_root(self, block: BaseSignedBeaconBlock) -> Root:
         return block.message.hash_tree_root
