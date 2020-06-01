@@ -233,12 +233,12 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         else:
             yield cls._get_eth1_peer_server(boot_info, event_bus)
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         try:
-            tracker_services = cls._get_services(boot_info, event_bus)
+            tracker_services = self._get_services(boot_info, event_bus)
         except BadDatabaseError as err:
-            cls.logger.exception(f"Unrecoverable error in Network Component: {err}")
+            self.logger.exception(f"Unrecoverable error in Network Component: {err}")
 
         async with contextlib.AsyncExitStack() as stack:
             tracker_managers = tuple([

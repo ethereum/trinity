@@ -9,7 +9,6 @@ from asyncio_run_in_process import open_in_process_with_trio
 
 from trinity._utils.logging import child_process_logging, get_logger
 from trinity._utils.profiling import profiler
-from trinity.boot_info import BootInfo
 from trinity.events import ShutdownRequest
 
 from .component import BaseComponent, BaseIsolatedComponent
@@ -30,7 +29,6 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
     async def run(self) -> None:
         proc_ctx = open_in_process_with_trio(
             self._do_run,
-            self._boot_info,
             subprocess_kwargs=self.get_subprocess_kwargs(),
         )
         try:
@@ -43,13 +41,13 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
                 returncode = getattr(proc, 'returncode', 'unset')
                 self.logger.debug("%s terminated: returncode=%s", self.name, returncode)
 
-    async def run_process(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def run_process(self, event_bus: EndpointAPI) -> None:
         try:
-            if boot_info.profile:
+            if self._boot_info.profile:
                 with profiler(f'profile_{self.get_endpoint_name()}'):
-                    await self.do_run(boot_info, event_bus)
+                    await self.do_run(event_bus)
             else:
-                await self.do_run(boot_info, event_bus)
+                await self.do_run(event_bus)
         except (trio.Cancelled, trio.MultiError):
             # These are expected, when trinity is terminating because of a Ctrl-C
             raise
@@ -66,16 +64,16 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
                 "Unexpected error in component %s, shutting down trinity", self)
             raise
 
-    async def _do_run(self, boot_info: BootInfo) -> None:
-        with child_process_logging(boot_info):
+    async def _do_run(self) -> None:
+        with child_process_logging(self._boot_info):
             event_bus_service = TrioEventBusService(
-                boot_info.trinity_config,
+                self._boot_info.trinity_config,
                 self.get_endpoint_name(),
             )
             async with background_trio_service(event_bus_service):
                 event_bus = await event_bus_service.get_event_bus()
                 async with trio.open_nursery() as nursery:
-                    nursery.start_soon(self.run_process, boot_info, event_bus)
+                    nursery.start_soon(self.run_process, event_bus)
                     try:
                         await trio.sleep_forever()
                     except KeyboardInterrupt:
@@ -83,7 +81,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
                         nursery.cancel_scope.cancel()
 
     @abstractmethod
-    async def do_run(self, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
         """
         This is where subclasses should override
         """

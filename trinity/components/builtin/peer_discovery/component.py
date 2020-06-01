@@ -33,7 +33,6 @@ from p2p.discovery import (
 from p2p.node_db import NodeDB
 from p2p.identity_schemes import default_identity_scheme_registry
 
-from trinity.boot_info import BootInfo
 from trinity.config import Eth1AppConfig
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.db.manager import DBClient
@@ -66,8 +65,8 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             help="Disable peer discovery",
         )
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         config = boot_info.trinity_config
         db = DBClient.connect(config.database_ipc_path)
 

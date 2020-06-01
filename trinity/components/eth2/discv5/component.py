@@ -126,8 +126,8 @@ class DiscV5Component(TrioIsolatedComponent):
     def is_enabled(self) -> bool:
         return False
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        boot_info = self._boot_info
         identity_scheme_registry = default_identity_scheme_registry
         message_type_registry = default_message_type_registry
 

@@ -12,7 +12,6 @@ from eth2.beacon.tools.builder.initializer import (
 from eth2.beacon.tools.builder.validator import create_mock_deposit_data
 from eth2.beacon.tools.fixtures.loading import load_yaml_at
 from eth2.beacon.typing import Timestamp
-from trinity.boot_info import BootInfo
 from trinity.components.eth2.beacon.base_validator import ETH1_FOLLOW_DISTANCE
 from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import FakeEth1DataProvider
@@ -56,9 +55,8 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         #     help="RPC HTTP endpoint of Eth1 client ",
         # )
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        trinity_config = boot_info.trinity_config
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        trinity_config = self._boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         chain_config = beacon_app_config.get_chain_config()
         base_db = DBClient.connect(trinity_config.database_ipc_path)

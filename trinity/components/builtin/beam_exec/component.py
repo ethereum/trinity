@@ -3,7 +3,6 @@ import asyncio
 from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
-from trinity.boot_info import BootInfo
 from trinity.config import Eth1AppConfig
 from trinity.constants import SYNC_BEAM
 from trinity.db.manager import DBClient
@@ -33,9 +32,8 @@ class BeamChainExecutionComponent(AsyncioIsolatedComponent):
     def is_enabled(self) -> bool:
         return self._boot_info.args.sync_mode.upper() == SYNC_BEAM.upper()
 
-    @classmethod
-    async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
-        trinity_config = boot_info.trinity_config
+    async def do_run(self, event_bus: EndpointAPI) -> None:
+        trinity_config = self._boot_info.trinity_config
         app_config = trinity_config.get_app_config(Eth1AppConfig)
         chain_config = app_config.get_chain_config()
 
