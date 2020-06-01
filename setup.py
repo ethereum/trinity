@@ -48,7 +48,6 @@ deps = {
         "websockets>=8.1.0",
         "jsonschema==3.0.1",
         "mypy-extensions>=0.4.3,<0.5.0",
-        "typing_extensions>=3.7.4,<4.0.0",
         "ruamel.yaml==0.16.10",
         "argcomplete>=1.10.0,<2",
         "multiaddr>=0.0.8,<0.1.0",
