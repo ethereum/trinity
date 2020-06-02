@@ -1,8 +1,7 @@
-from typing import Tuple
+from typing import Tuple, Set
 
 from eth_utils import ValidationError
 
-from eth2.beacon.operations.pool import OperationPool
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_attestation_slot,
 )
@@ -27,14 +26,14 @@ def is_valid_slot(
         return True
 
 
-class AttestationPool(OperationPool[Attestation]):
+class AttestationPool(Set[Attestation]):
     def get_valid_attestation_by_current_slot(
         self, slot: Slot, config: Eth2Config
     ) -> Tuple[Attestation, ...]:
         return tuple(
             filter(
                 lambda attestation: is_valid_slot(attestation, slot, config),
-                self._pool_storage.values(),
+                self,
             )
         )
 
@@ -48,6 +47,6 @@ class AttestationPool(OperationPool[Attestation]):
                     and slot == attestation.data.slot
                     and committee_index == attestation.data.index
                 ),
-                self._pool_storage.values(),
+                self,
             )
         )

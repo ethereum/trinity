@@ -547,7 +547,6 @@ def test_lmd_ghost_fork_choice_scoring(
     forking_asymmetry,
     genesis_state,
     genesis_block,
-    empty_attestation_pool,
     config,
 ):
     """
@@ -593,16 +592,6 @@ def test_lmd_ghost_fork_choice_scoring(
     )
 
     _attach_attestations_to_block_tree_with_committees(block_tree, config)
-
-    attestations = tuple(
-        _get_attestation_from_block(block)
-        for block in _iter_block_tree_by_block(block_tree)
-        if _get_attestation_from_block(block)
-    )
-
-    attestation_pool = empty_attestation_pool
-    for attestation in attestations:
-        attestation_pool.add(attestation)
 
     context = Context.from_genesis(genesis_state, genesis_block)
     store = Store(chain_db, SignedBeaconBlock, config, context)
