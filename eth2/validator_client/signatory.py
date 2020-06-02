@@ -13,8 +13,8 @@ from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.typing import Operation, SignedOperation
 from eth2.validator_client.abc import BeaconNodeAPI, SignatoryDatabaseAPI
 from eth2.validator_client.duty import Duty, DutyType
+from eth2.validator_client.exceptions import BeaconNodeRequestFailure
 from eth2.validator_client.typing import PrivateKeyProvider
-from trinity.exceptions import BeaconNodeRequestFailure
 
 logger = logging.getLogger("eth2.validator_client.signatory")
 

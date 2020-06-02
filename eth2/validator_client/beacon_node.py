@@ -34,7 +34,7 @@ from eth2.validator_client.duty import (
     Duty,
     DutyType,
 )
-from trinity.exceptions import BeaconNodeRequestFailure
+from eth2.validator_client.exceptions import BeaconNodeRequestFailure
 
 SYNCING_POLL_INTERVAL = 10  # seconds
 CONNECTION_RETRY_INTERVAL = 1  # second(s)
