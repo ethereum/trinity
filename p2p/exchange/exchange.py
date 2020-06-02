@@ -1,3 +1,5 @@
+from __future__ import annotations
+import asyncio
 from functools import partial
 import contextlib
 from typing import (
@@ -26,7 +28,8 @@ class BaseExchange(ExchangeAPI[TRequestCommand, TResponseCommand, TResult]):
         self.tracker = self.tracker_class()
 
     @contextlib.asynccontextmanager
-    async def run_exchange(self, connection: ConnectionAPI) -> AsyncIterator[None]:
+    async def run_exchange(
+            self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
         protocol = connection.get_protocol_for_command_type(self.get_request_cmd_type())
 
         response_stream: ResponseCandidateStream[TRequestCommand, TResponseCommand] = ResponseCandidateStream(  # noqa: E501
@@ -34,12 +37,12 @@ class BaseExchange(ExchangeAPI[TRequestCommand, TResponseCommand, TResult]):
             protocol,
             self.get_response_cmd_type(),
         )
-        async with background_asyncio_service(response_stream):
+        async with background_asyncio_service(response_stream) as response_stream_manager:
             self._manager = ExchangeManager(
                 connection,
                 response_stream,
             )
-            yield
+            yield asyncio.create_task(response_stream_manager.wait_finished())
 
     async def get_result(
             self,

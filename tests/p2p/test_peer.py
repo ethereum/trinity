@@ -1,10 +1,14 @@
 import asyncio
+import contextlib
 
 import pytest
 
 from p2p.disconnect import DisconnectReason
-from p2p.tools.factories import ParagonPeerPairFactory
+from p2p.logic import BaseLogic
 from p2p.p2p_proto import Disconnect
+from p2p.qualifiers import always
+from p2p.tools.factories import ParagonPeerPairFactory
+from p2p.tools.paragon.api import ParagonAPI
 
 
 @pytest.mark.asyncio
@@ -40,3 +44,28 @@ async def test_cancels_on_received_disconnect():
         await asyncio.wait_for(bob.connection.manager.wait_finished(), timeout=1)
         assert bob.connection.is_closing
         assert bob.p2p_api.remote_disconnect_reason == DisconnectReason.CLIENT_QUITTING
+
+
+class BehaviorCrash(Exception):
+    pass
+
+
+class CrashingLogic(BaseLogic):
+    async def crash(self):
+        raise BehaviorCrash()
+
+    @contextlib.asynccontextmanager
+    async def apply(self, connection):
+        yield asyncio.create_task(self.crash())
+
+
+@pytest.mark.asyncio
+async def test_stops_if_behavior_crashes(monkeypatch):
+
+    def init(self):
+        self.add_child_behavior(CrashingLogic().as_behavior(always))
+
+    monkeypatch.setattr(ParagonAPI, '__init__', init)
+    async with ParagonPeerPairFactory() as (alice, _):
+        await asyncio.wait_for(alice.ready.wait(), timeout=0.5)
+        assert alice.manager.is_cancelled

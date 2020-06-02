@@ -1,8 +1,9 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
+import contextlib
 from typing import (
     Any,
     AsyncIterator,
-    AsyncContextManager,
     Callable,
     Dict,
     Generic,
@@ -203,7 +204,8 @@ class ExchangeAPI(ABC, Generic[TRequestCommand, TResponseCommand, TResult]):
         ...
 
     @abstractmethod
-    def run_exchange(self, connection: ConnectionAPI) -> AsyncContextManager[None]:
+    @contextlib.asynccontextmanager
+    def run_exchange(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
         ...
 
     @abstractmethod

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 import contextlib
 from typing import Any, AsyncIterator, cast
@@ -91,10 +92,10 @@ class DisconnectIfIdle(BaseLogic):
         self.idle_timeout = idle_timeout
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
         service = PingAndDisconnectIfIdle(connection, self.idle_timeout)
-        async with background_asyncio_service(service):
-            yield
+        async with background_asyncio_service(service) as manager:
+            yield asyncio.create_task(manager.wait_finished())
 
 
 class P2PAPI(Application):

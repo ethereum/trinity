@@ -19,7 +19,20 @@ from p2p.tools.factories import ConnectionPairFactory
 class SimpleLogic(BaseLogic):
     @contextlib.asynccontextmanager
     async def apply(self, connection):
-        yield
+        yield asyncio.Future()
+
+
+class BehaviorCrash(Exception):
+    pass
+
+
+class CrashingLogic(BaseLogic):
+    async def crash(self):
+        raise BehaviorCrash()
+
+    @contextlib.asynccontextmanager
+    async def apply(self, connection):
+        yield asyncio.create_task(self.crash())
 
 
 @pytest.fixture
@@ -70,6 +83,14 @@ async def test_behavior_logic_reuse_protection_on_apply(alice):
             async with behavior_b.apply(alice):
                 # this block should not be hit
                 raise AssertionError("should not be hit")
+
+
+@pytest.mark.asyncio
+async def test_behavior_crash(alice):
+    behavior = Behavior(always, CrashingLogic())
+    async with behavior.apply(alice) as future:
+        with pytest.raises(BehaviorCrash):
+            await future
 
 
 def test_logic_as_behavior_with_local_qualifier(alice, bob):
@@ -151,3 +172,17 @@ async def test_behavior_application():
             assert isinstance(my_app, MyApp)
         # ensure it removes itself from the API on exit
         assert not alice.has_logic('app-name')
+
+
+@pytest.mark.asyncio
+async def test_behavior_crash_in_application(alice):
+    class MyApp(Application):
+        name = 'app-name'
+        qualifier = always
+
+    app = MyApp()
+    app.add_child_behavior(SimpleLogic().as_behavior(always))
+    app.add_child_behavior(CrashingLogic().as_behavior(always))
+    async with app.as_behavior().apply(alice) as future:
+        with pytest.raises(BehaviorCrash):
+            await future

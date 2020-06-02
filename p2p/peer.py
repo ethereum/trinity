@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 import asyncio
 import collections
@@ -53,6 +54,7 @@ from p2p.handshake import (
     dial_out,
     DevP2PHandshakeParams,
 )
+from p2p.logic import wait_first
 from p2p.p2p_api import P2PAPI
 from p2p.p2p_proto import BaseP2PProtocol, Disconnect
 from p2p.tracking.connection import (
@@ -260,12 +262,14 @@ class BasePeer(Service):
         self.connection.add_command_handler(Disconnect, cast(HandlerFn, self._handle_disconnect))
         try:
             async with contextlib.AsyncExitStack() as stack:
-                await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
+                fut = await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
+                futures = [fut]
                 self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
 
                 for behavior in self.get_behaviors():
                     if behavior.should_apply_to(self.connection):
-                        await stack.enter_async_context(behavior.apply(self.connection))
+                        future = await stack.enter_async_context(behavior.apply(self.connection))
+                        futures.append(future)
 
                 self.connection.add_msg_handler(self._handle_subscriber_message)
 
@@ -280,7 +284,13 @@ class BasePeer(Service):
                 self.connection.start_protocol_streams()
                 self.ready.set()
 
-                await self.manager.wait_finished()
+                try:
+                    await wait_first(futures)
+                except asyncio.CancelledError:
+                    raise
+                except BaseException:
+                    self.logger.exception("Behavior finished before us, cancelling ourselves")
+                    self.manager.cancel()
         finally:
             for callback in self._finished_callbacks:
                 callback(self)
