@@ -1,9 +1,14 @@
+from __future__ import annotations
 from abc import abstractmethod
+import asyncio
 import contextlib
 from typing import (
     cast,
     AsyncIterator,
     Generic,
+    Iterable,
+    List,
+    Sequence,
     Tuple,
     Type,
 )
@@ -48,15 +53,45 @@ class CommandHandler(BaseLogic, Generic[TCommand]):
         return HasCommand(self.command_type)
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+        """
+        See LogicAPI.apply()
+
+        The future returned here will never be done as a CommandHandler doesn't run a background
+        task.
+        """
         self.connection = connection
 
         with connection.add_command_handler(self.command_type, cast(HandlerFn, self.handle)):
-            yield
+            yield asyncio.Future()
 
     @abstractmethod
     async def handle(self, connection: ConnectionAPI, command: TCommand) -> None:
         ...
+
+
+async def wait_first(futures: Sequence[asyncio.Future[None]]) -> None:
+    """
+    Wait for the first of the given futures to complete, then cancels all others.
+
+    If the completed future raised an exception, re-raise it.
+
+    If the task running us is cancelled, all futures will be cancelled.
+    """
+    try:
+        done, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
+    except asyncio.CancelledError:
+        await cancel_futures(futures)
+        raise
+    else:
+        await cancel_futures(pending)
+        if len(done) != 1:
+            raise Exception(
+                "Invariant: asyncio.wait() returned more than one future even "
+                "though we used return_when=asyncio.FIRST_COMPLETED: %s", done)
+        done_future = list(done)[0]
+        if done_future.exception():
+            raise done_future.exception()
 
 
 class Application(BaseLogic):
@@ -75,15 +110,38 @@ class Application(BaseLogic):
         self._behaviors += (behavior,)
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+        """
+        See LogicAPI.apply()
+
+        The future returned here will be done when the first of the futures obtained from applying
+        all behaviors of this application is done.
+        """
         self.connection = connection
 
         async with contextlib.AsyncExitStack() as stack:
+            futures: List[asyncio.Future[None]] = []
             # First apply all the child behaviors
             for behavior in self._behaviors:
                 if behavior.should_apply_to(connection):
-                    await stack.enter_async_context(behavior.apply(connection))
+                    fut = await stack.enter_async_context(behavior.apply(connection))
+                    futures.append(fut)
+
+            # If none of our behaviors were applied, use a never-ending Future so that callsites
+            # can wait on it like when behaviors are applied.
+            if not futures:
+                futures.append(asyncio.Future())
 
             # Now register ourselves with the connection.
             with connection.add_logic(self.name, self):
-                yield
+                yield asyncio.create_task(wait_first(futures))
+
+
+async def cancel_futures(futures: Iterable[asyncio.Future[None]]) -> None:
+    """
+    Cancel and await for the given futures, ignoring any asyncio.CancelledErrors.
+    """
+    for fut in futures:
+        fut.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await fut

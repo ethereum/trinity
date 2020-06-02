@@ -1,3 +1,5 @@
+from __future__ import annotations
+import asyncio
 import contextlib
 from typing import Any, AsyncIterator
 
@@ -29,6 +31,6 @@ class ExchangeLogic(BaseLogic):
             return protocol.supports_command(self.exchange.get_response_cmd_type())
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
-        async with self.exchange.run_exchange(connection):
-            yield
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+        async with self.exchange.run_exchange(connection) as future:
+            yield future

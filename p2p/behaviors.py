@@ -1,3 +1,5 @@
+from __future__ import annotations
+import asyncio
 import contextlib
 from typing import (
     AsyncIterator,
@@ -36,7 +38,7 @@ class Behavior(BehaviorAPI):
         return self.qualifier(connection, self.logic)  # type: ignore
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[None]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
         if self._applied_to is not None:
             raise ValidationError(
                 f"Reentrance: Behavior has already been applied to a "
@@ -56,5 +58,5 @@ class Behavior(BehaviorAPI):
             self.logic._behavior = self
 
         # once the logic is bound to the connection we enter it's context.
-        async with self.logic.apply(connection):
-            yield
+        async with self.logic.apply(connection) as task:
+            yield task

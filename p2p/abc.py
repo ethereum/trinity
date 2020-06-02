@@ -1,8 +1,9 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
 import asyncio
+import contextlib
 from typing import (
     Any,
-    AsyncContextManager,
     AsyncIterator,
     Awaitable,
     Callable,
@@ -443,12 +444,6 @@ class MultiplexerAPI(ABC):
                                  ) -> AsyncIterator[CommandAPI[Any]]:
         ...
 
-    #
-    # Message reading and streaming API
-    #
-    def multiplex(self) -> AsyncContextManager[None]:
-        ...
-
 
 class ServiceEventsAPI(ABC):
     started: asyncio.Event
@@ -577,7 +572,14 @@ class LogicAPI(ABC):
         ...
 
     @abstractmethod
-    def apply(self, connection: 'ConnectionAPI') -> AsyncContextManager[None]:
+    @contextlib.asynccontextmanager
+    def apply(self, connection: 'ConnectionAPI') -> AsyncIterator[asyncio.Future[None]]:
+        """
+        Apply this behavior to the given connection.
+
+        The returned future must be used in callsites to detect early exits (i.e. the behaviour
+        exiting before the connection is cancelled) or unexpected errors.
+        """
         ...
 
 
@@ -593,7 +595,8 @@ class BehaviorAPI(ABC):
         ...
 
     @abstractmethod
-    def apply(self, connection: 'ConnectionAPI') -> AsyncContextManager[None]:
+    @contextlib.asynccontextmanager
+    def apply(self, connection: 'ConnectionAPI') -> AsyncIterator[asyncio.Future[None]]:
         """
         Context manager API used programatically by the `ContextManager` to
         apply the behavior to the connection during the lifecycle of the
