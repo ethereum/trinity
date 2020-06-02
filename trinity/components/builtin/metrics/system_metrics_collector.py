@@ -91,19 +91,19 @@ def read_network_stats() -> NetworkStats:
 def get_all_python_processes() -> Iterator[psutil.Process]:
     for process in psutil.process_iter():
         try:
-            process.cmdline()
+            commands = process.cmdline()
         except psutil.AccessDenied:
             continue
         except psutil.ZombieProcess:
             continue
-        if 'python' in process.name():
+        if any('python' in cmd for cmd in commands):
             yield process
 
 
 def get_main_trinity_process() -> psutil.Process:
     python_processes = get_all_python_processes()
     for process in python_processes:
-        if 'trinity' in process.cmdline():
+        if any('trinity' in cmd for cmd in process.cmdline()):
             return process
     raise MetricsReportingError("No 'trinity' process found.")
 
