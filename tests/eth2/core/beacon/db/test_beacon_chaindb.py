@@ -8,6 +8,7 @@ import pytest
 
 from eth2._utils.hash import hash_eth2
 from eth2._utils.ssz import validate_ssz_equal
+from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.db.exceptions import (
     AttestationRootNotFound,
     FinalizedHeadNotFound,
@@ -252,9 +253,7 @@ def test_chaindb_get_justified_head(
     # test that there is only one justified head per epoch
     state_with_bad_epoch = genesis_state.set(
         "current_justified_checkpoint",
-        Checkpoint.create(
-            root=block.message.hash_tree_root, epoch=config.GENESIS_EPOCH
-        ),
+        Checkpoint.create(root=block.message.hash_tree_root, epoch=GENESIS_EPOCH),
     )
     chaindb.persist_state(state_with_bad_epoch)
     chaindb.persist_block(block, SignedBeaconBlock, fork_choice_scoring)
@@ -265,9 +264,7 @@ def test_chaindb_get_justified_head(
     # test that the we can update justified head if we satisfy the invariants
     state_with_justified_block = genesis_state.set(
         "current_justified_checkpoint",
-        Checkpoint.create(
-            root=block.message.hash_tree_root, epoch=config.GENESIS_EPOCH + 1
-        ),
+        Checkpoint.create(root=block.message.hash_tree_root, epoch=GENESIS_EPOCH + 1),
     )
     chaindb.persist_state(state_with_justified_block)
 

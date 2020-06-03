@@ -23,8 +23,7 @@ class ProposerSlashing(HashableContainer):
         signed_header_2: SignedBeaconBlockHeader = default_signed_beacon_block_header,
     ) -> TProposerSlashing:
         return super().create(
-            signed_header_1=signed_header_1,
-            signed_header_2=signed_header_2,
+            signed_header_1=signed_header_1, signed_header_2=signed_header_2
         )
 
     def __str__(self) -> str:

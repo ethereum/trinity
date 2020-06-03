@@ -11,7 +11,7 @@ from py_ecc.optimized_bls12_381.optimized_curve import (
 from eth2._utils.bls import bls
 from eth2._utils.hash import hash_eth2
 from eth2._utils.merkle.common import MerkleTree, get_merkle_proof
-from eth2.beacon.constants import ZERO_TIMESTAMP, GENESIS_EPOCH
+from eth2.beacon.constants import GENESIS_EPOCH, ZERO_TIMESTAMP
 from eth2.beacon.genesis import get_genesis_block, initialize_beacon_state_from_eth1
 from eth2.beacon.tools.builder.validator import (
     create_deposit_data,

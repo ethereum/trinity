@@ -1,6 +1,7 @@
 import pytest
 
 from eth2._utils.bls import bls
+from eth2.beacon.constants import GENESIS_EPOCH, GENESIS_SLOT
 from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.state_machines.forks.serenity import SerenityStateMachine
@@ -29,8 +30,8 @@ def test_demo(base_db, validator_count, keymap, pubkeys, fork_choice_scoring):
         __name__="SerenityStateMachineForTesting", config=config
     )
 
-    genesis_slot = config.GENESIS_SLOT
-    genesis_epoch = config.GENESIS_EPOCH
+    genesis_slot = GENESIS_SLOT
+    genesis_epoch = GENESIS_EPOCH
     chaindb = BeaconChainDB(base_db, config)
 
     genesis_state, genesis_block = create_mock_genesis(

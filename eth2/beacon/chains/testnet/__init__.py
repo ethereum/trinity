@@ -4,6 +4,4 @@ from eth2.beacon.state_machines.forks.skeleton_lake import SkeletonLakeStateMach
 
 
 class SkeletonLakeChain(BeaconChain):
-    sm_configuration = (
-        (GENESIS_SLOT, SkeletonLakeStateMachine),
-    )
+    sm_configuration = ((GENESIS_SLOT, SkeletonLakeStateMachine),)

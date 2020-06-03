@@ -5,7 +5,7 @@ from eth_utils.toolz import curry
 from ssz.hashable_list import HashableList
 
 from eth2._utils.tuple import update_tuple_item, update_tuple_item_with_fn
-from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH
+from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH, GENESIS_EPOCH
 from eth2.beacon.epoch_processing_helpers import (
     compute_activation_exit_epoch,
     decrease_balance,
@@ -98,7 +98,7 @@ def _determine_updated_justifications(
 def _determine_new_justified_epoch_and_bitfield(
     state: BeaconState, config: Eth2Config
 ) -> Tuple[Epoch, Bitfield]:
-    genesis_epoch = config.GENESIS_EPOCH
+    genesis_epoch = GENESIS_EPOCH
     previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, genesis_epoch)
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
 
@@ -220,7 +220,7 @@ def process_justification_and_finalization(
     state: BeaconState, config: Eth2Config
 ) -> BeaconState:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    genesis_epoch = config.GENESIS_EPOCH
+    genesis_epoch = GENESIS_EPOCH
 
     if current_epoch <= genesis_epoch + 1:
         return state
@@ -250,9 +250,10 @@ def _is_threshold_met_against_committee(
     state: BeaconState,
     attesting_indices: Set[ValidatorIndex],
     committee: Set[ValidatorIndex],
+    config: Eth2Config,
 ) -> bool:
-    total_attesting_balance = get_total_balance(state, attesting_indices)
-    total_committee_balance = get_total_balance(state, committee)
+    total_attesting_balance = get_total_balance(state, attesting_indices, config)
+    total_committee_balance = get_total_balance(state, committee, config)
     return _bft_threshold_met(total_attesting_balance, total_committee_balance)
 
 
@@ -261,7 +262,7 @@ def get_attestation_deltas(
 ) -> Tuple[Sequence[Gwei], Sequence[Gwei]]:
     rewards = tuple(0 for _ in range(len(state.validators)))
     penalties = tuple(0 for _ in range(len(state.validators)))
-    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, config.GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, GENESIS_EPOCH)
     total_balance = get_total_active_balance(state, config)
     eligible_validator_indices = tuple(
         ValidatorIndex(index)
@@ -288,7 +289,9 @@ def get_attestation_deltas(
         unslashed_attesting_indices = get_unslashed_attesting_indices(
             state, attestations, config
         )
-        attesting_balance = get_total_balance(state, unslashed_attesting_indices)
+        attesting_balance = get_total_balance(
+            state, unslashed_attesting_indices, config
+        )
         for index in eligible_validator_indices:
             if index in unslashed_attesting_indices:
                 increment = config.EFFECTIVE_BALANCE_INCREMENT
@@ -296,7 +299,10 @@ def get_attestation_deltas(
                     rewards,
                     index,
                     lambda balance, delta: balance + delta,
-                    (get_base_reward(state, index, config) * (attesting_balance // increment))
+                    (
+                        get_base_reward(state, index, config)
+                        * (attesting_balance // increment)
+                    )
                     // (total_balance // increment),
                 )
             else:
@@ -367,7 +373,7 @@ def process_rewards_and_penalties(
     state: BeaconState, config: Eth2Config
 ) -> BeaconState:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    if current_epoch == config.GENESIS_EPOCH:
+    if current_epoch == GENESIS_EPOCH:
         return state
 
     rewards_for_attestations, penalties_for_attestations = get_attestation_deltas(
@@ -475,7 +481,11 @@ def process_slashings(state: BeaconState, config: Eth2Config) -> BeaconState:
 def _determine_next_eth1_votes(
     state: BeaconState, config: Eth2Config
 ) -> HashableList[Eth1Data]:
-    if (state.slot + 1) % config.SLOTS_PER_ETH1_VOTING_PERIOD == 0:
+    if (
+        state.current_epoch(config.SLOTS_PER_EPOCH)
+        % config.EPOCHS_PER_ETH1_VOTING_PERIOD
+        == 0
+    ):
         return HashableList.from_iterable((), state.eth1_data_votes.sedes)
     else:
         return state.eth1_data_votes

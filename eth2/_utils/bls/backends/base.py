@@ -28,9 +28,6 @@ class BaseBLSBackend(ABC):
     @staticmethod
     @abstractmethod
     def FastAggregateVerify(
-        PKs: Sequence[BLSPubkey],
-        message: Hash32,
-        signature: BLSSignature,
+        PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
     ) -> bool:
         ...
-

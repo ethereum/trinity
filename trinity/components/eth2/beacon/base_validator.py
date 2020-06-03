@@ -79,7 +79,10 @@ class BaseValidator(BaseService):
     ) -> Tuple[Deposit, ...]:
         eth1_data = state.eth1_data
         # Check if the eth1 vote pass the threshold
-        slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
+        slots_per_eth1_voting_period = (
+            state_machine.config.EPOCHS_PER_ETH1_VOTING_PERIOD
+            * state_machine.config.SLOTS_PER_EPOCH
+        )
         eth1_data_votes = state.eth1_data_votes.append(eth1_vote)
         if eth1_data_votes.count(eth1_vote) * 2 > slots_per_eth1_voting_period:
             eth1_data = eth1_vote
@@ -135,7 +138,10 @@ class BaseValidator(BaseService):
     async def _get_eth1_vote(
         self, slot: Slot, state: BeaconState, state_machine: BaseBeaconStateMachine
     ) -> Eth1Data:
-        slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
+        slots_per_eth1_voting_period = (
+            state_machine.config.EPOCHS_PER_ETH1_VOTING_PERIOD
+            * state_machine.config.SLOTS_PER_EPOCH
+        )
         seconds_per_slot = state_machine.config.SECONDS_PER_SLOT
         eth1_follow_distance = ETH1_FOLLOW_DISTANCE
         eth1_voting_period_start_timestamp = (

@@ -2,7 +2,11 @@ from eth_utils import ValidationError
 import pytest
 
 from eth2._utils.bls import bls
-from eth2.beacon.helpers import compute_start_slot_at_epoch, get_domain, compute_signing_root
+from eth2.beacon.helpers import (
+    compute_signing_root,
+    compute_start_slot_at_epoch,
+    get_domain,
+)
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_block_slot,
@@ -66,14 +70,11 @@ def test_validate_proposer_signature(
     )
 
     block = BeaconBlock.create(**sample_beacon_block_params)
-    domain = get_domain(
-        state, SignatureDomain.DOMAIN_BEACON_PROPOSER, slots_per_epoch
-    )
+    domain = get_domain(state, SignatureDomain.DOMAIN_BEACON_PROPOSER, slots_per_epoch)
     signing_root = compute_signing_root(block, domain)
 
     proposed_block = SignedBeaconBlock.create(
-        message=block,
-        signature=bls.Sign(proposer_privkey, signing_root),
+        message=block, signature=bls.Sign(proposer_privkey, signing_root)
     )
 
     if is_valid_signature:

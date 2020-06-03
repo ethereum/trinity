@@ -6,7 +6,7 @@ from eth_utils import ValidationError
 import ssz
 
 from eth2.beacon.attestation_helpers import validate_indexed_attestation
-from eth2.beacon.constants import ZERO_ROOT
+from eth2.beacon.constants import GENESIS_EPOCH, GENESIS_SLOT, ZERO_ROOT
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from eth2.beacon.epoch_processing_helpers import get_indexed_attestation
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
@@ -175,7 +175,7 @@ class Store:
         ) // self._config.SECONDS_PER_SLOT
 
     def get_current_slot(self) -> Slot:
-        return Slot(self._config.GENESIS_SLOT + self._get_slots_since_genesis())
+        return Slot(GENESIS_SLOT + self._get_slots_since_genesis())
 
     def _get_block_by_root(self, root: Root) -> BaseBeaconBlock:
         return self._db.get_block_by_root(root, self._block_class).message
@@ -358,9 +358,7 @@ class Store:
             self.get_current_slot(), self._config.SLOTS_PER_EPOCH
         )
         previous_epoch = (
-            current_epoch - 1
-            if current_epoch > self._config.GENESIS_EPOCH
-            else self._config.GENESIS_EPOCH
+            current_epoch - 1 if current_epoch > GENESIS_EPOCH else GENESIS_EPOCH
         )
         if target.epoch not in (current_epoch, previous_epoch):
             raise ValidationError(
@@ -412,7 +410,6 @@ class Store:
         validate_indexed_attestation(
             target_state,
             indexed_attestation,
-            self._config.MAX_VALIDATORS_PER_COMMITTEE,
             self._config.SLOTS_PER_EPOCH,
             validate_signature=validate_signature,
         )

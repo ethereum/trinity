@@ -110,7 +110,11 @@ class BaseBeaconBlock(HashableContainer, Configurable, ABC):
         body: BeaconBlockBody = default_beacon_block_body,
     ) -> TBaseBeaconBlock:
         return super().create(
-            slot=slot, proposer_index=proposer_index, parent_root=parent_root, state_root=state_root, body=body
+            slot=slot,
+            proposer_index=proposer_index,
+            parent_root=parent_root,
+            state_root=state_root,
+            body=body,
         )
 
     def __str__(self) -> str:

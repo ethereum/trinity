@@ -5,6 +5,7 @@ import ssz
 
 from eth2.beacon.constants import (
     DEPOSIT_CONTRACT_TREE_DEPTH,
+    GENESIS_EPOCH,
     ZERO_HASH32,
     ZERO_ROOT,
 )
@@ -39,7 +40,9 @@ def is_genesis_trigger(
     return active_validator_count == config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
 
 
-def _genesis_time_from_eth1_timestamp(eth1_timestamp: Timestamp, genesis_delay: int) -> Timestamp:
+def _genesis_time_from_eth1_timestamp(
+    eth1_timestamp: Timestamp, genesis_delay: int
+) -> Timestamp:
     return Timestamp(
         eth1_timestamp - eth1_timestamp % genesis_delay + 2 * genesis_delay
     )
@@ -52,14 +55,16 @@ def initialize_beacon_state_from_eth1(
     deposits: Sequence[Deposit],
     config: Eth2Config
 ) -> BeaconState:
-    fork = Fork(
+    fork = Fork.create(
         previous_version=config.GENESIS_FORK_VERSION,
         current_version=config.GENESIS_FORK_VERSION,
-        epoch=config.GENESIS_EPOCH,
+        epoch=GENESIS_EPOCH,
     )
 
     state = BeaconState.create(
-        genesis_time=_genesis_time_from_eth1_timestamp(eth1_timestamp, config.MIN_GENESIS_DELAY),
+        genesis_time=_genesis_time_from_eth1_timestamp(
+            eth1_timestamp, config.MIN_GENESIS_DELAY
+        ),
         fork=fork,
         eth1_data=Eth1Data.create(
             block_hash=eth1_block_hash, deposit_count=len(deposits)
@@ -95,7 +100,7 @@ def initialize_beacon_state_from_eth1(
 
         if effective_balance == config.MAX_EFFECTIVE_BALANCE:
             activated_validator = activate_validator(
-                state.validators[validator_index], config.GENESIS_EPOCH
+                state.validators[validator_index], GENESIS_EPOCH
             )
             state = state.transform(
                 ("validators", validator_index), activated_validator
@@ -108,9 +113,7 @@ def is_valid_genesis_state(state: BeaconState, config: Eth2Config) -> bool:
     if state.genesis_time < config.MIN_GENESIS_TIME:
         return False
 
-    validator_count = len(
-        get_active_validator_indices(state.validators, config.GENESIS_EPOCH)
-    )
+    validator_count = len(get_active_validator_indices(state.validators, GENESIS_EPOCH))
     if validator_count < config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT:
         return False
 

@@ -10,7 +10,7 @@ from eth_utils import ValidationError, encode_hex, to_tuple
 from lru import LRU
 import ssz
 
-from eth2.beacon.constants import ZERO_ROOT
+from eth2.beacon.constants import GENESIS_EPOCH, GENESIS_SLOT, ZERO_ROOT
 from eth2.beacon.db.exceptions import (
     AttestationRootNotFound,
     EpochInfoNotFound,
@@ -210,7 +210,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             slot = self.get_slot_by_root(justified_head_root)
             return compute_epoch_at_slot(slot, self.genesis_config.SLOTS_PER_EPOCH)
         except JustifiedHeadNotFound:
-            return self.genesis_config.GENESIS_EPOCH
+            return GENESIS_EPOCH
 
     def persist_block(
         self,
@@ -262,7 +262,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         return self._get_canonical_block_root(self.db, slot)
 
     def get_genesis_block_root(self) -> Root:
-        return self._get_canonical_block_root(self.db, self.genesis_config.GENESIS_SLOT)
+        return self._get_canonical_block_root(self.db, GENESIS_SLOT)
 
     @staticmethod
     def _get_canonical_block_root(db: DatabaseAPI, slot: Slot) -> Root:
@@ -832,7 +832,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         """
         genesis_root = genesis_block.message.hash_tree_root
         self._update_finalized_head(genesis_root)
-        self._update_justified_head(genesis_root, self.genesis_config.GENESIS_EPOCH)
+        self._update_justified_head(genesis_root, GENESIS_EPOCH)
 
     @staticmethod
     def _persist_canonical_epoch_info(db: DatabaseAPI, state: BeaconState) -> None:

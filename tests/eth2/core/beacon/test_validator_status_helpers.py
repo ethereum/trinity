@@ -4,7 +4,7 @@ from eth_utils.toolz import first, groupby, update_in
 import pytest
 
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
-from eth2.beacon.constants import FAR_FUTURE_EPOCH
+from eth2.beacon.constants import FAR_FUTURE_EPOCH, GENESIS_EPOCH
 from eth2.beacon.epoch_processing_helpers import (
     compute_activation_exit_epoch,
     get_validator_churn_limit,
@@ -24,13 +24,13 @@ from eth2.beacon.validator_status_helpers import (
 def test_activate_validator(
     genesis_state, is_already_activated, validator_count, pubkeys, config
 ):
-    some_future_epoch = config.GENESIS_EPOCH + random.randrange(1, 2 ** 32)
+    some_future_epoch = GENESIS_EPOCH + random.randrange(1, 2 ** 32)
 
     if is_already_activated:
         assert validator_count > 0
         some_validator = genesis_state.validators[0]
-        assert some_validator.activation_eligibility_epoch == config.GENESIS_EPOCH
-        assert some_validator.activation_epoch == config.GENESIS_EPOCH
+        assert some_validator.activation_eligibility_epoch == GENESIS_EPOCH
+        assert some_validator.activation_epoch == GENESIS_EPOCH
     else:
         some_validator = create_mock_validator(
             pubkeys[validator_count + 1], config, is_active=is_already_activated
@@ -59,7 +59,7 @@ def test_compute_exit_queue_epoch(
     for index in random.sample(
         range(len(state.validators)), len(state.validators) // 4
     ):
-        some_future_epoch = config.GENESIS_EPOCH + random.randrange(1, 2 ** 32)
+        some_future_epoch = GENESIS_EPOCH + random.randrange(1, 2 ** 32)
         state = state.transform(["validators", index, "exit_epoch"], some_future_epoch)
 
     if is_delayed_exit_epoch_the_maximum_exit_queue_epoch:
@@ -70,7 +70,7 @@ def test_compute_exit_queue_epoch(
             if validator.exit_epoch == FAR_FUTURE_EPOCH:
                 continue
             some_prior_epoch = random.randrange(
-                config.GENESIS_EPOCH, expected_candidate_exit_queue_epoch
+                GENESIS_EPOCH, expected_candidate_exit_queue_epoch
             )
             state = state.transform(
                 ["validators", index, "exit_epoch"], some_prior_epoch
@@ -84,7 +84,7 @@ def test_compute_exit_queue_epoch(
                 continue
             if validator.exit_epoch > expected_candidate_exit_queue_epoch:
                 expected_candidate_exit_queue_epoch = validator.exit_epoch
-        assert expected_candidate_exit_queue_epoch >= config.GENESIS_EPOCH
+        assert expected_candidate_exit_queue_epoch >= GENESIS_EPOCH
 
     if is_churn_limit_met:
         churn_limit = 0
@@ -131,8 +131,8 @@ def test_initiate_validator_exit(genesis_state, is_already_exited, config):
     index = random.choice(range(len(state.validators)))
     validator = state.validators[index]
     assert not validator.slashed
-    assert validator.activation_epoch == config.GENESIS_EPOCH
-    assert validator.activation_eligibility_epoch == config.GENESIS_EPOCH
+    assert validator.activation_epoch == GENESIS_EPOCH
+    assert validator.activation_eligibility_epoch == GENESIS_EPOCH
     assert validator.exit_epoch == FAR_FUTURE_EPOCH
     assert validator.withdrawable_epoch == FAR_FUTURE_EPOCH
 
@@ -163,7 +163,7 @@ def test_initiate_validator_exit(genesis_state, is_already_exited, config):
 def test_set_validator_slashed(
     genesis_state, is_already_slashed, validator_count, pubkeys, config
 ):
-    some_future_epoch = config.GENESIS_EPOCH + random.randrange(1, 2 ** 32)
+    some_future_epoch = GENESIS_EPOCH + random.randrange(1, 2 ** 32)
 
     assert len(genesis_state.validators) > 0
     some_validator = genesis_state.validators[0]
@@ -190,7 +190,7 @@ def test_set_validator_slashed(
 @pytest.mark.parametrize(("validator_count"), [(100)])
 def test_slash_validator(genesis_state, config):
     some_epoch = (
-        config.GENESIS_EPOCH
+        GENESIS_EPOCH
         + random.randrange(1, 2 ** 32)
         + config.EPOCHS_PER_SLASHINGS_VECTOR
     )

@@ -44,42 +44,27 @@ class Eth2BLS:
 
     @classmethod
     def Aggregate(cls, signatures: Sequence[BLSSignature]) -> BLSSignature:
-        return cls.backend.aggregate_signatures(signatures)
+        return cls.backend.Aggregate(signatures)
 
     @classmethod
-    def _AggregatePKs(cls, pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
-        return cls.backend.aggregate_pubkeys(pubkeys)
-
-    @classmethod
-    def Verify(
-        cls,
-        PK: BLSPubkey,
-        message: Hash32,
-        signature: BLSSignature,
-    ) -> bool:
-        return cls.backend.verify(PK, message, signature)
+    def Verify(cls, PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:
+        return cls.backend.Verify(PK, message, signature)
 
     @classmethod
     def FastAggregateVerify(
-        cls,
-        PKs: Sequence[BLSPubkey],
-        message: Sequence[Hash32],
-        signature: BLSSignature,
+        cls, PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
     ) -> bool:
-        return cls.backend.verify_multiple(PKs, message, signature)
+        return cls.backend.FastAggregateVerify(PKs, message, signature)
 
     @classmethod
     def validate(
-        cls,
-        message_hash: Hash32,
-        pubkey: BLSPubkey,
-        signature: BLSSignature,
+        cls, pubkey: BLSPubkey, message_hash: Hash32, signature: BLSSignature
     ) -> None:
         if cls.backend != NoOpBackend:
             validate_signature(signature)
             validate_public_key(pubkey)
 
-        if not cls.Verify(message_hash, pubkey, signature):
+        if not cls.Verify(pubkey, message_hash, signature):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
                 f"message_hash {message_hash.hex()}\n"
@@ -89,21 +74,18 @@ class Eth2BLS:
 
     @classmethod
     def validate_multiple(
-        cls,
-        pubkeys: Sequence[BLSPubkey],
-        message: Hash32,
-        signature: BLSSignature,
+        cls, pubkeys: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
     ) -> None:
         if cls.backend != NoOpBackend:
             validate_signature(signature)
             validate_many_public_keys(pubkeys)
 
-        if not cls.FastAggregateVerify():
+        if not cls.FastAggregateVerify(pubkeys, message, signature):
             raise SignatureError(
                 f"backend {cls.backend.__name__}\n"
                 f"pubkeys {pubkeys}\n"
-                f"message_hashes {message}\n"
-                f"signature {signature.hex()}\n"
+                f"message {message.hex()}\n"
+                f"signature {signature.hex()}"
             )
 
 

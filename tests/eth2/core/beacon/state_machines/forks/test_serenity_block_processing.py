@@ -4,7 +4,11 @@ from eth_utils.toolz import concat, first, mapcat
 import pytest
 
 from eth2._utils.bls import bls
-from eth2.beacon.helpers import compute_start_slot_at_epoch, get_domain, compute_signing_root
+from eth2.beacon.helpers import (
+    compute_signing_root,
+    compute_start_slot_at_epoch,
+    get_domain,
+)
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.serenity.block_processing import (
     process_eth1_data,
@@ -150,7 +154,7 @@ def test_process_eth1_data(
     assert tuple(updated_votes) == expanded_expected_votes
 
 
-@pytest.mark.parametrize(("slots_per_eth1_voting_period"), ((16),))
+@pytest.mark.parametrize(("epochs_per_eth1_voting_period"), ((2),))
 @pytest.mark.parametrize(
     ("vote_offsets"),  # a tuple of offsets against the majority threshold
     (
@@ -171,7 +175,7 @@ def test_process_eth1_data(
 )
 def test_ensure_update_eth1_vote_if_exists(genesis_state, config, vote_offsets):
     # one less than a majority is the majority divided by 2
-    threshold = config.SLOTS_PER_ETH1_VOTING_PERIOD // 2
+    threshold = config.EPOCHS_PER_ETH1_VOTING_PERIOD * config.SLOTS_PER_EPOCH // 2
     data_votes = tuple(
         concat(
             (Eth1Data.create(block_hash=(i).to_bytes(32, "little")),)

@@ -172,16 +172,18 @@ def test_get_active_validator_indices(sample_validator_record_params):
 @pytest.mark.parametrize(
     ("balances," "validator_indices," "expected"),
     [
-        (tuple(), tuple(), 1),
+        (tuple(), tuple(), 1000000000),
         ((32 * GWEI_PER_ETH, 32 * GWEI_PER_ETH), (0, 1), 64 * GWEI_PER_ETH),
         ((32 * GWEI_PER_ETH, 32 * GWEI_PER_ETH), (1,), 32 * GWEI_PER_ETH),
     ],
 )
-def test_get_total_balance(genesis_state, balances, validator_indices, expected):
+def test_get_total_balance(
+    genesis_state, config, balances, validator_indices, expected
+):
     state = genesis_state
     for i, index in enumerate(validator_indices):
         state = state.transform(["balances", index], balances[i])
-    total_balance = get_total_balance(state, validator_indices)
+    total_balance = get_total_balance(state, validator_indices, config)
     assert total_balance == expected
 
 
@@ -214,8 +216,28 @@ def test_get_fork_version(
         "expected"
     ),
     [
-        (b"\x11" * 4, b"\x22" * 4, 4, 4, 1, b"\x01\x00\x00\x00" + b"\x22" * 4),
-        (b"\x11" * 4, b"\x22" * 4, 4, 4 - 1, 1, b"\x01\x00\x00\x00" + b"\x11" * 4),
+        (
+            b"\x11" * 4,
+            b"\x22" * 4,
+            4,
+            4,
+            1,
+            b"\x01\x00\x00\x00"
+            + bytearray.fromhex(
+                "db9249a177b9b5a47773d2cf3c55d92000b7f3db23ddf295d52b4bba"
+            ),
+        ),
+        (
+            b"\x11" * 4,
+            b"\x22" * 4,
+            4,
+            4 - 1,
+            1,
+            b"\x01\x00\x00\x00"
+            + bytearray.fromhex(
+                "6f57efde1d7f54a7c621c29bfc7b917a26b462c06a966f8e8e1642a9"
+            ),
+        ),
     ],
 )
 def test_get_domain(

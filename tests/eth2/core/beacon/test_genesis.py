@@ -1,7 +1,7 @@
 from eth.constants import ZERO_HASH32
 import pytest
 
-from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH
+from eth2.beacon.constants import GENESIS_EPOCH, GENESIS_SLOT, JUSTIFICATION_BITS_LENGTH
 from eth2.beacon.genesis import (
     _genesis_time_from_eth1_timestamp,
     get_genesis_block,
@@ -29,12 +29,11 @@ def test_get_genesis_block():
 def test_get_genesis_beacon_state(
     validator_count,
     pubkeys,
-    genesis_epoch,
-    genesis_slot,
     max_committees_per_slot,
     slots_per_historical_root,
     epochs_per_slashings_vector,
     epochs_per_historical_vector,
+    min_genesis_delay,
     config,
     keymap,
 ):
@@ -58,8 +57,10 @@ def test_get_genesis_beacon_state(
     )
 
     # Versioning
-    assert state.slot == genesis_slot
-    assert state.genesis_time == _genesis_time_from_eth1_timestamp(eth1_timestamp)
+    assert state.slot == GENESIS_SLOT
+    assert state.genesis_time == _genesis_time_from_eth1_timestamp(
+        eth1_timestamp, min_genesis_delay
+    )
     assert state.fork == Fork.create()
 
     # History
@@ -96,15 +97,15 @@ def test_get_genesis_beacon_state(
     assert len(state.current_epoch_attestations) == 0
 
     # Justification
-    assert state.previous_justified_checkpoint.epoch == genesis_epoch
+    assert state.previous_justified_checkpoint.epoch == GENESIS_EPOCH
     assert state.previous_justified_checkpoint.root == ZERO_HASH32
-    assert state.current_justified_checkpoint.epoch == genesis_epoch
+    assert state.current_justified_checkpoint.epoch == GENESIS_EPOCH
     assert state.current_justified_checkpoint.root == ZERO_HASH32
     assert state.justification_bits == (False,) * JUSTIFICATION_BITS_LENGTH
 
     # Finalization
-    assert state.finalized_checkpoint.epoch == genesis_epoch
+    assert state.finalized_checkpoint.epoch == GENESIS_EPOCH
     assert state.finalized_checkpoint.root == ZERO_HASH32
 
     for i in range(len(genesis_deposits)):
-        assert state.validators[i].is_active(genesis_epoch)
+        assert state.validators[i].is_active(GENESIS_EPOCH)

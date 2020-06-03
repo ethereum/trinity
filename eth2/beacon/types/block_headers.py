@@ -1,13 +1,18 @@
 from typing import Type, TypeVar
 
-from eth.constants import ZERO_HASH32
-from eth_typing import BLSSignature, Hash32
+from eth_typing import BLSSignature
 from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32, bytes96, uint64
 
-from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_ROOT
-from eth2.beacon.typing import Root, Slot, default_root, ValidatorIndex, default_validator_index
+from eth2.beacon.constants import EMPTY_SIGNATURE
+from eth2.beacon.typing import (
+    Root,
+    Slot,
+    ValidatorIndex,
+    default_root,
+    default_validator_index,
+)
 
 from .defaults import default_slot
 

@@ -1,6 +1,6 @@
 from typing import Sequence
 
-from eth_typing import BLSPubkey, BLSSignature
+from eth_typing import BLSPubkey, BLSSignature, Hash32
 
 from eth2.beacon.constants import EMPTY_SIGNATURE
 
@@ -13,17 +13,19 @@ class NoOpBackend(BaseBLSBackend):
         return BLSPubkey(k.to_bytes(48, "little"))
 
     @staticmethod
-    def Sign(**kwargs) -> BLSSignature:
+    def Sign(SK: int, message: Hash32) -> BLSSignature:
         return EMPTY_SIGNATURE
 
     @staticmethod
-    def Verify(**kwargs) -> bool:
+    def Verify(PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:
         return True
 
     @staticmethod
-    def Aggregate(**kwargs) -> BLSSignature:
+    def Aggregate(signatures: Sequence[BLSSignature]) -> BLSSignature:
         return EMPTY_SIGNATURE
 
     @staticmethod
-    def FastAggregateVerify(**kwargs) -> bool:
+    def FastAggregateVerify(
+        PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
+    ) -> bool:
         return True

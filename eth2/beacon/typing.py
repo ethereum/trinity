@@ -69,6 +69,7 @@ default_bitfield = Bitfield(tuple())
 default_version = Version(b"\x00" * 4)
 default_fork_digest = ForkDigest(b"\x00" * 4)
 default_root = Root(Hash32(b"\x00" * 32))
+default_domain = Domain(Hash32(b"\x00" * 32))
 
 
 class Operation(Protocol):

@@ -14,6 +14,7 @@ from ssz.tools.dump import to_formatted_dict
 from ssz.tools.parse import from_formatted_dict
 
 from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.exceptions import NoCommitteeAssignment
 from eth2.beacon.helpers import (
     compute_epoch_at_slot,
@@ -113,7 +114,7 @@ class Context:
     def get_validator_duties(
         self, public_keys: Collection[BLSPubkey], epoch: Epoch
     ) -> Iterable[ValidatorDuty]:
-        if epoch < self.eth2_config.GENESIS_EPOCH:
+        if epoch < GENESIS_EPOCH:
             return ()
 
         current_tick = self.clock.compute_current_tick()

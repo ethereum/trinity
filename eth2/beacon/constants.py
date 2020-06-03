@@ -1,10 +1,11 @@
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSPubkey, BLSSignature
 
-from eth2.beacon.typing import Epoch, Root, Timestamp, Slot
+from eth2.beacon.typing import Epoch, Root, Slot, Timestamp
 
 EMPTY_SIGNATURE = BLSSignature(b"\x00" * 96)
 EMPTY_PUBKEY = BLSPubkey(b"\x00" * 48)
+EMPTY_MESSAGE = BLSPubkey(b"\x00" * 32)
 GWEI_PER_ETH = 10 ** 9
 FAR_FUTURE_EPOCH = Epoch(2 ** 64 - 1)
 

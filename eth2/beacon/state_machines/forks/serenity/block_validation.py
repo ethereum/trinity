@@ -2,7 +2,6 @@ from typing import cast  # noqa: F401
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import ValidationError, encode_hex
-import ssz
 
 from eth2._utils.bls import bls
 from eth2.beacon.attestation_helpers import (
@@ -14,10 +13,10 @@ from eth2.beacon.committee_helpers import (
     get_beacon_proposer_index,
     get_committee_count_at_slot,
 )
-from eth2.beacon.constants import FAR_FUTURE_EPOCH
+from eth2.beacon.constants import FAR_FUTURE_EPOCH, GENESIS_EPOCH
 from eth2.beacon.epoch_processing_helpers import get_indexed_attestation
 from eth2.beacon.exceptions import SignatureError
-from eth2.beacon.helpers import compute_epoch_at_slot, get_domain
+from eth2.beacon.helpers import compute_epoch_at_slot, compute_signing_root, get_domain
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
@@ -29,7 +28,7 @@ from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
-from eth2.beacon.typing import CommitteeIndex, Epoch, Root, Slot
+from eth2.beacon.typing import CommitteeIndex, Epoch, EpochOperation, Root, Slot
 from eth2.configs import Eth2Config
 
 
@@ -69,9 +68,7 @@ def validate_block_is_new(state: BeaconState, block: BaseBeaconBlock) -> None:
 
 
 def validate_correct_proposer(
-        state: BeaconState,
-        block: BaseBeaconBlock,
-        config: Eth2Config
+    state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
 ) -> None:
     if block.proposer != get_beacon_proposer_index(state, config):
         raise ValidationError(
@@ -101,21 +98,19 @@ def validate_proposer_is_not_slashed(
 def validate_proposer_signature(
     state: BeaconState, signed_block: BaseSignedBeaconBlock, config: Eth2Config
 ) -> None:
-    message_hash = signed_block.message.hash_tree_root
-
     # Get the public key of proposer
     beacon_proposer_index = get_beacon_proposer_index(state, config)
     proposer_pubkey = state.validators[beacon_proposer_index].pubkey
     domain = get_domain(
         state, SignatureDomain.DOMAIN_BEACON_PROPOSER, config.SLOTS_PER_EPOCH
     )
+    signing_root = compute_signing_root(signed_block.message, domain)
 
     try:
         bls.validate(
             pubkey=proposer_pubkey,
-            message_hash=message_hash,
+            message_hash=signing_root,
             signature=signed_block.signature,
-            domain=domain,
         )
     except SignatureError as error:
         raise ValidationError(
@@ -136,15 +131,15 @@ def validate_randao_reveal(
 ) -> None:
     proposer = state.validators[proposer_index]
     proposer_pubkey = proposer.pubkey
-    message_hash = ssz.get_hash_tree_root(epoch, sedes=ssz.sedes.uint64)
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, slots_per_epoch)
+
+    signing_root = compute_signing_root(EpochOperation(epoch), domain)
 
     try:
         bls.validate(
+            message_hash=signing_root,
             pubkey=proposer_pubkey,
-            message_hash=message_hash,
             signature=cast(BLSSignature, randao_reveal),
-            domain=domain,
         )
     except SignatureError as error:
         raise ValidationError("RANDAO reveal is invalid", error)
@@ -160,7 +155,9 @@ def validate_proposer_slashing(
     Validate the given ``proposer_slashing``.
     Raise ``ValidationError`` if it's invalid.
     """
-    proposer = state.validators[proposer_slashing.proposer_index]
+    proposer = state.validators[
+        proposer_slashing.signed_header_1.message.proposer_index
+    ]
 
     # NOTE: spec has: assert header_1.slot == header_2.slot
     validate_proposer_slashing_epoch(proposer_slashing, slots_per_epoch)
@@ -205,11 +202,7 @@ def validate_proposer_slashing_headers(proposer_slashing: ProposerSlashing) -> N
     header_1 = proposer_slashing.signed_header_1
     header_2 = proposer_slashing.signed_header_2
 
-    if header_1.proposer_index != header_2.proposer_index:
-        raise ValidationError(
-            f"proposer_slashing.signed_header_1.proposer_index ({header_1.proposer_index}) != "
-            f"proposer_slashing.signed_header_2.proposer_index ({header_2.proposer_index})"
-        )
+    # TODO double check this method
 
     if header_1 == header_2:
         raise ValidationError(
@@ -235,17 +228,17 @@ def validate_block_header_signature(
     pubkey: BLSPubkey,
     slots_per_epoch: int,
 ) -> None:
+    domain = get_domain(
+        state,
+        SignatureDomain.DOMAIN_BEACON_PROPOSER,
+        slots_per_epoch,
+        compute_epoch_at_slot(header.message.slot, slots_per_epoch),
+    )
+    signing_root = compute_signing_root(header.message, domain)
+
     try:
         bls.validate(
-            pubkey=pubkey,
-            message_hash=header.message.hash_tree_root,
-            signature=header.signature,
-            domain=get_domain(
-                state,
-                SignatureDomain.DOMAIN_BEACON_PROPOSER,
-                slots_per_epoch,
-                compute_epoch_at_slot(header.message.slot, slots_per_epoch),
-            ),
+            pubkey=pubkey, message_hash=signing_root, signature=header.signature
         )
     except SignatureError as error:
         raise ValidationError("Header signature is invalid:", error)
@@ -278,13 +271,9 @@ def validate_attester_slashing(
 
     validate_is_slashable_attestation_data(attestation_1, attestation_2)
 
-    validate_indexed_attestation(
-        state, attestation_1, max_validators_per_committee, slots_per_epoch
-    )
+    validate_indexed_attestation(state, attestation_1, slots_per_epoch)
 
-    validate_indexed_attestation(
-        state, attestation_2, max_validators_per_committee, slots_per_epoch
-    )
+    validate_indexed_attestation(state, attestation_2, slots_per_epoch)
 
 
 def validate_some_slashing(
@@ -378,7 +367,7 @@ def _validate_attestation_data(
 ) -> None:
     slots_per_epoch = config.SLOTS_PER_EPOCH
     current_epoch = state.current_epoch(slots_per_epoch)
-    previous_epoch = state.previous_epoch(slots_per_epoch, config.GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(slots_per_epoch, GENESIS_EPOCH)
 
     attestation_slot = data.slot
 
@@ -434,7 +423,6 @@ def validate_attestation(
     validate_indexed_attestation(
         state,
         get_indexed_attestation(state, attestation, config),
-        config.MAX_VALIDATORS_PER_COMMITTEE,
         config.SLOTS_PER_EPOCH,
     )
 
@@ -489,12 +477,13 @@ def _validate_voluntary_exit_signature(
         slots_per_epoch,
         voluntary_exit.epoch,
     )
+    signing_root = compute_signing_root(voluntary_exit, domain)
+
     try:
         bls.validate(
             pubkey=validator.pubkey,
-            message_hash=voluntary_exit.hash_tree_root,
+            message_hash=signing_root,
             signature=signed_voluntary_exit.signature,
-            domain=domain,
         )
     except SignatureError as error:
         raise ValidationError(

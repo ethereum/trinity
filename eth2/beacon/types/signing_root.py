@@ -4,28 +4,22 @@ from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32
 
-from eth2.beacon.typing import Root, Domain, default_root
+from eth2.beacon.typing import Domain, Root, default_domain, default_root
 
 TSigningRoot = TypeVar("TSigningRoot", bound="SigningRoot")
 
 
 class SigningRoot(HashableContainer):
 
-    fields = [
-        ("object_root", bytes32),
-        ("domain", bytes32),
-    ]
+    fields = [("object_root", bytes32), ("domain", bytes32)]
 
     @classmethod
     def create(
-            cls: Type[TSigningRoot],
-            object_root: Root = default_root,
-            domain: Domain = default_root,
+        cls: Type[TSigningRoot],
+        object_root: Root = default_root,
+        domain: Domain = default_domain,
     ) -> TSigningRoot:
-        return super().create(
-            object_root=object_root,
-            domain=domain,
-        )
+        return super().create(object_root=object_root, domain=domain)
 
     def __str__(self) -> str:
         return (

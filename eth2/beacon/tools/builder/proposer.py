@@ -1,7 +1,6 @@
 from typing import Dict, Sequence, Type
 
 from eth_typing import BLSPubkey, BLSSignature
-import ssz
 
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.constants import EMPTY_SIGNATURE
@@ -21,7 +20,13 @@ from eth2.beacon.types.blocks import (
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import FromBlockParams, Root, Slot, ValidatorIndex, EpochOperation
+from eth2.beacon.typing import (
+    EpochOperation,
+    FromBlockParams,
+    Root,
+    Slot,
+    ValidatorIndex,
+)
 from eth2.configs import Eth2Config
 
 

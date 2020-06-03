@@ -108,7 +108,10 @@ class Validator(BaseValidator):
     def _check_and_update_data_per_slot(self, slot: Slot) -> None:
         state_machine = self.chain.get_state_machine()
         state = self.chain.get_head_state()
-        slots_per_eth1_voting_period = state_machine.config.SLOTS_PER_ETH1_VOTING_PERIOD
+        slots_per_eth1_voting_period = (
+            state_machine.config.EPOCHS_PER_ETH1_VOTING_PERIOD
+            * state_machine.config.SLOTS_PER_EPOCH
+        )
         # Update eth1 block_hash in the beginning of each voting period
         if (
             slot % slots_per_eth1_voting_period == 0

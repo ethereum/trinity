@@ -10,15 +10,18 @@ from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.signing_root import SigningRoot
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import (
+    Domain,
     DomainType,
     Epoch,
     ForkDigest,
     Gwei,
+    Operation,
     Root,
     Slot,
     ValidatorIndex,
     Version,
-    default_version, default_root, Domain, Operation,
+    default_root,
+    default_version,
 )
 from eth2.configs import Eth2Config
 
@@ -198,7 +201,7 @@ def compute_domain(
     """
     domain_type = signature_domain_to_domain_type(signature_domain)
     fork_data_root = compute_fork_data_root(fork_version, genesis_validators_root)
-    return Domain(domain_type + fork_data_root[:28])
+    return Domain(Hash32(domain_type + fork_data_root[:28]))
 
 
 def get_domain(
@@ -235,8 +238,7 @@ def compute_signing_root(operation: Operation, domain: Domain) -> Root:
     """
     Return the signing root of an object by calculating the root of the object-domain tree.
     """
-    domain_wrapped_object = SigningRoot(
-        object_root=operation,
-        domain=domain,
+    domain_wrapped_object = SigningRoot.create(
+        object_root=operation.hash_tree_root, domain=domain
     )
     return domain_wrapped_object.hash_tree_root

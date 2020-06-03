@@ -5,10 +5,9 @@ from ssz.hashable_list import HashableList
 from ssz.sedes import List, uint64
 
 from eth2.beacon.constants import (
-    GENESIS_SLOT,
-    GENESIS_EPOCH,
     DEPOSIT_CONTRACT_TREE_DEPTH,
     FAR_FUTURE_EPOCH,
+    GENESIS_SLOT,
     GWEI_PER_ETH,
     JUSTIFICATION_BITS_LENGTH,
 )
@@ -291,7 +290,9 @@ def config(
     max_effective_balance,
     ejection_balance,
     effective_balance_increment,
+    genesis_fork_version,
     bls_withdrawal_prefix,
+    min_genesis_delay,
     seconds_per_slot,
     min_attestation_inclusion_delay,
     slots_per_epoch,
@@ -301,6 +302,7 @@ def config(
     min_validator_withdrawability_delay,
     persistent_committee_period,
     min_epochs_to_inactivity_penalty,
+    epochs_per_eth1_voting_period,
     epochs_per_historical_vector,
     epochs_per_slashings_vector,
     historical_roots_limit,
@@ -475,7 +477,6 @@ def sample_proposer_slashing_params(sample_block_header_params, sample_signature
         message=block_header_data, signature=sample_signature
     )
     return {
-        "proposer_index": 1,
         "signed_header_1": signed_block_header,
         "signed_header_2": signed_block_header,
     }
@@ -524,9 +525,9 @@ def sample_beacon_block_body_params(sample_signature, sample_eth1_data_params):
 
 
 @pytest.fixture
-def sample_beacon_block_params(sample_beacon_block_body_params, genesis_slot):
+def sample_beacon_block_params(sample_beacon_block_body_params):
     return {
-        "slot": genesis_slot + 10,
+        "slot": GENESIS_SLOT + 10,
         "parent_root": ZERO_HASH32,
         "state_root": b"\x55" * 32,
         "body": BeaconBlockBody.create(**sample_beacon_block_body_params),
@@ -535,17 +536,12 @@ def sample_beacon_block_params(sample_beacon_block_body_params, genesis_slot):
 
 @pytest.fixture
 def sample_beacon_state_params(
-    config,
-    genesis_slot,
-    genesis_epoch,
-    sample_fork_params,
-    sample_eth1_data_params,
-    sample_block_header_params,
+    config, sample_fork_params, sample_eth1_data_params, sample_block_header_params
 ):
     return {
         # Versioning
         "genesis_time": 0,
-        "slot": genesis_slot + 100,
+        "slot": GENESIS_SLOT + 100,
         "fork": Fork.create(**sample_fork_params),
         # History
         "latest_block_header": BeaconBlockHeader.create(**sample_block_header_params),

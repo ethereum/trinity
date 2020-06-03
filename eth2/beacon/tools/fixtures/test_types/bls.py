@@ -53,35 +53,6 @@ def get_output_bls_signature(test_case: Dict[str, Any]) -> BLSSignature:
     return BLSSignature(decode_hex(test_case["output"]))
 
 
-class AggregatePubkeysHandler(TestHandler[SequenceOfBLSPubkey, BLSPubkey]):
-    name = "aggregate_pubkeys"
-
-    @classmethod
-    def parse_inputs(
-        _cls, test_case_parts: Dict[str, TestPart], metadata: Dict[str, Any]
-    ) -> SequenceOfBLSPubkey:
-        test_case_data = test_case_parts["data"].load()
-        return get_input_bls_pubkeys(test_case_data)["pubkeys"]
-
-    @staticmethod
-    def parse_outputs(test_case_parts: Dict[str, TestPart]) -> BLSPubkey:
-        test_case_data = test_case_parts["data"].load()
-        return get_output_bls_pubkey(test_case_data)
-
-    @classmethod
-    def run_with(
-        _cls, inputs: SequenceOfBLSPubkey, _config: Optional[Eth2Config]
-    ) -> BLSPubkey:
-        # BLS override
-        bls.use(MilagroBackend)
-
-        return bls.aggregate_pubkeys(inputs)
-
-    @staticmethod
-    def condition(output: BLSPubkey, expected_output: BLSPubkey) -> None:
-        assert output == expected_output
-
-
 class AggregateSignaturesHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
     name = "aggregate_sigs"
 
@@ -104,7 +75,7 @@ class AggregateSignaturesHandler(TestHandler[SequenceOfBLSSignature, BLSSignatur
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.aggregate_signatures(inputs)
+        return bls.Aggregate(inputs)
 
     @staticmethod
     def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
@@ -160,10 +131,7 @@ class SignMessageHandler(TestHandler[SignatureDescriptor, BLSSignature]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.Sign(
-            int(inputs["privkey"]),
-            cast(Hash32, inputs["signing_root"]),
-        )
+        return bls.Sign(int(inputs["privkey"]), cast(Hash32, inputs["signing_root"]))
 
     @staticmethod
     def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
@@ -171,7 +139,6 @@ class SignMessageHandler(TestHandler[SignatureDescriptor, BLSSignature]):
 
 
 BLSHandlerType = Tuple[
-    Type[AggregatePubkeysHandler],
     Type[AggregateSignaturesHandler],
     Type[PrivateToPublicKeyHandler],
     Type[SignMessageHandler],
@@ -182,7 +149,6 @@ class BLSTestType(TestType[BLSHandlerType]):
     name = "bls"
 
     handlers = (
-        AggregatePubkeysHandler,
         AggregateSignaturesHandler,
         # MsgHashG2CompressedHandler, # NOTE: not exposed via public API in py_ecc
         # MsgHashG2UncompressedHandler, # NOTE: not exposed via public API in py_ecc

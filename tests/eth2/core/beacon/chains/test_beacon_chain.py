@@ -3,6 +3,7 @@ import copy
 import pytest
 
 from eth2.beacon.chains.base import BeaconChain
+from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.db.exceptions import AttestationRootNotFound, StateNotFound
 from eth2.beacon.exceptions import BlockClassError
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenitySignedBeaconBlock
@@ -26,8 +27,8 @@ def valid_chain(beacon_chain_with_block_validation):
     ("validator_count,slots_per_epoch,target_committee_size,max_committees_per_slot"),
     [(100, 20, 10, 20)],
 )
-def test_canonical_chain(valid_chain, genesis_slot, fork_choice_scoring):
-    genesis_block = valid_chain.get_canonical_block_by_slot(genesis_slot)
+def test_canonical_chain(valid_chain, fork_choice_scoring):
+    genesis_block = valid_chain.get_canonical_block_by_slot(GENESIS_SLOT)
 
     # Our chain fixture is created with only the genesis header, so initially that's the head of
     # the canonical chain.

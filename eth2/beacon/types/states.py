@@ -69,7 +69,8 @@ class BeaconState(HashableContainer):
         ),  # allow for a log-sized Merkle proof from any block to any historical block root  # noqa: E501
         # Ethereum 1.0 chain
         ("eth1_data", Eth1Data),
-        ("eth1_data_votes", List(Eth1Data, 1)),
+        # TODO: how to make length dependent on config vals?
+        ("eth1_data_votes", List(Eth1Data, 1024)),
         ("eth1_deposit_index", uint64),
         # Validator registry
         ("validators", List(Validator, 1)),

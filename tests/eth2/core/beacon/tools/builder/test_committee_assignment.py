@@ -1,5 +1,6 @@
 import pytest
 
+from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.exceptions import NoCommitteeAssignment
 from eth2.beacon.helpers import compute_start_slot_at_epoch
 from eth2.beacon.tools.builder.committee_assignment import get_committee_assignment
@@ -57,13 +58,11 @@ def test_get_committee_assignment(
     ),
     [(40, 16, 1, 16)],
 )
-def test_get_committee_assignment_no_assignment(
-    genesis_state, genesis_epoch, slots_per_epoch, config
-):
+def test_get_committee_assignment_no_assignment(genesis_state, slots_per_epoch, config):
     state = genesis_state
     validator_index = 1
     current_epoch = state.current_epoch(slots_per_epoch)
-    validator = state.validators[validator_index].set("exit_epoch", genesis_epoch)
+    validator = state.validators[validator_index].set("exit_epoch", GENESIS_EPOCH)
     state = state.transform(["validators", validator_index], validator)
     assert not validator.is_active(current_epoch)
 

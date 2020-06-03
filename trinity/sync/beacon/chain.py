@@ -14,6 +14,7 @@ from cancel_token import (
     CancelToken,
 )
 
+from eth2.beacon.constants import GENESIS_SLOT
 from p2p.service import (
     BaseService,
 )
@@ -109,7 +110,7 @@ class BeaconChainSyncer(BaseService):
             finalized_slot = finalized_head.slot
         # TODO(ralexstokes) look at better way to handle once we have fork choice in place
         except FinalizedHeadNotFound:
-            finalized_slot = self.genesis_config.GENESIS_SLOT
+            finalized_slot = GENESIS_SLOT
 
         self.logger.info(
             "Syncing with %s (their head slot: %d, our finalized slot: %d)",

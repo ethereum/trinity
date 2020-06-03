@@ -6,7 +6,7 @@ from eth_utils import ValidationError
 
 from eth2._utils.bls import bls
 from eth2._utils.humanize import humanize_bytes
-from eth2.beacon.helpers import signature_domain_to_domain_type, compute_domain, compute_signing_root
+from eth2.beacon.helpers import compute_domain, compute_signing_root
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.typing import Operation, SignedOperation

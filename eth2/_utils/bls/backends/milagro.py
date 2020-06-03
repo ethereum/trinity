@@ -2,13 +2,7 @@ from typing import Iterator, Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import to_tuple
-from milagro_bls_binding import (
-    Aggregate,
-    FastAggregateVerify,
-    SkToPk,
-    Sign,
-    Verify,
-)
+from milagro_bls_binding import Aggregate, FastAggregateVerify, Sign, SkToPk, Verify
 
 from eth2._utils.bls.backends.base import BaseBLSBackend
 from eth2.beacon.constants import EMPTY_PUBKEY, EMPTY_SIGNATURE
@@ -51,17 +45,11 @@ class MilagroBackend(BaseBLSBackend):
 
     @staticmethod
     def FastAggregateVerify(
-        PKs: Sequence[BLSPubkey],
-        message: Hash32,
-        signature: BLSSignature,
+        PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
     ) -> bool:
         if signature == EMPTY_SIGNATURE:
             raise ValueError(
                 f"Empty signature breaks Milagro binding  signature={signature.hex()}"
             )
 
-        return FastAggregateVerify(
-            PKs,
-            message,
-            signature
-        )
+        return FastAggregateVerify(list(PKs), message, signature)
