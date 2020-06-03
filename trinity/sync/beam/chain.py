@@ -13,7 +13,7 @@ from lahja import EndpointAPI
 from eth.abc import AtomicDatabaseAPI, BlockImportResult, DatabaseAPI
 from eth.constants import GENESIS_PARENT_HASH
 from eth.exceptions import (
-    HeaderNotFound,
+    BlockNotFound,
 )
 from eth.rlp.blocks import BaseBlock
 from eth.rlp.headers import BlockHeader
@@ -327,8 +327,7 @@ class RigorousFastChainBodySyncer(FastChainBodySyncer):
             return False
         try:
             await self.chain.coro_get_block_by_header(header)
-        except (HeaderNotFound, KeyError):
-            # TODO unify these exceptions in py-evm, returning BlockBodyNotFound instead
+        except BlockNotFound:
             return False
         else:
             return True
