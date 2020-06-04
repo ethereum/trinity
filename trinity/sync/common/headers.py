@@ -641,16 +641,25 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
         def fail_task() -> None:
             self._filler_header_tasks.complete(batch_id, tuple())
 
-        peer = await self._waiting_peers.get_fastest()
-        if not self.sync_progress:
-            await self._init_sync_progress(parent_header, peer)
-
         def complete_task() -> None:
             self._filler_header_tasks.complete(batch_id, (
                 (parent_header, gap, skeleton_peer),
             ))
-        peer.manager.run_task(
-            self._run_fetch_segment, peer, parent_header, gap, complete_task, fail_task)
+
+        download_scheduled = False
+        while not download_scheduled:
+            peer = await self._waiting_peers.get_fastest()
+            if not self.sync_progress:
+                await self._init_sync_progress(parent_header, peer)
+
+            if not peer.manager.is_running:
+                self.logger.debug(
+                    "Tried to fetch headers from %s but it is no longer running", peer)
+                continue
+
+            peer.manager.run_task(
+                self._run_fetch_segment, peer, parent_header, gap, complete_task, fail_task)
+            download_scheduled = True
 
     async def _run_fetch_segment(
             self,
@@ -661,6 +670,9 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
             fail_task_fn: Callable[[], None]) -> None:
         try:
             completed_headers = await self._fetch_segment(peer, parent_header, length)
+        except asyncio.CancelledError:
+            fail_task_fn()
+            raise
         except BaseP2PError as exc:
             self.logger.info("Unexpected p2p err while downloading headers from %s: %s", peer, exc)
             self.logger.debug("Problem downloading headers from peer, dropping...", exc_info=True)
