@@ -84,10 +84,10 @@ class BeamSyncer(Service):
     """
     Organizes several moving parts to coordinate beam sync. Roughly:
 
-        - Sync *only* headers up until you have caught up with a peer, ie~ the checkpoint
+        - Sync *only* headers up until you have caught up with a peer, ie~ the launchpoint
         - Launch a service responsible for serving event bus requests for missing state data
         - When you catch up with a peer, start downloading transactions needed to execute a block
-        - At the checkpoint, switch to full block imports, with a custom importer
+        - At the launchpoint, switch to full block imports, with a custom importer
 
     This syncer relies on a seperately orchestrated beam sync component, which:
 
@@ -154,12 +154,12 @@ class BeamSyncer(Service):
             self._backfiller,
             event_bus,
         )
-        self._checkpoint_header_syncer = HeaderCheckpointSyncer(self._header_syncer)
+        self._launchpoint_header_syncer = HeaderLaunchpointSyncer(self._header_syncer)
         self._body_syncer = RegularChainBodySyncer(
             chain,
             chain_db,
             peer_pool,
-            self._checkpoint_header_syncer,
+            self._launchpoint_header_syncer,
             self._block_importer,
         )
 
@@ -188,7 +188,7 @@ class BeamSyncer(Service):
         self.manager.run_daemon_child_service(self._block_importer)
         self.manager.run_daemon_child_service(self._header_syncer)
 
-        # Kick off the body syncer early (it hangs on the checkpoint header syncer anyway)
+        # Kick off the body syncer early (it hangs on the launchpoint header syncer anyway)
         # It needs to start early because we want to "re-run" the header at the tip,
         # which it gets grumpy about. (it doesn't want to receive the canonical header tip
         # as a header to process)
@@ -216,7 +216,7 @@ class BeamSyncer(Service):
         )
 
         # Now let the beam sync importer kick in
-        self._checkpoint_header_syncer.set_checkpoint_headers(final_headers)
+        self._launchpoint_header_syncer.set_launchpoint_headers(final_headers)
 
         # TODO wait until first header with a body comes in?...
         # Start state downloader service
@@ -349,40 +349,42 @@ class RigorousFastChainBodySyncer(FastChainBodySyncer):
         self._starting_tip = header
 
 
-class HeaderCheckpointSyncer(HeaderSyncerAPI):
+class HeaderLaunchpointSyncer(HeaderSyncerAPI):
     """
     Wraps a "real" header syncer, and drops headers on the floor, until triggered
-    at a "checkpoint".
+    at a "launchpoint".
 
-    Return the headers at the cehckpoint, and then pass through all the headers
+    Return the headers at the launchpoint, and then pass through all the headers
     subsequently found by the header syncer.
 
-    Can be used by a body syncer to pause syncing until a header checkpoint is reached.
+    Can be used by a body syncer to pause syncing until a header launchpoint is reached.
     """
-    logger = get_logger('trinity.sync.beam.chain.HeaderCheckpointSyncer')
+    logger = get_logger('trinity.sync.beam.chain.HeaderLaunchpointSyncer')
 
     def __init__(self, passthrough: HeaderSyncerAPI) -> None:
         self._real_syncer = passthrough
-        self._at_checkpoint = asyncio.Event()
-        self._checkpoint_headers: Tuple[BlockHeader, ...] = None
+        self._at_launchpoint = asyncio.Event()
+        self._launchpoint_headers: Tuple[BlockHeader, ...] = None
 
-    def set_checkpoint_headers(self, headers: Tuple[BlockHeader, ...]) -> None:
+    def set_launchpoint_headers(self, headers: Tuple[BlockHeader, ...]) -> None:
         """
-        Identify the given headers as checkpoint headers. These will be returned first.
+        Identify the given headers as launchpoint headers. These will be returned first.
 
-        Immediately after these checkpoint headers are returned, start consuming and
+        Immediately after these launchpoint headers are returned, start consuming and
         passing through all headers from the wrapped header syncer.
         """
-        self._checkpoint_headers = headers
-        self._at_checkpoint.set()
+        self._launchpoint_headers = headers
+        self._at_launchpoint.set()
 
     async def new_sync_headers(
             self,
             max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
-        await self._at_checkpoint.wait()
+        await self._at_launchpoint.wait()
 
-        self.logger.info("Choosing %s as checkpoint headers to sync from", self._checkpoint_headers)
-        yield self._checkpoint_headers
+        self.logger.info(
+            "Choosing %s as launchpoint headers to sync from", self._launchpoint_headers
+        )
+        yield self._launchpoint_headers
 
         async for headers in self._real_syncer.new_sync_headers(max_batch_size):
             yield headers
@@ -424,24 +426,21 @@ class HeaderOnlyPersist(Service):
         else:
             self.logger.warning("Tip %s is too far behind to Beam Sync, skipping ahead...", tip)
 
-        await self._persist_headers()
+        await persist_headers(self.logger, self._db, self._header_syncer, self._exit_if_launchpoint)
 
-    async def _persist_headers(self) -> None:
-        await persist_headers(self.logger, self._db, self._header_syncer, self._exit_if_checkpoint)
-
-    async def _exit_if_checkpoint(self, headers: Sequence[BlockHeader]) -> bool:
+    async def _exit_if_launchpoint(self, headers: Sequence[BlockHeader]) -> bool:
         """
         Determine if the supplied headers have reached the end of headers-only persist.
-        This might be in the form of a forced checkpoint, or because we caught up to
-        our peer's target checkpoint.
+        This might be in the form of a forced launchpoint, or because we caught up to
+        our peer's target launchpoint.
 
-        In the case that we have reached the checkpoint:
+        In the case that we have reached the launchpoint:
 
             - trigger service exit
-            - persist the headers before the checkpoint
-            - save the headers that triggered the checkpoint (retrievable via get_final_headers)
+            - persist the headers before the launchpoint
+            - save the headers that triggered the launchpoint (retrievable via get_final_headers)
 
-        :return: whether we have reached the checkpoint
+        :return: whether we have reached the launchpoint
         """
         ending_header_search = [
             header for header in headers if header.block_number == self._force_end_block_number
@@ -481,7 +480,7 @@ class HeaderOnlyPersist(Service):
 
         if persist_headers:
             self.logger.debug(
-                "Final header import before checkpoint: %s..%s, "
+                "Final header import before launchpoint: %s..%s, "
                 "old canon: %s..%s, new canon: %s..%s",
                 persist_headers[0],
                 persist_headers[-1],
@@ -491,7 +490,7 @@ class HeaderOnlyPersist(Service):
                 new_canon_headers[-1] if len(new_canon_headers) else None,
             )
         else:
-            self.logger.debug("Final header import before checkpoint: None")
+            self.logger.debug("Final header import before launchpoint: None")
 
         self._final_headers = final_headers
         self.manager.cancel()
@@ -500,9 +499,9 @@ class HeaderOnlyPersist(Service):
 
     def get_final_headers(self) -> Tuple[BlockHeader, ...]:
         """
-        Which header(s) triggered the checkpoint to switch out of header-only persist state.
+        Which header(s) triggered the launchpoint to switch out of header-only persist state.
 
-        :raise ValidationError: if the syncer has not reached the checkpoint yet
+        :raise ValidationError: if the syncer has not reached the launchpoint yet
         """
         if self._final_headers is None:
             raise ValidationError("Must not try to access final headers before it has been set")
