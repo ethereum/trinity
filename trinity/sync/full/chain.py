@@ -267,13 +267,15 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
         Loop indefinitely, assigning idle peers to download any block bodies needed for syncing.
         """
         while self.manager.is_running:
-            # from all the peers that are not currently downloading block bodies, get the fastest
-            peer = await self._body_peers.get_fastest()
-
             # get headers for bodies that we need to download, preferring lowest block number
             batch_id, headers = await self._block_body_tasks.get(MAX_BODIES_FETCH)
 
-            # schedule the body download and move on
+            # from all the peers that are not currently downloading block bodies, get the
+            # fastest
+            peer = await self._body_peers.get_fastest()
+            # NOTE: If there are any async calls between getting the peer above and the
+            # run_task() below, we need to ensure the peer is still running, otherwise it may have
+            # stopped and run_task() will raise a LifecycleError.
             peer.manager.run_task(self._run_body_download_batch, peer, batch_id, headers)
 
     async def _block_body_bundle_processing(self, bundles: Tuple[BlockBodyBundle, ...]) -> None:
@@ -768,13 +770,14 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         Loop indefinitely, assigning idle peers to download receipts needed for syncing.
         """
         while self.manager.is_running:
-            # from all the peers that are not currently downloading receipts, get the fastest
-            peer = await self._receipt_peers.get_fastest()
-
             # get headers for receipts that we need to download, preferring lowest block number
             batch_id, headers = await self._receipt_tasks.get(MAX_RECEIPTS_FETCH)
 
-            # schedule the receipt download and move on
+            # from all the peers that are not currently downloading receipts, get the fastest
+            peer = await self._receipt_peers.get_fastest()
+            # NOTE: If there are any async calls between getting the peer above and the
+            # run_task() below, we need to ensure the peer is still running, otherwise it may have
+            # stopped and run_task() will raise a LifecycleError.
             peer.manager.run_task(self._run_receipt_download_batch, peer, batch_id, headers)
 
     def _mark_body_download_complete(
