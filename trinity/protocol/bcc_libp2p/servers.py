@@ -8,7 +8,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Union,
 )
 
 from cancel_token import (
@@ -32,7 +31,6 @@ from p2p.service import BaseService
 from eth2.beacon.chains.base import (
     BaseBeaconChain,
 )
-from eth2.beacon.operations.attestation_pool import AttestationPool
 from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import (
     Attestation,
@@ -48,6 +46,7 @@ from eth2.beacon.typing import (
 from eth2.beacon.typing import CommitteeIndex, Slot
 
 from trinity.protocol.bcc_libp2p.node import Node
+from .attestation_pool import AttestationPool
 
 from .configs import (
     PUBSUB_TOPIC_BEACON_AGGREGATE_AND_PROOF,
@@ -59,54 +58,16 @@ from .configs import (
 PROCESS_ORPHAN_BLOCKS_PERIOD = 10.0
 
 
-class OrphanBlockPool:
-    """
-    Store the orphan blocks(the blocks who arrive before their parents).
-    """
-    # TODO: can probably use lru-cache or even database
-    _pool: Set[BaseSignedBeaconBlock]
-
-    def __init__(self) -> None:
-        self._pool = set()
-
-    def __len__(self) -> int:
-        return len(self._pool)
-
-    def __contains__(self, block_or_block_root: Union[BaseSignedBeaconBlock, Root]) -> bool:
-        block_root: Root
-        if isinstance(block_or_block_root, BaseSignedBeaconBlock):
-            block_root = block_or_block_root.message.hash_tree_root
-        elif isinstance(block_or_block_root, bytes):
-            block_root = block_or_block_root
-        else:
-            raise TypeError("`block_or_block_root` should be `BaseSignedBeaconBlock` or `Root`")
-        try:
-            self.get(block_root)
-            return True
-        except BlockNotFound:
-            return False
-
-    def to_list(self) -> List[BaseSignedBeaconBlock]:
-        return list(self._pool)
-
-    def get(self, block_root: Root) -> BaseSignedBeaconBlock:
-        for block in self._pool:
-            if block.message.hash_tree_root == block_root:
-                return block
-        raise BlockNotFound(f"No block with message.hash_tree_root {block_root.hex()} is found")
-
-    def add(self, block: BaseSignedBeaconBlock) -> None:
-        if block in self._pool:
-            return
-        self._pool.add(block)
+class OrphanBlockPool(Set[SignedBeaconBlock]):
 
     def pop_children(self, block_root: Root) -> Tuple[BaseSignedBeaconBlock, ...]:
         children = tuple(
             orphan_block
-            for orphan_block in self._pool
+            for orphan_block in self
             if orphan_block.parent_root == block_root
         )
-        self._pool.difference_update(children)
+
+        self.difference_update(children)
         return children
 
 
@@ -213,9 +174,8 @@ class BCCReceiveServer(BaseService):
                 continue
             # TODO: Prune Bruce Wayne type of orphan block
             # (whose parent block seemingly never going to show up)
-            orphan_blocks = self.orphan_block_pool.to_list()
-            parent_roots = set(block.parent_root for block in orphan_blocks)
-            block_roots = set(block.message.hash_tree_root for block in orphan_blocks)
+            parent_roots = set(block.parent_root for block in self.orphan_block_pool)
+            block_roots = set(block.message.hash_tree_root for block in self.orphan_block_pool)
             # Remove dependent orphan blocks
             parent_roots.difference_update(block_roots)
             # Keep requesting parent blocks from all peers
@@ -309,7 +269,7 @@ class BCCReceiveServer(BaseService):
             # TODO: should be done asynchronously?
             self._try_import_orphan_blocks(block.message.hash_tree_root)
             # Remove attestations in block that are also in the attestation pool.
-            self.unaggregated_attestation_pool.batch_remove(block.body.attestations)
+            self.unaggregated_attestation_pool.difference_update(block.body.attestations)
 
     def _try_import_orphan_blocks(self, parent_root: Root) -> None:
         """
@@ -345,7 +305,11 @@ class BCCReceiveServer(BaseService):
                     self.logger.debug("Fail to import block=%s  reason=%s", block, error)
 
     def _is_block_root_in_orphan_block_pool(self, block_root: Root) -> bool:
-        return block_root in self.orphan_block_pool
+        for block in self.orphan_block_pool:
+            if block.hash_tree_root == block_root:
+                return True
+
+        return False
 
     def _is_block_root_in_db(self, block_root: Root) -> bool:
         try:
