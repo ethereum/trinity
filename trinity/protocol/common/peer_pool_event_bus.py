@@ -196,6 +196,10 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
         async for event in self.event_bus.stream(event_type):
             try:
                 await event_handler_fn(event)
+            except asyncio.CancelledError:
+                # We need to catch and re-raise asyncio.CancelledError here because up until py37
+                # it would be suppressed below.
+                raise
             except Exception as exc:
                 self.logger.exception(
                     "Suppressed uncaught exception to continue handling events: %s",

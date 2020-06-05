@@ -59,7 +59,7 @@ async def handshake(
     try:
         aes_secret, mac_secret, egress_mac, ingress_mac = await _handshake(
             initiator, reader, writer)
-    except Exception:
+    except BaseException:
         # Note: This is one of two places where we manually handle closing the
         # reader/writer connection pair in the event of an error during the
         # peer connection and handshake process.

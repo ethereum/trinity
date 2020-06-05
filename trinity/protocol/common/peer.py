@@ -18,8 +18,6 @@ from cached_property import cached_property
 from lahja import EndpointAPI
 from pyformance.meters import SimpleGauge
 
-from cancel_token import OperationCancelled
-
 from eth_utils.toolz import (
     excepts,
     groupby,
@@ -241,10 +239,6 @@ class BaseChainPeerPool(BasePeerPool):
                     for backend in self.peer_backends
                 ))
                 last_candidates_count = sum(candidate_counts)
-            except OperationCancelled:
-                # FIXME: We may no longer need this; need to confirm that none of the tasks we
-                # create use BaseService.
-                break
             except asyncio.CancelledError:
                 # no need to log this exception, this is expected
                 raise

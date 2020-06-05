@@ -7,10 +7,6 @@ from typing import (
 
 from async_service import Service
 
-from cancel_token import (
-    OperationCancelled,
-)
-
 from eth.abc import BlockImportResult
 from eth.constants import GENESIS_BLOCK_NUMBER
 from eth.exceptions import (
@@ -152,9 +148,6 @@ class PeerHeaderSyncer(Service):
                 else:
                     new_headers = all_headers
                 self.logger.debug2('sync received new headers: %s', new_headers)
-            except OperationCancelled:
-                self.logger.info("Sync with %s completed", peer)
-                break
             except asyncio.TimeoutError:
                 self.logger.warning("Timeout waiting for header batch from %s, aborting sync", peer)
                 await peer.disconnect(DisconnectReason.TIMEOUT)
