@@ -28,8 +28,6 @@ from eth_typing import (
 
 from eth.abc import AtomicDatabaseAPI
 
-from cancel_token import OperationCancelled
-
 from p2p.abc import CommandAPI
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
@@ -458,14 +456,6 @@ class BeamDownloader(Service, PeerSubscriber):
         except BaseP2PError as exc:
             self.logger.warning("Unexpected p2p err while downloading nodes from %s: %s", peer, exc)
             self.logger.debug("Problem downloading nodes from peer, dropping...", exc_info=True)
-            self._queen_tracker.penalize_queen(peer)
-            return tuple()
-        except OperationCancelled:
-            self.logger.debug(
-                "Service cancellation while fetching nodes, dropping %s from queue",
-                peer,
-                exc_info=True,
-            )
             self._queen_tracker.penalize_queen(peer)
             return tuple()
         except CancelledError:

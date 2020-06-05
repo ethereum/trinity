@@ -335,7 +335,7 @@ async def dial_out(remote: NodeAPI,
             p2p_handshake_params=p2p_handshake_params,
             protocol_handshakers=protocol_handshakers,
         )
-    except Exception:
+    except BaseException:
         # Note: This is one of two places where we manually handle closing the
         # reader/writer connection pair in the event of an error during the
         # peer connection and handshake process.
@@ -373,7 +373,7 @@ async def receive_dial_in(reader: asyncio.StreamReader,
             p2p_handshake_params=p2p_handshake_params,
             protocol_handshakers=protocol_handshakers,
         )
-    except Exception:
+    except BaseException:
         # Note: This is one of two places where we manually handle closing the
         # reader/writer connection pair in the event of an error during the
         # peer connection and handshake process.

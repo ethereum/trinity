@@ -5,7 +5,6 @@ from abc import (
 import asyncio
 import logging
 
-from cancel_token import OperationCancelled
 from eth_typing import (
     BlockNumber,
 )
@@ -78,7 +77,6 @@ class FromGenesisLaunchStrategy(SyncLaunchStrategyAPI):
 
 NON_RESPONSE_FROM_PEERS = (
     asyncio.TimeoutError,
-    OperationCancelled,
     ValidationError,
 )
 

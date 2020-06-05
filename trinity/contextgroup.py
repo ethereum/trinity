@@ -40,7 +40,7 @@ class AsyncContextGroup:
         for d in done:
             try:
                 d.result()
-            except Exception:
+            except BaseException:
                 errors.append(sys.exc_info())
         if errors:
             raise MultiError(

@@ -24,7 +24,6 @@ from typing import (
 
 from async_service import Service, background_asyncio_service
 
-from cancel_token import OperationCancelled
 from eth_typing import BlockNumber, Hash32
 from eth_utils import (
     humanize_hash,
@@ -415,9 +414,6 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
             return tuple()
         except CancelledError:
             self.logger.debug("Pending block bodies call to %r future cancelled", peer)
-            return tuple()
-        except OperationCancelled:
-            self.logger.debug2("Pending block bodies call to %r operation cancelled", peer)
             return tuple()
         except PeerConnectionLost:
             self.logger.debug("Peer went away, cancelling the block body request and moving on...")
@@ -948,9 +944,6 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             return tuple()
         except CancelledError:
             self.logger.debug("Pending receipts call to %r future cancelled", peer)
-            return tuple()
-        except OperationCancelled:
-            self.logger.debug2("Pending receipts call to %r operation cancelled", peer)
             return tuple()
         except PeerConnectionLost:
             self.logger.debug("Peer went away, cancelling the receipts request and moving on...")

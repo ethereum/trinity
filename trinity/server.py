@@ -133,7 +133,7 @@ class BaseServer(Service, Generic[TPeerPool]):
         try:
             try:
                 await self._receive_handshake(reader, writer)
-            except Exception:
+            except BaseException:
                 if not reader.at_eof():
                     reader.feed_eof()
                 writer.close()

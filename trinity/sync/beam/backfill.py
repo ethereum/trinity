@@ -10,7 +10,6 @@ from typing import (
 
 from async_service import Service
 
-from cancel_token import OperationCancelled
 from eth.abc import AtomicDatabaseAPI
 from eth_typing import Hash32
 import rlp
@@ -105,7 +104,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         except asyncio.TimeoutError:
             self._node_hashes.extend(request_hashes)
             self._queening_queue.readd_peasant(peer, GAP_BETWEEN_TESTS * 2)
-        except (PeerConnectionLost, OperationCancelled):
+        except PeerConnectionLost:
             # Something unhappy, but we don't really care, peer will be gone by next loop
             self._node_hashes.extend(request_hashes)
         except (BaseP2PError, Exception) as exc:
