@@ -241,7 +241,7 @@ class Validator(BaseValidator):
             signed_block_class=SerenitySignedBeaconBlock,  # TODO: Should get block class from slot
             parent_block=head_block,
             slot=slot,
-            validator_index=proposer_index,
+            proposer_index=proposer_index,
             privkey=self.validator_privkeys[proposer_index],
             attestations=ready_attestations,
             eth1_data=eth1_vote,

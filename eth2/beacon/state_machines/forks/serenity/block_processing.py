@@ -4,6 +4,7 @@ from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.helpers import get_randao_mix
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_block_is_new,
+    validate_proposer_index,
     validate_randao_reveal,
 )
 from eth2.beacon.types.block_headers import BeaconBlockHeader
@@ -24,8 +25,7 @@ def process_block_header(
 ) -> BeaconState:
     validate_block_slot(state, block)
     validate_block_is_new(state, block)
-    # TODO: this should be uncommented
-    # validate_proposer_index(state, config, block.slot, block.proposer_index)
+    validate_proposer_index(state, block, config)
     validate_block_parent_root(state, block)
     validate_proposer_is_not_slashed(state, block.hash_tree_root, config)
 

@@ -67,12 +67,15 @@ def validate_block_is_new(state: BeaconState, block: BaseBeaconBlock) -> None:
         )
 
 
-def validate_correct_proposer(
+def validate_proposer_index(
     state: BeaconState, block: BaseBeaconBlock, config: Eth2Config
 ) -> None:
-    if block.proposer != get_beacon_proposer_index(state, config):
+    expected_proposer = get_beacon_proposer_index(state, config)
+    if block.proposer_index != expected_proposer:
         raise ValidationError(
-            f"block.slot ({block.slot}) proposer index is not the correct index ({state.slot})"
+            f"block.proposer_index "
+            f"({block.proposer_index}) does not equal expected_proposer ({expected_proposer})\n"
+            f"at block.slot {state.slot}"
         )
 
 

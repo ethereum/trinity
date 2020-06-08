@@ -26,6 +26,7 @@ from eth2.beacon.typing import (
     Root,
     Slot,
     ValidatorIndex,
+    default_validator_index,
 )
 from eth2.configs import Eth2Config
 
@@ -99,13 +100,14 @@ def create_unsigned_block_on_state(
     attestations: Sequence[Attestation],
     eth1_data: Eth1Data = None,
     deposits: Sequence[Deposit] = None,
-    check_proposer_index: bool = True,
+    proposer_index: ValidatorIndex = default_validator_index,
 ) -> BeaconBlock:
     """
     Create a beacon block with the given parameters.
     """
+    block_params = FromBlockParams(slot=slot, proposer_index=proposer_index)
     block = block_class.from_parent(
-        parent_block=parent_block, block_params=FromBlockParams(slot=slot)
+        parent_block=parent_block, block_params=block_params
     )
 
     # MAX_ATTESTATIONS
@@ -131,7 +133,7 @@ def create_block_on_state(
     signed_block_class: Type[BaseSignedBeaconBlock],
     parent_block: BaseBeaconBlock,
     slot: Slot,
-    validator_index: ValidatorIndex,
+    proposer_index: ValidatorIndex,
     privkey: int,
     attestations: Sequence[Attestation],
     eth1_data: Eth1Data = None,
@@ -142,7 +144,7 @@ def create_block_on_state(
     Create a beacon block with the given parameters.
     """
     if check_proposer_index:
-        validate_proposer_index(state, config, slot, validator_index)
+        validate_proposer_index(state, config, slot, proposer_index)
 
     block_class = signed_block_class.block_class
     block = create_unsigned_block_on_state(
@@ -151,6 +153,7 @@ def create_block_on_state(
         block_class=block_class,
         parent_block=parent_block.message,
         slot=slot,
+        proposer_index=proposer_index,
         attestations=attestations,
         eth1_data=eth1_data,
         deposits=deposits,
@@ -217,7 +220,7 @@ def create_mock_block(
         signed_block_class=signed_block_class,
         parent_block=parent_block,
         slot=slot,
-        validator_index=proposer_index,
+        proposer_index=proposer_index,
         privkey=proposer_privkey,
         attestations=attestations,
         check_proposer_index=False,

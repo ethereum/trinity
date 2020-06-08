@@ -4,6 +4,7 @@ from eth_utils import to_tuple
 import pytest
 import trio
 
+from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 
 
@@ -19,18 +20,24 @@ async def test_beacon_node_can_count_slots(autojump_clock, eth2_config, beacon_n
 
 @to_tuple
 def _mk_minimum_viable_signed_beacon_blocks(
-    slots, state_machine_provider, state, block
+    slots, state_machine_provider, state, block, config
 ):
     for slot in slots:
+        future_state = state_machine_provider(slot)\
+            .state_transition\
+            .apply_state_transition(state, future_slot=block.slot + 1)
+        proposer_index = get_beacon_proposer_index(future_state, config)
         message = BeaconBlock.create(
-            slot=slot, parent_root=block.message.hash_tree_root
+            slot=slot,
+            parent_root=block.message.hash_tree_root,
+            proposer_index=proposer_index,
         )
         block = SignedBeaconBlock.create(message=message)
         state, block = state_machine_provider(slot).import_block(block, state)
         yield block
 
 
-def _build_branch_across_slots(number_of_slots, chain):
+def _build_branch_across_slots(number_of_slots, chain, config):
     head = chain.get_canonical_head()
     state = chain.get_state_by_root(head.message.state_root)
 
@@ -39,15 +46,16 @@ def _build_branch_across_slots(number_of_slots, chain):
         lambda slot: chain.get_state_machine(at_slot=slot),
         state,
         head,
+        config
     )
 
 
 @pytest.mark.trio
 async def test_beacon_node_can_track_canonical_head_by_highest_slot(
-    autojump_clock, beacon_node, genesis_validators, no_op_bls
+    autojump_clock, beacon_node, genesis_validators, no_op_bls, eth2_config
 ):
     number_of_slots = 10
-    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain)
+    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain, eth2_config)
     for block in blocks:
         beacon_node.on_block(block)
 
@@ -59,10 +67,10 @@ async def test_beacon_node_can_track_canonical_head_by_highest_slot(
 
 @pytest.mark.trio
 async def test_beacon_node_can_handle_orphans(
-    autojump_clock, beacon_node, genesis_validators, no_op_bls
+    autojump_clock, beacon_node, genesis_validators, no_op_bls, eth2_config
 ):
     number_of_slots = 30
-    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain)
+    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain, eth2_config)
     shuffled_blocks = random.sample(blocks, len(blocks))
     had_orphans = False
     for block in shuffled_blocks:
@@ -81,10 +89,10 @@ async def test_beacon_node_can_handle_orphans(
 
 @pytest.mark.trio
 async def test_beacon_node_handles_duplicate_import(
-    autojump_clock, beacon_node, genesis_validators, no_op_bls
+    autojump_clock, beacon_node, genesis_validators, no_op_bls, eth2_config
 ):
     number_of_slots = 10
-    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain)
+    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain, eth2_config)
     for block in blocks:
         beacon_node.on_block(block)
 
@@ -103,10 +111,10 @@ async def test_beacon_node_handles_duplicate_import(
 
 @pytest.mark.trio
 async def test_beacon_node_yields_slashable_block(
-    autojump_clock, beacon_node, genesis_validators, no_op_bls
+    autojump_clock, beacon_node, genesis_validators, no_op_bls, eth2_config
 ):
     number_of_slots = 10
-    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain)
+    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain, eth2_config)
     for block in blocks:
         beacon_node.on_block(block)
 
@@ -126,10 +134,10 @@ async def test_beacon_node_yields_slashable_block(
 
 @pytest.mark.trio
 async def test_beacon_node_drops_invalid_blocks(
-    autojump_clock, beacon_node, genesis_validators, no_op_bls
+    autojump_clock, beacon_node, genesis_validators, no_op_bls, eth2_config
 ):
     number_of_slots = 10
-    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain)
+    blocks = _build_branch_across_slots(number_of_slots, beacon_node._chain, eth2_config)
     for block in blocks:
         if block.slot == number_of_slots:
             # corrupt the last block

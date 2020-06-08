@@ -46,15 +46,6 @@ SubnetId = NewType("SubnetId", int)
 
 
 #
-# Helpers
-#
-
-
-class FromBlockParams(NamedTuple):
-    slot: Slot = None
-
-
-#
 # Defaults to emulate "zero types"
 #
 
@@ -70,6 +61,16 @@ default_version = Version(b"\x00" * 4)
 default_fork_digest = ForkDigest(b"\x00" * 4)
 default_root = Root(Hash32(b"\x00" * 32))
 default_domain = Domain(Hash32(b"\x00" * 32))
+
+
+#
+# Helpers
+#
+
+
+class FromBlockParams(NamedTuple):
+    slot: Slot = None
+    proposer_index: ValidatorIndex = default_validator_index
 
 
 class Operation(Protocol):

@@ -172,6 +172,7 @@ class BeaconBlock(BaseBeaconBlock):
 
         block = cls.create(
             slot=slot,
+            proposer_index=block_params.proposer_index,
             parent_root=parent_block.hash_tree_root,
             state_root=parent_block.state_root,
             body=cls.block_body_class.create(),
