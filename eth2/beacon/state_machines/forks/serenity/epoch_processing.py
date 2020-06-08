@@ -494,12 +494,17 @@ def _determine_next_eth1_votes(
 def _update_effective_balances(
     state: BeaconState, config: Eth2Config
 ) -> Tuple[Validator, ...]:
-    half_increment = config.EFFECTIVE_BALANCE_INCREMENT // 2
+    hysteresis_increment = (
+        config.EFFECTIVE_BALANCE_INCREMENT // config.HYSTERESIS_QUOTIENT
+    )
+    downward_threshold = hysteresis_increment * config.HYSTERESIS_DOWNWARD_MULTIPLIER
+    upward_threshold = hysteresis_increment * config.HYSTERESIS_UPWARD_MULTIPLIER
     new_validators = state.validators
     for index, validator in enumerate(state.validators):
         balance = state.balances[index]
-        if balance < validator.effective_balance or (
-            validator.effective_balance + 3 * half_increment < balance
+        if (
+            balance + downward_threshold < validator.effective_balance
+            or validator.effective_balance + upward_threshold < balance
         ):
             new_effective_balance = min(
                 balance - balance % config.EFFECTIVE_BALANCE_INCREMENT,

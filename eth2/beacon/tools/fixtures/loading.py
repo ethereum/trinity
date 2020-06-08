@@ -52,7 +52,7 @@ def generate_config_by_dict(dict_config: Dict[str, Any]) -> Eth2Config:
     return Eth2Config(
         **keyfilter(
             lambda name: all(key not in name for key in filtered_keys), dict_config
-        ),
+        )
     )
 
 
