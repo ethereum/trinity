@@ -482,8 +482,7 @@ def _determine_next_eth1_votes(
     state: BeaconState, config: Eth2Config
 ) -> HashableList[Eth1Data]:
     if (
-        state.current_epoch(config.SLOTS_PER_EPOCH)
-        % config.EPOCHS_PER_ETH1_VOTING_PERIOD
+        state.next_epoch(config.SLOTS_PER_EPOCH) % config.EPOCHS_PER_ETH1_VOTING_PERIOD
         == 0
     ):
         return HashableList.from_iterable((), state.eth1_data_votes.sedes)

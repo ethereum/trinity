@@ -10,28 +10,14 @@ def pytest_generate_tests(metafunc):
 
 
 @pytest_from_eth2_fixture(
-    {"test_types": {BLSTestType: lambda handler: handler.name == "aggregate_pubkeys"}}
+    {"test_types": {BLSTestType: lambda handler: handler.name == "aggregate"}}
 )
-def test_aggregate_pubkeys(test_case):
+def test_aggregate(test_case):
     test_case.execute()
 
 
 @pytest_from_eth2_fixture(
-    {"test_types": {BLSTestType: lambda handler: handler.name == "aggregate_sigs"}}
+    {"test_types": {BLSTestType: lambda handler: handler.name == "sign"}}
 )
-def test_aggregate_sigs(test_case):
-    test_case.execute()
-
-
-@pytest_from_eth2_fixture(
-    {"test_types": {BLSTestType: lambda handler: handler.name == "priv_to_pub"}}
-)
-def test_priv_to_pub(test_case):
-    test_case.execute()
-
-
-@pytest_from_eth2_fixture(
-    {"test_types": {BLSTestType: lambda handler: handler.name == "sign_msg"}}
-)
-def test_sign_msg(test_case):
+def test_sign(test_case):
     test_case.execute()

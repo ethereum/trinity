@@ -2,7 +2,7 @@ from typing import Iterator, Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import to_tuple
-from milagro_bls_binding import Aggregate, FastAggregateVerify, Sign, SkToPk, Verify
+from milagro_bls_binding import Aggregate, FastAggregateVerify, PrivToPub, Sign, Verify
 
 from eth2._utils.bls.backends.base import BaseBLSBackend
 from eth2.beacon.constants import EMPTY_PUBKEY, EMPTY_SIGNATURE
@@ -20,7 +20,7 @@ def filter_non_empty_pair(
 class MilagroBackend(BaseBLSBackend):
     @staticmethod
     def SkToPk(SK: int) -> BLSPubkey:
-        return SkToPk(SK.to_bytes(32, "big"))
+        return PrivToPub(SK.to_bytes(32, "big"))
 
     @staticmethod
     def Sign(SK: int, message: Hash32) -> BLSSignature:

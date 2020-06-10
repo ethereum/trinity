@@ -4,7 +4,6 @@ from async_service.trio import background_trio_service
 import pytest
 import trio
 
-from eth2.beacon.constants import GENESIS_SLOT
 from eth2.validator_client.beacon_node import BeaconNode as BeaconNodeClient
 from eth2.validator_client.client import Client as ValidatorClient
 from eth2.validator_client.key_store import KeyStore
@@ -30,7 +29,7 @@ async def test_beacon_node_and_validator_client_can_talk(
     no_op_bls,
 ):
     starting_head_slot = beacon_node._chain.get_canonical_head().message.slot
-    assert starting_head_slot == GENESIS_SLOT
+    assert starting_head_slot == eth2_config.GENESIS_SLOT
 
     async with trio.open_nursery() as nursery:
         await nursery.start(beacon_node.run)

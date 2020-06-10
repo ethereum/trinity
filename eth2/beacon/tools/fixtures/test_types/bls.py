@@ -1,8 +1,9 @@
 from typing import Any, Dict, Optional, Tuple, Type, Union, cast
 
+from eth_typing import Hash32
 from eth_utils import decode_hex
 
-from eth2._utils.bls import BLSPubkey, BLSSignature, Hash32, bls
+from eth2._utils.bls import BLSPubkey, BLSSignature, bls
 from eth2._utils.bls.backends import MilagroBackend
 from eth2.beacon.tools.fixtures.test_handler import TestHandler
 from eth2.beacon.tools.fixtures.test_part import TestPart
@@ -40,8 +41,7 @@ def get_input_bls_privkey(test_case: Dict[str, Any]) -> Dict[str, int]:
 def get_input_sign_message(test_case: Dict[str, Any]) -> Dict[str, Union[int, bytes]]:
     return {
         "privkey": int.from_bytes(decode_hex(test_case["input"]["privkey"]), "big"),
-        "message_hash": decode_hex(test_case["input"]["message"]),
-        "domain": decode_hex(test_case["input"]["domain"]),
+        "message": decode_hex(test_case["input"]["message"]),
     }
 
 
@@ -53,8 +53,8 @@ def get_output_bls_signature(test_case: Dict[str, Any]) -> BLSSignature:
     return BLSSignature(decode_hex(test_case["output"]))
 
 
-class AggregateSignaturesHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
-    name = "aggregate_sigs"
+class AggregateHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
+    name = "aggregate"
 
     @classmethod
     def parse_inputs(
@@ -82,39 +82,12 @@ class AggregateSignaturesHandler(TestHandler[SequenceOfBLSSignature, BLSSignatur
         assert output == expected_output
 
 
-class PrivateToPublicKeyHandler(TestHandler[int, BLSPubkey]):
-    name = "priv_to_pub"
+class SignHandler(TestHandler[SignatureDescriptor, BLSSignature]):
+    name = "sign"
 
     @classmethod
     def parse_inputs(
-        _cls, test_case_parts: Dict[str, TestPart], metadata: Dict[str, Any]
-    ) -> int:
-        test_case_data = test_case_parts["data"].load()
-        return get_input_bls_privkey(test_case_data)["privkey"]
-
-    @staticmethod
-    def parse_outputs(test_case_parts: Dict[str, TestPart]) -> BLSPubkey:
-        test_case_data = test_case_parts["data"].load()
-        return get_output_bls_pubkey(test_case_data)
-
-    @classmethod
-    def run_with(_cls, inputs: int, _config: Optional[Eth2Config]) -> BLSPubkey:
-        # BLS override
-        bls.use(MilagroBackend)
-
-        return bls.SkToPk(inputs)
-
-    @staticmethod
-    def condition(output: BLSPubkey, expected_output: BLSPubkey) -> None:
-        assert output == expected_output
-
-
-class SignMessageHandler(TestHandler[SignatureDescriptor, BLSSignature]):
-    name = "sign_msg"
-
-    @classmethod
-    def parse_inputs(
-        _cls, test_case_parts: Dict[str, TestPart], metadata: Dict[str, Any]
+        _cls, test_case_parts: Dict[str, TestPart], metadata: Dict[str, bytes]
     ) -> SignatureDescriptor:
         test_case_data = test_case_parts["data"].load()
         return get_input_sign_message(test_case_data)
@@ -131,27 +104,17 @@ class SignMessageHandler(TestHandler[SignatureDescriptor, BLSSignature]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.Sign(int(inputs["privkey"]), cast(Hash32, inputs["signing_root"]))
+        return bls.Sign(int(inputs["privkey"]), cast(Hash32, inputs["message"]))
 
     @staticmethod
     def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
         assert output == expected_output
 
 
-BLSHandlerType = Tuple[
-    Type[AggregateSignaturesHandler],
-    Type[PrivateToPublicKeyHandler],
-    Type[SignMessageHandler],
-]
+BLSHandlerType = Tuple[Type[AggregateHandler], Type[SignHandler]]
 
 
 class BLSTestType(TestType[BLSHandlerType]):
     name = "bls"
 
-    handlers = (
-        AggregateSignaturesHandler,
-        # MsgHashG2CompressedHandler, # NOTE: not exposed via public API in py_ecc
-        # MsgHashG2UncompressedHandler, # NOTE: not exposed via public API in py_ecc
-        PrivateToPublicKeyHandler,
-        SignMessageHandler,
-    )
+    handlers = (AggregateHandler, SignHandler)

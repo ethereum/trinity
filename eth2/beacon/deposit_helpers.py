@@ -63,7 +63,9 @@ def process_deposit(
         deposit_message = DepositMessage.create(
             pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
         )
-        domain = compute_domain(SignatureDomain.DOMAIN_DEPOSIT)
+        domain = compute_domain(
+            SignatureDomain.DOMAIN_DEPOSIT, fork_version=config.GENESIS_FORK_VERSION
+        )
         signing_root = compute_signing_root(deposit_message, domain)
 
         is_valid_proof_of_possession = bls.Verify(

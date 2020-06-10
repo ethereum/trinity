@@ -205,13 +205,14 @@ def validate_proposer_slashing_headers(proposer_slashing: ProposerSlashing) -> N
     header_1 = proposer_slashing.signed_header_1
     header_2 = proposer_slashing.signed_header_2
 
-    # TODO double check this method
+    if header_1.message.proposer_index != header_2.message.proposer_index:
+        raise ValidationError(
+            f"header_1.message.proposer_index ({header_1.message.proposer_index}) !="
+            f"header_2.message.proposer_index ({header_2.message.proposer_index})"
+        )
 
     if header_1 == header_2:
-        raise ValidationError(
-            f"proposer_slashing.signed_header_1 ({header_1}) == "
-            f"proposer_slashing.signed_header_2 ({header_2})"
-        )
+        raise ValidationError(f"header_1 ({header_1}) == header_2 ({header_2})")
 
 
 def validate_proposer_slashing_is_slashable(
@@ -406,7 +407,11 @@ def _validate_aggregation_bits(
 ) -> None:
     data = attestation.data
     committee = get_beacon_committee(state, data.slot, data.index, config)
-    if not (len(attestation.aggregation_bits) == len(committee)):
+
+    if not any(attestation.aggregation_bits):
+        raise ValidationError("The attestation bit length is empty.")
+
+    if len(attestation.aggregation_bits) != len(committee):
         raise ValidationError(
             f"The attestation bit lengths not match:"
             f"\tlen(attestation.aggregation_bits)={len(attestation.aggregation_bits)}\n"
