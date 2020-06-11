@@ -1,0 +1,1 @@
+Add cookbook recipe on how to sync from a trusted checkpoint.

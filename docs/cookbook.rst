@@ -5,6 +5,51 @@ The Cookbook is a collection of simple recipes that demonstrate good practices t
 common tasks. The examples are usually short answers to simple "How do I..." questions that go
 beyond simple API descriptions but also don't need a full guide to become clear.
 
+.. _cookbook_recipe_start_from_a_trusted_checkpoint:
+
+Starting from a trusted checkpoint
+----------------------------------
+
+No matter which syncing strategy we use the first step is always to fetch the chain of
+block headers. While this operation is relatively lightweight it can still take up to a few hours
+for the mainnet chain to progress to the tip of the chain.
+
+If we are willing to compromise on security, we can use a trusted checkpoint to start syncing from
+a more recent header and then leave it up to a background process to fill the gaps eventually.
+
+Trinity offers two ways to do that:
+
+1. Automatically pick a recent header from `Etherscan <https://etherscan.io>`_
+
+.. warning::
+
+  Caution! This method relies on a 3rd party service to provide a checkpoint for us. Consider using
+  a manual checkpoint for added safety.
+
+In order to that, we need to register for an API key on `Etherscan <https://etherscan.io>`_ and
+expose it through an environment variable with the name ``TRINITY_ETHERSCAN_API_KEY``.
+
+Then run:
+
+.. code:: sh
+
+  trinity --sync-from-checkpoint eth://block/byetherscan/latest
+
+2. If we do not want to rely on `Etherscan <https://etherscan.io>`_ to pick a checkpoint for us,
+we can also define one manually.
+
+For instance, to use `block 10245082 <https://etherscan.io/block/10245082>`_
+ as a checkpoint we take its hash
+ ``0xa65877df954e1ff2012473efee8287252eee956c0d395a5791f1103a950a1e21`` and the difficulty (score)
+ ``15,835,269,727,022,672,760,774`` and run:
+
+.. code:: sh
+
+  trinity --sync-from-checkpoint eth://block/byhash/0xa65877df954e1ff2012473efee8287252eee956c0d395a5791f1103a950a1e21?score=15,835,269,727,022,672,760,774
+
+.. note::
+
+  Checkpoints can only be used with ``beam`` or ``header`` sync.
 
 .. _cookbook_recipe_running_as_a_light_client:
 
