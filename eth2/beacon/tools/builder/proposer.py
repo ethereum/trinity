@@ -77,11 +77,17 @@ def create_block_proposal(
     eth1_data: Eth1Data,
     state: BeaconState,
     state_machine: BaseBeaconStateMachine,
+    config: Eth2Config,
 ) -> BeaconBlock:
+    future_state = state_machine.state_transition.apply_state_transition(
+        state, future_slot=slot
+    )
+    proposer_index = get_beacon_proposer_index(future_state, config)
     proposal = BeaconBlock.create(
         slot=slot,
         parent_root=parent_root,
         body=BeaconBlockBody.create(randao_reveal=randao_reveal, eth1_data=eth1_data),
+        proposer_index=proposer_index,
     )
     signed_block = SignedBeaconBlock.create(message=proposal, signature=EMPTY_SIGNATURE)
     post_state, signed_block = state_machine.import_block(

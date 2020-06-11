@@ -203,6 +203,7 @@ class Context:
             eth1_data,
             parent_state,
             state_machine,
+            self.eth2_config,
         )
 
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:

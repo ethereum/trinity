@@ -74,7 +74,7 @@ def validate_proposer_index(
     if block.proposer_index != expected_proposer:
         raise ValidationError(
             f"block.proposer_index "
-            f"({block.proposer_index}) does not equal expected_proposer ({expected_proposer})\n"
+            f"({block.proposer_index}) does not equal expected_proposer ({expected_proposer}) "
             f"at block.slot {state.slot}"
         )
 
