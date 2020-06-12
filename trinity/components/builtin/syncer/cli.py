@@ -51,7 +51,7 @@ def parse_checkpoint_uri(uri: str, network_id: int) -> Checkpoint:
         raise ValidationError("Not a valid checkpoint URI")
 
 
-BLOCKS_FROM_TIP = 50
+BLOCKS_FROM_TIP = 5000
 
 
 def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> Checkpoint:
