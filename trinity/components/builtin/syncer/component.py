@@ -41,6 +41,7 @@ from trinity.constants import (
     SYNC_BEAM,
 )
 from trinity.chains.base import AsyncChainAPI
+from trinity.components.builtin.syncer.cli import NormalizeCheckpointURI
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.db.eth1.header import AsyncHeaderDB
 from trinity.extensibility.asyncio import (
@@ -72,7 +73,7 @@ from trinity.sync.header.chain import (
 from trinity.sync.light.chain import (
     LightChainSyncer,
 )
-from trinity.components.builtin.syncer.cli import NormalizeCheckpointURI
+from trinity._utils.logging import get_logger
 
 
 def add_shared_argument(arg_group: _ArgumentGroup, arg_name: str, **kwargs: Any) -> None:
@@ -310,7 +311,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
 
     endpoint_name = NETWORKING_EVENTBUS_ENDPOINT
 
-    logger = logging.getLogger('trinity.components.sync.Sync')
+    logger = get_logger('trinity.components.sync.Sync')
 
     @property
     def is_enabled(self) -> bool:

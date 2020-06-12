@@ -11,6 +11,7 @@ from libp2p.crypto.secp256k1 import create_new_key_pair
 from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.typing import SubnetId
 from p2p.service import BaseService, run_service
+from trinity._utils.logging import get_logger
 from trinity.config import BeaconAppConfig, TrinityConfig
 from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient
@@ -38,7 +39,7 @@ def _load_secp256k1_key_pair_from(trinity_config: TrinityConfig) -> KeyPair:
 class BeaconNodeComponent(AsyncioIsolatedComponent):
     name = "Beacon Node"
 
-    logger = logging.getLogger("trinity.components.beacon.BeaconNode")
+    logger = get_logger("trinity.components.beacon.BeaconNode")
 
     @classmethod
     def configure_parser(

@@ -12,6 +12,7 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    cast,
 )
 
 from asyncio_run_in_process import open_in_process
@@ -41,6 +42,7 @@ from trinity.config import (
 )
 from trinity.extensibility import (
     BaseComponentAPI,
+    BaseIsolatedComponent,
     ComponentAPI,
     ComponentManager,
 )
@@ -279,7 +281,7 @@ def run(component_types: Tuple[Type[BaseComponentAPI], ...],
         boot_info: BootInfo,
         get_base_db_fn: Callable[[BootInfo], LevelDB]) -> None:
     runtime_component_types = tuple(
-        component_cls
+        cast(Type[BaseIsolatedComponent], component_cls)
         for component_cls in component_types
         if issubclass(component_cls, ComponentAPI)
     )

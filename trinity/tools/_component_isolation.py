@@ -2,7 +2,6 @@
 This module exists because these classes end up being unpickleable if defined
 in the tests modules.
 """
-import logging
 from pathlib import Path
 import subprocess
 import tempfile
@@ -13,6 +12,7 @@ from eth_utils.toolz import merge
 from lahja import EndpointAPI, BaseEvent
 
 from trinity.extensibility import AsyncioIsolatedComponent, TrioIsolatedComponent
+from trinity._utils.logging import get_logger
 
 
 class IsStarted(BaseEvent):
@@ -21,7 +21,7 @@ class IsStarted(BaseEvent):
 
 
 class ComponentTestService(Service):
-    logger = logging.getLogger('trinity.testing.ServiceForTest')
+    logger = get_logger('trinity.testing.ServiceForTest')
 
     def __init__(self, event_bus: EndpointAPI) -> None:
         self.event_bus = event_bus
@@ -43,7 +43,7 @@ class ComponentTestService(Service):
 class AsyncioComponentForTest(AsyncioIsolatedComponent):
     name = "component-test-asyncio"
     endpoint_name = 'component-test-asyncio'
-    logger = logging.getLogger('trinity.testing.AsyncioComponentForTest')
+    logger = get_logger('trinity.testing.AsyncioComponentForTest')
 
     def get_subprocess_kwargs(self) -> SubprocessKwargs:
         # This is needed so that pytest can capture the subproc's output. Otherwise it will crash
