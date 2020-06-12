@@ -1,0 +1,3 @@
+Implement backfilling of gaps in the header chain (introduced through checkpointing) for
+sync modes ``header`` and ``beam``. This background job can be disable via
+the ``--disable-backfill`` flag.
