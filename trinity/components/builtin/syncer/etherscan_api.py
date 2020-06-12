@@ -24,8 +24,8 @@ class EtherscanAPIError(BaseTrinityError):
 
 class Network(enum.IntEnum):
     MAINNET = MAINNET_NETWORK_ID
-    GOERLI = ROPSTEN_NETWORK_ID
-    ROPSTEN = GOERLI_NETWORK_ID
+    GOERLI = GOERLI_NETWORK_ID
+    ROPSTEN = ROPSTEN_NETWORK_ID
 
 
 API_URLS = {
@@ -33,6 +33,10 @@ API_URLS = {
     Network.GOERLI: "https://api-goerli.etherscan.io/api",
     Network.ROPSTEN: "https://api-ropsten.etherscan.io/api",
 }
+
+# The Etherscan API for Goerli and Ropsten rejects any requests without User-Agent
+
+COMMON_REQUEST_HEADERS = {'User-Agent': 'Trinity'}
 
 
 class Etherscan:
@@ -47,8 +51,10 @@ class Etherscan:
         return f"{API_URLS[network]}?module=proxy&apikey={self.api_key}"
 
     def post(self, action: str, network: Network) -> Any:
-        response = requests.post(f"{self.get_proxy_api_url(network)}&action={action}")
-
+        response = requests.post(
+            f"{self.get_proxy_api_url(network)}&action={action}",
+            headers=COMMON_REQUEST_HEADERS
+        )
         if response.status_code not in [200, 201]:
             raise EtherscanAPIError(
                 f"Invalid status code: {response.status_code}, {response.reason}"
