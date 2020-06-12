@@ -1,0 +1,1 @@
+Update the list of bootnodes for Mainnet, Görli and Ropsten.
