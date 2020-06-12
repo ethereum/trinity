@@ -31,6 +31,8 @@ class AsyncContextGroup:
                     exc_value: Optional[BaseException],
                     traceback: Optional[TracebackType],
                     ) -> None:
+        if not self.cms_to_exit:
+            return
         # don't use gather() to ensure that we wait for all __aexit__s
         # to complete even if one of them raises
         done, _pending = await asyncio.wait(

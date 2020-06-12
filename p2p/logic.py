@@ -13,6 +13,8 @@ from typing import (
     Type,
 )
 
+from trio import MultiError
+
 from p2p.abc import (
     BehaviorAPI,
     ConnectionAPI,
@@ -143,5 +145,18 @@ async def cancel_futures(futures: Iterable[asyncio.Future[None]]) -> None:
     """
     for fut in futures:
         fut.cancel()
+
+    errors: List[BaseException] = []
+    # Wait for all futures in parallel so if any of them catches CancelledError and performs a
+    # slow cleanup the othders don't have to wait for it. The timeout is long as our component
+    # tasks can do a lot of stuff during their cleanup.
+    done, pending = await asyncio.wait(futures, timeout=5)
+    if pending:
+        errors.append(
+            asyncio.TimeoutError("Tasks never returned after being cancelled: %s", pending))
+    for task in done:
         with contextlib.suppress(asyncio.CancelledError):
-            await fut
+            if task.exception():
+                errors.append(task.exception())
+    if errors:
+        raise MultiError(errors)

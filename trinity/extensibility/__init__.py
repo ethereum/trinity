@@ -6,7 +6,6 @@ from trinity.extensibility.component import (  # noqa: F401
     BaseComponentAPI,
     BaseIsolatedComponent,
     ComponentAPI,
-    run_component,
 )
 from trinity.extensibility.component_manager import (  # noqa: F401
     ComponentManager,

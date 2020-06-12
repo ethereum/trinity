@@ -1,7 +1,11 @@
 from abc import abstractmethod
-import logging
+from typing import (
+    Any,
+    Callable,
+)
 
-from asyncio_run_in_process import open_in_process
+from asyncio_run_in_process import run_in_process
+from asyncio_run_in_process.typing import SubprocessKwargs
 from async_service import background_asyncio_service
 from lahja import EndpointAPI
 
@@ -10,30 +14,20 @@ from trinity._utils.logging import child_process_logging, get_logger
 from trinity._utils.profiling import profiler
 from trinity.events import ShutdownRequest
 
-from .component import BaseIsolatedComponent
+from .component import BaseIsolatedComponent, TReturn
 from .event_bus import AsyncioEventBusService
 
 
 class AsyncioIsolatedComponent(BaseIsolatedComponent):
-    logger: logging.Logger = get_logger('trinity.extensibility.asyncio.AsyncioIsolatedComponent')
+    logger = get_logger('trinity.extensibility.asyncio.AsyncioIsolatedComponent')
 
-    async def run(self) -> None:
-        proc_ctx = open_in_process(
-            self._do_run,
-            subprocess_kwargs=self.get_subprocess_kwargs(),
-        )
-        try:
-            async with proc_ctx as proc:
-                await proc.wait_result_or_raise()
-        finally:
-            # Right now, when we shutdown trinity, all our components terminate with a 15
-            # returncode (SIGTERM), but ideally they should terminate with a 2 (SIGINT). See the
-            # comment below for why that is.
-            # Only attempt to log the proc's returncode if we succesfully entered the context
-            # manager above.
-            if 'proc' in locals():
-                returncode = getattr(proc, 'returncode', 'unset')
-                self.logger.debug("%s terminated: returncode=%s", self, returncode)
+    async def _run_in_process(
+            self,
+            async_fn: Callable[..., TReturn],
+            *args: Any,
+            subprocess_kwargs: 'SubprocessKwargs' = None,
+    ) -> TReturn:
+        return await run_in_process(async_fn, *args, subprocess_kwargs=subprocess_kwargs)
 
     async def _do_run(self) -> None:
         with child_process_logging(self._boot_info):

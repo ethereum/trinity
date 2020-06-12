@@ -5,7 +5,6 @@ from argparse import (
 )
 import asyncio
 import contextlib
-import logging
 from typing import ClassVar, Iterable
 
 from async_service import background_asyncio_service, Service
@@ -45,6 +44,7 @@ from trinity.components.builtin.network_db.eth1_peer_db.tracker import (
     SQLiteEth1PeerTracker,
     MemoryEth1PeerTracker,
 )
+from trinity._utils.logging import get_logger
 
 
 class NetworkDBComponent(AsyncioIsolatedComponent):
@@ -52,7 +52,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
 
     endpoint_name = "network-db"
 
-    logger = logging.getLogger('trinity.components.network_db.NetworkDB')
+    logger = get_logger('trinity.components.network_db.NetworkDB')
 
     @property
     def is_enabled(self) -> bool:

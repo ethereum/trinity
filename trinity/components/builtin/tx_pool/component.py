@@ -2,7 +2,6 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-import logging
 
 from async_service import background_asyncio_service
 from eth_utils import ValidationError
@@ -33,12 +32,13 @@ from trinity.components.builtin.tx_pool.validators import (
     DefaultTransactionValidator
 )
 from trinity.protocol.eth.peer import ETHProxyPeerPool
+from trinity._utils.logging import get_logger
 
 
 class TxComponent(AsyncioIsolatedComponent):
     name = "TxComponent"
 
-    logger = logging.getLogger('trinity.components.tx_pool.TxPool')
+    logger = get_logger('trinity.components.tx_pool.TxPool')
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:

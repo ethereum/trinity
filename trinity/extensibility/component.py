@@ -1,6 +1,7 @@
+from __future__ import annotations
 from abc import (
     ABC,
-    abstractmethod
+    abstractmethod,
 )
 from argparse import (
     ArgumentParser,
@@ -12,10 +13,21 @@ import logging
 import os
 import pathlib
 import signal
-from typing import AsyncIterator, Optional, Tuple, Type, TYPE_CHECKING, Union
+from typing import (
+    Any,
+    AsyncIterator,
+    Callable,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from asyncio_run_in_process.typing import SubprocessKwargs
 
+import eth_utils
 
 from lahja import AsyncioEndpoint, ConnectionConfig, EndpointAPI, TrioEndpoint
 
@@ -31,6 +43,7 @@ if TYPE_CHECKING:
     from trinity.extensibility.trio import TrioIsolatedComponent  # noqa: F401
     from trinity.extensibility.asyncio import AsyncioIsolatedComponent  # noqa: F401
 
+TReturn = TypeVar("TReturn")
 logger = logging.getLogger('trinity.extensibility.component')
 
 
@@ -70,10 +83,6 @@ class ComponentAPI(BaseComponentAPI):
     def is_enabled(self) -> bool:
         ...
 
-    @abstractmethod
-    async def run(self) -> None:
-        ...
-
 
 class BaseComponent(ComponentAPI):
     def __init__(self, boot_info: BootInfo) -> None:
@@ -101,6 +110,20 @@ class BaseIsolatedComponent(BaseComponent):
     It is up to the component to handle these signals accordingly.
     """
     endpoint_name: str = None
+    logger: eth_utils.ExtendedDebugLogger = None
+
+    @abstractmethod
+    async def _run_in_process(
+            self,
+            async_fn: Callable[..., TReturn],
+            *args: Any,
+            subprocess_kwargs: 'SubprocessKwargs' = None,
+    ) -> TReturn:
+        ...
+
+    @abstractmethod
+    async def _do_run(self) -> None:
+        ...
 
     def get_subprocess_kwargs(self) -> Optional[SubprocessKwargs]:
         # By default we want every child process its own process group leader as we don't want a
@@ -119,6 +142,12 @@ class BaseIsolatedComponent(BaseComponent):
             return friendly_filename_or_url(cls.name)
         else:
             return cls.endpoint_name
+
+    @contextlib.asynccontextmanager
+    async def run(self) -> AsyncIterator[asyncio.Future[None]]:
+        future = asyncio.create_task(
+            self._run_in_process(self._do_run, subprocess_kwargs=self.get_subprocess_kwargs()))
+        yield future
 
 
 async def _cleanup_component_task(component_name: str, task: "asyncio.Future[None]") -> None:
@@ -143,29 +172,16 @@ async def _cleanup_component_task(component_name: str, task: "asyncio.Future[Non
 
 
 @contextlib.asynccontextmanager
-async def run_component(component: ComponentAPI) -> AsyncIterator[None]:
-    task = asyncio.ensure_future(component.run())
-    logger.debug("Starting component: %s", component.name)
-    try:
-        yield
-    finally:
-        await _cleanup_component_task(component.name, task)
-
-
-@contextlib.asynccontextmanager
 async def _run_asyncio_component_in_proc(
         component: 'AsyncioIsolatedComponent',
         event_bus: EndpointAPI,
-) -> AsyncIterator[None]:
+) -> AsyncIterator[asyncio.Future[None]]:
     """
     Run the given AsyncioIsolatedComponent in the same process as ourselves.
     """
     task = asyncio.ensure_future(component.do_run(event_bus))
     logger.info("Starting component: %s", component.name)
-    try:
-        yield
-    finally:
-        await _cleanup_component_task(component.name, task)
+    yield task
 
 
 @contextlib.asynccontextmanager
@@ -218,6 +234,8 @@ def _setup_standalone_component(
         level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%H:%M:%S')
     if args.log_levels is not None:
         for name, level in args.log_levels.items():
+            if name is None:
+                name = ''
             get_logger(name).setLevel(level)
 
     trinity_config = TrinityConfig.from_parser_args(args, app_identifier, (app_cfg,))
@@ -238,7 +256,7 @@ def _setup_standalone_component(
 async def _run_eventbus_for_component(
     component: Union['TrioIsolatedComponent', 'AsyncioIsolatedComponent'],
     connect_to_endpoints: Tuple[str, ...],
-) -> AsyncIterator[None]:
+) -> AsyncIterator[Union[TrioEndpoint, AsyncioEndpoint]]:
     from trinity.extensibility.trio import TrioIsolatedComponent
     from trinity.extensibility.asyncio import AsyncioIsolatedComponent
     if isinstance(component, TrioIsolatedComponent):
@@ -263,6 +281,7 @@ async def _run_eventbus_for_component(
 
 def run_asyncio_eth1_component(component_type: Type['AsyncioIsolatedComponent']) -> None:
     import asyncio
+    from p2p.logic import wait_first
     loop = asyncio.get_event_loop()
     got_sigint = asyncio.Event()
     loop.add_signal_handler(signal.SIGINT, got_sigint.set)
@@ -272,11 +291,9 @@ def run_asyncio_eth1_component(component_type: Type['AsyncioIsolatedComponent'])
         component, connect_to_endpoints = _setup_standalone_component(
             component_type, APP_IDENTIFIER_ETH1)
         async with _run_eventbus_for_component(component, connect_to_endpoints) as event_bus:
-            async with _run_asyncio_component_in_proc(component, event_bus) as task:
-                await asyncio.wait(
-                    [got_sigint.wait(), task],
-                    return_when=asyncio.FIRST_COMPLETED
-                )
+            async with _run_asyncio_component_in_proc(component, event_bus) as component_task:
+                sigint_task = asyncio.create_task(got_sigint.wait())
+                await wait_first([component_task, sigint_task])
 
     loop.run_until_complete(run())
 

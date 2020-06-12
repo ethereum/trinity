@@ -21,8 +21,7 @@ from trinity.events import (
     EventBusConnected,
 )
 from trinity.extensibility import (
-    ComponentAPI,
-    run_component,
+    BaseIsolatedComponent,
 )
 
 
@@ -44,7 +43,7 @@ class ComponentManager(Service):
 
     def __init__(self,
                  boot_info: BootInfo,
-                 component_types: Sequence[Type[ComponentAPI]]) -> None:
+                 component_types: Sequence[Type[BaseIsolatedComponent]]) -> None:
         self._boot_info = boot_info
         self._component_types = component_types
 
@@ -90,16 +89,17 @@ class ComponentManager(Service):
 
             # a little bit of extra try/finally structure here to produce good
             # logging messages about the component lifecycle.
+            from p2p.logic import wait_first
             try:
                 self.logger.info(
                     "Starting components: %s",
                     '/'.join(component.name for component in enabled_components),
                 )
-                context_managers = [run_component(component) for component in enabled_components]
-                async with AsyncContextGroup(context_managers):
+                context_managers = [component.run() for component in enabled_components]
+                async with AsyncContextGroup(context_managers) as futures:
                     self.logger.info("Components started")
                     try:
-                        await self._trigger_component_exit.wait()
+                        await wait_first(futures + (self._trigger_component_exit.wait(),))
                     finally:
                         self.logger.info("Stopping components")
             finally:

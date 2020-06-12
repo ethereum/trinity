@@ -1,17 +1,22 @@
 from abc import abstractmethod
+from typing import (
+    Any,
+    Callable,
+)
 
 import trio
 from async_service import background_trio_service
 
 from lahja import EndpointAPI
 
-from asyncio_run_in_process import open_in_process_with_trio
+from asyncio_run_in_process import run_in_process_with_trio
+from asyncio_run_in_process.typing import SubprocessKwargs
 
 from trinity._utils.logging import child_process_logging, get_logger
 from trinity._utils.profiling import profiler
 from trinity.events import ShutdownRequest
 
-from .component import BaseComponent, BaseIsolatedComponent
+from .component import BaseComponent, BaseIsolatedComponent, TReturn
 from .event_bus import TrioEventBusService
 
 
@@ -20,26 +25,22 @@ class TrioComponent(BaseComponent):
     ``TrioComponent`` is a component that executes in-process
     with the ``trio`` concurrency library.
     """
-    pass
+
+    @abstractmethod
+    async def run(self) -> None:
+        ...
 
 
 class TrioIsolatedComponent(BaseIsolatedComponent):
     logger = get_logger('trinity.extensibility.TrioIsolatedComponent')
 
-    async def run(self) -> None:
-        proc_ctx = open_in_process_with_trio(
-            self._do_run,
-            subprocess_kwargs=self.get_subprocess_kwargs(),
-        )
-        try:
-            async with proc_ctx as proc:
-                await proc.wait_result_or_raise()
-        finally:
-            # Only attempt to log the proc's returncode if we succesfully entered the context
-            # manager above.
-            if 'proc' in locals():
-                returncode = getattr(proc, 'returncode', 'unset')
-                self.logger.debug("%s terminated: returncode=%s", self.name, returncode)
+    async def _run_in_process(
+            self,
+            async_fn: Callable[..., TReturn],
+            *args: Any,
+            subprocess_kwargs: 'SubprocessKwargs' = None,
+    ) -> TReturn:
+        return await run_in_process_with_trio(async_fn, *args, subprocess_kwargs=subprocess_kwargs)
 
     async def run_process(self, event_bus: EndpointAPI) -> None:
         try:
