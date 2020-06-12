@@ -76,6 +76,7 @@ from trinity._utils.timer import Timer
 from trinity._utils.logging import get_logger
 
 from .backfill import BeamStateBackfill
+from ..header.chain import SequentialHeaderChainGapSyncer
 
 STATS_DISPLAY_PERIOD = 10
 
@@ -106,7 +107,8 @@ class BeamSyncer(Service):
             peer_pool: ETHPeerPool,
             event_bus: EndpointAPI,
             checkpoint: Checkpoint = None,
-            force_beam_block_number: BlockNumber = None) -> None:
+            force_beam_block_number: BlockNumber = None,
+            enable_backfill: bool = True) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamSyncer')
         if checkpoint is None:
             self._launch_strategy: SyncLaunchStrategyAPI = FromGenesisLaunchStrategy(
@@ -171,7 +173,10 @@ class BeamSyncer(Service):
             self._manual_header_syncer,
         )
 
+        self._header_backfill = SequentialHeaderChainGapSyncer(chain, chain_db, peer_pool)
+
         self._chain = chain
+        self._enable_backfill = enable_backfill
 
     async def run(self) -> None:
 
@@ -184,6 +189,11 @@ class BeamSyncer(Service):
             )
             self.manager.cancel()
             return
+
+        # There's no chance to introduce new gaps after this point. Therefore we can run this until
+        # it has filled all gaps and let it finish.
+        if self._enable_backfill:
+            self.manager.run_child_service(self._header_backfill)
 
         self.manager.run_daemon_child_service(self._block_importer)
         self.manager.run_daemon_child_service(self._header_syncer)
@@ -426,7 +436,19 @@ class HeaderOnlyPersist(Service):
         else:
             self.logger.warning("Tip %s is too far behind to Beam Sync, skipping ahead...", tip)
 
-        await persist_headers(self.logger, self._db, self._header_syncer, self._exit_if_launchpoint)
+        async for persist_info in persist_headers(
+                self.logger, self._db, self._header_syncer, self._exit_if_launchpoint):
+
+            if len(persist_info.new_canon_headers):
+                head = persist_info.new_canon_headers[-1]
+            else:
+                head = await self._db.coro_get_canonical_head()
+            self.logger.info(
+                "Imported %d headers in %0.2f seconds, new head: %s",
+                len(persist_info.imported_headers),
+                persist_info.elapsed_time,
+                head,
+            )
 
     async def _exit_if_launchpoint(self, headers: Sequence[BlockHeader]) -> bool:
         """

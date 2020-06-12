@@ -24,4 +24,16 @@ class LightChainSyncer(Service):
         await self.manager.wait_finished()
 
     async def _persist_headers(self) -> None:
-        await persist_headers(self.logger, self._db, self._header_syncer)
+
+        async for persist_info in persist_headers(self.logger, self._db, self._header_syncer):
+
+            if len(persist_info.new_canon_headers):
+                head = persist_info.new_canon_headers[-1]
+            else:
+                head = await self._db.coro_get_canonical_head()
+            self.logger.info(
+                "Imported %d headers in %0.2f seconds, new head: %s",
+                len(persist_info.imported_headers),
+                persist_info.elapsed_time,
+                head,
+            )

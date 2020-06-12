@@ -247,3 +247,28 @@ class FromCheckpointLaunchStrategy(SyncLaunchStrategyAPI):
     async def get_starting_block_number(self) -> BlockNumber:
         block_number = await self._genesis_strategy.get_starting_block_number()
         return block_number if block_number > self.min_block_number else self.min_block_number
+
+
+class FromBlockNumberLaunchStrategy(SyncLaunchStrategyAPI):
+    """
+    A launch strategy that is starting to sync from a specified block number. In contrast to
+     ``FromCheckpointLaunchStrategy``, this strategy assumes all previous parents to the defined
+     block number already exist, otherwise the sync will fail with an exception.
+    """
+
+    logger = logging.getLogger('trinity.sync.common.strategies.FromBlockNumberLaunchStrategy')
+
+    def __init__(self, db: BaseAsyncHeaderDB, launch_block_number: BlockNumber) -> None:
+        self._db = db
+        self._launch_block_number = launch_block_number
+
+    async def fulfill_prerequisites(self) -> None:
+        try:
+            await self._db.coro_get_canonical_block_header_by_number(self._launch_block_number)
+        except HeaderNotFound:
+            raise ValidationError(
+                f"No canonical header #{self._launch_block_number} exists. Invalid launch header."
+            )
+
+    async def get_starting_block_number(self) -> BlockNumber:
+        return self._launch_block_number

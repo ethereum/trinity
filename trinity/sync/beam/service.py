@@ -30,7 +30,8 @@ class BeamSyncService(Service):
             peer_pool: ETHPeerPool,
             event_bus: EndpointAPI,
             checkpoint: Checkpoint = None,
-            force_beam_block_number: BlockNumber = None) -> None:
+            force_beam_block_number: BlockNumber = None,
+            enable_header_backfill: bool = False) -> None:
         self.logger = get_logger('trinity.sync.beam.service.BeamSyncService')
         self.chain = chain
         self.chaindb = chaindb
@@ -39,6 +40,7 @@ class BeamSyncService(Service):
         self.event_bus = event_bus
         self.checkpoint = checkpoint
         self.force_beam_block_number = force_beam_block_number
+        self.enable_header_backfill = enable_header_backfill
 
     async def run(self) -> None:
         head = await self.chaindb.coro_get_canonical_head()
@@ -64,6 +66,7 @@ class BeamSyncService(Service):
                 self.event_bus,
                 self.checkpoint,
                 self.force_beam_block_number,
+                self.enable_header_backfill,
             )
             self.manager.run_child_service(beam_syncer)
             do_pivot = await self._monitor_for_pivot(beam_syncer)

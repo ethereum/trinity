@@ -17,6 +17,7 @@ from typing import (
     Sequence,
     Tuple,
     Type,
+    NamedTuple,
 )
 
 from async_service import Service, background_asyncio_service
@@ -1043,12 +1044,20 @@ async def _always_false(headers: Sequence[BlockHeaderAPI]) -> bool:
     return False
 
 
+class HeaderPersistInfo(NamedTuple):
+    imported_headers: Tuple[BlockHeaderAPI, ...]
+    old_canon_headers: Tuple[BlockHeaderAPI, ...]
+    new_canon_headers: Tuple[BlockHeaderAPI, ...]
+    elapsed_time: float
+
+
 async def persist_headers(
         logger: ExtendedDebugLogger,
         db: BaseAsyncHeaderDB,
         syncer: BaseHeaderChainSyncer[TChainPeer],
         exit_condition: Callable[[Sequence[BlockHeaderAPI]], Awaitable[bool]] = _always_false
-) -> None:
+) -> AsyncIterator[HeaderPersistInfo]:
+
     async for headers in syncer.new_sync_headers(HEADER_QUEUE_SIZE_TARGET):
 
         syncer._chain.validate_chain_extension(headers)
@@ -1061,17 +1070,6 @@ async def persist_headers(
 
         new_canon_headers, old_canon_headers = await db.coro_persist_header_chain(headers)
 
-        if len(new_canon_headers):
-            head = new_canon_headers[-1]
-        else:
-            head = await db.coro_get_canonical_head()
-
-        logger.info(
-            "Imported %d headers in %0.2f seconds, new head: %s",
-            len(headers),
-            timer.elapsed,
-            head,
-        )
         logger.debug(
             "Header import details: %s..%s, old canon: %s..%s, new canon: %s..%s",
             headers[0],
@@ -1080,4 +1078,10 @@ async def persist_headers(
             old_canon_headers[-1] if len(old_canon_headers) else None,
             new_canon_headers[0] if len(new_canon_headers) else None,
             new_canon_headers[-1] if len(new_canon_headers) else None,
+        )
+        yield HeaderPersistInfo(
+            imported_headers=headers,
+            old_canon_headers=old_canon_headers,
+            new_canon_headers=new_canon_headers,
+            elapsed_time=timer.elapsed
         )

@@ -31,7 +31,7 @@ FUNDED_ACCT = keys.PrivateKey(
     decode_hex("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee"))
 
 
-def load_mining_chain(db):
+def load_mining_chain(db, *chain_builder_fns):
     GENESIS_PARAMS = {
         'coinbase': ZERO_ADDRESS,
         'difficulty': 5,
@@ -45,9 +45,11 @@ def load_mining_chain(db):
         }
     }
 
+    chain_builder_fns = (latest_mainnet_at(0),) if not chain_builder_fns else chain_builder_fns
+
     return build(
         AsyncMiningChain,
-        latest_mainnet_at(0),
+        *chain_builder_fns,
         enable_pow_mining(),
         genesis(db=db, params=GENESIS_PARAMS, state=GENESIS_STATE),
     )
@@ -56,7 +58,10 @@ def load_mining_chain(db):
 class DBFixture(Enum):
     TWENTY_POW_HEADERS = '20pow_headers.ldb'
     THOUSAND_POW_HEADERS = '1000pow_headers.ldb'
-
+    # this chain is an uncle chain to `THOUSAND_POW_HEADERS`. It shares a common history until
+    # block 474, forks at 475 and contains uncle headers until block 1000. It was built with:
+    # build_uncle_chain_to_existing_db(new_db, existing_db, 475, 526)
+    UNCLE_CHAIN = '1000pow_uncle_chain.ldb'
     # this chain updates and churns storage, as well as creating a bunch of
     # contracts that are later deleted. It was built with:
     # build_pow_churning_fixture(db, 128)

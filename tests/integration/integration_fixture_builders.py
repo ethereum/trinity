@@ -1,3 +1,4 @@
+from eth.tools.builder.chain import byzantium_at
 from eth_keys import keys
 from eth_utils import decode_hex
 
@@ -11,6 +12,28 @@ from .churn_state.builder import (
 
 RECEIVER = keys.PrivateKey(
     decode_hex("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"))
+
+
+def build_uncle_chain_to_existing_db(write_db, existing_db, fork_at, num_blocks=20):
+    # 1000pow_headers fixture uses byzantium and we don't want to upgrade the fixture to not bloat
+    # the git repository too much (see discussion: https://github.com/ethereum/trinity/pull/1777)
+    base_chain = load_mining_chain(existing_db, byzantium_at(0))
+    uncle_chain = load_mining_chain(write_db, byzantium_at(0))
+
+    assert uncle_chain.get_canonical_head() == base_chain.get_canonical_block_header_by_number(0)
+    for block_number in range(1, fork_at):
+        uncle_chain.import_block(base_chain.get_canonical_block_by_number(block_number))
+
+    assert uncle_chain.get_canonical_head().block_number == fork_at - 1
+
+    for _ in range(num_blocks):
+        uncle_chain.mine_block()
+
+    # If `fork_at` is 500 it means that up to block 499 is shared history and 500 is the first uncle
+    tip_number = fork_at - 1 + num_blocks
+
+    assert uncle_chain.get_canonical_head().block_number == tip_number
+    assert uncle_chain.get_canonical_head() != base_chain.get_canonical_block_by_number(tip_number)
 
 
 def build_pow_fixture(write_db, num_blocks=20):

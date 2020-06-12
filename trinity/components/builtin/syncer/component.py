@@ -11,6 +11,7 @@ from argparse import (
 )
 import logging
 from typing import (
+    Any,
     cast,
     Iterable,
     Tuple,
@@ -65,34 +66,61 @@ from trinity.sync.full.service import (
 from trinity.sync.beam.service import (
     BeamSyncService,
 )
-from trinity.sync.header.chain import HeaderChainSyncer
+from trinity.sync.header.chain import (
+    HeaderChainSyncer,
+)
 from trinity.sync.light.chain import (
     LightChainSyncer,
 )
 from trinity.components.builtin.syncer.cli import NormalizeCheckpointURI
 
 
-def add_sync_from_checkpoint_arg(arg_parser: _ArgumentGroup) -> None:
+def add_shared_argument(arg_group: _ArgumentGroup, arg_name: str, **kwargs: Any) -> None:
     try:
-        arg_parser.add_argument(
-            '--sync-from-checkpoint',
-            action=NormalizeCheckpointURI,
-            help=(
-                "Start syncing from a trusted checkpoint specified using URI syntax:"
-                "By specific block, eth://block/byhash/<hash>?score=<score>"
-                "Let etherscan pick a block near the tip, eth://block/byetherscan/latest"
-            ),
-            default=None,
-        )
+        arg_group.add_argument(arg_name, **kwargs)
     except ArgumentError as err:
-        if "conflicting option string: --sync-from-checkpoint" in str(err):
-            # --sync-from-checkpoint is used for multiple strategies but only one of them can
+        if f"conflicting option string: {arg_name}" in str(err):
+            # --arg_name is used for multiple strategies but only one of them can
             # add the flag. We do not want strategies to rely on other strategies to add the flag
             # so we have to catch the error and silence it.
             pass
         else:
             # Re-raise in case we caught a different error than we expected.
             raise
+
+
+def add_sync_from_checkpoint_arg(arg_group: _ArgumentGroup) -> None:
+    add_shared_argument(
+        arg_group,
+        '--sync-from-checkpoint',
+        action=NormalizeCheckpointURI,
+        help=(
+            "Start syncing from a trusted checkpoint specified using URI syntax:"
+            "By specific block, eth://block/byhash/<hash>?score=<score>"
+            "Let etherscan pick a block near the tip, eth://block/byetherscan/latest"
+        ),
+        default=None,
+    )
+
+
+def add_disable_backfill_for_beam_sync_arg(arg_group: _ArgumentGroup) -> None:
+    add_shared_argument(
+        arg_group,
+        '--disable-backfill',
+        action="store_true",
+        help="Disable backfilling entirely (headers, blocks, state)",
+        default=False,
+    )
+
+
+def add_disable_backfill_for_header_sync_arg(arg_group: _ArgumentGroup) -> None:
+    add_shared_argument(
+        arg_group,
+        '--disable-backfill',
+        action="store_true",
+        help="Disable backfilling of headers (introduced through checkpointing)",
+        default=False,
+    )
 
 
 class BaseSyncStrategy(ABC):
@@ -187,7 +215,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
             help="Force beam sync to activate on a specific block number (for testing)",
             default=None,
         )
-
+        add_disable_backfill_for_beam_sync_arg(arg_group)
         add_sync_from_checkpoint_arg(arg_group)
 
     async def sync(self,
@@ -206,6 +234,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
             event_bus,
             args.sync_from_checkpoint,
             args.force_beam_block_number,
+            not args.disable_backfill
         )
 
         async with background_asyncio_service(syncer) as manager:
@@ -219,8 +248,9 @@ class HeaderSyncStrategy(BaseSyncStrategy):
         return 'header'
 
     @classmethod
-    def configure_parser(cls, arg_parser: _ArgumentGroup) -> None:
-        add_sync_from_checkpoint_arg(arg_parser)
+    def configure_parser(cls, arg_group: _ArgumentGroup) -> None:
+        add_sync_from_checkpoint_arg(arg_group)
+        add_disable_backfill_for_header_sync_arg(arg_group)
 
     async def sync(self,
                    args: Namespace,
@@ -234,7 +264,8 @@ class HeaderSyncStrategy(BaseSyncStrategy):
             chain,
             AsyncChainDB(base_db),
             cast(ETHPeerPool, peer_pool),
-            args.sync_from_checkpoint,
+            enable_backfill=not args.disable_backfill,
+            checkpoint=args.sync_from_checkpoint,
         )
 
         async with background_asyncio_service(syncer) as manager:
