@@ -10,6 +10,7 @@ from eth_utils import (
 
 import requests
 
+from trinity._utils.version import construct_trinity_client_identifier
 from trinity.constants import (
     MAINNET_NETWORK_ID,
     GOERLI_NETWORK_ID,
@@ -36,7 +37,7 @@ API_URLS = {
 
 # The Etherscan API for Goerli and Ropsten rejects any requests without User-Agent
 
-COMMON_REQUEST_HEADERS = {'User-Agent': 'Trinity'}
+COMMON_REQUEST_HEADERS = {'User-Agent': construct_trinity_client_identifier()}
 
 
 class Etherscan:
