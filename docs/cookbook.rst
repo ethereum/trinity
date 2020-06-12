@@ -66,13 +66,19 @@ Running as a light client
 Use the ``--sync-mode=light`` flag to instruct Trinity to run as a light node.
 
 
-.. _cookbook_recipe_ropsten_vs_mainnet:
+.. _cookbook_recipe_mainnet_vs_testnets:
 
-Ropsten vs Mainnet
-------------------
+Mainnet, Görli or Ropsten
+-------------------------
 
-Trinity supports running against either the Ethereum Mainnet or
-Ropsten testnet out of the box.  Use ``--ropsten`` to run against Ropsten.
+Trinity comes with out of the box support to sync either the Ethereum Mainnet or
+the Görli and Ropsten testnets. Mainnet is the default and doesn't need any flag. Use either
+``-goerli`` or ``--ropsten`` to run one of the supported testnets.
+
+.. note::
+
+  The Görli testnet uses `Clique consensus <https://eips.ethereum.org/EIPS/eip-225>`_ and is
+  considered the superior testnet.
 
 
 .. code:: sh
