@@ -176,7 +176,7 @@ Trinity's general :doc:`Architecture </guides/architecture>`, :doc:`Writing Comp
 or scan the :doc:`Cookbook </cookbook>` for short recipes to learn how to:
 
 - :ref:`Run Trinity as a light client<cookbook_recipe_running_as_a_light_client>`
-- :ref:`Connect to Mainnet or Ropsten<cookbook_recipe_ropsten_vs_mainnet>`
+- :ref:`Connect to Mainnet or Ropsten<cookbook_recipe_mainnet_vs_testnets>`
 - :ref:`Connect to preferred nodes<cookbook_recipe_connecting_to_preferred_nodes>`
 - :ref:`Retrieve chain information via web3<cookbook_recipe_retrieving_chain_information_via_web3>`
 - and many more!

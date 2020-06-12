@@ -26,7 +26,7 @@ The main focus is to enrich the Ethereum ecosystem with a Python implementation 
 * Runs fast and resource friendly
 * Is highly flexible to support:
 
-  * Public chains (including Mainnet, Ropsten and other networks)
+  * Public chains (including Mainnet, Görli, Ropsten and other networks)
   * Private chains
   * Consortium chains
   * Advanced research
