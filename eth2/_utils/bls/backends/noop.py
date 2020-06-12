@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 
@@ -8,6 +8,12 @@ from .base import BaseBLSBackend
 
 
 class NoOpBackend(BaseBLSBackend):
+    @staticmethod
+    def AggregateVerify(
+        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+    ) -> bool:
+        return True
+
     @staticmethod
     def SkToPk(k: int) -> BLSPubkey:
         return BLSPubkey(k.to_bytes(48, "little"))

@@ -1,4 +1,4 @@
-from typing import Sequence, Type
+from typing import Sequence, Tuple, Type
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 
@@ -49,6 +49,12 @@ class Eth2BLS:
     @classmethod
     def Verify(cls, PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:
         return cls.backend.Verify(PK, message, signature)
+
+    @classmethod
+    def AggregateVerify(
+        cls, pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+    ) -> bool:
+        return cls.backend.AggregateVerify(pairs, signature)
 
     @classmethod
     def FastAggregateVerify(

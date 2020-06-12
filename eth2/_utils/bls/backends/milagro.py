@@ -2,7 +2,14 @@ from typing import Iterator, Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import to_tuple
-from milagro_bls_binding import Aggregate, FastAggregateVerify, PrivToPub, Sign, Verify
+from milagro_bls_binding import (
+    Aggregate,
+    AggregateVerify,
+    FastAggregateVerify,
+    PrivToPub,
+    Sign,
+    Verify,
+)
 
 from eth2._utils.bls.backends.base import BaseBLSBackend
 from eth2.beacon.constants import EMPTY_PUBKEY, EMPTY_SIGNATURE
@@ -42,6 +49,12 @@ class MilagroBackend(BaseBLSBackend):
         if len(non_empty_signatures) == 0:
             return EMPTY_SIGNATURE
         return Aggregate(list(non_empty_signatures))
+
+    @staticmethod
+    def AggregateVerify(
+        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+    ) -> bool:
+        return AggregateVerify(list(pairs), signature)
 
     @staticmethod
     def FastAggregateVerify(

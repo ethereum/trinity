@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from py_ecc.bls import G2ProofOfPossession
@@ -8,6 +8,13 @@ from eth2.beacon.constants import EMPTY_SIGNATURE
 
 
 class PyECCBackend(BaseBLSBackend):
+    @staticmethod
+    def AggregateVerify(
+        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+    ) -> bool:
+        PKs, messages = zip(*pairs)
+        return G2ProofOfPossession.AggregateVerify(PKs, messages, signature)
+
     @staticmethod
     def SkToPk(k: int) -> BLSPubkey:
         return G2ProofOfPossession.SkToPk(k)

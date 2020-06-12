@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 
@@ -18,6 +18,13 @@ class BaseBLSBackend(ABC):
     @staticmethod
     @abstractmethod
     def Verify(PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def AggregateVerify(
+        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+    ) -> bool:
         ...
 
     @staticmethod
