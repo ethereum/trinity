@@ -52,7 +52,7 @@ def generate_genesis_config(
     deposits = create_genesis_deposits_from(
         validator_key_pairs,
         withdrawal_credentials_provider=mk_withdrawal_credentials_from(
-            eth2_config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, byteorder="little")
+            eth2_config.BLS_WITHDRAWAL_PREFIX
         ),
         amount_provider=lambda _public_key: eth2_config.MAX_EFFECTIVE_BALANCE,
     )

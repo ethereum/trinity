@@ -89,7 +89,7 @@ def create_keypair_and_mock_withdraw_credentials(
         pubkey = BLSPubkey(decode_hex(key_pair["pubkey"]))
         privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
         withdrawal_credential = Hash32(
-            config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, "big") + hash_eth2(pubkey)[1:]
+            config.BLS_WITHDRAWAL_PREFIX + hash_eth2(pubkey)[1:]
         )
 
         pubkeys += (pubkey,)

@@ -25,7 +25,7 @@ SERENITY_CONFIG = Eth2Config(
     EFFECTIVE_BALANCE_INCREMENT=Gwei(2 ** 0 * GWEI_PER_ETH),  # (= 1,000,000,000) Gwei
     # Initial values
     GENESIS_FORK_VERSION=Version(b"\x00" * 4),
-    BLS_WITHDRAWAL_PREFIX=0,
+    BLS_WITHDRAWAL_PREFIX=b"\x00",
     # Time parameters
     MIN_GENESIS_DELAY=Second(86400),
     SECONDS_PER_SLOT=Second(12),  # seconds

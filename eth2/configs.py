@@ -53,7 +53,7 @@ class Eth2Config:
     EFFECTIVE_BALANCE_INCREMENT: Gwei
     # Initial values
     GENESIS_FORK_VERSION: Version
-    BLS_WITHDRAWAL_PREFIX: int
+    BLS_WITHDRAWAL_PREFIX: bytes
     # Time parameters
     MIN_GENESIS_DELAY: int
     SECONDS_PER_SLOT: Second

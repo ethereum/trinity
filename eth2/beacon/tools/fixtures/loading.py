@@ -72,6 +72,9 @@ def load_config_at_path(p: Path) -> Eth2Config:
     config_data["GENESIS_FORK_VERSION"] = config_data["GENESIS_FORK_VERSION"].to_bytes(
         4, byteorder="big"
     )
+    config_data["BLS_WITHDRAWAL_PREFIX"] = config_data[
+        "BLS_WITHDRAWAL_PREFIX"
+    ].to_bytes(1, byteorder="big")
     config = generate_config_by_dict(config_data)
     config_cache[p] = config
     return config
