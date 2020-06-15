@@ -6,6 +6,7 @@ from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import to_tuple
 from eth_utils.toolz import keymap as keymapper
 from eth_utils.toolz import pipe
+import ssz
 
 from eth2._utils.bitfield import get_empty_bitfield, set_voted
 from eth2._utils.bls import bls
@@ -45,7 +46,6 @@ from eth2.beacon.typing import (
     CommitteeValidatorIndex,
     Epoch,
     Gwei,
-    Operation,
     Root,
     Slot,
     ValidatorIndex,
@@ -213,7 +213,7 @@ def sign_proof_of_possession(
 
 def sign_transaction(
     *,
-    operation: Operation,
+    object: ssz.Serializable,
     privkey: int,
     state: BeaconState,
     slot: Slot,
@@ -226,7 +226,7 @@ def sign_transaction(
         slots_per_epoch,
         message_epoch=compute_epoch_at_slot(slot, slots_per_epoch),
     )
-    signing_root = compute_signing_root(operation, domain)
+    signing_root = compute_signing_root(object, domain)
 
     return bls.Sign(privkey, signing_root)
 
@@ -252,7 +252,7 @@ def create_block_header_with_signature(
         body_root=body_root,
     )
     block_header_signature = sign_transaction(
-        operation=block_header,
+        object=block_header,
         privkey=privkey,
         state=state,
         slot=block_header.slot,
@@ -369,7 +369,7 @@ def create_mock_slashable_attestation(
     attesting_indices = _get_mock_attesting_indices(committee, num_voted_attesters=1)
 
     signature = sign_transaction(
-        operation=attestation_data,
+        object=attestation_data,
         privkey=keymap[state.validators[attesting_indices[0]].pubkey],
         state=state,
         slot=attestation_slot,
@@ -506,7 +506,7 @@ def _create_mock_signed_attestation(
     # Use privkeys to sign the attestation
     signatures = [
         sign_transaction(
-            operation=attestation_data,
+            object=attestation_data,
             privkey=privkey,
             state=state,
             slot=attestation_slot,
@@ -715,7 +715,7 @@ def create_mock_voluntary_exit(
     return SignedVoluntaryExit.create(
         message=voluntary_exit,
         signature=sign_transaction(
-            operation=voluntary_exit,
+            object=voluntary_exit,
             privkey=keymap[state.validators[validator_index].pubkey],
             state=state,
             slot=compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH),

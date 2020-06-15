@@ -18,7 +18,7 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Bitfield, CommitteeIndex, Slot, SlotOperation
+from eth2.beacon.typing import Bitfield, CommitteeIndex, SerializableUint64, Slot
 from eth2.configs import Eth2Config
 
 # TODO: TARGET_AGGREGATORS_PER_COMMITTEE is not in Eth2Config now.
@@ -37,7 +37,7 @@ def get_slot_signature(
         config.SLOTS_PER_EPOCH,
         message_epoch=compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH),
     )
-    signing_root = compute_signing_root(SlotOperation(slot), domain)
+    signing_root = compute_signing_root(SerializableUint64(slot), domain)
     return bls.Sign(privkey, signing_root)
 
 
@@ -169,7 +169,7 @@ def validate_aggregator_proof(
         config.SLOTS_PER_EPOCH,
         message_epoch=compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH),
     )
-    signing_root = compute_signing_root(SlotOperation(slot), domain)
+    signing_root = compute_signing_root(SerializableUint64(slot), domain)
 
     bls.validate(
         pubkey=pubkey,

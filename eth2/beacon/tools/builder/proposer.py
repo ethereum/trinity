@@ -21,9 +21,9 @@ from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import (
-    EpochOperation,
     FromBlockParams,
     Root,
+    SerializableUint64,
     Slot,
     ValidatorIndex,
     default_validator_index,
@@ -51,7 +51,7 @@ def _generate_randao_reveal(
     epoch = compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH)
 
     randao_reveal = sign_transaction(
-        operation=EpochOperation(epoch),
+        object=SerializableUint64(epoch),
         privkey=privkey,
         state=state,
         slot=slot,
@@ -173,7 +173,7 @@ def create_block_on_state(
 
     # Sign
     signature = sign_transaction(
-        operation=signed_block.message,
+        object=signed_block.message,
         privkey=privkey,
         state=post_state,
         slot=slot,

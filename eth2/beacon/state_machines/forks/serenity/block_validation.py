@@ -28,7 +28,7 @@ from eth2.beacon.types.proposer_slashings import ProposerSlashing
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
-from eth2.beacon.typing import CommitteeIndex, Epoch, EpochOperation, Root, Slot
+from eth2.beacon.typing import CommitteeIndex, Epoch, Root, SerializableUint64, Slot
 from eth2.configs import Eth2Config
 
 
@@ -136,7 +136,7 @@ def validate_randao_reveal(
     proposer_pubkey = proposer.pubkey
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, slots_per_epoch)
 
-    signing_root = compute_signing_root(EpochOperation(epoch), domain)
+    signing_root = compute_signing_root(SerializableUint64(epoch), domain)
 
     try:
         bls.validate(

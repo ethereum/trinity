@@ -68,7 +68,7 @@ def test_get_aggregate_from_valid_committee_attestations(
                 set_voted(empty_bitfield, i),
                 "signature",
                 sign_transaction(
-                    operation=base_attestation.data,
+                    object=base_attestation.data,
                     privkey=privkeys[i],
                     state=genesis_state,
                     slot=genesis_state.slot,

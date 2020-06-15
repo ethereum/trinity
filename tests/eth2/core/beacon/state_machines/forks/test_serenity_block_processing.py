@@ -21,7 +21,7 @@ from eth2.beacon.tools.builder.proposer import _generate_randao_reveal
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import EpochOperation
+from eth2.beacon.typing import SerializableUint64
 
 
 def test_randao_processing(
@@ -94,7 +94,7 @@ def test_randao_processing_validates_randao_reveal(
 
     epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, config.SLOTS_PER_EPOCH)
-    signing_root = compute_signing_root(EpochOperation(epoch + 1), domain)
+    signing_root = compute_signing_root(SerializableUint64(epoch + 1), domain)
     randao_reveal = bls.Sign(proposer_privkey, signing_root)
 
     block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(

@@ -16,7 +16,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 from eth2.beacon.tools.builder.initializer import create_mock_validator
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import EpochOperation
+from eth2.beacon.typing import SerializableUint64
 
 
 @pytest.mark.parametrize(
@@ -111,7 +111,7 @@ def test_randao_reveal_validation(
     )
     slots_per_epoch = config.SLOTS_PER_EPOCH
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, slots_per_epoch)
-    signing_root = compute_signing_root(EpochOperation(epoch), domain)
+    signing_root = compute_signing_root(SerializableUint64(epoch), domain)
 
     proposer_privkey = privkeys[proposer_key_index]
     randao_reveal = bls.Sign(proposer_privkey, signing_root)
