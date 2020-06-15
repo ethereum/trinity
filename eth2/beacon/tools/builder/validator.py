@@ -165,7 +165,6 @@ def verify_votes(
     """
     Verify the given votes.
     """
-    # TODO: this may need domain?
     sigs_with_committee_info = tuple(
         (sig, committee_index)
         for (committee_index, sig, pubkey) in votes

@@ -40,12 +40,6 @@ def test_sanity(backend):
     pubkey_1 = bls.SkToPk(privkey_1)
     assert bls.Verify(pubkey_1, msg_0, sig_1)
 
-    # Test: Verify signatures are correctly aggregated
-    aggregated_signature = bls.Aggregate([sig_0, sig_1])
-    assert_signature(aggregated_signature)
-
-    # TODO: Add test for fast aggregate
-
 
 @pytest.mark.parametrize("backend", BACKENDS)
 @pytest.mark.parametrize(
