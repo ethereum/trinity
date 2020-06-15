@@ -39,7 +39,7 @@ Root = NewType("Root", Hash32)  # a Merkle root
 Domain = NewType("Domain", Hash32)  # a signature domain
 
 #
-#  Networkinig
+#  Networking
 #
 
 # CommitteeIndex % ATTESTATION_SUBNET_COUNT
