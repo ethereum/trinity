@@ -8,7 +8,7 @@ from eth2._utils.hash import hash_eth2
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.fork_data import ForkData
 from eth2.beacon.types.forks import Fork
-from eth2.beacon.types.signing_root import SigningRoot
+from eth2.beacon.types.signing_root import SigningData
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import (
     Domain,
@@ -238,7 +238,7 @@ def compute_signing_root(object: ssz.Serializable, domain: Domain) -> Root:
     """
     Return the signing root of an object by calculating the root of the object-domain tree.
     """
-    domain_wrapped_object = SigningRoot.create(
+    domain_wrapped_object = SigningData.create(
         object_root=object.hash_tree_root, domain=domain
     )
     return domain_wrapped_object.hash_tree_root

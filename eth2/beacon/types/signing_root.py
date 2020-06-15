@@ -6,19 +6,19 @@ from ssz.sedes import bytes32
 
 from eth2.beacon.typing import Domain, Root, default_domain, default_root
 
-TSigningRoot = TypeVar("TSigningRoot", bound="SigningRoot")
+TSigningData = TypeVar("TSigningData", bound="SigningData")
 
 
-class SigningRoot(HashableContainer):
+class SigningData(HashableContainer):
 
     fields = [("object_root", bytes32), ("domain", bytes32)]
 
     @classmethod
     def create(
-        cls: Type[TSigningRoot],
+        cls: Type[TSigningData],
         object_root: Root = default_root,
         domain: Domain = default_domain,
-    ) -> TSigningRoot:
+    ) -> TSigningData:
         return super().create(object_root=object_root, domain=domain)
 
     def __str__(self) -> str:
@@ -28,4 +28,4 @@ class SigningRoot(HashableContainer):
         )
 
 
-default_signing_root = SigningRoot.create()
+default_signing_data = SigningData.create()
