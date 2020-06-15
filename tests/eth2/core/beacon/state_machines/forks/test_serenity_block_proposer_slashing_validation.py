@@ -4,8 +4,8 @@ import pytest
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_block_header_signature,
     validate_proposer_slashing,
-    validate_proposer_slashing_epoch,
     validate_proposer_slashing_headers,
+    validate_proposer_slashing_slot,
 )
 from eth2.beacon.tools.builder.validator import create_mock_proposer_slashing_at_block
 
@@ -29,23 +29,20 @@ def test_validate_proposer_slashing_valid(
     validate_proposer_slashing(state, valid_proposer_slashing, slots_per_epoch)
 
 
-def test_validate_proposer_slashing_epoch(genesis_state, keymap, config):
+def test_validate_proposer_slashing_slot(genesis_state, keymap, config):
     state = genesis_state
     valid_proposer_slashing = get_valid_proposer_slashing(state, keymap, config)
     # Valid
-    validate_proposer_slashing_epoch(valid_proposer_slashing, config.SLOTS_PER_EPOCH)
+    validate_proposer_slashing_slot(valid_proposer_slashing)
 
     invalid_proposer_slashing = valid_proposer_slashing.transform(
         ("signed_header_1", "message", "slot"),
-        valid_proposer_slashing.signed_header_2.message.slot
-        + 2 * config.SLOTS_PER_EPOCH,
+        valid_proposer_slashing.signed_header_2.message.slot + 2,
     )
 
     # Invalid
     with pytest.raises(ValidationError):
-        validate_proposer_slashing_epoch(
-            invalid_proposer_slashing, config.SLOTS_PER_EPOCH
-        )
+        validate_proposer_slashing_slot(invalid_proposer_slashing)
 
 
 def test_validate_proposer_slashing_headers(genesis_state, keymap, config):

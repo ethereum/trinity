@@ -162,8 +162,7 @@ def validate_proposer_slashing(
         proposer_slashing.signed_header_1.message.proposer_index
     ]
 
-    # NOTE: spec has: assert header_1.slot == header_2.slot
-    validate_proposer_slashing_epoch(proposer_slashing, slots_per_epoch)
+    validate_proposer_slashing_slot(proposer_slashing)
 
     validate_proposer_slashing_headers(proposer_slashing)
 
@@ -184,20 +183,14 @@ def validate_proposer_slashing(
     )
 
 
-def validate_proposer_slashing_epoch(
-    proposer_slashing: ProposerSlashing, slots_per_epoch: int
-) -> None:
-    epoch_1 = compute_epoch_at_slot(
-        proposer_slashing.signed_header_1.message.slot, slots_per_epoch
-    )
-    epoch_2 = compute_epoch_at_slot(
-        proposer_slashing.signed_header_2.message.slot, slots_per_epoch
-    )
+def validate_proposer_slashing_slot(proposer_slashing: ProposerSlashing) -> None:
+    slot_1 = proposer_slashing.signed_header_1.message.slot
+    slot_2 = proposer_slashing.signed_header_2.message.slot
 
-    if epoch_1 != epoch_2:
+    if slot_1 != slot_2:
         raise ValidationError(
-            f"Epoch of proposer_slashing.proposal_1 ({epoch_1}) !="
-            f" epoch of proposer_slashing.proposal_2 ({epoch_2})"
+            f"Slot of proposer_slashing.proposal_1 ({slot_1}) !="
+            f" slot of proposer_slashing.proposal_2 ({slot_2})"
         )
 
 
