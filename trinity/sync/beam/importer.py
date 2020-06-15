@@ -160,6 +160,7 @@ def make_pausing_beam_chain(
         for starting_block, vm in vm_config
     )
     PausingBeamChain = BeamChain.configure(
+        consensus_context_class=consensus_context_class,
         vm_configuration=pausing_vm_config,
         chain_id=chain_id,
     )
