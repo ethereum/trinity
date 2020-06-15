@@ -208,7 +208,7 @@ def validate_proposer_slashing_headers(proposer_slashing: ProposerSlashing) -> N
     if header_1.message.proposer_index != header_2.message.proposer_index:
         raise ValidationError(
             f"header_1.message.proposer_index ({header_1.message.proposer_index}) !="
-            f"header_2.message.proposer_index ({header_2.message.proposer_index})"
+            f" header_2.message.proposer_index ({header_2.message.proposer_index})"
         )
 
     if header_1 == header_2:
@@ -409,7 +409,9 @@ def _validate_aggregation_bits(
     committee = get_beacon_committee(state, data.slot, data.index, config)
 
     if not any(attestation.aggregation_bits):
-        raise ValidationError("The attestation bit length is empty.")
+        raise ValidationError(
+            f"No bits set in attestation's aggregation bits, attestation={attestation}."
+        )
 
     if len(attestation.aggregation_bits) != len(committee):
         raise ValidationError(
