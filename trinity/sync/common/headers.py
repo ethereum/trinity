@@ -118,8 +118,24 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
 
     async def next_skeleton_segment(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
         while self.manager.is_running:
-            yield await self._fetched_headers.get()
-            self._fetched_headers.task_done()
+            header_task = asyncio.create_task(self._fetched_headers.get())
+            service_end_task = asyncio.create_task(self.manager.wait_finished())
+            done, pending = await asyncio.wait(
+                [header_task, service_end_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            if header_task in done:
+                yield header_task.result()
+                self._fetched_headers.task_done()
+            if service_end_task in done:
+                # The manager completed, so break out of the loop
+                break
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._display_stats)
