@@ -624,4 +624,14 @@ async def wait_for_head(headerdb, header, sync_timeout=10):
             else:
                 break
         assert header_at_block == header
-    await asyncio.wait_for(wait_loop(), sync_timeout)
+    try:
+        await asyncio.wait_for(wait_loop(), sync_timeout)
+    except asyncio.TimeoutError:
+        canonical_head = headerdb.get_canonical_head()
+        logging.error(
+            "Could not finish syncing to %s within %ds, only arrived at %s",
+            header,
+            sync_timeout,
+            canonical_head,
+        )
+        raise
