@@ -460,7 +460,11 @@ async def test_header_syncer(request,
                     #   may not properly fill in right up to the missing tip
                     erase_block_numbers[0] - 1
                 )
-                await wait_for_head(chaindb_fresh, target_head, sync_timeout=20)
+                await wait_for_head(chaindb_fresh, target_head)
+
+                # gut check that we didn't skip past the erased range of blocks
+                head = chaindb_fresh.get_canonical_head()
+                assert head.block_number < erase_block_numbers[0]
 
                 # TODO validate that the skeleton syncer has cycled??
 
