@@ -5,6 +5,7 @@ import uuid
 from async_service import Service, background_asyncio_service
 from eth.consensus import ConsensusContext
 from eth.db.atomic import AtomicDB
+from eth.db.schema import SchemaV1
 from eth.exceptions import HeaderNotFound
 from eth.vm.forks.petersburg import PetersburgVM
 from eth_utils import decode_hex
@@ -86,7 +87,7 @@ def chaindb_with_gaps(chaindb_fresh, chaindb_1000):
 
 
 @pytest.mark.asyncio
-async def test_skeleton_syncer(request, event_loop, event_bus, chaindb_fresh, chaindb_1000):
+async def test_fast_syncer(request, event_loop, event_bus, chaindb_fresh, chaindb_1000):
 
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
     server_context = ChainContextFactory(headerdb__db=chaindb_1000.db)
@@ -115,6 +116,7 @@ async def test_skeleton_syncer(request, event_loop, event_bus, chaindb_fresh, ch
 
             head = chaindb_fresh.get_canonical_head()
             assert head == chaindb_1000.get_canonical_head()
+            # TODO assert that the block transactions and uncles are present too.
 
 
 @pytest.mark.asyncio
@@ -413,9 +415,9 @@ async def test_header_syncer(request,
                              event_loop,
                              event_bus,
                              chaindb_fresh,
-                             chaindb_20):
+                             chaindb_1000):
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
-    server_context = ChainContextFactory(headerdb__db=chaindb_20.db)
+    server_context = ChainContextFactory(headerdb__db=chaindb_1000.db)
     peer_pair = LatestETHPeerPairFactory(
         alice_peer_context=client_context,
         bob_peer_context=server_context,
@@ -433,14 +435,44 @@ async def test_header_syncer(request,
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db),
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
         )):
 
-            server_peer.logger.info("%s is serving 20 blocks", server_peer)
-            client_peer.logger.info("%s is syncing up 20", client_peer)
+            server_peer.logger.info("%s is serving 1000 blocks", server_peer)
+            client_peer.logger.info("%s is syncing up 1000", client_peer)
+
+            # Artificially split header sync into two parts, to verify that
+            #   cycling to the next sync works properly. Split by erasing the canonical
+            #   lookups in a middle chunk. We have to erase a range of them because of
+            #   the way that the skeleton sync skips over headers on the first request,
+            #   it expects the peer to have all headers in the 192-header gaps in between.
+            erase_block_numbers = range(500, 700)
+            erased_canonicals = []
+            for blocknum in erase_block_numbers:
+                dbkey = SchemaV1.make_block_number_to_hash_lookup_key(blocknum)
+                canonical_hash = chaindb_1000.db[dbkey]
+                erased_canonicals.append((dbkey, canonical_hash))
+                del chaindb_1000.db[dbkey]
 
             async with background_asyncio_service(client):
-                await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
+                target_head = chaindb_1000.get_canonical_block_header_by_number(
+                    # TODO? Look back from the first erased block number, because the skeleton
+                    #   may not properly fill in right up to the missing tip
+                    erase_block_numbers[0] - 1
+                )
+                await wait_for_head(chaindb_fresh, target_head, sync_timeout=20)
+
+                # TODO validate that the skeleton syncer has cycled??
+
+                # Replace the missing headers so that syncing can resume
+                for dbkey, canonical_hash in erased_canonicals:
+                    chaindb_1000.db[dbkey] = canonical_hash
+
+                # Do we have to do anything here to have the server notify the client
+                #   that it's capable of serving more headers now?
+
+                await wait_for_head(chaindb_fresh, chaindb_1000.get_canonical_head())
+
 
 
 @pytest.mark.asyncio
