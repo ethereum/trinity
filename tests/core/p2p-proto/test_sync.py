@@ -623,4 +623,5 @@ async def wait_for_head(headerdb, header, sync_timeout=10):
                 await asyncio.sleep(0.1)
             else:
                 break
+        assert header_at_block == header
     await asyncio.wait_for(wait_loop(), sync_timeout)
