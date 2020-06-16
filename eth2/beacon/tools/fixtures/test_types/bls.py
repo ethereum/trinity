@@ -92,7 +92,7 @@ class AggregateHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.Aggregate(inputs)
+        return bls.aggregate(*inputs)
 
     @staticmethod
     def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
@@ -119,7 +119,7 @@ class AggregateVerifyHandler(TestHandler[SignatureData, bool]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.AggregateVerify(inputs["pairs"], inputs["signature"])
+        return bls.aggregate_verify(inputs["signature"], *inputs["pairs"])
 
     @staticmethod
     def condition(output: bool, expected_output: bool) -> None:
@@ -148,7 +148,7 @@ class SignHandler(TestHandler[SignatureData, BLSSignature]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.Sign(inputs["privkey"], inputs["message"])
+        return bls.sign(inputs["privkey"], inputs["message"])
 
     @staticmethod
     def condition(output: BLSSignature, expected_output: BLSSignature) -> None:
@@ -175,7 +175,7 @@ class VerifyHandler(TestHandler[SignatureData, bool]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.Verify(inputs["pubkey"], inputs["message"], inputs["signature"])
+        return bls.verify(inputs["message"], inputs["signature"], inputs["pubkey"])
 
     @staticmethod
     def condition(output: bool, expected_output: bool) -> None:
@@ -202,8 +202,8 @@ class FastAggregateVerifyHandler(TestHandler[SignatureData, bool]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.FastAggregateVerify(
-            inputs["pubkeys"], inputs["message"], inputs["signature"]
+        return bls.fast_aggregate_verify(
+            inputs["message"], inputs["signature"], *inputs["pubkeys"]
         )
 
     @staticmethod

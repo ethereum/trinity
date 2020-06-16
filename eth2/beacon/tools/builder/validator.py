@@ -62,7 +62,7 @@ from eth2.configs import Eth2Config
 #
 def mk_key_pair_from_seed_index(seed_index: int) -> Tuple[BLSPubkey, int]:
     privkey = int.from_bytes(hash_eth2(str(seed_index).encode("utf-8"))[:4], "big")
-    pubkey = bls.SkToPk(privkey)
+    pubkey = bls.sk_to_pk(privkey)
     return (pubkey, privkey)
 
 
@@ -168,7 +168,7 @@ def verify_votes(
     sigs_with_committee_info = tuple(
         (sig, committee_index)
         for (committee_index, sig, pubkey) in votes
-        if bls.Verify(PK=pubkey, message=message_hash, signature=sig)
+        if bls.verify(message_hash, sig, pubkey)
     )
     try:
         sigs, committee_indices = zip(*sigs_with_committee_info)
@@ -195,7 +195,7 @@ def aggregate_votes(
         *(set_voted(index=committee_index) for committee_index in attesting_indices)
     )
 
-    return bitfield, bls.Aggregate(sigs)
+    return bitfield, bls.aggregate(*sigs)
 
 
 #
@@ -207,7 +207,7 @@ def sign_proof_of_possession(
     domain = compute_domain(SignatureDomain.DOMAIN_DEPOSIT)
     signing_root = compute_signing_root(deposit_message, domain)
 
-    return bls.Sign(privkey, signing_root)
+    return bls.sign(privkey, signing_root)
 
 
 def sign_transaction(
@@ -227,7 +227,7 @@ def sign_transaction(
     )
     signing_root = compute_signing_root(object, domain)
 
-    return bls.Sign(privkey, signing_root)
+    return bls.sign(privkey, signing_root)
 
 
 SAMPLE_HASH_1 = Root(Hash32(b"\x11" * 32))

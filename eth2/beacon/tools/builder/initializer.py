@@ -109,7 +109,7 @@ def create_key_pairs_for(validator_count: int) -> Iterable[Tuple[BLSPubkey, int]
     """
     for i in range(validator_count):
         private_key = generate_privkey_from_index(i)
-        public_key = bls.SkToPk(private_key)
+        public_key = bls.sk_to_pk(private_key)
         yield public_key, private_key
 
 

@@ -14,6 +14,6 @@ def mk_randao_provider(private_key_provider: PrivateKeyProvider) -> RandaoProvid
         privkey = private_key_provider(public_key)
         domain = compute_domain(SignatureDomain.DOMAIN_RANDAO)
         signing_root = compute_signing_root(SerializableUint64(epoch), domain)
-        return bls.Sign(privkey, signing_root)
+        return bls.sign(privkey, signing_root)
 
     return _randao_provider_of_epoch_signature

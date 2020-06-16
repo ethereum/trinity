@@ -38,7 +38,7 @@ def get_slot_signature(
         message_epoch=compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH),
     )
     signing_root = compute_signing_root(SerializableUint64(slot), domain)
-    return bls.Sign(privkey, signing_root)
+    return bls.sign(privkey, signing_root)
 
 
 def is_aggregator(
@@ -77,7 +77,7 @@ def get_aggregate_from_valid_committee_attestations(
     The given attestations SHOULD have the same `data: AttestationData` and are valid.
     """
     signatures = [attestation.signature for attestation in attestations]
-    aggregate_signature = bls.Aggregate(signatures)
+    aggregate_signature = bls.aggregate(*signatures)
 
     all_aggregation_bits = [
         attestation.aggregation_bits for attestation in attestations
@@ -171,11 +171,7 @@ def validate_aggregator_proof(
     )
     signing_root = compute_signing_root(SerializableUint64(slot), domain)
 
-    bls.validate(
-        pubkey=pubkey,
-        message_hash=signing_root,
-        signature=aggregate_and_proof.selection_proof,
-    )
+    bls.validate(signing_root, aggregate_and_proof.selection_proof, pubkey)
 
 
 def validate_attestation_signature(

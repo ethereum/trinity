@@ -12,7 +12,7 @@ from eth2.beacon.types.states import BeaconState
 def validate_indexed_attestation_aggregate_signature(
     state: BeaconState, indexed_attestation: IndexedAttestation, slots_per_epoch: int
 ) -> None:
-    pubkeys = tuple(
+    public_keys = tuple(
         state.validators[i].pubkey for i in indexed_attestation.attesting_indices
     )
     domain = get_domain(
@@ -22,7 +22,7 @@ def validate_indexed_attestation_aggregate_signature(
         indexed_attestation.data.target.epoch,
     )
     signing_root = compute_signing_root(indexed_attestation.data, domain)
-    bls.validate_multiple(pubkeys, signing_root, indexed_attestation.signature)
+    bls.validate(signing_root, indexed_attestation.signature, *public_keys)
 
 
 def validate_indexed_attestation(

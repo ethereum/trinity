@@ -23,7 +23,7 @@ def generate_validator_keypairs(validator_count: int) -> Iterable[Dict]:
         privkey = generate_privkey_from_index(index)
         yield {
             "privkey": int_to_hex(privkey),
-            "pubkey": encode_hex(bls.SkToPk(privkey)),
+            "pubkey": encode_hex(bls.sk_to_pk(privkey)),
         }
 
 

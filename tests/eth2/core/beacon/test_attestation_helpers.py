@@ -68,7 +68,7 @@ def _get_indices_and_signatures(validator_count, state, config, attestation, pri
     )
     signing_root = compute_signing_root(attestation.data, domain)
 
-    signatures = tuple(map(lambda key: bls.Sign(key, signing_root), privkeys))
+    signatures = tuple(map(lambda key: bls.sign(key, signing_root), privkeys))
     return (indices, signatures)
 
 
@@ -98,7 +98,7 @@ def _correct_indexed_attestation_params(
 
     valid_params["attesting_indices"] = attesting_indices
 
-    signature = bls.Aggregate(signatures)
+    signature = bls.aggregate(*signatures)
 
     valid_params["signature"] = signature
 

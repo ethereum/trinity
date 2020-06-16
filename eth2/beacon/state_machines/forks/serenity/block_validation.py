@@ -110,11 +110,7 @@ def validate_proposer_signature(
     signing_root = compute_signing_root(signed_block.message, domain)
 
     try:
-        bls.validate(
-            pubkey=proposer_pubkey,
-            message_hash=signing_root,
-            signature=signed_block.signature,
-        )
+        bls.validate(signing_root, signed_block.signature, proposer_pubkey)
     except SignatureError as error:
         raise ValidationError(
             f"Invalid Proposer Signature on block, beacon_proposer_index={beacon_proposer_index}",
@@ -139,11 +135,7 @@ def validate_randao_reveal(
     signing_root = compute_signing_root(SerializableUint64(epoch), domain)
 
     try:
-        bls.validate(
-            message_hash=signing_root,
-            pubkey=proposer_pubkey,
-            signature=cast(BLSSignature, randao_reveal),
-        )
+        bls.validate(signing_root, cast(BLSSignature, randao_reveal), proposer_pubkey)
     except SignatureError as error:
         raise ValidationError("RANDAO reveal is invalid", error)
 
@@ -234,9 +226,7 @@ def validate_block_header_signature(
     signing_root = compute_signing_root(header.message, domain)
 
     try:
-        bls.validate(
-            pubkey=pubkey, message_hash=signing_root, signature=header.signature
-        )
+        bls.validate(signing_root, header.signature, pubkey)
     except SignatureError as error:
         raise ValidationError("Header signature is invalid:", error)
 
@@ -483,11 +473,7 @@ def _validate_voluntary_exit_signature(
     signing_root = compute_signing_root(voluntary_exit, domain)
 
     try:
-        bls.validate(
-            pubkey=validator.pubkey,
-            message_hash=signing_root,
-            signature=signed_voluntary_exit.signature,
-        )
+        bls.validate(signing_root, signed_voluntary_exit.signature, validator.pubkey)
     except SignatureError as error:
         raise ValidationError(
             f"Invalid VoluntaryExit signature, validator_index={voluntary_exit.validator_index}",

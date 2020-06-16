@@ -95,7 +95,7 @@ def test_randao_processing_validates_randao_reveal(
     epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, config.SLOTS_PER_EPOCH)
     signing_root = compute_signing_root(SerializableUint64(epoch + 1), domain)
-    randao_reveal = bls.Sign(proposer_privkey, signing_root)
+    randao_reveal = bls.sign(proposer_privkey, signing_root)
 
     block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
         "randao_reveal", randao_reveal

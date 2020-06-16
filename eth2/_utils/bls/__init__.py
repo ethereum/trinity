@@ -1,8 +1,8 @@
-from typing import Sequence, Tuple, Type
+from typing import Tuple, Type
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 
-from eth2.beacon.exceptions import SignatureError
+from eth2.beacon.exceptions import AggregateSignatureError, SignatureError
 
 from .backends import DEFAULT_BACKEND, NoOpBackend
 from .backends.base import BaseBLSBackend
@@ -33,66 +33,69 @@ class Eth2BLS:
         cls.use(NoOpBackend)
 
     @classmethod
-    def SkToPk(cls, SK: int) -> BLSPubkey:
-        validate_private_key(SK)
-        return cls.backend.SkToPk(SK)
+    def sk_to_pk(cls, secret_key: int) -> BLSPubkey:
+        validate_private_key(secret_key)
+        return cls.backend.SkToPk(secret_key)
 
     @classmethod
-    def Sign(cls, SK: int, message: Hash32) -> BLSSignature:
-        validate_private_key(SK)
-        return cls.backend.Sign(SK, message)
+    def sign(cls, secret_key: int, message: Hash32) -> BLSSignature:
+        validate_private_key(secret_key)
+        return cls.backend.Sign(secret_key, message)
 
     @classmethod
-    def Aggregate(cls, signatures: Sequence[BLSSignature]) -> BLSSignature:
+    def aggregate(cls, *signatures: BLSSignature) -> BLSSignature:
         return cls.backend.Aggregate(signatures)
 
     @classmethod
-    def Verify(cls, PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:
-        return cls.backend.Verify(PK, message, signature)
+    def verify(
+        cls, message: Hash32, signature: BLSSignature, public_key: BLSPubkey
+    ) -> bool:
+        return cls.backend.Verify(public_key, message, signature)
 
     @classmethod
-    def AggregateVerify(
-        cls, pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+    def aggregate_verify(
+        cls, signature: BLSSignature, *pairs: Tuple[BLSPubkey, Hash32]
     ) -> bool:
         return cls.backend.AggregateVerify(pairs, signature)
 
     @classmethod
-    def FastAggregateVerify(
-        cls, PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
+    def fast_aggregate_verify(
+        cls, message: Hash32, signature: BLSSignature, *public_keys: BLSPubkey
     ) -> bool:
-        return cls.backend.FastAggregateVerify(PKs, message, signature)
+        return cls.backend.FastAggregateVerify(public_keys, message, signature)
 
     @classmethod
     def validate(
-        cls, pubkey: BLSPubkey, message_hash: Hash32, signature: BLSSignature
+        cls, message: Hash32, signature: BLSSignature, *public_keys: BLSPubkey
     ) -> None:
+        if len(public_keys) == 0:
+            raise AggregateSignatureError("public_keys is empty")
+
+        is_aggregate = len(public_keys) > 1
+
         if cls.backend != NoOpBackend:
             validate_signature(signature)
-            validate_public_key(pubkey)
+            if is_aggregate:
+                validate_many_public_keys(public_keys)
+            else:
+                validate_public_key(public_keys[0])
 
-        if not cls.Verify(pubkey, message_hash, signature):
-            raise SignatureError(
-                f"backend {cls.backend.__name__}\n"
-                f"message_hash {message_hash.hex()}\n"
-                f"pubkey {pubkey.hex()}\n"
-                f"signature {signature.hex()}\n"
-            )
-
-    @classmethod
-    def validate_multiple(
-        cls, pubkeys: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
-    ) -> None:
-        if cls.backend != NoOpBackend:
-            validate_signature(signature)
-            validate_many_public_keys(pubkeys)
-
-        if not cls.FastAggregateVerify(pubkeys, message, signature):
-            raise SignatureError(
-                f"backend {cls.backend.__name__}\n"
-                f"pubkeys {pubkeys}\n"
-                f"message {message.hex()}\n"
-                f"signature {signature.hex()}"
-            )
+        if is_aggregate:
+            if not cls.fast_aggregate_verify(message, signature, *public_keys):
+                raise AggregateSignatureError(
+                    f"backend {cls.backend.__name__}\n"
+                    f"pubkeys {public_keys}\n"
+                    f"message {message.hex()}\n"
+                    f"signature {signature.hex()}"
+                )
+        else:
+            if not cls.verify(message, signature, public_keys[0]):
+                raise SignatureError(
+                    f"backend {cls.backend.__name__}\n"
+                    f"message {message.hex()}\n"
+                    f"pubkey {public_keys[0].hex()}\n"
+                    f"signature {signature.hex()}\n"
+                )
 
 
 bls = Eth2BLS()

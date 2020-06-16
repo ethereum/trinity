@@ -68,9 +68,10 @@ def process_deposit(
         )
         signing_root = compute_signing_root(deposit_message, domain)
 
-        is_valid_proof_of_possession = bls.Verify(
-            PK=pubkey, message=signing_root, signature=deposit.data.signature
+        is_valid_proof_of_possession = bls.verify(
+            signing_root, deposit.data.signature, pubkey
         )
+
         if not is_valid_proof_of_possession:
             return state
 

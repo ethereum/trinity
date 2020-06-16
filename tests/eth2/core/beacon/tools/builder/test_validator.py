@@ -23,7 +23,7 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
     votes = [
         (
             committee_index,
-            bls.Sign(privkeys[committee_index], message_hash),
+            bls.sign(privkeys[committee_index], message_hash),
             pubkeys[committee_index],
         )
         for committee_index in random_votes

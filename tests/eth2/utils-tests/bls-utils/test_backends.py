@@ -29,16 +29,16 @@ def test_sanity(backend):
 
     # Test: Verify the basic sign/verify process
     privkey_0 = 5566
-    sig_0 = bls.Sign(privkey_0, msg_0)
+    sig_0 = bls.sign(privkey_0, msg_0)
     assert_signature(sig_0)
-    pubkey_0 = bls.SkToPk(privkey_0)
+    pubkey_0 = bls.sk_to_pk(privkey_0)
     assert_pubkey(pubkey_0)
-    assert bls.Verify(pubkey_0, msg_0, sig_0)
+    assert bls.verify(msg_0, sig_0, pubkey_0)
 
     privkey_1 = 5567
-    sig_1 = bls.Sign(privkey_1, msg_0)
-    pubkey_1 = bls.SkToPk(privkey_1)
-    assert bls.Verify(pubkey_1, msg_0, sig_1)
+    sig_1 = bls.sign(privkey_1, msg_0)
+    pubkey_1 = bls.sk_to_pk(privkey_1)
+    assert bls.verify(msg_0, sig_1, pubkey_1)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -57,9 +57,9 @@ def test_sanity(backend):
 def test_bls_core_succeed(backend, privkey):
     bls.use(backend)
     msg = str(privkey).encode("utf-8")
-    sig = bls.Sign(privkey, msg)
-    pub = bls.SkToPk(privkey)
-    assert bls.Verify(pub, msg, sig)
+    sig = bls.sign(privkey, msg)
+    pub = bls.sk_to_pk(privkey)
+    assert bls.verify(msg, sig, pub)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
@@ -68,6 +68,6 @@ def test_invalid_private_key(backend, privkey, domain):
     bls.use(backend)
     msg = str(privkey).encode("utf-8")
     with pytest.raises(ValueError):
-        bls.SkToPk(privkey)
+        bls.sk_to_pk(privkey)
     with pytest.raises(ValueError):
-        bls.Sign(privkey, msg)
+        bls.sign(privkey, msg)

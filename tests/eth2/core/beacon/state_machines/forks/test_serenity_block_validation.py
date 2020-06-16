@@ -43,10 +43,10 @@ def test_validate_block_slot(
     "slots_per_epoch, max_committees_per_slot,"
     "proposer_privkey, proposer_pubkey, is_valid_signature",
     (
-        (5, 5, 56, bls.SkToPk(56), True),
-        (5, 5, 56, bls.SkToPk(56)[1:] + b"\x01", False),
-        (5, 5, 123, bls.SkToPk(123), True),
-        (5, 5, 123, bls.SkToPk(123)[1:] + b"\x01", False),
+        (5, 5, 56, bls.sk_to_pk(56), True),
+        (5, 5, 56, bls.sk_to_pk(56)[1:] + b"\x01", False),
+        (5, 5, 123, bls.sk_to_pk(123), True),
+        (5, 5, 123, bls.sk_to_pk(123)[1:] + b"\x01", False),
     ),
 )
 def test_validate_proposer_signature(
@@ -74,7 +74,7 @@ def test_validate_proposer_signature(
     signing_root = compute_signing_root(block, domain)
 
     proposed_block = SignedBeaconBlock.create(
-        message=block, signature=bls.Sign(proposer_privkey, signing_root)
+        message=block, signature=bls.sign(proposer_privkey, signing_root)
     )
 
     if is_valid_signature:
@@ -114,7 +114,7 @@ def test_randao_reveal_validation(
     signing_root = compute_signing_root(SerializableUint64(epoch), domain)
 
     proposer_privkey = privkeys[proposer_key_index]
-    randao_reveal = bls.Sign(proposer_privkey, signing_root)
+    randao_reveal = bls.sign(proposer_privkey, signing_root)
 
     try:
         validate_randao_reveal(

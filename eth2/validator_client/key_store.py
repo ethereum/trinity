@@ -38,7 +38,7 @@ def _compute_key_pair_from_private_key_bytes(
     private_key_bytes: bytes
 ) -> Tuple[BLSPubkey, BLSPrivateKey]:
     private_key = _deserialize_private_key(private_key_bytes)
-    return (bls.SkToPk(private_key), private_key)
+    return (bls.sk_to_pk(private_key), private_key)
 
 
 class KeyStore(KeyStoreAPI):

@@ -40,7 +40,7 @@ def sign(
     domain = compute_domain(duty.signature_domain)
     signing_root = compute_signing_root(operation, domain)
 
-    return bls.Sign(privkey, signing_root)
+    return bls.sign(privkey, signing_root)
 
 
 def _attach_signature(

@@ -72,6 +72,14 @@ class SignatureError(BLSValidationError):
     pass
 
 
+class AggregateSignatureError(BLSValidationError):
+    """
+    Aggregate signature is ill-formed
+    """
+
+    pass
+
+
 class PublicKeyError(BLSValidationError):
     """
     Public Key is ill-formed
