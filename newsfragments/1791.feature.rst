@@ -1,0 +1,1 @@
+When monitoring the tip of the chain, also monitor the ``NewBlockHashes`` event.
