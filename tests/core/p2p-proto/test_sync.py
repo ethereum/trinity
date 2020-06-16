@@ -444,8 +444,8 @@ async def test_header_syncer(request,
             # Artificially split header sync into two parts, to verify that
             #   cycling to the next sync works properly. Split by erasing the canonical
             #   lookups in a middle chunk. We have to erase a range of them because of
-            #   the way that the skeleton sync skips over headers on the first request,
-            #   it expects the peer to have all headers in the 192-header gaps in between.
+            #   how the skeleton syncer asks for every ~192 headers. The skeleton request
+            #   would skip right over a single missing header.
             erase_block_numbers = range(500, 700)
             erased_canonicals = []
             for blocknum in erase_block_numbers:
@@ -456,8 +456,6 @@ async def test_header_syncer(request,
 
             async with background_asyncio_service(client):
                 target_head = chaindb_1000.get_canonical_block_header_by_number(
-                    # TODO? Look back from the first erased block number, because the skeleton
-                    #   may not properly fill in right up to the missing tip
                     erase_block_numbers[0] - 1
                 )
                 await wait_for_head(chaindb_fresh, target_head)
@@ -473,7 +471,7 @@ async def test_header_syncer(request,
                     chaindb_1000.db[dbkey] = canonical_hash
 
                 # Do we have to do anything here to have the server notify the client
-                #   that it's capable of serving more headers now?
+                #   that it's capable of serving more headers now? ... Apparently not.
 
                 await wait_for_head(chaindb_fresh, chaindb_1000.get_canonical_head())
 
