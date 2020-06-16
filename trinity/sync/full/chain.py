@@ -84,6 +84,7 @@ from trinity.sync.common.constants import (
 )
 from trinity._utils.datastructures import (
     BaseOrderedTaskPreparation,
+    DuplicateTasks,
     MissingDependency,
     OrderedTaskPreparation,
     TaskQueue,
@@ -218,6 +219,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                         # no new headers to process, wait for next batch to come in
                         continue
 
+                # TODO optimize by skipping parent_header lookup if it's the last completed header
                 # If the parent header doesn't exist yet, this is a legit bug instead of a fork,
                 # let the HeaderNotFound exception bubble up
                 try:
@@ -244,7 +246,16 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                     )
 
                 # Set first header's parent as finished
-                task_integrator.set_finished_dependency(parent_header)
+                try:
+                    task_integrator.set_finished_dependency(parent_header)
+                except DuplicateTasks:
+                    self.logger.debug(
+                        "Parent %s of first header %s is already present during sync, ignoring...",
+                        parent_header,
+                        new_headers[0],
+                    )
+                    pass
+
                 # Re-register the header tasks, which will now succeed
                 task_integrator.register_tasks(new_headers, ignore_duplicates=True)
 
