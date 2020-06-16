@@ -478,7 +478,6 @@ async def test_header_syncer(request,
                 await wait_for_head(chaindb_fresh, chaindb_1000.get_canonical_head())
 
 
-
 @pytest.mark.asyncio
 async def test_header_gapfill_syncer(request,
                                      event_loop,
