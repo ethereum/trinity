@@ -20,7 +20,8 @@ from typing import (
     NamedTuple,
 )
 
-from async_service import Service, background_asyncio_service
+import async_service
+from async_service import Service, background_asyncio_service, external_asyncio_api
 
 from eth.abc import BlockHeaderAPI
 
@@ -117,8 +118,14 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         self._fetched_headers = asyncio.Queue(max_pending_headers)
 
     async def next_skeleton_segment(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+        # @external_asyncio_api can not be used on `next_skeleton_segment` directly because
+        # it returns a generator. Maybe that could be fixed though?
+        @external_asyncio_api
+        async def _cancellable_fetch_headers_get(_: Service) -> Tuple[BlockHeader, ...]:
+            return await self._fetched_headers.get()
+
         while self.manager.is_running:
-            yield await self._fetched_headers.get()
+            yield await _cancellable_fetch_headers_get(self)
             self._fetched_headers.task_done()
 
     async def run(self) -> None:
@@ -975,7 +982,12 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
         self._stitcher.register_tasks(first_segment, ignore_duplicates=True)
 
         previous_segment = first_segment
-        async for segment in skeleton_generator:
+        while skeleton_syncer.get_manager().is_running:
+            try:
+                segment = await skeleton_generator.__anext__()
+            except async_service.exceptions.LifecycleError:
+                return
+
             self._stitcher.register_tasks(segment, ignore_duplicates=True)
 
             gap_length = segment[0].block_number - previous_segment[-1].block_number - 1
