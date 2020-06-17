@@ -125,8 +125,11 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
             return await self._fetched_headers.get()
 
         while self.manager.is_running:
-            yield await _cancellable_fetch_headers_get(self)
-            self._fetched_headers.task_done()
+            try:
+                yield await _cancellable_fetch_headers_get(self)
+                self._fetched_headers.task_done()
+            except async_service.exceptions.LifecycleError:
+                break
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._display_stats)
@@ -982,11 +985,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
         self._stitcher.register_tasks(first_segment, ignore_duplicates=True)
 
         previous_segment = first_segment
-        while skeleton_syncer.get_manager().is_running:
-            try:
-                segment = await skeleton_generator.__anext__()
-            except async_service.exceptions.LifecycleError:
-                return
+        async for segment in skeleton_generator:
 
             self._stitcher.register_tasks(segment, ignore_duplicates=True)
 
