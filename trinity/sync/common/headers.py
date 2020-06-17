@@ -13,22 +13,14 @@ from typing import (
     FrozenSet,
     Generic,
     Iterable,
-    NamedTuple,
     Optional,
     Sequence,
     Tuple,
     Type,
-    TypeVar,
-    cast,
+    NamedTuple,
 )
 
-from async_service import (
-    Service,
-    ServiceAPI,
-    LifecycleError,
-    background_asyncio_service,
-    external_asyncio_api,
-)
+from async_service import Service, background_asyncio_service
 
 from eth.abc import BlockHeaderAPI
 
@@ -97,34 +89,6 @@ from trinity._utils.humanize import (
 )
 from trinity._utils.logging import get_logger
 
-TFunc = TypeVar("TFunc", bound=Callable[..., AsyncIterator[Any]])
-
-
-def stop_iteration_on_service_halt(func: TFunc) -> TFunc:
-    @functools.wraps(func)
-    async def inner(self: ServiceAPI, *args: Any, **kwargs: Any) -> Any:
-        async_iterator = func(self, *args, **kwargs)
-
-        @external_asyncio_api
-        async def cancellable_next_value(service: ServiceAPI) -> Any:
-            # Just drop the service passed in. external_asyncio_api expects to be
-            #   used on an unbound Service method, but we are using it on anext which
-            #   is bound to the async iterable.
-            return await async_iterator.__anext__()
-
-        manager = self.get_manager()
-        while manager.is_running:
-            try:
-                # An alternative to the cancellable_next_value wrapping boilerplate would be
-                #   a new async-service API like:
-                # yield await manager.await_task(async_iterator.__anext__())
-                yield await cancellable_next_value(self)
-            except LifecycleError:
-                # Service exited, just stop returning values and exit cleanly
-                break
-
-    return cast(TFunc, inner)
-
 
 # NOTE: This service should not be cancelled externally as doing so may cause queued headers
 # to get dropped on the floor.
@@ -152,7 +116,6 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         max_pending_headers = peer.max_headers_fetch * 8
         self._fetched_headers = asyncio.Queue(max_pending_headers)
 
-    @stop_iteration_on_service_halt
     async def skeleton_segments(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
         while self.manager.is_running:
             yield await self._fetched_headers.get()
@@ -960,7 +923,13 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
                 self.logger.debug("At or behind peer %s, skipping skeleton sync", peer)
             else:
                 async with self._get_skeleton_syncer(peer) as syncer:
-                    await self._full_skeleton_sync(syncer)
+                    # We cannot simply await self._full_skeleton_sync(syncer) here because
+                    #   if the service exits, we get stuck waiting for the next header to appear
+                    #   from skeleton_segments(). By running it async and waiting until the manager
+                    #   exits, we ensure that _full_skeleton_sync gets cancelled when the service
+                    #   exits, even if it's hanging on skeleton_segments().
+                    syncer.manager.run_task(self._full_skeleton_sync, syncer)
+                    await syncer.manager.wait_finished()
 
     @contextlib.asynccontextmanager
     async def _get_skeleton_syncer(
