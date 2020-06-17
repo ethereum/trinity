@@ -20,7 +20,12 @@ from typing import (
     NamedTuple,
 )
 
-from async_service import Service, background_asyncio_service
+from async_service import (
+    Service,
+    LifecycleError,
+    background_asyncio_service,
+    external_asyncio_api,
+)
 
 from eth.abc import BlockHeaderAPI
 
@@ -116,26 +121,18 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         max_pending_headers = peer.max_headers_fetch * 8
         self._fetched_headers = asyncio.Queue(max_pending_headers)
 
-    async def next_skeleton_segment(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+    @external_asyncio_api
+    async def _next_skeleton_segment(self) -> Tuple[BlockHeader, ...]:
+        return await self._fetched_headers.get()
+
+    async def skeleton_segments(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
         while self.manager.is_running:
-            header_task = asyncio.create_task(self._fetched_headers.get())
-            service_end_task = asyncio.create_task(self.manager.wait_finished())
-            done, pending = await asyncio.wait(
-                [header_task, service_end_task],
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-            if header_task in done:
-                yield header_task.result()
-                self._fetched_headers.task_done()
-            if service_end_task in done:
-                # The manager completed, so break out of the loop
+            try:
+                yield await self._next_skeleton_segment()
+            except LifecycleError:
                 break
+            else:
+                self._fetched_headers.task_done()
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._display_stats)
@@ -966,7 +963,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
         return self._skeleton is not None
 
     async def _full_skeleton_sync(self, skeleton_syncer: SkeletonSyncer[TChainPeer]) -> None:
-        skeleton_generator = skeleton_syncer.next_skeleton_segment()
+        skeleton_generator = skeleton_syncer.skeleton_segments()
         try:
             first_segment = await skeleton_generator.__anext__()
         except StopAsyncIteration:
