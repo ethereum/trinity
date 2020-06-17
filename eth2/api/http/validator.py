@@ -208,7 +208,7 @@ class Context:
             parent_block_root,
             randao_reveal,
             eth1_data,
-            state_at_slot,
+            parent_state,
             state_machine,
         )
 
