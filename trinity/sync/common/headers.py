@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from concurrent.futures import CancelledError
 import contextlib
-from functools import partial
+import functools
 from operator import attrgetter, itemgetter
 from random import randrange
 from typing import (
@@ -716,7 +716,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
                     len(completed_headers),
                 )
                 loop = asyncio.get_event_loop()
-                loop.call_later(delay, partial(self._waiting_peers.put_nowait, peer))
+                loop.call_later(delay, functools.partial(self._waiting_peers.put_nowait, peer))
                 fail_task_fn()
 
     async def _fetch_segment(
