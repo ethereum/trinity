@@ -51,6 +51,7 @@ from lahja import EndpointAPI
 from p2p.abc import CommandAPI
 from p2p.constants import SEAL_CHECK_RANDOM_SAMPLE_RATE
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
+from p2p.logging import loggable
 from p2p.peer import BasePeer, PeerSubscriber
 from trinity._utils.timer import Timer
 
@@ -465,7 +466,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
                 reverse=False,
             )
 
-            self.logger.debug2('sync received new headers: %s', headers)
+            self.logger.debug2("sync received new headers: %s", loggable(headers))
         except PeerConnectionLost:
             self.logger.debug("Lost connection to %s while retrieving headers", peer)
             return tuple()
