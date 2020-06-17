@@ -16,6 +16,7 @@ from eth_utils.toolz import (
 from hypothesis import (
     example,
     given,
+    settings,
     strategies as st,
 )
 
@@ -63,6 +64,7 @@ def run_in_event_loop(async_func):
     add_size=2,
     get_size=5,
 )
+@settings(deadline=300)
 @run_in_event_loop
 async def test_no_asyncio_exception_leaks(operations, queue_size, add_size, get_size, event_loop):
     """
