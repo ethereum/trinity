@@ -20,7 +20,11 @@ from typing import (
     NamedTuple,
 )
 
-from async_service import Service, background_asyncio_service
+from async_service import (
+    Service,
+    LifecycleError,
+    background_asyncio_service,
+)
 
 from eth.abc import BlockHeaderAPI
 
@@ -118,8 +122,12 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
 
     async def skeleton_segments(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
         while self.manager.is_running:
-            yield await self._fetched_headers.get()
-            self._fetched_headers.task_done()
+            try:
+                yield await self.manager.await_task(self._fetched_headers.get)
+            except LifecycleError:
+                break
+            else:
+                self._fetched_headers.task_done()
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._display_stats)
@@ -923,13 +931,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
                 self.logger.debug("At or behind peer %s, skipping skeleton sync", peer)
             else:
                 async with self._get_skeleton_syncer(peer) as syncer:
-                    # We cannot simply await self._full_skeleton_sync(syncer) here because
-                    #   if the service exits, we get stuck waiting for the next header to appear
-                    #   from skeleton_segments(). By running it async and waiting until the manager
-                    #   exits, we ensure that _full_skeleton_sync gets cancelled when the service
-                    #   exits, even if it's hanging on skeleton_segments().
-                    syncer.manager.run_task(self._full_skeleton_sync, syncer)
-                    await syncer.manager.wait_finished()
+                    await self._full_skeleton_sync(syncer)
 
     @contextlib.asynccontextmanager
     async def _get_skeleton_syncer(
