@@ -8,7 +8,7 @@ COPY . /usr/src/app
 RUN apt-get update
 RUN apt-get -y install libsnappy-dev gcc g++ cmake
 
-ARG GITREF=v0.1.0-alpha.28
+ARG GITREF=v0.1.0-alpha.36
 
 RUN git clone https://github.com/ethereum/trinity.git
 RUN cd trinity && git checkout $GITREF && pip install -e .[dev] --no-cache-dir

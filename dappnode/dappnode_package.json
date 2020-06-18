@@ -1,13 +1,13 @@
 {
   "name": "trinity.public.dappnode.eth",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Ethereum Python Client (experimental)",
   "avatar": "/ipfs/QmRyJJwuCEYHPf7xkRcoPJqiHQgAN3ay2voSCTrAY1nMet",
   "type": "service",
   "image": {
-    "path": "trinity.public.dappnode.eth_0.1.2.tar.xz",
-    "hash": "/ipfs/Qmdp6GFvWzaaFMbAn7bhy9RVbVjkvL4DcnDt6Bvmv3GnoW",
-    "size": 285899704,
+    "path": "trinity.public.dappnode.eth_0.1.3.tar.xz",
+    "hash": "/ipfs/QmZfnAJNHoGESss7gQAjfiyV9RP3Rt1bEh4Btcz2LNFAVh",
+    "size": 296347736,
     "ports": [
       "57313:30303",
       "57313:30303/udp",

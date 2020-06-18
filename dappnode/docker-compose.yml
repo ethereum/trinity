@@ -1,7 +1,7 @@
 version: '3.4'
 services:
   trinity.public.dappnode.eth:
-    image: 'trinity.public.dappnode.eth:0.1.2'
+    image: 'trinity.public.dappnode.eth:0.1.3'
     build: ./build
     volumes: []
     ports: []
