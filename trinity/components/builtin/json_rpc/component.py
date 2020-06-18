@@ -117,7 +117,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
             default="127.0.0.1",
         )
         arg_parser.add_argument(
-            "--rpcport",
+            "--http-port",
             type=int,
             help="JSON-RPC server port",
             default=8545,
@@ -148,7 +148,7 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
                 http_server = HTTPServer(
                     host=boot_info.args.http_listen_address,
                     handler=RPCHandler.handle(rpc.execute),
-                    port=boot_info.args.rpcport,
+                    port=boot_info.args.http_port,
                 )
                 services_to_exit += (http_server,)
 

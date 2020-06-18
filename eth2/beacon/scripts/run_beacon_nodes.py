@@ -51,7 +51,7 @@ class Node:
     node_privkey: str
     port: int
     preferred_nodes: Tuple["Node", ...]
-    rpcport: Optional[int]
+    http_port: Optional[int]
     metrics_port: Optional[int]
     api_port: Optional[int]
 
@@ -75,7 +75,7 @@ class Node:
         port: int,
         start_time: float,
         validators: Sequence[int],
-        rpcport: Optional[int] = None,
+        http_port: Optional[int] = None,
         metrics_port: Optional[int] = None,
         api_port: Optional[int] = None,
         preferred_nodes: Optional[Tuple["Node", ...]] = None,
@@ -87,7 +87,7 @@ class Node:
         if preferred_nodes is None:
             preferred_nodes = []
         self.preferred_nodes = preferred_nodes
-        self.rpcport = rpcport
+        self.http_port = http_port
         self.metrics_port = metrics_port
         self.api_port = api_port
 
@@ -130,7 +130,7 @@ class Node:
             f"--trinity-root-dir={self.root_dir}",
             f"--beacon-nodekey={remove_0x_prefix(encode_hex(self.node_privkey.to_bytes()))}",
             f"--preferred_nodes={','.join(str(node.maddr) for node in self.preferred_nodes)}",
-            f"--rpcport={self.rpcport}",
+            f"--http-port={self.http_port}",
             "--enable-http",
             "--enable-metrics",
             "--enable-api",
@@ -230,7 +230,7 @@ async def main():
         port=30304,
         preferred_nodes=[],
         validators=[0, 1, 2, 3, 4, 5, 6, 7],
-        rpcport=8555,
+        http_port=8555,
         api_port=5555,
         start_time=start_time,
         metrics_port=9555,
@@ -241,7 +241,7 @@ async def main():
         port=30305,
         preferred_nodes=[node_alice],
         validators=[8, 9, 10, 11, 12, 13, 14, 15],
-        rpcport=8666,
+        http_port=8666,
         api_port=5666,
         start_time=start_time,
         metrics_port=9666,
