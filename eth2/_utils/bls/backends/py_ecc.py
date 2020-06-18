@@ -12,12 +12,11 @@ class PyECCBackend(BaseBLSBackend):
     def AggregateVerify(
         pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
     ) -> bool:
-        PKs, messages = zip(*pairs)
-        return G2ProofOfPossession.AggregateVerify(PKs, messages, signature)
+        return G2ProofOfPossession.AggregateVerify(pairs, signature)
 
     @staticmethod
-    def SkToPk(k: int) -> BLSPubkey:
-        return G2ProofOfPossession.SkToPk(k)
+    def SkToPk(SK: int) -> BLSPubkey:
+        return G2ProofOfPossession.PrivToPub(SK)
 
     @staticmethod
     def Sign(SK: int, message: Hash32) -> BLSSignature:
