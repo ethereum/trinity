@@ -1,1 +1,0 @@
-Drop support for Python 3.6 making Python 3.7 the minimal supported Python version.

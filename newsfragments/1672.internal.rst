@@ -1,2 +1,0 @@
-Improve test coverage of Ethereum Wire Protocol making sure that certain tests ran across
-all supported protocols from ETH/63 to ETH/65.

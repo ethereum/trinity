@@ -1,1 +1,0 @@
-Return checksum address for ``to`` field in ``eth_getTransactionReceipt`` RPC API

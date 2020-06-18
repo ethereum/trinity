@@ -1,1 +1,0 @@
-Add a guide on how to setup local monitoring with InfluxDB and Grafana

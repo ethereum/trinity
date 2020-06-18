@@ -1,1 +1,0 @@
-Monitor the number of peers in Grafana

@@ -1,1 +1,0 @@
-Upgrade to py-evm v0.3.0-alpha.15 -- gives access to block state witnesses

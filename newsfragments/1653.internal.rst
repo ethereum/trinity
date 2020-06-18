@@ -1,6 +1,0 @@
-Upgrade latest lahja 0.16.0
-
-With the new release the event bus raises exceptions if events or requests
-are send into the void, meaning when no active subscribers exist. This can
-be explicitly allowed if desired by setting ``require_subscriber`` to ``False``
-when broadcasting events or making requests.

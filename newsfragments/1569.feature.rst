@@ -1,9 +1,0 @@
-Implement basic metrics tracking. With this change Trinity supports collecting
-and writing metrics to InfluxDB to be further processed and visualized
-by Grafana.
-
-Run Trinity with ``--enable-metrics --metrics-host "mymachine"`` and provide
-the Influx server and password via the following two environment variables:
-
-- ``TRINITY_METRICS_INFLUX_DB_SERVER``
-- ``TRINITY_METRICS_INFLUX_DB_PW``

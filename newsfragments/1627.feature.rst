@@ -1,4 +1,0 @@
-Add partial support for `eth/65`. Recognize the protocol with its new commands
-and support it across all internal infrastructure. The built-in "transaction pool"
-does not yet use the ``NewPooledTransactionHashes`` command yet and answers
-``GetPooledTransactions`` with empty responses.

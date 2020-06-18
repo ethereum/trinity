@@ -1,2 +1,0 @@
-Upgraded py-evm to v0.3.0-alpha.16 -- See `py-evm's release notes
-<https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-16-2020-05-27>`_

@@ -5,6 +5,95 @@ Trinity is moving fast. Read up on all the latest improvements.
 
 .. towncrier release notes start
 
+Trinity 0.1.0-alpha.36 (2020-06-18)
+-----------------------------------
+
+Features
+~~~~~~~~
+
+- Implement ``admin_peers`` JSON-RPC API (`#1491 <https://github.com/ethereum/trinity/issues/1491>`__)
+- Implement basic metrics tracking. With this change Trinity supports collecting
+  and writing metrics to InfluxDB to be further processed and visualized
+  by Grafana.
+
+  Run Trinity with ``--enable-metrics --metrics-host "mymachine"`` and provide
+  the Influx server and password via the following two environment variables:
+
+  - ``TRINITY_METRICS_INFLUX_DB_SERVER``
+  - ``TRINITY_METRICS_INFLUX_DB_PW`` (`#1569 <https://github.com/ethereum/trinity/issues/1569>`__)
+- Monitor the total number of incoming and outgoing packets in Influx/Grafana (`#1595 <https://github.com/ethereum/trinity/issues/1595>`__)
+- Monitor the number of peers in Grafana (`#1599 <https://github.com/ethereum/trinity/issues/1599>`__)
+- The `--ethstats` flag is now named `--enable-ethstats` to improve consistency. (`#1604 <https://github.com/ethereum/trinity/issues/1604>`__)
+- Don't let `CompressedLengthError` escape and be written to the console. (`#1606 <https://github.com/ethereum/trinity/issues/1606>`__)
+- Add partial support for `eth/65`. Recognize the protocol with its new commands
+  and support it across all internal infrastructure. The built-in "transaction pool"
+  does not yet use the ``NewPooledTransactionHashes`` command yet and answers
+  ``GetPooledTransactions`` with empty responses. (`#1627 <https://github.com/ethereum/trinity/issues/1627>`__)
+- Allow for Influxdb port & protocol to be configured via cli arguments. (`#1680 <https://github.com/ethereum/trinity/issues/1680>`__)
+- Upgrade to py-evm v0.3.0-alpha.15 -- gives access to block state witnesses (`#1681 <https://github.com/ethereum/trinity/issues/1681>`__)
+- Support reporting of the current head for connected peers to influx / grafana. (`#1699 <https://github.com/ethereum/trinity/issues/1699>`__)
+- Rename ``--beam-from-checkpoint`` to ``--sync-from-checkpoint``
+
+  Ensure sync related flags show up under ``--sync-mode`` section in ``--help``
+
+  Add new ``--sync-mode header`` to only sync the header chain on the ETH network.
+  This does also support launching from a checkpoint via ``--sync-from-checkpoint`` flag. (`#1707 <https://github.com/ethereum/trinity/issues/1707>`__)
+- Report trinity process and thread count to grafana. (`#1713 <https://github.com/ethereum/trinity/issues/1713>`__)
+- Implement backfilling of gaps in the header chain (introduced through checkpointing) for
+  sync modes ``header`` and ``beam``. This background job can be disable via
+  the ``--disable-backfill`` flag. (`#1714 <https://github.com/ethereum/trinity/issues/1714>`__)
+- Upgraded py-evm to v0.3.0-alpha.16 -- See `py-evm's release notes
+  <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-16-2020-05-27>`_ (`#1761 <https://github.com/ethereum/trinity/issues/1761>`__)
+- Upgraded py-evm to v0.3.0-alpha.17 -- See `py-evm v0.3.0-alpha.17 release notes
+  <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-17-2020-06-02>`_ (`#1768 <https://github.com/ethereum/trinity/issues/1768>`__)
+- Increase the tip distance for etherscan checkpoint resolving from 50 to 5000 blocks. (`#1781 <https://github.com/ethereum/trinity/issues/1781>`__)
+
+
+Bugfixes
+~~~~~~~~
+
+- Fix the propagation of transactions which was broken when the transaction pool
+  was moved into an isolated component.
+
+  Also the transaction pool tests now do assertions based on what the remote
+  pool actually receives instead of based on what we appear to be sending out. (`#1649 <https://github.com/ethereum/trinity/issues/1649>`__)
+- Squash some deprecation warnings, by upgrading to eth-keys v0.3.3, eth-tester v0.4.0-beta.2,
+  and web3.py v5.9.0 (`#1724 <https://github.com/ethereum/trinity/issues/1724>`__)
+- Return checksum address for ``to`` field in ``eth_getTransactionReceipt`` RPC API (`#1749 <https://github.com/ethereum/trinity/issues/1749>`__)
+- Fix etherscan checkpoint resolving for Ropsten and Görli. (`#1782 <https://github.com/ethereum/trinity/issues/1782>`__)
+- Fix beam sync crashing when running under Clique consensus (e.g. Görli) (`#1786 <https://github.com/ethereum/trinity/issues/1786>`__)
+
+
+Improved Documentation
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Add API docs for various proxy events under ``trinity.protocol.*`` (`#1633 <https://github.com/ethereum/trinity/issues/1633>`__)
+- Add a guide on how to setup local monitoring with InfluxDB and Grafana (`#1659 <https://github.com/ethereum/trinity/issues/1659>`__)
+- Add cookbook recipe on how to sync from a trusted checkpoint. (`#1779 <https://github.com/ethereum/trinity/issues/1779>`__)
+
+
+Deprecations and Removals
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Drop support for Python 3.6 making Python 3.7 the minimal supported Python version. (`#1675 <https://github.com/ethereum/trinity/issues/1675>`__)
+
+
+Internal Changes - for Trinity Contributors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Remove test that scans for unhandled errors when the transaction pool is disabled.
+  Disabling the transaction pool is unlikely to increase the chance of error. (`#1611 <https://github.com/ethereum/trinity/issues/1611>`__)
+- Upgrade latest lahja 0.16.0
+
+  With the new release the event bus raises exceptions if events or requests
+  are send into the void, meaning when no active subscribers exist. This can
+  be explicitly allowed if desired by setting ``require_subscriber`` to ``False``
+  when broadcasting events or making requests. (`#1653 <https://github.com/ethereum/trinity/issues/1653>`__)
+- Improve test coverage of Ethereum Wire Protocol making sure that certain tests ran across
+  all supported protocols from ETH/63 to ETH/65. (`#1672 <https://github.com/ethereum/trinity/issues/1672>`__)
+- Run RPC API tests against Istanbul fixtures (`#1749 <https://github.com/ethereum/trinity/issues/1749>`__)
+
+
 Trinity 0.1.0-alpha.35 (2020-03-03)
 -----------------------------------
 

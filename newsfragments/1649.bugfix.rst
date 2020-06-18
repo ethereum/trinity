@@ -1,5 +1,0 @@
-Fix the propagation of transactions which was broken when the transaction pool
-was moved into an isolated component.
-
-Also the transaction pool tests now do assertions based on what the remote
-pool actually receives instead of based on what we appear to be sending out.

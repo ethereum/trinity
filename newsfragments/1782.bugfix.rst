@@ -1,1 +1,0 @@
-Fix etherscan checkpoint resolving for Ropsten and Görli.

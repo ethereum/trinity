@@ -1,1 +1,0 @@
-Increase the tip distance for etherscan checkpoint resolving from 50 to 5000 blocks.

@@ -1,1 +1,0 @@
-Support reporting of the current head for connected peers to influx / grafana.

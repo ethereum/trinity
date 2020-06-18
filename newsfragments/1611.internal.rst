@@ -1,2 +1,0 @@
-Remove test that scans for unhandled errors when the transaction pool is disabled.
-Disabling the transaction pool is unlikely to increase the chance of error.
