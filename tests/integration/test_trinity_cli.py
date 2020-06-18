@@ -243,7 +243,7 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
 @pytest.mark.parametrize(
     'command,expected_stderr_logs,unexpected_stderr_logs,expected_file_logs,unexpected_file_logs',
     (
-        (
+        pytest.param(
             # Default run without any flag
             ('trinity',),
             # Expected stderr logs
@@ -254,21 +254,25 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
             {'Started main process', 'Logging initialized'},
             # Unexpected file logs
             {'>>> ping'},
+            id="noflag:starts-both,loginit-file,ping-none",
         ),
-        (
+        pytest.param(
             # Enable DEBUG2 logs across the board
             ('trinity', '-l=DEBUG2'),
             {'Started main process', '>>> ping'},
             {},
             {'Started main process', '>>> ping'},
             {},
+            id="all>=debug2:starts-both,ping-both",
         ),
-        (   # Enable DEBUG2 logs for everything except discovery which is reduced to ERROR logs
+        pytest.param(
+            # Enable DEBUG2 logs for everything except discovery which is reduced to ERROR logs
             ('trinity', '-l=DEBUG2', '-l', 'p2p.discovery=ERROR'),
             {'Started main process', '<Manager[ConnectionTrackerServer] flags=SRcfe>: running root task run[daemon=False]'},  # noqa: E501
             {'>>> ping'},
             {'Started main process', '<Manager[ConnectionTrackerServer] flags=SRcfe>: running root task run[daemon=False]'},  # noqa: E501
             {'>>> ping'},
+            id="all>=debug2,p2p>=error:starts-both,manager_debug-both,ping-none",
         ),
         # Commented out because sometimes it passes and sometimes it fails.
         # pytest.param(
@@ -295,6 +299,7 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
             # {'Started main process'},
             # TODO: investigate in #1347
             marks=(pytest.mark.xfail),
+            id="all>=error,p2p>=debug2:starts-nostderr,ping-stderr",
         ),
     )
 )

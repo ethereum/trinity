@@ -54,6 +54,7 @@ from p2p.handshake import (
     dial_out,
     DevP2PHandshakeParams,
 )
+from p2p.logging import loggable
 from p2p.logic import wait_first
 from p2p.p2p_api import P2PAPI
 from p2p.p2p_proto import BaseP2PProtocol, Disconnect
@@ -426,21 +427,30 @@ class PeerSubscriber(ABC):
                 self.logger.debug2(  # type: ignore
                     "Discarding %s msg from %s; not subscribed to msg type; "
                     "subscriptions: %s",
-                    cmd, peer, self.subscription_msg_types,
+                    loggable(cmd),
+                    peer,
+                    self.subscription_msg_types,
                 )
             return False
 
         try:
             if hasattr(self, 'logger'):
                 self.logger.debug2(  # type: ignore
-                    "Adding %s msg from %s to queue; queue_size=%d", cmd, peer, self.queue_size)
+                    "Adding %s msg from %s to queue; queue_size=%d",
+                    loggable(cmd),
+                    peer,
+                    self.queue_size,
+                )
             self.msg_queue.put_nowait(msg)
             return True
         except asyncio.queues.QueueFull:
             if hasattr(self, 'logger'):
                 self.logger.warning(  # type: ignore
                     "%s msg queue is full; discarding %s msg from %s",
-                    self.__class__.__name__, cmd, peer)
+                    self.__class__.__name__,
+                    loggable(cmd),
+                    peer,
+                )
             return False
 
     @contextlib.contextmanager

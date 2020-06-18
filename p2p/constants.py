@@ -217,3 +217,13 @@ TCP_PORT_ENR_KEY = b"tcp"
 IP_V4_SIZE = 4  # size of an IPv4 address
 IP_V6_SIZE = 16  # size of an IPv6 address
 NUM_ROUTING_TABLE_BUCKETS = 256  # number of buckets in the routing table
+
+# Stringified objects longer than this will be trimmed before emitting to log.
+#   Some commands were >200k characters as a string, and choked up the
+#   AsyncProcessRunner.stderr which overreaches the buffer limit in the
+#   internal StreamReader.readuntil() call. The 10k limit is informed by:
+#   - should be much smaller than the ~200k buffer limit (because some logs
+#       might print multiple commands)
+#   - should be big enough not to clip typical logs (On a test DEBUG2 run
+#       on mainnet, the largest logs were <2k characters)
+LONGEST_ALLOWED_LOG_STRING = 10000

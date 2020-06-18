@@ -84,6 +84,7 @@ from trinity.sync.common.constants import (
 )
 from trinity._utils.datastructures import (
     BaseOrderedTaskPreparation,
+    DuplicateTasks,
     MissingDependency,
     OrderedTaskPreparation,
     TaskQueue,
@@ -191,6 +192,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
             self._got_first_header.set()
             for h in headers:
                 self._block_hash_to_state_root[h.hash] = h.state_root
+            # TODO extract the following try/except to a function that returns the non-duplicates
             try:
                 # We might end up with duplicates that can be safely ignored.
                 # Likely scenario: switched which peer downloads headers, and the new peer isn't
@@ -204,7 +206,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                 #   - a bug: old headers were pruned out of the tracker, but not in DB yet
 
                 # Skip over all headers found in db, (could happen with a long backtrack)
-                completed_headers, new_headers = await skip_complete_headers(
+                completed_headers, fresh_headers = await skip_complete_headers(
                     headers, completion_check)
                 if completed_headers:
                     self.logger.debug(
@@ -214,39 +216,50 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                         completed_headers[0],
                         completed_headers[-1],
                     )
-                    if not new_headers:
+                    if not fresh_headers:
                         # no new headers to process, wait for next batch to come in
                         continue
 
+                # TODO optimize by skipping parent_header lookup if it's the last completed header
                 # If the parent header doesn't exist yet, this is a legit bug instead of a fork,
                 # let the HeaderNotFound exception bubble up
                 try:
                     parent_header = await self.db.coro_get_block_header_by_hash(
-                        new_headers[0].parent_hash)
+                        fresh_headers[0].parent_hash)
                     self._block_hash_to_state_root[parent_header.hash] = parent_header.state_root
                 except HeaderNotFound:
-                    await self._log_missing_parent(new_headers[0], highest_block_num, missing_exc)
+                    await self._log_missing_parent(fresh_headers[0], highest_block_num, missing_exc)
 
                     # Nowhere to go from here, re-raise
                     raise
 
                 # If this isn't a trivial case, log it as a possible fork
                 canonical_head = await self.db.coro_get_canonical_head()
-                if canonical_head not in new_headers and canonical_head != parent_header:
+                if canonical_head not in fresh_headers and canonical_head != parent_header:
                     self.logger.info(
                         "Received a header before processing its parent during regular sync. "
                         "Canonical head is %s, the received header "
                         "is %s, with parent %s. This might be a fork, importing to determine if it "
                         "is the longest chain",
                         canonical_head,
-                        new_headers[0],
+                        fresh_headers[0],
                         parent_header,
                     )
 
                 # Set first header's parent as finished
-                task_integrator.set_finished_dependency(parent_header)
+                try:
+                    task_integrator.set_finished_dependency(parent_header)
+                except DuplicateTasks:
+                    self.logger.debug(
+                        "Parent %s of first header %s is already present during sync, ignoring...",
+                        parent_header,
+                        fresh_headers[0],
+                    )
+                    pass
+
                 # Re-register the header tasks, which will now succeed
-                task_integrator.register_tasks(new_headers, ignore_duplicates=True)
+                # Be sure to filter out any duplicates, so we don't re-register them for processing
+                new_headers = task_integrator.register_tasks(fresh_headers, ignore_duplicates=True)
 
             if not new_headers:
                 continue

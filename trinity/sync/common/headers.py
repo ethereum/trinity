@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import asyncio
 from concurrent.futures import CancelledError
 import contextlib
-from functools import partial
+import functools
 from operator import attrgetter, itemgetter
 from random import randrange
 from typing import (
@@ -51,6 +51,7 @@ from lahja import EndpointAPI
 from p2p.abc import CommandAPI
 from p2p.constants import SEAL_CHECK_RANDOM_SAMPLE_RATE
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
+from p2p.logging import loggable
 from p2p.peer import BasePeer, PeerSubscriber
 from trinity._utils.timer import Timer
 
@@ -116,7 +117,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         max_pending_headers = peer.max_headers_fetch * 8
         self._fetched_headers = asyncio.Queue(max_pending_headers)
 
-    async def next_skeleton_segment(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+    async def skeleton_segments(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
         while self.manager.is_running:
             yield await self._fetched_headers.get()
             self._fetched_headers.task_done()
@@ -465,7 +466,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
                 reverse=False,
             )
 
-            self.logger.debug2('sync received new headers: %s', headers)
+            self.logger.debug2("sync received new headers: %s", loggable(headers))
         except PeerConnectionLost:
             self.logger.debug("Lost connection to %s while retrieving headers", peer)
             return tuple()
@@ -703,7 +704,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
                     len(completed_headers),
                 )
                 loop = asyncio.get_event_loop()
-                loop.call_later(delay, partial(self._waiting_peers.put_nowait, peer))
+                loop.call_later(delay, functools.partial(self._waiting_peers.put_nowait, peer))
                 fail_task_fn()
 
     async def _fetch_segment(
@@ -923,7 +924,13 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
                 self.logger.debug("At or behind peer %s, skipping skeleton sync", peer)
             else:
                 async with self._get_skeleton_syncer(peer) as syncer:
-                    await self._full_skeleton_sync(syncer)
+                    # We cannot simply await self._full_skeleton_sync(syncer) here because
+                    #   if the service exits, we get stuck waiting for the next header to appear
+                    #   from skeleton_segments(). By running it async and waiting until the manager
+                    #   exits, we ensure that _full_skeleton_sync gets cancelled when the service
+                    #   exits, even if it's hanging on skeleton_segments().
+                    syncer.manager.run_task(self._full_skeleton_sync, syncer)
+                    await syncer.manager.wait_finished()
 
     @contextlib.asynccontextmanager
     async def _get_skeleton_syncer(
@@ -950,7 +957,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
         return self._skeleton is not None
 
     async def _full_skeleton_sync(self, skeleton_syncer: SkeletonSyncer[TChainPeer]) -> None:
-        skeleton_generator = skeleton_syncer.next_skeleton_segment()
+        skeleton_generator = skeleton_syncer.skeleton_segments()
         try:
             first_segment = await skeleton_generator.__anext__()
         except StopAsyncIteration:
