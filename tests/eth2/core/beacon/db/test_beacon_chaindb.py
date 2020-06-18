@@ -101,9 +101,7 @@ def test_chaindb_persist_block_and_block_to_root(chaindb, block, fork_choice_sco
     assert chaindb.exists(block_to_root_key)
 
 
-def test_chaindb_get_score(
-    chaindb, fixture_sm_class, genesis_block, fork_choice_scoring
-):
+def test_chaindb_get_score(chaindb, genesis_block, fork_choice_scoring):
     chaindb.persist_block(genesis_block, genesis_block.__class__, fork_choice_scoring)
 
     genesis_score_key = SchemaV1.make_block_root_to_score_lookup_key(

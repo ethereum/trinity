@@ -27,11 +27,7 @@ async def test_json_rpc_http_server(
 ):
     manager = DBManager(base_db)
     with manager.run(ipc_path):
-        # Set chaindb
         override_lengths(SERENITY_CONFIG)
-        db = DBClient.connect(ipc_path)
-        genesis_config = SERENITY_CONFIG
-        chaindb = AsyncBeaconChainDB(db, genesis_config)
 
         fork_choice_scoring = HigherSlotScoring()
         genesis_state, genesis_block = create_mock_genesis(
@@ -42,12 +38,11 @@ async def test_json_rpc_http_server(
             genesis_time=0,
         )
 
-        chaindb.persist_state(genesis_state)
-        chaindb.persist_block(
-            SignedBeaconBlock.create(message=genesis_block),
-            SignedBeaconBlock,
-            fork_choice_scoring,
+        db = DBClient.connect(ipc_path)
+        chaindb = AsyncBeaconChainDB.from_genesis(
+            db, genesis_state, SignedBeaconBlock, fork_choice_scoring
         )
+
         try:
             rpc = RPCServer(
                 initialize_beacon_modules(chaindb, event_bus), chaindb, event_bus

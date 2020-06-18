@@ -35,7 +35,7 @@ def get_base_db(boot_info: BootInfo) -> LevelDB:
     app_config = boot_info.trinity_config.get_app_config(BeaconAppConfig)
     chain_config = app_config.get_chain_config()
     base_db = LevelDB(db_path=app_config.database_dir)
-    chaindb = BeaconChainDB(base_db, chain_config.genesis_config)
+    chaindb = BeaconChainDB(base_db)
     if not is_beacon_database_initialized(chaindb):
         initialize_beacon_database(chain_config, chaindb, base_db)
     return base_db

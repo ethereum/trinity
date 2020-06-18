@@ -91,9 +91,7 @@ class ChainMaintainer(BaseService):
         """
         Forward state to the target ``slot`` and persist the state.
         """
-        post_state = state_machine.state_transition.apply_state_transition(
-            state, future_slot=slot
-        )
+        post_state, _ = state_machine.apply_state_transition(state, future_slot=slot)
         self.logger.debug(
             bold_green("Skip block at slot=%s  post_state=%s"), slot, repr(post_state)
         )

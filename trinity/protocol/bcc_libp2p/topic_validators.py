@@ -188,7 +188,7 @@ def run_validate_block_proposer_signature(
     # Fast forward to state in future slot in order to pass
     # block.slot validity check
     try:
-        future_state = state_machine.state_transition.apply_state_transition(
+        future_state, _ = state_machine.apply_state_transition(
             state,
             future_slot=block.slot,
         )

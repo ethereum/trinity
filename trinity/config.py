@@ -61,13 +61,9 @@ from multiaddr import (
 from eth2.beacon.chains.testnet import (
     SkeletonLakeChain,
 )
-from eth2.beacon.genesis import (
-    get_genesis_block,
-)
 from eth2.beacon.tools.builder.initializer import load_genesis_key_map
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.typing import (
     Timestamp,
 )
@@ -754,22 +750,11 @@ class BeaconChainConfig:
     def get_genesis_config_file_path(cls, profile: str) -> Path:
         return _get_eth2_genesis_config_file_path(profile)
 
-    def get_genesis_block(self) -> BaseBeaconBlock:
-        chain_class = self.beacon_chain_class
-        genesis_state_machine_class = chain_class.get_genesis_state_machine_class()
-        return get_genesis_block(
-            genesis_state_root=self._genesis_state.hash_tree_root,
-            block_class=genesis_state_machine_class.block_class,
-        )
-
     def initialize_chain(self,
                          base_db: AtomicDatabaseAPI) -> 'BaseBeaconChain':
-        block = self.get_genesis_block()
         return self.beacon_chain_class.from_genesis(
             base_db=base_db,
             genesis_state=self._genesis_state,
-            genesis_block=block,
-            genesis_config=self._eth2_config,
         )
 
 

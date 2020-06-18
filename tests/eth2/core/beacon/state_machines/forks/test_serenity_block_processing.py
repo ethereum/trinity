@@ -17,7 +17,7 @@ from eth2.beacon.state_machines.forks.serenity.block_processing import (
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.state_machines.forks.serenity.states import SerenityBeaconState
 from eth2.beacon.tools.builder.initializer import create_mock_validator
-from eth2.beacon.tools.builder.proposer import _generate_randao_reveal
+from eth2.beacon.tools.builder.proposer import generate_randao_reveal
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
@@ -47,7 +47,7 @@ def test_randao_processing(
     epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     slot = compute_start_slot_at_epoch(epoch, config.SLOTS_PER_EPOCH)
 
-    randao_reveal = _generate_randao_reveal(
+    randao_reveal = generate_randao_reveal(
         privkey=proposer_privkey, slot=slot, state=state, config=config
     )
 

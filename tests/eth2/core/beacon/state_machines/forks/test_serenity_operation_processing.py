@@ -173,7 +173,7 @@ def test_process_attestations(
     attestations = create_mock_signed_attestations_at_slot(
         state=state,
         config=config,
-        state_machine=fixture_sm_class(chaindb, genesis_fork_choice_context),
+        state_machine=fixture_sm_class(chaindb),
         attestation_slot=attestation_slot,
         beacon_block_root=genesis_block.message.hash_tree_root,
         keymap=keymap,

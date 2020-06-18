@@ -195,15 +195,17 @@ class Context:
 
         # TODO: query for latest eth1 data...
         eth1_data = parent_state.eth1_data
+        # TODO: query for relevant attestations
+        attestations = ()
 
         return create_block_proposal(
             slot,
             parent_block_root,
             randao_reveal,
             eth1_data,
+            attestations,
             parent_state,
             state_machine,
-            self.eth2_config,
         )
 
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:

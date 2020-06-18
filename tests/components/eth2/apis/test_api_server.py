@@ -21,9 +21,7 @@ def chain(num_validators, base_db):
     state_machine = chain.get_state_machine()
     state = chain.get_head_state()
     slot = 4
-    post_state = state_machine.state_transition.apply_state_transition(
-        state, future_slot=slot
-    )
+    post_state, _ = state_machine.apply_state_transition(state, future_slot=slot)
     chain.chaindb.persist_state(post_state)
     chain.chaindb.update_head_state(post_state.slot, post_state.hash_tree_root)
     return chain
