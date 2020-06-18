@@ -1,2 +1,2 @@
-Upgraded py-evm to v0.3.0-alpha.17 -- See `py-evm's release notes
+Upgraded py-evm to v0.3.0-alpha.17 -- See `py-evm v0.3.0-alpha.17 release notes
 <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-17-2020-06-02>`_
