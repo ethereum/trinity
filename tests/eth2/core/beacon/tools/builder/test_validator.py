@@ -1,3 +1,4 @@
+from eth_utils import ValidationError
 from hypothesis import given, settings
 from hypothesis import strategies as st
 import pytest
@@ -43,7 +44,7 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
     try:
         _, _, pubs = zip(*votes)
     except ValueError:
-        pass
+        pubs = ()
 
     voted_index = [
         committee_index
@@ -51,3 +52,9 @@ def test_aggregate_votes(votes_count, random, privkeys, pubkeys):
         if has_voted(bitfield, committee_index)
     ]
     assert len(voted_index) == len(votes)
+
+    if votes_count == 0:
+        with pytest.raises(ValidationError):
+            bls.validate(message_hash, sigs, *pubs)
+    else:
+        bls.validate(message_hash, sigs, *pubs)
