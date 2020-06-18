@@ -23,9 +23,9 @@ def _mk_minimum_viable_signed_beacon_blocks(
     slots, state_machine_provider, state, block, config
 ):
     for slot in slots:
-        future_state = state_machine_provider(slot)\
-            .state_transition\
-            .apply_state_transition(state, future_slot=block.slot + 1)
+        future_state = state_machine_provider(
+            slot
+        ).state_transition.apply_state_transition(state, future_slot=block.slot + 1)
         proposer_index = get_beacon_proposer_index(future_state, config)
         message = BeaconBlock.create(
             slot=slot,

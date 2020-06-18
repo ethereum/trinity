@@ -169,20 +169,20 @@ class Context:
         if slot < 1:
             raise InvalidRequest()
 
-        last_slot_w_block = Slot(max(slot - 1, 0))
+        parent_slot = Slot(max(slot - 1, 0))
         try:
-            parent = self.chain.get_canonical_block_by_slot(last_slot_w_block)
+            parent = self.chain.get_canonical_block_by_slot(parent_slot)
         except BlockNotFound:
             # as an optimization, try checking the head
             parent = self.chain.get_canonical_head()
-            if parent.slot > last_slot_w_block:
+            if parent.slot > parent_slot:
                 # NOTE: if parent.slot == target_slot, we are not under this block.
                 # NOTE: head has greater slot than the target, while it is odd
                 # a client may want a block here, let's try to satisfy the request.
                 # TODO: should we allow this behavior?
                 # TODO: consider a more sophisticated search strategy if we can detect ``slot``
                 # is far from the canonical head, e.g. binary search across slots
-                parent = self._search_linearly_for_parent(last_slot_w_block)
+                parent = self._search_linearly_for_parent(parent_slot)
                 if not parent:
                     raise ServerError()
             else:
@@ -191,7 +191,7 @@ class Context:
 
         parent_block_root = parent.message.hash_tree_root
         parent_state = self.chain.get_state_by_root(parent.state_root)
-        parent_state = self.chain.advance_state_to_slot(last_slot_w_block, parent_state)
+        parent_state = self.chain.advance_state_to_slot(parent_slot, parent_state)
         state_machine = self.chain.get_state_machine(at_slot=slot)
 
         state_at_slot = state_machine.state_transition.apply_state_transition(

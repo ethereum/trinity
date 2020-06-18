@@ -1,5 +1,6 @@
 from typing import Any, NamedTuple, NewType, Sequence, Tuple
 
+from eth.constants import ZERO_HASH32
 from eth_typing import BLSSignature, Hash32
 import ssz
 from ssz import uint64
@@ -60,8 +61,8 @@ default_second = Second(0)
 default_bitfield = Bitfield(tuple())
 default_version = Version(b"\x00" * 4)
 default_fork_digest = ForkDigest(b"\x00" * 4)
-default_root = Root(Hash32(b"\x00" * 32))
-default_domain = Domain(Hash32(b"\x00" * 32))
+default_root = Root(ZERO_HASH32)
+default_domain = Domain(ZERO_HASH32)
 
 
 #

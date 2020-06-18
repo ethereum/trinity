@@ -1,5 +1,6 @@
 import random
 
+from eth_typing import Hash32
 import pytest
 
 from eth2._utils.bitfield import get_empty_bitfield, set_voted
@@ -10,6 +11,7 @@ from eth2.beacon.epoch_processing_helpers import (
     decrease_balance,
     get_attesting_indices,
     get_base_reward,
+    get_matching_head_attestations,
     get_matching_source_attestations,
     get_matching_target_attestations,
     get_unslashed_attesting_indices,
@@ -21,7 +23,7 @@ from eth2.beacon.helpers import compute_start_slot_at_epoch
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.pending_attestations import PendingAttestation
-from eth2.beacon.typing import Gwei
+from eth2.beacon.typing import Gwei, Root
 
 
 @pytest.mark.parametrize(
@@ -177,7 +179,6 @@ def test_get_matching_target_attestations(genesis_state, config):
     assert attestations == target_attestations
 
 
-"""
 @pytest.mark.parametrize(("validator_count,"), [(1000)])
 def test_get_matching_head_attestations(genesis_state, config):
     some_epoch = GENESIS_EPOCH + 20
@@ -185,7 +186,7 @@ def test_get_matching_head_attestations(genesis_state, config):
         compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
         + config.SLOTS_PER_EPOCH // 4
     )
-    some_target_root = b"\x33" * 32
+    some_target_root = Root(Hash32(b"\x33" * 32))
     target_attestations = tuple(
         (
             PendingAttestation.create(
@@ -193,10 +194,12 @@ def test_get_matching_head_attestations(genesis_state, config):
                     slot=some_slot - 1,
                     index=0,
                     beacon_block_root=some_target_root,
-                    target=Checkpoint.create(epoch=some_epoch - 1),
+                    target=Checkpoint.create(
+                        epoch=some_epoch - 1, root=some_target_root
+                    ),
                 )
             )
-            for i in range(3)
+            for _ in range(3)
         )
     )
     current_epoch_attestations = target_attestations + tuple(
@@ -222,7 +225,6 @@ def test_get_matching_head_attestations(genesis_state, config):
     attestations = get_matching_head_attestations(state, some_epoch, config)
 
     assert attestations == target_attestations
-"""
 
 
 @pytest.mark.parametrize(("validator_count,"), [(1000)])

@@ -24,7 +24,7 @@ class SigningData(HashableContainer):
     def __str__(self) -> str:
         return (
             f"object_root={humanize_hash(self.object_root)},"
-            f" domain={humanize_hash(self.domain)},"
+            f" domain={humanize_hash(self.domain)}"
         )
 
 

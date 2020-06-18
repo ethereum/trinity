@@ -1,6 +1,6 @@
 from typing import cast  # noqa: F401
 
-from eth_typing import BLSPubkey, BLSSignature, Hash32
+from eth_typing import BLSPubkey, BLSSignature
 from eth_utils import ValidationError, encode_hex
 
 from eth2._utils.bls import bls
@@ -125,7 +125,7 @@ def validate_randao_reveal(
     state: BeaconState,
     proposer_index: int,
     epoch: Epoch,
-    randao_reveal: Hash32,
+    randao_reveal: BLSSignature,
     slots_per_epoch: int,
 ) -> None:
     proposer = state.validators[proposer_index]
@@ -135,7 +135,7 @@ def validate_randao_reveal(
     signing_root = compute_signing_root(SerializableUint64(epoch), domain)
 
     try:
-        bls.validate(signing_root, cast(BLSSignature, randao_reveal), proposer_pubkey)
+        bls.validate(signing_root, randao_reveal, proposer_pubkey)
     except SignatureError as error:
         raise ValidationError("RANDAO reveal is invalid", error)
 

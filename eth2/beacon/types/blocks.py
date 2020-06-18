@@ -44,7 +44,7 @@ class BeaconBlockBody(HashableContainer):
     def create(
         cls: Type[TBeaconBlockBody],
         *,
-        randao_reveal: bytes96 = EMPTY_SIGNATURE,
+        randao_reveal: BLSSignature = EMPTY_SIGNATURE,
         eth1_data: Eth1Data = default_eth1_data,
         graffiti: Hash32 = ZERO_HASH32,
         proposer_slashings: Sequence[ProposerSlashing] = default_tuple,

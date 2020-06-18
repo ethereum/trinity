@@ -108,6 +108,7 @@ class Client(Service):
         """
         # TODO: sanity check the validator key pairs we find are valid
         # perhaps by fetching their indices in the state
+        pass
 
     async def run(self) -> None:
         self.logger.debug("booting client...")
