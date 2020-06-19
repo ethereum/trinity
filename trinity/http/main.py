@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import (
     Any,
     Callable,
@@ -9,6 +10,7 @@ from aiohttp import web
 from cancel_token import (
     CancelToken,
 )
+from eth_utils import DEBUG2_LEVEL_NUM
 
 from p2p.service import (
     BaseService,
@@ -31,6 +33,11 @@ class HTTPServer(BaseService):
         self.host = host
         self.port = port
         self.server = web.Server(handler)
+
+        # aiohttp logs every HTTP request as INFO so we want to reduce the general log level for
+        # this particular logger to WARNING except if the Trinity is configured to write DEBUG2 logs
+        if logging.getLogger().level != DEBUG2_LEVEL_NUM:
+            logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
 
     async def _run(self) -> None:
         runner = web.ServerRunner(self.server)

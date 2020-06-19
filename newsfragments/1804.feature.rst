@@ -1,0 +1,1 @@
+Only print JSON HTTP API request access logs when Trinity runs with ``DEBUG2`` logs.
