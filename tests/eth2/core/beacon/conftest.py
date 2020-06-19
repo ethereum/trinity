@@ -7,6 +7,7 @@ from ssz.sedes import List, uint64
 from eth2.beacon.constants import (
     DEPOSIT_CONTRACT_TREE_DEPTH,
     FAR_FUTURE_EPOCH,
+    GENESIS_SLOT,
     GWEI_PER_ETH,
     JUSTIFICATION_BITS_LENGTH,
 )
@@ -81,6 +82,21 @@ def shuffle_round_count():
 
 
 @pytest.fixture
+def hysteresis_quotient():
+    return SERENITY_CONFIG.HYSTERESIS_QUOTIENT
+
+
+@pytest.fixture
+def hysteresis_downward_multiplier():
+    return SERENITY_CONFIG.HYSTERESIS_DOWNWARD_MULTIPLIER
+
+
+@pytest.fixture
+def hysteresis_upward_multiplier():
+    return SERENITY_CONFIG.HYSTERESIS_UPWARD_MULTIPLIER
+
+
+@pytest.fixture
 def min_genesis_active_validator_count():
     return SERENITY_CONFIG.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
 
@@ -111,13 +127,18 @@ def effective_balance_increment():
 
 
 @pytest.fixture
-def genesis_slot():
-    return SERENITY_CONFIG.GENESIS_SLOT
+def genesis_fork_version():
+    return SERENITY_CONFIG.GENESIS_FORK_VERSION
 
 
 @pytest.fixture
-def genesis_epoch():
-    return SERENITY_CONFIG.GENESIS_EPOCH
+def min_genesis_delay():
+    return SERENITY_CONFIG.MIN_GENESIS_DELAY
+
+
+@pytest.fixture
+def epochs_per_eth1_voting_period():
+    return SERENITY_CONFIG.EPOCHS_PER_ETH1_VOTING_PERIOD
 
 
 @pytest.fixture
@@ -148,11 +169,6 @@ def min_seed_lookahead():
 @pytest.fixture
 def max_seed_lookahead():
     return SERENITY_CONFIG.MAX_SEED_LOOKAHEAD
-
-
-@pytest.fixture
-def slots_per_eth1_voting_period():
-    return SERENITY_CONFIG.SLOTS_PER_ETH1_VOTING_PERIOD
 
 
 @pytest.fixture
@@ -268,25 +284,28 @@ def config(
     min_per_epoch_churn_limit,
     churn_limit_quotient,
     shuffle_round_count,
+    hysteresis_quotient,
+    hysteresis_upward_multiplier,
+    hysteresis_downward_multiplier,
     min_genesis_active_validator_count,
     min_genesis_time,
     min_deposit_amount,
     max_effective_balance,
     ejection_balance,
     effective_balance_increment,
-    genesis_slot,
-    genesis_epoch,
+    genesis_fork_version,
     bls_withdrawal_prefix,
+    min_genesis_delay,
     seconds_per_slot,
     min_attestation_inclusion_delay,
     slots_per_epoch,
     min_seed_lookahead,
     max_seed_lookahead,
-    slots_per_eth1_voting_period,
     slots_per_historical_root,
     min_validator_withdrawability_delay,
     persistent_committee_period,
     min_epochs_to_inactivity_penalty,
+    epochs_per_eth1_voting_period,
     epochs_per_historical_vector,
     epochs_per_slashings_vector,
     historical_roots_limit,
@@ -311,21 +330,24 @@ def config(
         MIN_PER_EPOCH_CHURN_LIMIT=min_per_epoch_churn_limit,
         CHURN_LIMIT_QUOTIENT=churn_limit_quotient,
         SHUFFLE_ROUND_COUNT=shuffle_round_count,
+        HYSTERESIS_QUOTIENT=hysteresis_quotient,
+        HYSTERESIS_DOWNWARD_MULTIPLIER=hysteresis_downward_multiplier,
+        HYSTERESIS_UPWARD_MULTIPLIER=hysteresis_upward_multiplier,
         MIN_GENESIS_ACTIVE_VALIDATOR_COUNT=min_genesis_active_validator_count,
         MIN_GENESIS_TIME=min_genesis_time,
         MIN_DEPOSIT_AMOUNT=min_deposit_amount,
         MAX_EFFECTIVE_BALANCE=max_effective_balance,
         EJECTION_BALANCE=ejection_balance,
         EFFECTIVE_BALANCE_INCREMENT=effective_balance_increment,
-        GENESIS_SLOT=genesis_slot,
-        GENESIS_EPOCH=genesis_epoch,
+        GENESIS_FORK_VERSION=genesis_fork_version,
         BLS_WITHDRAWAL_PREFIX=bls_withdrawal_prefix,
+        MIN_GENESIS_DELAY=min_genesis_delay,
+        EPOCHS_PER_ETH1_VOTING_PERIOD=epochs_per_eth1_voting_period,
         SECONDS_PER_SLOT=seconds_per_slot,
         MIN_ATTESTATION_INCLUSION_DELAY=min_attestation_inclusion_delay,
         SLOTS_PER_EPOCH=slots_per_epoch,
         MIN_SEED_LOOKAHEAD=min_seed_lookahead,
         MAX_SEED_LOOKAHEAD=max_seed_lookahead,
-        SLOTS_PER_ETH1_VOTING_PERIOD=slots_per_eth1_voting_period,
         SLOTS_PER_HISTORICAL_ROOT=slots_per_historical_root,
         MIN_VALIDATOR_WITHDRAWABILITY_DELAY=min_validator_withdrawability_delay,
         PERSISTENT_COMMITTEE_PERIOD=persistent_committee_period,
@@ -458,7 +480,6 @@ def sample_proposer_slashing_params(sample_block_header_params, sample_signature
         message=block_header_data, signature=sample_signature
     )
     return {
-        "proposer_index": 1,
         "signed_header_1": signed_block_header,
         "signed_header_2": signed_block_header,
     }
@@ -507,9 +528,9 @@ def sample_beacon_block_body_params(sample_signature, sample_eth1_data_params):
 
 
 @pytest.fixture
-def sample_beacon_block_params(sample_beacon_block_body_params, genesis_slot):
+def sample_beacon_block_params(sample_beacon_block_body_params):
     return {
-        "slot": genesis_slot + 10,
+        "slot": GENESIS_SLOT + 10,
         "parent_root": ZERO_HASH32,
         "state_root": b"\x55" * 32,
         "body": BeaconBlockBody.create(**sample_beacon_block_body_params),
@@ -518,17 +539,12 @@ def sample_beacon_block_params(sample_beacon_block_body_params, genesis_slot):
 
 @pytest.fixture
 def sample_beacon_state_params(
-    config,
-    genesis_slot,
-    genesis_epoch,
-    sample_fork_params,
-    sample_eth1_data_params,
-    sample_block_header_params,
+    config, sample_fork_params, sample_eth1_data_params, sample_block_header_params
 ):
     return {
         # Versioning
         "genesis_time": 0,
-        "slot": genesis_slot + 100,
+        "slot": GENESIS_SLOT + 100,
         "fork": Fork.create(**sample_fork_params),
         # History
         "latest_block_header": BeaconBlockHeader.create(**sample_block_header_params),

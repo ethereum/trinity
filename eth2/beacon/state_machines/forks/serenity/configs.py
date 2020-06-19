@@ -1,7 +1,7 @@
 from eth_utils import decode_hex
 
 from eth2.beacon.constants import GWEI_PER_ETH
-from eth2.beacon.typing import Epoch, Gwei, Second, Slot
+from eth2.beacon.typing import Gwei, Second, Version
 from eth2.configs import Eth2Config
 
 SERENITY_CONFIG = Eth2Config(
@@ -12,6 +12,9 @@ SERENITY_CONFIG = Eth2Config(
     MIN_PER_EPOCH_CHURN_LIMIT=2 ** 2,
     CHURN_LIMIT_QUOTIENT=2 ** 16,
     SHUFFLE_ROUND_COUNT=90,
+    HYSTERESIS_QUOTIENT=4,
+    HYSTERESIS_DOWNWARD_MULTIPLIER=1,
+    HYSTERESIS_UPWARD_MULTIPLIER=5,
     # Genesis
     MIN_GENESIS_ACTIVE_VALIDATOR_COUNT=2 ** 14,
     MIN_GENESIS_TIME=1578009600,  # (= Jan 3, 2020)
@@ -21,21 +24,21 @@ SERENITY_CONFIG = Eth2Config(
     EJECTION_BALANCE=Gwei(2 ** 4 * GWEI_PER_ETH),  # (= 16,000,000,000) Gwei
     EFFECTIVE_BALANCE_INCREMENT=Gwei(2 ** 0 * GWEI_PER_ETH),  # (= 1,000,000,000) Gwei
     # Initial values
-    GENESIS_SLOT=Slot(0),
-    GENESIS_EPOCH=Epoch(0),
-    BLS_WITHDRAWAL_PREFIX=0,
+    GENESIS_FORK_VERSION=Version(b"\x00" * 4),
+    BLS_WITHDRAWAL_PREFIX=b"\x00",
     # Time parameters
+    MIN_GENESIS_DELAY=Second(86400),
     SECONDS_PER_SLOT=Second(12),  # seconds
     MIN_ATTESTATION_INCLUSION_DELAY=2 ** 0,  # (= 1) slots
     SLOTS_PER_EPOCH=2 ** 5,  # (= 32) slots
     MIN_SEED_LOOKAHEAD=2 ** 0,  # (= 1) epochs
     MAX_SEED_LOOKAHEAD=2 ** 2,  # (= 4) epochs
-    SLOTS_PER_ETH1_VOTING_PERIOD=2 ** 10,  # (= 16) epochs
     SLOTS_PER_HISTORICAL_ROOT=2 ** 13,  # (= 8,192) slots
     MIN_VALIDATOR_WITHDRAWABILITY_DELAY=2 ** 8,  # (= 256) epochs
     PERSISTENT_COMMITTEE_PERIOD=2 ** 11,  # (= 2,048) epochs
     MIN_EPOCHS_TO_INACTIVITY_PENALTY=2 ** 2,
     # State list lengths
+    EPOCHS_PER_ETH1_VOTING_PERIOD=2 ** 32,
     EPOCHS_PER_HISTORICAL_VECTOR=2 ** 16,
     EPOCHS_PER_SLASHINGS_VECTOR=2 ** 13,
     HISTORICAL_ROOTS_LIMIT=2 ** 24,

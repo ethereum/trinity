@@ -11,7 +11,7 @@ from py_ecc.optimized_bls12_381.optimized_curve import (
 from eth2._utils.bls import bls
 from eth2._utils.hash import hash_eth2
 from eth2._utils.merkle.common import MerkleTree, get_merkle_proof
-from eth2.beacon.constants import ZERO_TIMESTAMP
+from eth2.beacon.constants import GENESIS_EPOCH, ZERO_TIMESTAMP
 from eth2.beacon.genesis import get_genesis_block, initialize_beacon_state_from_eth1
 from eth2.beacon.tools.builder.validator import (
     create_deposit_data,
@@ -89,7 +89,7 @@ def create_keypair_and_mock_withdraw_credentials(
         pubkey = BLSPubkey(decode_hex(key_pair["pubkey"]))
         privkey = int.from_bytes(decode_hex(key_pair["privkey"]), "big")
         withdrawal_credential = Hash32(
-            config.BLS_WITHDRAWAL_PREFIX.to_bytes(1, "big") + hash_eth2(pubkey)[1:]
+            config.BLS_WITHDRAWAL_PREFIX + hash_eth2(pubkey)[1:]
         )
 
         pubkeys += (pubkey,)
@@ -109,7 +109,7 @@ def create_key_pairs_for(validator_count: int) -> Iterable[Tuple[BLSPubkey, int]
     """
     for i in range(validator_count):
         private_key = generate_privkey_from_index(i)
-        public_key = bls.privtopub(private_key)
+        public_key = bls.sk_to_pk(private_key)
         yield public_key, private_key
 
 
@@ -280,6 +280,6 @@ def create_mock_validator(
         pubkey, withdrawal_credentials, config.MAX_EFFECTIVE_BALANCE, config
     )
     if is_active:
-        return activate_validator(validator, config.GENESIS_EPOCH)
+        return activate_validator(validator, GENESIS_EPOCH)
     else:
         return validator

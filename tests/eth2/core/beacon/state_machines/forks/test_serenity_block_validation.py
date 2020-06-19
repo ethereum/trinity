@@ -2,7 +2,11 @@ from eth_utils import ValidationError
 import pytest
 
 from eth2._utils.bls import bls
-from eth2.beacon.helpers import compute_start_slot_at_epoch, get_domain
+from eth2.beacon.helpers import (
+    compute_signing_root,
+    compute_start_slot_at_epoch,
+    get_domain,
+)
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_block_slot,
@@ -12,6 +16,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
 from eth2.beacon.tools.builder.initializer import create_mock_validator
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import SerializableUint64
 
 
 @pytest.mark.parametrize(
@@ -38,10 +43,10 @@ def test_validate_block_slot(
     "slots_per_epoch, max_committees_per_slot,"
     "proposer_privkey, proposer_pubkey, is_valid_signature",
     (
-        (5, 5, 56, bls.privtopub(56), True),
-        (5, 5, 56, bls.privtopub(56)[1:] + b"\x01", False),
-        (5, 5, 123, bls.privtopub(123), True),
-        (5, 5, 123, bls.privtopub(123)[1:] + b"\x01", False),
+        (5, 5, 56, bls.sk_to_pk(56), True),
+        (5, 5, 56, bls.sk_to_pk(56)[1:] + b"\x01", False),
+        (5, 5, 123, bls.sk_to_pk(123), True),
+        (5, 5, 123, bls.sk_to_pk(123)[1:] + b"\x01", False),
     ),
 )
 def test_validate_proposer_signature(
@@ -65,16 +70,11 @@ def test_validate_proposer_signature(
     )
 
     block = BeaconBlock.create(**sample_beacon_block_params)
+    domain = get_domain(state, SignatureDomain.DOMAIN_BEACON_PROPOSER, slots_per_epoch)
+    signing_root = compute_signing_root(block, domain)
 
     proposed_block = SignedBeaconBlock.create(
-        message=block,
-        signature=bls.sign(
-            message_hash=block.hash_tree_root,
-            privkey=proposer_privkey,
-            domain=get_domain(
-                state, SignatureDomain.DOMAIN_BEACON_PROPOSER, slots_per_epoch
-            ),
-        ),
+        message=block, signature=bls.sign(proposer_privkey, signing_root)
     )
 
     if is_valid_signature:
@@ -109,14 +109,12 @@ def test_randao_reveal_validation(
     state = genesis_state.set(
         "slot", compute_start_slot_at_epoch(epoch, config.SLOTS_PER_EPOCH)
     )
-    message_hash = epoch.to_bytes(32, byteorder="little")
     slots_per_epoch = config.SLOTS_PER_EPOCH
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, slots_per_epoch)
+    signing_root = compute_signing_root(SerializableUint64(epoch), domain)
 
     proposer_privkey = privkeys[proposer_key_index]
-    randao_reveal = bls.sign(
-        message_hash=message_hash, privkey=proposer_privkey, domain=domain
-    )
+    randao_reveal = bls.sign(proposer_privkey, signing_root)
 
     try:
         validate_randao_reveal(

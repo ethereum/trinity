@@ -1,44 +1,40 @@
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
-from py_ecc.bls.typing import Domain
 
 
 class BaseBLSBackend(ABC):
     @staticmethod
     @abstractmethod
-    def privtopub(k: int) -> BLSPubkey:
+    def SkToPk(SK: int) -> BLSPubkey:
         ...
 
     @staticmethod
     @abstractmethod
-    def sign(message_hash: Hash32, privkey: int, domain: Domain) -> BLSSignature:
+    def Sign(SK: int, message: Hash32) -> BLSSignature:
         ...
 
     @staticmethod
     @abstractmethod
-    def verify(
-        message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, domain: Domain
+    def Verify(PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:
+        ...
+
+    @staticmethod
+    @abstractmethod
+    def AggregateVerify(
+        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
     ) -> bool:
         ...
 
     @staticmethod
     @abstractmethod
-    def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+    def Aggregate(signatures: Sequence[BLSSignature]) -> BLSSignature:
         ...
 
     @staticmethod
     @abstractmethod
-    def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
-        ...
-
-    @staticmethod
-    @abstractmethod
-    def verify_multiple(
-        pubkeys: Sequence[BLSPubkey],
-        message_hashes: Sequence[Hash32],
-        signature: BLSSignature,
-        domain: Domain,
+    def FastAggregateVerify(
+        PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
     ) -> bool:
         ...

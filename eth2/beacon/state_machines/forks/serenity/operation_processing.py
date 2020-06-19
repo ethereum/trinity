@@ -33,8 +33,9 @@ def process_proposer_slashings(
 
     for proposer_slashing in block.body.proposer_slashings:
         validate_proposer_slashing(state, proposer_slashing, config.SLOTS_PER_EPOCH)
-
-        state = slash_validator(state, proposer_slashing.proposer_index, config)
+        state = slash_validator(
+            state, proposer_slashing.signed_header_1.message.proposer_index, config
+        )
 
     return state
 

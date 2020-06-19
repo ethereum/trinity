@@ -2,14 +2,16 @@ from typing import TYPE_CHECKING, Callable, Sequence, Set, Tuple
 
 from eth_typing import Hash32
 from eth_utils import ValidationError
-from py_ecc.bls.typing import Domain
+import ssz
 
 from eth2._utils.hash import hash_eth2
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.fork_data import ForkData
 from eth2.beacon.types.forks import Fork
+from eth2.beacon.types.signing_root import SigningData
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import (
+    Domain,
     DomainType,
     Epoch,
     ForkDigest,
@@ -18,6 +20,7 @@ from eth2.beacon.typing import (
     Slot,
     ValidatorIndex,
     Version,
+    default_root,
     default_version,
 )
 from eth2.configs import Eth2Config
@@ -156,17 +159,19 @@ def get_seed(
 
 
 def get_total_balance(
-    state: "BeaconState", validator_indices: Set[ValidatorIndex]
+    state: "BeaconState", validator_indices: Set[ValidatorIndex], config: Eth2Config
 ) -> Gwei:
     """
-    Return the combined effective balance of an array of validators.
+    Return the combined effective balance of the ``indices``.
+    ``EFFECTIVE_BALANCE_INCREMENT`` Gwei minimum to avoid divisions by zero.
+    Math safe up to ~10B ETH, afterwhich this overflows uint64.
     """
     return Gwei(
         max(
             sum(
                 state.validators[index].effective_balance for index in validator_indices
             ),
-            1,
+            config.EFFECTIVE_BALANCE_INCREMENT,
         )
     )
 
@@ -186,14 +191,17 @@ def signature_domain_to_domain_type(s: SignatureDomain) -> DomainType:
 
 
 def compute_domain(
-    signature_domain: SignatureDomain, fork_version: Version = default_version
+    signature_domain: SignatureDomain,
+    fork_version: Version = default_version,
+    genesis_validators_root: Root = default_root,
 ) -> Domain:
     """
     NOTE: we deviate from the spec here by taking the enum ``SignatureDomain`` and
     converting before creating the domain.
     """
     domain_type = signature_domain_to_domain_type(signature_domain)
-    return Domain(domain_type + fork_version)
+    fork_data_root = compute_fork_data_root(fork_version, genesis_validators_root)
+    return Domain(Hash32(domain_type + fork_data_root[:28]))
 
 
 def get_domain(
@@ -209,7 +217,7 @@ def get_domain(
         state.current_epoch(slots_per_epoch) if message_epoch is None else message_epoch
     )
     fork_version = _get_fork_version(state.fork, epoch)
-    return compute_domain(signature_domain, fork_version)
+    return compute_domain(signature_domain, fork_version, state.genesis_validators_root)
 
 
 def compute_fork_data_root(
@@ -224,3 +232,13 @@ def compute_fork_digest(
     return ForkDigest(
         compute_fork_data_root(current_version, genesis_validators_root)[:4]
     )
+
+
+def compute_signing_root(object: ssz.Serializable, domain: Domain) -> Root:
+    """
+    Return the signing root of an object by calculating the root of the object-domain tree.
+    """
+    domain_wrapped_object = SigningData.create(
+        object_root=object.hash_tree_root, domain=domain
+    )
+    return domain_wrapped_object.hash_tree_root

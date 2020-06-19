@@ -55,7 +55,7 @@ def extract_privkeys_from_dir(dir_path: Path) -> Dict[BLSPubkey, int]:
     for key_file_name in key_files:
         key_file_path = dir_path / key_file_name
         privkey = _read_privkey(key_file_path)
-        pubkey = bls.privtopub(privkey)
+        pubkey = bls.sk_to_pk(privkey)
         validator_keymap[pubkey] = privkey
         logger.debug("imported public key: %s", humanize_hash(Hash32(pubkey)))
     if len(validator_keymap) == 0:

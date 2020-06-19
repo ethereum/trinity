@@ -11,10 +11,10 @@ from eth2.beacon.attestation_helpers import (
     validate_indexed_attestation,
     validate_indexed_attestation_aggregate_signature,
 )
-from eth2.beacon.helpers import get_domain
+from eth2.beacon.helpers import compute_signing_root, get_domain
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
-from eth2.beacon.types.attestations import IndexedAttestation
+from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.forks import Fork
 
 
@@ -25,23 +25,16 @@ def test_verify_indexed_attestation_signature(
     genesis_state,
     config,
     privkeys,
-    sample_beacon_state_params,
-    genesis_validators,
-    genesis_balances,
+    sample_attestation_params,
     sample_indexed_attestation_params,
     sample_fork_params,
 ):
     state = genesis_state.set("fork", Fork.create(**sample_fork_params))
-
-    # NOTE: we can do this before "correcting" the params as they
-    # touch disjoint subsets of the provided params
-    message_hash = _create_indexed_attestation_messages(
-        sample_indexed_attestation_params
-    )
+    attestation = Attestation.create(**sample_attestation_params)
 
     valid_params = _correct_indexed_attestation_params(
         validator_count,
-        message_hash,
+        attestation,
         sample_indexed_attestation_params,
         privkeys,
         state,
@@ -61,20 +54,21 @@ def test_verify_indexed_attestation_signature(
         )
 
 
-def _get_indices_and_signatures(validator_count, state, config, message_hash, privkeys):
+def _get_indices_and_signatures(validator_count, state, config, attestation, privkeys):
     num_indices = 5
     assert validator_count >= num_indices
     indices = random.sample(range(validator_count), num_indices)
     indices.sort()
 
     privkeys = [privkeys[i] for i in indices]
-    signature_domain = SignatureDomain.DOMAIN_BEACON_ATTESTER
     domain = get_domain(
         state=state,
-        signature_domain=signature_domain,
+        signature_domain=SignatureDomain.DOMAIN_BEACON_ATTESTER,
         slots_per_epoch=config.SLOTS_PER_EPOCH,
     )
-    signatures = tuple(map(lambda key: bls.sign(message_hash, key, domain), privkeys))
+    signing_root = compute_signing_root(attestation.data, domain)
+
+    signatures = tuple(map(lambda key: bls.sign(key, signing_root), privkeys))
     return (indices, signatures)
 
 
@@ -94,17 +88,17 @@ def _run_verify_indexed_vote(
 
 
 def _correct_indexed_attestation_params(
-    validator_count, message_hash, params, privkeys, state, config
+    validator_count, attestation, params, privkeys, state, config
 ):
     valid_params = copy.deepcopy(params)
 
     (attesting_indices, signatures) = _get_indices_and_signatures(
-        validator_count, state, config, message_hash, privkeys
+        validator_count, state, config, attestation, privkeys
     )
 
     valid_params["attesting_indices"] = attesting_indices
 
-    signature = bls.aggregate_signatures(signatures)
+    signature = bls.aggregate(*signatures)
 
     valid_params["signature"] = signature
 
@@ -129,11 +123,6 @@ def _corrupt_signature(slots_per_epoch, params, fork):
     return assoc(params, "signature", b"\x12" * 96)
 
 
-def _create_indexed_attestation_messages(params):
-    attestation = IndexedAttestation.create(**params)
-    return attestation.data.hash_tree_root
-
-
 @pytest.mark.parametrize(("validator_count",), [(40,)])
 @pytest.mark.parametrize(
     ("param_mapper", "should_succeed", "needs_fork", "is_testing_max_length"),
@@ -152,25 +141,17 @@ def test_validate_indexed_attestation(
     needs_fork,
     is_testing_max_length,
     privkeys,
-    sample_beacon_state_params,
-    genesis_validators,
-    genesis_balances,
     sample_indexed_attestation_params,
     sample_fork_params,
     max_validators_per_committee,
     config,
 ):
     state = genesis_state.set("fork", Fork.create(**sample_fork_params))
-
-    # NOTE: we can do this before "correcting" the params as they
-    # touch disjoint subsets of the provided params
-    message_hash = _create_indexed_attestation_messages(
-        sample_indexed_attestation_params
-    )
+    attestation = IndexedAttestation.create(**sample_indexed_attestation_params)
 
     params = _correct_indexed_attestation_params(
         validator_count,
-        message_hash,
+        attestation,
         sample_indexed_attestation_params,
         privkeys,
         state,
@@ -194,11 +175,8 @@ def test_verify_indexed_attestation_after_fork(
     slots_per_epoch,
     validator_count,
     privkeys,
-    sample_beacon_state_params,
-    genesis_validators,
-    genesis_balances,
+    sample_attestation_params,
     sample_indexed_attestation_params,
-    sample_fork_params,
     config,
     max_validators_per_committee,
 ):
@@ -211,14 +189,11 @@ def test_verify_indexed_attestation_after_fork(
     }
 
     state = genesis_state.mset("slot", 20, "fork", Fork.create(**past_fork_params))
-
-    message_hash = _create_indexed_attestation_messages(
-        sample_indexed_attestation_params
-    )
+    attestation = Attestation.create(**sample_attestation_params)
 
     valid_params = _correct_indexed_attestation_params(
         validator_count,
-        message_hash,
+        attestation,
         sample_indexed_attestation_params,
         privkeys,
         state,

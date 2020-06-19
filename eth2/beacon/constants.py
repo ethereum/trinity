@@ -1,7 +1,7 @@
 from eth.constants import ZERO_HASH32
 from eth_typing import BLSPubkey, BLSSignature
 
-from eth2.beacon.typing import Epoch, Root, Timestamp
+from eth2.beacon.typing import Epoch, Root, Slot, Timestamp
 
 EMPTY_SIGNATURE = BLSSignature(b"\x00" * 96)
 EMPTY_PUBKEY = BLSPubkey(b"\x00" * 48)
@@ -21,6 +21,7 @@ BASE_REWARDS_PER_EPOCH = 4
 
 DEPOSIT_CONTRACT_TREE_DEPTH = 2 ** 5
 
-SECONDS_PER_DAY = 86400
-
 JUSTIFICATION_BITS_LENGTH = 4
+
+GENESIS_SLOT = Slot(0)
+GENESIS_EPOCH = Epoch(0)

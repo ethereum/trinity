@@ -14,6 +14,7 @@ from ssz.tools.dump import to_formatted_dict
 from ssz.tools.parse import from_formatted_dict
 
 from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.exceptions import NoCommitteeAssignment
 from eth2.beacon.helpers import (
     compute_epoch_at_slot,
@@ -113,7 +114,7 @@ class Context:
     def get_validator_duties(
         self, public_keys: Collection[BLSPubkey], epoch: Epoch
     ) -> Iterable[ValidatorDuty]:
-        if epoch < self.eth2_config.GENESIS_EPOCH:
+        if epoch < GENESIS_EPOCH:
             return ()
 
         current_tick = self.clock.compute_current_tick()
@@ -167,20 +168,20 @@ class Context:
         if slot < 1:
             raise InvalidRequest()
 
-        target_slot = Slot(max(slot - 1, 0))
+        parent_slot = Slot(max(slot - 1, 0))
         try:
-            parent = self.chain.get_canonical_block_by_slot(target_slot)
+            parent = self.chain.get_canonical_block_by_slot(parent_slot)
         except BlockNotFound:
             # as an optimization, try checking the head
             parent = self.chain.get_canonical_head()
-            if parent.slot > target_slot:
+            if parent.slot > parent_slot:
                 # NOTE: if parent.slot == target_slot, we are not under this block.
                 # NOTE: head has greater slot than the target, while it is odd
                 # a client may want a block here, let's try to satisfy the request.
                 # TODO: should we allow this behavior?
                 # TODO: consider a more sophisticated search strategy if we can detect ``slot``
                 # is far from the canonical head, e.g. binary search across slots
-                parent = self._search_linearly_for_parent(target_slot)
+                parent = self._search_linearly_for_parent(parent_slot)
                 if not parent:
                     raise ServerError()
             else:
@@ -189,7 +190,7 @@ class Context:
 
         parent_block_root = parent.message.hash_tree_root
         parent_state = self.chain.get_state_by_root(parent.state_root)
-        parent_state = self.chain.advance_state_to_slot(target_slot, parent_state)
+        parent_state = self.chain.advance_state_to_slot(parent_slot, parent_state)
         state_machine = self.chain.get_state_machine(at_slot=slot)
 
         # TODO: query for latest eth1 data...
@@ -202,6 +203,7 @@ class Context:
             eth1_data,
             parent_state,
             state_machine,
+            self.eth2_config,
         )
 
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:

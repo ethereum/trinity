@@ -2,7 +2,6 @@ from typing import Sequence
 
 from eth_typing import BLSSignature
 from eth_utils import ValidationError
-from ssz import get_hash_tree_root, uint64
 
 from eth2._utils.bls import bls
 from eth2._utils.hash import hash_eth2
@@ -14,12 +13,12 @@ from eth2.beacon.epoch_processing_helpers import (
     get_attesting_indices,
     get_indexed_attestation,
 )
-from eth2.beacon.helpers import compute_epoch_at_slot, get_domain
+from eth2.beacon.helpers import compute_epoch_at_slot, compute_signing_root, get_domain
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Bitfield, CommitteeIndex, Slot
+from eth2.beacon.typing import Bitfield, CommitteeIndex, SerializableUint64, Slot
 from eth2.configs import Eth2Config
 
 # TODO: TARGET_AGGREGATORS_PER_COMMITTEE is not in Eth2Config now.
@@ -38,7 +37,8 @@ def get_slot_signature(
         config.SLOTS_PER_EPOCH,
         message_epoch=compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH),
     )
-    return bls.sign(get_hash_tree_root(slot, sedes=uint64), privkey, domain)
+    signing_root = compute_signing_root(SerializableUint64(slot), domain)
+    return bls.sign(privkey, signing_root)
 
 
 def is_aggregator(
@@ -77,7 +77,7 @@ def get_aggregate_from_valid_committee_attestations(
     The given attestations SHOULD have the same `data: AttestationData` and are valid.
     """
     signatures = [attestation.signature for attestation in attestations]
-    aggregate_signature = bls.aggregate_signatures(signatures)
+    aggregate_signature = bls.aggregate(*signatures)
 
     all_aggregation_bits = [
         attestation.aggregation_bits for attestation in attestations
@@ -169,14 +169,9 @@ def validate_aggregator_proof(
         config.SLOTS_PER_EPOCH,
         message_epoch=compute_epoch_at_slot(slot, config.SLOTS_PER_EPOCH),
     )
-    message_hash = get_hash_tree_root(slot, sedes=uint64)
+    signing_root = compute_signing_root(SerializableUint64(slot), domain)
 
-    bls.validate(
-        message_hash=message_hash,
-        pubkey=pubkey,
-        signature=aggregate_and_proof.selection_proof,
-        domain=domain,
-    )
+    bls.validate(signing_root, aggregate_and_proof.selection_proof, pubkey)
 
 
 def validate_attestation_signature(

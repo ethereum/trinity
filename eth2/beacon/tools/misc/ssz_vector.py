@@ -25,7 +25,8 @@ def _mk_overrides(config: Eth2Config) -> Dict[HashableContainer, Dict[str, int]]
             "block_roots": config.SLOTS_PER_HISTORICAL_ROOT,
             "state_roots": config.SLOTS_PER_HISTORICAL_ROOT,
             "historical_roots": config.HISTORICAL_ROOTS_LIMIT,
-            "eth1_data_votes": config.SLOTS_PER_ETH1_VOTING_PERIOD,
+            "eth1_data_votes": config.EPOCHS_PER_ETH1_VOTING_PERIOD
+            * config.SLOTS_PER_EPOCH,
             "validators": config.VALIDATOR_REGISTRY_LIMIT,
             "balances": config.VALIDATOR_REGISTRY_LIMIT,
             "randao_mixes": config.EPOCHS_PER_HISTORICAL_VECTOR,

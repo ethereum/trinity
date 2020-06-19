@@ -4,7 +4,11 @@ from eth_utils.toolz import concat, first, mapcat
 import pytest
 
 from eth2._utils.bls import bls
-from eth2.beacon.helpers import compute_start_slot_at_epoch, get_domain
+from eth2.beacon.helpers import (
+    compute_signing_root,
+    compute_start_slot_at_epoch,
+    get_domain,
+)
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.serenity.block_processing import (
     process_eth1_data,
@@ -17,6 +21,7 @@ from eth2.beacon.tools.builder.proposer import _generate_randao_reveal
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
+from eth2.beacon.typing import SerializableUint64
 
 
 def test_randao_processing(
@@ -88,9 +93,9 @@ def test_randao_processing_validates_randao_reveal(
     )
 
     epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    message_hash = (epoch + 1).to_bytes(32, byteorder="little")
     domain = get_domain(state, SignatureDomain.DOMAIN_RANDAO, config.SLOTS_PER_EPOCH)
-    randao_reveal = bls.sign(message_hash, proposer_privkey, domain)
+    signing_root = compute_signing_root(SerializableUint64(epoch + 1), domain)
+    randao_reveal = bls.sign(proposer_privkey, signing_root)
 
     block_body = BeaconBlockBody.create(**sample_beacon_block_body_params).set(
         "randao_reveal", randao_reveal
@@ -149,7 +154,7 @@ def test_process_eth1_data(
     assert tuple(updated_votes) == expanded_expected_votes
 
 
-@pytest.mark.parametrize(("slots_per_eth1_voting_period"), ((16),))
+@pytest.mark.parametrize(("epochs_per_eth1_voting_period"), ((2),))
 @pytest.mark.parametrize(
     ("vote_offsets"),  # a tuple of offsets against the majority threshold
     (
@@ -170,7 +175,7 @@ def test_process_eth1_data(
 )
 def test_ensure_update_eth1_vote_if_exists(genesis_state, config, vote_offsets):
     # one less than a majority is the majority divided by 2
-    threshold = config.SLOTS_PER_ETH1_VOTING_PERIOD // 2
+    threshold = config.EPOCHS_PER_ETH1_VOTING_PERIOD * config.SLOTS_PER_EPOCH // 2
     data_votes = tuple(
         concat(
             (Eth1Data.create(block_hash=(i).to_bytes(32, "little")),)

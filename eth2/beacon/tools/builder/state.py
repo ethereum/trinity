@@ -1,5 +1,6 @@
 from typing import Sequence
 
+from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.genesis import initialize_beacon_state_from_eth1
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.states import BeaconState
@@ -56,7 +57,7 @@ def create_mock_genesis_state_from_validators(
     _check_distinct_pubkeys(genesis_validators)
     _check_no_missing_balances(genesis_validators, genesis_balances)
     _check_sufficient_balance(genesis_balances, config.MAX_EFFECTIVE_BALANCE)
-    _check_activated_validators(genesis_validators, config.GENESIS_EPOCH)
+    _check_activated_validators(genesis_validators, GENESIS_EPOCH)
     _check_correct_eth1_data(genesis_eth1_data, genesis_validators)
 
     empty_state = initialize_beacon_state_from_eth1(

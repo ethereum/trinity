@@ -8,6 +8,7 @@ from lahja import EndpointAPI
 from libp2p.crypto.keys import KeyPair
 from libp2p.crypto.secp256k1 import create_new_key_pair
 
+from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.typing import SubnetId
 from p2p.service import BaseService, run_service
 from trinity.config import BeaconAppConfig, TrinityConfig
@@ -122,7 +123,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             )
 
             slot_ticker = SlotTicker(
-                genesis_slot=chain_config.genesis_config.GENESIS_SLOT,
+                genesis_slot=GENESIS_SLOT,
                 genesis_time=chain_config.genesis_time,
                 seconds_per_slot=chain_config.genesis_config.SECONDS_PER_SLOT,
                 event_bus=event_bus,

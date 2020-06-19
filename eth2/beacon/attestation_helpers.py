@@ -2,7 +2,7 @@ from eth_utils import ValidationError
 
 from eth2._utils.bls import bls
 from eth2.beacon.exceptions import SignatureError
-from eth2.beacon.helpers import get_domain
+from eth2.beacon.helpers import compute_signing_root, get_domain
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import IndexedAttestation
@@ -12,30 +12,22 @@ from eth2.beacon.types.states import BeaconState
 def validate_indexed_attestation_aggregate_signature(
     state: BeaconState, indexed_attestation: IndexedAttestation, slots_per_epoch: int
 ) -> None:
-    attesting_indices = indexed_attestation.attesting_indices
-    pubkey = bls.aggregate_pubkeys(
-        tuple(state.validators[i].pubkey for i in attesting_indices)
+    public_keys = tuple(
+        state.validators[i].pubkey for i in indexed_attestation.attesting_indices
     )
-
-    message_hash = indexed_attestation.data.hash_tree_root
     domain = get_domain(
         state,
         SignatureDomain.DOMAIN_BEACON_ATTESTER,
         slots_per_epoch,
         indexed_attestation.data.target.epoch,
     )
-    bls.validate(
-        pubkey=pubkey,
-        message_hash=message_hash,
-        signature=indexed_attestation.signature,
-        domain=domain,
-    )
+    signing_root = compute_signing_root(indexed_attestation.data, domain)
+    bls.validate(signing_root, indexed_attestation.signature, *public_keys)
 
 
 def validate_indexed_attestation(
     state: BeaconState,
     indexed_attestation: IndexedAttestation,
-    max_validators_per_committee: int,
     slots_per_epoch: int,
     validate_signature: bool = True,
 ) -> None:
@@ -45,12 +37,6 @@ def validate_indexed_attestation(
     Option ``validate_signature`` is used in some testing scenarios, like some fork choice tests.
     """
     attesting_indices = indexed_attestation.attesting_indices
-
-    if len(attesting_indices) > max_validators_per_committee:
-        raise ValidationError(
-            f"Require no more than {max_validators_per_committee} validators per attestation,"
-            f" but have {len(attesting_indices)} validators."
-        )
 
     if list(attesting_indices) != sorted(set(attesting_indices)):
         raise ValidationError(

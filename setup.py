@@ -113,7 +113,7 @@ deps = {
         "cytoolz>=0.9.0,<1.0.0",
         "eth-typing>=2.1.0,<3.0.0",
         "lru-dict>=1.1.6",
-        "py-ecc==1.7.1",
+        "py-ecc==2.0.0",
         "rlp>=1.1.0,<2.0.0",
         PYEVM_DEPENDENCY,
         "ssz==0.2.4",
@@ -121,7 +121,7 @@ deps = {
         "eth-keyfile",  # validator client
     ],
     'eth2-extra': [
-        "milagro-bls-binding==0.1.4",
+        "milagro-bls-binding==1.0.2",
     ],
     'eth2-lint': [
         "black==19.3b0",

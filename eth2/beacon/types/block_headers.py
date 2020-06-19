@@ -1,13 +1,18 @@
 from typing import Type, TypeVar
 
-from eth.constants import ZERO_HASH32
-from eth_typing import BLSSignature, Hash32
+from eth_typing import BLSSignature
 from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import bytes32, bytes96, uint64
 
-from eth2.beacon.constants import EMPTY_SIGNATURE, ZERO_ROOT
-from eth2.beacon.typing import Root, Slot
+from eth2.beacon.constants import EMPTY_SIGNATURE
+from eth2.beacon.typing import (
+    Root,
+    Slot,
+    ValidatorIndex,
+    default_root,
+    default_validator_index,
+)
 
 from .defaults import default_slot
 
@@ -18,6 +23,7 @@ class BeaconBlockHeader(HashableContainer):
 
     fields = [
         ("slot", uint64),
+        ("proposer_index", uint64),
         ("parent_root", bytes32),
         ("state_root", bytes32),
         ("body_root", bytes32),
@@ -28,12 +34,14 @@ class BeaconBlockHeader(HashableContainer):
         cls: Type[TBeaconBlockHeader],
         *,
         slot: Slot = default_slot,
-        parent_root: Root = ZERO_ROOT,
-        state_root: Hash32 = ZERO_HASH32,
-        body_root: Hash32 = ZERO_HASH32,
+        proposer_index: ValidatorIndex = default_validator_index,
+        parent_root: Root = default_root,
+        state_root: Root = default_root,
+        body_root: Root = default_root,
     ) -> TBeaconBlockHeader:
         return super().create(
             slot=slot,
+            proposer_index=proposer_index,
             parent_root=parent_root,
             state_root=state_root,
             body_root=body_root,
@@ -43,6 +51,7 @@ class BeaconBlockHeader(HashableContainer):
         return (
             f"[hash_tree_root]={humanize_hash(self.hash_tree_root)},"
             f" slot={self.slot},"
+            f" proposer_index={self.proposer_index},"
             f" parent_root={humanize_hash(self.parent_root)},"
             f" state_root={humanize_hash(self.state_root)},"
             f" body_root={humanize_hash(self.body_root)},"

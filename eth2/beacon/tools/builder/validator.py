@@ -6,9 +6,10 @@ from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import to_tuple
 from eth_utils.toolz import keymap as keymapper
 from eth_utils.toolz import pipe
+import ssz
 
 from eth2._utils.bitfield import get_empty_bitfield, set_voted
-from eth2._utils.bls import Domain, bls
+from eth2._utils.bls import bls
 from eth2._utils.hash import hash_eth2
 from eth2._utils.merkle.common import MerkleTree, get_merkle_proof
 from eth2._utils.merkle.sparse import calc_merkle_tree_from_leaves, get_root
@@ -17,10 +18,11 @@ from eth2.beacon.committee_helpers import (
     iterate_committees_at_epoch,
     iterate_committees_at_slot,
 )
-from eth2.beacon.constants import ZERO_ROOT
+from eth2.beacon.constants import GENESIS_EPOCH, ZERO_ROOT
 from eth2.beacon.helpers import (
     compute_domain,
     compute_epoch_at_slot,
+    compute_signing_root,
     compute_start_slot_at_epoch,
     get_block_root,
     get_block_root_at_slot,
@@ -60,7 +62,7 @@ from eth2.configs import Eth2Config
 #
 def mk_key_pair_from_seed_index(seed_index: int) -> Tuple[BLSPubkey, int]:
     privkey = int.from_bytes(hash_eth2(str(seed_index).encode("utf-8"))[:4], "big")
-    pubkey = bls.privtopub(privkey)
+    pubkey = bls.sk_to_pk(privkey)
     return (pubkey, privkey)
 
 
@@ -159,7 +161,6 @@ def mk_all_pending_attestations_with_full_participation_in_epoch(
 def verify_votes(
     message_hash: Hash32,
     votes: Iterable[Tuple[ValidatorIndex, BLSSignature, BLSPubkey]],
-    domain: Domain,
 ) -> Tuple[Tuple[BLSSignature, ...], Tuple[ValidatorIndex, ...]]:
     """
     Verify the given votes.
@@ -167,9 +168,7 @@ def verify_votes(
     sigs_with_committee_info = tuple(
         (sig, committee_index)
         for (committee_index, sig, pubkey) in votes
-        if bls.verify(
-            message_hash=message_hash, pubkey=pubkey, signature=sig, domain=domain
-        )
+        if bls.verify(message_hash, sig, pubkey)
     )
     try:
         sigs, committee_indices = zip(*sigs_with_committee_info)
@@ -196,7 +195,7 @@ def aggregate_votes(
         *(set_voted(index=committee_index) for committee_index in attesting_indices)
     )
 
-    return bitfield, bls.aggregate_signatures(sigs)
+    return bitfield, bls.aggregate(*sigs)
 
 
 #
@@ -205,16 +204,15 @@ def aggregate_votes(
 def sign_proof_of_possession(
     deposit_message: DepositMessage, privkey: int
 ) -> BLSSignature:
-    return bls.sign(
-        message_hash=deposit_message.hash_tree_root,
-        privkey=privkey,
-        domain=compute_domain(SignatureDomain.DOMAIN_DEPOSIT),
-    )
+    domain = compute_domain(SignatureDomain.DOMAIN_DEPOSIT)
+    signing_root = compute_signing_root(deposit_message, domain)
+
+    return bls.sign(privkey, signing_root)
 
 
 def sign_transaction(
     *,
-    message_hash: Hash32,
+    object: ssz.Serializable,
     privkey: int,
     state: BeaconState,
     slot: Slot,
@@ -227,29 +225,33 @@ def sign_transaction(
         slots_per_epoch,
         message_epoch=compute_epoch_at_slot(slot, slots_per_epoch),
     )
-    return bls.sign(message_hash=message_hash, privkey=privkey, domain=domain)
+    signing_root = compute_signing_root(object, domain)
+
+    return bls.sign(privkey, signing_root)
 
 
 SAMPLE_HASH_1 = Root(Hash32(b"\x11" * 32))
-SAMPLE_HASH_2 = Hash32(b"\x22" * 32)
+SAMPLE_HASH_2 = Root(Hash32(b"\x22" * 32))
 
 
 def create_block_header_with_signature(
     state: BeaconState,
-    body_root: Hash32,
+    body_root: Root,
     privkey: int,
     slots_per_epoch: int,
+    proposer_index: ValidatorIndex,
     parent_root: Root = SAMPLE_HASH_1,
-    state_root: Hash32 = SAMPLE_HASH_2,
+    state_root: Root = SAMPLE_HASH_2,
 ) -> SignedBeaconBlockHeader:
     block_header = BeaconBlockHeader.create(
-        slot=state.slot,
+        slot=Slot(state.slot),
+        proposer_index=proposer_index,
         parent_root=parent_root,
         state_root=state_root,
         body_root=body_root,
     )
     block_header_signature = sign_transaction(
-        message_hash=block_header.hash_tree_root,
+        object=block_header,
         privkey=privkey,
         state=state,
         slot=block_header.slot,
@@ -275,8 +277,8 @@ def create_mock_proposer_slashing_at_block(
     state: BeaconState,
     config: Eth2Config,
     keymap: Dict[BLSPubkey, int],
-    block_root_1: Hash32,
-    block_root_2: Hash32,
+    body_root_1: Root,
+    body_root_2: Root,
     proposer_index: ValidatorIndex,
 ) -> ProposerSlashing:
     """
@@ -289,22 +291,22 @@ def create_mock_proposer_slashing_at_block(
 
     block_header_1 = create_block_header_with_signature(
         state,
-        block_root_1,
+        body_root_1,
         keymap[state.validators[proposer_index].pubkey],
         slots_per_epoch,
+        proposer_index,
     )
 
     block_header_2 = create_block_header_with_signature(
         state,
-        block_root_2,
+        body_root_2,
         keymap[state.validators[proposer_index].pubkey],
         slots_per_epoch,
+        proposer_index,
     )
 
     return ProposerSlashing.create(
-        proposer_index=proposer_index,
-        signed_header_1=block_header_1,
-        signed_header_2=block_header_2,
+        signed_header_1=block_header_1, signed_header_2=block_header_2
     )
 
 
@@ -363,11 +365,10 @@ def create_mock_slashable_attestation(
         ),
     )
 
-    message_hash = attestation_data.hash_tree_root
     attesting_indices = _get_mock_attesting_indices(committee, num_voted_attesters=1)
 
     signature = sign_transaction(
-        message_hash=message_hash,
+        object=attestation_data,
         privkey=keymap[state.validators[attesting_indices[0]].pubkey],
         state=state,
         slot=attestation_slot,
@@ -418,7 +419,7 @@ def create_mock_attester_slashing_is_surround_vote(
 
     slashable_attestation_1 = create_mock_slashable_attestation(
         state.mset(
-            "slot", attestation_slot_1, "current_justified_epoch", config.GENESIS_EPOCH
+            "slot", attestation_slot_1, "current_justified_epoch", GENESIS_EPOCH
         ),
         config,
         keymap,
@@ -429,7 +430,7 @@ def create_mock_attester_slashing_is_surround_vote(
             "slot",
             attestation_slot_1,
             "current_justified_epoch",
-            config.GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
+            GENESIS_EPOCH + 1,  # source_epoch_1 < source_epoch_2
         ),
         config,
         keymap,
@@ -489,7 +490,6 @@ def _create_mock_signed_attestation(
     """
     Create a mocking attestation of the given ``attestation_data`` slot with ``keymap``.
     """
-    message_hash = attestation_data.hash_tree_root
 
     if is_for_simulation:
         simulation_attesting_indices = _get_mock_attesting_indices(
@@ -505,7 +505,7 @@ def _create_mock_signed_attestation(
     # Use privkeys to sign the attestation
     signatures = [
         sign_transaction(
-            message_hash=message_hash,
+            object=attestation_data,
             privkey=privkey,
             state=state,
             slot=attestation_slot,
@@ -714,7 +714,7 @@ def create_mock_voluntary_exit(
     return SignedVoluntaryExit.create(
         message=voluntary_exit,
         signature=sign_transaction(
-            message_hash=voluntary_exit.hash_tree_root,
+            object=voluntary_exit,
             privkey=keymap[state.validators[validator_index].pubkey],
             state=state,
             slot=compute_start_slot_at_epoch(target_epoch, config.SLOTS_PER_EPOCH),

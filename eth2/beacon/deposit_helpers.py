@@ -4,7 +4,7 @@ from eth2._utils.bls import bls
 from eth2._utils.merkle.common import verify_merkle_branch
 from eth2.beacon.constants import DEPOSIT_CONTRACT_TREE_DEPTH
 from eth2.beacon.epoch_processing_helpers import increase_balance
-from eth2.beacon.helpers import compute_domain
+from eth2.beacon.helpers import compute_domain, compute_signing_root
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.deposit_data import DepositMessage
 from eth2.beacon.types.deposits import Deposit
@@ -63,12 +63,15 @@ def process_deposit(
         deposit_message = DepositMessage.create(
             pubkey=pubkey, withdrawal_credentials=withdrawal_credentials, amount=amount
         )
-        is_valid_proof_of_possession = bls.verify(
-            message_hash=deposit_message.hash_tree_root,
-            pubkey=pubkey,
-            signature=deposit.data.signature,
-            domain=compute_domain(SignatureDomain.DOMAIN_DEPOSIT),
+        domain = compute_domain(
+            SignatureDomain.DOMAIN_DEPOSIT, fork_version=config.GENESIS_FORK_VERSION
         )
+        signing_root = compute_signing_root(deposit_message, domain)
+
+        is_valid_proof_of_possession = bls.verify(
+            signing_root, deposit.data.signature, pubkey
+        )
+
         if not is_valid_proof_of_possession:
             return state
 

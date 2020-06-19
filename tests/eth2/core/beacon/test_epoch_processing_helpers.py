@@ -1,10 +1,11 @@
 import random
 
+from eth_typing import Hash32
 import pytest
 
 from eth2._utils.bitfield import get_empty_bitfield, set_voted
 from eth2.beacon.committee_helpers import get_beacon_committee
-from eth2.beacon.constants import FAR_FUTURE_EPOCH, GWEI_PER_ETH
+from eth2.beacon.constants import FAR_FUTURE_EPOCH, GENESIS_EPOCH, GWEI_PER_ETH
 from eth2.beacon.epoch_processing_helpers import (
     compute_activation_exit_epoch,
     decrease_balance,
@@ -22,7 +23,7 @@ from eth2.beacon.helpers import compute_start_slot_at_epoch
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.pending_attestations import PendingAttestation
-from eth2.beacon.typing import Gwei
+from eth2.beacon.typing import Gwei, Root
 
 
 @pytest.mark.parametrize(
@@ -149,7 +150,7 @@ def test_get_matching_source_attestations(
 
 
 def test_get_matching_target_attestations(genesis_state, config):
-    some_epoch = config.GENESIS_EPOCH + 20
+    some_epoch = GENESIS_EPOCH + 20
     some_slot = compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
     some_target_root = b"\x33" * 32
     target_attestations = tuple(
@@ -180,12 +181,12 @@ def test_get_matching_target_attestations(genesis_state, config):
 
 @pytest.mark.parametrize(("validator_count,"), [(1000)])
 def test_get_matching_head_attestations(genesis_state, config):
-    some_epoch = config.GENESIS_EPOCH + 20
+    some_epoch = GENESIS_EPOCH + 20
     some_slot = (
         compute_start_slot_at_epoch(some_epoch, config.SLOTS_PER_EPOCH)
         + config.SLOTS_PER_EPOCH // 4
     )
-    some_target_root = b"\x33" * 32
+    some_target_root = Root(Hash32(b"\x33" * 32))
     target_attestations = tuple(
         (
             PendingAttestation.create(
@@ -193,10 +194,12 @@ def test_get_matching_head_attestations(genesis_state, config):
                     slot=some_slot - 1,
                     index=0,
                     beacon_block_root=some_target_root,
-                    target=Checkpoint.create(epoch=some_epoch - 1),
+                    target=Checkpoint.create(
+                        epoch=some_epoch - 1, root=some_target_root
+                    ),
                 )
             )
-            for i in range(3)
+            for _ in range(3)
         )
     )
     current_epoch_attestations = target_attestations + tuple(

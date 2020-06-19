@@ -5,7 +5,7 @@ import ssz
 
 from eth2.beacon.constants import (
     DEPOSIT_CONTRACT_TREE_DEPTH,
-    SECONDS_PER_DAY,
+    GENESIS_EPOCH,
     ZERO_HASH32,
     ZERO_ROOT,
 )
@@ -16,6 +16,7 @@ from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlockBody
 from eth2.beacon.types.deposit_data import DepositData
 from eth2.beacon.types.deposits import Deposit
 from eth2.beacon.types.eth1_data import Eth1Data
+from eth2.beacon.types.forks import Fork
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import calculate_effective_balance
 from eth2.beacon.typing import Gwei, Timestamp, ValidatorIndex
@@ -39,9 +40,11 @@ def is_genesis_trigger(
     return active_validator_count == config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
 
 
-def _genesis_time_from_eth1_timestamp(eth1_timestamp: Timestamp) -> Timestamp:
+def _genesis_time_from_eth1_timestamp(
+    eth1_timestamp: Timestamp, genesis_delay: int
+) -> Timestamp:
     return Timestamp(
-        eth1_timestamp - eth1_timestamp % SECONDS_PER_DAY + 2 * SECONDS_PER_DAY
+        eth1_timestamp - eth1_timestamp % genesis_delay + 2 * genesis_delay
     )
 
 
@@ -52,8 +55,17 @@ def initialize_beacon_state_from_eth1(
     deposits: Sequence[Deposit],
     config: Eth2Config
 ) -> BeaconState:
+    fork = Fork.create(
+        previous_version=config.GENESIS_FORK_VERSION,
+        current_version=config.GENESIS_FORK_VERSION,
+        epoch=GENESIS_EPOCH,
+    )
+
     state = BeaconState.create(
-        genesis_time=_genesis_time_from_eth1_timestamp(eth1_timestamp),
+        genesis_time=_genesis_time_from_eth1_timestamp(
+            eth1_timestamp, config.MIN_GENESIS_DELAY
+        ),
+        fork=fork,
         eth1_data=Eth1Data.create(
             block_hash=eth1_block_hash, deposit_count=len(deposits)
         ),
@@ -88,7 +100,7 @@ def initialize_beacon_state_from_eth1(
 
         if effective_balance == config.MAX_EFFECTIVE_BALANCE:
             activated_validator = activate_validator(
-                state.validators[validator_index], config.GENESIS_EPOCH
+                state.validators[validator_index], GENESIS_EPOCH
             )
             state = state.transform(
                 ("validators", validator_index), activated_validator
@@ -101,9 +113,7 @@ def is_valid_genesis_state(state: BeaconState, config: Eth2Config) -> bool:
     if state.genesis_time < config.MIN_GENESIS_TIME:
         return False
 
-    validator_count = len(
-        get_active_validator_indices(state.validators, config.GENESIS_EPOCH)
-    )
+    validator_count = len(get_active_validator_indices(state.validators, GENESIS_EPOCH))
     if validator_count < config.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT:
         return False
 

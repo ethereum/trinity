@@ -148,7 +148,7 @@ def sample_bls_private_key():
 
 @pytest.fixture
 def sample_bls_public_key(sample_bls_private_key):
-    return bls.privtopub(sample_bls_private_key)
+    return bls.sk_to_pk(sample_bls_private_key)
 
 
 @pytest.fixture

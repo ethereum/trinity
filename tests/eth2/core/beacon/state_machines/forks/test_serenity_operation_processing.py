@@ -2,7 +2,7 @@ from eth_utils import ValidationError
 import pytest
 
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
-from eth2.beacon.constants import FAR_FUTURE_EPOCH
+from eth2.beacon.constants import FAR_FUTURE_EPOCH, GENESIS_EPOCH, GENESIS_SLOT
 from eth2.beacon.helpers import compute_start_slot_at_epoch
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenityBeaconBlock
 from eth2.beacon.state_machines.forks.serenity.operation_processing import (
@@ -26,8 +26,8 @@ from eth2.beacon.types.blocks import BeaconBlockBody
         "slots_per_epoch",
         "target_committee_size",
         "max_committees_per_slot",
-        "block_root_1",
-        "block_root_2",
+        "body_root_1",
+        "body_root_2",
         "success",
     ),
     [
@@ -41,11 +41,11 @@ def test_process_proposer_slashings(
     sample_beacon_block_body_params,
     config,
     keymap,
-    block_root_1,
-    block_root_2,
+    body_root_1,
+    body_root_2,
     success,
 ):
-    current_slot = config.GENESIS_SLOT + 1
+    current_slot = GENESIS_SLOT + 1
     state = genesis_state.set("slot", current_slot)
     whistleblower_index = get_beacon_proposer_index(state, config)
     slashing_proposer_index = (whistleblower_index + 1) % len(state.validators)
@@ -53,8 +53,8 @@ def test_process_proposer_slashings(
         state,
         config,
         keymap,
-        block_root_1=block_root_1,
-        block_root_2=block_root_2,
+        body_root_1=body_root_1,
+        body_root_2=body_root_2,
         proposer_index=slashing_proposer_index,
     )
     proposer_slashings = (proposer_slashing,)
@@ -226,14 +226,11 @@ def test_process_voluntary_exits(
     state = genesis_state.set(
         "slot",
         compute_start_slot_at_epoch(
-            config.GENESIS_EPOCH + config.PERSISTENT_COMMITTEE_PERIOD,
-            config.SLOTS_PER_EPOCH,
+            GENESIS_EPOCH + config.PERSISTENT_COMMITTEE_PERIOD, config.SLOTS_PER_EPOCH
         ),
     )
     validator_index = 0
-    validator = state.validators[validator_index].set(
-        "activation_epoch", config.GENESIS_EPOCH
-    )
+    validator = state.validators[validator_index].set("activation_epoch", GENESIS_EPOCH)
     state = state.transform(["validators", validator_index], validator)
     valid_voluntary_exit = create_mock_voluntary_exit(
         state, config, keymap, validator_index

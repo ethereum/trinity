@@ -1,54 +1,40 @@
-from typing import Sequence
+from typing import Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
-from py_ecc.bls import (
-    aggregate_pubkeys,
-    aggregate_signatures,
-    privtopub,
-    sign,
-    verify,
-    verify_multiple,
-)
-from py_ecc.bls.typing import Domain
+from py_ecc.bls import G2ProofOfPossession
 
 from eth2._utils.bls.backends.base import BaseBLSBackend
-from eth2.beacon.constants import EMPTY_PUBKEY, EMPTY_SIGNATURE
+from eth2.beacon.constants import EMPTY_SIGNATURE
 
 
 class PyECCBackend(BaseBLSBackend):
     @staticmethod
-    def privtopub(k: int) -> BLSPubkey:
-        return privtopub(k)
-
-    @staticmethod
-    def sign(message_hash: Hash32, privkey: int, domain: Domain) -> BLSSignature:
-        return sign(message_hash, privkey, domain)
-
-    @staticmethod
-    def verify(
-        message_hash: Hash32, pubkey: BLSPubkey, signature: BLSSignature, domain: Domain
+    def AggregateVerify(
+        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
     ) -> bool:
-        return verify(message_hash, pubkey, signature, domain)
+        return G2ProofOfPossession.AggregateVerify(pairs, signature)
 
     @staticmethod
-    def aggregate_signatures(signatures: Sequence[BLSSignature]) -> BLSSignature:
+    def SkToPk(SK: int) -> BLSPubkey:
+        return G2ProofOfPossession.PrivToPub(SK)
+
+    @staticmethod
+    def Sign(SK: int, message: Hash32) -> BLSSignature:
+        return G2ProofOfPossession.Sign(SK, message)
+
+    @staticmethod
+    def Verify(PK: BLSPubkey, message: Hash32, signature: BLSSignature) -> bool:
+        return G2ProofOfPossession.Verify(PK, message, signature)
+
+    @staticmethod
+    def Aggregate(signatures: Sequence[BLSSignature]) -> BLSSignature:
         # py_ecc use a different EMPTY_SIGNATURE. Return the Trinity one here:
         if len(signatures) == 0:
             return EMPTY_SIGNATURE
-        return aggregate_signatures(signatures)
+        return G2ProofOfPossession.Aggregate(signatures)
 
     @staticmethod
-    def aggregate_pubkeys(pubkeys: Sequence[BLSPubkey]) -> BLSPubkey:
-        # py_ecc use a different EMPTY_PUBKEY. Return the Trinity one here:
-        if len(pubkeys) == 0:
-            return EMPTY_PUBKEY
-        return aggregate_pubkeys(pubkeys)
-
-    @staticmethod
-    def verify_multiple(
-        pubkeys: Sequence[BLSPubkey],
-        message_hashes: Sequence[Hash32],
-        signature: BLSSignature,
-        domain: Domain,
+    def FastAggregateVerify(
+        PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
     ) -> bool:
-        return verify_multiple(pubkeys, message_hashes, signature, domain)
+        return G2ProofOfPossession.FastAggregateVerify(PKs, message, signature)
