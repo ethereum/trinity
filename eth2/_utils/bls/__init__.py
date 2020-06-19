@@ -2,7 +2,7 @@ from typing import Tuple, Type
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 
-from eth2.beacon.exceptions import AggregateSignatureError, SignatureError
+from eth2.beacon.exceptions import SignatureError
 
 from .backends import DEFAULT_BACKEND, NoOpBackend
 from .backends.base import BaseBLSBackend
@@ -69,7 +69,7 @@ class Eth2BLS:
         cls, message: Hash32, signature: BLSSignature, *public_keys: BLSPubkey
     ) -> None:
         if len(public_keys) == 0:
-            raise AggregateSignatureError("public_keys is empty")
+            raise SignatureError("public_keys is empty")
 
         is_aggregate = len(public_keys) > 1
 
@@ -82,10 +82,10 @@ class Eth2BLS:
 
         if is_aggregate:
             if not cls.fast_aggregate_verify(message, signature, *public_keys):
-                raise AggregateSignatureError(
+                raise SignatureError(
                     f"backend {cls.backend.__name__}\n"
-                    f"pubkeys {public_keys}\n"
                     f"message {message.hex()}\n"
+                    f"public_keys {public_keys}\n"
                     f"signature {signature.hex()}"
                 )
         else:
@@ -93,7 +93,7 @@ class Eth2BLS:
                 raise SignatureError(
                     f"backend {cls.backend.__name__}\n"
                     f"message {message.hex()}\n"
-                    f"pubkey {public_keys[0].hex()}\n"
+                    f"public_key {public_keys[0].hex()}\n"
                     f"signature {signature.hex()}\n"
                 )
 

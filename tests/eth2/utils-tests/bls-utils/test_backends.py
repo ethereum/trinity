@@ -1,73 +1,75 @@
-from py_ecc.optimized_bls12_381 import curve_order
 import pytest
 
 from eth2._utils.bls import bls
 from eth2._utils.bls.backends.milagro import MilagroBackend
-from eth2._utils.bls.backends.noop import NoOpBackend
 from eth2._utils.bls.backends.py_ecc import PyECCBackend
+from eth2.beacon.exceptions import SignatureError
 
-BACKENDS = (NoOpBackend, MilagroBackend, PyECCBackend)
-
-
-def assert_pubkey(obj):
-    assert isinstance(obj, bytes) and len(obj) == 48
-
-
-def assert_signature(obj):
-    assert isinstance(obj, bytes) and len(obj) == 96
-
-
-@pytest.fixture
-def domain():
-    return (123).to_bytes(8, "big")
+BACKENDS = (MilagroBackend, PyECCBackend)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-def test_sanity(backend):
+def test_validate_empty(backend):
     bls.use(backend)
-    msg_0 = b"\x32" * 32
-
-    # Test: Verify the basic sign/verify process
-    privkey_0 = 5566
-    sig_0 = bls.sign(privkey_0, msg_0)
-    assert_signature(sig_0)
-    pubkey_0 = bls.sk_to_pk(privkey_0)
-    assert_pubkey(pubkey_0)
-    assert bls.verify(msg_0, sig_0, pubkey_0)
-
-    privkey_1 = 5567
-    sig_1 = bls.sign(privkey_1, msg_0)
-    pubkey_1 = bls.sk_to_pk(privkey_1)
-    assert bls.verify(msg_0, sig_1, pubkey_1)
+    msg = b"\x32" * 32
+    sig = b"\x42" * 96
+    with pytest.raises(SignatureError):
+        bls.validate(msg, sig)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize(
-    "privkey",
-    [
-        (1),
-        (5),
-        (124),
-        (735),
-        (127409812145),
-        (90768492698215092512159),
-        (curve_order - 1),
-    ],
-)
-def test_bls_core_succeed(backend, privkey):
+def test_validate(backend):
     bls.use(backend)
-    msg = str(privkey).encode("utf-8")
+    msg = b"\x32" * 32
+    privkey = 42
+    pubkey = bls.sk_to_pk(privkey)
     sig = bls.sign(privkey, msg)
-    pub = bls.sk_to_pk(privkey)
-    assert bls.verify(msg, sig, pub)
+    bls.validate(msg, sig, pubkey)
 
 
 @pytest.mark.parametrize("backend", BACKENDS)
-@pytest.mark.parametrize("privkey", [(0), (curve_order), (curve_order + 1)])
-def test_invalid_private_key(backend, privkey, domain):
+def test_validate_multiple(backend):
     bls.use(backend)
-    msg = str(privkey).encode("utf-8")
-    with pytest.raises(ValueError):
-        bls.sk_to_pk(privkey)
-    with pytest.raises(ValueError):
-        bls.sign(privkey, msg)
+    msg = b"\x32" * 32
+    privkey_0 = 42
+    privkey_1 = 4242
+    pubkey_0 = bls.sk_to_pk(privkey_0)
+    pubkey_1 = bls.sk_to_pk(privkey_1)
+    aggregate_sig = bls.aggregate(bls.sign(privkey_0, msg), bls.sign(privkey_1, msg))
+    bls.validate(msg, aggregate_sig, pubkey_0, pubkey_1)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_validate_invalid(backend):
+    bls.use(backend)
+    msg = b"\x32" * 32
+    privkey = 42
+    pubkey = bls.sk_to_pk(privkey)
+    sig = b"\x42" * 96
+    with pytest.raises(SignatureError):
+        bls.validate(msg, sig, pubkey)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_validate_multiple_one_invalid(backend):
+    bls.use(backend)
+    msg = b"\x32" * 32
+    privkey_0 = 42
+    privkey_1 = 4242
+    privkey_other = 424242
+    pubkey_0 = bls.sk_to_pk(privkey_0)
+    pubkey_1 = bls.sk_to_pk(privkey_1)
+    aggregate_sig = bls.aggregate(
+        bls.sign(privkey_0, msg), bls.sign(privkey_other, msg)
+    )
+    with pytest.raises(SignatureError):
+        bls.validate(msg, aggregate_sig, pubkey_0, pubkey_1)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_validate_invalid_lengths(backend):
+    msg = b"\x32" * 32
+    with pytest.raises(SignatureError):
+        bls.validate(msg, b"\x00", b"\x00" * 48)
+    with pytest.raises(SignatureError):
+        bls.validate(msg, b"\x00" * 96, b"\x00")
