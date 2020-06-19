@@ -1,3 +1,5 @@
+import os
+
 from eth.db.backends.level import LevelDB
 from eth.db.chain import ChainDB
 
@@ -22,6 +24,9 @@ from trinity.initialization import (
 
 
 def main() -> None:
+    # Need a pretty long timeout because we fire all components at the same time so unless there
+    # are at least a dozen idle cores, some of them will take a while to actually start running.
+    os.environ['ASYNCIO_RUN_IN_PROCESS_STARTUP_TIMEOUT'] = '30'
     main_entry(
         trinity_boot,
         get_base_db,
