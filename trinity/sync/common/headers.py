@@ -50,7 +50,7 @@ from lahja import EndpointAPI
 
 from p2p.abc import CommandAPI
 from p2p.constants import SEAL_CHECK_RANDOM_SAMPLE_RATE
-from p2p.exceptions import BaseP2PError, PeerConnectionLost
+from p2p.exceptions import BaseP2PError, ConnectionBusy, PeerConnectionLost
 from p2p.logging import loggable
 from p2p.peer import BasePeer, PeerSubscriber
 from trinity._utils.timer import Timer
@@ -472,6 +472,9 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
             return tuple()
         except asyncio.TimeoutError:
             self.logger.debug("Timeout waiting for headers (skip=%s) from %s", skip, peer)
+            return tuple()
+        except ConnectionBusy:
+            self.logger.debug("Already waiting for headers from %s", peer)
             return tuple()
         except ValidationError as err:
             self.logger.warning(
