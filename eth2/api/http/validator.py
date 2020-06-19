@@ -14,7 +14,6 @@ from ssz.tools.dump import to_formatted_dict
 from ssz.tools.parse import from_formatted_dict
 
 from eth2.beacon.chains.base import BaseBeaconChain
-from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.exceptions import NoCommitteeAssignment
 from eth2.beacon.helpers import (
@@ -194,22 +193,17 @@ class Context:
         parent_state = self.chain.advance_state_to_slot(parent_slot, parent_state)
         state_machine = self.chain.get_state_machine(at_slot=slot)
 
-        state_at_slot = state_machine.state_transition.apply_state_transition(
-            parent_state, future_slot=slot
-        )
-        proposer_index = get_beacon_proposer_index(state_at_slot, self.eth2_config)
-
         # TODO: query for latest eth1 data...
         eth1_data = parent_state.eth1_data
 
         return create_block_proposal(
             slot,
-            proposer_index,
             parent_block_root,
             randao_reveal,
             eth1_data,
             parent_state,
             state_machine,
+            self.eth2_config,
         )
 
     async def broadcast_block(self, block: SignedBeaconBlock) -> bool:
