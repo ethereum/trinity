@@ -7,30 +7,43 @@ We can also generate an always up-to-date version of them by running ``trinity -
 .. code-block:: shell
 
     usage: trinity [-h] [--version] [--trinity-root-dir TRINITY_ROOT_DIR]
-                  [--port PORT] [--trinity-tmp-root-dir] [-l LEVEL]
-                  [--stderr-log-level STDERR_LOG_LEVEL]
-                  [--file-log-level FILE_LOG_LEVEL]
-                  [--network-id NETWORK_ID | --ropsten]
-                  [--preferred-node PREFERRED_NODES] [--discv5]
-                  [--max-peers MAX_PEERS] [--genesis GENESIS]
-                  [--data-dir DATA_DIR] [--nodekey NODEKEY] [--profile]
-                  [--disable-rpc] [--enable-http] [--rpcport RPCPORT]
-                  [--network-tracking-backend {sqlite3,memory,do-not-track}]
-                  [--disable-networkdb-component] [--disable-blacklistdb]
-                  [--disable-eth1-peer-db]
-                  [--enable-experimental-eth1-peer-tracking]
-                  [--disable-discovery] [--disable-upnp] [--enable-ethstats]
-                  [--ethstats-server-url ETHSTATS_SERVER_URL]
-                  [--ethstats-server-secret ETHSTATS_SERVER_SECRET]
-                  [--ethstats-node-id ETHSTATS_NODE_ID]
-                  [--ethstats-node-contact ETHSTATS_NODE_CONTACT]
-                  [--ethstats-interval ETHSTATS_INTERVAL]
-                  [--disable-request-server]
-                  [--force-beam-block-number FORCE_BEAM_BLOCK_NUMBER]
-                  [--sync-from-checkpoint SYNC_FROM_CHECKPOINT]
-                  [--sync-mode {full,beam,light,none}] [--disable-tx-pool]
-                  {attach,db-shell,fix-unclean-shutdown,remove-network-db,export,import}
-                  ...
+                   [--port PORT] [--trinity-tmp-root-dir] [-l LEVEL]
+                   [--stderr-log-level STDERR_LOG_LEVEL]
+                   [--file-log-level FILE_LOG_LEVEL]
+                   [--network-id NETWORK_ID | --ropsten | --goerli]
+                   [--preferred-node PREFERRED_NODES] [--max-peers MAX_PEERS]
+                   [--genesis GENESIS] [--data-dir DATA_DIR] [--nodekey NODEKEY]
+                   [--profile] [--disable-rpc] [--enable-http]
+                   [--http-listen-address HTTP_LISTEN_ADDRESS]
+                   [--http-port HTTP_PORT]
+                   [--network-tracking-backend {sqlite3,memory,do-not-track}]
+                   [--disable-networkdb-component] [--disable-blacklistdb]
+                   [--disable-eth1-peer-db]
+                   [--enable-experimental-eth1-peer-tracking]
+                   [--disable-discovery] [--disable-upnp] [--enable-ethstats]
+                   [--ethstats-server-url ETHSTATS_SERVER_URL]
+                   [--ethstats-server-secret ETHSTATS_SERVER_SECRET]
+                   [--ethstats-node-id ETHSTATS_NODE_ID]
+                   [--ethstats-node-contact ETHSTATS_NODE_CONTACT]
+                   [--ethstats-interval ETHSTATS_INTERVAL] [--enable-metrics]
+                   [--metrics-host METRICS_HOST]
+                   [--metrics-influx-user METRICS_INFLUX_USER]
+                   [--metrics-influx-database METRICS_INFLUX_DATABASE]
+                   [--metrics-influx-password METRICS_INFLUX_PASSWORD]
+                   [--metrics-influx-server METRICS_INFLUX_SERVER]
+                   [--metrics-influx-port METRICS_INFLUX_PORT]
+                   [--metrics-influx-protocol METRICS_INFLUX_PROTOCOL]
+                   [--metrics-reporting-frequency METRICS_REPORTING_FREQUENCY]
+                   [--metrics-system-collector-frequency METRICS_SYSTEM_COLLECTOR_FREQUENCY]
+                   [--metrics-blockchain-collector-frequency METRICS_BLOCKCHAIN_COLLECTOR_FREQUENCY]
+                   [--disable-request-server]
+                   [--sync-mode {header,full,beam,light,none}]
+                   [--sync-from-checkpoint SYNC_FROM_CHECKPOINT]
+                   [--disable-backfill]
+                   [--force-beam-block-number FORCE_BEAM_BLOCK_NUMBER]
+                   [--disable-tx-pool]
+                   {attach,db-shell,fix-unclean-shutdown,remove-network-db,export,import}
+                   ...
 
     Trinity
 
@@ -48,22 +61,16 @@ We can also generate an always up-to-date version of them by running ``trinity -
 
     optional arguments:
       -h, --help            show this help message and exit
-      --disable-rpc         Disables the JSON-RPC Server
-      --enable-http         Enables the HTTP Server
-      --rpcport RPCPORT     JSON-RPC server port
+      --disable-rpc         Disables the JSON-RPC server
+      --enable-http         Enables the HTTP server
+      --http-listen-address HTTP_LISTEN_ADDRESS
+                            Address for the HTTP server to listen on
+      --http-port HTTP_PORT
+                            JSON-RPC server port
       --disable-discovery   Disable peer discovery
       --disable-upnp        Disable upnp mapping
       --disable-request-server
                             Disables the Request Server
-      --force-beam-block-number FORCE_BEAM_BLOCK_NUMBER
-                            Force beam sync to activate on a specific block number
-                            (for testing)
-      --sync-from-checkpoint SYNC_FROM_CHECKPOINT
-                            Start beam sync from a trusted checkpoint specified
-                            using URI syntax:By specific block,
-                            eth://block/byhash/<hash>?score=<score>Let etherscan
-                            pick a block near the tip,
-                            eth://block/byetherscan/latest
       --disable-tx-pool     Disables the Transaction Pool
 
     core:
@@ -97,10 +104,11 @@ We can also generate an always up-to-date version of them by running ``trinity -
                             Network identifier (1=Mainnet, 3=Ropsten)
       --ropsten             Ropsten network: pre configured proof-of-work test
                             network. Shortcut for `--networkid=3`
+      --goerli              Goerli network: pre configured proof-of-authority
+                            (Clique) test network. Shortcut for `--networkid=5`
       --preferred-node PREFERRED_NODES
                             An enode address which will be 'preferred' above nodes
                             found using the discovery protocol
-      --discv5              Enable experimental v5 (topic) discovery mechanism
       --max-peers MAX_PEERS
                             Maximum number of network peers
 
@@ -152,8 +160,49 @@ We can also generate an always up-to-date version of them by running ``trinity -
       --ethstats-interval ETHSTATS_INTERVAL
                             The interval at which data is reported back
 
+    metrics:
+      --enable-metrics      Enable metrics component
+      --metrics-host METRICS_HOST
+                            Host name to tag the metrics data (e.g. trinity-
+                            bootnode-europe-pt)
+      --metrics-influx-user METRICS_INFLUX_USER
+                            Influx DB user. Defaults to `trinity`
+      --metrics-influx-database METRICS_INFLUX_DATABASE
+                            Influx DB name. Defaults to `trinity`
+      --metrics-influx-password METRICS_INFLUX_PASSWORD
+                            Influx DB password. Defaults to ENV var
+                            TRINITY_METRICS_INFLUX_DB_PW
+      --metrics-influx-server METRICS_INFLUX_SERVER
+                            Influx DB server. Defaults to ENV var
+                            TRINITY_METRICS_INFLUX_DB_SERVER
+      --metrics-influx-port METRICS_INFLUX_PORT
+                            Influx DB port. Defaults to ENV var
+                            TRINITY_METRICS_INFLUX_DB_PORT or 8086
+      --metrics-influx-protocol METRICS_INFLUX_PROTOCOL
+                            Influx DB protocol. Defaults to ENV var
+                            TRINITY_METRICS_INFLUX_DB_PROTOCOL or http
+      --metrics-reporting-frequency METRICS_REPORTING_FREQUENCY
+                            The frequency in seconds at which metrics are reported
+      --metrics-system-collector-frequency METRICS_SYSTEM_COLLECTOR_FREQUENCY
+                            The frequency in seconds at which system metrics are
+                            collected
+      --metrics-blockchain-collector-frequency METRICS_BLOCKCHAIN_COLLECTOR_FREQUENCY
+                            The frequency in seconds at which blockchain metrics
+                            are collected
+
     sync mode:
-      --sync-mode {full,beam,light,none}
+      --sync-mode {header,full,beam,light,none}
+      --sync-from-checkpoint SYNC_FROM_CHECKPOINT
+                            Start syncing from a trusted checkpoint specified
+                            using URI syntax:By specific block,
+                            eth://block/byhash/<hash>?score=<score>Let etherscan
+                            pick a block near the tip,
+                            eth://block/byetherscan/latest
+      --disable-backfill    Disable backfilling of headers (introduced through
+                            checkpointing)
+      --force-beam-block-number FORCE_BEAM_BLOCK_NUMBER
+                            Force beam sync to activate on a specific block number
+                            (for testing)
 
 
 Attach a REPL to a running Trinity instance
