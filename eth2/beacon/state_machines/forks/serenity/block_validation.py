@@ -1,5 +1,3 @@
-from typing import cast  # noqa: F401
-
 from eth_typing import BLSPubkey, BLSSignature
 from eth_utils import ValidationError, encode_hex
 
