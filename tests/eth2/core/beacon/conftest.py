@@ -182,8 +182,8 @@ def min_validator_withdrawability_delay():
 
 
 @pytest.fixture
-def persistent_committee_period():
-    return SERENITY_CONFIG.PERSISTENT_COMMITTEE_PERIOD
+def shard_committee_period():
+    return SERENITY_CONFIG.SHARD_COMMITTEE_PERIOD
 
 
 @pytest.fixture
@@ -303,7 +303,7 @@ def config(
     max_seed_lookahead,
     slots_per_historical_root,
     min_validator_withdrawability_delay,
-    persistent_committee_period,
+    shard_committee_period,
     min_epochs_to_inactivity_penalty,
     epochs_per_eth1_voting_period,
     epochs_per_historical_vector,
@@ -350,7 +350,7 @@ def config(
         MAX_SEED_LOOKAHEAD=max_seed_lookahead,
         SLOTS_PER_HISTORICAL_ROOT=slots_per_historical_root,
         MIN_VALIDATOR_WITHDRAWABILITY_DELAY=min_validator_withdrawability_delay,
-        PERSISTENT_COMMITTEE_PERIOD=persistent_committee_period,
+        SHARD_COMMITTEE_PERIOD=shard_committee_period,
         MIN_EPOCHS_TO_INACTIVITY_PENALTY=min_epochs_to_inactivity_penalty,
         EPOCHS_PER_HISTORICAL_VECTOR=epochs_per_historical_vector,
         EPOCHS_PER_SLASHINGS_VECTOR=epochs_per_slashings_vector,

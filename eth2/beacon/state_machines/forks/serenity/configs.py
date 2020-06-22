@@ -35,7 +35,7 @@ SERENITY_CONFIG = Eth2Config(
     MAX_SEED_LOOKAHEAD=2 ** 2,  # (= 4) epochs
     SLOTS_PER_HISTORICAL_ROOT=2 ** 13,  # (= 8,192) slots
     MIN_VALIDATOR_WITHDRAWABILITY_DELAY=2 ** 8,  # (= 256) epochs
-    PERSISTENT_COMMITTEE_PERIOD=2 ** 11,  # (= 2,048) epochs
+    SHARD_COMMITTEE_PERIOD=2 ** 8,  # (= 256) epochs
     MIN_EPOCHS_TO_INACTIVITY_PENALTY=2 ** 2,
     # State list lengths
     EPOCHS_PER_ETH1_VOTING_PERIOD=2 ** 32,

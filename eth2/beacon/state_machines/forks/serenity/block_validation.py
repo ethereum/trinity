@@ -447,12 +447,12 @@ def _validate_eligible_exit_epoch(exit_epoch: Epoch, current_epoch: Epoch) -> No
 
 
 def _validate_validator_minimum_lifespan(
-    validator: Validator, current_epoch: Epoch, persistent_committee_period: int
+    validator: Validator, current_epoch: Epoch, shard_committee_period: int
 ) -> None:
-    if current_epoch < validator.activation_epoch + persistent_committee_period:
+    if current_epoch < validator.activation_epoch + shard_committee_period:
         raise ValidationError(
             f"Validator in voluntary exit has not completed the minimum number of epochs"
-            f" {persistent_committee_period} since activation in {validator.activation_epoch}"
+            f" {shard_committee_period} since activation in {validator.activation_epoch}"
             f" relative to the current epoch {current_epoch}."
         )
 
@@ -485,7 +485,7 @@ def validate_voluntary_exit(
     state: BeaconState,
     signed_voluntary_exit: SignedVoluntaryExit,
     slots_per_epoch: int,
-    persistent_committee_period: int,
+    shard_committee_period: int,
 ) -> None:
     voluntary_exit = signed_voluntary_exit.message
     validator = state.validators[voluntary_exit.validator_index]
@@ -495,7 +495,7 @@ def validate_voluntary_exit(
     _validate_validator_has_not_exited(validator)
     _validate_eligible_exit_epoch(voluntary_exit.epoch, current_epoch)
     _validate_validator_minimum_lifespan(
-        validator, current_epoch, persistent_committee_period
+        validator, current_epoch, shard_committee_period
     )
     _validate_voluntary_exit_signature(
         state, signed_voluntary_exit, validator, slots_per_epoch
