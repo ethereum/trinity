@@ -69,16 +69,13 @@ def compute_proposer_index(
     while True:
         candidate_index = indices[
             compute_shuffled_index(
-                ValidatorIndex(i % len(indices)),
-                len(indices),
-                seed,
-                shuffle_round_count,
+                i % len(indices), len(indices), seed, shuffle_round_count
             )
         ]
         random_byte = hash_eth2(seed + (i // 32).to_bytes(8, "little"))[i % 32]
         effective_balance = validators[candidate_index].effective_balance
         if effective_balance * MAX_RANDOM_BYTE >= max_effective_balance * random_byte:
-            return ValidatorIndex(candidate_index)
+            return candidate_index
 
         # Log the warning message in case it happends.
         if i % len(indices) == 0 and i > 0:
