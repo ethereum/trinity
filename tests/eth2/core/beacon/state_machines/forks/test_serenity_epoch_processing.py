@@ -7,7 +7,6 @@ from eth2.beacon.committee_helpers import (
 )
 from eth2.beacon.constants import (
     FAR_FUTURE_EPOCH,
-    GENESIS_EPOCH,
     GWEI_PER_ETH,
     JUSTIFICATION_BITS_LENGTH,
 )
@@ -234,7 +233,7 @@ def test_get_attestation_deltas(
         "finalized_checkpoint",
         Checkpoint.create(epoch=finalized_epoch),
     )
-    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
     has_inactivity_penalty = (
         previous_epoch - finalized_epoch > config.MIN_EPOCHS_TO_INACTIVITY_PENALTY
     )

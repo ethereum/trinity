@@ -13,7 +13,7 @@ from eth2.beacon.committee_helpers import (
     get_beacon_proposer_index,
     get_committee_count_at_slot,
 )
-from eth2.beacon.constants import FAR_FUTURE_EPOCH, GENESIS_EPOCH
+from eth2.beacon.constants import FAR_FUTURE_EPOCH
 from eth2.beacon.epoch_processing_helpers import get_indexed_attestation
 from eth2.beacon.exceptions import SignatureError
 from eth2.beacon.helpers import compute_epoch_at_slot, compute_signing_root, get_domain
@@ -354,7 +354,7 @@ def _validate_attestation_data(
 ) -> None:
     slots_per_epoch = config.SLOTS_PER_EPOCH
     current_epoch = state.current_epoch(slots_per_epoch)
-    previous_epoch = state.previous_epoch(slots_per_epoch, GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(slots_per_epoch)
 
     attestation_slot = data.slot
 
