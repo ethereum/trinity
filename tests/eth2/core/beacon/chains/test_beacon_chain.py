@@ -3,6 +3,7 @@ import copy
 import pytest
 
 from eth2.beacon.chains.base import BeaconChain
+from eth2.beacon.chains.testnet import SkeletonLakeChain
 from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.db.exceptions import AttestationRootNotFound, StateNotFound
 from eth2.beacon.exceptions import BlockClassError
@@ -201,3 +202,9 @@ def test_get_attestation_root(
     with pytest.raises(AttestationRootNotFound):
         valid_chain.get_attestation_by_root(fake_attestation.hash_tree_root)
     assert not valid_chain.attestation_exists(fake_attestation.hash_tree_root)
+
+
+@pytest.mark.parametrize("chain_klass", (SkeletonLakeChain,))
+def test_chain_class_well_defined(base_db, chain_klass, config):
+    chain = chain_klass(base_db, config)
+    assert chain.sm_configuration is not () and chain.sm_configuration is not None
