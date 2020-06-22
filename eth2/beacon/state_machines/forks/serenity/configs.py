@@ -27,7 +27,7 @@ SERENITY_CONFIG = Eth2Config(
     GENESIS_FORK_VERSION=Version(b"\x00" * 4),
     BLS_WITHDRAWAL_PREFIX=b"\x00",
     # Time parameters
-    MIN_GENESIS_DELAY=Second(86400),
+    GENESIS_DELAY=Second(172800),
     SECONDS_PER_SLOT=Second(12),  # seconds
     MIN_ATTESTATION_INCLUSION_DELAY=2 ** 0,  # (= 1) slots
     SLOTS_PER_EPOCH=2 ** 5,  # (= 32) slots

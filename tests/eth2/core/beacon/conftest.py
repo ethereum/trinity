@@ -132,8 +132,8 @@ def genesis_fork_version():
 
 
 @pytest.fixture
-def min_genesis_delay():
-    return SERENITY_CONFIG.MIN_GENESIS_DELAY
+def genesis_delay():
+    return SERENITY_CONFIG.GENESIS_DELAY
 
 
 @pytest.fixture
@@ -295,7 +295,7 @@ def config(
     effective_balance_increment,
     genesis_fork_version,
     bls_withdrawal_prefix,
-    min_genesis_delay,
+    genesis_delay,
     seconds_per_slot,
     min_attestation_inclusion_delay,
     slots_per_epoch,
@@ -341,7 +341,7 @@ def config(
         EFFECTIVE_BALANCE_INCREMENT=effective_balance_increment,
         GENESIS_FORK_VERSION=genesis_fork_version,
         BLS_WITHDRAWAL_PREFIX=bls_withdrawal_prefix,
-        MIN_GENESIS_DELAY=min_genesis_delay,
+        GENESIS_DELAY=genesis_delay,
         EPOCHS_PER_ETH1_VOTING_PERIOD=epochs_per_eth1_voting_period,
         SECONDS_PER_SLOT=seconds_per_slot,
         MIN_ATTESTATION_INCLUSION_DELAY=min_attestation_inclusion_delay,

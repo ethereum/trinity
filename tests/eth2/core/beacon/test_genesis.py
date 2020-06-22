@@ -33,7 +33,7 @@ def test_get_genesis_beacon_state(
     slots_per_historical_root,
     epochs_per_slashings_vector,
     epochs_per_historical_vector,
-    min_genesis_delay,
+    genesis_delay,
     config,
     keymap,
 ):
@@ -59,7 +59,7 @@ def test_get_genesis_beacon_state(
     # Versioning
     assert state.slot == GENESIS_SLOT
     assert state.genesis_time == _genesis_time_from_eth1_timestamp(
-        eth1_timestamp, min_genesis_delay
+        eth1_timestamp, genesis_delay
     )
     assert state.fork == Fork.create()
 

@@ -55,7 +55,7 @@ class Eth2Config:
     GENESIS_FORK_VERSION: Version
     BLS_WITHDRAWAL_PREFIX: bytes
     # Time parameters
-    MIN_GENESIS_DELAY: int
+    GENESIS_DELAY: int
     SECONDS_PER_SLOT: Second
     MIN_ATTESTATION_INCLUSION_DELAY: int
     SLOTS_PER_EPOCH: int
