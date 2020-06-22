@@ -34,7 +34,7 @@ class BeaconBlockBody(HashableContainer):
         ("eth1_data", Eth1Data),
         ("graffiti", bytes32),
         ("proposer_slashings", List(ProposerSlashing, 16)),
-        ("attester_slashings", List(AttesterSlashing, 1)),
+        ("attester_slashings", List(AttesterSlashing, 2)),
         ("attestations", List(Attestation, 128)),
         ("deposits", List(Deposit, 16)),
         ("voluntary_exits", List(SignedVoluntaryExit, 16)),
