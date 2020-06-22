@@ -11,7 +11,7 @@ from eth2.beacon.helpers import compute_epoch_at_slot, compute_start_slot_at_epo
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_attestation,
 )
-from eth2.beacon.state_machines.forks.skeleton_lake.config import (
+from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
     MINIMAL_SERENITY_CONFIG,
 )
 from eth2.beacon.tools.builder.proposer import get_beacon_proposer_index, is_proposer

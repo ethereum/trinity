@@ -8,7 +8,7 @@ from typing_extensions import Literal
 
 from eth2.beacon.genesis import initialize_beacon_state_from_eth1
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
-from eth2.beacon.state_machines.forks.skeleton_lake.config import (
+from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
     MINIMAL_SERENITY_CONFIG,
 )
 from eth2.beacon.tools.builder.initializer import (
