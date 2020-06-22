@@ -29,8 +29,11 @@ from trinity.nodes.beacon.metadata import MetaData
 from trinity.nodes.beacon.metadata import SeqNumber as MetaDataSeqNumber
 from trinity.nodes.beacon.status import Status
 
+MAX_REQUEST_BLOCKS = 2 ** 10
 MAX_CHUNK_SIZE = 2 ** 20
 SUCCESS_CODE = b"\x00"
+VALID_BLOCKS_BY_RANGE_RANGE = range(1, MAX_REQUEST_BLOCKS + 1)
+ROOT_SEDES = ssz.sedes.bytes32
 
 StatusProvider = Callable[[], Status]
 MetadataProvider = Callable[[], MetaData]
@@ -167,6 +170,10 @@ async def _ensure_valid_response(stream: INetStream) -> None:
         raise StreamEOF()
 
     if response_code != SUCCESS_CODE:
+        # TODO attempt parsing an error message from the client
+        # response_code == b"\x01": invalid request
+        # response_code == b"\x02": server error
+        # each with a payload ssz type: List[byte, 256]
         raise ValidationError("response code was not successful: {response_code}")
 
 
@@ -261,7 +268,7 @@ class RequestResponder:
     async def get_blocks_by_range(
         self, stream: INetStream, range_request: BlocksByRangeRequest
     ) -> AsyncIterable[SignedBeaconBlock]:
-        if range_request.count_expected_blocks() < 1:
+        if range_request.count_expected_blocks() not in VALID_BLOCKS_BY_RANGE_RANGE:
             return
 
         request_payload = _serialize_ssz(range_request, BlocksByRangeRequest)
@@ -283,6 +290,11 @@ class RequestResponder:
 
         request = _deserialize_ssz(request_data, BlocksByRangeRequest)
 
+        if request.count_expected_blocks() not in VALID_BLOCKS_BY_RANGE_RANGE:
+            # TODO signal error to client and possibly adjust reputation internally
+            await stream.reset()
+            return
+
         for slot in range(
             request.start_slot, request.start_slot + request.count, request.step
         ):
@@ -303,7 +315,10 @@ class RequestResponder:
         if not roots:
             return
 
-        request_payload = _serialize_ssz(roots, ssz.List(ssz.sedes.bytes32, len(roots)))
+        # TODO ensure ssz error if ``len(roots) > MAX_REQUEST_BLOCKS``
+        request_payload = _serialize_ssz(
+            roots, ssz.List(ROOT_SEDES, MAX_REQUEST_BLOCKS)
+        )
 
         await _write_request(request_payload, stream)
         await stream.close()
@@ -319,9 +334,9 @@ class RequestResponder:
 
     async def _recv_beacon_blocks_by_root(self, stream: INetStream) -> None:
         request_data = await _read_request(stream)
-        element_sedes = ssz.sedes.bytes32
-        list_len = len(request_data) // element_sedes.length
-        request = _deserialize_ssz(request_data, ssz.List(element_sedes, list_len))
+        request = _deserialize_ssz(
+            request_data, ssz.List(ROOT_SEDES, MAX_REQUEST_BLOCKS)
+        )
 
         for root in request:
             block = self._block_provider_by_root(root)
