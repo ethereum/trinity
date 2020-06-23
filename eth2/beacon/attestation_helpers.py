@@ -40,7 +40,7 @@ def validate_indexed_attestation(
 
     if len(attesting_indices) == 0:
         raise ValidationError(
-            f"No bits set in attestation's aggregation bits, attestation={indexed_attestation}."
+            f"The indexed attestation's attesting indices is empty: {indexed_attestation}."
         )
 
     if list(attesting_indices) != sorted(set(attesting_indices)):
