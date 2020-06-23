@@ -23,7 +23,9 @@ class BaseBLSBackend(ABC):
     @staticmethod
     @abstractmethod
     def AggregateVerify(
-        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+        signature: BLSSignature,
+        public_keys: Tuple[BLSPubkey, ...],
+        messages: Tuple[Hash32, ...],
     ) -> bool:
         ...
 

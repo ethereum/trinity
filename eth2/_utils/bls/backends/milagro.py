@@ -6,8 +6,8 @@ from milagro_bls_binding import (
     Aggregate,
     AggregateVerify,
     FastAggregateVerify,
-    PrivToPub,
     Sign,
+    SkToPk,
     Verify,
 )
 
@@ -27,7 +27,7 @@ def filter_non_empty_pair(
 class MilagroBackend(BaseBLSBackend):
     @staticmethod
     def SkToPk(SK: int) -> BLSPubkey:
-        return PrivToPub(SK.to_bytes(32, "big"))
+        return SkToPk(SK.to_bytes(32, "big"))
 
     @staticmethod
     def Sign(SK: int, message: Hash32) -> BLSSignature:
@@ -46,23 +46,18 @@ class MilagroBackend(BaseBLSBackend):
         non_empty_signatures = tuple(
             sig for sig in signatures if sig != EMPTY_SIGNATURE
         )
-        if len(non_empty_signatures) == 0:
-            return EMPTY_SIGNATURE
         return Aggregate(list(non_empty_signatures))
 
     @staticmethod
     def AggregateVerify(
-        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+        signature: BLSSignature,
+        public_keys: Tuple[BLSPubkey, ...],
+        messages: Tuple[Hash32, ...],
     ) -> bool:
-        return AggregateVerify(list(pairs), signature)
+        return AggregateVerify(list(public_keys), list(messages), signature)
 
     @staticmethod
     def FastAggregateVerify(
         PKs: Sequence[BLSPubkey], message: Hash32, signature: BLSSignature
     ) -> bool:
-        if signature == EMPTY_SIGNATURE:
-            raise ValueError(
-                f"Empty signature breaks Milagro binding  signature={signature.hex()}"
-            )
-
         return FastAggregateVerify(list(PKs), message, signature)

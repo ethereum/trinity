@@ -26,11 +26,12 @@ def get_input_bls_signatures(
 
 
 def get_input_aggregate_verify(test_case: Dict[str, Any]) -> SignatureData:
+    input_data = test_case["input"]
+    pubkeys = tuple(decode_hex(key) for key in input_data["pubkeys"])
+    messages = tuple(decode_hex(msg) for msg in input_data["messages"])
     return {
-        "pairs": tuple(
-            (decode_hex(item["pubkey"]), decode_hex(item["message"]))
-            for item in test_case["input"]["pairs"]
-        ),
+        "pubkeys": pubkeys,
+        "messages": messages,
         "signature": BLSSignature(decode_hex(test_case["input"]["signature"])),
     }
 
@@ -67,7 +68,11 @@ def get_output_bls_pubkey(test_case: Dict[str, Any]) -> BLSPubkey:
 
 
 def get_output_bls_signature(test_case: Dict[str, Any]) -> BLSSignature:
-    return BLSSignature(decode_hex(test_case["output"]))
+    output = test_case["output"]
+    if output:
+        return BLSSignature(decode_hex(test_case["output"]))
+    else:
+        return BLSSignature(b"\x00")
 
 
 class AggregateHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
@@ -84,6 +89,11 @@ class AggregateHandler(TestHandler[SequenceOfBLSSignature, BLSSignature]):
     def parse_outputs(test_case_parts: Dict[str, TestPart]) -> BLSSignature:
         test_case_data = test_case_parts["data"].load()
         return get_output_bls_signature(test_case_data)
+
+    @staticmethod
+    def valid(test_case_parts: Dict[str, TestPart]) -> bool:
+        part = test_case_parts["data"].load()
+        return bool(part["output"])
 
     @classmethod
     def run_with(
@@ -119,7 +129,9 @@ class AggregateVerifyHandler(TestHandler[SignatureData, bool]):
         # BLS override
         bls.use(MilagroBackend)
 
-        return bls.aggregate_verify(inputs["signature"], *inputs["pairs"])
+        return bls.aggregate_verify(
+            inputs["signature"], inputs["pubkeys"], inputs["messages"]
+        )
 
     @staticmethod
     def condition(output: bool, expected_output: bool) -> None:

@@ -10,13 +10,15 @@ from eth2.beacon.constants import EMPTY_SIGNATURE
 class PyECCBackend(BaseBLSBackend):
     @staticmethod
     def AggregateVerify(
-        pairs: Sequence[Tuple[BLSPubkey, Hash32]], signature: BLSSignature
+        signature: BLSSignature,
+        public_keys: Tuple[BLSPubkey, ...],
+        messages: Tuple[Hash32, ...],
     ) -> bool:
-        return G2ProofOfPossession.AggregateVerify(pairs, signature)
+        return G2ProofOfPossession.AggregateVerify(public_keys, messages, signature)
 
     @staticmethod
     def SkToPk(SK: int) -> BLSPubkey:
-        return G2ProofOfPossession.PrivToPub(SK)
+        return G2ProofOfPossession.SkToPk(SK)
 
     @staticmethod
     def Sign(SK: int, message: Hash32) -> BLSSignature:
