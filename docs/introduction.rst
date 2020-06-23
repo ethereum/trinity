@@ -1,12 +1,11 @@
 Introduction
 ============
 
-Trinity is a program that connects to the Ethereum network to operate as a full or light node.
-It is built on top of Py-EVM which is a new implementation of the Ethereum Virtual Machine (EVM)
-written in Python.
+Trinity is an implementation of an Ethereum network node. It is built on top of Py-EVM which is
+an implementation of the Ethereum Virtual Machine (EVM) written in Python.
 
-Trinity and Py-EVM aim to replace existing Python Ethereum implementations to eventually become the
-defacto standard for the Python ecosystem.
+Trinity and Py-EVM are the successors to the deprecated py-ethereum project and are the current
+go-to implementations for the Python ecosystem.
 
 If none of this makes sense to you yet we recommend to checkout the
 `Ethereum <https://ethereum.org>`_ website as well as a
@@ -19,7 +18,9 @@ Goals
 The main focus is to enrich the Ethereum ecosystem with a Python implementation that:
 
 * Supports Ethereum 1.0 as well as 2.0 / Serenity
-* Support "full" and "light" modes
+* Runs as a "full" node using a
+  novel `beam sync <https://github.com/ethereum/stateless-ethereum-specs/blob/master/beam-sync-phase0.md>`_
+  strategy
 * Is well documented
 * Is easy to understand
 * Has clear APIs
