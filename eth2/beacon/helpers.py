@@ -8,7 +8,7 @@ from eth2._utils.hash import hash_eth2
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.types.fork_data import ForkData
 from eth2.beacon.types.forks import Fork
-from eth2.beacon.types.signing_root import SigningData
+from eth2.beacon.types.signing_data import SigningData
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import (
     Domain,

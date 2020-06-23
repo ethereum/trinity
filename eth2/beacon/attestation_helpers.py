@@ -38,6 +38,11 @@ def validate_indexed_attestation(
     """
     attesting_indices = indexed_attestation.attesting_indices
 
+    if len(attesting_indices) == 0:
+        raise ValidationError(
+            f"The indexed attestation's attesting indices is empty: {indexed_attestation}."
+        )
+
     if list(attesting_indices) != sorted(set(attesting_indices)):
         raise ValidationError(
             f"Indices should be sorted; the attesting indices are not: {attesting_indices}."

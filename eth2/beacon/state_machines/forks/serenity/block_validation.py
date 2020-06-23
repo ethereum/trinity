@@ -1,5 +1,3 @@
-from typing import cast  # noqa: F401
-
 from eth_typing import BLSPubkey, BLSSignature
 from eth_utils import ValidationError, encode_hex
 
@@ -390,11 +388,6 @@ def _validate_aggregation_bits(
 ) -> None:
     data = attestation.data
     committee = get_beacon_committee(state, data.slot, data.index, config)
-
-    if not any(attestation.aggregation_bits):
-        raise ValidationError(
-            f"No bits set in attestation's aggregation bits, attestation={attestation}."
-        )
 
     if len(attestation.aggregation_bits) != len(committee):
         raise ValidationError(
