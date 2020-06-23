@@ -98,8 +98,7 @@ def _determine_updated_justifications(
 def _determine_new_justified_epoch_and_bitfield(
     state: BeaconState, config: Eth2Config
 ) -> Tuple[Epoch, Bitfield]:
-    genesis_epoch = GENESIS_EPOCH
-    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, genesis_epoch)
+    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
 
     previous_epoch_justifiable = _is_epoch_justifiable(state, previous_epoch, config)
@@ -220,9 +219,8 @@ def process_justification_and_finalization(
     state: BeaconState, config: Eth2Config
 ) -> BeaconState:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
-    genesis_epoch = GENESIS_EPOCH
 
-    if current_epoch <= genesis_epoch + 1:
+    if current_epoch <= GENESIS_EPOCH + 1:
         return state
 
     (
@@ -262,7 +260,7 @@ def get_attestation_deltas(
 ) -> Tuple[Sequence[Gwei], Sequence[Gwei]]:
     rewards = tuple(0 for _ in range(len(state.validators)))
     penalties = tuple(0 for _ in range(len(state.validators)))
-    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
     total_balance = get_total_active_balance(state, config)
     eligible_validator_indices = tuple(
         ValidatorIndex(index)

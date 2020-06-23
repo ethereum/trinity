@@ -20,7 +20,6 @@ from eth2.beacon.committee_helpers import (
     iterate_committees_at_epoch,
     iterate_committees_at_slot,
 )
-from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.epoch_processing_helpers import get_attesting_indices
 from eth2.beacon.fork_choice.lmd_ghost import (
     Context,
@@ -222,7 +221,7 @@ def test_store_get_latest_attestation(
         _compute_seconds_since_genesis_for_epoch(some_epoch, config)
         + state.genesis_time
     )
-    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH, GENESIS_EPOCH)
+    previous_epoch = state.previous_epoch(config.SLOTS_PER_EPOCH)
     previous_epoch_committee_count = _get_committee_count(state, previous_epoch, config)
 
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)

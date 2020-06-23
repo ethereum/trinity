@@ -6,7 +6,7 @@ from eth_utils import humanize_hash
 from ssz.hashable_container import HashableContainer
 from ssz.sedes import Bitvector, List, Vector, bytes32, uint64
 
-from eth2.beacon.constants import JUSTIFICATION_BITS_LENGTH, ZERO_ROOT
+from eth2.beacon.constants import GENESIS_EPOCH, JUSTIFICATION_BITS_LENGTH, ZERO_ROOT
 from eth2.beacon.helpers import compute_epoch_at_slot
 from eth2.beacon.typing import (
     Bitfield,
@@ -184,10 +184,10 @@ class BeaconState(HashableContainer):
     def current_epoch(self, slots_per_epoch: int) -> Epoch:
         return compute_epoch_at_slot(self.slot, slots_per_epoch)
 
-    def previous_epoch(self, slots_per_epoch: int, genesis_epoch: Epoch) -> Epoch:
+    def previous_epoch(self, slots_per_epoch: int) -> Epoch:
         current_epoch = self.current_epoch(slots_per_epoch)
-        if current_epoch == genesis_epoch:
-            return genesis_epoch
+        if current_epoch == GENESIS_EPOCH:
+            return GENESIS_EPOCH
         else:
             return Epoch(current_epoch - 1)
 

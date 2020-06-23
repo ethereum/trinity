@@ -5,7 +5,7 @@ from eth_utils import to_tuple
 from eth2._utils.bitfield import Bitfield, has_voted
 from eth2._utils.numeric import integer_squareroot
 from eth2.beacon.committee_helpers import get_beacon_committee
-from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH, GENESIS_EPOCH
+from eth2.beacon.constants import BASE_REWARDS_PER_EPOCH
 from eth2.beacon.exceptions import InvalidEpochError
 from eth2.beacon.helpers import (
     get_active_validator_indices,
@@ -100,7 +100,7 @@ def get_matching_source_attestations(
 ) -> Tuple[PendingAttestation, ...]:
     if epoch == state.current_epoch(config.SLOTS_PER_EPOCH):
         return state.current_epoch_attestations
-    elif epoch == state.previous_epoch(config.SLOTS_PER_EPOCH, GENESIS_EPOCH):
+    elif epoch == state.previous_epoch(config.SLOTS_PER_EPOCH):
         return state.previous_epoch_attestations
     else:
         raise InvalidEpochError
