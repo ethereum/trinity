@@ -5,8 +5,6 @@ from typing import Any, FrozenSet, Optional, Type
 
 from async_service import Service
 
-from eth_utils import ValidationError
-
 from p2p.abc import CommandAPI
 from p2p.exceptions import (
     PeerConnectionLost,
@@ -44,8 +42,10 @@ class QueenTrackerAPI(ABC):
 
 class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
     # The best peer gets skipped for backfill, because we prefer to use it for
-    #   urgent beam sync nodes
+    #   urgent beam sync nodes. _queen_peer should only ever be set to a new peer
+    #   in _insert_peer(). It may be set to None anywhere.
     _queen_peer: ETHPeer = None
+    _queen_updated: asyncio.Event
     _waiting_peers: WaitingPeers[ETHPeer]
 
     # We are only interested in peers entering or leaving the pool
@@ -60,6 +60,7 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         self.logger = get_logger('trinity.sync.beam.queen.QueeningQueue')
         self._peer_pool = peer_pool
         self._waiting_peers = WaitingPeers(NodeDataV65)
+        self._queen_updated = asyncio.Event()
 
     async def run(self) -> None:
         with self.subscribe(self._peer_pool):
@@ -67,21 +68,23 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
 
     def register_peer(self, peer: BasePeer) -> None:
         super().register_peer(peer)
-        # when a new peer is added to the pool, add it to the idle peer list
-        self._waiting_peers.put_nowait(peer)  # type: ignore
+
+        self._insert_peer(peer)  # type: ignore
 
     def deregister_peer(self, peer: BasePeer) -> None:
         super().deregister_peer(peer)
         if self._queen_peer == peer:
             self._queen_peer = None
+        # If it's not the queen, we will catch the peer as cancelled when we try to draw it
+        #   as a peasant. (We can't drop an element from the middle of a Queue)
 
     async def get_queen_peer(self) -> ETHPeer:
         """
         Wait until a queen peer is designated, then return it.
         """
         while self._queen_peer is None:
-            peer = await self._waiting_peers.get_fastest()
-            self._update_queen(peer)
+            await self._queen_updated.wait()
+            self._queen_updated.clear()
 
         return self._queen_peer
 
@@ -105,10 +108,9 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
                     self._queen_peer = None
                 continue
 
-            old_queen = self._queen_peer
-            self._update_queen(peer)
-            if peer == self._queen_peer:
-                self.logger.debug("Switching queen peer from %s to %s", old_queen, peer)
+            if self._should_be_queen(peer):
+                self.logger.debug("About to draw peasant %s, but realized it should be queen", peer)
+                self._insert_peer(peer)
                 continue
 
             try:
@@ -121,7 +123,7 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
                     # skip the peer if there's an active request
                     self.logger.debug("QueenQueuer is skipping active peer %s", peer)
                     loop = asyncio.get_event_loop()
-                    loop.call_later(10, functools.partial(self._waiting_peers.put_nowait, peer))
+                    loop.call_later(10, functools.partial(self._insert_peer, peer))
                     continue
 
             return peer
@@ -134,60 +136,61 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
     def readd_peasant(self, peer: ETHPeer, delay: float = 0) -> None:
         if delay > 0:
             loop = asyncio.get_event_loop()
-            loop.call_later(delay, functools.partial(self._waiting_peers.put_nowait, peer))
+            loop.call_later(delay, functools.partial(self._insert_peer, peer))
         else:
-            self._waiting_peers.put_nowait(peer)
+            self._insert_peer(peer)
 
-    def penalize_queen(self, peer: ETHPeer) -> None:
+    def penalize_queen(self, peer: ETHPeer, delay: float = NON_IDEAL_RESPONSE_PENALTY) -> None:
         if peer == self._queen_peer:
             self._queen_peer = None
 
-            delay = NON_IDEAL_RESPONSE_PENALTY
             self.logger.debug(
                 "Penalizing %s for %.2fs, for minor infraction",
                 peer,
                 delay,
             )
             loop = asyncio.get_event_loop()
-            loop.call_later(delay, functools.partial(self._waiting_peers.put_nowait, peer))
+            loop.call_later(delay, functools.partial(self._insert_peer, peer))
 
-    def _update_queen(self, peer: ETHPeer) -> None:
-        '''
-        @return peer that is no longer queen
-        '''
+    def _should_be_queen(self, peer: ETHPeer) -> bool:
         if self._queen_peer is None:
-            self._queen_peer = peer
-            return
+            return True
         elif peer == self._queen_peer:
-            # nothing to do, peer is already the queen
-            return
+            return True
         else:
             try:
                 new_peer_quality = _peer_sort_key(peer)
             except (UnknownAPI, PeerConnectionLost) as exc:
-                self.logger.debug("Ignoring %s, because we can't get speed stats: %r", peer, exc)
-                return
+                self.logger.debug("Invalid %s, because we can't get speed stats: %r", peer, exc)
+                return False
 
             try:
-                old_queen_quality = _peer_sort_key(self._queen_peer)
-                force_drop_queen = False
+                current_queen_quality = _peer_sort_key(self._queen_peer)
             except (UnknownAPI, PeerConnectionLost) as exc:
                 self.logger.debug(
-                    "Dropping queen %s, because we can't get speed stats: %r",
+                    "Invalid queen %s, because we can't get speed stats: %r",
                     self._queen_peer,
                     exc,
                 )
-                force_drop_queen = True
-
-            if force_drop_queen or new_peer_quality < old_queen_quality:
-                old_queen, self._queen_peer = self._queen_peer, peer
-                self._waiting_peers.put_nowait(old_queen)
-                return
+                return True
             else:
-                # nothing to do, peer is slower than the queen
-                return
+                # Quality is designed so that an ascending sort puts the best quality at the front
+                #   of a sequence. So, a lower value means a better quality.
+                return new_peer_quality < current_queen_quality
 
-        raise ValidationError(
-            "Unreachable: every queen peer check should have finished and returned. "
-            f"Was checking {peer} against queen {self._queen_peer}."
-        )
+    def _insert_peer(self, peer: ETHPeer) -> None:
+        """
+        Add peer as ready to receive requests. Check if it should be queen, and promote if
+        appropriate. Otherwise, insert to be drawn as a peasant.
+        """
+        if self._should_be_queen(peer):
+            old_queen, self._queen_peer = self._queen_peer, peer
+            if peer != old_queen:
+                # We only need to log the change if there was an actual change in queen
+                self.logger.debug("Switching queen peer from %s to %s", old_queen, peer)
+                self._queen_updated.set()
+
+                if old_queen is not None:
+                    self._waiting_peers.put_nowait(old_queen)
+        else:
+            self._waiting_peers.put_nowait(peer)

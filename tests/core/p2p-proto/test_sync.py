@@ -35,6 +35,7 @@ from trinity.protocol.les.peer import (
 from trinity.sync.beam.chain import (
     BeamSyncer,
 )
+from trinity.sync.beam.queen import QueeningQueue
 from trinity.sync.header.chain import (
     HeaderChainSyncer,
     HeaderChainGapSyncer,
@@ -629,6 +630,61 @@ async def test_light_syncer(request,
 
             async with background_asyncio_service(client):
                 await wait_for_head(chaindb_fresh, chaindb_20.get_canonical_head())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("has_parallel_peasant_call", (True, False))
+async def test_queening_queue_recovers_from_penalty_with_one_peer(
+        event_bus,
+        chaindb_fresh,
+        chaindb_20,
+        has_parallel_peasant_call):
+
+    local_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
+    remote_context = ChainContextFactory(headerdb__db=chaindb_20.db)
+    peer_pair = LatestETHPeerPairFactory(
+        alice_peer_context=local_context,
+        bob_peer_context=remote_context,
+        event_bus=event_bus,
+    )
+    async with peer_pair as (connection_to_local, connection_to_remote):
+
+        local_peer_pool = MockPeerPoolWithConnectedPeers(
+            [connection_to_remote],
+            event_bus=event_bus,
+        )
+
+        async with run_peer_pool_event_server(
+            event_bus, local_peer_pool, handler_type=ETHPeerPoolEventServer
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db),
+        )):
+            queue = QueeningQueue(local_peer_pool)
+
+            async with background_asyncio_service(queue):
+                queen = await asyncio.wait_for(queue.get_queen_peer(), timeout=0.01)
+                assert queen == connection_to_remote
+
+                queue.penalize_queen(connection_to_remote, delay=0.1)
+                assert queue.queen is None
+                with pytest.raises(asyncio.TimeoutError):
+                    # The queen should be penalized for this entire period, and
+                    #   there are no alternative peers, so this call should hang:
+                    await asyncio.wait_for(queue.get_queen_peer(), timeout=0.05)
+
+                if has_parallel_peasant_call:
+                    waiting_on_peasant = asyncio.ensure_future(queue.pop_fastest_peasant())
+
+                # But after waiting long enough, even with just one peer, the blocking
+                #   call should return. Whether or not there is also a waiting call looking for
+                #   a peasant.
+                final_queen = await asyncio.wait_for(queue.get_queen_peer(), timeout=0.075)
+                assert final_queen == connection_to_remote
+
+                if has_parallel_peasant_call:
+                    waiting_on_peasant.cancel()
+                    with pytest.raises(asyncio.CancelledError):
+                        await waiting_on_peasant
 
 
 @pytest.fixture
