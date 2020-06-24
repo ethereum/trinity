@@ -110,7 +110,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         self._chain = chain
         self._db = db
         if launch_strategy is None:
-            launch_strategy = FromGenesisLaunchStrategy(db, chain)
+            launch_strategy = FromGenesisLaunchStrategy(db)
 
         self._launch_strategy = launch_strategy
         self.peer = peer
@@ -839,7 +839,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
         self._skeleton: SkeletonSyncer[TChainPeer] = None
 
         if launch_strategy is None:
-            launch_strategy = FromGenesisLaunchStrategy(self._db, self._chain)
+            launch_strategy = FromGenesisLaunchStrategy(self._db)
 
         self._launch_strategy = launch_strategy
 
