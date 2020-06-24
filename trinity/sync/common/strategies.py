@@ -58,9 +58,8 @@ class SyncLaunchStrategyAPI(ABC):
 
 class FromGenesisLaunchStrategy(SyncLaunchStrategyAPI):
 
-    def __init__(self, db: BaseAsyncHeaderDB, chain: AsyncChainAPI) -> None:
+    def __init__(self, db: BaseAsyncHeaderDB) -> None:
         self._db = db
-        self._chain = chain
 
     async def fulfill_prerequisites(self) -> None:
         pass
@@ -99,7 +98,7 @@ class FromCheckpointLaunchStrategy(SyncLaunchStrategyAPI):
         self._chain = chain
         # We wrap the `FromGenesisLaunchStrategy` because we delegate to it at times and
         # reaching for inheritance seems wrong in this case.
-        self._genesis_strategy = FromGenesisLaunchStrategy(self._db, self._chain)
+        self._genesis_strategy = FromGenesisLaunchStrategy(self._db)
         self._checkpoint = checkpoint
         self._peer_pool = peer_pool
 

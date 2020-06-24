@@ -37,10 +37,7 @@ class HeaderChainSyncer(Service):
         self._peer_pool = peer_pool
 
         if checkpoint is None:
-            self._launch_strategy: SyncLaunchStrategyAPI = FromGenesisLaunchStrategy(
-                db,
-                chain
-            )
+            self._launch_strategy: SyncLaunchStrategyAPI = FromGenesisLaunchStrategy(db)
         else:
             self._launch_strategy = FromCheckpointLaunchStrategy(
                 db,

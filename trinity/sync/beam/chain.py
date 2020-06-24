@@ -111,10 +111,7 @@ class BeamSyncer(Service):
             enable_backfill: bool = True) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamSyncer')
         if checkpoint is None:
-            self._launch_strategy: SyncLaunchStrategyAPI = FromGenesisLaunchStrategy(
-                chain_db,
-                chain
-            )
+            self._launch_strategy: SyncLaunchStrategyAPI = FromGenesisLaunchStrategy(chain_db)
         else:
             self._launch_strategy = FromCheckpointLaunchStrategy(
                 chain_db,
