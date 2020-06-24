@@ -43,9 +43,7 @@ def is_genesis_trigger(
 def _genesis_time_from_eth1_timestamp(
     eth1_timestamp: Timestamp, genesis_delay: int
 ) -> Timestamp:
-    return Timestamp(
-        eth1_timestamp - eth1_timestamp % genesis_delay + 2 * genesis_delay
-    )
+    return Timestamp(eth1_timestamp + genesis_delay)
 
 
 def initialize_beacon_state_from_eth1(
@@ -63,7 +61,7 @@ def initialize_beacon_state_from_eth1(
 
     state = BeaconState.create(
         genesis_time=_genesis_time_from_eth1_timestamp(
-            eth1_timestamp, config.MIN_GENESIS_DELAY
+            eth1_timestamp, config.GENESIS_DELAY
         ),
         fork=fork,
         eth1_data=Eth1Data.create(

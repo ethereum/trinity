@@ -12,7 +12,7 @@ from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
     SerenitySignedBeaconBlock,
 )
-from eth2.beacon.state_machines.forks.skeleton_lake.config import (
+from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
     MINIMAL_SERENITY_CONFIG,
 )
 from eth2.beacon.tools.builder.initializer import create_mock_genesis

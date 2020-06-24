@@ -15,7 +15,7 @@ import trio
 from eth2._utils.bls import Eth2BLS, bls
 from eth2.beacon.chains.testnet import SkeletonLakeChain
 from eth2.beacon.constants import FAR_FUTURE_EPOCH
-from eth2.beacon.state_machines.forks.skeleton_lake.config import (
+from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
     MINIMAL_SERENITY_CONFIG,
 )
 from eth2.beacon.tools.builder.initializer import create_key_pairs_for

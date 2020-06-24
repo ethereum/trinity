@@ -150,7 +150,7 @@ def process_voluntary_exits(
             state,
             signed_voluntary_exit,
             config.SLOTS_PER_EPOCH,
-            config.PERSISTENT_COMMITTEE_PERIOD,
+            config.SHARD_COMMITTEE_PERIOD,
         )
         state = initiate_validator_exit(
             state, signed_voluntary_exit.message.validator_index, config

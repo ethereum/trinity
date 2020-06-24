@@ -9,7 +9,7 @@ from eth2.beacon.state_machines.forks.serenity.state_transitions import (
 )
 from eth2.beacon.state_machines.forks.serenity.states import SerenityBeaconState
 
-from .config import MINIMAL_SERENITY_CONFIG
+from .configs import MINIMAL_SERENITY_CONFIG
 
 
 class SkeletonLakeStateMachine(BeaconStateMachine):

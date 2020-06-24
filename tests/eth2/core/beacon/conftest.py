@@ -132,8 +132,8 @@ def genesis_fork_version():
 
 
 @pytest.fixture
-def min_genesis_delay():
-    return SERENITY_CONFIG.MIN_GENESIS_DELAY
+def genesis_delay():
+    return SERENITY_CONFIG.GENESIS_DELAY
 
 
 @pytest.fixture
@@ -182,8 +182,8 @@ def min_validator_withdrawability_delay():
 
 
 @pytest.fixture
-def persistent_committee_period():
-    return SERENITY_CONFIG.PERSISTENT_COMMITTEE_PERIOD
+def shard_committee_period():
+    return SERENITY_CONFIG.SHARD_COMMITTEE_PERIOD
 
 
 @pytest.fixture
@@ -295,7 +295,7 @@ def config(
     effective_balance_increment,
     genesis_fork_version,
     bls_withdrawal_prefix,
-    min_genesis_delay,
+    genesis_delay,
     seconds_per_slot,
     min_attestation_inclusion_delay,
     slots_per_epoch,
@@ -303,7 +303,7 @@ def config(
     max_seed_lookahead,
     slots_per_historical_root,
     min_validator_withdrawability_delay,
-    persistent_committee_period,
+    shard_committee_period,
     min_epochs_to_inactivity_penalty,
     epochs_per_eth1_voting_period,
     epochs_per_historical_vector,
@@ -341,7 +341,7 @@ def config(
         EFFECTIVE_BALANCE_INCREMENT=effective_balance_increment,
         GENESIS_FORK_VERSION=genesis_fork_version,
         BLS_WITHDRAWAL_PREFIX=bls_withdrawal_prefix,
-        MIN_GENESIS_DELAY=min_genesis_delay,
+        GENESIS_DELAY=genesis_delay,
         EPOCHS_PER_ETH1_VOTING_PERIOD=epochs_per_eth1_voting_period,
         SECONDS_PER_SLOT=seconds_per_slot,
         MIN_ATTESTATION_INCLUSION_DELAY=min_attestation_inclusion_delay,
@@ -350,7 +350,7 @@ def config(
         MAX_SEED_LOOKAHEAD=max_seed_lookahead,
         SLOTS_PER_HISTORICAL_ROOT=slots_per_historical_root,
         MIN_VALIDATOR_WITHDRAWABILITY_DELAY=min_validator_withdrawability_delay,
-        PERSISTENT_COMMITTEE_PERIOD=persistent_committee_period,
+        SHARD_COMMITTEE_PERIOD=shard_committee_period,
         MIN_EPOCHS_TO_INACTIVITY_PENALTY=min_epochs_to_inactivity_penalty,
         EPOCHS_PER_HISTORICAL_VECTOR=epochs_per_historical_vector,
         EPOCHS_PER_SLASHINGS_VECTOR=epochs_per_slashings_vector,

@@ -18,17 +18,17 @@ from eth2.beacon.tools.builder.validator import create_mock_voluntary_exit
         "validator_count",
         "slots_per_epoch",
         "target_committee_size",
-        "persistent_committee_period",
+        "shard_committee_period",
     ),
     [(40, 2, 2, 16)],
 )
 def test_validate_voluntary_exit(
-    genesis_state, keymap, slots_per_epoch, persistent_committee_period, config
+    genesis_state, keymap, slots_per_epoch, shard_committee_period, config
 ):
     state = genesis_state.set(
         "slot",
         compute_start_slot_at_epoch(
-            GENESIS_EPOCH + persistent_committee_period, slots_per_epoch
+            GENESIS_EPOCH + shard_committee_period, slots_per_epoch
         ),
     )
     validator_index = 0
@@ -36,7 +36,7 @@ def test_validate_voluntary_exit(
         state, config, keymap, validator_index
     )
     validate_voluntary_exit(
-        state, valid_voluntary_exit, slots_per_epoch, persistent_committee_period
+        state, valid_voluntary_exit, slots_per_epoch, shard_committee_period
     )
 
 
@@ -102,7 +102,7 @@ def test_validate_eligible_exit_epoch(
 
 
 @pytest.mark.parametrize(
-    ("current_epoch", "persistent_committee_period", "activation_epoch", "success"),
+    ("current_epoch", "shard_committee_period", "activation_epoch", "success"),
     [(16, 4, 16 - 4, True), (16, 4, 16 - 4 + 1, False)],
 )
 def test_validate_validator_minimum_lifespan(
@@ -111,7 +111,7 @@ def test_validate_validator_minimum_lifespan(
     current_epoch,
     activation_epoch,
     slots_per_epoch,
-    persistent_committee_period,
+    shard_committee_period,
     success,
 ):
     state = genesis_state.set(
@@ -125,14 +125,12 @@ def test_validate_validator_minimum_lifespan(
 
     if success:
         _validate_validator_minimum_lifespan(
-            validator, state.current_epoch(slots_per_epoch), persistent_committee_period
+            validator, state.current_epoch(slots_per_epoch), shard_committee_period
         )
     else:
         with pytest.raises(ValidationError):
             _validate_validator_minimum_lifespan(
-                validator,
-                state.current_epoch(slots_per_epoch),
-                persistent_committee_period,
+                validator, state.current_epoch(slots_per_epoch), shard_committee_period
             )
 
 

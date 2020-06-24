@@ -27,7 +27,7 @@ SERENITY_CONFIG = Eth2Config(
     GENESIS_FORK_VERSION=Version(b"\x00" * 4),
     BLS_WITHDRAWAL_PREFIX=b"\x00",
     # Time parameters
-    MIN_GENESIS_DELAY=Second(86400),
+    GENESIS_DELAY=Second(172800),
     SECONDS_PER_SLOT=Second(12),  # seconds
     MIN_ATTESTATION_INCLUSION_DELAY=2 ** 0,  # (= 1) slots
     SLOTS_PER_EPOCH=2 ** 5,  # (= 32) slots
@@ -35,7 +35,7 @@ SERENITY_CONFIG = Eth2Config(
     MAX_SEED_LOOKAHEAD=2 ** 2,  # (= 4) epochs
     SLOTS_PER_HISTORICAL_ROOT=2 ** 13,  # (= 8,192) slots
     MIN_VALIDATOR_WITHDRAWABILITY_DELAY=2 ** 8,  # (= 256) epochs
-    PERSISTENT_COMMITTEE_PERIOD=2 ** 11,  # (= 2,048) epochs
+    SHARD_COMMITTEE_PERIOD=2 ** 8,  # (= 256) epochs
     MIN_EPOCHS_TO_INACTIVITY_PENALTY=2 ** 2,
     # State list lengths
     EPOCHS_PER_ETH1_VOTING_PERIOD=2 ** 32,
@@ -47,11 +47,11 @@ SERENITY_CONFIG = Eth2Config(
     BASE_REWARD_FACTOR=2 ** 6,  # (= 64)
     WHISTLEBLOWER_REWARD_QUOTIENT=2 ** 9,  # (= 512)
     PROPOSER_REWARD_QUOTIENT=2 ** 3,
-    INACTIVITY_PENALTY_QUOTIENT=2 ** 25,  # (= 33,554,432)
+    INACTIVITY_PENALTY_QUOTIENT=2 ** 24,  # (= 16,777,216)
     MIN_SLASHING_PENALTY_QUOTIENT=2 ** 5,
     # Max operations per block
     MAX_PROPOSER_SLASHINGS=2 ** 4,  # (= 16)
-    MAX_ATTESTER_SLASHINGS=2 ** 0,  # (= 1)
+    MAX_ATTESTER_SLASHINGS=2 ** 1,  # (= 2)
     MAX_ATTESTATIONS=2 ** 7,  # (= 128)
     MAX_DEPOSITS=2 ** 4,  # (= 16)
     MAX_VOLUNTARY_EXITS=2 ** 4,  # (= 16)

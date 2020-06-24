@@ -255,6 +255,26 @@ def _is_threshold_met_against_committee(
     return _bft_threshold_met(total_attesting_balance, total_committee_balance)
 
 
+def get_proposer_reward(
+    state: BeaconState, attesting_index: ValidatorIndex, config: Eth2Config
+) -> Gwei:
+    return Gwei(
+        get_base_reward(state, attesting_index, config)
+        // config.PROPOSER_REWARD_QUOTIENT
+    )
+
+
+def get_finality_delay(state: BeaconState, slots_per_epoch: int) -> int:
+    return state.previous_epoch(slots_per_epoch) - state.finalized_checkpoint.epoch
+
+
+def is_in_inactivity_leak(state: BeaconState, config: Eth2Config) -> bool:
+    return (
+        get_finality_delay(state, config.SLOTS_PER_EPOCH)
+        > config.MIN_EPOCHS_TO_INACTIVITY_PENALTY
+    )
+
+
 def get_attestation_deltas(
     state: BeaconState, config: Eth2Config
 ) -> Tuple[Sequence[Gwei], Sequence[Gwei]]:
@@ -279,6 +299,8 @@ def get_attestation_deltas(
         state, previous_epoch, config
     )
 
+    increment = config.EFFECTIVE_BALANCE_INCREMENT
+    total_balance_in_increment = total_balance // increment
     for attestations in (
         matching_source_attestations,
         matching_target_attestations,
@@ -290,18 +312,21 @@ def get_attestation_deltas(
         attesting_balance = get_total_balance(
             state, unslashed_attesting_indices, config
         )
+        attesting_balance_in_increment = attesting_balance // increment
         for index in eligible_validator_indices:
             if index in unslashed_attesting_indices:
-                increment = config.EFFECTIVE_BALANCE_INCREMENT
-                rewards = update_tuple_item_with_fn(
-                    rewards,
-                    index,
-                    lambda balance, delta: balance + delta,
-                    (
-                        get_base_reward(state, index, config)
-                        * (attesting_balance // increment)
+                if is_in_inactivity_leak(state, config):
+                    reward = get_base_reward(state, index, config)
+                else:
+                    reward = Gwei(
+                        (
+                            get_base_reward(state, index, config)
+                            * attesting_balance_in_increment
+                        )
+                        // total_balance_in_increment
                     )
-                    // (total_balance // increment),
+                rewards = update_tuple_item_with_fn(
+                    rewards, index, lambda balance, delta: balance + delta, reward
                 )
             else:
                 penalties = update_tuple_item_with_fn(
@@ -323,14 +348,14 @@ def get_attestation_deltas(
             ),
             key=lambda a: a.inclusion_delay,
         )
-        base_reward = get_base_reward(state, index, config)
-        proposer_reward = base_reward // config.PROPOSER_REWARD_QUOTIENT
+        proposer_reward = get_proposer_reward(state, index, config)
         rewards = update_tuple_item_with_fn(
             rewards,
             attestation.proposer_index,
             lambda balance, delta: balance + delta,
             proposer_reward,
         )
+        base_reward = get_base_reward(state, index, config)
         max_attester_reward = base_reward - proposer_reward
         rewards = update_tuple_item_with_fn(
             rewards,
@@ -339,17 +364,18 @@ def get_attestation_deltas(
             (max_attester_reward // attestation.inclusion_delay),
         )
 
-    finality_delay = previous_epoch - state.finalized_checkpoint.epoch
-    if finality_delay > config.MIN_EPOCHS_TO_INACTIVITY_PENALTY:
+    if is_in_inactivity_leak(state, config):
         matching_target_attesting_indices = get_unslashed_attesting_indices(
             state, matching_target_attestations, config
         )
         for index in eligible_validator_indices:
+            base_reward = get_base_reward(state, index, config)
             penalties = update_tuple_item_with_fn(
                 penalties,
                 index,
                 lambda balance, delta: balance + delta,
-                BASE_REWARDS_PER_EPOCH * get_base_reward(state, index, config),
+                BASE_REWARDS_PER_EPOCH * base_reward
+                - get_proposer_reward(state, index, config),
             )
             if index not in matching_target_attesting_indices:
                 effective_balance = state.validators[index].effective_balance
@@ -358,7 +384,7 @@ def get_attestation_deltas(
                     index,
                     lambda balance, delta: balance + delta,
                     effective_balance
-                    * finality_delay
+                    * get_finality_delay(state, config.SLOTS_PER_EPOCH)
                     // config.INACTIVITY_PENALTY_QUOTIENT,
                 )
     return (

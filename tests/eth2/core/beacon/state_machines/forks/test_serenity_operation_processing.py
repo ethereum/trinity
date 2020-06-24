@@ -226,7 +226,7 @@ def test_process_voluntary_exits(
     state = genesis_state.set(
         "slot",
         compute_start_slot_at_epoch(
-            GENESIS_EPOCH + config.PERSISTENT_COMMITTEE_PERIOD, config.SLOTS_PER_EPOCH
+            GENESIS_EPOCH + config.SHARD_COMMITTEE_PERIOD, config.SLOTS_PER_EPOCH
         ),
     )
     validator_index = 0

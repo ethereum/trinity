@@ -54,9 +54,12 @@ class Eth2BLS:
 
     @classmethod
     def aggregate_verify(
-        cls, signature: BLSSignature, *pairs: Tuple[BLSPubkey, Hash32]
+        cls,
+        signature: BLSSignature,
+        public_keys: Tuple[BLSPubkey, ...],
+        messages: Tuple[Hash32, ...],
     ) -> bool:
-        return cls.backend.AggregateVerify(pairs, signature)
+        return cls.backend.AggregateVerify(signature, public_keys, messages)
 
     @classmethod
     def fast_aggregate_verify(
