@@ -4,7 +4,7 @@ from eth_utils import ValidationError
 
 from eth2.beacon.state_machines.forks.serenity.slot_processing import process_slots
 from eth2.beacon.state_machines.forks.serenity.state_transitions import (
-    SerenityStateTransition,
+    apply_state_transition,
 )
 from eth2.beacon.tools.fixtures.conditions import validate_state
 from eth2.beacon.tools.fixtures.test_handler import TestHandler
@@ -50,9 +50,8 @@ class BlocksHandler(
         config: Optional[Eth2Config],
     ) -> BeaconState:
         state, blocks = inputs
-        state_transition = SerenityStateTransition(config)
         for block in blocks:
-            state = state_transition.apply_state_transition(state, block)
+            state = apply_state_transition(config, state, block)
             if block.message.state_root != state.hash_tree_root:
                 raise ValidationError(
                     "block's state root did not match computed state root"

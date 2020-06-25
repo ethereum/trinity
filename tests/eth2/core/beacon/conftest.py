@@ -15,12 +15,14 @@ from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
 from eth2.beacon.fork_choice.lmd_ghost import Context as LMDGHOSTContext
 from eth2.beacon.genesis import get_genesis_block
-from eth2.beacon.state_machines.forks.serenity import SerenityStateMachine
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
     SerenitySignedBeaconBlock,
 )
-from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
+from eth2.beacon.state_machines.forks.skeleton_lake import SkeletonLakeStateMachine
+from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
+    MINIMAL_SERENITY_CONFIG,
+)
 from eth2.beacon.tools.builder.initializer import create_mock_validator
 from eth2.beacon.tools.builder.state import create_mock_genesis_state_from_validators
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
@@ -29,7 +31,6 @@ from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.blocks import (
     BeaconBlockBody,
     BeaconBlockHeader,
-    SignedBeaconBlock,
     SignedBeaconBlockHeader,
 )
 from eth2.beacon.types.checkpoints import Checkpoint
@@ -53,217 +54,217 @@ def override_ssz_lengths(config):
 #
 @pytest.fixture
 def max_committees_per_slot():
-    return SERENITY_CONFIG.MAX_COMMITTEES_PER_SLOT
+    return MINIMAL_SERENITY_CONFIG.MAX_COMMITTEES_PER_SLOT
 
 
 @pytest.fixture
 def target_committee_size():
-    return SERENITY_CONFIG.TARGET_COMMITTEE_SIZE
+    return MINIMAL_SERENITY_CONFIG.TARGET_COMMITTEE_SIZE
 
 
 @pytest.fixture
 def max_validators_per_committee():
-    return SERENITY_CONFIG.MAX_VALIDATORS_PER_COMMITTEE
+    return MINIMAL_SERENITY_CONFIG.MAX_VALIDATORS_PER_COMMITTEE
 
 
 @pytest.fixture
 def min_per_epoch_churn_limit():
-    return SERENITY_CONFIG.MIN_PER_EPOCH_CHURN_LIMIT
+    return MINIMAL_SERENITY_CONFIG.MIN_PER_EPOCH_CHURN_LIMIT
 
 
 @pytest.fixture
 def churn_limit_quotient():
-    return SERENITY_CONFIG.CHURN_LIMIT_QUOTIENT
+    return MINIMAL_SERENITY_CONFIG.CHURN_LIMIT_QUOTIENT
 
 
 @pytest.fixture
 def shuffle_round_count():
-    return SERENITY_CONFIG.SHUFFLE_ROUND_COUNT
+    return MINIMAL_SERENITY_CONFIG.SHUFFLE_ROUND_COUNT
 
 
 @pytest.fixture
 def hysteresis_quotient():
-    return SERENITY_CONFIG.HYSTERESIS_QUOTIENT
+    return MINIMAL_SERENITY_CONFIG.HYSTERESIS_QUOTIENT
 
 
 @pytest.fixture
 def hysteresis_downward_multiplier():
-    return SERENITY_CONFIG.HYSTERESIS_DOWNWARD_MULTIPLIER
+    return MINIMAL_SERENITY_CONFIG.HYSTERESIS_DOWNWARD_MULTIPLIER
 
 
 @pytest.fixture
 def hysteresis_upward_multiplier():
-    return SERENITY_CONFIG.HYSTERESIS_UPWARD_MULTIPLIER
+    return MINIMAL_SERENITY_CONFIG.HYSTERESIS_UPWARD_MULTIPLIER
 
 
 @pytest.fixture
 def min_genesis_active_validator_count():
-    return SERENITY_CONFIG.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
+    return MINIMAL_SERENITY_CONFIG.MIN_GENESIS_ACTIVE_VALIDATOR_COUNT
 
 
 @pytest.fixture
 def min_genesis_time():
-    return SERENITY_CONFIG.MIN_GENESIS_TIME
+    return MINIMAL_SERENITY_CONFIG.MIN_GENESIS_TIME
 
 
 @pytest.fixture
 def min_deposit_amount():
-    return SERENITY_CONFIG.MIN_DEPOSIT_AMOUNT
+    return MINIMAL_SERENITY_CONFIG.MIN_DEPOSIT_AMOUNT
 
 
 @pytest.fixture
 def max_effective_balance():
-    return SERENITY_CONFIG.MAX_EFFECTIVE_BALANCE
+    return MINIMAL_SERENITY_CONFIG.MAX_EFFECTIVE_BALANCE
 
 
 @pytest.fixture
 def ejection_balance():
-    return SERENITY_CONFIG.EJECTION_BALANCE
+    return MINIMAL_SERENITY_CONFIG.EJECTION_BALANCE
 
 
 @pytest.fixture
 def effective_balance_increment():
-    return SERENITY_CONFIG.EFFECTIVE_BALANCE_INCREMENT
+    return MINIMAL_SERENITY_CONFIG.EFFECTIVE_BALANCE_INCREMENT
 
 
 @pytest.fixture
 def genesis_fork_version():
-    return SERENITY_CONFIG.GENESIS_FORK_VERSION
+    return MINIMAL_SERENITY_CONFIG.GENESIS_FORK_VERSION
 
 
 @pytest.fixture
 def genesis_delay():
-    return SERENITY_CONFIG.GENESIS_DELAY
+    return MINIMAL_SERENITY_CONFIG.GENESIS_DELAY
 
 
 @pytest.fixture
 def epochs_per_eth1_voting_period():
-    return SERENITY_CONFIG.EPOCHS_PER_ETH1_VOTING_PERIOD
+    return MINIMAL_SERENITY_CONFIG.EPOCHS_PER_ETH1_VOTING_PERIOD
 
 
 @pytest.fixture
 def bls_withdrawal_prefix():
-    return SERENITY_CONFIG.BLS_WITHDRAWAL_PREFIX
+    return MINIMAL_SERENITY_CONFIG.BLS_WITHDRAWAL_PREFIX
 
 
 @pytest.fixture
 def seconds_per_slot():
-    return SERENITY_CONFIG.SECONDS_PER_SLOT
+    return MINIMAL_SERENITY_CONFIG.SECONDS_PER_SLOT
 
 
 @pytest.fixture
 def min_attestation_inclusion_delay():
-    return SERENITY_CONFIG.MIN_ATTESTATION_INCLUSION_DELAY
+    return MINIMAL_SERENITY_CONFIG.MIN_ATTESTATION_INCLUSION_DELAY
 
 
 @pytest.fixture
 def slots_per_epoch():
-    return SERENITY_CONFIG.SLOTS_PER_EPOCH
+    return MINIMAL_SERENITY_CONFIG.SLOTS_PER_EPOCH
 
 
 @pytest.fixture
 def min_seed_lookahead():
-    return SERENITY_CONFIG.MIN_SEED_LOOKAHEAD
+    return MINIMAL_SERENITY_CONFIG.MIN_SEED_LOOKAHEAD
 
 
 @pytest.fixture
 def max_seed_lookahead():
-    return SERENITY_CONFIG.MAX_SEED_LOOKAHEAD
+    return MINIMAL_SERENITY_CONFIG.MAX_SEED_LOOKAHEAD
 
 
 @pytest.fixture
 def slots_per_historical_root():
-    return SERENITY_CONFIG.SLOTS_PER_HISTORICAL_ROOT
+    return MINIMAL_SERENITY_CONFIG.SLOTS_PER_HISTORICAL_ROOT
 
 
 @pytest.fixture
 def min_validator_withdrawability_delay():
-    return SERENITY_CONFIG.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
+    return MINIMAL_SERENITY_CONFIG.MIN_VALIDATOR_WITHDRAWABILITY_DELAY
 
 
 @pytest.fixture
 def shard_committee_period():
-    return SERENITY_CONFIG.SHARD_COMMITTEE_PERIOD
+    return MINIMAL_SERENITY_CONFIG.SHARD_COMMITTEE_PERIOD
 
 
 @pytest.fixture
 def min_epochs_to_inactivity_penalty():
-    return SERENITY_CONFIG.MIN_EPOCHS_TO_INACTIVITY_PENALTY
+    return MINIMAL_SERENITY_CONFIG.MIN_EPOCHS_TO_INACTIVITY_PENALTY
 
 
 @pytest.fixture
 def epochs_per_historical_vector():
-    return SERENITY_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR
+    return MINIMAL_SERENITY_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR
 
 
 @pytest.fixture
 def epochs_per_slashings_vector():
-    return SERENITY_CONFIG.EPOCHS_PER_SLASHINGS_VECTOR
+    return MINIMAL_SERENITY_CONFIG.EPOCHS_PER_SLASHINGS_VECTOR
 
 
 @pytest.fixture
 def historical_roots_limit():
-    return SERENITY_CONFIG.HISTORICAL_ROOTS_LIMIT
+    return MINIMAL_SERENITY_CONFIG.HISTORICAL_ROOTS_LIMIT
 
 
 @pytest.fixture
 def validator_registry_limit():
-    return SERENITY_CONFIG.VALIDATOR_REGISTRY_LIMIT
+    return MINIMAL_SERENITY_CONFIG.VALIDATOR_REGISTRY_LIMIT
 
 
 @pytest.fixture
 def base_reward_factor():
-    return SERENITY_CONFIG.BASE_REWARD_FACTOR
+    return MINIMAL_SERENITY_CONFIG.BASE_REWARD_FACTOR
 
 
 @pytest.fixture
 def whistleblower_reward_quotient():
-    return SERENITY_CONFIG.WHISTLEBLOWER_REWARD_QUOTIENT
+    return MINIMAL_SERENITY_CONFIG.WHISTLEBLOWER_REWARD_QUOTIENT
 
 
 @pytest.fixture
 def proposer_reward_quotient():
-    return SERENITY_CONFIG.PROPOSER_REWARD_QUOTIENT
+    return MINIMAL_SERENITY_CONFIG.PROPOSER_REWARD_QUOTIENT
 
 
 @pytest.fixture
 def inactivity_penalty_quotient():
-    return SERENITY_CONFIG.INACTIVITY_PENALTY_QUOTIENT
+    return MINIMAL_SERENITY_CONFIG.INACTIVITY_PENALTY_QUOTIENT
 
 
 @pytest.fixture
 def min_slashing_penalty_quotient():
-    return SERENITY_CONFIG.MIN_SLASHING_PENALTY_QUOTIENT
+    return MINIMAL_SERENITY_CONFIG.MIN_SLASHING_PENALTY_QUOTIENT
 
 
 @pytest.fixture
 def max_proposer_slashings():
-    return SERENITY_CONFIG.MAX_PROPOSER_SLASHINGS
+    return MINIMAL_SERENITY_CONFIG.MAX_PROPOSER_SLASHINGS
 
 
 @pytest.fixture
 def max_attester_slashings():
-    return SERENITY_CONFIG.MAX_ATTESTER_SLASHINGS
+    return MINIMAL_SERENITY_CONFIG.MAX_ATTESTER_SLASHINGS
 
 
 @pytest.fixture
 def max_attestations():
-    return SERENITY_CONFIG.MAX_ATTESTATIONS
+    return MINIMAL_SERENITY_CONFIG.MAX_ATTESTATIONS
 
 
 @pytest.fixture
 def max_deposits():
-    return SERENITY_CONFIG.MAX_DEPOSITS
+    return MINIMAL_SERENITY_CONFIG.MAX_DEPOSITS
 
 
 @pytest.fixture
 def max_voluntary_exits():
-    return SERENITY_CONFIG.MAX_VOLUNTARY_EXITS
+    return MINIMAL_SERENITY_CONFIG.MAX_VOLUNTARY_EXITS
 
 
 @pytest.fixture
 def safe_slots_to_update_justified():
-    return SERENITY_CONFIG.SAFE_SLOTS_TO_UPDATE_JUSTIFIED
+    return MINIMAL_SERENITY_CONFIG.SAFE_SLOTS_TO_UPDATE_JUSTIFIED
 
 
 @pytest.fixture
@@ -273,7 +274,7 @@ def deposit_contract_tree_depth():
 
 @pytest.fixture
 def deposit_contract_address():
-    return SERENITY_CONFIG.DEPOSIT_CONTRACT_ADDRESS
+    return MINIMAL_SERENITY_CONFIG.DEPOSIT_CONTRACT_ADDRESS
 
 
 @pytest.fixture
@@ -634,8 +635,7 @@ def genesis_state(
 @pytest.fixture
 def genesis_block(genesis_state, sample_signature):
     return SerenitySignedBeaconBlock.create(
-        message=get_genesis_block(genesis_state.hash_tree_root, SerenityBeaconBlock),
-        signature=sample_signature,
+        message=get_genesis_block(genesis_state.hash_tree_root, SerenityBeaconBlock)
     )
 
 
@@ -643,13 +643,13 @@ def genesis_block(genesis_state, sample_signature):
 # State machine
 #
 @pytest.fixture
-def fixture_sm_class(config, fork_choice_scoring, fork_choice_scoring_class):
-    return SerenityStateMachine.configure(
-        __name__="SerenityStateMachineForTesting",
-        config=config,
-        get_fork_choice_scoring=lambda self: fork_choice_scoring,
-        fork_choice_scoring_class=fork_choice_scoring_class,
-    )
+def fixture_sm_class():
+    return SkeletonLakeStateMachine
+
+
+@pytest.fixture
+def fixture_sm(chaindb):
+    return SkeletonLakeStateMachine(chaindb)
 
 
 @pytest.fixture
@@ -666,15 +666,15 @@ def fork_choice_scoring():
 # ChainDB
 #
 @pytest.fixture
-def chaindb(base_db, config):
-    return BeaconChainDB(base_db, config)
+def chaindb(base_db):
+    return BeaconChainDB(base_db)
 
 
 @pytest.fixture
-def chaindb_at_genesis(chaindb, genesis_state, genesis_block, fork_choice_scoring):
-    chaindb.persist_state(genesis_state)
-    chaindb.persist_block(genesis_block, SignedBeaconBlock, fork_choice_scoring)
-    return chaindb
+def chaindb_at_genesis(base_db, genesis_state, genesis_block, fork_choice_scoring):
+    return BeaconChainDB.from_genesis(
+        base_db, genesis_state, SerenitySignedBeaconBlock, fork_choice_scoring
+    )
 
 
 #

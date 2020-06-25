@@ -135,7 +135,10 @@ def validate_randao_reveal(
     try:
         bls.validate(signing_root, randao_reveal, proposer_pubkey)
     except SignatureError as error:
-        raise ValidationError("RANDAO reveal is invalid", error)
+        raise ValidationError(
+            f"RANDAO reveal is invalid for proposer index {proposer_index} at slot {state.slot}",
+            error,
+        )
 
 
 #

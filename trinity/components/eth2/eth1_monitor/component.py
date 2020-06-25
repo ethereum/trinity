@@ -59,6 +59,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
         trinity_config = self._boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         chain_config = beacon_app_config.get_chain_config()
+        genesis_state = chain_config._genesis_state
         base_db = DBClient.connect(trinity_config.database_ipc_path)
 
         # TODO: For now we use fake eth1 monitor.
@@ -69,7 +70,7 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
 
         # TODO: For now we use fake eth1 monitor. So we load validators data from
         # interop setting and hardcode the deposit data into fake eth1 data provider.
-        chain = chain_config.beacon_chain_class(base_db, chain_config.genesis_config)
+        chain = chain_config.beacon_chain_class.from_genesis(base_db, genesis_state)
         config = chain.get_state_machine().config
         key_set = load_yaml_at(
             Path("eth2/beacon/scripts/quickstart_state/keygen_16_validators.yaml")

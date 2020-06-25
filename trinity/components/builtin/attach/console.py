@@ -191,12 +191,11 @@ def get_beacon_shell_context(database_dir: Path,
 
     with _get_base_db(database_dir, ipc_path) as db:
         chain_config = app_config.get_chain_config()
+        chaindb = BeaconChainDB(db)
         chain = chain_config.beacon_chain_class(
-            db,
-            chain_config.genesis_config
+            chaindb,
         )
 
-        chaindb = BeaconChainDB(db, chain_config.genesis_config)
         head = chaindb.get_canonical_head(BeaconBlock)
         yield {
             'db': db,

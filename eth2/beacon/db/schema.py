@@ -99,6 +99,10 @@ class SchemaV1(BaseSchema):
         return b"v1:beacon:justified-head-root"
 
     @staticmethod
+    def make_justified_head_epoch_lookup_key() -> bytes:
+        return b"v1:beacon:justified-head-epoch"
+
+    @staticmethod
     def make_block_slot_to_root_lookup_key(slot: int) -> bytes:
         slot_to_root_key = b"v1:beacon:block-slot-to-root:%d" % slot
         return slot_to_root_key

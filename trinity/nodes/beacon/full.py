@@ -121,10 +121,10 @@ class BeaconNode:
         self._slashable_block_pool: Set[SignedBeaconBlock] = set()
 
         self._base_db = LevelDB(db_path=database_dir)
-        self._chain_db = BeaconChainDB(self._base_db, eth2_config)
+        self._chain_db = BeaconChainDB(self._base_db)
         if not is_beacon_database_initialized(self._chain_db):
             initialize_beacon_database(chain_config, self._chain_db, self._base_db)
-        self._chain = chain_class(self._base_db, eth2_config)
+        self._chain = chain_class(self._chain_db)
 
         # FIXME: can we provide `p2p_maddr` as a default listening interface for `_mk_host`?
         p2p_maddr = _derive_port(p2p_maddr, orchestration_profile)
@@ -259,7 +259,7 @@ class BeaconNode:
         Return value indicates if block was successfully imported.
         """
         try:
-            self._chain.import_block(block)
+            self._chain.on_block(block)
             self._on_block_imported(block)
             return True
         except ParentNotFoundError as exc:
@@ -298,7 +298,7 @@ class BeaconNode:
         self, block: SignedBeaconBlock, exc: SlashableBlockError
     ) -> None:
         self.logger.warning("failed to import block %s: %s", block, exc)
-        # NOTE: chain will write the block in ``import_block`` but not the block's state
+        # NOTE: chain will write the block in ``on_block`` but not the block's state
         # See the place that exception is raised for further rationale.
         # TODO: pipe to "slasher" software...
         self._slashable_block_pool.add(block)

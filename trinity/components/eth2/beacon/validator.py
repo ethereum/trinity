@@ -9,7 +9,6 @@ from lahja import EndpointAPI
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.helpers import compute_epoch_at_slot
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
-from eth2.beacon.state_machines.forks.serenity.blocks import SerenitySignedBeaconBlock
 from eth2.beacon.tools.builder.aggregator import (
     get_aggregate_from_valid_committee_attestations,
     get_slot_signature,
@@ -20,8 +19,10 @@ from eth2.beacon.tools.builder.committee_assignment import (
     get_committee_assignment,
 )
 from eth2.beacon.tools.builder.proposer import (
-    create_block_on_state,
+    create_block_proposal,
+    generate_randao_reveal,
     get_beacon_proposer_index,
+    sign_block,
 )
 from eth2.beacon.tools.builder.validator import create_signed_attestations_at_slot
 from eth2.beacon.types.aggregate_and_proof import AggregateAndProof
@@ -177,9 +178,7 @@ class Validator(BaseValidator):
         # be in the epoch in question. At the epoch boundaries, the validator must run an
         # epoch transition into the epoch to successfully check the proposal assignment of the
         # first slot.
-        temp_state = state_machine.state_transition.apply_state_transition(
-            state, future_slot=slot
-        )
+        temp_state, _ = state_machine.apply_state_transition(state, future_slot=slot)
         proposer_index = get_beacon_proposer_index(temp_state, state_machine.config)
 
         # `latest_proposed_epoch` is used to prevent validator from erraneously proposing twice
@@ -228,26 +227,27 @@ class Validator(BaseValidator):
         Propose a block and broadcast it.
         """
         eth1_vote = await self._get_eth1_vote(slot, state, state_machine)
-        deposits = await self._get_deposit_data(state, state_machine, eth1_vote)
+        # deposits = await self._get_deposit_data(state, state_machine, eth1_vote)
         # TODO(hwwhww): Check if need to aggregate and if they are overlapping.
         aggregated_attestations = self.get_ready_attestations(slot, True)
         unaggregated_attestations = self.get_ready_attestations(slot, False)
         ready_attestations = aggregated_attestations + unaggregated_attestations
-
-        block = create_block_on_state(
-            state=state,
-            config=state_machine.config,
-            state_machine=state_machine,
-            signed_block_class=SerenitySignedBeaconBlock,  # TODO: Should get block class from slot
-            parent_block=head_block,
-            slot=slot,
-            proposer_index=proposer_index,
-            privkey=self.validator_privkeys[proposer_index],
-            attestations=ready_attestations,
-            eth1_data=eth1_vote,
-            deposits=deposits,
-            check_proposer_index=False,
+        private_key = self.validator_privkeys[proposer_index]
+        randao_reveal = generate_randao_reveal(
+            private_key, slot, state, state_machine.config
         )
+
+        block = create_block_proposal(
+            slot,
+            head_block.message.hash_tree_root,
+            randao_reveal,
+            eth1_vote,
+            ready_attestations,
+            state,
+            state_machine,
+        )
+
+        block = sign_block(state, block, private_key, self.slots_per_epoch)
         self.logger.debug(
             bold_green("validator %s is proposing a block %s with attestations %s"),
             proposer_index,
@@ -266,9 +266,7 @@ class Validator(BaseValidator):
         """
         Forward state to the target ``slot`` and persist the state.
         """
-        post_state = state_machine.state_transition.apply_state_transition(
-            state, future_slot=slot
-        )
+        post_state, _ = state_machine.apply_state_transition(state, future_slot=slot)
         self.logger.debug(
             bold_green("Skip block at slot=%s  post_state=%s"), slot, repr(post_state)
         )

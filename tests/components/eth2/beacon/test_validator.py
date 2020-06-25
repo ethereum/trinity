@@ -86,7 +86,7 @@ async def get_validator(
 
     # Make requesting eth1 vote and deposit a stub
     async def _get_eth1_vote(slot, state, state_machine):
-        return None
+        return state.eth1_data
 
     monkeypatch.setattr(v, "_get_eth1_vote", _get_eth1_vote)
 
@@ -190,7 +190,7 @@ async def test_validator_propose_block_fails(event_loop, event_bus, monkeypatch)
             slot=slot,
             state=state,
             state_machine=state_machine,
-            head_block=head,
+            head_block=head.message,
         )
 
 
@@ -366,7 +366,7 @@ async def test_validator_attest(event_loop, event_bus, monkeypatch):
 
     # Advance the state and validate the attestation
     config = state_machine.config
-    future_state = state_machine.state_transition.apply_state_transition(
+    future_state, _ = state_machine.apply_state_transition(
         state, future_slot=assignment.slot + config.MIN_ATTESTATION_INCLUSION_DELAY
     )
     validate_attestation(future_state, attestation, config)
@@ -408,7 +408,7 @@ async def test_validator_aggregate(event_loop, event_bus, monkeypatch):
 
         # Advance the state and validate the attestation
         config = state_machine.config
-        future_state = state_machine.state_transition.apply_state_transition(
+        future_state, _ = state_machine.apply_state_transition(
             state, future_slot=assignment.slot + config.MIN_ATTESTATION_INCLUSION_DELAY
         )
         validate_attestation(future_state, attestation, config)

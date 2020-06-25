@@ -257,6 +257,7 @@ class BaseSignedBeaconBlock(HashableContainer):
         return (
             f"[hash_tree_root]={humanize_hash(self.hash_tree_root)},"
             f" [block_root]={humanize_hash(self.message.hash_tree_root)},"
+            f" [signature]={humanize_hash(self.signature)},"
             f" slot={self.slot},"
             f" parent_root={humanize_hash(self.parent_root)},"
             f" state_root={humanize_hash(self.state_root)},"

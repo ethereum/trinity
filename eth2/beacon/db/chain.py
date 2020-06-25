@@ -23,12 +23,11 @@ from eth2.beacon.db.exceptions import (
 )
 from eth2.beacon.db.schema import SchemaV1
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring, BaseScore
-from eth2.beacon.helpers import compute_epoch_at_slot
+from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.nonspec.epoch_info import EpochInfo
 from eth2.beacon.types.states import BeaconState  # noqa: F401
 from eth2.beacon.typing import Epoch, Root, Slot
-from eth2.configs import Eth2Config
 
 # When performing a chain sync (either fast or regular modes), we'll very often need to look
 # up recent blocks to validate the chain, and decoding their SSZ representation is
@@ -47,7 +46,18 @@ class BaseBeaconChainDB(ABC):
     db: AtomicDatabaseAPI = None
 
     @abstractmethod
-    def __init__(self, db: AtomicDatabaseAPI, genesis_config: Eth2Config) -> None:
+    def __init__(self, db: AtomicDatabaseAPI) -> None:
+        ...
+
+    @classmethod
+    @abstractmethod
+    def from_genesis(
+        cls,
+        db: AtomicDatabaseAPI,
+        genesis_state: BeaconState,
+        signed_block_class: Type[BaseSignedBeaconBlock],
+        genesis_fork_choice_scoring: BaseForkChoiceScoring,
+    ) -> "BaseBeaconChainDB":
         ...
 
     #
@@ -191,26 +201,51 @@ class BaseBeaconChainDB(ABC):
 
 
 class BeaconChainDB(BaseBeaconChainDB):
-    def __init__(self, db: AtomicDatabaseAPI, genesis_config: Eth2Config) -> None:
+    def __init__(self, db: AtomicDatabaseAPI) -> None:
         self.db = db
-        self.genesis_config = genesis_config
 
-        self._finalized_root = self._get_finalized_root_if_present(db)
-        self._highest_justified_epoch = self._get_highest_justified_epoch(db)
+        self._load_finalized_head()
+        self._load_justified_head()
 
-    def _get_finalized_root_if_present(self, db: DatabaseAPI) -> Root:
-        try:
-            return self._get_finalized_head_root(db)
-        except FinalizedHeadNotFound:
-            return ZERO_ROOT
+    @classmethod
+    def from_genesis(
+        cls,
+        db: AtomicDatabaseAPI,
+        genesis_state: BeaconState,
+        signed_block_class: Type[BaseSignedBeaconBlock],
+        genesis_fork_choice_scoring: BaseForkChoiceScoring,
+    ) -> "BeaconChainDB":
+        chain_db = cls(db)
 
-    def _get_highest_justified_epoch(self, db: DatabaseAPI) -> Epoch:
-        try:
-            justified_head_root = self._get_justified_head_root(db)
-            slot = self.get_slot_by_root(justified_head_root)
-            return compute_epoch_at_slot(slot, self.genesis_config.SLOTS_PER_EPOCH)
-        except JustifiedHeadNotFound:
-            return GENESIS_EPOCH
+        genesis_block = get_genesis_block(
+            genesis_state.hash_tree_root, signed_block_class.block_class
+        )
+        genesis_root = genesis_block.hash_tree_root
+
+        chain_db.persist_state(genesis_state)
+        chain_db.update_head_state(genesis_state.slot, genesis_state.hash_tree_root)
+        chain_db.persist_block(
+            signed_block_class.create(message=genesis_block),
+            signed_block_class,
+            genesis_fork_choice_scoring,
+        )
+
+        # NOTE: this should happen after persisting the state and block for now...
+        chain_db._handle_exceptional_justification_and_finality(genesis_root)
+
+        return chain_db
+
+    def _handle_exceptional_justification_and_finality(
+        self, genesis_root: Root
+    ) -> None:
+        """
+        The genesis ``BeaconState`` lacks the correct justification and finality
+        data in the early epochs. The invariants of this class require an exceptional
+        handling to mark the genesis block's root and the genesis epoch as
+        finalized and justified.
+        """
+        self._update_justified_head(genesis_root, GENESIS_EPOCH)
+        self._update_finalized_head(genesis_root)
 
     def persist_block(
         self,
@@ -222,9 +257,6 @@ class BeaconChainDB(BaseBeaconChainDB):
         Persist the given block.
         """
         with self.db.atomic_batch() as db:
-            if block.is_genesis:
-                self._handle_exceptional_justification_and_finality(block)
-
             return self._persist_block(db, block, block_class, fork_choice_scoring)
 
     @classmethod
@@ -744,6 +776,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         return self._persist_state(state)
 
     def _persist_state(self, state: BeaconState) -> None:
+        # TODO schema for state?
         self.db.set(state.hash_tree_root, ssz.encode(state))
 
         self._persist_finalized_head(state)
@@ -760,13 +793,19 @@ class BeaconChainDB(BaseBeaconChainDB):
         # TODO: only persist per epoch transition
         self._persist_canonical_epoch_info(self.db, state)
 
+    def _load_finalized_head(self) -> None:
+        finalized_root = self.db.get(
+            SchemaV1.make_finalized_head_root_lookup_key(), ZERO_ROOT
+        )
+        self._finalized_root = finalized_root
+
     def _update_finalized_head(self, finalized_root: Root) -> None:
         """
         Unconditionally write the ``finalized_root`` as the root of the currently
         finalized block.
         """
         self.db.set(SchemaV1.make_finalized_head_root_lookup_key(), finalized_root)
-        self._finalized_root = finalized_root
+        self._load_finalized_head()
 
     def _persist_finalized_head(self, state: BeaconState) -> None:
         """
@@ -775,11 +814,18 @@ class BeaconChainDB(BaseBeaconChainDB):
         will have violated a slashing condition if the invariant does not hold.
         """
         if state.finalized_checkpoint.root == ZERO_ROOT:
-            # ignore finality in the genesis state
             return
 
         if state.finalized_checkpoint.root != self._finalized_root:
             self._update_finalized_head(state.finalized_checkpoint.root)
+
+    def _load_justified_head(self) -> None:
+        encoded_epoch = self.db.get(SchemaV1.make_justified_head_epoch_lookup_key())
+        if not encoded_epoch:
+            self._highest_justified_epoch = GENESIS_EPOCH
+            return
+
+        self._highest_justified_epoch = ssz.decode(encoded_epoch, ssz.uint64)
 
     def _update_justified_head(self, justified_root: Root, epoch: Epoch) -> None:
         """
@@ -787,7 +833,10 @@ class BeaconChainDB(BaseBeaconChainDB):
         justified block.
         """
         self.db.set(SchemaV1.make_justified_head_root_lookup_key(), justified_root)
-        self._highest_justified_epoch = epoch
+        self.db.set(
+            SchemaV1.make_justified_head_epoch_lookup_key(),
+            ssz.encode(epoch, ssz.uint64),
+        )
 
     def _find_updated_justified_root(
         self, state: BeaconState
@@ -820,19 +869,6 @@ class BeaconChainDB(BaseBeaconChainDB):
 
         if result:
             self._update_justified_head(*result)
-
-    def _handle_exceptional_justification_and_finality(
-        self, genesis_block: BaseBeaconBlock
-    ) -> None:
-        """
-        The genesis ``BeaconState`` lacks the correct justification and finality
-        data in the early epochs. The invariants of this class require an exceptional
-        handling to mark the genesis block's root and the genesis epoch as
-        finalized and justified.
-        """
-        genesis_root = genesis_block.message.hash_tree_root
-        self._update_finalized_head(genesis_root)
-        self._update_justified_head(genesis_root, GENESIS_EPOCH)
 
     @staticmethod
     def _persist_canonical_epoch_info(db: DatabaseAPI, state: BeaconState) -> None:

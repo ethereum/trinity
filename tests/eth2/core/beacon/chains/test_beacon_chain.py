@@ -4,11 +4,11 @@ import pytest
 
 from eth2.beacon.chains.base import BeaconChain
 from eth2.beacon.chains.testnet import SkeletonLakeChain
+from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.db.exceptions import AttestationRootNotFound, StateNotFound
-from eth2.beacon.exceptions import BlockClassError
 from eth2.beacon.state_machines.forks.serenity.blocks import SerenitySignedBeaconBlock
-from eth2.beacon.tools.builder.proposer import create_mock_block
+from eth2.beacon.tools.builder.proposer import create_block, generate_randao_reveal
 from eth2.beacon.tools.builder.validator import create_mock_signed_attestations_at_slot
 from eth2.beacon.types.blocks import SignedBeaconBlock
 from eth2.beacon.typing import FromBlockParams
@@ -34,10 +34,6 @@ def test_canonical_chain(valid_chain, fork_choice_scoring):
     # Our chain fixture is created with only the genesis header, so initially that's the head of
     # the canonical chain.
     assert valid_chain.get_canonical_head() == genesis_block
-    # verify a special case (score(genesis) == 0)
-    assert valid_chain.get_score(
-        genesis_block.message.hash_tree_root
-    ) == fork_choice_scoring.score(genesis_block.message)
 
     block = SerenitySignedBeaconBlock.from_parent(
         genesis_block, FromBlockParams(slot=1)
@@ -48,9 +44,6 @@ def test_canonical_chain(valid_chain, fork_choice_scoring):
     state_machine = valid_chain.get_state_machine(block.slot)
     scoring = state_machine.get_fork_choice_scoring()
 
-    assert valid_chain.get_score(block.message.hash_tree_root) == scoring.score(
-        block.message
-    )
     assert scoring.score(block.message) != 0
 
     canonical_block_1 = valid_chain.get_canonical_block_by_slot(genesis_block.slot + 1)
@@ -69,12 +62,13 @@ def test_canonical_chain(valid_chain, fork_choice_scoring):
     ),
     [(100, 16, 10, 16)],
 )
-def test_get_state_by_slot(valid_chain, genesis_block, genesis_state, config, keymap):
+def test_get_state_by_slot(valid_chain, genesis_block, genesis_state, keymap):
     # First, skip block and check if `get_state_by_slot` returns the expected state
     state_machine = valid_chain.get_state_machine(genesis_block.slot)
+    config = state_machine.config
     state = valid_chain.get_head_state()
     block_skipped_slot = genesis_block.slot + 1
-    block_skipped_state = state_machine.state_transition.apply_state_transition(
+    block_skipped_state, _ = state_machine.apply_state_transition(
         state, future_slot=block_skipped_slot
     )
     valid_chain.chaindb.persist_state(block_skipped_state)
@@ -83,15 +77,24 @@ def test_get_state_by_slot(valid_chain, genesis_block, genesis_state, config, ke
 
     # Next, import proposed block and check if `get_state_by_slot` returns the expected state
     proposed_slot = block_skipped_slot + 1
-    block = create_mock_block(
-        state=block_skipped_state,
-        config=config,
-        state_machine=state_machine,
-        signed_block_class=genesis_block.__class__,
-        parent_block=genesis_block,
-        keymap=keymap,
-        slot=proposed_slot,
-        attestations=(),
+    future_state, _ = state_machine.apply_state_transition(
+        block_skipped_state, future_slot=proposed_slot
+    )
+    proposer_index = get_beacon_proposer_index(future_state, config)
+    proposer = block_skipped_state.validators[proposer_index].pubkey
+    private_key = keymap[proposer]
+    randao_reveal = generate_randao_reveal(
+        private_key, proposed_slot, block_skipped_state, config
+    )
+    block = create_block(
+        proposed_slot,
+        genesis_block.message.hash_tree_root,
+        randao_reveal,
+        state.eth1_data,
+        (),
+        block_skipped_state,
+        state_machine,
+        private_key,
     )
     valid_chain.import_block(block)
     state = valid_chain.get_head_state()
@@ -111,14 +114,26 @@ def test_import_blocks(valid_chain, genesis_block, genesis_state, config, keymap
     blocks = (genesis_block,)
     valid_chain_2 = copy.deepcopy(valid_chain)
     for _ in range(3):
-        block = create_mock_block(
-            state=state,
-            config=config,
-            state_machine=valid_chain.get_state_machine(blocks[-1].slot),
-            signed_block_class=genesis_block.__class__,
-            parent_block=blocks[-1],
-            keymap=keymap,
-            slot=state.slot + 2,
+        state_machine = valid_chain.get_state_machine(blocks[-1].slot)
+        parent_block = blocks[-1]
+        slot = state.slot + 2
+
+        future_state, _ = state_machine.apply_state_transition(
+            state, future_slot=state.slot + 2
+        )
+        proposer_index = get_beacon_proposer_index(future_state, config)
+        proposer = state.validators[proposer_index].pubkey
+        private_key = keymap[proposer]
+        randao_reveal = generate_randao_reveal(private_key, slot, state, config)
+        block = create_block(
+            slot,
+            parent_block.message.hash_tree_root,
+            randao_reveal,
+            state.eth1_data,
+            (),
+            state,
+            state_machine,
+            private_key,
         )
 
         valid_chain.import_block(block)
@@ -144,15 +159,15 @@ def test_import_blocks(valid_chain, genesis_block, genesis_state, config, keymap
 
 def test_from_genesis(base_db, genesis_block, genesis_state, fixture_sm_class, config):
     klass = BeaconChain.configure(
-        __name__="TestChain", sm_configuration=((0, fixture_sm_class),), chain_id=5566
+        __name__="TestChain", sm_configuration=((0, fixture_sm_class),)
     )
 
     assert type(genesis_block) == SerenitySignedBeaconBlock
     block = SignedBeaconBlock.create(message=genesis_block.message)
     assert type(block) == SignedBeaconBlock
 
-    with pytest.raises(BlockClassError):
-        klass.from_genesis(base_db, genesis_state, block, config)
+    chain = klass.from_genesis(base_db, genesis_state)
+    assert chain
 
 
 @pytest.mark.long
@@ -167,14 +182,10 @@ def test_from_genesis(base_db, genesis_block, genesis_state, fixture_sm_class, c
     [(100, 16, 10, 16, 0)],
 )
 def test_get_attestation_root(
-    valid_chain,
-    genesis_block,
-    genesis_state,
-    config,
-    keymap,
-    min_attestation_inclusion_delay,
+    valid_chain, genesis_block, genesis_state, keymap, min_attestation_inclusion_delay
 ):
     state_machine = valid_chain.get_state_machine()
+    config = state_machine.config
     attestations = create_mock_signed_attestations_at_slot(
         state=genesis_state,
         config=config,
@@ -183,15 +194,23 @@ def test_get_attestation_root(
         beacon_block_root=genesis_block.message.hash_tree_root,
         keymap=keymap,
     )
-    block = create_mock_block(
-        state=genesis_state,
-        config=config,
-        state_machine=state_machine,
-        signed_block_class=genesis_block.__class__,
-        parent_block=genesis_block,
-        keymap=keymap,
-        slot=genesis_state.slot + 1,
-        attestations=attestations,
+
+    state = genesis_state
+    slot = genesis_state.slot + 1
+    future_state, _ = state_machine.apply_state_transition(state, future_slot=slot)
+    proposer_index = get_beacon_proposer_index(future_state, config)
+    proposer = state.validators[proposer_index].pubkey
+    private_key = keymap[proposer]
+    randao_reveal = generate_randao_reveal(private_key, slot, state, config)
+    block = create_block(
+        slot,
+        genesis_block.message.hash_tree_root,
+        randao_reveal,
+        state.eth1_data,
+        attestations,
+        state,
+        state_machine,
+        private_key,
     )
     valid_chain.import_block(block)
     # Only one attestation in attestations, so just check that one
@@ -205,6 +224,6 @@ def test_get_attestation_root(
 
 
 @pytest.mark.parametrize("chain_klass", (SkeletonLakeChain,))
-def test_chain_class_well_defined(base_db, chain_klass, config):
-    chain = chain_klass(base_db, config)
+def test_chain_class_well_defined(base_db, chain_klass):
+    chain = chain_klass(base_db)
     assert chain.sm_configuration is not () and chain.sm_configuration is not None

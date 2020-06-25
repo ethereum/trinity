@@ -3,7 +3,7 @@ from eth_typing import BLSSignature
 from lahja import EndpointAPI
 
 from eth2.beacon.chains.base import BaseBeaconChain
-from eth2.beacon.tools.builder.proposer import create_unsigned_block_on_state
+from eth2.beacon.tools.builder.proposer import create_block_proposal
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.typing import Slot
 from trinity._utils.shellart import bold_green
@@ -55,7 +55,7 @@ class ValidatorHandler(BaseValidator):
         state = self.chain.get_head_state()
 
         eth1_vote = await self._get_eth1_vote(slot, state, state_machine)
-        deposits = await self._get_deposit_data(state, state_machine, eth1_vote)
+        # deposits = await self._get_deposit_data(state, state_machine, eth1_vote)
 
         # TODO(hwwhww): Check if need to aggregate and if they are overlapping.
 
@@ -63,21 +63,15 @@ class ValidatorHandler(BaseValidator):
         unaggregated_attestations = self.get_ready_attestations(slot, False)
         ready_attestations = aggregated_attestations + unaggregated_attestations
 
-        block = create_unsigned_block_on_state(
-            state=state,
-            config=state_machine.config,
-            block_class=state_machine.block_class,
-            parent_block=head_block.block_class,
-            slot=slot,
-            attestations=ready_attestations,
-            eth1_data=eth1_vote,
-            deposits=deposits,
+        return create_block_proposal(
+            slot,
+            head_block.message.hash_tree_root,
+            randao_reveal,
+            eth1_vote,
+            ready_attestations,
+            state,
+            state_machine,
         )
-
-        # Fill randao_reveal
-        block = block.set("body", block.body.set("randao_reveal", randao_reveal))
-
-        return block
 
     #
     # Handle API Request

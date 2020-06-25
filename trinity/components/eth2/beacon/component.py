@@ -81,9 +81,8 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
 
         with base_db:
             chain_config = beacon_app_config.get_chain_config()
-            chain = chain_config.beacon_chain_class(
-                base_db, chain_config.genesis_config
-            )
+            genesis_state = chain_config._genesis_state
+            chain = chain_config.beacon_chain_class.from_genesis(base_db, genesis_state)
             # TODO: To simplify, subsribe all subnets
             subnets: Set[SubnetId] = set(
                 SubnetId(subnet_id) for subnet_id in range(ATTESTATION_SUBNET_COUNT)
@@ -131,7 +130,7 @@ class BeaconNodeComponent(AsyncioIsolatedComponent):
             )
 
             syncer = BeaconChainSyncer(
-                chain_db=AsyncBeaconChainDB(base_db, chain_config.genesis_config),
+                chain_db=AsyncBeaconChainDB(base_db),
                 peer_pool=libp2p_node.handshaked_peers,
                 block_importer=SyncBlockImporter(chain),
                 genesis_config=chain_config.genesis_config,

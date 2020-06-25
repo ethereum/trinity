@@ -4,12 +4,7 @@ from eth2.beacon.chains.base import BeaconChain
 
 
 def _beacon_chain_with_block_validation(
-    base_db,
-    genesis_block,
-    genesis_state,
-    fixture_sm_class,
-    config,
-    chain_cls=BeaconChain,
+    base_db, genesis_block, genesis_state, fixture_sm_class, chain_cls=BeaconChain
 ):
     """
     Return a Chain object containing just the genesis block.
@@ -24,21 +19,19 @@ def _beacon_chain_with_block_validation(
     """
 
     klass = chain_cls.configure(
-        __name__="TestChain",
-        sm_configuration=((genesis_state.slot, fixture_sm_class),),
-        chain_id=5566,
+        __name__="TestChain", sm_configuration=((genesis_state.slot, fixture_sm_class),)
     )
 
-    chain = klass.from_genesis(base_db, genesis_state, genesis_block, config)
+    chain = klass.from_genesis(base_db, genesis_state)
     return chain
 
 
 @pytest.fixture
 def beacon_chain_with_block_validation(
-    base_db, genesis_block, genesis_state, fixture_sm_class, config
+    base_db, genesis_block, genesis_state, fixture_sm_class
 ):
     return _beacon_chain_with_block_validation(
-        base_db, genesis_block.message, genesis_state, fixture_sm_class, config
+        base_db, genesis_block.message, genesis_state, fixture_sm_class
     )
 
 
@@ -69,5 +62,5 @@ def beacon_chain_without_block_validation(
         **overrides,
     )
 
-    chain = klass.from_genesis(base_db, genesis_state, genesis_block)
+    chain = klass.from_genesis(base_db, genesis_state)
     return chain

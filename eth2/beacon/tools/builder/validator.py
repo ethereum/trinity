@@ -4,7 +4,6 @@ from typing import Dict, Iterable, Sequence, Tuple
 
 from eth_typing import BLSPubkey, BLSSignature, Hash32
 from eth_utils import to_tuple
-from eth_utils.toolz import keymap as keymapper
 from eth_utils.toolz import pipe
 import ssz
 
@@ -192,7 +191,7 @@ def aggregate_votes(
     sigs = tuple(sigs) + tuple(voting_sigs)
     bitfield = pipe(
         bitfield,
-        *(set_voted(index=committee_index) for committee_index in attesting_indices)
+        *(set_voted(index=committee_index) for committee_index in attesting_indices),
     )
 
     return bitfield, bls.aggregate(*sigs)
@@ -217,7 +216,7 @@ def sign_transaction(
     state: BeaconState,
     slot: Slot,
     signature_domain: SignatureDomain,
-    slots_per_epoch: int
+    slots_per_epoch: int,
 ) -> BLSSignature:
     domain = get_domain(
         state,
@@ -572,8 +571,7 @@ def create_signed_attestations_at_slot(
     """
     Create the attestations of the given ``attestation_slot`` slot with ``validator_privkeys``.
     """
-    state_transition = state_machine.state_transition
-    state = state_transition.apply_state_transition(state, future_slot=attestation_slot)
+    state, _ = state_machine.apply_state_transition(state, future_slot=attestation_slot)
 
     attestation_data = create_atteatsion_data(
         state,
@@ -602,46 +600,6 @@ def create_signed_attestations_at_slot(
             is_for_simulation=False,
             attesting_indices=(committee_validator_index,),
         )
-
-
-def create_signed_attestation_at_slot(
-    state: BeaconState,
-    config: Eth2Config,
-    state_machine: BaseBeaconStateMachine,
-    attestation_slot: Slot,
-    beacon_block_root: Root,
-    validator_privkeys: Dict[ValidatorIndex, int],
-    committee: Tuple[ValidatorIndex, ...],
-    committee_index: CommitteeIndex,
-    attesting_indices: Sequence[CommitteeValidatorIndex],
-) -> Attestation:
-    """
-    Create the aggregated attestation of the given ``attestation_slot`` slot
-    of the given committee.
-    """
-    state_transition = state_machine.state_transition
-    state = state_transition.apply_state_transition(state, future_slot=attestation_slot)
-
-    attestation_data = create_atteatsion_data(
-        state,
-        config,
-        state_machine,
-        attestation_slot,
-        beacon_block_root,
-        committee_index,
-    )
-
-    return _create_mock_signed_attestation(
-        state,
-        attestation_data,
-        attestation_slot,
-        committee,
-        len(committee),
-        keymapper(lambda index: state.validators[index].pubkey, validator_privkeys),
-        config.SLOTS_PER_EPOCH,
-        is_for_simulation=False,
-        attesting_indices=attesting_indices,
-    )
 
 
 @to_tuple
@@ -751,7 +709,7 @@ def create_mock_deposit_data(
     pubkey: BLSPubkey,
     privkey: int,
     withdrawal_credentials: Hash32,
-    amount: Gwei = None
+    amount: Gwei = None,
 ) -> DepositData:
     if amount is None:
         amount = config.MAX_EFFECTIVE_BALANCE

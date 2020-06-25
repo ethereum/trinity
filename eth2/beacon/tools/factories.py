@@ -7,7 +7,6 @@ import factory
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.chains.testnet import SkeletonLakeChain
 from eth2.beacon.fork_choice.higher_slot import HigherSlotScoring
-from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.state_machines.forks.serenity.blocks import (
     SerenityBeaconBlock,
     SerenitySignedBeaconBlock,
@@ -55,30 +54,18 @@ class BeaconChainFactory(factory.Factory):
 
         if kwargs["genesis_state"] is None:
             keymap = mk_keymap_of_size(num_validators)
-            genesis_state, genesis_block = create_mock_genesis(
+            genesis_state, _ = create_mock_genesis(
                 config=cls.config,
                 pubkeys=tuple(keymap.keys()),
                 keymap=keymap,
                 genesis_block_class=SerenityBeaconBlock,
                 genesis_time=Timestamp(int(time.time())),
             )
-        elif kwargs["genesis_block"] is None:
-            genesis_state = kwargs["genesis_state"]
-            genesis_block = get_genesis_block(
-                genesis_state.hash_tree_root, SerenityBeaconBlock
-            )
         else:
             genesis_state = kwargs["genesis_state"]
-            genesis_block = kwargs["genesis_block"]
 
         db = kwargs.pop("db", AtomicDB())
-        genesis_config = model_class.get_genesis_state_machine_class().config
-        chain = model_class.from_genesis(
-            base_db=db,
-            genesis_state=genesis_state,
-            genesis_block=genesis_block,
-            genesis_config=genesis_config,
-        )
+        chain = model_class.from_genesis(base_db=db, genesis_state=genesis_state)
 
         if kwargs["branch"] is not None:
             branch = kwargs["branch"]

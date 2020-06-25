@@ -322,7 +322,9 @@ class Store:
         if not post_state:
             # NOTE: error to not provide a post_state and not provide a way to compute it
             assert state_machine is not None
-            post_state, _ = state_machine.import_block(signed_block, pre_state)
+            post_state, _ = state_machine.apply_state_transition(
+                pre_state, signed_block
+            )
 
         self._context.block_states[root] = post_state
 

@@ -1,26 +1,24 @@
-from typing import Type  # noqa: F401
+from typing import Tuple, Type  # noqa: F401
 
-from eth2.beacon.db.chain import BaseBeaconChainDB
-from eth2.beacon.db.exceptions import MissingForkChoiceContext
+from eth2.beacon.db.chain import BaseBeaconChainDB, MissingForkChoiceContext
 from eth2.beacon.fork_choice.lmd_ghost import Context as LMDGHOSTContext
 from eth2.beacon.fork_choice.lmd_ghost import LMDGHOSTScoring, Store
 from eth2.beacon.fork_choice.scoring import BaseForkChoiceScoring
-from eth2.beacon.state_machines.base import BeaconStateMachine
-from eth2.beacon.state_machines.state_transitions import (  # noqa: F401
-    BaseStateTransition,
+from eth2.beacon.state_machines.base import BaseBeaconStateMachine
+from eth2.beacon.state_machines.forks.serenity.state_transitions import (
+    apply_state_transition,
 )
-from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseBeaconBlock  # noqa: F401
+from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState  # noqa: F401
-from eth2.clock import Tick
+from eth2.beacon.typing import Slot
 
 from .blocks import SerenityBeaconBlock, SerenitySignedBeaconBlock
 from .configs import SERENITY_CONFIG
-from .state_transitions import SerenityStateTransition
 from .states import SerenityBeaconState
 
 
-class SerenityStateMachine(BeaconStateMachine):
+class SerenityStateMachine(BaseBeaconStateMachine):
     # fork name
     fork = "serenity"  # type: str
     config = SERENITY_CONFIG
@@ -29,24 +27,20 @@ class SerenityStateMachine(BeaconStateMachine):
     block_class = SerenityBeaconBlock  # type: Type[BaseBeaconBlock]
     signed_block_class = SerenitySignedBeaconBlock
     state_class = SerenityBeaconState  # type: Type[BeaconState]
-    state_transition_class = SerenityStateTransition  # type: Type[BaseStateTransition]
-    fork_choice_scoring_class = LMDGHOSTScoring  # type: Type[BaseForkChoiceScoring]
 
-    def __init__(
-        self, chaindb: BaseBeaconChainDB, fork_choice_context: LMDGHOSTContext = None
-    ) -> None:
-        super().__init__(chaindb)
+    def __init__(self, chain_db: BaseBeaconChainDB) -> None:
+        self.chain_db = chain_db
         self._fork_choice_store = Store(
-            chaindb,
-            self.block_class,
-            self.config,
-            fork_choice_context or self._get_fork_choice_context(),
+            chain_db, self.block_class, self.config, self._get_fork_choice_context()
         )
         self.fork_choice_scoring = LMDGHOSTScoring(self._fork_choice_store)
 
+    def get_fork_choice_scoring(self) -> BaseForkChoiceScoring:
+        return self.fork_choice_scoring
+
     def _get_fork_choice_context(self) -> LMDGHOSTContext:
         try:
-            fork_choice_context_data = self.chaindb.get_fork_choice_context_data_for(
+            fork_choice_context_data = self.chain_db.get_fork_choice_context_data_for(
                 self.fork
             )
         except MissingForkChoiceContext:
@@ -54,32 +48,37 @@ class SerenityStateMachine(BeaconStateMachine):
             # fork choice context for this fork, which happens to be the genesis fork.
             # In this situation (possibly uniquely), we want to build a new
             # fork choice context from the genesis data.
-            genesis_root = self.chaindb.get_genesis_block_root()
-            genesis_block = self.chaindb.get_block_by_root(
+            genesis_root = self.chain_db.get_genesis_block_root()
+            genesis_block = self.chain_db.get_block_by_root(
                 genesis_root, self.block_class
             )
-            genesis_state = self.chaindb.get_state_by_root(
+            genesis_state = self.chain_db.get_state_by_root(
                 genesis_block.message.state_root, self.state_class
             )
             return LMDGHOSTContext.from_genesis(genesis_state, genesis_block)
         else:
             return LMDGHOSTContext.from_bytes(fork_choice_context_data)
 
-    # methods
     def _get_justified_head_state(self) -> BeaconState:
-        justified_head = self.chaindb.get_justified_head(self.block_class)
-        return self.chaindb.get_state_by_root(
+        justified_head = self.chain_db.get_justified_head(self.block_class)
+        return self.chain_db.get_state_by_root(
             justified_head.state_root, self.state_class
         )
 
-    def get_fork_choice_scoring(self) -> BaseForkChoiceScoring:
-        return self.fork_choice_scoring
+    def apply_state_transition(
+        self,
+        state: BeaconState,
+        signed_block: BaseSignedBeaconBlock = None,
+        future_slot: Slot = None,
+        check_proposer_signature: bool = True,
+    ) -> Tuple[BeaconState, BaseSignedBeaconBlock]:
+        state = apply_state_transition(
+            self.config, state, signed_block, future_slot, check_proposer_signature
+        )
 
-    def on_tick(self, tick: Tick) -> None:
-        self._fork_choice_store.on_tick(tick)
+        if signed_block:
+            signed_block = signed_block.transform(
+                ("message", "state_root"), state.hash_tree_root
+            )
 
-    def on_block(self, block: BaseBeaconBlock) -> None:
-        self._fork_choice_store.on_block(block)
-
-    def on_attestation(self, attestation: Attestation) -> None:
-        self._fork_choice_store.on_attestation(attestation)
+        return state, signed_block
