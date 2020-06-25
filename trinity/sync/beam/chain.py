@@ -8,14 +8,10 @@ from typing import (
 )
 
 from async_service import Service, background_asyncio_service
-
 from lahja import EndpointAPI
 
 from eth.abc import AtomicDatabaseAPI, BlockImportResult, DatabaseAPI
 from eth.constants import GENESIS_PARENT_HASH
-from eth.exceptions import (
-    BlockNotFound,
-)
 from eth.rlp.blocks import BaseBlock
 from eth.rlp.headers import BlockHeader
 from eth.rlp.transactions import BaseTransaction
@@ -74,9 +70,11 @@ from trinity.sync.beam.state import (
 )
 from trinity._utils.timer import Timer
 from trinity._utils.logging import get_logger
+from trinity._utils.headers import body_for_header_exists
 
 from .backfill import BeamStateBackfill
 from ..header.chain import SequentialHeaderChainGapSyncer
+
 
 STATS_DISPLAY_PERIOD = 10
 
@@ -110,6 +108,9 @@ class BeamSyncer(Service):
             force_beam_block_number: BlockNumber = None,
             enable_backfill: bool = True) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamSyncer')
+
+        self._body_for_header_exists = body_for_header_exists(chain_db, chain)
+
         if checkpoint is None:
             self._launch_strategy: SyncLaunchStrategyAPI = FromGenesisLaunchStrategy(chain_db)
         else:
@@ -307,12 +308,12 @@ class BeamSyncer(Service):
             headers_with_potential_conflicts: Iterable[BlockHeader]) -> bool:
 
         for header in headers_with_potential_conflicts:
-            if not await self._fast_syncer._should_skip_header(header):
+            if not await self._body_for_header_exists(header):
                 return False
         return True
 
 
-class RigorousFastChainBodySyncer(FastChainBodySyncer):
+class RigorousFastChainBodySyncer(Service):
     """
     Very much like the regular FastChainBodySyncer, but does a more robust
     check about whether we should skip syncing a header's body. We explicitly
@@ -322,21 +323,19 @@ class RigorousFastChainBodySyncer(FastChainBodySyncer):
     """
     _starting_tip: BlockHeader = None
 
-    async def _should_skip_header(self, header: BlockHeader) -> bool:
-        """
-        Should we skip trying to import this header?
-        Return True if the syncing of header appears to be complete.
-
-        Only skip the header if we've definitely got the body downloaded
-        """
-        if not await self.db.coro_header_exists(header.hash):
-            return False
-        try:
-            await self.chain.coro_get_block_by_header(header)
-        except BlockNotFound:
-            return False
-        else:
-            return True
+    def __init__(self,
+                 chain: AsyncChainAPI,
+                 db: BaseAsyncChainDB,
+                 peer_pool: ETHPeerPool,
+                 header_syncer: HeaderSyncerAPI) -> None:
+        self._body_syncer = FastChainBodySyncer(
+            chain,
+            db,
+            peer_pool,
+            header_syncer,
+            launch_header_fn=self._sync_from,
+            should_skip_header_fn=body_for_header_exists(db, chain)
+        )
 
     async def _sync_from(self) -> BlockHeader:
         """
@@ -354,6 +353,10 @@ class RigorousFastChainBodySyncer(FastChainBodySyncer):
         Explicitly set the sync-from target, to use instead of the canonical head.
         """
         self._starting_tip = header
+
+    async def run(self) -> None:
+
+        await self.manager.run_service(self._body_syncer)
 
 
 class HeaderLaunchpointSyncer(HeaderSyncerAPI):
