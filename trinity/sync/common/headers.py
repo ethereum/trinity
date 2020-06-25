@@ -23,6 +23,7 @@ from typing import (
 from async_service import Service, background_asyncio_service
 
 from eth.abc import BlockHeaderAPI
+from eth.typing import BlockRange
 
 from eth_typing import (
     BlockIdentifier,
@@ -545,6 +546,46 @@ class ManualHeaderSyncer(HeaderSyncerAPI):
         self._headers_to_emit = self._headers_to_emit + tuple(headers)
         self._final_header_hash = self._headers_to_emit[-1].hash
         self._new_data.set()
+
+
+class DatabaseBlockRangeHeaderSyncer(HeaderSyncerAPI):
+    """
+    A :class:`~trinity.sync.common.headers.HeaderSyncerAPI` that yields a given range of existing
+    headers from the database.
+    """
+    def __init__(self,
+                 db: BaseAsyncHeaderDB,
+                 block_range: BlockRange) -> None:
+
+        self._db = db
+        self._from_header, self._to_header = block_range
+        final_header = db.get_canonical_block_header_by_number(self._to_header)
+        self._final_header_hash = final_header.hash
+
+    async def new_sync_headers(
+            self,
+            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+        """
+        Yield all headers in the specified block range. This method will never return and simply
+        stop yielding headers after the last header is processed.
+        """
+
+        for block_number in range(self._from_header, self._to_header + 1):
+            header = await self._db.coro_get_canonical_block_header_by_number(
+                BlockNumber(block_number)
+            )
+            # Since we are fetching these from the db, it is much more resource friendly to not
+            # batch these to the max_batch_size and instead yield them one by one as we load them.
+            yield (header,)
+
+        # This API is not expected to ever finish
+        await asyncio.Future()
+
+    def get_target_header_hash(self) -> Hash32:
+        """
+        Return the target hash which is defined as the hash of right-hand block of the block range.
+        """
+        return self._final_header_hash
 
 
 class _PeerBehind(Exception):

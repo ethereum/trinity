@@ -8,13 +8,20 @@ from typing import (
 )
 
 from async_service import Service, background_asyncio_service
+
 from lahja import EndpointAPI
 
-from eth.abc import AtomicDatabaseAPI, BlockImportResult, DatabaseAPI
+from eth.abc import (
+    AtomicDatabaseAPI,
+    BlockHeaderAPI,
+    BlockImportResult,
+    DatabaseAPI,
+)
 from eth.constants import GENESIS_PARENT_HASH
 from eth.rlp.blocks import BaseBlock
 from eth.rlp.headers import BlockHeader
 from eth.rlp.transactions import BaseTransaction
+from eth.typing import BlockRange
 from eth_typing import (
     BlockNumber,
     Hash32,
@@ -32,8 +39,12 @@ from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.sync.beam.constants import (
     BEAM_PIVOT_BUFFER_FRACTION,
+    BLOCK_BACKFILL_IDLE_TIME,
     ESTIMATED_BEAMABLE_SECONDS,
     FULL_BLOCKS_NEEDED_TO_START_BEAM,
+    MAX_LAG_TO_PAUSE_BACKFILL,
+    MAX_LAG_TO_RESUME_BACKFILL,
+    PREDICTED_BLOCK_TIME,
 )
 from trinity.sync.common.checkpoint import (
     Checkpoint,
@@ -52,6 +63,7 @@ from trinity.sync.common.events import (
     MissingStorageResult,
 )
 from trinity.sync.common.headers import (
+    DatabaseBlockRangeHeaderSyncer,
     HeaderSyncerAPI,
     ManualHeaderSyncer,
     persist_headers,
@@ -172,6 +184,7 @@ class BeamSyncer(Service):
         )
 
         self._header_backfill = SequentialHeaderChainGapSyncer(chain, chain_db, peer_pool)
+        self._block_backfill = BodyChainGapSyncer(chain, chain_db, peer_pool)
 
         self._chain = chain
         self._enable_backfill = enable_backfill
@@ -188,10 +201,14 @@ class BeamSyncer(Service):
             self.manager.cancel()
             return
 
-        # There's no chance to introduce new gaps after this point. Therefore we can run this until
-        # it has filled all gaps and let it finish.
         if self._enable_backfill:
+            # There's no chance to introduce new gaps after this point. Therefore we can run this
+            # until it has filled all gaps and let it finish.
             self.manager.run_child_service(self._header_backfill)
+
+            # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
+            self.manager.run_daemon_child_service(self._block_backfill)
+            self.manager.run_daemon_task(self._monitor_block_backfill)
 
         self.manager.run_daemon_child_service(self._block_importer)
         self.manager.run_daemon_child_service(self._header_syncer)
@@ -312,6 +329,26 @@ class BeamSyncer(Service):
                 return False
         return True
 
+    async def _monitor_block_backfill(self) -> None:
+        while self.manager.is_running:
+            await asyncio.sleep(PREDICTED_BLOCK_TIME)
+            if self._block_backfill.get_manager().is_cancelled:
+                return
+            else:
+                lag = self.get_block_count_lag()
+                if lag >= MAX_LAG_TO_PAUSE_BACKFILL and not self._block_backfill.is_paused:
+                    self.logger.debug(
+                        "Pausing historical block sync because we lag %s blocks",
+                        lag,
+                    )
+                    self._block_backfill.pause()
+                elif lag <= MAX_LAG_TO_RESUME_BACKFILL and self._block_backfill.is_paused:
+                    self.logger.debug(
+                        "Resuming historical block sync because we lag %s blocks",
+                        lag,
+                    )
+                    self._block_backfill.resume()
+
 
 class RigorousFastChainBodySyncer(Service):
     """
@@ -357,6 +394,117 @@ class RigorousFastChainBodySyncer(Service):
     async def run(self) -> None:
 
         await self.manager.run_service(self._body_syncer)
+
+
+class BodyChainGapSyncer(Service):
+    """
+    A service to sync historical blocks without executing them. This service is meant to be run
+    in tandem with other operations that sync the state.
+    """
+
+    _starting_tip: BlockHeader = None
+    logger = get_logger('trinity.sync.beam.chain.BodyChainGapSyncer')
+
+    def __init__(self,
+                 chain: AsyncChainAPI,
+                 db: BaseAsyncChainDB,
+                 peer_pool: ETHPeerPool) -> None:
+        self._chain = chain
+        self._db = db
+        self._peer_pool = peer_pool
+        self._paused = False
+        self._resumed = asyncio.Event()
+
+    async def _setup_for_next_gap(self) -> None:
+        gap_start, gap_end = self._get_next_gap()
+        start_num = BlockNumber(gap_start - 1)
+        _starting_tip = await self._db.coro_get_canonical_block_header_by_number(start_num)
+
+        async def _get_launch_header() -> BlockHeaderAPI:
+            return _starting_tip
+
+        self.logger.debug("Starting to sync missing blocks from #%s to #%s", gap_start, gap_end)
+
+        self._body_syncer = FastChainBodySyncer(
+            self._chain,
+            self._db,
+            self._peer_pool,
+            DatabaseBlockRangeHeaderSyncer(self._db, (gap_start, gap_end,)),
+            launch_header_fn=_get_launch_header,
+            should_skip_header_fn=body_for_header_exists(self._db, self._chain)
+        )
+
+    def _get_next_gap(self) -> BlockRange:
+        gaps, future_tip_block = self._db.get_chain_gaps()
+        if len(gaps) == 0:
+            # We do not have gaps in the chain of blocks but we may still have a gap from the last
+            # block up until the highest consecutive written header.
+            header_gaps, future_tip_header = self._db.get_header_chain_gaps()
+            if len(header_gaps) > 0:
+                # The header chain has gaps, find out the lowest missing header
+                lowest_missing_header, _ = header_gaps[0]
+            else:
+                # It doesn't have gaps, so the future_tip_header is the lowest missing header
+                lowest_missing_header = future_tip_header
+
+            highest_consecutive_header = lowest_missing_header - 1
+            if highest_consecutive_header >= future_tip_block:
+                # The header before the lowest missing header is the highest consecutive header
+                # that exists in the db and it is higher than the future tip block. That's a gap
+                # we can try to close.
+                return future_tip_block, BlockNumber(highest_consecutive_header)
+            else:
+                raise ValidationError("No gaps in the chain of blocks")
+        else:
+            return gaps[0]
+
+    @property
+    def is_paused(self) -> bool:
+        """
+        Return ``True`` if the sync is currently paused, otherwise ``False``.
+        """
+        return self._paused
+
+    def pause(self) -> None:
+        """
+        Pause the sync. Pause and resume are wasteful actions and should not happen too frequently.
+        """
+        if self._paused:
+            raise RuntimeError("Invalid action. Can not pause service that is already paused.")
+
+        self._paused = True
+        self._body_syncer.get_manager().cancel()
+        self.logger.debug2("BodyChainGapSyncer paused")
+
+    def resume(self) -> None:
+        """
+        Resume the sync.
+        """
+        if not self._paused:
+            raise RuntimeError("Invalid action. Can not resume service that isn't paused.")
+
+        self._paused = False
+        self.logger.debug2("BodyChainGapSyncer resumed")
+        self._resumed.set()
+
+    async def run(self) -> None:
+        """
+        Run the sync indefinitely until it is cancelled externally.
+        """
+        while True:
+            if self._paused:
+                await self._resumed.wait()
+                self._resumed.clear()
+            try:
+                await self._setup_for_next_gap()
+            except ValidationError:
+                self.logger.debug(
+                    "There are no gaps in the chain of blocks at this time. Sleeping for %ss",
+                    BLOCK_BACKFILL_IDLE_TIME
+                )
+                await asyncio.sleep(BLOCK_BACKFILL_IDLE_TIME)
+            else:
+                await self.manager.run_service(self._body_syncer)
 
 
 class HeaderLaunchpointSyncer(HeaderSyncerAPI):

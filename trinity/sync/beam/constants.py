@@ -58,3 +58,13 @@ BEAM_PIVOT_BUFFER_FRACTION = 1 / 2
 # We need MAX_UNCLE_DEPTH + 1 headers to check during uncle validation
 # We need to request one more header, to set the starting tip
 FULL_BLOCKS_NEEDED_TO_START_BEAM = MAX_UNCLE_DEPTH + 2
+
+# The number of blocks that beam sync is allowed to lag behind when resuming backfill
+MAX_LAG_TO_RESUME_BACKFILL = 0
+
+# The number of blocks that, when lagged behind, will cause backfill to pause
+MAX_LAG_TO_PAUSE_BACKFILL = 5
+
+# The time that the block backfill should idle when there are concurrently no blocks to fill.
+# Once gaps are closed they can only re-occur when beam sync pivots so it's ok to idle a fair while.
+BLOCK_BACKFILL_IDLE_TIME = PREDICTED_BLOCK_TIME * 500
