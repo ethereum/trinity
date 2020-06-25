@@ -6,7 +6,10 @@ from async_service import Service, background_asyncio_service
 from eth.consensus import ConsensusContext
 from eth.db.atomic import AtomicDB
 from eth.db.schema import SchemaV1
-from eth.exceptions import HeaderNotFound, BlockNotFound
+from eth.exceptions import (
+    BlockNotFound,
+    HeaderNotFound,
+)
 from eth.vm.forks.petersburg import PetersburgVM
 from eth_utils import decode_hex
 from lahja import ConnectionConfig, AsyncioEndpoint
@@ -34,6 +37,7 @@ from trinity.protocol.les.peer import (
 
 from trinity.sync.beam.chain import (
     BeamSyncer,
+    BodyChainGapSyncer,
 )
 from trinity.sync.beam.queen import QueeningQueue
 from trinity.sync.header.chain import (
@@ -84,6 +88,27 @@ def chaindb_with_gaps(chaindb_fresh, chaindb_1000):
         chaindb_fresh.persist_checkpoint_header(header_at, score_at)
 
     assert chaindb_fresh.get_header_chain_gaps() == (((1, 249), (251, 499)), 501)
+    yield chaindb_fresh
+
+
+@pytest.fixture
+def chaindb_with_block_gaps(chaindb_fresh, chaindb_1000):
+    # Make a chain with gaps. This fixture can not be used in a test alongside `chaindb_fresh`
+    # because it alters the `chaindb_fresh` fixture.
+
+    all_headers = [
+        chaindb_1000.get_canonical_block_header_by_number(block_number)
+        for block_number in range(1, 1001)
+    ]
+    chaindb_fresh.persist_header_chain(all_headers)
+
+    fat_chain = LatestTestChain(chaindb_1000.db)
+    for block_number in (250, 500):
+        block = fat_chain.get_canonical_block_by_number(block_number)
+        receipts = block.get_receipts(chaindb_1000)
+        chaindb_fresh.persist_unexecuted_block(block, receipts)
+
+    assert chaindb_fresh.get_chain_gaps() == (((1, 249), (251, 499)), 501)
     yield chaindb_fresh
 
 
@@ -478,6 +503,72 @@ async def test_header_syncer(request,
 
 
 @pytest.mark.asyncio
+async def test_block_gapfill_syncer(request,
+                                    event_loop,
+                                    event_bus,
+                                    chaindb_with_block_gaps,
+                                    chaindb_1000):
+    client_context = ChainContextFactory(headerdb__db=chaindb_with_block_gaps.db)
+    server_context = ChainContextFactory(headerdb__db=chaindb_1000.db)
+    peer_pair = LatestETHPeerPairFactory(
+        alice_peer_context=client_context,
+        bob_peer_context=server_context,
+        event_bus=event_bus,
+    )
+    async with peer_pair as (client_peer, server_peer):
+
+        syncer = BodyChainGapSyncer(
+            LatestTestChain(chaindb_with_block_gaps.db),
+            chaindb_with_block_gaps,
+            MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
+        )
+        server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+
+        async with run_peer_pool_event_server(
+            event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
+        )):
+
+            server_peer.logger.info("%s is serving 1000 blocks", server_peer)
+            client_peer.logger.info("%s is syncing up 1000", client_peer)
+
+            async with background_asyncio_service(syncer):
+                chain_with_gaps = LatestTestChain(chaindb_with_block_gaps.db)
+                fat_chain = LatestTestChain(chaindb_1000.db)
+
+                # Sync the first 100 blocks, then check that pausing/resume works
+                await wait_for_block(
+                    chain_with_gaps, fat_chain.get_canonical_block_by_number(100))
+
+                # Pause the syncer and take note how far we have synced at this point
+                syncer.pause()
+                # We need to give async code a moment to settle before we save the progress to
+                # ensure it has stabilized before we save it.
+                await asyncio.sleep(0.01)
+                paused_chain_gaps = chain_with_gaps.chaindb.get_chain_gaps()
+
+                # Consider it victory if after 0.5s no new blocks were written to the database
+                await asyncio.sleep(0.5)
+                assert paused_chain_gaps == chain_with_gaps.chaindb.get_chain_gaps()
+
+                # Resume syncing
+                syncer.resume()
+
+                await wait_for_block(
+                    chain_with_gaps, fat_chain.get_canonical_block_by_number(1000), sync_timeout=20)
+
+                for block_num in range(1, 1001):
+                    assert chain_with_gaps.get_canonical_block_by_number(
+                        block_num) == fat_chain.get_canonical_block_by_number(block_num)
+
+                # We need to give the async calls a moment to settle before we can read the updated
+                # chain gaps.
+                await asyncio.sleep(0.1)
+                assert chain_with_gaps.chaindb.get_chain_gaps() == ((), 1001)
+
+
+@pytest.mark.asyncio
 async def test_header_gapfill_syncer(request,
                                      event_loop,
                                      event_bus,
@@ -728,5 +819,34 @@ async def wait_for_head(headerdb, header, sync_timeout=10):
             header,
             sync_timeout,
             canonical_head,
+        )
+        raise
+
+
+async def wait_for_block(chain, block, sync_timeout=10):
+    """
+    Await until the block the given ``block`` is found in the ``chain``
+    """
+
+    async def wait_loop():
+        synced_block = None
+        while synced_block != block:
+            try:
+                synced_block = chain.get_canonical_block_by_number(block.number)
+            except BlockNotFound:
+                await asyncio.sleep(0.1)
+            else:
+                break
+        assert synced_block == block
+    try:
+        await asyncio.wait_for(wait_loop(), sync_timeout)
+    except asyncio.TimeoutError:
+        gaps, future_tip = chain.chaindb.get_chain_gaps()
+        logging.error(
+            "Could not finish syncing to %s within %ds, gaps %s, future tip %s",
+            block,
+            sync_timeout,
+            gaps,
+            future_tip,
         )
         raise
