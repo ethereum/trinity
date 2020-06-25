@@ -90,7 +90,7 @@ from trinity._utils.datastructures import (
     TaskQueue,
 )
 from trinity._utils.headers import (
-    skip_complete_headers,
+    skip_complete_headers, is_header_in_db,
 )
 from trinity._utils.humanize import (
     humanize_integer_sequence,
@@ -591,12 +591,30 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
     highest TD, at which point we must run the StateDownloader to fetch the state for our chain
     head.
     """
+
     def __init__(self,
                  chain: AsyncChainAPI,
                  db: BaseAsyncChainDB,
                  peer_pool: ETHPeerPool,
-                 header_syncer: HeaderSyncerAPI) -> None:
+                 header_syncer: HeaderSyncerAPI,
+                 launch_header_fn: Callable[[], Awaitable[BlockHeaderAPI]] = None,
+                 should_skip_header_fn: Callable[[BlockHeaderAPI], Awaitable[bool]] = None,
+                 ) -> None:
         super().__init__(chain, db, peer_pool, header_syncer)
+
+        if launch_header_fn is None:
+            self._launch_header_fn: Callable[
+                [], Awaitable[BlockHeaderAPI]
+            ] = db.coro_get_canonical_head
+        else:
+            self._launch_header_fn = launch_header_fn
+
+        if should_skip_header_fn is None:
+            self._should_skip_header_fn: Callable[
+                [BlockHeaderAPI], Awaitable[bool]
+            ] = is_header_in_db(db)
+        else:
+            self._should_skip_header_fn = should_skip_header_fn
 
         # queue up any idle peers, in order of how fast they return receipts
         self._receipt_peers: WaitingPeers[ETHPeer] = WaitingPeers(commands.ReceiptsV65)
@@ -617,15 +635,8 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         # Track whether the fast chain syncer completed its goal
         self.is_complete = False
 
-    async def _sync_from(self) -> BlockHeaderAPI:
-        """
-        Select which header should be the last known header.
-        Start by importing headers that are children of this tip.
-        """
-        return await self.db.coro_get_canonical_head()
-
     async def run(self) -> None:
-        head = await self._sync_from()
+        head = await self._launch_header_fn()
         self.tracker = ChainSyncPerformanceTracker(head)
 
         self._block_persist_tracker.set_finished_dependency(head)
@@ -645,14 +656,6 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         self._body_peers.put_nowait(peer)
         self._receipt_peers.put_nowait(peer)
 
-    async def _should_skip_header(self, header: BlockHeaderAPI) -> bool:
-        """
-        Should we skip trying to import this header?
-        Return True if the syncing of header appears to be complete.
-        This is fairly relaxed about the definition, preferring speed over slow precision.
-        """
-        return await self.db.coro_header_exists(header.hash)
-
     async def _launch_prerequisite_tasks(self) -> None:
         """
         Watch for new headers to be added to the queue, and add the prerequisite
@@ -660,7 +663,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         """
         async for headers in self._sync_from_headers(
                 self._block_persist_tracker,
-                self._should_skip_header):
+                self._should_skip_header_fn):
 
             # Sometimes duplicates are added to the queue, when switching from one sync to another.
             # We can simply ignore them.

@@ -7,9 +7,14 @@ from typing import (
     TypeVar,
 )
 
+from eth_utils.toolz import curry
+
 from eth.abc import BlockHeaderAPI
 from eth.constants import UINT_256_MAX
+from eth.exceptions import BlockNotFound
 
+from trinity.chains.base import AsyncChainAPI
+from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.exceptions import OversizeObject
 
 
@@ -66,3 +71,25 @@ async def skip_complete_headers(
         first_incomplete_index = len(headers)
 
     return tuple(headers[:first_incomplete_index]), tuple(headers[first_incomplete_index:])
+
+
+@curry
+async def body_for_header_exists(db: BaseAsyncChainDB,
+                                 chain: AsyncChainAPI,
+                                 header: BlockHeaderAPI) -> bool:
+    """
+    Return ``True`` if the body for this header exists, otherwise ``False``.
+    """
+    if not await db.coro_header_exists(header.hash):
+        return False
+    try:
+        await chain.coro_get_block_by_header(header)
+    except BlockNotFound:
+        return False
+    else:
+        return True
+
+
+@curry
+def is_header_in_db(db: BaseAsyncChainDB, header: BlockHeaderAPI) -> Awaitable[bool]:
+    return db.coro_header_exists(header.hash)
