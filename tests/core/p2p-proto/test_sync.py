@@ -6,7 +6,7 @@ from async_service import Service, background_asyncio_service
 from eth.consensus import ConsensusContext
 from eth.db.atomic import AtomicDB
 from eth.db.schema import SchemaV1
-from eth.exceptions import HeaderNotFound
+from eth.exceptions import HeaderNotFound, BlockNotFound
 from eth.vm.forks.petersburg import PetersburgVM
 from eth_utils import decode_hex
 from lahja import ConnectionConfig, AsyncioEndpoint
@@ -530,8 +530,9 @@ async def test_sequential_header_gapfill_syncer(request,
     )
     async with peer_pair as (client_peer, server_peer):
 
+        chain_with_gaps = LatestTestChain(chaindb_with_gaps.db)
         client = SequentialHeaderChainGapSyncer(
-            LatestTestChain(chaindb_with_gaps.db),
+            chain_with_gaps,
             chaindb_with_gaps,
             MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
         )
@@ -551,6 +552,11 @@ async def test_sequential_header_gapfill_syncer(request,
                     # We check for 499 because 500 is there from the very beginning (the checkpoint)
                     chaindb_with_gaps, chaindb_1000.get_canonical_block_header_by_number(499)
                 )
+                # This test is supposed to only fill in headers, so the following should fail.
+                # If this ever succeeds it probably means the fixture was re-created with trivial
+                # blocks and the test will fail and remind us what kind of fixture we want here.
+                with pytest.raises(BlockNotFound):
+                    chain_with_gaps.get_canonical_block_by_number(499)
 
 
 @pytest.mark.asyncio
