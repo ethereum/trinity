@@ -28,7 +28,10 @@ class PongWhenPinged(CommandHandler[Ping]):
 
     async def handle(self, connection: ConnectionAPI, cmd: Ping) -> None:
         connection.logger.debug2("Received ping on %s, replying with pong", connection)
-        connection.get_base_protocol().send(Pong(None))
+        try:
+            connection.get_base_protocol().send(Pong(None))
+        except PeerConnectionLost:
+            connection.logger.debug2("%s disconnected while sending pong", connection)
 
 
 class PingAndDisconnectIfIdle(Service):
