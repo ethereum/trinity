@@ -90,11 +90,7 @@ async def server(event_bus, receiver_remote):
 
 
 @pytest.mark.asyncio
-async def test_server_incoming_connection(monkeypatch,
-                                          server,
-                                          event_loop,
-                                          receiver_remote,
-                                          ):
+async def test_server_incoming_connection(server, receiver_remote):
     use_eip8 = False
     initiator = HandshakeInitiator(receiver_remote, INITIATOR_PRIVKEY, use_eip8)
     initiator_remote = NodeFactory(
@@ -163,14 +159,22 @@ async def test_server_incoming_connection(monkeypatch,
     assert initiator_peer.sub_proto.version == receiver_peer.sub_proto.version
     assert initiator_peer.remote.pubkey == RECEIVER_PRIVKEY.public_key
 
+    # Our connections are created manually and we don't call run() on them, so we need to stop the
+    # background streaming task or else we'll get asyncio warnings about task exceptions not being
+    # retrieved.
+    await initiator_peer.connection._multiplexer.stop_streaming()
+    await receiver_peer.connection._multiplexer.stop_streaming()
+
 
 @pytest.mark.asyncio
-async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remote):
-    started_peers = []
+async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
+    peer_started = asyncio.Event()
+
+    start_peer = server.peer_pool.start_peer
 
     async def mock_start_peer(peer):
-        nonlocal started_peers
-        started_peers.append(peer)
+        await start_peer(peer)
+        peer_started.set()
 
     monkeypatch.setattr(server.peer_pool, 'start_peer', mock_start_peer)
 
@@ -182,10 +186,9 @@ async def test_peer_pool_connect(monkeypatch, event_loop, server, receiver_remot
     async with background_asyncio_service(initiator_peer_pool) as manager:
         await manager.wait_started()
         await initiator_peer_pool.connect_to_nodes(nodes)
-        # Give the receiver_server a chance to ack the handshake.
-        await asyncio.sleep(0.2)
 
-        assert len(started_peers) == 1
+        await asyncio.wait_for(peer_started.wait(), timeout=1)
+
         assert len(initiator_peer_pool.connected_nodes) == 1
 
 
