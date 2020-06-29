@@ -80,6 +80,10 @@ async def wait_first(futures: Sequence[asyncio.Future[None]]) -> None:
 
     If the task running us is cancelled, all futures will be cancelled.
     """
+    for future in futures:
+        if not isinstance(future, asyncio.Future):
+            raise ValueError("{future} is not an asyncio.Future")
+
     try:
         done, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
     except asyncio.CancelledError:

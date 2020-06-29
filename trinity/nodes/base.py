@@ -19,7 +19,6 @@ from trinity.db.eth1.header import (
     AsyncHeaderDB,
     BaseAsyncHeaderDB,
 )
-from trinity.events import ShutdownRequest
 from trinity.config import (
     Eth1ChainConfig,
     Eth1AppConfig,
@@ -131,8 +130,4 @@ class Node(Service, Generic[TPeer]):
             self.manager.run_daemon_child_service(self.get_p2p_server())
             self.manager.run_daemon_child_service(self.get_event_server())
             self.manager.run_daemon_child_service(self.metrics_service)
-            try:
-                await self.manager.wait_finished()
-            finally:
-                self.event_bus.broadcast_nowait(
-                    ShutdownRequest("Node exiting. Triggering shutdown"))
+            await self.manager.wait_finished()

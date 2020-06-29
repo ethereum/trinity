@@ -37,7 +37,6 @@ from trinity.config import Eth1AppConfig
 from trinity.db.eth1.header import BaseAsyncHeaderDB
 from trinity.db.manager import DBClient
 from trinity.db.eth1.header import TrioHeaderDB
-from trinity.events import ShutdownRequest
 from trinity.extensibility import (
     TrioIsolatedComponent,
 )
@@ -95,12 +94,8 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
                 (eth_cap_provider,),
             )
 
-        try:
-            with db:
-                await async_service.run_trio_service(discovery_service)
-        except Exception:
-            event_bus.broadcast_nowait(ShutdownRequest("Discovery ended unexpectedly"))
-            raise
+        with db:
+            await async_service.run_trio_service(discovery_service)
 
 
 async def generate_eth_cap_enr_field(

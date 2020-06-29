@@ -14,7 +14,6 @@ from asyncio_run_in_process.typing import SubprocessKwargs
 
 from trinity._utils.logging import child_process_logging, get_logger
 from trinity._utils.profiling import profiler
-from trinity.events import ShutdownRequest
 
 from .component import BaseComponent, BaseIsolatedComponent, TReturn
 from .event_bus import TrioEventBusService
@@ -51,18 +50,6 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
                 await self.do_run(event_bus)
         except (trio.Cancelled, trio.MultiError):
             # These are expected, when trinity is terminating because of a Ctrl-C
-            raise
-        except BaseException:
-            # Leaving trinity running after a component crashes can lead to unexpected
-            # behavior that'd be hard to debug/reproduce, so for now we shut it down if
-            # any component crashes unexpectedly.
-            event_bus.broadcast_nowait(ShutdownRequest(f"Unexpected error in {self}"))
-            # Because of an issue in the ComponentManager (see comment in
-            # _cleanup_component_task), when a component crashes and requests trinity to
-            # shutdown, there's still a chance its exception could be lost, so we log it
-            # here as well.
-            self.logger.exception(
-                "Unexpected error in component %s, shutting down trinity", self)
             raise
 
     async def _do_run(self) -> None:
