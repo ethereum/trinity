@@ -30,9 +30,9 @@ from p2p.abc import (
     TProtocol,
 )
 from p2p.exceptions import (
+    MalformedMessage,
     UnknownProtocol,
     UnknownProtocolCommand,
-    MalformedMessage,
 )
 from p2p.p2p_proto import BaseP2PProtocol
 from p2p._utils import (

@@ -173,6 +173,8 @@ async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
     start_peer = server.peer_pool.start_peer
 
     async def mock_start_peer(peer):
+        # Call the original start_peer() so that we create and run Peer/Connection objects,
+        # which will ensure everything is cleaned up properly.
         await start_peer(peer)
         peer_started.set()
 
