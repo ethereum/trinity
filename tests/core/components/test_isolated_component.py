@@ -14,6 +14,7 @@ from trinity.extensibility import ComponentManager
 from trinity.tools._component_isolation import (
     AsyncioComponentForTest,
     AsyncioBrokenComponent,
+    ComponentException,
     IsStarted,
     TrioBrokenComponent,
     TrioComponentForTest,
@@ -86,19 +87,16 @@ async def test_isolated_component(boot_info, log_listener, component, request):
 @pytest.mark.asyncio
 async def test_isolated_component_crash(boot_info, log_listener, component):
     component_manager = ComponentManager(boot_info, (component,))
-    async with background_asyncio_service(component_manager):
-        event_bus = await component_manager.get_event_bus()
-        component_started = asyncio.Event()
-        event_bus.subscribe(IsStarted, lambda ev: component_started.set())
-        await asyncio.wait_for(component_started.wait(), timeout=10)
-        try:
-            await asyncio.wait_for(component_manager._trigger_component_exit.wait(), timeout=1)
-        except asyncio.TimeoutError:
-            # XXX: For some reason, when this test fails this AssertionError gets somewhat
-            # obfuscated in the RemoteTraceback raised by asyncio-run-in-process, but the
-            # traceback itself point to this line as the cause of the failure.
-            raise AssertionError("ComponentManager did not get ShutdownRequest")
-
-        # Sleep a bit to give the component a chance to terminate, otherwise when shutting down
-        # the ComponentManager we end up double-killing it, which leads to asyncio warnings.
-        await asyncio.sleep(0.5)
+    with pytest.raises(ComponentException):
+        async with background_asyncio_service(component_manager):
+            event_bus = await component_manager.get_event_bus()
+            component_started = asyncio.Event()
+            event_bus.subscribe(IsStarted, lambda ev: component_started.set())
+            await asyncio.wait_for(component_started.wait(), timeout=10)
+            try:
+                await asyncio.wait_for(component_manager.manager.wait_finished(), timeout=1)
+            except asyncio.TimeoutError:
+                # XXX: For some reason, when this test fails this AssertionError gets somewhat
+                # obfuscated in the RemoteTraceback raised by asyncio-run-in-process, but the
+                # traceback itself point to this line as the cause of the failure.
+                raise AssertionError("ComponentManager did not stop")

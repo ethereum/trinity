@@ -10,12 +10,6 @@ from lahja import (
 
 
 @dataclass
-class ShutdownRequest(BaseEvent):
-
-    reason: str = ""
-
-
-@dataclass
 class EventBusConnected(BaseEvent):
     """
     Broadcasted when a new :class:`~lahja.endpoint.Endpoint` connects to the ``main``

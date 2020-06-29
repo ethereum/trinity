@@ -17,7 +17,6 @@ from trinity.components.eth2.eth1_monitor.configs import deposit_contract_json
 from trinity.components.eth2.eth1_monitor.eth1_data_provider import FakeEth1DataProvider
 from trinity.config import BeaconAppConfig
 from trinity.db.manager import DBClient
-from trinity.events import ShutdownRequest
 from trinity.extensibility import TrioIsolatedComponent
 
 from .eth1_data_provider import AVERAGE_BLOCK_TIME
@@ -112,10 +111,4 @@ class Eth1MonitorComponent(TrioIsolatedComponent):
                 base_db=base_db,
             )
 
-            try:
-                await TrioManager.run_service(eth1_monitor_service)
-            except Exception:
-                await event_bus.broadcast(
-                    ShutdownRequest("Eth1 Monitor ended unexpectedly")
-                )
-                raise
+            await TrioManager.run_service(eth1_monitor_service)

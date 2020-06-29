@@ -9,6 +9,7 @@ from argparse import (
     _ArgumentGroup,
     _SubParsersAction,
 )
+import asyncio
 import logging
 from typing import (
     Any,
@@ -50,7 +51,6 @@ from trinity.extensibility.asyncio import (
 from trinity.nodes.base import (
     Node,
 )
-from trinity.events import ShutdownRequest
 from trinity.protocol.common.peer import (
     BasePeer,
     BasePeerPool,
@@ -126,14 +126,6 @@ def add_disable_backfill_for_header_sync_arg(arg_group: _ArgumentGroup) -> None:
 
 class BaseSyncStrategy(ABC):
 
-    @property
-    def shutdown_node_on_halt(self) -> bool:
-        """
-        Return ``False`` if the `sync` is allowed to complete without causing
-        the node to fully shut down.
-        """
-        return True
-
     @classmethod
     def configure_parser(cls, arg_group: _ArgumentGroup) -> None:
         """
@@ -159,10 +151,6 @@ class BaseSyncStrategy(ABC):
 
 class NoopSyncStrategy(BaseSyncStrategy):
 
-    @property
-    def shutdown_node_on_halt(self) -> bool:
-        return False
-
     @classmethod
     def get_sync_mode(cls) -> str:
         return 'none'
@@ -176,6 +164,7 @@ class NoopSyncStrategy(BaseSyncStrategy):
                    event_bus: EndpointAPI) -> None:
 
         logger.info("Node running without sync (--sync-mode=%s)", self.get_sync_mode())
+        await asyncio.Future()
 
 
 class FullSyncStrategy(BaseSyncStrategy):
@@ -409,10 +398,6 @@ class SyncerComponent(AsyncioIsolatedComponent):
             node.get_peer_pool(),
             event_bus,
         )
-
-        if strategy.shutdown_node_on_halt:
-            cls.logger.error("Sync ended unexpectedly. Shutting down trinity")
-            event_bus.broadcast_nowait(ShutdownRequest("Sync ended unexpectedly"))
 
 
 if __name__ == "__main__":

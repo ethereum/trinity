@@ -1,6 +1,8 @@
 import asyncio
 import logging
 from typing import (
+    cast,
+    List,
     Sequence,
     Type,
     Tuple,
@@ -16,7 +18,6 @@ from trinity.constants import (
 )
 from trinity.contextgroup import AsyncContextGroup
 from trinity.events import (
-    ShutdownRequest,
     AvailableEndpointsUpdated,
     EventBusConnected,
 )
@@ -27,13 +28,9 @@ from trinity.extensibility import (
 
 class ComponentManager(Service):
     """
-    Run the given components and wait for a ShutdownRequest event.
+    Run the given components until any of them terminates.
 
-    When a ShutdownRequest is received, we cancel and wait for all components to terminate.
-
-    Notice that an unhandled exception from a component is only detected/reported when we leave
-    the AsyncContextGroup context (in the run() method), so components must send us a
-    ShutdownRequest if they want us to terminate.
+    If our process is killed, we cancel and wait for all components to terminate.
     """
 
     logger = logging.getLogger('trinity.extensibility.component_manager.ComponentManager')
@@ -66,9 +63,7 @@ class ComponentManager(Service):
             # start the background process that tracks and propagates available
             # endpoints to the other connected endpoints
             self.manager.run_daemon_task(self._track_and_propagate_available_endpoints)
-            self.manager.run_daemon_task(self._handle_shutdown_request)
 
-            await endpoint.wait_until_any_endpoint_subscribed_to(ShutdownRequest)
             await endpoint.wait_until_any_endpoint_subscribed_to(EventBusConnected)
 
             # signal the endpoint is up and running and available
@@ -96,10 +91,15 @@ class ComponentManager(Service):
                     '/'.join(component.name for component in enabled_components),
                 )
                 context_managers = [component.run() for component in enabled_components]
-                async with AsyncContextGroup(context_managers) as futures:
+                async with AsyncContextGroup(context_managers) as futs:
+                    # AsyncContextGroup() yields a Sequence[Any], so we cast to a list of Futures
+                    # here to ensure mypy can come to our aid if we forget the create_task() when
+                    # adding new entries to the list of Futures we want to wait for.
+                    futures = cast(List["asyncio.Future[None]"], list(futs))
+                    futures.append(asyncio.create_task(self._trigger_component_exit.wait()))
                     self.logger.info("Components started")
                     try:
-                        await wait_first(futures + (self._trigger_component_exit.wait(),))
+                        await wait_first(futures)
                     finally:
                         self.logger.info("Stopping components")
             finally:
@@ -110,18 +110,6 @@ class ComponentManager(Service):
         self.logger.info("Shutting down, reason: %s", reason)
         self.reason = reason
         self._trigger_component_exit.set()
-
-    async def _handle_shutdown_request(self) -> None:
-        shutdown_request_received = False
-        # We need to run in a loop because we're a daemon.
-        while self.manager.is_running:
-            req = await self._endpoint.wait_for(ShutdownRequest)
-            self.logger.info("Received shutdown request: %s", req.reason)
-            if shutdown_request_received:
-                self.logger.warning("Received multiple shutdown requests, ignoring")
-                continue
-            shutdown_request_received = True
-            self.shutdown(req.reason)
 
     _available_endpoints: Tuple[ConnectionConfig, ...] = ()
 
