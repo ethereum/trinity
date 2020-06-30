@@ -1,5 +1,7 @@
 from eth.constants import MAX_UNCLE_DEPTH
 
+from trinity.sync.common.constants import PREDICTED_BLOCK_TIME
+
 # Peers are typically expected to have predicted nodes available,
 #   so it's reasonable to ask for all-predictive nodes from a peer.
 # Urgent node requests usually come in pretty fast, so
@@ -46,7 +48,6 @@ GAP_BETWEEN_TESTS = 0.25
 ESTIMATED_BEAMABLE_BLOCKS = 75
 
 # It's also useful to estimate the amount of time covered by those beamable blocks.
-PREDICTED_BLOCK_TIME = 14
 ESTIMATED_BEAMABLE_SECONDS = ESTIMATED_BEAMABLE_BLOCKS * PREDICTED_BLOCK_TIME
 
 # To make up for clients that are configured with unusually low block times,

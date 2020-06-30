@@ -77,6 +77,7 @@ from trinity.sync.common.constants import (
     BLOCK_QUEUE_SIZE_TARGET,
     EMPTY_PEER_RESPONSE_PENALTY,
     HEADER_QUEUE_SIZE_TARGET,
+    PREDICTED_BLOCK_TIME,
 )
 from trinity.sync.common.headers import HeaderSyncerAPI
 from trinity.sync.common.peers import WaitingPeers
@@ -1143,8 +1144,18 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
 
             block = await self._import_queue.get()
             if not self._import_active.locked():
-                self.logger.info(
-                    "Waited %.1fs for %s body",
+                lag = time.time() - block.header.timestamp
+                if lag > PREDICTED_BLOCK_TIME * 2:
+                    # Only highlight that import was starved if we are
+                    #   still syncing from behind
+                    log_func = self.logger.info
+                else:
+                    # If we are near the time, we will often be starved
+                    #   for the next block, because it is still being mined.
+                    log_func = self.logger.debug
+
+                log_func(
+                    "Import starved for %.1fs, waiting for %s body",
                     waiting_for_next_block.elapsed,
                     block.header,
                 )
