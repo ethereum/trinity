@@ -576,25 +576,36 @@ async def test_header_gap_fill_detects_invalid_attempt(caplog,
             MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
         )
         server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
-
+        uncle_chaindb = AsyncChainDB(chaindb_uncle.db)
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_uncle.db),
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, uncle_chaindb,
         )):
 
             server_peer.logger.info("%s is serving 1000 blocks", server_peer)
             client_peer.logger.info("%s is syncing up 1000", client_peer)
 
+            # We check for 499 because 500 exists from the very beginning (the checkpoint)
+            expected_block_number = 499
             async with background_asyncio_service(client):
                 try:
                     await wait_for_head(
-                        # We check for 499 because 500 exists from the
-                        # very beginning (the checkpoint)
-                        chaindb_with_gaps, chaindb_1000.get_canonical_block_header_by_number(499)
+                        chaindb_with_gaps,
+                        chaindb_1000.get_canonical_block_header_by_number(expected_block_number),
+                        sync_timeout=5,
                     )
                 except asyncio.TimeoutError:
                     assert "Attempted to fill gap with invalid header" in caplog.text
+                    # Monkey patch the uncle chaindb to effectively make the attacker peer
+                    # switch to the correct chain.
+                    uncle_chaindb.db = chaindb_1000.db
+                    await wait_for_head(
+                        chaindb_with_gaps,
+                        chaindb_1000.get_canonical_block_header_by_number(expected_block_number)
+                    )
+                else:
+                    raise AssertionError("Succeeded when it was expected to fail")
 
 
 @pytest.mark.asyncio
