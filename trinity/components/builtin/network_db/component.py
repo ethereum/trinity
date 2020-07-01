@@ -3,11 +3,9 @@ from argparse import (
     ArgumentParser,
     _SubParsersAction,
 )
-import asyncio
-import contextlib
 from typing import ClassVar, Iterable
 
-from async_service import background_asyncio_service, Service
+from async_service import Service
 from eth_utils import ValidationError, to_tuple
 from lahja import EndpointAPI
 from sqlalchemy.orm import Session
@@ -45,6 +43,7 @@ from trinity.components.builtin.network_db.eth1_peer_db.tracker import (
     MemoryEth1PeerTracker,
 )
 from trinity._utils.logging import get_logger
+from trinity._utils.services import run_background_asyncio_services
 
 
 class NetworkDBComponent(AsyncioIsolatedComponent):
@@ -240,15 +239,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
         except BadDatabaseError as err:
             self.logger.exception(f"Unrecoverable error in Network Component: {err}")
 
-        async with contextlib.AsyncExitStack() as stack:
-            tracker_managers = tuple([
-                await stack.enter_async_context(background_asyncio_service(service))
-                for service in tracker_services
-            ])
-            await asyncio.gather(*(
-                manager.wait_finished()
-                for manager in tracker_managers
-            ))
+        await run_background_asyncio_services(tracker_services)
 
 
 if __name__ == "__main__":
