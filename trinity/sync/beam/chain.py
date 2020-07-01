@@ -285,7 +285,9 @@ class BeamSyncer(Service):
                 "Collecting %d blocks to genesis for uncle validation",
                 len(parent_headers),
             )
-            sync_from_tip = await self._chain.coro_get_canonical_block_by_number(BlockNumber(0))
+            sync_from_tip = await self._chain.coro_get_canonical_block_header_by_number(
+                BlockNumber(0)
+            )
             uncle_conflict_headers = parent_headers
         else:
             sync_from_tip = parent_headers[0]

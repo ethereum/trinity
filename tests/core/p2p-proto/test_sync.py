@@ -295,10 +295,16 @@ async def _beam_syncing(
 #       After persisting storage trie, a root node was not found.
 #       State root for account 0x49361e4f811f49542f19d691cf5f79d39983e8e0 is missing for
 #       hash 0x4d76d61d563099c7fa0088068bc7594d27334f5df2df43110bf86ff91dce5be6
+# -  2: Normally we need to look back ~6 headers to look for duplicate uncles. This
+#       tests the lowest block number code path where an alternate code path is triggered,
+#       to look up fewer than usual.
+# -  7: Normally we need to look back ~6 headers to look for duplicate uncles. This
+#       tests the highest block number code path where an alternate code path is triggered,
+#       to look up fewer than usual.
 # This test was reduced to a few cases for speed. To run the full suite, use
 # range(1, 130) for beam_to_block. (and optionally follow the instructions at target_head)
 @pytest.mark.asyncio
-@pytest.mark.parametrize('beam_to_block', [1, 66, 68, 129])
+@pytest.mark.parametrize('beam_to_block', [1, 2, 7, 66, 68, 129])
 async def test_beam_syncer_loads_recent_state_root(
         request,
         event_loop,
