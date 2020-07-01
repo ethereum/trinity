@@ -4,10 +4,8 @@ from argparse import (
     Namespace,
     _SubParsersAction,
 )
-import contextlib
 from typing import Type
 
-from async_service import background_trio_service
 from eth_utils import ValidationError
 
 from lahja import EndpointAPI
@@ -23,6 +21,7 @@ from trinity.components.builtin.metrics.system_metrics_collector import collect_
 from trinity.extensibility import (
     TrioIsolatedComponent,
 )
+from trinity._utils.services import run_background_trio_services
 
 
 def metrics_service_from_args(
@@ -157,15 +156,8 @@ class MetricsComponent(TrioIsolatedComponent):
             frequency_seconds=boot_info.args.metrics_blockchain_collector_frequency,
         )
 
-        services_to_exit = (
+        await run_background_trio_services([
             metrics_service,
             system_metrics_collector,
             blockchain_metrics_collector,
-        )
-
-        async with contextlib.AsyncExitStack() as stack:
-            managers = tuple([
-                await stack.enter_async_context(background_trio_service(service))
-                for service in services_to_exit
-            ])
-            await managers[0].wait_finished()
+        ])

@@ -5,7 +5,7 @@ from argparse import (
 import contextlib
 from typing import Iterator, Tuple, Union
 
-from async_service import background_asyncio_service, Service
+from async_service import Service
 
 from lahja import EndpointAPI
 
@@ -42,6 +42,7 @@ from trinity.http.handlers.rpc_handler import RPCHandler
 from trinity.http.main import (
     HTTPServer,
 )
+from trinity._utils.services import run_background_asyncio_services
 
 
 @contextlib.contextmanager
@@ -151,9 +152,4 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
                 )
                 services_to_exit += (http_server,)
 
-            async with contextlib.AsyncExitStack() as stack:
-                managers = tuple([
-                    await stack.enter_async_context(background_asyncio_service(service))
-                    for service in services_to_exit
-                ])
-                await managers[0].wait_finished()
+            await run_background_asyncio_services(services_to_exit)
