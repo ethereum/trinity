@@ -242,6 +242,10 @@ class BaseSignedBeaconBlock(HashableContainer):
         return self.message.state_root
 
     @property
+    def proposer_index(self) -> ValidatorIndex:
+        return self.message.proposer_index
+
+    @property
     def is_genesis(self) -> bool:
         return self.message.is_genesis
 
@@ -259,6 +263,7 @@ class BaseSignedBeaconBlock(HashableContainer):
             f" [block_root]={humanize_hash(self.message.hash_tree_root)},"
             f" [signature]={humanize_hash(self.signature)},"
             f" slot={self.slot},"
+            f" proposer_index={self.proposer_index},"
             f" parent_root={humanize_hash(self.parent_root)},"
             f" state_root={humanize_hash(self.state_root)},"
             f" body=({self.body})"

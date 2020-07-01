@@ -8,7 +8,6 @@ from eth2._utils.bls import bls
 from eth2.beacon.tools.builder.validator import aggregate_votes, verify_votes
 
 
-@pytest.mark.slow
 @settings(max_examples=1, deadline=None)
 @given(random=st.randoms())
 @pytest.mark.parametrize(("votes_count"), [(0), (9)])

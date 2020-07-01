@@ -111,7 +111,9 @@ def validate_proposer_signature(
         bls.validate(signing_root, signed_block.signature, proposer_pubkey)
     except SignatureError as error:
         raise ValidationError(
-            f"Invalid Proposer Signature on block, beacon_proposer_index={beacon_proposer_index}",
+            f"Invalid proposer signature on block with proposer index"
+            f" {signed_block.message.proposer_index} and"
+            f" expected proposer index {beacon_proposer_index}",
             error,
         )
 

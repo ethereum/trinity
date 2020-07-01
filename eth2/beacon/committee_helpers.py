@@ -63,7 +63,7 @@ def compute_proposer_index(
     Return from ``indices`` a random index sampled by effective balance.
     """
     if len(indices) == 0:
-        raise ValidationError("There is no any active validator.")
+        raise ValidationError("There is no active validators.")
 
     i = 0
     while True:
@@ -77,7 +77,6 @@ def compute_proposer_index(
         if effective_balance * MAX_RANDOM_BYTE >= max_effective_balance * random_byte:
             return candidate_index
 
-        # Log the warning message in case it happends.
         if i % len(indices) == 0 and i > 0:
             logger.warning(
                 "Tried over %d times in compute_proposer_index while loop.", i
