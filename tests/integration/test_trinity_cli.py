@@ -4,6 +4,7 @@ import sys
 import tempfile
 import time
 import os
+import zipfile
 
 import pexpect
 import pytest
@@ -11,6 +12,8 @@ import pytest
 from eth.constants import (
     GENESIS_BLOCK_NUMBER,
 )
+
+from eth_utils.hexadecimal import remove_0x_prefix
 
 from tests.integration.helpers import (
     run_command_and_detect_errors,
@@ -26,6 +29,10 @@ from trinity.constants import (
 from trinity.tools.async_process_runner import AsyncProcessRunner
 from trinity._utils.async_iter import (
     contains_all
+)
+from trinity._utils.chains import (
+    get_nodekey_path,
+    load_nodekey,
 )
 
 
@@ -50,6 +57,43 @@ def amend_command_for_unused_port(command, unused_tcp_port):
     # trinity instance
     command += (f'--port={unused_tcp_port}',)
     return command
+
+
+@pytest.fixture
+def prepopulated_datadir():
+    # A mainnet datadir with the first 580 headers, but no block bodies.
+    zipped_datadir = pathlib.Path(__file__).parent / 'fixtures' / 'trinity_headerchain_datadir.zip'
+    with zipfile.ZipFile(zipped_datadir, 'r') as zipped, tempfile.TemporaryDirectory() as temp_dir:
+        zipped.extractall(temp_dir)
+        yield pathlib.Path(temp_dir) / 'trinity'
+
+
+@pytest.mark.asyncio
+async def test_trinity_sync_from_trinity(unused_tcp_port_factory, prepopulated_datadir):
+    port1 = unused_tcp_port_factory()
+    listen_ip = '0.0.0.0'
+    nodekey = load_nodekey(get_nodekey_path(prepopulated_datadir / 'mainnet'))
+    serving_enode = f'enode://{remove_0x_prefix(nodekey.public_key.to_hex())}@{listen_ip}:{port1}'
+    command1 = amend_command_for_unused_port(
+        ('trinity', '--trinity-root-dir', str(prepopulated_datadir), '--disable-discovery'),
+        port1)
+    async with AsyncProcessRunner.run(command1, timeout_sec=120) as runner1:
+        assert await contains_all(runner1.stderr, {serving_enode})
+        port2 = unused_tcp_port_factory()
+        command2 = amend_command_for_unused_port(
+            ('trinity', '--disable-discovery', '--preferred-node', serving_enode),
+            port2)
+        async with AsyncProcessRunner.run(command2, timeout_sec=120) as runner2:
+            assert await contains_all(runner2.stderr, {
+                "Adding ETHPeer",
+                "Imported 192 headers",
+                "Caught up to skeleton peer",
+            })
+
+            # A weak assertion to try and ensure our nodes are actually talking to each other.
+            assert await contains_all(runner1.stderr, {
+                "Adding ETHPeer",
+            })
 
 
 @pytest.mark.parametrize(
