@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 import logging
 import uuid
 
@@ -161,7 +162,7 @@ async def test_beam_syncer_with_checkpoint_too_close_to_tip(
 
     caplog.set_level(logging.INFO)
     try:
-        await test_beam_syncer(
+        await test_beam_syncer_loads_recent_state_root(
             request,
             event_loop,
             event_bus,
@@ -189,7 +190,7 @@ async def test_beam_syncer_with_checkpoint(
         score=55,
     )
 
-    await test_beam_syncer(
+    await test_beam_syncer_loads_recent_state_root(
         request,
         event_loop,
         event_bus,
@@ -200,25 +201,17 @@ async def test_beam_syncer_with_checkpoint(
     )
 
 
-# Identified tricky scenarios:
-# - 66: Missing an account trie node required for account deletion trie fixups,
-#       when "resuming" execution after completing all transactions
-# - 68: If some storage saves succeed and some fail, you might get:
-#       After persisting storage trie, a root node was not found.
-#       State root for account 0x49361e4f811f49542f19d691cf5f79d39983e8e0 is missing for
-#       hash 0x4d76d61d563099c7fa0088068bc7594d27334f5df2df43110bf86ff91dce5be6
-# This test was reduced to a few cases for speed. To run the full suite, use
-# range(1, 130) for beam_to_block. (and optionally follow the instructions at target_head)
-@pytest.mark.asyncio
-@pytest.mark.parametrize('beam_to_block', [1, 66, 68, 129])
-async def test_beam_syncer(
+@asynccontextmanager
+async def _beam_syncing(
         request,
         event_loop,
         event_bus,
         chaindb_fresh,
         chaindb_churner,
         beam_to_block,
-        checkpoint=None):
+        checkpoint=None,
+        VM_at_0=PetersburgVM,
+):
 
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
     server_context = ChainContextFactory(headerdb__db=chaindb_churner.db)
@@ -227,7 +220,12 @@ async def test_beam_syncer(
         bob_peer_context=server_context,
         event_bus=event_bus,
     )
-    async with peer_pair as (client_peer, server_peer):
+    backfiller = LatestETHPeerPairFactory(
+        alice_peer_context=client_context,
+        bob_peer_context=server_context,
+        event_bus=event_bus,
+    )
+    async with peer_pair as (client_peer, server_peer), backfiller as (client2_peer, backfill_peer):
 
         # Need a name that will be unique per xdist-process, otherwise
         #   lahja IPC endpoints in each process will clobber each other
@@ -239,11 +237,17 @@ async def test_beam_syncer(
         # manually add endpoint for trie data gatherer to serve requests
         gatherer_config = ConnectionConfig.from_name(f"GathererEndpoint-{unique_process_name}")
 
-        client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
+        client_peer_pool = MockPeerPoolWithConnectedPeers(
+            [client_peer, backfill_peer],
+            event_bus=event_bus,
+        )
         server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+        backfill_peer_pool = MockPeerPoolWithConnectedPeers([client2_peer], event_bus=event_bus)
 
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ), run_peer_pool_event_server(
+            event_bus, backfill_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
             event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_churner.db)
         )), AsyncioEndpoint.serve(
@@ -251,7 +255,7 @@ async def test_beam_syncer(
         ) as pausing_endpoint, AsyncioEndpoint.serve(gatherer_config) as gatherer_endpoint:
 
             client_chain = make_pausing_beam_chain(
-                ((0, PetersburgVM), ),
+                ((0, VM_at_0), ),
                 chain_id=999,
                 consensus_context_class=ConsensusContext,
                 db=chaindb_fresh.db,
@@ -271,6 +275,7 @@ async def test_beam_syncer(
             )
 
             client_peer.logger.info("%s is serving churner blocks", client_peer)
+            backfill_peer.logger.info("%s is serving backfill state", client_peer)
             server_peer.logger.info("%s is syncing up churner blocks", server_peer)
 
             import_server = BlockImportServer(
@@ -280,17 +285,57 @@ async def test_beam_syncer(
             async with background_asyncio_service(import_server):
                 await pausing_endpoint.connect_to_endpoints(gatherer_config)
                 async with background_asyncio_service(client):
-                    # We can sync at least 10 blocks in 1s at current speeds, (or
-                    # reach the current one) Trying to keep the tests short-ish. A
-                    # fuller test could always set the target header to the
-                    # chaindb_churner canonical head, and increase the timeout
-                    # significantly
-                    target_block_number = min(beam_to_block + 10, 129)
-                    target_head = chaindb_churner.get_canonical_block_header_by_number(
-                        target_block_number,
-                    )
-                    await wait_for_head(chaindb_fresh, target_head, sync_timeout=10)
-                    assert target_head.state_root in chaindb_fresh.db
+                    yield
+
+
+# Cases of interest:
+# - 66: Missing an account trie node required for account deletion trie fixups,
+#       when "resuming" execution after completing all transactions
+# - 68: If some storage saves succeed and some fail, you might get:
+#       After persisting storage trie, a root node was not found.
+#       State root for account 0x49361e4f811f49542f19d691cf5f79d39983e8e0 is missing for
+#       hash 0x4d76d61d563099c7fa0088068bc7594d27334f5df2df43110bf86ff91dce5be6
+# -  2: Normally we need to look back ~6 headers to look for duplicate uncles. This
+#       tests the lowest block number code path where an alternate code path is triggered,
+#       to look up fewer than usual.
+# -  7: Normally we need to look back ~6 headers to look for duplicate uncles. This
+#       tests the highest block number code path where an alternate code path is triggered,
+#       to look up fewer than usual.
+# This test was reduced to a few cases for speed. To run the full suite, use
+# range(1, 130) for beam_to_block. (and optionally follow the instructions at target_head)
+@pytest.mark.asyncio
+@pytest.mark.parametrize('beam_to_block', [1, 2, 7, 66, 68, 129])
+async def test_beam_syncer_loads_recent_state_root(
+        request,
+        event_loop,
+        event_bus,
+        chaindb_fresh,
+        chaindb_churner,
+        beam_to_block,
+        checkpoint=None):
+
+    sync_test_service = _beam_syncing(
+        request,
+        event_loop,
+        event_bus,
+        chaindb_fresh,
+        chaindb_churner,
+        beam_to_block,
+        checkpoint,
+    )
+
+    async with sync_test_service:
+        # We can sync at least 10 blocks in 1s at current speeds, (or
+        # reach the current one) Trying to keep the tests short-ish. A
+        # fuller test could always set the target header to the
+        # chaindb_churner canonical head, and increase the timeout
+        # significantly
+        target_block_number = min(beam_to_block + 10, 129)
+        target_head = chaindb_churner.get_canonical_block_header_by_number(
+            target_block_number,
+        )
+        await wait_for_head(chaindb_fresh, target_head, sync_timeout=5)
+        assert target_head.state_root in chaindb_fresh.db
 
 
 @pytest.mark.asyncio
