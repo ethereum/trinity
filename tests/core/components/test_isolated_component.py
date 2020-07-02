@@ -57,7 +57,11 @@ def log_listener(trinity_config):
 # SIGINT, but currently that's not the case: https://github.com/ethereum/trinity/issues/1711.
 @pytest.mark.parametrize("component", (AsyncioComponentForTest, TrioComponentForTest))
 @pytest.mark.asyncio
-async def test_isolated_component(boot_info, log_listener, component, request):
+async def test_isolated_component(boot_info, log_listener, component, request, monkeypatch):
+    # On overloaded CI machines it can sometimes take a while for a component's process to start,
+    # so we need a high timeout here.
+    component_timeout = 10
+    monkeypatch.setenv('ASYNCIO_RUN_IN_PROCESS_STARTUP_TIMEOUT', str(component_timeout))
     # Test the lifecycle management for isolated process components to be sure
     # they start and stop as expected
     component_manager = ComponentManager(boot_info, (component,))
@@ -69,7 +73,7 @@ async def test_isolated_component(boot_info, log_listener, component, request):
 
         event_bus.subscribe(IsStarted, lambda ev: got_started.set_result(ev.path))
 
-        touch_path = await asyncio.wait_for(got_started, timeout=10)
+        touch_path = await asyncio.wait_for(got_started, timeout=component_timeout)
 
         def delete_touch_path():
             if touch_path.exists():
@@ -85,14 +89,18 @@ async def test_isolated_component(boot_info, log_listener, component, request):
 
 @pytest.mark.parametrize("component", (AsyncioBrokenComponent, TrioBrokenComponent))
 @pytest.mark.asyncio
-async def test_isolated_component_crash(boot_info, log_listener, component):
+async def test_isolated_component_crash(boot_info, log_listener, component, monkeypatch):
+    # On overloaded CI machines it can sometimes take a while for a component's process to start,
+    # so we need a high timeout here.
+    component_timeout = 10
+    monkeypatch.setenv('ASYNCIO_RUN_IN_PROCESS_STARTUP_TIMEOUT', str(component_timeout))
     component_manager = ComponentManager(boot_info, (component,))
     with pytest.raises(ComponentException):
         async with background_asyncio_service(component_manager):
             event_bus = await component_manager.get_event_bus()
             component_started = asyncio.Event()
             event_bus.subscribe(IsStarted, lambda ev: component_started.set())
-            await asyncio.wait_for(component_started.wait(), timeout=10)
+            await asyncio.wait_for(component_started.wait(), timeout=component_timeout)
             try:
                 await asyncio.wait_for(component_manager.manager.wait_finished(), timeout=1)
             except asyncio.TimeoutError:
