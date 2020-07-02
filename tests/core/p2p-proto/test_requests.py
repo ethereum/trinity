@@ -20,6 +20,7 @@ from trinity.protocol.eth.servers import ETHRequestServer
 
 from trinity.tools.factories import (
     ChainContextFactory,
+    LatestETHPeerPairFactory,
     ALL_PEER_PAIR_FACTORIES,
 )
 
@@ -256,3 +257,43 @@ async def test_requests_when_peer_in_client_vanishs(request,
 
         with pytest.raises(PeerConnectionLost):
             await proxy_peer.eth_api.get_node_data(())
+
+
+#
+# === ETH-specific server tests
+#
+
+@pytest.mark.asyncio
+async def test_no_duplicate_node_data(request, event_loop, event_bus, chaindb_fresh, chaindb_20):
+    """
+    Test that when a peer calls GetNodeData to ETHRequestServer, with duplicate node hashes,
+    that ETHRequestServer only responds with unique nodes.
+
+    Note: A nice extension to the test would be to check that a warning is
+        raised about sending the duplicate hashes in the first place.
+    """
+    client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
+    server_context = ChainContextFactory(headerdb__db=chaindb_20.db)
+    peer_pair = LatestETHPeerPairFactory(
+        alice_peer_context=client_context,
+        bob_peer_context=server_context,
+        event_bus=event_bus,
+    )
+
+    async with peer_pair as (client_to_server, server_to_client):
+
+        server_peer_pool = MockPeerPoolWithConnectedPeers([server_to_client], event_bus=event_bus)
+
+        async with run_peer_pool_event_server(
+            event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db)
+        )):
+            root_hash = chaindb_20.get_canonical_head().state_root
+            state_root = chaindb_20.db[root_hash]
+
+            returned_nodes = await client_to_server.eth_api.get_node_data((root_hash, root_hash))
+            assert returned_nodes == (
+                # Server must not send back duplicates, just the single root node
+                (root_hash, state_root),
+            )

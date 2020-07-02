@@ -143,7 +143,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
         nodes = []
         missing_node_hashes = []
         # Only serve up to MAX_STATE_FETCH items in every request.
-        for node_hash in node_hashes[:MAX_STATE_FETCH]:
+        for node_hash in set(node_hashes[:MAX_STATE_FETCH]):
             try:
                 node = await self.db.coro_get(node_hash)
             except KeyError:
