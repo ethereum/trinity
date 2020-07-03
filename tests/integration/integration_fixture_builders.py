@@ -5,6 +5,8 @@ from eth_utils import decode_hex
 from tests.core.integration_test_helpers import FUNDED_ACCT, load_mining_chain
 
 from .churn_state.builder import (
+    add_nymph_contract,
+    churn_storage_once,
     delete_churn,
     deploy_storage_churn_contract,
     update_churn,
@@ -60,3 +62,40 @@ def build_pow_churning_fixture(write_db, num_blocks=40):
     nymph_contracts, nonce = update_churn(chain, contract_addr, num_blocks=half_blocks)
     delete_churn(chain, nymph_contracts, contract_addr, start_nonce=nonce, num_blocks=half_blocks)
     return chain, contract_addr
+
+
+def build_pow_cold_state_fixture(write_db, num_blocks=10):
+    chain = load_mining_chain(write_db)
+
+    # Reuse the churning methods for convenience, rather than because they're
+    #   specially suited to the task
+
+    # Deploy three contracts to fill with data, then never touch the first two
+    cold1, cold2, active = [deploy_storage_churn_contract(chain, nonce) for nonce in range(3)]
+
+    chain.mine_block()
+
+    # Fill in some cold data
+    churn_storage_once(chain, cold1, nonce=3)
+    churn_storage_once(chain, cold2, nonce=4)
+    churn_storage_once(chain, cold2, nonce=5)
+
+    chain.mine_block()
+
+    # Add some unique bytecodes that are not called later in the chain
+    # This is to test if bytecodes get backfilled
+    add_nymph_contract(chain, nonce=6, variant=1)
+    add_nymph_contract(chain, nonce=7, variant=2)
+
+    chain.mine_block()
+
+    # Create a bunch of accounts, just to branch out the address space a bit
+    for nonce in range(8, 128):
+        add_nymph_contract(chain, nonce)
+        if nonce % 35 == 5:
+            chain.mine_block()
+
+    chain.mine_block()
+
+    update_churn(chain, active, start_nonce=128, num_blocks=num_blocks)
+    return chain, (cold1, cold2, active)

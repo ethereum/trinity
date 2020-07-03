@@ -6,8 +6,7 @@ from eth_utils import decode_hex
 from tests.core.integration_test_helpers import FUNDED_ACCT
 
 
-def deploy_storage_churn_contract(chain):
-    nonce = 0
+def deploy_storage_churn_contract(chain, nonce=0):
     deploy_tx = chain.create_unsigned_transaction(
         nonce=nonce,
         gas_price=1234,
@@ -26,11 +25,11 @@ def update_churn(chain, contract_addr, start_nonce=1, num_blocks=20):
     nymph_addrs = []
     nonces = itertools.count(start_nonce)
     for _ in range(num_blocks):
-        _churn_storage_once(chain, contract_addr, next(nonces))
-        _churn_storage_once(chain, contract_addr, next(nonces))
+        churn_storage_once(chain, contract_addr, next(nonces))
+        churn_storage_once(chain, contract_addr, next(nonces))
         nymph_addrs.extend([
-            _add_nymph_contract(chain, next(nonces)),
-            _add_nymph_contract(chain, next(nonces)),
+            add_nymph_contract(chain, next(nonces)),
+            add_nymph_contract(chain, next(nonces)),
         ])
         chain.mine_block()
     return nymph_addrs, next(nonces)
@@ -51,7 +50,7 @@ def delete_churn(chain, nymph_addresses, contract_addr, start_nonce=1, num_block
     return nymph_addresses
 
 
-def _churn_storage_once(chain, contract_addr, nonce):
+def churn_storage_once(chain, contract_addr, nonce):
     # invoke function shuffle the storage, with a width of 64
     # shuffle(uint256)
     func_id = decode_hex("0xef6537b5")
@@ -63,26 +62,36 @@ def _churn_storage_once(chain, contract_addr, nonce):
     tx = chain.create_unsigned_transaction(
         nonce=nonce,
         gas_price=1234,
-        gas=123456,
+        gas=300000,
         to=contract_addr,
         value=0,
         data=method_invocation,
     )
     _, _, computation = chain.apply_transaction(tx.as_signed_transaction(FUNDED_ACCT))
-    assert computation.is_success
+    computation.raise_if_error()
 
 
-def _add_nymph_contract(chain, nonce):
+NYMPH_BYTECODES = [
+    decode_hex("6080604052348015600f57600080fd5b50607a8061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80635969aa8414602d575b600080fd5b60336035565b005b3373ffffffffffffffffffffffffffffffffffffffff16fffea165627a7a72305820cc81a4355ab2bb255e1233528ced5013be67280d530689ba007ed9f206230c740029"),  # noqa: E501
+    decode_hex("6080604052348015600f57600080fd5b50606e80601d6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063efef643214602d575b600080fd5b60336035565b005b33fffea2646970667358221220b4ea18f564027780dd6914a115a492a1dbf78dc68f64b867e51db5a6c71238c964736f6c634300060a0033"),  # noqa: E501
+    decode_hex("6080604052348015600f57600080fd5b50606e80601d6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063052950fc14602d575b600080fd5b60336035565b005b33fffea26469706673582212201ded73ef5821dbba54ce9bf1768654ba3ee022844594138501f73c9b5432163264736f6c634300060a0033"),  # noqa: E501
+]
+
+
+def add_nymph_contract(chain, nonce, variant=0):
+    if variant not in range(len(NYMPH_BYTECODES)):
+        raise ValueError(f"Unrecognized Nymph variant {variant}")
+
     deploy_tx = chain.create_unsigned_transaction(
         nonce=nonce,
         gas_price=1234,
         gas=123457,
         to=b'',
         value=0,
-        data=decode_hex("6080604052348015600f57600080fd5b50607a8061001e6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80635969aa8414602d575b600080fd5b60336035565b005b3373ffffffffffffffffffffffffffffffffffffffff16fffea165627a7a72305820cc81a4355ab2bb255e1233528ced5013be67280d530689ba007ed9f206230c740029"),  # noqa: E501
+        data=NYMPH_BYTECODES[variant],
     )
     _, _, computation = chain.apply_transaction(deploy_tx.as_signed_transaction(FUNDED_ACCT))
-    assert computation.is_success
+    computation.raise_if_error()
 
     return generate_contract_address(FUNDED_ACCT.public_key.to_canonical_address(), nonce)
 
@@ -105,7 +114,7 @@ def _delete_storage_twice(chain, contract_addr, nonce):
         data=method_invocation,
     )
     _, _, computation = chain.apply_transaction(tx.as_signed_transaction(FUNDED_ACCT))
-    assert computation.is_success
+    computation.raise_if_error()
 
 
 def _delete_nymph(chain, contract_addr, nonce):
@@ -122,4 +131,4 @@ def _delete_nymph(chain, contract_addr, nonce):
         data=func_id,
     )
     _, _, computation = chain.apply_transaction(tx.as_signed_transaction(FUNDED_ACCT))
-    assert computation.is_success
+    computation.raise_if_error()

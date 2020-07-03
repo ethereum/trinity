@@ -2,10 +2,18 @@ import pytest
 
 from eth.db.atomic import AtomicDB
 
-from .integration_fixture_builders import build_pow_fixture, build_pow_churning_fixture
+from .integration_fixture_builders import (
+    build_pow_churning_fixture,
+    build_pow_cold_state_fixture,
+    build_pow_fixture,
+)
 
 
-@pytest.mark.parametrize('builder', (build_pow_fixture, build_pow_churning_fixture))
+@pytest.mark.parametrize('builder', (
+    build_pow_churning_fixture,
+    build_pow_cold_state_fixture,
+    build_pow_fixture,
+))
 def test_fixture_builders(builder):
     # just make sure it doesn't crash, for now
     db = AtomicDB()

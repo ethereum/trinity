@@ -30,6 +30,28 @@ ZIPPED_FIXTURES_PATH = Path(__file__).parent.parent / 'integration' / 'fixtures'
 FUNDED_ACCT = keys.PrivateKey(
     decode_hex("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee"))
 
+# How to build your own database:
+#
+#   - Create your own tests.integration.integration_fixture_builders.build_* method
+#   - Use it to create a database like:
+#       from eth.db.atomic import AtomicDB
+#       import importlib
+#       from tests.integration import integration_fixture_builders as ifb
+#       db = AtomicDB(); ifb.build_YOUR_NEW_METHOD(db, num_blocks=SOME_SMALL_TEST_NUMBER)
+#       # inevitable debugging
+#       importlib.reload(ifb)
+#       db = AtomicDB(); ifb.build_YOUR_NEW_METHOD(db, num_blocks=SOME_SMALL_TEST_NUMBER)
+#       # inevitable debugging, etc...
+#       # It works!
+#       from eth.db.backends.level import LevelDB
+#       ldb = LevelDB('/tmp/NEW_DB_NAME.ldb')
+#       ifb.build_YOUR_NEW_METHOD(ldb, num_blocks=FULL_TEST_NUMBER)
+#   - Then zip it up:
+#       cd /tmp; zip -r NEW_DB_NAME.ldb.zip NEW_DB_NAME.ldb
+#       cd -
+#       mv /tmp/NEW_DB_NAME.ldb.zip tests/integration/fixtures/.
+#   - Finally, add an entry to DBFixture
+
 
 def load_mining_chain(db, *chain_builder_fns):
     GENESIS_PARAMS = {
@@ -66,6 +88,14 @@ class DBFixture(Enum):
     # contracts that are later deleted. It was built with:
     # build_pow_churning_fixture(db, 128)
     STATE_CHURNER = 'churn_state.ldb'
+
+    # This chain adds a bunch of state in the first few blocks, then doesn't
+    #   touch it again. The motivation is to test state backfill.
+    # Build only 32 blocks so the DB isn't too big, but it's big enough to check
+    #   what happens at the 32-block epoch boundary. (Note that it ends up with
+    #   more than 32 blocks, because of some setup blocks at the beginning)
+    # build_pow_cold_state_fixture(db, num_blocks=32)
+    COLD_STATE = 'cold_state.ldb'
 
 
 def load_fixture_db(db_fixture, db_class=LevelDB):
