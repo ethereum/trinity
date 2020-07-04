@@ -76,8 +76,10 @@ async def test_exception_inside_context_block():
     group = AsyncContextGroup([ctx(), ctx(True), ctx()])
     with pytest.raises(ValueError):
         async with group as awaitables:
-            for awaitable in awaitables:
-                await awaitable
+            empty1, exception, empty2 = await asyncio.gather(*awaitables, return_exceptions=True)
+            assert empty1 is None
+            assert empty2 is None
+            raise exception
 
     assert exit_count == 3
 

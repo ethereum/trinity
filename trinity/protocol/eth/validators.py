@@ -13,6 +13,7 @@ from eth.abc import BlockHeaderAPI, SignedTransactionAPI
 
 from p2p.exchange import ValidatorAPI
 
+from trinity._utils.logging import get_logger
 from trinity.protocol.common.validators import (
     BaseBlockHeadersValidator,
 )
@@ -31,7 +32,18 @@ class GetBlockHeadersValidator(BaseBlockHeadersValidator):
 
 class GetNodeDataValidator(ValidatorAPI[NodeDataBundles]):
     def __init__(self, node_hashes: Sequence[Hash32]) -> None:
+        self.logger = get_logger("trinity.protocol.eth.validators.GetNodeDataValidator")
         self.node_hashes = node_hashes
+
+        # Check for uniqueness
+        num_requested = len(node_hashes)
+        num_unique = len(set(node_hashes))
+        if num_requested != num_unique:
+            self.logger.warning(
+                "GetNodeData: Asked peer for %d trie nodes, but %d were duplicates",
+                num_requested,
+                num_requested - num_unique,
+            )
 
     def validate_result(self, response: NodeDataBundles) -> None:
         if not response:
