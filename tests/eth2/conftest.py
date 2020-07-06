@@ -177,7 +177,11 @@ def privkeys(_key_cache):
 
 
 @pytest.fixture(scope="session")
-def keymap(_key_cache):
+def keymap(_key_cache, pubkeys):
+    # NOTE: ensure some keys are in the cache,
+    # in lieu of emulating an "on-demand" ``dict`` instance.
+    pubkeys[:10]
+
     return _key_cache._mapping_view()
 
 
