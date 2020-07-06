@@ -42,16 +42,13 @@ class ChainInfo(Application, ChainInfoAPI):
 
     qualifier = AnyETHLES
 
-    @cached_property
-    def network_id(self) -> int:
-        return self._get_logic().network_id
-
-    @cached_property
-    def genesis_hash(self) -> Hash32:
-        return self._get_logic().genesis_hash
-
-    def _get_logic(self) -> AnyETHLESAPI:
-        return choose_eth_or_les_api(self.connection)
+    def post_apply(self) -> None:
+        logic = choose_eth_or_les_api(self.connection)
+        # These things don't change so by storing them as instance variables we free our callsites
+        # from having to deal with PeerConnectionLost errors, which can be raised by
+        # choose_eth_or_les_api().
+        self.network_id = logic.network_id
+        self.genesis_hash = logic.genesis_hash
 
 
 class HeadInfo(Application, HeadInfoAPI):

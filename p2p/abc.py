@@ -595,6 +595,13 @@ class BehaviorAPI(ABC):
         ...
 
     @abstractmethod
+    def post_apply(self) -> None:
+        """
+        Called after all behaviors have been applied to the Connection.
+        """
+        ...
+
+    @abstractmethod
     @contextlib.asynccontextmanager
     def apply(self, connection: 'ConnectionAPI') -> AsyncIterator[asyncio.Future[None]]:
         """
@@ -624,6 +631,7 @@ class ConnectionAPI(ServiceAPI):
     #
     # Primary properties of the connection
     #
+    behaviors_applied: asyncio.Event
     is_dial_out: bool
 
     @property

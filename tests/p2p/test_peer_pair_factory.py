@@ -14,7 +14,7 @@ async def test_connection_factory_with_ParagonPeer():
 
         async def handle_ping(conn, msg):
             got_ping.set()
-            bob.p2p_api.send_pong()
+            bob._p2p_api.send_pong()
 
         async def handle_pong(conn, msg):
             got_pong.set()
@@ -22,7 +22,7 @@ async def test_connection_factory_with_ParagonPeer():
         alice.connection.add_command_handler(Pong, handle_pong)
         bob.connection.add_command_handler(Ping, handle_ping)
 
-        alice.p2p_api.send_ping()
+        alice._p2p_api.send_ping()
 
         await asyncio.wait_for(got_ping.wait(), timeout=1)
         await asyncio.wait_for(got_pong.wait(), timeout=1)

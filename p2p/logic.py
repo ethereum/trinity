@@ -39,6 +39,9 @@ class BaseLogic(LogicAPI):
             qualifier = self.qualifier  # type: ignore
         return Behavior(qualifier, self)
 
+    def post_apply(self) -> None:
+        pass
+
 
 class CommandHandler(BaseLogic, Generic[TCommand]):
     """
@@ -90,7 +93,8 @@ async def wait_first(futures: Sequence[asyncio.Future[None]]) -> None:
         await cancel_futures(futures)
         raise
     else:
-        await cancel_futures(pending)
+        if pending:
+            await cancel_futures(pending)
         if len(done) != 1:
             raise Exception(
                 "Invariant: asyncio.wait() returned more than one future even "

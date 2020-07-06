@@ -5,8 +5,6 @@ from typing import (
     Type,
 )
 
-from cached_property import cached_property
-
 from lahja import EndpointAPI
 
 from eth_typing import BlockNumber
@@ -37,7 +35,7 @@ from trinity.protocol.common.typing import (
 )
 from . import forkid
 
-from .api import ETHV63API, ETHV65API, AnyETHAPI, ETHV64API
+from .api import AnyETHAPI, ETHV63API, ETHV65API, ETHV64API
 from .commands import (
     GetBlockHeadersV65,
     GetBlockBodiesV65,
@@ -87,6 +85,7 @@ class ETHPeer(BaseChainPeer):
         ETHProtocolV65
     )
     sub_proto: BaseETHProtocol = None
+    eth_api: AnyETHAPI
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
         return super().get_behaviors() + (
@@ -95,18 +94,24 @@ class ETHPeer(BaseChainPeer):
             ETHV65API().as_behavior()
         )
 
-    @cached_property
-    def eth_api(self) -> AnyETHAPI:
+    def _pre_run(self) -> None:
+        super()._pre_run()
+
         if self.connection.has_protocol(ETHProtocolV63):
-            return self.connection.get_logic(ETHV63API.name, ETHV63API)
-        if self.connection.has_protocol(ETHProtocolV64):
-            return self.connection.get_logic(ETHV64API.name, ETHV64API)
+            self.eth_api = self.connection.get_logic(ETHV63API.name, ETHV63API)
+        elif self.connection.has_protocol(ETHProtocolV64):
+            self.eth_api = self.connection.get_logic(ETHV64API.name, ETHV64API)
         elif self.connection.has_protocol(ETHProtocolV65):
-            return self.connection.get_logic(ETHV65API.name, ETHV65API)
+            self.eth_api = self.connection.get_logic(ETHV65API.name, ETHV65API)
         else:
             raise Exception("Unreachable code")
 
     def get_extra_stats(self) -> Tuple[str, ...]:
+        """
+        Return extra stats for this peer.
+
+        Raises PeerConnectionLost if the peer is no longer alive.
+        """
         basic_stats = super().get_extra_stats()
         eth_stats = self.eth_api.get_extra_stats()
         return basic_stats + eth_stats

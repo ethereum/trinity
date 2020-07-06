@@ -4,18 +4,15 @@ from eth_typing import BlockNumber, Hash32
 
 
 class ChainInfoAPI(ABC):
-    @property
-    @abstractmethod
-    def network_id(self) -> int:
-        ...
-
-    @property
-    @abstractmethod
-    def genesis_hash(self) -> Hash32:
-        ...
+    network_id: int
+    genesis_hash: Hash32
 
 
 class HeadInfoAPI(ABC):
+    """
+    NOTE: Accessing any of the attributes here can raise PeerConnectionLost!
+    """
+
     @property
     @abstractmethod
     def head_td(self) -> int:

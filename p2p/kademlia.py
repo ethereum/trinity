@@ -322,22 +322,22 @@ class KademliaRoutingTable:
         is_node_in_bucket = node_id in bucket
 
         if not is_node_in_bucket and not is_bucket_full:
-            self.logger.debug("Adding %s to bucket %d", encode_hex(node_id), bucket_index)
+            self.logger.debug2("Adding %s to bucket %d", encode_hex(node_id), bucket_index)
             self.update_bucket_unchecked(node_id)
             eviction_candidate = None
         elif is_node_in_bucket:
-            self.logger.debug("Updating %s in bucket %d", encode_hex(node_id), bucket_index)
+            self.logger.debug2("Updating %s in bucket %d", encode_hex(node_id), bucket_index)
             self.update_bucket_unchecked(node_id)
             eviction_candidate = None
         elif not is_node_in_bucket and is_bucket_full:
             if node_id not in replacement_cache:
-                self.logger.debug(
+                self.logger.debug2(
                     "Adding %s to replacement cache of bucket %d",
                     encode_hex(node_id),
                     bucket_index,
                 )
             else:
-                self.logger.debug(
+                self.logger.debug2(
                     "Updating %s in replacement cache of bucket %d",
                     encode_hex(node_id),
                     bucket_index,
