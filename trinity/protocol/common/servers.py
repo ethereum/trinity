@@ -9,6 +9,7 @@ from typing import (
 )
 
 from async_service import Service
+from eth.abc import BlockHeaderAPI
 from lahja import EndpointAPI
 
 from eth_typing import Hash32
@@ -19,7 +20,6 @@ from eth.exceptions import (
 from eth_typing import (
     BlockNumber,
 )
-from eth.rlp.headers import BlockHeader
 from lahja import (
     BroadcastConfig,
 )
@@ -88,7 +88,7 @@ class BasePeerRequestHandler:
         self.db = db
 
     async def lookup_headers(self,
-                             query: BlockHeadersQuery) -> Tuple[BlockHeader, ...]:
+                             query: BlockHeadersQuery) -> Tuple[BlockHeaderAPI, ...]:
         """
         Lookup :max_headers: headers starting at :block_number_or_hash:, skipping :skip: items
         between each, in reverse order if :reverse: is True.
@@ -101,7 +101,7 @@ class BasePeerRequestHandler:
                 query.block_number_or_hash)
             return tuple()
 
-        headers: Tuple[BlockHeader, ...] = tuple([
+        headers: Tuple[BlockHeaderAPI, ...] = tuple([
             header
             async for header
             in self._generate_available_headers(block_numbers)
@@ -131,7 +131,7 @@ class BasePeerRequestHandler:
         )
 
     async def _generate_available_headers(
-            self, block_numbers: Tuple[BlockNumber, ...]) -> AsyncIterator[BlockHeader]:
+            self, block_numbers: Tuple[BlockNumber, ...]) -> AsyncIterator[BlockHeaderAPI]:
         """
         Generates the headers requested, halting on the first header that is not locally available.
         """

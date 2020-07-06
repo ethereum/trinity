@@ -29,6 +29,8 @@ from eth_utils import (
 )
 
 from eth.abc import (
+    BlockAPI,
+    BlockHeaderAPI,
     SignedTransactionAPI,
     StateAPI,
 )
@@ -39,12 +41,7 @@ from eth.exceptions import (
     HeaderNotFound,
     TransactionNotFound,
 )
-from eth.rlp.blocks import (
-    BaseBlock,
-)
-from eth.rlp.headers import (
-    BlockHeader,
-)
+
 from eth.vm.spoof import (
     SpoofTransaction,
 )
@@ -96,7 +93,7 @@ async def state_at_block(
     return vm.state
 
 
-async def get_block_at_number(chain: AsyncChainAPI, at_block: Union[str, int]) -> BaseBlock:
+async def get_block_at_number(chain: AsyncChainAPI, at_block: Union[str, int]) -> BlockAPI:
     # mypy doesn't have user defined type guards yet
     # https://github.com/python/mypy/issues/5206
     if is_integer(at_block) and at_block >= 0:  # type: ignore
@@ -109,7 +106,7 @@ async def get_block_at_number(chain: AsyncChainAPI, at_block: Union[str, int]) -
 
 def dict_to_spoof_transaction(
         chain: AsyncChainAPI,
-        header: BlockHeader,
+        header: BlockHeaderAPI,
         transaction_dict: Dict[str, Any]) -> SignedTransactionAPI:
     """
     Convert dicts used in calls & gas estimates into a spoof transaction

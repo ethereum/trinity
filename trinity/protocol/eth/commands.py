@@ -70,9 +70,9 @@ class NewBlockHashes(BaseCommand[Tuple[NewBlockHash, ...]]):
     )
 
 
-class Transactions(BaseCommand[Tuple[BaseTransactionFields, ...]]):
+class Transactions(BaseCommand[Tuple[SignedTransactionAPI, ...]]):
     protocol_command_id = 2
-    serialization_codec: RLPCodec[Tuple[BaseTransactionFields, ...]] = RLPCodec(
+    serialization_codec: RLPCodec[Tuple[SignedTransactionAPI, ...]] = RLPCodec(
         sedes=sedes.CountableList(BaseTransactionFields),
     )
 

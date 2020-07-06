@@ -46,7 +46,7 @@ from eth_utils.toolz import (
 from eth.exceptions import (
     HeaderNotFound,
 )
-from eth.rlp.headers import BlockHeader
+
 from lahja import EndpointAPI
 
 from p2p.abc import CommandAPI
@@ -100,7 +100,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
 
     max_reorg_depth = MAX_SKELETON_REORG_DEPTH
 
-    _fetched_headers: 'asyncio.Queue[Tuple[BlockHeader, ...]]'
+    _fetched_headers: 'asyncio.Queue[Tuple[BlockHeaderAPI, ...]]'
 
     def __init__(self,
                  chain: AsyncChainAPI,
@@ -118,7 +118,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         max_pending_headers = peer.max_headers_fetch * 8
         self._fetched_headers = asyncio.Queue(max_pending_headers)
 
-    async def skeleton_segments(self) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+    async def skeleton_segments(self) -> AsyncIterator[Tuple[BlockHeaderAPI, ...]]:
         while self.manager.is_running:
             yield await self._fetched_headers.get()
             self._fetched_headers.task_done()
@@ -230,7 +230,9 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
 
         await self._get_final_headers(peer, previous_tail_header)
 
-    async def _get_final_headers(self, peer: TChainPeer, previous_tail_header: BlockHeader) -> None:
+    async def _get_final_headers(self,
+                                 peer: TChainPeer,
+                                 previous_tail_header: BlockHeaderAPI) -> None:
         while self.manager.is_running:
             final_headers = await self._fetch_headers_from(
                 peer,
@@ -248,7 +250,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
             await self._fetched_headers.put(final_headers)
             previous_tail_header = final_headers[-1]
 
-    async def _find_newest_matching_skeleton_header(self, peer: TChainPeer) -> BlockHeader:
+    async def _find_newest_matching_skeleton_header(self, peer: TChainPeer) -> BlockHeaderAPI:
         start_num = await self._launch_strategy.get_starting_block_number()
 
         # after returning this header, we request the next gap, and prefer that one header
@@ -281,7 +283,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
                 # Return the newest one
                 return skeleton_launch_headers[-1]
 
-    async def _is_header_imported(self, header: BlockHeader) -> bool:
+    async def _is_header_imported(self, header: BlockHeaderAPI) -> bool:
         """
         Typically used to decide if we should skip trying to import this header.
         Return True if the syncing of header appears to be complete.
@@ -302,7 +304,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
                 # Skip it during sync
                 return True
 
-    async def _find_launch_headers(self, peer: TChainPeer) -> Tuple[BlockHeader, ...]:
+    async def _find_launch_headers(self, peer: TChainPeer) -> Tuple[BlockHeaderAPI, ...]:
         """
         When getting started with a peer, find exactly where the headers start differing from the
         current database of headers by requesting contiguous headers from peer. Return the first
@@ -365,8 +367,8 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
     async def _fill_in_gap(
             self,
             peer: TChainPeer,
-            pairs: Tuple[Tuple[BlockHeader, ...], ...],
-            gap_index: int) -> Tuple[Tuple[BlockHeader, ...], ...]:
+            pairs: Tuple[Tuple[BlockHeaderAPI, ...], ...],
+            gap_index: int) -> Tuple[Tuple[BlockHeaderAPI, ...], ...]:
         """
         Fill headers into the specified gap in the middle of the header pairs using supplied peer.
         Validate the returned segment of headers against the surrounding header pairs.
@@ -441,7 +443,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
             peer: TChainPeer,
             start_at: BlockNumber,
             max_headers: int = None,
-            skip: int = None) -> Tuple[BlockHeader, ...]:
+            skip: int = None) -> Tuple[BlockHeaderAPI, ...]:
 
         if not peer.manager.is_running:
             self.logger.info("%s disconnected while fetching headers", peer)
@@ -487,7 +489,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         else:
             return headers
 
-    async def _log_ancester_failure(self, peer: TChainPeer, first_header: BlockHeader) -> None:
+    async def _log_ancester_failure(self, peer: TChainPeer, first_header: BlockHeaderAPI) -> None:
         self.logger.info("Unable to find common ancestor betwen our chain and %s", peer)
         block_num = first_header.block_number
         try:
@@ -511,7 +513,7 @@ class HeaderSyncerAPI(ABC):
     @abstractmethod
     async def new_sync_headers(
             self,
-            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeaderAPI, ...]]:
         # hack to get python & mypy to recognize that this is an async generator
         if False:
             yield
@@ -523,13 +525,13 @@ class HeaderSyncerAPI(ABC):
 
 class ManualHeaderSyncer(HeaderSyncerAPI):
     def __init__(self) -> None:
-        self._headers_to_emit: Tuple[BlockHeader, ...] = ()
+        self._headers_to_emit: Tuple[BlockHeaderAPI, ...] = ()
         self._final_header_hash: Hash32 = None
         self._new_data = asyncio.Event()
 
     async def new_sync_headers(
             self,
-            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeaderAPI, ...]]:
         while True:
             next_batch = tuple(take(max_batch_size, self._headers_to_emit))
             if not next_batch:
@@ -542,7 +544,7 @@ class ManualHeaderSyncer(HeaderSyncerAPI):
     def get_target_header_hash(self) -> Hash32:
         return self._final_header_hash
 
-    def emit(self, headers: Iterable[BlockHeader]) -> None:
+    def emit(self, headers: Iterable[BlockHeaderAPI]) -> None:
         self._headers_to_emit = self._headers_to_emit + tuple(headers)
         self._final_header_hash = self._headers_to_emit[-1].hash
         self._new_data.set()
@@ -564,7 +566,7 @@ class DatabaseBlockRangeHeaderSyncer(HeaderSyncerAPI):
 
     async def new_sync_headers(
             self,
-            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeaderAPI, ...]]:
         """
         Yield all headers in the specified block range. This method will never return and simply
         stop yielding headers after the last header is processed.
@@ -595,7 +597,7 @@ class _PeerBehind(Exception):
     pass
 
 
-HeaderStitcher = OrderedTaskPreparation[BlockHeader, Hash32, NoPrerequisites]
+HeaderStitcher = OrderedTaskPreparation[BlockHeaderAPI, Hash32, NoPrerequisites]
 
 
 class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
@@ -603,7 +605,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
     subscription_msg_types: FrozenSet[Type[CommandAPI[Any]]] = frozenset()
     msg_queue_maxsize = 2000
 
-    _filler_header_tasks: TaskQueue[Tuple[BlockHeader, int, TChainPeer]]
+    _filler_header_tasks: TaskQueue[Tuple[BlockHeaderAPI, int, TChainPeer]]
 
     def __init__(
             self,
@@ -634,7 +636,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
 
     async def schedule_segment(
             self,
-            parent_header: BlockHeader,
+            parent_header: BlockHeaderAPI,
             gap_length: int,
             skeleton_peer: TChainPeer) -> None:
         """
@@ -684,7 +686,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
     async def _match_dl_to_peer(
             self,
             batch_id: int,
-            parent_header: BlockHeader,
+            parent_header: BlockHeaderAPI,
             gap: int,
             skeleton_peer: TChainPeer) -> None:
         def fail_task() -> None:
@@ -713,7 +715,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
     async def _run_fetch_segment(
             self,
             peer: TChainPeer,
-            parent_header: BlockHeader,
+            parent_header: BlockHeaderAPI,
             length: int,
             complete_task_fn: Callable[[], None],
             fail_task_fn: Callable[[], None]) -> None:
@@ -751,8 +753,8 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
     async def _fetch_segment(
             self,
             peer: TChainPeer,
-            parent_header: BlockHeader,
-            length: int) -> Tuple[BlockHeader, ...]:
+            parent_header: BlockHeaderAPI,
+            length: int) -> Tuple[BlockHeaderAPI, ...]:
         if length > peer.max_headers_fetch:
             raise ValidationError(
                 f"Can't request {length} headers, because peer maximum is {peer.max_headers_fetch}"
@@ -812,7 +814,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
 
     async def _request_headers(
             self, peer: TChainPeer, start_at: BlockIdentifier, length: int
-    ) -> Tuple[BlockHeader, ...]:
+    ) -> Tuple[BlockHeaderAPI, ...]:
         self.logger.debug("Requesting %d headers from %s", length, peer)
         try:
             return await peer.chain_api.get_block_headers(start_at, length, skip=0, reverse=False)
@@ -829,7 +831,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
             self.logger.exception("Unknown error when getting headers")
             raise
 
-    async def _init_sync_progress(self, parent_header: BlockHeader, peer: TChainPeer) -> None:
+    async def _init_sync_progress(self, parent_header: BlockHeaderAPI, peer: TChainPeer) -> None:
         try:
             latest_block_number = peer.head_info.head_number
         except AttributeError:
@@ -846,7 +848,7 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
         )
 
 
-def first_nonconsecutive_header(headers: Sequence[BlockHeader]) -> int:
+def first_nonconsecutive_header(headers: Sequence[BlockHeaderAPI]) -> int:
     """
     :return: index of first child that does not match parent header, or a number
         past the end if all are consecutive
@@ -913,7 +915,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
 
     async def new_sync_headers(
             self,
-            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeaderAPI, ...]]:
 
         while self.manager.is_running:
             headers = await self._stitcher.ready_tasks(max_batch_size)
