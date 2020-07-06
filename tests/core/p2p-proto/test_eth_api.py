@@ -152,7 +152,7 @@ async def test_eth_api_properties(alice, ETHAPI_class, ETHHandshakeReceipt_class
     assert alice.connection.has_logic(ETHAPI_class.name)
     eth_api = alice.connection.get_logic(ETHAPI_class.name, ETHAPI_class)
 
-    assert eth_api is alice.eth_api
+    assert eth_api is alice.get_eth_api()
 
     eth_receipt = alice.connection.get_receipt_by_type(ETHHandshakeReceipt_class)
 
@@ -216,7 +216,7 @@ async def test_eth_api_send_status(alice, bob, StatusPayloadFactory_class, Statu
         command_fut.set_result(cmd)
 
     bob.connection.add_command_handler(Status_class, _handle_cmd)
-    alice.eth_api.send_status(payload)
+    alice.get_eth_api().send_status(payload)
 
     result = await asyncio.wait_for(command_fut, timeout=1)
     assert isinstance(result, Status_class)
@@ -233,7 +233,7 @@ async def test_eth_api_send_get_node_data(alice, bob):
         command_fut.set_result(cmd)
 
     bob.connection.add_command_handler(GetNodeDataV65, _handle_cmd)
-    alice.eth_api.send_get_node_data(payload)
+    alice.get_eth_api().send_get_node_data(payload)
 
     result = await asyncio.wait_for(command_fut, timeout=1)
     assert isinstance(result, GetNodeDataV65)
@@ -250,7 +250,7 @@ async def test_eth_api_send_get_block_headers(alice, bob):
         command_fut.set_result(cmd)
 
     bob.connection.add_command_handler(GetBlockHeadersV65, _handle_cmd)
-    alice.eth_api.send_get_block_headers(
+    alice.get_eth_api().send_get_block_headers(
         block_number_or_hash=payload.block_number_or_hash,
         max_headers=payload.block_number_or_hash,
         skip=payload.skip,

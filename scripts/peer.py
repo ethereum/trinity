@@ -96,10 +96,11 @@ async def _main() -> None:
         peer = peer_pool.highest_td_peer
         if peer_class == ETHPeer:
             peer = cast(ETHPeer, peer)
-            headers = await peer.eth_api.get_block_headers(BlockNumber(2440319), max_headers=100)
+            headers = await peer.get_eth_api().get_block_headers(
+                BlockNumber(2440319), max_headers=100)
             hashes = tuple(header.hash for header in headers)
-            peer.eth_api.send_get_block_bodies(hashes)
-            peer.eth_api.send_get_receipts(hashes)
+            peer.get_eth_api().send_get_block_bodies(hashes)
+            peer.get_eth_api().send_get_receipts(hashes)
         else:
             peer = cast(LESPeer, peer)
             headers = await peer.les_api.get_block_headers(BlockNumber(2440319), max_headers=100)

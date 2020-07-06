@@ -475,8 +475,8 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             self.logger.info(
                 "Removing %s from pool: local_reason=%s remote_reason=%s",
                 peer,
-                peer.p2p_api.local_disconnect_reason,
-                peer.p2p_api.remote_disconnect_reason,
+                peer.local_disconnect_reason,
+                peer.remote_disconnect_reason,
             )
             self.connected_nodes.pop(peer.session)
         else:
@@ -535,7 +535,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
                 )
                 self.logger.debug(
                     "client_version_string='%s'",
-                    peer.p2p_api.safe_client_version_string,
+                    peer.safe_client_version_string,
                 )
                 try:
                     for line in peer.get_extra_stats():

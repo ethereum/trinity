@@ -18,6 +18,7 @@ from lahja import (
 )
 
 from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI
+from p2p.exceptions import PeerConnectionLost
 
 from trinity.protocol.common.peer import (
     BaseChainPeer,
@@ -95,8 +96,18 @@ class ETHPeer(BaseChainPeer):
             ETHV65API().as_behavior()
         )
 
+    def get_eth_api(self) -> AnyETHAPI:
+        """
+        Return this peer's ETH API.
+
+        Raises PeerConnectionLost if the peer is no longer alive.
+        """
+        if not self.is_alive:
+            raise PeerConnectionLost(f"{self} is no longer alive")
+        return self._eth_api
+
     @cached_property
-    def eth_api(self) -> AnyETHAPI:
+    def _eth_api(self) -> AnyETHAPI:
         if self.connection.has_protocol(ETHProtocolV63):
             return self.connection.get_logic(ETHV63API.name, ETHV63API)
         if self.connection.has_protocol(ETHProtocolV64):
@@ -107,8 +118,13 @@ class ETHPeer(BaseChainPeer):
             raise Exception("Unreachable code")
 
     def get_extra_stats(self) -> Tuple[str, ...]:
+        """
+        Return extra stats for this peer.
+
+        Raises PeerConnectionLost if the peer is no longer alive.
+        """
         basic_stats = super().get_extra_stats()
-        eth_stats = self.eth_api.get_extra_stats()
+        eth_stats = self.get_eth_api().get_extra_stats()
         return basic_stats + eth_stats
 
 
@@ -231,7 +247,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
             self,
             event: GetBlockHeadersRequest) -> Tuple[BlockHeaderAPI, ...]:
         peer = self.get_peer(event.session)
-        return await peer.eth_api.get_block_headers(
+        return await peer.get_eth_api().get_block_headers(
             event.block_number_or_hash,
             event.max_headers,
             skip=event.skip,
@@ -245,7 +261,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         return await self.with_node_and_timeout(
             event.session,
             event.timeout,
-            lambda peer: peer.eth_api.get_receipts(event.headers)
+            lambda peer: peer.get_eth_api().get_receipts(event.headers)
         )
 
     async def handle_get_block_bodies_request(self,
@@ -253,7 +269,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         return await self.with_node_and_timeout(
             event.session,
             event.timeout,
-            lambda peer: peer.eth_api.get_block_bodies(event.headers)
+            lambda peer: peer.get_eth_api().get_block_bodies(event.headers)
         )
 
     async def handle_get_node_data_request(self,
@@ -261,7 +277,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         return await self.with_node_and_timeout(
             event.session,
             event.timeout,
-            lambda peer: peer.eth_api.get_node_data(event.node_hashes)
+            lambda peer: peer.get_eth_api().get_node_data(event.node_hashes)
         )
 
     async def handle_get_pooled_transactions_request(
@@ -271,7 +287,7 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         return await self.with_node_and_timeout(
             event.session,
             event.timeout,
-            lambda peer: peer.eth_api.get_pooled_transactions(event.transaction_hashes)
+            lambda peer: peer.get_eth_api().get_pooled_transactions(event.transaction_hashes)
         )
 
     async def handle_native_peer_message(self,

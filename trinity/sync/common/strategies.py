@@ -164,7 +164,7 @@ class FromCheckpointLaunchStrategy(SyncLaunchStrategyAPI):
                 continue
 
             try:
-                headers = await peer.chain_api.get_block_headers(
+                headers = await peer.get_chain_api().get_block_headers(
                     self._checkpoint.block_hash,
                     max_headers=FULL_BLOCKS_NEEDED_TO_START_BEAM,
                     skip=0,
