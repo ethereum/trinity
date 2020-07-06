@@ -118,6 +118,7 @@ deps = {
         PYEVM_DEPENDENCY,
         "ssz==0.2.4",
         "asks>=2.3.6,<3",  # validator client
+        "anyio>1.3,<1.4",
         "eth-keyfile",  # validator client
     ],
     'eth2-extra': [
