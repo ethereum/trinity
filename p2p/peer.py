@@ -19,7 +19,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from async_service import Service
+from async_service import LifecycleError, Service
 
 from lahja import EndpointAPI
 
@@ -55,7 +55,6 @@ from p2p.handshake import (
     DevP2PHandshakeParams,
 )
 from p2p.logging import loggable
-from p2p.logic import wait_first
 from p2p.p2p_api import P2PAPI
 from p2p.p2p_proto import BaseP2PProtocol, Disconnect
 from p2p.tracking.connection import (
@@ -115,7 +114,7 @@ class BasePeer(Service):
     _event_bus: EndpointAPI = None
 
     base_protocol: BaseP2PProtocol
-    p2p_api: P2PAPI
+    _p2p_api: P2PAPI
 
     def __init__(self,
                  connection: ConnectionAPI,
@@ -166,6 +165,9 @@ class BasePeer(Service):
         # been installed to the connection.
         self.ready = asyncio.Event()
 
+    def _pre_run(self) -> None:
+        self._p2p_api = self.connection.get_logic('p2p', P2PAPI)
+
     @property
     def uptime(self) -> float:
         if self._start_time is None:
@@ -183,7 +185,7 @@ class BasePeer(Service):
         pass
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
-        return ()
+        return (P2PAPI().as_behavior(),)
 
     @cached_property
     def has_event_bus(self) -> bool:
@@ -252,52 +254,53 @@ class BasePeer(Service):
         pass
 
     async def _handle_disconnect(self, connection: ConnectionAPI, cmd: Disconnect) -> None:
-        self.p2p_api.remote_disconnect_reason = cmd.payload
+        self._p2p_api.remote_disconnect_reason = cmd.payload
         # We run as a daemon child of the connection, so cancel the connection instead of
         # ourselves to ensure asyncio-service doesn't think we're exiting when the connection is
         # still active, as that would cause a DaemonTaskExit.
         self.connection.get_manager().cancel()
 
+    @property
+    def is_alive(self) -> bool:
+        # We need this because when a remote disconnects from us the connection may be closed
+        # before the Disconnect msg is processed and cancels ourselves.
+        if not hasattr(self, 'manager'):
+            return False
+        return self.manager.is_running and not self.connection.is_closing
+
     async def run(self) -> None:
-        self._start_time = time.monotonic()
-        self.connection.add_command_handler(Disconnect, cast(HandlerFn, self._handle_disconnect))
+        if not self.connection.behaviors_applied.is_set():
+            raise LifecycleError("Cannot run peer when behaviors haven't been applied")
+
         try:
-            async with contextlib.AsyncExitStack() as stack:
-                fut = await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
-                futures = [fut]
-                self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
+            self._start_time = time.monotonic()
+            self._pre_run()
 
-                for behavior in self.get_behaviors():
-                    if behavior.should_apply_to(self.connection):
-                        future = await stack.enter_async_context(behavior.apply(self.connection))
-                        futures.append(future)
+            self.connection.add_command_handler(
+                Disconnect, cast(HandlerFn, self._handle_disconnect))
 
-                self.connection.add_msg_handler(self._handle_subscriber_message)
+            self.connection.add_msg_handler(self._handle_subscriber_message)
 
-                self.setup_protocol_handlers()
+            self.setup_protocol_handlers()
 
-                # The `boot` process is run in the background to allow the `run` loop
-                # to continue so that all of the Peer APIs can be used within the
-                # `boot` task.
-                self.manager.run_child_service(self.boot_manager)
+            # The `boot` process is run in the background to allow the `run` loop
+            # to continue so that all of the Peer APIs can be used within the
+            # `boot` task.
+            self.manager.run_child_service(self.boot_manager)
 
-                # Trigger the connection to start feeding messages though the handlers
-                self.connection.start_protocol_streams()
-                self.ready.set()
+            # Trigger the connection to start feeding messages though the handlers
+            self.connection.start_protocol_streams()
+            self.ready.set()
 
-                try:
-                    await wait_first(futures)
-                except asyncio.CancelledError:
-                    raise
-                except BaseException:
-                    self.logger.exception("Behavior finished before us, cancelling ourselves")
-                    self.manager.cancel()
+            await self.manager.wait_finished()
         finally:
             for callback in self._finished_callbacks:
                 callback(self)
-            if hasattr(self, 'p2p_api'):
-                if (self.p2p_api.local_disconnect_reason is None and
-                        self.p2p_api.remote_disconnect_reason is None):
+            # We may have crashed before setting self._p2p_api; in that case don't attempt to send
+            # a disconnect.
+            if hasattr(self, '_p2p_api'):
+                if (self.local_disconnect_reason is None and
+                        self.remote_disconnect_reason is None):
                     self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
             # We run as a child service of the connection, but we don't want to leave a connection
             # open if somebody cancels just us, so this ensures the connection gets closed as well.
@@ -332,9 +335,21 @@ class BasePeer(Service):
 
     def _send_disconnect(self, reason: DisconnectReason) -> None:
         try:
-            self.p2p_api.disconnect(reason)
+            self._p2p_api.disconnect(reason)
         except PeerConnectionLost:
             self.logger.debug("Tried to disconnect from %s, but already disconnected", self)
+
+    @property
+    def safe_client_version_string(self) -> str:
+        return self._p2p_api.safe_client_version_string
+
+    @property
+    def local_disconnect_reason(self) -> DisconnectReason:
+        return self._p2p_api.local_disconnect_reason
+
+    @property
+    def remote_disconnect_reason(self) -> DisconnectReason:
+        return self._p2p_api.remote_disconnect_reason
 
 
 class PeerMessage(NamedTuple):

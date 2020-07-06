@@ -6,10 +6,6 @@ from typing import Any, FrozenSet, Optional, Type
 from async_service import Service
 
 from p2p.abc import CommandAPI
-from p2p.exceptions import (
-    PeerConnectionLost,
-    UnknownAPI,
-)
 from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
 from trinity.protocol.eth.commands import NodeDataV65
@@ -24,6 +20,8 @@ def queen_peer_performance_sort(tracker: PerformanceAPI) -> float:
 
 
 def _peer_sort_key(peer: ETHPeer) -> float:
+    # FIXME: This should not be hard-coded to get_node_data as we could, in theory, be used to
+    # request other types of data.
     return queen_peer_performance_sort(peer.eth_api.get_node_data.tracker)
 
 
@@ -101,7 +99,7 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         """
         while self.manager.is_running:
             peer = await self._waiting_peers.get_fastest()
-            if not peer.manager.is_running:
+            if not peer.is_alive:
                 # drop any peers that aren't alive anymore
                 self.logger.info("Dropping %s from beam peers, as no longer active", peer)
                 if peer == self._queen_peer:
@@ -113,18 +111,16 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
                 self._insert_peer(peer)
                 continue
 
-            try:
-                peer_is_requesting_nodes = peer.eth_api.get_node_data.is_requesting
-            except PeerConnectionLost:
-                self.logger.debug("QueenQueuer is skipping disconnecting peer %s", peer)
-                # Don't bother re-adding to _waiting_peers, since the peer is disconnected
-            else:
-                if peer_is_requesting_nodes:
-                    # skip the peer if there's an active request
-                    self.logger.debug("QueenQueuer is skipping active peer %s", peer)
-                    loop = asyncio.get_event_loop()
-                    loop.call_later(10, functools.partial(self._insert_peer, peer))
-                    continue
+            # FIXME: This should not be hard-coded to get_node_data as we could, in theory, be
+            # used to request other types of data.
+            peer_is_requesting = peer.eth_api.get_node_data.is_requesting
+
+            if peer_is_requesting:
+                # skip the peer if there's an active request
+                self.logger.debug("QueenQueuer is skipping active peer %s", peer)
+                loop = asyncio.get_event_loop()
+                loop.call_later(10, functools.partial(self._insert_peer, peer))
+                continue
 
             return peer
         # This should never happen as we run as a daemon and if we return before our caller it'd
@@ -153,36 +149,34 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
             loop.call_later(delay, functools.partial(self._insert_peer, peer))
 
     def _should_be_queen(self, peer: ETHPeer) -> bool:
+        if not peer.is_alive:
+            raise ValueError(f"{peer} is no longer alive")
+
         if self._queen_peer is None:
+            return True
+        elif not self._queen_peer.is_alive:
             return True
         elif peer == self._queen_peer:
             return True
         else:
-            try:
-                new_peer_quality = _peer_sort_key(peer)
-            except (UnknownAPI, PeerConnectionLost) as exc:
-                self.logger.debug("Invalid %s, because we can't get speed stats: %r", peer, exc)
-                return False
-
-            try:
-                current_queen_quality = _peer_sort_key(self._queen_peer)
-            except (UnknownAPI, PeerConnectionLost) as exc:
-                self.logger.debug(
-                    "Invalid queen %s, because we can't get speed stats: %r",
-                    self._queen_peer,
-                    exc,
-                )
-                return True
-            else:
-                # Quality is designed so that an ascending sort puts the best quality at the front
-                #   of a sequence. So, a lower value means a better quality.
-                return new_peer_quality < current_queen_quality
+            new_peer_quality = _peer_sort_key(peer)
+            current_queen_quality = _peer_sort_key(self._queen_peer)
+            # Quality is designed so that an ascending sort puts the best quality at the front
+            #   of a sequence. So, a lower value means a better quality.
+            return new_peer_quality < current_queen_quality
 
     def _insert_peer(self, peer: ETHPeer) -> None:
         """
         Add peer as ready to receive requests. Check if it should be queen, and promote if
         appropriate. Otherwise, insert to be drawn as a peasant.
+
+        If the given peer is no longer running, do nothing. This is needed because we're sometimes
+        called via loop.call_later().
         """
+        if not peer.is_alive:
+            self.logger.debug("Peer %s is no longer alive, not adding to queue", peer)
+            return
+
         if self._should_be_queen(peer):
             old_queen, self._queen_peer = self._queen_peer, peer
             if peer != old_queen:

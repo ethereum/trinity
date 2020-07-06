@@ -125,7 +125,7 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
         # prevent circular import
         from trinity.protocol.common.peer import BaseChainPeer
         peer = cast(BaseChainPeer, peer)
-        if peer.p2p_api.remote_disconnect_reason is None and peer.p2p_api.remote_disconnect_reason is None:  # noqa: E501
+        if peer.remote_disconnect_reason is None:
             # we don't care about peers that don't properly disconnect
             self.logger.debug(
                 'Not tracking disconnecting peer %s[%s] missing disconnect reason',
@@ -139,7 +139,7 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
             self.logger.debug(
                 'Not tracking disconnecting peer %s[%s][%s] due to insufficient uptime (%s < %s)',
                 peer,
-                peer.p2p_api.local_disconnect_reason,
+                peer.local_disconnect_reason,
                 'inbound' if peer.inbound else 'outbound',
                 humanize_seconds(peer.uptime),
                 humanize_seconds(MIN_QUALIFYING_UPTIME),
@@ -150,7 +150,7 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
                 'Tracking disconnecting peer %s[%s][%s] with uptime: %s',
                 peer,
                 'inbound' if peer.inbound else 'outbound',
-                peer.p2p_api.local_disconnect_reason,
+                peer.local_disconnect_reason,
                 humanize_seconds(peer.uptime),
             )
 

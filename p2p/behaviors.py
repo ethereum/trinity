@@ -37,6 +37,9 @@ class Behavior(BehaviorAPI):
         # mypy bug: https://github.com/python/mypy/issues/708
         return self.qualifier(connection, self.logic)  # type: ignore
 
+    def post_apply(self) -> None:
+        self.logic.post_apply()
+
     @contextlib.asynccontextmanager
     async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
         if self._applied_to is not None:

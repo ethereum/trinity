@@ -6,8 +6,6 @@ from typing import (
     Union,
 )
 
-from cached_property import cached_property
-
 from eth.rlp.accounts import Account
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
@@ -67,18 +65,20 @@ if TYPE_CHECKING:
 class LESPeer(BaseChainPeer):
     max_headers_fetch = MAX_HEADERS_FETCH
 
+    les_api: Union[LESV1API, LESV2API]
     supported_sub_protocols = (LESProtocolV1, LESProtocolV2)
     sub_proto: Union[LESProtocolV1, LESProtocolV2] = None
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
         return super().get_behaviors() + (LESV1API().as_behavior(), LESV2API().as_behavior())
 
-    @cached_property
-    def les_api(self) -> Union[LESV1API, LESV2API]:
+    def _pre_run(self) -> None:
+        super()._pre_run()
+
         if self.connection.has_protocol(LESProtocolV2):
-            return self.connection.get_logic(LESV2API.name, LESV2API)
+            self.les_api = self.connection.get_logic(LESV2API.name, LESV2API)
         elif self.connection.has_protocol(LESProtocolV1):
-            return self.connection.get_logic(LESV1API.name, LESV1API)
+            self.les_api = self.connection.get_logic(LESV1API.name, LESV1API)
         else:
             raise Exception("Should be unreachable")
 

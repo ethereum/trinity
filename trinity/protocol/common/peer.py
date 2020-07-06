@@ -13,8 +13,6 @@ from typing import (
 
 from async_service import Service
 
-from cached_property import cached_property
-
 from lahja import EndpointAPI
 from pyformance.meters import SimpleGauge
 
@@ -39,7 +37,6 @@ from p2p.exceptions import (
     MalformedMessage,
     NoConnectedPeers,
     PeerConnectionLost,
-    UnknownAPI,
 )
 from p2p.metrics import (
     PeerReporterRegistry,
@@ -62,8 +59,7 @@ from p2p.tracking.connection import (
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.exceptions import BaseForkIDValidationError, ENRMissingForkID
-from trinity.protocol.common.abc import ChainInfoAPI, HeadInfoAPI
-from trinity.protocol.common.api import ChainInfo, HeadInfo, choose_eth_or_les_api, AnyETHLESAPI
+from trinity.protocol.common.api import ChainInfo, HeadInfo, choose_eth_or_les_api
 
 from trinity.protocol.eth.forkid import (
     extract_fork_blocks,
@@ -93,20 +89,15 @@ class BaseChainPeer(BasePeer):
     boot_manager_class = DAOCheckBootManager
     context: ChainContext
 
-    @cached_property
-    def chain_api(self) -> AnyETHLESAPI:
-        return choose_eth_or_les_api(self.connection)
+    def _pre_run(self) -> None:
+        super()._pre_run()
 
-    @cached_property
-    def head_info(self) -> HeadInfoAPI:
-        return self.connection.get_logic(HeadInfo.name, HeadInfo)
-
-    @cached_property
-    def chain_info(self) -> ChainInfoAPI:
-        return self.connection.get_logic(ChainInfo.name, ChainInfo)
+        self.chain_api = choose_eth_or_les_api(self.connection)
+        self.head_info = self.connection.get_logic(HeadInfo.name, HeadInfo)
+        self.chain_info = self.connection.get_logic(ChainInfo.name, ChainInfo)
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
-        return (
+        return super().get_behaviors() + (
             HeadInfo().as_behavior(),
             ChainInfo().as_behavior(),
         )
@@ -164,14 +155,13 @@ class BaseChainPeerReporterRegistry(PeerReporterRegistry[BaseChainPeer]):
         head_gauge = self._get_blockheight_gauge(peer_id)
         td_gauge = self._get_td_gauge(peer_id)
 
+        head_info = peer.head_info
         try:
-            head_info = peer.head_info
+            td_gauge.set_value(head_info.head_td)
         except PeerConnectionLost:
             head_gauge.set_value(0)
             td_gauge.set_value(0)
         else:
-            td_gauge.set_value(head_info.head_td)
-
             try:
                 head_number = head_info.head_number
             except AttributeError:
@@ -265,7 +255,7 @@ class BaseChainPeerPool(BasePeerPool):
             raise NoConnectedPeers("No connected peers")
 
         td_getter = excepts(
-            (PeerConnectionLost, UnknownAPI),
+            (PeerConnectionLost,),
             operator.attrgetter('head_info.head_td'),
             lambda _: 0,
         )

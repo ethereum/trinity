@@ -335,6 +335,7 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
         A single attempt to get the block header from the given peer.
 
         :raise BadLESResponse: if the peer replies with a header that has a different hash
+        :raise PeerConnectionLost: if the peer is no longer alive.
         """
         self.logger.debug("Fetching header %s from %s", encode_hex(block_hash), peer)
         max_headers = 1
