@@ -111,10 +111,10 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
             remote=peer.remote,
             is_outbound=not peer.inbound,
             last_connected_at=None,
-            genesis_hash=peer.chain_info.genesis_hash,
+            genesis_hash=peer.get_chain_info().genesis_hash,
             protocol=peer.sub_proto.name,
             protocol_version=peer.sub_proto.version,
-            network_id=peer.chain_info.network_id,
+            network_id=peer.get_chain_info().network_id,
         )
 
     def deregister_peer(self, peer: BasePeer) -> None:
@@ -125,7 +125,7 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
         # prevent circular import
         from trinity.protocol.common.peer import BaseChainPeer
         peer = cast(BaseChainPeer, peer)
-        if peer.p2p_api.remote_disconnect_reason is None and peer.p2p_api.remote_disconnect_reason is None:  # noqa: E501
+        if peer.remote_disconnect_reason is None and peer.remote_disconnect_reason is None:
             # we don't care about peers that don't properly disconnect
             self.logger.debug(
                 'Not tracking disconnecting peer %s[%s] missing disconnect reason',
@@ -139,7 +139,7 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
             self.logger.debug(
                 'Not tracking disconnecting peer %s[%s][%s] due to insufficient uptime (%s < %s)',
                 peer,
-                peer.p2p_api.local_disconnect_reason,
+                peer.local_disconnect_reason,
                 'inbound' if peer.inbound else 'outbound',
                 humanize_seconds(peer.uptime),
                 humanize_seconds(MIN_QUALIFYING_UPTIME),
@@ -150,7 +150,7 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
                 'Tracking disconnecting peer %s[%s][%s] with uptime: %s',
                 peer,
                 'inbound' if peer.inbound else 'outbound',
-                peer.p2p_api.local_disconnect_reason,
+                peer.local_disconnect_reason,
                 humanize_seconds(peer.uptime),
             )
 
@@ -158,10 +158,10 @@ class BaseEth1PeerTracker(BasePeerBackend, PeerSubscriber):
             remote=peer.remote,
             is_outbound=not peer.inbound,
             last_connected_at=datetime.datetime.utcnow(),
-            genesis_hash=peer.chain_info.genesis_hash,
+            genesis_hash=peer.get_chain_info().genesis_hash,
             protocol=peer.sub_proto.name,
             protocol_version=peer.sub_proto.version,
-            network_id=peer.chain_info.network_id,
+            network_id=peer.get_chain_info().network_id,
         )
 
     @abstractmethod

@@ -292,7 +292,8 @@ async def test_no_duplicate_node_data(request, event_loop, event_bus, chaindb_fr
             root_hash = chaindb_20.get_canonical_head().state_root
             state_root = chaindb_20.db[root_hash]
 
-            returned_nodes = await client_to_server.eth_api.get_node_data((root_hash, root_hash))
+            returned_nodes = await client_to_server.get_eth_api().get_node_data(
+                (root_hash, root_hash))
             assert returned_nodes == (
                 # Server must not send back duplicates, just the single root node
                 (root_hash, state_root),

@@ -44,7 +44,7 @@ def mk_header_chain(length):
 @pytest.mark.asyncio
 async def test_eth_get_headers_empty_stats():
     async with LatestETHPeerPairFactory() as (peer, remote):
-        stats = peer.eth_api.get_extra_stats()
+        stats = peer.get_eth_api().get_extra_stats()
         assert all('None' in line for line in stats)
         assert any('BlockHeader' in line for line in stats)
 
@@ -53,17 +53,17 @@ async def test_eth_get_headers_empty_stats():
 async def test_eth_get_headers_stats():
     async with LatestETHPeerPairFactory() as (peer, remote):
         async def send_headers():
-            remote.eth_api.send_block_headers(mk_header_chain(1))
+            remote.get_eth_api().send_block_headers(mk_header_chain(1))
 
         for idx in range(1, 5):
             get_headers_task = asyncio.ensure_future(
-                peer.eth_api.get_block_headers(0, 1, 0, False)
+                peer.get_eth_api().get_block_headers(0, 1, 0, False)
             )
             asyncio.ensure_future(send_headers())
 
             await get_headers_task
 
-            stats = peer.eth_api.get_extra_stats()
+            stats = peer.get_eth_api().get_extra_stats()
 
             for line in stats:
                 if 'BlockHeaders' in line:

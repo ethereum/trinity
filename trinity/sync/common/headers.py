@@ -445,7 +445,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
             max_headers: int = None,
             skip: int = None) -> Tuple[BlockHeaderAPI, ...]:
 
-        if not peer.manager.is_running:
+        if not peer.is_alive:
             self.logger.info("%s disconnected while fetching headers", peer)
             return tuple()
 
@@ -462,7 +462,7 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
         try:
             self.logger.debug("Requsting chain of headers from %s starting at #%d", peer, start_at)
 
-            headers = await peer.chain_api.get_block_headers(
+            headers = await peer.get_chain_api().get_block_headers(
                 start_at,
                 header_limit,
                 derived_skip,
@@ -703,9 +703,9 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
             if not self.sync_progress:
                 await self._init_sync_progress(parent_header, peer)
 
-            if not peer.manager.is_running:
+            if not peer.is_alive:
                 self.logger.debug(
-                    "Tried to fetch headers from %s but it is no longer running", peer)
+                    "Tried to fetch headers from %s but it is no longer alive", peer)
                 continue
 
             peer.manager.run_task(
@@ -817,7 +817,8 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
     ) -> Tuple[BlockHeaderAPI, ...]:
         self.logger.debug("Requesting %d headers from %s", length, peer)
         try:
-            return await peer.chain_api.get_block_headers(start_at, length, skip=0, reverse=False)
+            return await peer.get_chain_api().get_block_headers(
+                start_at, length, skip=0, reverse=False)
         except asyncio.TimeoutError:
             self.logger.debug("Timed out requesting %d headers from %s", length, peer)
             return tuple()
@@ -833,9 +834,9 @@ class HeaderMeatSyncer(Service, PeerSubscriber, Generic[TChainPeer]):
 
     async def _init_sync_progress(self, parent_header: BlockHeaderAPI, peer: TChainPeer) -> None:
         try:
-            latest_block_number = peer.head_info.head_number
+            latest_block_number = peer.get_head_info().head_number
         except AttributeError:
-            headers = await self._request_headers(peer, peer.head_info.head_hash, 1)
+            headers = await self._request_headers(peer, peer.get_head_info().head_hash, 1)
             if headers:
                 latest_block_number = headers[0].block_number
             else:
@@ -940,7 +941,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
         if not self._is_syncing_skeleton and self._last_target_header_hash is None:
             raise ValidationError("Cannot check the target hash before the first sync has started")
         elif self._is_syncing_skeleton:
-            return self._skeleton.peer.head_info.head_hash
+            return self._skeleton.peer.get_head_info().head_hash
         else:
             return self._last_target_header_hash
 
@@ -992,7 +993,7 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
                 yield self._skeleton
             finally:
                 self.logger.debug("Skeleton sync with %s ended", peer)
-                self._last_target_header_hash = peer.head_info.head_hash
+                self._last_target_header_hash = peer.get_head_info().head_hash
                 self._skeleton = None
 
     @property
@@ -1057,15 +1058,18 @@ class BaseHeaderChainSyncer(Service, HeaderSyncerAPI, Generic[TChainPeer]):
     async def _validate_peer_is_ahead(self, peer: BaseChainPeer) -> None:
         head = await self._db.coro_get_canonical_head()
         head_td = await self._db.coro_get_score(head.hash)
-        if peer.head_info.head_td <= head_td:
+        # Since we yielded above, we could've lost the peer connection.
+        if not peer.is_alive:
+            raise _PeerBehind(f"{peer} is no longer alive, not a valid target for sync")
+        elif peer.get_head_info().head_td <= head_td:
             self.logger.debug(
                 "Head TD (%d) announced by %s not higher than ours (%d), not syncing",
-                peer.head_info.head_td, peer, head_td)
+                peer.get_head_info().head_td, peer, head_td)
             raise _PeerBehind(f"{peer} is behind us, not a valid target for sync")
         else:
             self.logger.debug(
                 "%s announced Head TD %d, which is higher than ours (%d), starting sync",
-                peer, peer.head_info.head_td, head_td)
+                peer, peer.get_head_info().head_td, head_td)
 
     def _run_handle_sync_status_requests(self) -> None:
         if self._peer_pool.has_event_bus:

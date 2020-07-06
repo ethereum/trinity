@@ -22,7 +22,7 @@ async def test_disconnect_on_cancellation():
         bob.connection.add_command_handler(Disconnect, _handle_disconnect)
         await alice.manager.stop()
         await asyncio.wait_for(got_disconnect.wait(), timeout=1)
-        assert bob.p2p_api.remote_disconnect_reason == DisconnectReason.CLIENT_QUITTING
+        assert bob.remote_disconnect_reason == DisconnectReason.CLIENT_QUITTING
 
 
 @pytest.mark.asyncio
@@ -40,10 +40,10 @@ async def test_cancels_on_received_disconnect():
         # cancel itself even if alice accidentally leaves her connection open. If we used
         # alice.cancel() to send the Disconnect msg, alice would also close its connection,
         # causing bob to detect it, close its own and cause the peer to be cancelled.
-        alice.p2p_api.disconnect(DisconnectReason.CLIENT_QUITTING)
+        alice._p2p_api.disconnect(DisconnectReason.CLIENT_QUITTING)
         await asyncio.wait_for(bob.connection.manager.wait_finished(), timeout=1)
         assert bob.connection.is_closing
-        assert bob.p2p_api.remote_disconnect_reason == DisconnectReason.CLIENT_QUITTING
+        assert bob.remote_disconnect_reason == DisconnectReason.CLIENT_QUITTING
 
 
 class BehaviorCrash(Exception):
