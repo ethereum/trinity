@@ -763,7 +763,7 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             FIRE_AND_FORGET_BROADCASTING
         )
 
-        self._backfiller.set_root_hash(parent_state_root)
+        self._backfiller.set_root_hash(header, parent_state_root)
 
     async def _preview_address_load(
             self,
