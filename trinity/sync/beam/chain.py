@@ -13,14 +13,13 @@ from lahja import EndpointAPI
 
 from eth.abc import (
     AtomicDatabaseAPI,
+    BlockAPI,
     BlockHeaderAPI,
     BlockImportResult,
     DatabaseAPI,
+    SignedTransactionAPI,
 )
 from eth.constants import GENESIS_PARENT_HASH
-from eth.rlp.blocks import BaseBlock
-from eth.rlp.headers import BlockHeader
-from eth.rlp.transactions import BaseTransaction
 from eth.typing import BlockRange
 from eth_typing import (
     BlockNumber,
@@ -260,7 +259,7 @@ class BeamSyncer(Service):
         """
         return self._body_syncer.get_block_count_lag()
 
-    async def _download_blocks(self, before_header: BlockHeader) -> None:
+    async def _download_blocks(self, before_header: BlockHeaderAPI) -> None:
         """
         When importing a block, we need to validate uncles against the previous
         six blocks, so download those bodies and persist them to the database.
@@ -311,7 +310,9 @@ class BeamSyncer(Service):
         # When this completes, we have all the uncles needed to validate
         self.logger.info("Have all data needed for Beam validation, continuing...")
 
-    async def _get_ancestors(self, limit: int, header: BlockHeader) -> AsyncIterator[BlockHeader]:
+    async def _get_ancestors(self,
+                             limit: int,
+                             header: BlockHeaderAPI) -> AsyncIterator[BlockHeaderAPI]:
         """
         Return `limit` number of ancestor headers from the specified header.
         """
@@ -324,7 +325,7 @@ class BeamSyncer(Service):
 
     async def _all_verification_bodies_present(
             self,
-            headers_with_potential_conflicts: Iterable[BlockHeader]) -> bool:
+            headers_with_potential_conflicts: Iterable[BlockHeaderAPI]) -> bool:
 
         for header in headers_with_potential_conflicts:
             if not await self._body_for_header_exists(header):
@@ -360,7 +361,7 @@ class RigorousFastChainBodySyncer(Service):
     the header is present than the body must be. This is helpful, because
     the previous syncer is a header-only syncer.
     """
-    _starting_tip: BlockHeader = None
+    _starting_tip: BlockHeaderAPI = None
 
     def __init__(self,
                  chain: AsyncChainAPI,
@@ -376,7 +377,7 @@ class RigorousFastChainBodySyncer(Service):
             should_skip_header_fn=body_for_header_exists(db, chain)
         )
 
-    async def _sync_from(self) -> BlockHeader:
+    async def _sync_from(self) -> BlockHeaderAPI:
         """
         Typically, the FastChainBodySyncer always starts syncing from the tip of the chain,
         but we actually want to sync from *behind* the tip, so we manually set the sync-from
@@ -387,7 +388,7 @@ class RigorousFastChainBodySyncer(Service):
         else:
             return self._starting_tip
 
-    def set_starting_tip(self, header: BlockHeader) -> None:
+    def set_starting_tip(self, header: BlockHeaderAPI) -> None:
         """
         Explicitly set the sync-from target, to use instead of the canonical head.
         """
@@ -404,7 +405,7 @@ class BodyChainGapSyncer(Service):
     in tandem with other operations that sync the state.
     """
 
-    _starting_tip: BlockHeader = None
+    _starting_tip: BlockHeaderAPI = None
     logger = get_logger('trinity.sync.beam.chain.BodyChainGapSyncer')
 
     def __init__(self,
@@ -524,9 +525,9 @@ class HeaderLaunchpointSyncer(HeaderSyncerAPI):
     def __init__(self, passthrough: HeaderSyncerAPI) -> None:
         self._real_syncer = passthrough
         self._at_launchpoint = asyncio.Event()
-        self._launchpoint_headers: Tuple[BlockHeader, ...] = None
+        self._launchpoint_headers: Tuple[BlockHeaderAPI, ...] = None
 
-    def set_launchpoint_headers(self, headers: Tuple[BlockHeader, ...]) -> None:
+    def set_launchpoint_headers(self, headers: Tuple[BlockHeaderAPI, ...]) -> None:
         """
         Identify the given headers as launchpoint headers. These will be returned first.
 
@@ -538,7 +539,7 @@ class HeaderLaunchpointSyncer(HeaderSyncerAPI):
 
     async def new_sync_headers(
             self,
-            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeader, ...]]:
+            max_batch_size: int = None) -> AsyncIterator[Tuple[BlockHeaderAPI, ...]]:
         await self._at_launchpoint.wait()
 
         self.logger.info(
@@ -565,7 +566,7 @@ class HeaderOnlyPersist(Service):
         self.logger = get_logger('trinity.sync.beam.chain.HeaderOnlyPersist')
         self._db = db
         self._header_syncer = header_syncer
-        self._final_headers: Tuple[BlockHeader, ...] = None
+        self._final_headers: Tuple[BlockHeaderAPI, ...] = None
         self._force_end_block_number = force_end_block_number
         self._launch_strategy = launch_strategy
 
@@ -574,7 +575,7 @@ class HeaderOnlyPersist(Service):
         # run sync until cancelled
         await self.manager.wait_finished()
 
-    def _is_header_eligible_to_beam_sync(self, header: BlockHeader) -> bool:
+    def _is_header_eligible_to_beam_sync(self, header: BlockHeaderAPI) -> bool:
         time_gap = time.time() - header.timestamp
         return time_gap < (ESTIMATED_BEAMABLE_SECONDS * (1 - BEAM_PIVOT_BUFFER_FRACTION))
 
@@ -600,7 +601,7 @@ class HeaderOnlyPersist(Service):
                 head,
             )
 
-    async def _exit_if_launchpoint(self, headers: Sequence[BlockHeader]) -> bool:
+    async def _exit_if_launchpoint(self, headers: Sequence[BlockHeaderAPI]) -> bool:
         """
         Determine if the supplied headers have reached the end of headers-only persist.
         This might be in the form of a forced launchpoint, or because we caught up to
@@ -669,7 +670,7 @@ class HeaderOnlyPersist(Service):
 
         return True
 
-    def get_final_headers(self) -> Tuple[BlockHeader, ...]:
+    def get_final_headers(self) -> Tuple[BlockHeaderAPI, ...]:
         """
         Which header(s) triggered the launchpoint to switch out of header-only persist state.
 
@@ -713,7 +714,7 @@ class BeamBlockImporter(BaseBlockImporter, Service):
 
     async def import_block(
             self,
-            block: BaseBlock) -> BlockImportResult:
+            block: BlockAPI) -> BlockImportResult:
         self.logger.info("Beam importing %s (%d txns) ...", block.header, len(block.transactions))
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)
@@ -741,8 +742,8 @@ class BeamBlockImporter(BaseBlockImporter, Service):
 
     async def preview_transactions(
             self,
-            header: BlockHeader,
-            transactions: Tuple[BaseTransaction, ...],
+            header: BlockHeaderAPI,
+            transactions: Tuple[SignedTransactionAPI, ...],
             parent_state_root: Hash32,
             lagging: bool = True) -> None:
 
@@ -766,9 +767,9 @@ class BeamBlockImporter(BaseBlockImporter, Service):
 
     async def _preview_address_load(
             self,
-            header: BlockHeader,
+            header: BlockHeaderAPI,
             parent_state_root: Hash32,
-            transactions: Tuple[BaseTransaction, ...]) -> None:
+            transactions: Tuple[SignedTransactionAPI, ...]) -> None:
         """
         Get account state for transaction addresses on a block being previewed in parallel.
         """
@@ -783,9 +784,9 @@ class BeamBlockImporter(BaseBlockImporter, Service):
 
     async def _load_address_state(
             self,
-            header: BlockHeader,
+            header: BlockHeaderAPI,
             parent_state_root: Hash32,
-            transactions: Tuple[BaseTransaction, ...],
+            transactions: Tuple[SignedTransactionAPI, ...],
             urgent: bool = True) -> Tuple[int, float]:
         """
         Load all state needed to read transaction account status.
@@ -833,9 +834,9 @@ class BeamBlockImporter(BaseBlockImporter, Service):
 
     async def _request_address_nodes(
             self,
-            header: BlockHeader,
+            header: BlockHeaderAPI,
             parent_state_root: Hash32,
-            transactions: Tuple[BaseTransaction, ...],
+            transactions: Tuple[SignedTransactionAPI, ...],
             urgent: bool = True) -> Tuple[int, int]:
         """
         Request any missing trie nodes needed to read account state for the given transactions.

@@ -7,10 +7,13 @@ from typing import (
     Type,
 )
 
-from eth.abc import BlockImportResult
-from eth.rlp.blocks import BaseBlock
-from eth.rlp.headers import BlockHeader
-from eth.rlp.transactions import BaseTransaction
+from eth.abc import (
+    BlockAPI,
+    BlockImportResult,
+    BlockHeaderAPI,
+    SignedTransactionAPI,
+)
+
 from eth_typing import (
     Address,
     Hash32,
@@ -125,7 +128,7 @@ class StatelessBlockImportDone(BaseEvent):
     or a failure.
     """
 
-    block: BaseBlock
+    block: BlockAPI
     completed: bool
     result: BlockImportResult
     exception: BaseException
@@ -137,7 +140,7 @@ class DoStatelessBlockImport(BaseRequestResponseEvent[StatelessBlockImportDone])
     The syncer emits this event when it would like the Beam Sync process to
     start attempting a block import.
     """
-    block: BaseBlock
+    block: BlockAPI
 
     @staticmethod
     def expected_response_type() -> Type[StatelessBlockImportDone]:
@@ -149,5 +152,5 @@ class DoStatelessBlockPreview(BaseEvent):
     """
     Event to identify and download the data needed to execute the given transactions
     """
-    header: BlockHeader
-    transactions: Tuple[BaseTransaction, ...]
+    header: BlockHeaderAPI
+    transactions: Tuple[SignedTransactionAPI, ...]

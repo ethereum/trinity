@@ -67,8 +67,10 @@ class SimpleBlockImporter(BaseBlockImporter):
 class BaseSyncBlockImporter(ABC):
     @abstractmethod
     def import_block(
-            self,
-            block: BlockAPI) -> Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]:
+        self, block: BaseBeaconBlock
+    ) -> Tuple[
+        BaseBeaconBlock, Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]
+    ]:
         ...
 
 

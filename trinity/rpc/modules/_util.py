@@ -2,6 +2,7 @@ from typing import (
     Union,
 )
 
+from eth.abc import BlockHeaderAPI
 from eth_typing import (
     BlockNumber,
 )
@@ -9,14 +10,11 @@ from eth_utils import (
     is_integer,
 )
 
-from eth.rlp.headers import (
-    BlockHeader,
-)
 
 from trinity.chains.base import AsyncChainAPI
 
 
-async def get_header(chain: AsyncChainAPI, at_block: Union[str, int]) -> BlockHeader:
+async def get_header(chain: AsyncChainAPI, at_block: Union[str, int]) -> BlockHeaderAPI:
     if at_block == 'pending':
         raise NotImplementedError("RPC interface does not support the 'pending' block at this time")
     elif at_block == 'latest':

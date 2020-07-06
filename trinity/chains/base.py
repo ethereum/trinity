@@ -18,7 +18,7 @@ from eth.abc import (
 class AsyncChainAPI(ChainAPI):
     @abstractmethod
     async def coro_import_block(self,
-                                block: BlockHeaderAPI,
+                                block: BlockAPI,
                                 perform_validation: bool = True,
                                 ) -> BlockImportResult:
         ...

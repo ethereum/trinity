@@ -33,6 +33,7 @@ from eth.abc import (
     ReceiptAPI,
     SignedTransactionAPI,
     UnsignedTransactionAPI,
+    BlockImportResult,
 )
 from eth.chains.base import (
     AccountState,
@@ -237,10 +238,12 @@ class LightDispatchChain(AsyncChainAPI, Chain):
             at_header: BlockHeaderAPI = None) -> int:
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
-    def import_block(self, block: BlockAPI, perform_validation: bool = True) -> BlockAPI:
+    def import_block(self, block: BlockAPI, perform_validation: bool = True) -> BlockImportResult:
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
-    async def coro_import_block(self, block: BlockAPI, perform_validation: bool = True) -> BlockAPI:
+    async def coro_import_block(self,
+                                block: BlockAPI,
+                                perform_validation: bool = True) -> BlockImportResult:
         raise NotImplementedError("Chain classes must implement " + inspect.stack()[0][3])
 
     def mine_block(self, *args: Any, **kwargs: Any) -> BlockAPI:

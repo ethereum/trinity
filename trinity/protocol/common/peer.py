@@ -25,9 +25,8 @@ from eth_utils.toolz import (
 
 from eth_typing import BlockNumber, Hash32
 
-from eth.abc import VirtualMachineAPI
+from eth.abc import VirtualMachineAPI, BlockHeaderAPI
 from eth.constants import GENESIS_BLOCK_NUMBER
-from eth.rlp.headers import BlockHeader
 
 from p2p.abc import BehaviorAPI, NodeAPI, SessionAPI
 from p2p.constants import (
@@ -252,7 +251,7 @@ class BaseChainPeerPool(BasePeerPool):
     def vm_configuration(self) -> Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...]:
         return self.context.vm_configuration
 
-    async def get_chain_head(self) -> BlockHeader:
+    async def get_chain_head(self) -> BlockHeaderAPI:
         return await self.context.headerdb.coro_get_canonical_head()
 
     async def get_genesis_hash(self) -> Hash32:
