@@ -649,7 +649,7 @@ async def test_block_gapfill_syncer(request,
                 syncer.pause()
                 # We need to give async code a moment to settle before we save the progress to
                 # ensure it has stabilized before we save it.
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.25)
                 paused_chain_gaps = chain_with_gaps.chaindb.get_chain_gaps()
 
                 # Consider it victory if after 0.5s no new blocks were written to the database
@@ -668,7 +668,7 @@ async def test_block_gapfill_syncer(request,
 
                 # We need to give the async calls a moment to settle before we can read the updated
                 # chain gaps.
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.25)
                 assert chain_with_gaps.chaindb.get_chain_gaps() == ((), 1001)
 
 
