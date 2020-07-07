@@ -6,12 +6,14 @@ import uuid
 
 from async_service import Service, background_asyncio_service
 from eth.consensus import ConsensusContext
+from eth.constants import EMPTY_SHA3
 from eth.db.atomic import AtomicDB
 from eth.db.schema import SchemaV1
 from eth.exceptions import (
     BlockNotFound,
     HeaderNotFound,
 )
+from eth.rlp.accounts import Account
 from eth.vm.forks import (
     MuirGlacierVM,
     PetersburgVM,
@@ -19,8 +21,12 @@ from eth.vm.forks import (
 from eth_utils import decode_hex
 from lahja import ConnectionConfig, AsyncioEndpoint
 import pytest
+import rlp
 from trie import (
     HexaryTrie,
+)
+from trie.constants import (
+    BLANK_NODE_HASH,
 )
 from trie.exceptions import (
     MissingTraversalNode,
@@ -298,7 +304,7 @@ async def _beam_syncing(
             async with background_asyncio_service(import_server):
                 await pausing_endpoint.connect_to_endpoints(gatherer_config)
                 async with background_asyncio_service(client):
-                    yield
+                    yield client
 
 
 # Cases of interest:
@@ -353,6 +359,8 @@ async def test_beam_syncer_loads_recent_state_root(
 
 @pytest.mark.asyncio
 # Cases of interest:
+# -  0: This doesn't test beam sync or backfill, since all state is available immediately.
+#       The test checks things that don't happen if we start at 0, so it's excluded from the range.
 # -  2: Normally we need to look back ~6 headers to look for duplicate uncles. This
 #       tests the lowest block number code path where an alternate code path is triggered,
 #       to look up fewer than usual.
@@ -365,9 +373,10 @@ async def test_beam_syncer_loads_recent_state_root(
 #       duplicate hashes in the same request.
 # - 42: Last block
 # In order to run a deeper test, we can run:
-# @pytest.mark.parametrize('beam_to_block', range(0, 43))
+# @pytest.mark.parametrize('beam_to_block', range(1, 43))
 @pytest.mark.parametrize('beam_to_block', [2, 7, 8, 25, 38, 42])
 async def test_beam_syncer_backfills_all_state(
+        caplog,
         request,
         event_loop,
         event_bus,
@@ -387,8 +396,29 @@ async def test_beam_syncer_backfills_all_state(
         VM_at_0=MuirGlacierVM,
     )
 
-    async with sync_test_service:
+    caplog.set_level(logging.INFO)
+    async with sync_test_service as beam_syncer:
+        # Manually verify that all state is in the state database now
         await wait_for_full_state_db(chaindb_fresh, beam_to_block, timeout=10)
+        beam_syncer.logger.info("State DB complete by manual inspection")
+
+        # Check that backfiller exits on state completion
+        try:
+            await asyncio.wait_for(beam_syncer._backfiller.manager.wait_finished(), timeout=10)
+        except asyncio.TimeoutError:
+            beam_syncer.logger.warning("Backfiller never exited, even though all state is present")
+            if beam_syncer._backfiller._check_complete():
+                beam_syncer.logger.warning("Backfiller thinks it's complete, but never exited")
+            else:
+                beam_syncer.logger.warning(
+                    "Backfiller thinks it's missing %s",
+                    beam_syncer._backfiller._account_tracker,
+                )
+            # Whatever the reason, this TimeoutError means the backfiller service didn't exit
+            raise
+
+    # Double-check that backfiller exited for the right reason.
+    assert "Downloaded all accounts, storage and bytecode state" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -985,7 +1015,6 @@ async def wait_for_block(chain, block, sync_timeout=10):
 
 
 async def wait_for_full_state_db(headerdb, min_block_number, timeout):
-    # Only tracking accounts for now, will add bytecode & storage shortly
     collected_data = collections.defaultdict(int)
 
     def _has_full_state_db(headerdb):
@@ -1001,8 +1030,29 @@ async def wait_for_full_state_db(headerdb, min_block_number, timeout):
         trie = HexaryTrie(raw_db, state_root)
         iterator = NodeIterator(trie)
         try:
-            for _ in iterator.items():
+            for key, value in iterator.items():
                 collected_data["num_accounts"] += 1
+
+                account = rlp.decode(value, sedes=Account)
+
+                if account.code_hash == EMPTY_SHA3:
+                    pass
+                elif account.code_hash not in raw_db:
+                    # missing bytecodes
+                    logging.warning("Missing bytecode for account at 0x%s", key.hex())
+                    return False
+                else:
+                    collected_data["num_bytecodes"] += 1
+
+                if account.storage_root != BLANK_NODE_HASH:
+                    storage_trie = HexaryTrie(raw_db, account.storage_root)
+                    try:
+                        for _key in NodeIterator(storage_trie).keys():
+                            # We don't care what the keys are, just that we can iterate through them
+                            collected_data["num_storage_slots"] += 1
+                    except MissingTraversalNode as exc:
+                        logging.warning("Missing storage for account at 0x%s: %s", key.hex(), exc)
+                        return False
 
         except MissingTraversalNode:
             return False
