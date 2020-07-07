@@ -1,4 +1,5 @@
 import asyncio
+import collections
 from contextlib import asynccontextmanager
 import logging
 import uuid
@@ -11,10 +12,22 @@ from eth.exceptions import (
     BlockNotFound,
     HeaderNotFound,
 )
-from eth.vm.forks.petersburg import PetersburgVM
+from eth.vm.forks import (
+    MuirGlacierVM,
+    PetersburgVM,
+)
 from eth_utils import decode_hex
 from lahja import ConnectionConfig, AsyncioEndpoint
 import pytest
+from trie import (
+    HexaryTrie,
+)
+from trie.exceptions import (
+    MissingTraversalNode,
+)
+from trie.iter import (
+    NodeIterator,
+)
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
@@ -336,6 +349,46 @@ async def test_beam_syncer_loads_recent_state_root(
         )
         await wait_for_head(chaindb_fresh, target_head, sync_timeout=5)
         assert target_head.state_root in chaindb_fresh.db
+
+
+@pytest.mark.asyncio
+# Cases of interest:
+# -  2: Normally we need to look back ~6 headers to look for duplicate uncles. This
+#       tests the lowest block number code path where an alternate code path is triggered,
+#       to look up fewer than usual.
+# -  7: Normally we need to look back ~6 headers to look for duplicate uncles. This
+#       tests the highest block number code path where an alternate code path is triggered,
+#       to look up fewer than usual.
+# -  8: First block that looks up all possible headers for duplicate uncles
+# - 25: Random block in the middle.
+# - 38: During a full range(0, 43) scan, found this block failing. It (sometimes?) requests
+#       duplicate hashes in the same request.
+# - 42: Last block
+# In order to run a deeper test, we can run:
+# @pytest.mark.parametrize('beam_to_block', range(0, 43))
+@pytest.mark.parametrize('beam_to_block', [2, 7, 8, 25, 38, 42])
+async def test_beam_syncer_backfills_all_state(
+        request,
+        event_loop,
+        event_bus,
+        chaindb_fresh,
+        chaindb_cold_state,
+        beam_to_block,
+        checkpoint=None):
+
+    sync_test_service = _beam_syncing(
+        request,
+        event_loop,
+        event_bus,
+        chaindb_fresh,
+        chaindb_cold_state,
+        beam_to_block,
+        checkpoint,
+        VM_at_0=MuirGlacierVM,
+    )
+
+    async with sync_test_service:
+        await wait_for_full_state_db(chaindb_fresh, beam_to_block, timeout=10)
 
 
 @pytest.mark.asyncio
@@ -852,6 +905,23 @@ def chaindb_churner(leveldb_churner):
     return chain.chaindb
 
 
+@pytest.fixture
+def leveldb_cold_state():
+    yield from load_fixture_db(DBFixture.COLD_STATE)
+
+
+@pytest.fixture
+def chaindb_cold_state(leveldb_cold_state):
+    chain = load_mining_chain(AtomicDB(leveldb_cold_state))
+    chaindb = chain.chaindb
+    head = chaindb.get_canonical_head()
+    assert head.block_number == 42
+    assert head.state_root == (
+        b"\xecVG\x1dT\xd7l'M/\xfd\xfe\xf961:\xc2\x10\xc5\xbd)+&\xd6\x82\xe43\x1c$$\xb3\xb5"
+    )
+    return chaindb
+
+
 async def wait_for_head(headerdb, header, sync_timeout=10):
     # A full header sync may involve several round trips, so we must be willing to wait a little
     # bit for them.
@@ -904,5 +974,48 @@ async def wait_for_block(chain, block, sync_timeout=10):
             sync_timeout,
             gaps,
             future_tip,
+        )
+        raise
+
+
+async def wait_for_full_state_db(headerdb, min_block_number, timeout):
+    # Only tracking accounts for now, will add bytecode & storage shortly
+    collected_data = collections.defaultdict(int)
+
+    def _has_full_state_db(headerdb):
+        head = headerdb.get_canonical_head()
+        if head.block_number < min_block_number:
+            return False
+
+        # reset statistics
+        collected_data.clear()
+
+        raw_db = headerdb.db
+        state_root = head.state_root
+        trie = HexaryTrie(raw_db, state_root)
+        iterator = NodeIterator(trie)
+        try:
+            for _ in iterator.items():
+                collected_data["num_accounts"] += 1
+
+        except MissingTraversalNode:
+            return False
+        else:
+            return True
+
+    async def _wait_loop():
+        while not _has_full_state_db(headerdb):
+            await asyncio.sleep(0.3)
+
+    try:
+        await asyncio.wait_for(_wait_loop(), timeout)
+    except asyncio.TimeoutError:
+        canonical_head = headerdb.get_canonical_head()
+        logging.error(
+            "Could not finish syncing all state. Synced from block #%s to %s in %ds, with %s",
+            min_block_number,
+            canonical_head,
+            timeout,
+            collected_data,
         )
         raise

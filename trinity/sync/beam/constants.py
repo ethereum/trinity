@@ -65,6 +65,19 @@ MAX_LAG_TO_RESUME_BACKFILL = 0
 # The number of blocks that, when lagged behind, will cause backfill to pause
 MAX_LAG_TO_PAUSE_BACKFILL = 5
 
+# If there is still unknown state to request, but we don't have any available hashes
+#   to ask for a peer (all known hashes are already being actively requested), then
+#   pause this long before asking any other peer for more state hashes.
+PAUSE_SECONDS_IF_STATE_BACKFILL_STARVED = 2
+
+# Rotate the state backfill key to a new state root once every epoch. The key is
+#   used to have beam syncing nodes generally be able to help each other backfill.
+#   Otherwise, they might all haphazardly try to fill in different parts of the trie
+#   at the same time, and not have the nodes needed to supply each other. So all
+#   nodes try to get nodes near the key defined by the state root on every block with
+#   block_number % EPOCH_BLOCK_LENGTH == 0.
+EPOCH_BLOCK_LENGTH = 32
+
 # The time that the block backfill should idle when there are concurrently no blocks to fill.
 # Once gaps are closed they can only re-occur when beam sync pivots so it's ok to idle a fair while.
 BLOCK_BACKFILL_IDLE_TIME = PREDICTED_BLOCK_TIME * 500

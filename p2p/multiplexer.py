@@ -31,6 +31,7 @@ from p2p.abc import (
 )
 from p2p.exceptions import (
     MalformedMessage,
+    PeerConnectionLost,
     UnknownProtocol,
     UnknownProtocolCommand,
 )
@@ -53,7 +54,11 @@ async def stream_transport_messages(transport: TransportAPI,
     command_id_cache: Dict[int, ProtocolAPI] = {}
 
     while not transport.is_closing:
-        msg = await transport.recv()
+        try:
+            msg = await transport.recv()
+        except PeerConnectionLost:
+            return
+
         command_id = msg.command_id
 
         if msg.command_id not in command_id_cache:
