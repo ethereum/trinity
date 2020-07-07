@@ -690,7 +690,7 @@ async def test_wait_to_prune_until_yielded():
     ),
     st.integers(min_value=1, max_value=4),
 )
-@settings(max_examples=1000)
+@settings(max_examples=1000, deadline=500)
 @example(task_series=[1, 2, 0, 3], prune_depth=1)
 @example(task_series=[0, 1, 2, 3, 0, 4], prune_depth=1)
 @example(task_series=[0, 4, 2, 1, 5], prune_depth=1)
