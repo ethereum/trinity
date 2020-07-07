@@ -405,7 +405,9 @@ class BodyChainGapSyncer(Service):
     in tandem with other operations that sync the state.
     """
 
+    _idle_time = BLOCK_BACKFILL_IDLE_TIME
     _starting_tip: BlockHeaderAPI = None
+
     logger = get_logger('trinity.sync.beam.chain.BodyChainGapSyncer')
 
     def __init__(self,
@@ -416,12 +418,18 @@ class BodyChainGapSyncer(Service):
         self._db = db
         self._peer_pool = peer_pool
         self._paused = False
+        self._body_syncer: FastChainBodySyncer = None
         self._resumed = asyncio.Event()
 
     async def _setup_for_next_gap(self) -> None:
         gap_start, gap_end = self._get_next_gap()
         start_num = BlockNumber(gap_start - 1)
         _starting_tip = await self._db.coro_get_canonical_block_header_by_number(start_num)
+
+        if self._paused:
+            # If the syncer was paused while we were busy setting it up throw the current setup
+            # away. A new setup will be performed as soon as `resume()` was called again.
+            raise ValidationError("Syncer was paused by the user")
 
         async def _get_launch_header() -> BlockHeaderAPI:
             return _starting_tip
@@ -476,7 +484,10 @@ class BodyChainGapSyncer(Service):
             raise RuntimeError("Invalid action. Can not pause service that is already paused.")
 
         self._paused = True
-        self._body_syncer.get_manager().cancel()
+        if self._body_syncer:
+            # Pausing the syncer is valid at any point that the service is running but that might
+            # hit a point where we are still resolving the gaps and have no body_syncer set up yet.
+            self._body_syncer.get_manager().cancel()
         self.logger.debug2("BodyChainGapSyncer paused")
 
     def resume(self) -> None:
@@ -503,9 +514,9 @@ class BodyChainGapSyncer(Service):
             except ValidationError:
                 self.logger.debug(
                     "There are no gaps in the chain of blocks at this time. Sleeping for %ss",
-                    BLOCK_BACKFILL_IDLE_TIME
+                    self._idle_time
                 )
-                await asyncio.sleep(BLOCK_BACKFILL_IDLE_TIME)
+                await asyncio.sleep(self._idle_time)
             else:
                 await self.manager.run_service(self._body_syncer)
 

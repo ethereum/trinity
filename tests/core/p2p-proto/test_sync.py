@@ -618,8 +618,10 @@ async def test_block_gapfill_syncer(request,
         syncer = BodyChainGapSyncer(
             LatestTestChain(chaindb_with_block_gaps.db),
             chaindb_with_block_gaps,
-            MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
+            MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus),
         )
+        # In production, this would be the block time but we want our test to pause/resume swiftly
+        syncer._idle_time = 0.01
         server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
 
         async with run_peer_pool_event_server(
@@ -634,6 +636,10 @@ async def test_block_gapfill_syncer(request,
             async with background_asyncio_service(syncer):
                 chain_with_gaps = LatestTestChain(chaindb_with_block_gaps.db)
                 fat_chain = LatestTestChain(chaindb_1000.db)
+
+                # Ensure we can pause/resume immediately and not just after syncing has started
+                syncer.pause()
+                syncer.resume()
 
                 # Sync the first 100 blocks, then check that pausing/resume works
                 await wait_for_block(
