@@ -4,7 +4,7 @@ from eth2.beacon.constants import GWEI_PER_ETH
 from eth2.beacon.typing import Gwei, Second, Version
 from eth2.configs import Eth2Config
 
-SERENITY_CONFIG = Eth2Config(
+ALTONA_CONFIG = Eth2Config(
     # Misc
     MAX_COMMITTEES_PER_SLOT=2 ** 6,  # (= 64) committees
     TARGET_COMMITTEE_SIZE=2 ** 7,  # (= 128) validators
@@ -16,15 +16,15 @@ SERENITY_CONFIG = Eth2Config(
     HYSTERESIS_DOWNWARD_MULTIPLIER=1,
     HYSTERESIS_UPWARD_MULTIPLIER=5,
     # Genesis
-    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT=2 ** 14,
-    MIN_GENESIS_TIME=1578009600,  # (= Jan 3, 2020)
+    MIN_GENESIS_ACTIVE_VALIDATOR_COUNT=640,
+    MIN_GENESIS_TIME=1593433800,
     # Gwei values
     MIN_DEPOSIT_AMOUNT=Gwei(2 ** 0 * GWEI_PER_ETH),  # (= 1,000,000,000) Gwei
     MAX_EFFECTIVE_BALANCE=Gwei(2 ** 5 * GWEI_PER_ETH),  # (= 32,000,000,00) Gwei
     EJECTION_BALANCE=Gwei(2 ** 4 * GWEI_PER_ETH),  # (= 16,000,000,000) Gwei
     EFFECTIVE_BALANCE_INCREMENT=Gwei(2 ** 0 * GWEI_PER_ETH),  # (= 1,000,000,000) Gwei
     # Initial values
-    GENESIS_FORK_VERSION=Version(b"\x00" * 4),
+    GENESIS_FORK_VERSION=Version(b"\x00000121"),
     BLS_WITHDRAWAL_PREFIX=b"\x00",
     # Time parameters
     GENESIS_DELAY=Second(172800),
