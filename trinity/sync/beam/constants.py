@@ -59,11 +59,11 @@ BEAM_PIVOT_BUFFER_FRACTION = 1 / 2
 # We need to request one more header, to set the starting tip
 FULL_BLOCKS_NEEDED_TO_START_BEAM = MAX_UNCLE_DEPTH + 2
 
-# The number of blocks that beam sync is allowed to lag behind when resuming backfill
-MAX_LAG_TO_RESUME_BACKFILL = 0
+# If backfill is paused, resume when the lag has reduced to this number of blocks.
+RESUME_BACKFILL_AT_LAG = 0
 
-# The number of blocks that, when lagged behind, will cause backfill to pause
-MAX_LAG_TO_PAUSE_BACKFILL = 5
+# Pause backfill if sync starts lagging behind this number of blocks
+PAUSE_BACKFILL_AT_LAG = 5
 
 # If there is still unknown state to request, but we don't have any available hashes
 #   to ask for a peer (all known hashes are already being actively requested), then
