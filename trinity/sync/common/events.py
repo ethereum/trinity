@@ -29,6 +29,11 @@ from trinity.sync.common.types import (
 
 
 @dataclass
+class SendLocalTransaction(BaseEvent):
+    transaction: SignedTransactionAPI
+
+
+@dataclass
 class SyncingResponse(BaseEvent):
     is_syncing: bool
     progress: Optional[SyncProgress]

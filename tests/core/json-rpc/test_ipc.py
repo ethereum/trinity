@@ -29,6 +29,7 @@ from trinity.protocol.common.events import (
     PeerCountResponse,
 )
 from trinity.sync.common.events import (
+    SendLocalTransaction,
     SyncingRequest,
     SyncingResponse,
 )
@@ -279,6 +280,62 @@ async def test_ipc_requests(
         ipc_server):
     result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
     assert result == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    'request_msg, expected, propagate',
+    (
+        (
+            build_request('eth_sendRawTransaction', ["0xf8728001832fe3dd94000000000000000000000000000000000000101001900f498265baa54c70b2ae87eeaedecb2e820a95a0e3d8f417b5b4094cff0059de001f6d2172ea5f8c9e930abde7c00acd3fc16290a01a2f4c8f55cc288b89be4809bdcccdc97a76e15e38c24fb34979a26f97e6a476"]),  # noqa: E501
+            {
+                'result': '0x6faf85a8217d55c975fe6a0908d52ecbe6488b4b8a4a4f1272da3c4ecfabbc94',
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
+            True,
+        ),
+        (
+            build_request('eth_sendRawTransaction', ["0xf8718001832fe3dd9400000000000000000000000000000000000010100190633efb1b1fc043b2be4f5a110b770af181bea00949454076ee31595f698a573a8fec44956f43d9a806a3950ef1d35f82647547a0327c9e77ea2f51ac7f6868796f3d38e68812db40a5a483cfd1ec3e75d39912ea"]),  # noqa: E501
+            {
+                'error': 'Transaction 0x61c40c20ce2e6c9a4ec70914e6abd68be165648ff21e3105c12ae0da4e47e001 is for chain with id 77 but current chain has id 1337',  # noqa: E501
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
+            False,
+        ),
+        (
+            build_request('eth_sendRawTransaction', ["0xf889808609184e72a00082271094000000000000000000000000000000000000000080a47f74657374320000000000000000000000000000000000000000000000000000006000571ca08a8bbf888cfa37bbf0bb965423625641fc956967b81d12e23709cead01446075a01ce999b56a8a88504be365442ea61239198e23d1fce7d00fcfc5cd3b44b7215f"]),  # noqa: E501
+            {
+                # Investigate if we could test a successful transaction as well
+                'error': 'Insufficient gas',
+                'id': 3,
+                'jsonrpc': '2.0'
+            },
+            False,
+        ),
+    ),
+)
+async def test_send_raw_transaction_requests(
+        jsonrpc_ipc_pipe_path,
+        request_msg,
+        expected,
+        propagate,
+        event_loop,
+        event_bus,
+        ipc_server):
+    received_tx = asyncio.Event()
+    event_bus.subscribe(SendLocalTransaction, lambda _: received_tx.set())
+
+    await event_bus.wait_until_any_endpoint_subscribed_to(SendLocalTransaction)
+
+    result = await get_ipc_response(jsonrpc_ipc_pipe_path, request_msg, event_loop, event_bus)
+    assert result == expected
+    if propagate:
+        await asyncio.wait_for(received_tx.wait(), timeout=5)
+        assert received_tx.is_set()
+    else:
+        assert not received_tx.is_set()
 
 
 @pytest.mark.asyncio

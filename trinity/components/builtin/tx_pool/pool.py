@@ -26,11 +26,13 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeer,
     ETHProxyPeerPool,
 )
+from trinity.sync.common.events import SendLocalTransaction
 
 
 # The 'LOW_WATER` mark determines the minimum size at which we'll choose to
 # broadcast a chunk of transactions to our peers (even if we have more than
 # this locally available and ready).
+
 BATCH_LOW_WATER = 100
 
 # The `HIGH_WATER` mark determines the maximum number of transactions we'll
@@ -106,6 +108,9 @@ class TxPool(Service):
         # Process GetPooledTransactions requests
         self.manager.run_daemon_task(self._process_get_pooled_transactions_requests)
 
+        # Process all local transactions coming through the JSON-RPC API
+        self.manager.run_daemon_task(self._process_local_transactions)
+
         async for event in self._event_bus.stream(TransactionsEvent):
             self.manager.run_task(self._handle_tx, event.session, event.command.payload)
 
@@ -114,6 +119,15 @@ class TxPool(Service):
         async for event in self._event_bus.stream(GetPooledTransactionsEvent):
             asking_peer = await self._peer_pool.ensure_proxy_peer(event.session)
             asking_peer.eth_api.send_pooled_transactions([])
+
+    async def _process_local_transactions(self) -> None:
+
+        async for event in self._event_bus.stream(SendLocalTransaction):
+            # We probably want to save the transaction in the database to make sure it survives
+            # across reboots and gets rebroadcasted if needed. It should probably also be monitored
+            # for inclusion and removed when it's either included or past the maximum age.
+            # See: https://github.com/ethereum/trinity/issues/29
+            await self._internal_queue.put((event.transaction,))
 
     async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SignedTransactionAPI]) -> None:
 
