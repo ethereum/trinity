@@ -28,6 +28,8 @@ from eth_utils import (
     ValidationError,
 )
 
+from p2p.logic import wait_first
+
 from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
@@ -379,9 +381,11 @@ class SyncerComponent(AsyncioIsolatedComponent):
         node = NodeClass(event_bus, metrics_service, trinity_config)
         strategy = self.get_active_strategy(boot_info)
 
-        async with background_asyncio_service(node) as manager:
-            await self.launch_sync(node, strategy, boot_info, event_bus)
-            await manager.wait_finished()
+        async with background_asyncio_service(node) as node_manager:
+            sync_task = asyncio.create_task(self.launch_sync(node, strategy, boot_info, event_bus))
+            # The Node service is our responsibility, so we must exit if either that or the syncer
+            # returns.
+            await wait_first([sync_task, asyncio.create_task(node_manager.wait_finished())])
 
     @classmethod
     async def launch_sync(cls,
