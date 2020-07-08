@@ -214,7 +214,10 @@ async def test_peer_pool_answers_connect_commands(event_bus, server, receiver_re
                 TO_NETWORKING_BROADCAST_CONFIG
             )
 
-            # This test was maybe 30% flaky at 0.1 sleep
-            await asyncio.sleep(0.2)
-
-            assert len(server.peer_pool.connected_nodes) == 1
+            # This test was maybe 30% flaky at 0.1 sleep, so wait in a loop.
+            for _ in range(5):
+                await asyncio.sleep(0.1)
+                if len(server.peer_pool.connected_nodes) == 1:
+                    break
+            else:
+                assert len(server.peer_pool.connected_nodes) == 1
