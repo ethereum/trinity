@@ -41,8 +41,8 @@ from trinity.sync.beam.constants import (
     BLOCK_BACKFILL_IDLE_TIME,
     ESTIMATED_BEAMABLE_SECONDS,
     FULL_BLOCKS_NEEDED_TO_START_BEAM,
-    MAX_LAG_TO_PAUSE_BACKFILL,
-    MAX_LAG_TO_RESUME_BACKFILL,
+    PAUSE_BACKFILL_AT_LAG,
+    RESUME_BACKFILL_AT_LAG,
     PREDICTED_BLOCK_TIME,
 )
 from trinity.sync.common.checkpoint import (
@@ -339,13 +339,13 @@ class BeamSyncer(Service):
                 return
             else:
                 lag = self.get_block_count_lag()
-                if lag >= MAX_LAG_TO_PAUSE_BACKFILL and not self._block_backfill.is_paused:
+                if lag >= PAUSE_BACKFILL_AT_LAG and not self._block_backfill.is_paused:
                     self.logger.debug(
                         "Pausing historical block sync because we lag %s blocks",
                         lag,
                     )
                     self._block_backfill.pause()
-                elif lag <= MAX_LAG_TO_RESUME_BACKFILL and self._block_backfill.is_paused:
+                elif lag <= RESUME_BACKFILL_AT_LAG and self._block_backfill.is_paused:
                     self.logger.debug(
                         "Resuming historical block sync because we lag %s blocks",
                         lag,
