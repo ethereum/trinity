@@ -32,7 +32,7 @@ from .web3 import Web3  # noqa: F401
 def initialize_eth1_modules(chain: AsyncChainAPI,
                             event_bus: EndpointAPI,
                             trinity_config: TrinityConfig) -> Iterable[BaseRPCModule]:
-    yield Eth(chain, event_bus)
+    yield Eth(chain, event_bus, trinity_config)
     yield EVM(chain, event_bus)
     yield Net(event_bus)
     yield Web3()

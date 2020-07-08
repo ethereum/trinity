@@ -53,14 +53,17 @@ class DefaultTransactionValidator():
 
     def __call__(self, transaction: SignedTransactionAPI) -> bool:
 
-        transaction_class = self.get_appropriate_tx_class()
-        tx = transaction_class(**transaction.as_dict())
         try:
-            tx.validate()
+            self.validate(transaction)
         except ValidationError:
             return False
         else:
             return True
+
+    def validate(self, transaction: SignedTransactionAPI) -> None:
+        transaction_class = self.get_appropriate_tx_class()
+        tx = transaction_class(**transaction.as_dict())
+        tx.validate()
 
     @cachetools.func.ttl_cache(maxsize=1024, ttl=300)
     def get_appropriate_tx_class(self) -> Type[SignedTransactionAPI]:

@@ -5,11 +5,9 @@ from argparse import (
 
 from async_service import background_asyncio_service
 from eth_utils import ValidationError
-from eth.chains.mainnet import ISTANBUL_MAINNET_BLOCK
-from eth.chains.ropsten import ISTANBUL_ROPSTEN_BLOCK
-from eth.chains.goerli import ISTANBUL_GOERLI_BLOCK
 from lahja import EndpointAPI
 
+from trinity._utils.transactions import get_transaction_validator_for_network_id
 from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
@@ -27,9 +25,6 @@ from trinity.extensibility import (
 )
 from trinity.components.builtin.tx_pool.pool import (
     TxPool,
-)
-from trinity.components.builtin.tx_pool.validators import (
-    DefaultTransactionValidator
 )
 from trinity.protocol.eth.peer import ETHProxyPeerPool
 from trinity._utils.logging import get_logger
@@ -81,14 +76,10 @@ class TxComponent(AsyncioIsolatedComponent):
 
             chain = chain_config.full_chain_class(db)
 
-            if boot_info.trinity_config.network_id == MAINNET_NETWORK_ID:
-                validator = DefaultTransactionValidator(chain, ISTANBUL_MAINNET_BLOCK)
-            elif boot_info.trinity_config.network_id == ROPSTEN_NETWORK_ID:
-                validator = DefaultTransactionValidator(chain, ISTANBUL_ROPSTEN_BLOCK)
-            elif boot_info.trinity_config.network_id == GOERLI_NETWORK_ID:
-                validator = DefaultTransactionValidator(chain, ISTANBUL_GOERLI_BLOCK)
-            else:
-                raise Exception("This code path should not be reachable")
+            validator = get_transaction_validator_for_network_id(
+                chain,
+                boot_info.trinity_config.network_id,
+            )
 
             proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
             async with background_asyncio_service(proxy_peer_pool):

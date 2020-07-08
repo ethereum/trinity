@@ -22,6 +22,7 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
     ETHPeerPoolEventServer
 )
+from trinity.sync.common.events import SendLocalTransaction
 from trinity.tools.factories import LatestETHPeerPairFactory, ChainContextFactory
 
 from tests.core.integration_test_helpers import run_peer_pool_event_server
@@ -192,6 +193,29 @@ async def test_does_not_propagate_invalid_tx(two_connected_tx_pools,
     await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
     assert len(bob_incoming_tx) == 1
     assert bob_incoming_tx[0].as_dict() == txs_broadcasted_by_alice[1].as_dict()
+
+
+@pytest.mark.asyncio
+async def test_local_transaction_propagation(two_connected_tx_pools,
+                                             chain_with_block_validation,
+                                             funded_address_private_key):
+
+    (
+        (alice, alice_event_bus, alice_tx_pool),
+        (bob, bob_event_bus, bob_tx_pool)
+    ) = two_connected_tx_pools
+
+    alice_incoming_tx, alice_got_tx = observe_incoming_transactions(alice_event_bus)
+    bob_incoming_tx, bob_got_tx = observe_incoming_transactions(bob_event_bus)
+
+    local_alice_tx = create_random_tx(chain_with_block_validation, funded_address_private_key)
+
+    await alice_event_bus.broadcast(SendLocalTransaction(local_alice_tx))
+
+    await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
+    assert len(bob_incoming_tx) == 1
+
+    assert bob_incoming_tx[0].as_dict() == local_alice_tx.as_dict()
 
 
 def create_random_tx(chain, private_key, is_valid=True):

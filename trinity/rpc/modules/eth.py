@@ -1,5 +1,7 @@
 import os
 
+import rlp
+from eth.rlp.transactions import BaseTransactionFields
 from eth_utils.toolz import (
     identity,
 )
@@ -11,6 +13,8 @@ from typing import (
     NoReturn,
     Union,
 )
+
+from lahja import EndpointAPI
 from mypy_extensions import (
     TypedDict,
 )
@@ -19,6 +23,7 @@ from eth_typing import (
     Address,
     BlockNumber,
     Hash32,
+    HexStr,
 )
 from eth_utils import (
     decode_hex,
@@ -26,7 +31,9 @@ from eth_utils import (
     int_to_big_endian,
     is_integer,
     to_wei,
+    ValidationError,
 )
+from eth_utils.toolz import compose
 
 from eth.abc import (
     BlockAPI,
@@ -50,6 +57,7 @@ from eth._utils.padding import (
 )
 
 from trinity.chains.base import AsyncChainAPI
+from trinity.config import TrinityConfig
 from trinity.constants import (
     TO_NETWORKING_BROADCAST_CONFIG,
 )
@@ -66,6 +74,9 @@ from trinity.rpc.format import (
 from trinity.rpc.modules import (
     Eth1ChainRPCModule,
 )
+from trinity.rpc.modules._util import (
+    get_header,
+)
 from trinity.rpc.retry import retryable
 from trinity.rpc.typing import (
     RpcBlockResponse,
@@ -75,13 +86,15 @@ from trinity.rpc.typing import (
 )
 from trinity.sync.common.events import (
     SyncingRequest,
+    SendLocalTransaction,
+)
+from trinity._utils.transactions import (
+    get_transaction_validator_for_network_id,
 )
 from trinity._utils.validation import (
     validate_transaction_call_dict,
     validate_transaction_gas_estimation_dict,
 )
-
-from ._util import get_header
 
 
 async def state_at_block(
@@ -146,6 +159,14 @@ class Eth(Eth1ChainRPCModule):
 
     Any attribute without an underscore is publicly accessible.
     """
+
+    def __init__(self,
+                 chain: AsyncChainAPI,
+                 event_bus: EndpointAPI,
+                 trinity_config: TrinityConfig) -> None:
+        self.trinity_config = trinity_config
+        super().__init__(chain, event_bus)
+
     async def accounts(self) -> List[str]:
         # trinity does not manage accounts for the user
         return []
@@ -348,6 +369,23 @@ class Eth(Eth1ChainRPCModule):
         block = await get_block_at_number(self.chain, at_block)
         uncle = block.uncles[index]
         return header_to_dict(uncle)
+
+    @format_params(compose(BaseTransactionFields.deserialize, rlp.decode, decode_hex,))
+    async def sendRawTransaction(self,
+                                 transaction: SignedTransactionAPI) -> HexStr:
+
+        validator = get_transaction_validator_for_network_id(
+            self.chain,
+            self.trinity_config.network_id,
+        )
+
+        try:
+            validator.validate(transaction)
+        except ValidationError as err:
+            raise RpcError(err) from err
+        else:
+            await self.event_bus.broadcast(SendLocalTransaction(transaction))
+            return encode_hex(transaction.hash)
 
     async def hashrate(self) -> str:
         raise NotImplementedError("Trinity does not support mining")
