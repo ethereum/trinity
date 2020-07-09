@@ -232,8 +232,10 @@ class DiscoveryService(Service):
         self, should_skip_fn: Callable[[NodeAPI], bool], max_candidates: int,
     ) -> Tuple[NodeAPI, ...]:
         candidates = []
+        skip_count = 0
         for candidate in self.iter_nodes():
             if should_skip_fn(candidate):
+                skip_count += 1
                 continue
             candidates.append(candidate)
             if len(candidates) == max_candidates:
@@ -246,12 +248,13 @@ class DiscoveryService(Service):
                 log_msg += "triggering a random lookup in the background."
                 self.manager.run_task(self.lookup_random)
             self.logger.debug(log_msg)
+        self.logger.debug("Found %d peer candidates, skipped %d", len(candidates), skip_count)
         return tuple(candidates)
 
     async def handle_get_peer_candidates_requests(self) -> None:
         async for event in self._event_bus.stream(PeerCandidatesRequest):
             candidates = self.get_peer_candidates(event.should_skip_fn, event.max_candidates)
-            self.logger.debug2("Broadcasting peer candidates (%s)", candidates)
+            self.logger.debug("Broadcasting %d peer candidates", len(candidates))
             await self._event_bus.broadcast(
                 event.expected_response_type()(candidates),
                 event.broadcast_config()
@@ -262,7 +265,7 @@ class DiscoveryService(Service):
 
             nodes = tuple(self.get_random_bootnode())
 
-            self.logger.debug2("Broadcasting random boot nodes (%s)", nodes)
+            self.logger.debug("Broadcasting random boot node: %s", nodes)
             await self._event_bus.broadcast(
                 event.expected_response_type()(nodes),
                 event.broadcast_config()
@@ -306,7 +309,7 @@ class DiscoveryService(Service):
             return
 
         if enr.sequence_number >= enr_seq:
-            self.logger.debug("Already got latest ENR for %s", encode_hex(node_id))
+            self.logger.debug2("Already got latest ENR for %s", encode_hex(node_id))
             return
 
         node = Node(enr)
@@ -383,7 +386,7 @@ class DiscoveryService(Service):
 
         self.logger.debug2("Starting bond process with %s", node)
         if self.is_bond_valid_with(node_id):
-            self.logger.debug("Bond with %s is still valid, not doing it again", node)
+            self.logger.debug2("Bond with %s is still valid, not doing it again", node)
             return True
 
         token = await self.send_ping_v4(node)
@@ -396,7 +399,7 @@ class DiscoveryService(Service):
             self.logger.debug("Bonding failed, already waiting pong from %s", node)
             return False
         except trio.TooSlowError:
-            self.logger.debug("Bonding with %s timed out", node)
+            self.logger.debug2("Bonding with %s timed out", node)
             return False
 
         if received_token != token:
@@ -418,13 +421,13 @@ class DiscoveryService(Service):
             self.logger.debug("bonding failed, already waiting for ping")
             return False
 
-        self.logger.debug("bonding completed successfully with %s", node)
+        self.logger.debug2("bonding completed successfully with %s", node)
         if enr_seq is not None:
             self.schedule_enr_retrieval(node.id, enr_seq)
         return True
 
     def schedule_enr_retrieval(self, node_id: NodeID, enr_seq: int) -> None:
-        self.logger.debug("scheduling ENR retrieval from %s", encode_hex(node_id))
+        self.logger.debug2("scheduling ENR retrieval from %s", encode_hex(node_id))
         try:
             self.pending_enrs_producer.send_nowait((node_id, enr_seq))
         except trio.WouldBlock:
@@ -577,7 +580,7 @@ class DiscoveryService(Service):
             self.send_find_node_v4(remote, target)
             candidates = await self.wait_neighbours(remote)
             if not candidates:
-                self.logger.debug("got no candidates from %s, returning", remote)
+                self.logger.debug2("got no neighbors from %s, returning", remote)
                 return tuple()
             all_candidates = tuple(c for c in candidates if c not in nodes_seen)
             candidates = tuple(
@@ -585,14 +588,14 @@ class DiscoveryService(Service):
                 if (not self.ping_channels.already_waiting_for(c) and
                     not self.pong_channels.already_waiting_for(c))
             )
-            self.logger.debug2("got %s new candidates", len(candidates))
+            self.logger.debug2("got %s new neighbors", len(candidates))
             # Ensure all received candidates are in our DB so that we can bond with them.
             self._ensure_nodes_are_in_db(candidates)
             # Add new candidates to nodes_seen so that we don't attempt to bond with failing ones
             # in the future.
             nodes_seen.update(candidates)
             bonded = await trio_utils.gather(*((self.bond, c.id) for c in candidates))
-            self.logger.debug2("bonded with %s candidates", bonded.count(True))
+            self.logger.debug2("bonded with %s neighbors", bonded.count(True))
             return tuple(c for c in candidates if bonded[candidates.index(c)])
 
         def _exclude_if_asked(nodes: Iterable[NodeAPI]) -> List[NodeAPI]:

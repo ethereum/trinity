@@ -100,6 +100,9 @@ ALLOWED_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
 )) + COMMON_PEER_CONNECTION_EXCEPTIONS
 
 
+OVER_PROVISION_MISSING_PEERS = 4
+
+
 class BasePeerPool(Service, AsyncIterable[BasePeer]):
     """
     PeerPool maintains connections to up-to max_peers on a given network.
@@ -199,10 +202,15 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
 
         skip_list = connected_node_ids.union(blacklisted_node_ids)
         should_skip_fn = functools.partial(should_skip_fn, skip_list)
+        # Request a large batch on every iteration as that will effectively push DiscoveryService
+        # to trigger new peer lookups in order to find enough compatible peers to fulfill our
+        # request. There's probably some room for experimentation here in order to find an optimal
+        # value.
+        max_candidates = self.available_slots * OVER_PROVISION_MISSING_PEERS
         try:
             candidates = await asyncio.wait_for(
                 backend.get_peer_candidates(
-                    max_candidates=self.available_slots,
+                    max_candidates=max_candidates,
                     should_skip_fn=should_skip_fn,
                 ),
                 timeout=REQUEST_PEER_CANDIDATE_TIMEOUT,
@@ -211,11 +219,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             self.logger.warning("PeerCandidateRequest timed out to backend %s", backend)
             return 0
         else:
-            self.logger.debug2(
-                "Got candidates from backend %s (%s)",
-                backend,
-                candidates,
-            )
+            self.logger.debug("Got %d peer candidates from backend %s", len(candidates), backend)
             if candidates:
                 await self.connect_to_nodes(candidates)
             return len(candidates)
@@ -291,9 +295,6 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             self.logger.debug('Timout waiting for peer to boot: %s', err)
             await peer.disconnect(DisconnectReason.TIMEOUT)
             return
-        except HandshakeFailure as err:
-            self.connection_tracker.record_failure(peer.remote, err)
-            raise
         else:
             if not peer.get_manager().is_running:
                 self.logger.debug('%s disconnected during boot-up, dropped from pool', peer)
@@ -347,7 +348,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             raise IneligiblePeer(f"Already connected to {remote}")
 
         try:
-            self.logger.debug2("Connecting to %s...", remote)
+            self.logger.debug("Connecting to %s...", remote)
             task = asyncio.ensure_future(self.get_peer_factory().handshake(remote))
             return await asyncio.wait_for(task, timeout=HANDSHAKE_TIMEOUT)
         except BadAckMessage:
@@ -373,6 +374,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             raise
         except COMMON_PEER_CONNECTION_EXCEPTIONS as e:
             self.logger.debug("Could not complete handshake with %r: %s", remote, repr(e))
+            self.connection_tracker.record_failure(remote, e)
             raise
         finally:
             # XXX: We sometimes get an exception here but the task is finished and with
@@ -402,7 +404,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             if not batch:
                 return
 
-            self.logger.debug(
+            self.logger.info(
                 'Initiating %d peer connection attempts with %d open peer slots',
                 len(batch),
                 self.available_slots,

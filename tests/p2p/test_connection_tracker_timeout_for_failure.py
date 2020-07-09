@@ -4,7 +4,11 @@ import pytest
 
 from p2p.exceptions import (
     HandshakeFailure,
+    HandshakeFailureTooManyPeers,
+    MalformedMessage,
+    NoMatchingPeerCapabilities,
 )
+from p2p.peer_pool import COMMON_PEER_CONNECTION_EXCEPTIONS
 from p2p.tracking.connection import (
     get_timeout_for_failure,
     register_error,
@@ -30,8 +34,12 @@ def _prevent_global_mutation_of_registry():
     assert connection.FAILURE_TIMEOUTS == original
 
 
-def test_get_timeout_for_failure_with_HandshakeFailure():
-    assert get_timeout_for_failure(HandshakeFailure()) == 10
+def test_get_timeout_for_common_handshake_exceptions():
+    common_exc_types = COMMON_PEER_CONNECTION_EXCEPTIONS + (
+        HandshakeFailure, HandshakeFailureTooManyPeers, MalformedMessage,
+        NoMatchingPeerCapabilities)
+    for exc_type in common_exc_types:
+        assert get_timeout_for_failure(exc_type()) <= (60 * 60)
 
 
 def test_get_timeout_for_failure_with_unknown_exception():

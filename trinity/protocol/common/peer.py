@@ -322,7 +322,7 @@ def skip_candidate_if_on_list_or_fork_mismatch(
     try:
         candidate_forkid = extract_forkid(candidate.enr)
     except ENRMissingForkID:
-        p2p_logger.debug("Accepting connection candidate (%s) with no ForkID", candidate)
+        p2p_logger.debug2("Accepting connection candidate (%s) with no ForkID", candidate)
         return False
     except MalformedMessage as e:
         # Logging as a warning just in case there's a bug in our code that fails to deserialize
@@ -338,8 +338,9 @@ def skip_candidate_if_on_list_or_fork_mismatch(
     try:
         validate_forkid(candidate_forkid, genesis_hash, head, fork_blocks)
     except BaseForkIDValidationError as e:
-        p2p_logger.debug("Skipping forkid-incompatible connection candidate (%s): %s", candidate, e)
+        p2p_logger.debug2(
+            "Skipping forkid-incompatible connection candidate (%s): %s", candidate, e)
         return True
 
-    p2p_logger.debug("Accepting forkid-compatible connection candidate (%s)", candidate)
+    p2p_logger.debug2("Accepting forkid-compatible connection candidate (%s)", candidate)
     return False
