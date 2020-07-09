@@ -14,7 +14,7 @@ from eth.vm.forks.spurious_dragon.transactions import (
     SpuriousDragonTransaction,
 )
 
-from trinity.components.builtin.tx_pool.validators import (
+from trinity._utils.transactions import (
     DefaultTransactionValidator,
 )
 
