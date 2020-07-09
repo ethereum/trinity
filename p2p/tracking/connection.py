@@ -1,8 +1,10 @@
 from abc import ABC, abstractmethod
+import asyncio
 from typing import (
     Dict,
     Tuple,
     Type,
+    Union,
 )
 
 from eth_utils.logging import get_extended_debug_logger
@@ -13,6 +15,9 @@ from p2p.exceptions import (
     HandshakeFailure,
     HandshakeFailureTooManyPeers,
     MalformedMessage,
+    NoMatchingPeerCapabilities,
+    PeerConnectionLost,
+    UnreachablePeer,
 )
 from p2p.typing import NodeID
 
@@ -20,16 +25,25 @@ from p2p.typing import NodeID
 FAILURE_TIMEOUTS: Dict[Type[Exception], int] = {}
 
 
-def register_error(exception: Type[BaseP2PError], timeout_seconds: int) -> None:
+def register_error(exception: Union[Type[BaseP2PError], Type[asyncio.TimeoutError]],
+                   timeout_seconds: int) -> None:
     if exception in FAILURE_TIMEOUTS:
         raise KeyError(f"Exception class already registered")
     FAILURE_TIMEOUTS[exception] = timeout_seconds
 
 
-register_error(HandshakeFailure, 10)  # 10 seconds
-register_error(HandshakeFailureTooManyPeers, 60)  # one minute
+# Any timeout on the order of seconds makes no sense as we'll effectively end up retrying the
+# blacklisted candidate before we even had a chance of trying new ones.
+register_error(HandshakeFailure, 600)
+register_error(PeerConnectionLost, 600)
+register_error(UnreachablePeer, 600)
+register_error(asyncio.TimeoutError, 600)
+register_error(HandshakeFailureTooManyPeers, 600)
 # A MalformedMessage is usually not a transient issue, so blacklist the remote for a long time.
-register_error(MalformedMessage, 60 * 10)  # 10 minutes
+register_error(MalformedMessage, 60 * 60)
+# We (and our peer) are unlikely to grow new capabilities unless restarted, so no point in
+# retrying those frequently.
+register_error(NoMatchingPeerCapabilities, 60 * 60)
 
 
 def get_timeout_for_failure(failure: BaseP2PError) -> int:

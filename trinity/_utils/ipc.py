@@ -1,5 +1,4 @@
 from logging import Logger
-from multiprocessing import Process
 import os
 import pathlib
 import signal
@@ -51,14 +50,6 @@ def remove_dangling_ipc_files(logger: Logger,
 
 DEFAULT_SIGINT_TIMEOUT = 10
 DEFAULT_SIGTERM_TIMEOUT = 5
-
-
-def kill_process_gracefully(
-        process: Process,
-        logger: Logger,
-        SIGINT_timeout: int = DEFAULT_SIGINT_TIMEOUT,
-        SIGTERM_timeout: int = DEFAULT_SIGTERM_TIMEOUT) -> None:
-    kill_process_id_gracefully(process.pid, process.join, logger, SIGINT_timeout, SIGTERM_timeout)
 
 
 def kill_popen_gracefully(

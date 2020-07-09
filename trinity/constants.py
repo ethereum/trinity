@@ -90,8 +90,7 @@ DEFAULT_PREFERRED_NODES: Dict[int, Tuple[Node, ...]] = {
     ),
 }
 
-# Amount of time a peer will be blacklisted if their network or genesis hash does not match
-BLACKLIST_SECONDS_WRONG_NETWORK_OR_GENESIS = 600
-
-# Enables connection when clients launch from another process on the shell
-AUTH_KEY = b"not secure, but only connect over IPC"
+# Number of seconds a peer will be blacklisted if we get an error during handshake.
+# These are not failures that we expect to be transient, so no point in retrying frequently.
+BLACKLIST_SECONDS_WRONG_NETWORK_OR_GENESIS = 60 * 60
+BLACKLIST_SECONDS_DAO_FORK_CHECK_FAILURE = 60 * 60

@@ -1,9 +1,15 @@
 import pathlib
 
-from p2p.exceptions import HandshakeFailure
+from p2p.exceptions import (
+    BaseP2PError,
+    HandshakeFailure,
+)
 from p2p.tracking.connection import register_error
 
-from trinity.constants import BLACKLIST_SECONDS_WRONG_NETWORK_OR_GENESIS
+from trinity.constants import (
+    BLACKLIST_SECONDS_DAO_FORK_CHECK_FAILURE,
+    BLACKLIST_SECONDS_WRONG_NETWORK_OR_GENESIS,
+)
 
 
 class BaseTrinityError(Exception):
@@ -43,11 +49,14 @@ class OversizeObject(BaseTrinityError):
     pass
 
 
-class DAOForkCheckFailure(BaseTrinityError):
+class DAOForkCheckFailure(BaseP2PError):
     """
     Raised when the DAO fork check with a certain peer is unsuccessful.
     """
     pass
+
+
+register_error(DAOForkCheckFailure, BLACKLIST_SECONDS_DAO_FORK_CHECK_FAILURE)
 
 
 class BadDatabaseError(BaseTrinityError):
