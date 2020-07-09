@@ -7,6 +7,7 @@ from eth_typing import (
 )
 
 from eth_utils import (
+    encode_hex,
     ValidationError,
 )
 
@@ -64,6 +65,12 @@ class DefaultTransactionValidator():
         transaction_class = self.get_appropriate_tx_class()
         tx = transaction_class(**transaction.as_dict())
         tx.validate()
+
+        if tx.chain_id != self.chain.chain_id:
+            raise ValidationError(
+                f"Transaction {encode_hex(tx.hash)} is for chain with id {tx.chain_id} "
+                f"but current chain has id {self.chain.chain_id}"
+            )
 
     @cachetools.func.ttl_cache(maxsize=1024, ttl=300)
     def get_appropriate_tx_class(self) -> Type[SignedTransactionAPI]:
