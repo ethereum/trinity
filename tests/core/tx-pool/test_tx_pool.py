@@ -228,4 +228,4 @@ def create_random_tx(chain, private_key, is_valid=True):
         data=uuid.uuid4().bytes,
         to=force_bytes_to_address(b'\x10\x10'),
         value=1,
-    ).as_signed_transaction(private_key)
+    ).as_signed_transaction(private_key, chain_id=chain.chain_id)
