@@ -347,7 +347,7 @@ async def test_beam_syncer_loads_recent_state_root(
         target_head = chaindb_churner.get_canonical_block_header_by_number(
             target_block_number,
         )
-        await wait_for_head(chaindb_fresh, target_head, sync_timeout=5)
+        await wait_for_head(chaindb_fresh, target_head, sync_timeout=10)
         assert target_head.state_root in chaindb_fresh.db
 
 
