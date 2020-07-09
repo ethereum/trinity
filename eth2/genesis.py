@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Dict
 
 from eth.constants import ZERO_HASH32
@@ -7,6 +8,7 @@ from ssz.tools.parse import from_formatted_dict
 from typing_extensions import Literal
 
 from eth2.beacon.genesis import initialize_beacon_state_from_eth1
+from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
     MINIMAL_SERENITY_CONFIG,
@@ -42,7 +44,7 @@ def update_genesis_config_with_time(
 
 
 def generate_genesis_config(
-    config_profile: Literal["minimal", "mainnet"], genesis_time: Timestamp
+    config_profile: Literal["minimal", "mainnet", "altona"], genesis_time: Timestamp
 ) -> Dict[str, Any]:
     eth2_config = _get_eth2_config(config_profile)
     override_lengths(eth2_config)
@@ -78,5 +80,27 @@ def generate_genesis_config(
     }
 
 
+def genesis_config_from_state(
+    config_profile: Literal["minimal", "mainnet", "altona"], genesis_state_path: Path
+) -> Dict[str, Any]:
+    eth2_config = _get_eth2_config(config_profile)
+    override_lengths(eth2_config)
+
+    with open(genesis_state_path, "rb") as genesis_state_file:
+        genesis_state = BeaconState.deserialize(genesis_state_file.read())
+
+    return {
+        "profile": config_profile,
+        "eth2_config": eth2_config.to_formatted_dict(),
+        "genesis_validator_key_pairs": (),
+        "genesis_state_root": encode_hex(genesis_state.hash_tree_root),
+        "genesis_state": to_formatted_dict(genesis_state),
+    }
+
+
 def _get_eth2_config(profile: str) -> Eth2Config:
-    return {"minimal": MINIMAL_SERENITY_CONFIG, "mainnet": SERENITY_CONFIG}[profile]
+    return {
+        "minimal": MINIMAL_SERENITY_CONFIG,
+        "mainnet": SERENITY_CONFIG,
+        "altona": ALTONA_CONFIG,
+    }[profile]
