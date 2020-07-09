@@ -88,9 +88,7 @@ from trinity.sync.common.events import (
     SyncingRequest,
     SendLocalTransaction,
 )
-from trinity._utils.transactions import (
-    get_transaction_validator_for_network_id,
-)
+from trinity._utils.transactions import DefaultTransactionValidator
 from trinity._utils.validation import (
     validate_transaction_call_dict,
     validate_transaction_gas_estimation_dict,
@@ -374,7 +372,7 @@ class Eth(Eth1ChainRPCModule):
     async def sendRawTransaction(self,
                                  transaction: SignedTransactionAPI) -> HexStr:
 
-        validator = get_transaction_validator_for_network_id(
+        validator = DefaultTransactionValidator.from_network_id(
             self.chain,
             self.trinity_config.network_id,
         )

@@ -7,7 +7,6 @@ from async_service import background_asyncio_service
 from eth_utils import ValidationError
 from lahja import EndpointAPI
 
-from trinity._utils.transactions import get_transaction_validator_for_network_id
 from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
@@ -28,6 +27,7 @@ from trinity.components.builtin.tx_pool.pool import (
 )
 from trinity.protocol.eth.peer import ETHProxyPeerPool
 from trinity._utils.logging import get_logger
+from trinity._utils.transactions import DefaultTransactionValidator
 
 
 class TxComponent(AsyncioIsolatedComponent):
@@ -76,7 +76,7 @@ class TxComponent(AsyncioIsolatedComponent):
 
             chain = chain_config.full_chain_class(db)
 
-            validator = get_transaction_validator_for_network_id(
+            validator = DefaultTransactionValidator.from_network_id(
                 chain,
                 boot_info.trinity_config.network_id,
             )

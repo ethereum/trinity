@@ -8,12 +8,11 @@ from eth._utils.address import (
     force_bytes_to_address
 )
 
+from trinity._utils.transactions import DefaultTransactionValidator
 from trinity.components.builtin.tx_pool.pool import (
     TxPool,
 )
-from trinity.components.builtin.tx_pool.validators import (
-    DefaultTransactionValidator
-)
+
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.eth.events import (
     TransactionsEvent,
