@@ -247,7 +247,7 @@ class BeamSyncer(Service):
         self.manager.run_daemon_child_service(self._state_downloader)
 
         # Start state background service
-        self.manager.run_daemon_child_service(self._backfiller)
+        self.manager.run_child_service(self._backfiller)
 
         # run sync until cancelled
         await self.manager.wait_finished()

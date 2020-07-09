@@ -65,9 +65,11 @@ BASE_FIXTURE_PATH = ROOT_PROJECT_DIR / 'fixtures' / 'BlockchainTests'
 
 SLOW_TESTS = (
     'bcExploitTest/SuicideIssue.json',
+    'CALLBlake2f_MaxRounds.json',
     'Call1024PreCalls_d0g0v0',
     'ContractCreationSpam_d0g0v0_Homestead',
     'ContractCreationSpam_d0g0v0_Frontier',
+    'ContractCreationSpam_d0g0v0_Istanbul',
     'Create2Recursive_d0g0v0',
     'Create2Recursive_d0g1v0',
     'DelegateCallSpam',
@@ -83,6 +85,7 @@ SLOW_TESTS = (
     'static_Call1024PreCalls2_d0g0v0',
     'static_Call1024PreCalls2_d1g0v0',
     'static_Call1024PreCalls3_d1g0v0',
+    'static_Call1MB1024Calldepth.json',
     'static_Call50000bytesContract50_1_d0g0v0',
     'static_Call50000_ecrec_d0g0v0',
     'static_Call50000_ecrec_d1g0v0',
