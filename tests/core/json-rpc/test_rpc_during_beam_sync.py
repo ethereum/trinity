@@ -232,6 +232,38 @@ async def test_getBalance_during_beam_sync(
         assert response['result'] == hex(funded_address_initial_balance)
 
 
+# Test that eth_getTransactionCount works during beam sync
+
+
+@pytest.mark.asyncio
+async def test_getTransactionCount_during_beam_sync(
+        chain, ipc_request, funded_address,
+        fake_beam_syncer):
+    """
+    Sanity check, if we call eth_getTransactionCount we get back the expected response.
+    """
+
+    # sanity check, by default it works
+    expected_result = '0x0'
+    response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), 'latest'])
+    assert 'error' not in response
+    assert response['result'] == expected_result
+
+    state_root_hash = chain.get_canonical_head().state_root
+    state_root = chain.chaindb.db.pop(state_root_hash)
+
+    # now that the hash is missing we should receive an error
+    response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), 'latest'])
+    assert 'error' in response
+    assert response['error'].startswith('State trie database is missing node for hash')
+
+    # with a beam syncer running it should work again! It sends requests to the syncer
+    async with fake_beam_syncer({state_root_hash: state_root}):
+        response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), 'latest'])
+        assert 'error' not in response
+        assert response['result'] == expected_result
+
+
 @pytest.fixture
 async def contract_code_hash(genesis_state, simple_contract_address):
     return keccak(genesis_state[simple_contract_address]['code'])
