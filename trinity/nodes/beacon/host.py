@@ -8,6 +8,7 @@ from libp2p.network.swarm import Swarm
 from libp2p.peer.id import ID as PeerID
 from libp2p.peer.peerinfo import PeerInfo
 from libp2p.peer.peerstore import PeerStore
+import libp2p.security.secio.transport as secio
 import libp2p.security.noise.transport as noise
 from libp2p.stream_muxer.mplex.mplex import MPLEX_PROTOCOL_ID, Mplex
 from libp2p.transport.tcp.tcp import TCP
@@ -58,6 +59,9 @@ class Host(BasicHost):
         muxer_transports_by_protocol = {MPLEX_PROTOCOL_ID: Mplex}
         noise_key = ed25519.create_new_key_pair()
         security_transports_by_protocol = {
+            TProtocol(secio.ID): secio.Transport(
+                key_pair
+            ),
             TProtocol(noise.PROTOCOL_ID): noise.Transport(
                 key_pair, noise_key.private_key
             )
