@@ -271,9 +271,14 @@ class Eth(Eth1ChainRPCModule):
     async def getTransactionReceipt(self,
                                     transaction_hash: Hash32) -> RpcReceiptResponse:
 
-        tx_block_number, tx_index = await self.chain.coro_get_canonical_transaction_index(
-            transaction_hash,
-        )
+        try:
+            tx_block_number, tx_index = await self.chain.coro_get_canonical_transaction_index(
+                transaction_hash,
+            )
+        except TransactionNotFound as exc:
+            raise RpcError(
+                f"Transaction {encode_hex(transaction_hash)} is not in the canonical chain"
+            ) from exc
 
         try:
             block_header = await self.chain.coro_get_canonical_block_header_by_number(
