@@ -280,8 +280,10 @@ class Eth(Eth1ChainRPCModule):
         transaction = block.transactions[index]
         return transaction_to_dict(transaction)
 
+    @retryable(which_block_arg_name='at_block')
     @format_params(decode_hex, to_int_if_hex)
     async def getTransactionCount(self, address: Address, at_block: Union[str, int]) -> str:
+
         state = await state_at_block(self.chain, at_block)
         nonce = state.get_nonce(address)
         return hex(nonce)
