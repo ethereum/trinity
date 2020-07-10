@@ -24,6 +24,7 @@ from eth.vm.interrupt import (
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
+from trinity.rpc.format import to_int_if_hex
 from trinity.sync.common.events import (
     CollectMissingAccount,
     CollectMissingBytecode,
@@ -83,7 +84,8 @@ async def check_requested_block_age(chain: Union[AsyncChainAPI, BaseAsyncBeaconC
 
     # Beacon chain doesn't support it
     if not isinstance(chain, BaseAsyncBeaconChainDB):
-        at_block = params.arguments[at_block_name]
+        at_block = to_int_if_hex(params.arguments[at_block_name])
+
         requested_header = await get_header(chain, at_block)
         requested_block = requested_header.block_number
         current_block = chain.get_canonical_head().block_number

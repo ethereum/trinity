@@ -1,0 +1,1 @@
+Ensure JSON-RPC API do work with hexadecimal block identifier during beam sync
