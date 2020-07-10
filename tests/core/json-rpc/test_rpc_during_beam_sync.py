@@ -204,16 +204,19 @@ def fake_beam_syncer(chain, event_bus):
 # Test that eth_getBalance works during beam sync
 
 
+@pytest.mark.parametrize(
+    "at_block", ('latest', '0x0', 0)
+)
 @pytest.mark.asyncio
 async def test_getBalance_during_beam_sync(
-        chain, ipc_request, funded_address, funded_address_initial_balance,
-        fake_beam_syncer):
+        chain, ipc_request, funded_address, funded_address_initial_balance, fake_beam_syncer,
+        at_block):
     """
     Sanity check, if we call eth_getBalance we get back the expected response.
     """
 
     # sanity check, by default it works
-    response = await ipc_request('eth_getBalance', [funded_address.hex(), 'latest'])
+    response = await ipc_request('eth_getBalance', [funded_address.hex(), at_block])
     assert 'error' not in response
     assert response['result'] == hex(funded_address_initial_balance)
 
@@ -221,31 +224,32 @@ async def test_getBalance_during_beam_sync(
     state_root = chain.chaindb.db.pop(state_root_hash)
 
     # now that the hash is missing we should receive an error
-    response = await ipc_request('eth_getBalance', [funded_address.hex(), 'latest'])
+    response = await ipc_request('eth_getBalance', [funded_address.hex(), at_block])
     assert 'error' in response
     assert response['error'].startswith('State trie database is missing node for hash')
 
     # with a beam syncer running it should work again! It sends requests to the syncer
     async with fake_beam_syncer({state_root_hash: state_root}):
-        response = await ipc_request('eth_getBalance', [funded_address.hex(), 'latest'])
+        response = await ipc_request('eth_getBalance', [funded_address.hex(), at_block])
         assert 'error' not in response
         assert response['result'] == hex(funded_address_initial_balance)
 
 
 # Test that eth_getTransactionCount works during beam sync
 
-
+@pytest.mark.parametrize(
+    "at_block", ('latest', '0x0', 0)
+)
 @pytest.mark.asyncio
 async def test_getTransactionCount_during_beam_sync(
-        chain, ipc_request, funded_address,
-        fake_beam_syncer):
+        chain, ipc_request, funded_address, fake_beam_syncer,
+        at_block):
     """
     Sanity check, if we call eth_getTransactionCount we get back the expected response.
     """
-
     # sanity check, by default it works
     expected_result = '0x0'
-    response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), 'latest'])
+    response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), at_block])
     assert 'error' not in response
     assert response['result'] == expected_result
 
@@ -253,13 +257,13 @@ async def test_getTransactionCount_during_beam_sync(
     state_root = chain.chaindb.db.pop(state_root_hash)
 
     # now that the hash is missing we should receive an error
-    response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), 'latest'])
+    response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), at_block])
     assert 'error' in response
     assert response['error'].startswith('State trie database is missing node for hash')
 
     # with a beam syncer running it should work again! It sends requests to the syncer
     async with fake_beam_syncer({state_root_hash: state_root}):
-        response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), 'latest'])
+        response = await ipc_request('eth_getTransactionCount', [funded_address.hex(), at_block])
         assert 'error' not in response
         assert response['result'] == expected_result
 
@@ -269,26 +273,29 @@ async def contract_code_hash(genesis_state, simple_contract_address):
     return keccak(genesis_state[simple_contract_address]['code'])
 
 
+@pytest.mark.parametrize(
+    "at_block", ('latest', '0x0', 0)
+)
 @pytest.mark.asyncio
 async def test_getCode_during_beam_sync(
-        chain, ipc_request, simple_contract_address, contract_code_hash,
-        fake_beam_syncer):
+        chain, ipc_request, simple_contract_address, contract_code_hash, fake_beam_syncer,
+        at_block):
 
     # sanity check, by default it works
-    response = await ipc_request('eth_getCode', [simple_contract_address.hex(), 'latest'])
+    response = await ipc_request('eth_getCode', [simple_contract_address.hex(), at_block])
     assert 'error' not in response
     assert keccak(decode_hex(response['result'])) == contract_code_hash
 
     missing_bytecode = chain.chaindb.db.pop(contract_code_hash)
 
     # now that the hash is missing we should receive an error
-    response = await ipc_request('eth_getCode', [simple_contract_address.hex(), 'latest'])
+    response = await ipc_request('eth_getCode', [simple_contract_address.hex(), at_block])
     assert 'error' in response
     assert response['error'].startswith('Database is missing bytecode for code hash')
 
     # with a beam syncer running it should work again! It sends requests to the syncer
     async with fake_beam_syncer({contract_code_hash: missing_bytecode}):
-        response = await ipc_request('eth_getCode', [simple_contract_address.hex(), 'latest'])
+        response = await ipc_request('eth_getCode', [simple_contract_address.hex(), at_block])
         assert 'error' not in response
         assert keccak(decode_hex(response['result'])) == contract_code_hash
 
@@ -303,11 +310,14 @@ def storage_root(chain, simple_contract_address):
     return account_db._get_storage_root(simple_contract_address)
 
 
+@pytest.mark.parametrize(
+    "at_block", ('latest', '0x0', 0)
+)
 @pytest.mark.asyncio
 async def test_getStorageAt_during_beam_sync(
-        ipc_request, simple_contract_address, storage_root, chain, fake_beam_syncer):
+        ipc_request, simple_contract_address, storage_root, chain, fake_beam_syncer, at_block):
 
-    params = [simple_contract_address.hex(), 1, 'latest']
+    params = [simple_contract_address.hex(), 1, at_block]
 
     # sanity check, by default it works
     response = await ipc_request('eth_getStorageAt', params)
@@ -341,33 +351,39 @@ def transaction(simple_contract_address):
     }
 
 
+@pytest.mark.parametrize(
+    "at_block", ('latest', '0x0', 0)
+)
 @pytest.mark.asyncio
 async def test_eth_call(
-        ipc_request, contract_code_hash, chain, transaction, fake_beam_syncer):
+        ipc_request, contract_code_hash, chain, transaction, fake_beam_syncer, at_block):
 
     # sanity check, by default it works
-    response = await ipc_request('eth_call', [transaction, 'latest'])
+    response = await ipc_request('eth_call', [transaction, at_block])
     assert 'error' not in response
     assert response['result'].endswith('002a')
 
     bytecode = chain.chaindb.db.pop(contract_code_hash)
 
     # now that the hash is missing we should receive an error
-    response = await ipc_request('eth_call', [transaction, 'latest'])
+    response = await ipc_request('eth_call', [transaction, at_block])
     assert 'error' in response
     assert response['error'].startswith('Database is missing bytecode for code hash')
 
     # with a beam syncer running it should work again! It sends requests to the syncer
     async with fake_beam_syncer({contract_code_hash: bytecode}):
-        response = await ipc_request('eth_call', [transaction, 'latest'])
+        response = await ipc_request('eth_call', [transaction, at_block])
         assert 'error' not in response
         assert response['result'].endswith('002a')
 
 
+@pytest.mark.parametrize(
+    "at_block", ('latest', '0x0', 0)
+)
 @pytest.mark.asyncio
 async def test_eth_call_multiple_missing_nodes(
         ipc_request, contract_code_hash, storage_root,
-        chain, transaction, fake_beam_syncer):
+        chain, transaction, fake_beam_syncer, at_block):
 
     state_root_hash = chain.get_canonical_head().state_root
     missing_nodes = {
@@ -377,36 +393,39 @@ async def test_eth_call_multiple_missing_nodes(
     }
 
     # now that the hash is missing we should receive an error
-    response = await ipc_request('eth_call', [transaction, 'latest'])
+    response = await ipc_request('eth_call', [transaction, at_block])
     assert 'error' in response
     assert 'missing' in response['error']
 
     # with a beam syncer running it should work again! It sends requests to the syncer
     async with fake_beam_syncer(missing_nodes):
-        response = await ipc_request('eth_call', [transaction, 'latest'])
+        response = await ipc_request('eth_call', [transaction, at_block])
         assert 'error' not in response
         assert response['result'].endswith('002a')
 
 
+@pytest.mark.parametrize(
+    "at_block", ('latest', '0x0', 0)
+)
 @pytest.mark.asyncio
 async def test_eth_estimateGas(
-        ipc_request, contract_code_hash, chain, transaction, fake_beam_syncer):
+        ipc_request, contract_code_hash, chain, transaction, fake_beam_syncer, at_block):
 
     # sanity check, by default it works
-    response = await ipc_request('eth_estimateGas', [transaction, 'latest'])
+    response = await ipc_request('eth_estimateGas', [transaction, at_block])
     assert 'error' not in response
     assert response['result'] == '0x82a8'
 
     bytecode = chain.chaindb.db.pop(contract_code_hash)
 
     # now that the hash is missing we should receive an error
-    response = await ipc_request('eth_estimateGas', [transaction, 'latest'])
+    response = await ipc_request('eth_estimateGas', [transaction, at_block])
     assert 'error' in response
     assert response['error'].startswith('Database is missing bytecode for code hash')
 
     # with a beam syncer running it should work again! It sends requests to the syncer
     async with fake_beam_syncer({contract_code_hash: bytecode}):
-        response = await ipc_request('eth_estimateGas', [transaction, 'latest'])
+        response = await ipc_request('eth_estimateGas', [transaction, at_block])
         assert 'error' not in response
         assert response['result'] == '0x82a8'
 
