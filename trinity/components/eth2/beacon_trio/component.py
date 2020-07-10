@@ -30,7 +30,10 @@ class BeaconNodeComponent(TrioComponent):
         trinity_config = self._boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         config = BeaconNodeConfig.from_platform_config(
-            trinity_config, beacon_app_config, boot_info.args.validator_api_port
+            trinity_config,
+            beacon_app_config,
+            boot_info.args.validator_api_port,
+            boot_info.args.bootstrap_nodes,
         )
         node = BeaconNode.from_config(config)
         self._node = node

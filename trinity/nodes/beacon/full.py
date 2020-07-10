@@ -110,6 +110,7 @@ class BeaconNode:
         p2p_maddr: Multiaddr,
         orchestration_profile: str,
         preferred_nodes: Collection[Multiaddr],
+        bootstrap_nodes: Collection[Multiaddr],
     ) -> None:
         local_node_key = _derive_local_node_key(local_node_key, orchestration_profile)
         self._local_key_pair = create_new_key_pair(local_node_key.to_bytes())
@@ -158,6 +159,7 @@ class BeaconNode:
             self._eth2_config,
         )
         self._preferred_nodes = preferred_nodes
+        self._bootstrap_nodes = bootstrap_nodes
 
         self._sync_notifier, self._sync_requests = trio.open_memory_channel[
             SyncRequest
@@ -200,6 +202,7 @@ class BeaconNode:
             config.p2p_maddr,
             config.orchestration_profile,
             config.preferred_nodes,
+            config.bootstrap_nodes,
         )
 
     @property
@@ -350,6 +353,7 @@ class BeaconNode:
                 async with background_trio_service(host._gossiper.pubsub):
                     async with background_trio_service(host._gossiper.gossipsub):
                         await self._connect_preferred_nodes()
+                        await self._connect_bootstrap_nodes()
 
                         # NOTE: need to connect *some* peers first before
                         # subscribing to gossip
@@ -368,6 +372,11 @@ class BeaconNode:
         async with trio.open_nursery() as nursery:
             for preferred_maddr in self._preferred_nodes:
                 nursery.start_soon(self._host.add_peer_from_maddr, preferred_maddr)
+
+    async def _connect_bootstrap_nodes(self) -> None:
+        async with trio.open_nursery() as nursery:
+            for bootstrap_maddr in self._bootstrap_nodes:
+                nursery.start_soon(self._host.add_peer_from_maddr, bootstrap_maddr)
 
     async def _handle_gossip(self) -> None:
         gossip_handlers = (self._handle_block_gossip,)
