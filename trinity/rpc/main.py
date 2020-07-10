@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import (
     Any,
     Dict,
@@ -11,11 +10,14 @@ from typing import (
 from lahja import EndpointAPI
 
 from eth_utils import (
+    get_logger,
     ValidationError,
+    ExtendedDebugLogger,
 )
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
+from trinity.exceptions import RpcError
 from trinity.rpc.modules import (
     BaseRPCModule,
 )
@@ -71,6 +73,7 @@ class RPCServer:
         self.event_bus = event_bus
         self.modules: Dict[str, BaseRPCModule] = {}
         self.chain = chain
+        self.logger: ExtendedDebugLogger = get_logger('trinity.rpc.main.RPCServer')
 
         for module in modules:
             name = module.name.lower()
@@ -131,10 +134,13 @@ class RPCServer:
             error = "Method not implemented: %r %s" % (request['method'], exc)
             return None, error
         except ValidationError as exc:
-            logging.debug("Validation error while executing RPC method", exc_info=True)
+            self.logger.debug("Validation error while executing RPC method", exc_info=True)
+            return None, exc
+        except RpcError as exc:
+            self.logger.info(exc)
             return None, exc
         except Exception as exc:
-            logging.info("RPC method caused exception", exc_info=True)
+            self.logger.warning("RPC method caused exception", exc_info=True)
             if debug:
                 raise Exception("failure during rpc call with %s" % request) from exc
             return None, exc
