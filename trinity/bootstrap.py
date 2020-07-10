@@ -199,6 +199,10 @@ def install_logging(args: argparse.Namespace,
 
     # Set the individual logger levels that have been specified.
     logger_levels = {} if args.log_levels is None else args.log_levels
+    # async-service's DEBUG logs completely drowns our stuff (i.e. more than 95% of all our DEBUG
+    # logs), so unless explicitly overridden, we limit it to INFO.
+    if 'async_service' not in logger_levels:
+        logger_levels['async_service'] = logging.INFO
     set_logger_levels(logger_levels)
 
     min_log_level = min(

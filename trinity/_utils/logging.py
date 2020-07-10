@@ -30,7 +30,7 @@ from trinity._utils.socket import BufferedSocket, IPCSocketServer
 from trinity._utils.ipc import wait_for_ipc
 from trinity.boot_info import BootInfo
 
-LOG_BACKUP_COUNT = 10
+LOG_BACKUP_COUNT = 20
 LOG_MAX_MB = 5
 
 
@@ -154,21 +154,22 @@ LOG_FORMATTER = TrinityLogFormatter(
 )
 
 
-def set_logger_levels(log_levels: Dict[str, int],
-                      *handlers: logging.Handler) -> None:
+def set_logger_levels(log_levels: Dict[str, int]) -> None:
     for name, level in log_levels.items():
 
         # The root logger is configured separately
         if name is None:
             continue
 
-        logger = get_logger(name)
+        # Workaround for https://github.com/ethereum/trinity/issues/1866
+        logger: logging.Logger
+        if name.startswith('trinity.') or name.startswith('p2p.'):
+            logger = get_logger(name)
+        else:
+            logger = logging.getLogger(name)
+
         logger.propagate = False
         logger.setLevel(level)
-
-        for handler in handlers:
-            handler.setLevel(level)
-            handler.setFormatter(LOG_FORMATTER)
 
 
 def setup_stderr_logging(level: int = None) -> StreamHandler:
@@ -189,9 +190,7 @@ def setup_stderr_logging(level: int = None) -> StreamHandler:
     return handler_stream
 
 
-def setup_file_logging(
-        logfile_path: Path,
-        level: int = None) -> RotatingFileHandler:
+def setup_file_logging(logfile_path: Path, level: int = None) -> RotatingFileHandler:
     if level is None:
         level = logging.DEBUG
     logger = logging.getLogger()
