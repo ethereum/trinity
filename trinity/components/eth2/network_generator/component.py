@@ -1,14 +1,14 @@
 from argparse import ArgumentParser, Namespace, _SubParsersAction
 import json
-from json import JSONDecodeError
 import logging
 import pathlib
 import time
 
 from eth2.genesis import (
-    generate_genesis_config,
-    genesis_config_from_state,
-    update_genesis_config_with_time,
+    format_genesis_config,
+    genesis_config_from_state_file,
+    genesis_config_with_default_state,
+    genesis_config_with_validators,
 )
 from trinity.config import BeaconChainConfig, TrinityConfig
 from trinity.extensibility import Application
@@ -19,13 +19,6 @@ Produces a genesis state and a set of private keys for validators in the genesis
 CONFIG_PROFILE_HELP = """
 Use this profile of configuration to determine minimal parameters in the system.
 """
-
-
-class BytesJsonEncoder(json.JSONEncoder):
-    def default(self, obj: object) -> str:
-        if isinstance(obj, bytes):
-            return obj.hex()
-        return super().default(obj)
 
 
 def _get_network_config_path_for(profile: str) -> pathlib.Path:
@@ -50,27 +43,31 @@ class NetworkGeneratorComponent(Application):
         network_generator_parser.add_argument(
             "--config-profile",
             help=CONFIG_PROFILE_HELP,
-            choices=("minimal", "mainnet", "altona"),
+            choices=("minimal", "mainnet"),
             default="minimal",
         )
         network_generator_parser.add_argument(
-            "--output", type=pathlib.Path, help="where to save the output configuration"
+            "--output", type=pathlib.Path, help="Path to save the output configuration"
         )
-        genesis_group = network_generator_parser.add_mutually_exclusive_group(
-            required=True
+        genesis_state_group = network_generator_parser.add_mutually_exclusive_group()
+        genesis_state_group.add_argument(
+            "--generate-validator-keys",
+            action="store_true",
+            help="Initialize the chain state from self-generated validator keys",
         )
-        genesis_group.add_argument(
-            "--genesis-time", type=int, help="Unix timestamp to use as the genesis time"
-        )
-        genesis_group.add_argument(
-            "--genesis-delay",
-            type=int,
-            help="Delay in seconds to use as the genesis time from time of execution",
-        )
-        genesis_group.add_argument(
+        genesis_state_group.add_argument(
             "--genesis-state",
             type=pathlib.Path,
             help="Path to an SSZ file that contains the initial chain state",
+        )
+        genesis_time_group = network_generator_parser.add_mutually_exclusive_group()
+        genesis_time_group.add_argument(
+            "--genesis-time", type=int, help="Unix timestamp to use as the genesis time"
+        )
+        genesis_time_group.add_argument(
+            "--genesis-delay",
+            type=int,
+            help="Delay in seconds to use as the genesis time from time of execution",
         )
 
         network_generator_parser.set_defaults(func=cls._generate_network_as_json)
@@ -79,50 +76,39 @@ class NetworkGeneratorComponent(Application):
     def _generate_network_as_json(
         cls, args: Namespace, trinity_config: TrinityConfig
     ) -> None:
-        cls.logger.info("using config profile: %s", args.config_profile)
+        cls.logger.info(f"generating genesis {args.config_profile} config")
 
         if args.output:
             output_file_path = args.output
         else:
             output_file_path = _get_network_config_path_for(args.config_profile)
 
-        if output_file_path.exists():
-            with open(output_file_path, "r") as config_file:
-                try:
-                    existing_genesis_config = json.load(config_file)
-                except JSONDecodeError as e:
-                    existing_genesis_config = None
-                    cls.logger.warning("failed to load existing config as json: %s", e)
-
         if args.genesis_time:
             genesis_time = args.genesis_time
-            cls.logger.info("genesis time specified from config: %d", genesis_time)
+            cls.logger.info(f"genesis time specified by user: {genesis_time}")
         elif args.genesis_delay:
             genesis_time = int(time.time()) + args.genesis_delay
-            cls.logger.info(
-                "genesis delay specified from config: %d", args.genesis_delay
-            )
-
-        if (args.genesis_time or args.genesis_delay) and existing_genesis_config:
-            genesis_config = update_genesis_config_with_time(
-                existing_genesis_config, genesis_time
-            )
-        elif args.genesis_time or args.genesis_delay:
-            genesis_config = generate_genesis_config(args.config_profile, genesis_time)
+            cls.logger.info(f"genesis delay specified by user: {args.genesis_delay}")
         else:
-            genesis_config = genesis_config_from_state(
-                args.config_profile, args.genesis_state
+            genesis_time = None
+
+        if args.genesis_state:
+            genesis_config = genesis_config_from_state_file(
+                args.config_profile, args.genesis_state, genesis_time=genesis_time
+            )
+        elif args.generate_validator_keys:
+            genesis_config = genesis_config_with_validators(
+                args.config_profile, genesis_time=genesis_time
+            )
+        else:
+            genesis_config = genesis_config_with_default_state(
+                args.config_profile, genesis_time=genesis_time
             )
 
-        genesis_time = genesis_config["genesis_state"]["genesis_time"]
         cls.logger.info(
-            "configuration generated; genesis state has root %s with genesis time %d (%s); "
-            "writing to '%s'",
-            genesis_config["genesis_state_root"],
-            genesis_time,
-            time.strftime("%Y-%m-%d %I:%M%z", time.localtime(genesis_time)),
-            output_file_path,
+            f"configuration generated: {format_genesis_config(genesis_config)}"
         )
+        cls.logger.info(f"writing config to {output_file_path}")
         output_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_file_path, "w") as output_file:
-            json.dump(genesis_config, output_file, cls=BytesJsonEncoder)
+            json.dump(genesis_config, output_file)
