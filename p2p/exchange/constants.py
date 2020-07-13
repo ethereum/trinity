@@ -10,4 +10,4 @@ ROUND_TRIP_TIMEOUT = 20.0
 # they are sent. This is an estimate of how many get queued locally. The reason we
 # estimate the queue length is to determine how long a timeout to use when
 # waiting for the lock to send the next queued peer request.
-NUM_QUEUED_REQUESTS = 3
+NUM_QUEUED_REQUESTS = 4
