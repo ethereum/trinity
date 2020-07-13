@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 from collections import Counter
 from functools import partial
+import itertools
 import typing
 from typing import (
     AsyncIterator,
@@ -28,8 +29,14 @@ from trie import (
     exceptions as trie_exceptions,
     fog,
 )
+from trie.constants import (
+    BLANK_NODE_HASH,
+)
 from trie.utils.nibbles import (
     bytes_to_nibbles,
+)
+from trie.utils.nodes import (
+    key_starts_with,
 )
 from trie.typing import (
     HexaryTrieNode,
@@ -46,6 +53,7 @@ from trinity.sync.beam.constants import (
 )
 from trinity._utils.async_iter import async_take
 from trinity._utils.logging import get_logger
+from trinity._utils.timer import Timer
 
 from .queen import (
     QueeningQueue,
@@ -66,9 +74,11 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
     the round-trip-time that peers take to respond to GetNodeData commands.
     """
 
-    _total_processed_nodes = 0
+    _total_added_nodes = 0
     _num_added = 0
     _num_missed = 0
+    _num_accounts_completed = 0
+    _num_storage_completed = 0
     _report_interval = 10
 
     _num_requests_by_peer: typing.Counter[ETHPeer]
@@ -221,7 +231,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 # Check if account is fully downloaded
                 account_components_complete = self._are_account_components_complete(
                     address_hash_nibbles,
-                    account.code_hash,
+                    account,
                 )
                 if account_components_complete:
                     # Mark fully downloaded accounts as complete, and do some cleanup
@@ -382,6 +392,10 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         requested, or if there are no more missing nodes.
         """
 
+        if storage_root == BLANK_NODE_HASH:
+            # Nothing to do if the storage has an empty root
+            return
+
         storage_tracker = self._get_storage_tracker(address_hash_nibbles)
         storage_iterator = self._request_tracking_trie_items(
             storage_tracker,
@@ -472,9 +486,12 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
     def _mark_account_complete(self, path_to_leaf: Nibbles, address_hash_nibbles: Nibbles) -> None:
         self._account_tracker.confirm_leaf(path_to_leaf)
 
+        self._num_accounts_completed += 1
+
         # Clear the storage tracker, to reduce memory usage
         #   and the time to check self._check_complete()
         if address_hash_nibbles in self._storage_trackers:
+            self._num_storage_completed += 1
             del self._storage_trackers[address_hash_nibbles]
 
         # Clear the bytecode tracker, for the same reason
@@ -484,11 +501,14 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
     def _are_account_components_complete(
             self,
             address_hash_nibbles: Nibbles,
-            code_hash: Hash32) -> bool:
+            account: Account) -> bool:
 
-        storage_tracker = self._get_storage_tracker(address_hash_nibbles)
-        if storage_tracker.is_complete:
-            if code_hash == EMPTY_SHA3:
+        if account.storage_root != BLANK_NODE_HASH:
+            # Avoid generating a storage tracker if there is no storage for this account
+            storage_tracker = self._get_storage_tracker(address_hash_nibbles)
+
+        if account.storage_root == BLANK_NODE_HASH or storage_tracker.is_complete:
+            if account.code_hash == EMPTY_SHA3:
                 # All storage is downloaded, and no bytecode to download
                 return True
             else:
@@ -534,7 +554,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             for requested_hash in requested_hashes:
                 if requested_hash in returned_nodes:
                     self._num_added += 1
-                    self._total_processed_nodes += 1
+                    self._total_added_nodes += 1
                     encoded_node = returned_nodes[requested_hash]
                     write_batch[requested_hash] = encoded_node
                 else:
@@ -549,21 +569,23 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             self._next_trie_root_hash = root_hash
 
     async def _periodically_report_progress(self) -> None:
-        while self.manager.is_running:
+        for step in itertools.count():
+            if not self.manager.is_running:
+                break
+
+            self._num_added = 0
+            self._num_missed = 0
+            timer = Timer()
             await asyncio.sleep(self._report_interval)
 
             if not self._begin_backfill.is_set():
                 self.logger.debug("Beam-Backfill: waiting for new state root")
                 continue
 
-            msg = "all=%d" % self._total_processed_nodes
+            msg = "total=%d" % self._total_added_nodes
             msg += "  new=%d" % self._num_added
-            msg += "  missed=%d" % self._num_missed
-            msg += "  queen=%s" % self._queening_queue.queen
+            msg += "  miss=%d" % self._num_missed
             self.logger.debug("Beam-Backfill: %s", msg)
-
-            self._num_added = 0
-            self._num_missed = 0
 
             # log peer counts
             show_top_n_peers = 3
@@ -573,6 +595,133 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 self._num_requests_by_peer.most_common(show_top_n_peers),
             )
             self._num_requests_by_peer.clear()
+
+            # For now, report every 30s (1/3 as often as the debug report above)
+            if step % 3 == 0:
+                num_storage_trackers = len(self._storage_trackers)
+                if num_storage_trackers:
+                    active_storage_completion = sum(
+                        self._complete_trie_fraction(store_tracker)
+                        for store_tracker in self._storage_trackers.values()
+                    ) / num_storage_trackers
+                else:
+                    active_storage_completion = 0
+
+                # Log backfill state stats as a progress indicator to the user:
+                #   - nodes: the total number of nodes collected during this backfill session
+                #   - accts: number of accounts completed, including all storage and bytecode,
+                #       if present. This includes accounts downloaded and ones already present.
+                #   - prog: the progress to completion, measured as a percentage of accounts
+                #       completed, using trie structure. Ignores imbalances caused by storage.
+                #   - stores: number of non-trivial complete storages downloaded
+                #   - storing: the percentage complete and number of storage tries being
+                #       downloaded actively
+                #   - walked: the part of the account trie walked from this
+                #       epoch's index, as parts per million (a fraction of the
+                #       total account trie)
+                #   - tnps: trie nodes collected per second, since the last debug log (in the
+                #       last 10 seconds, at comment time)
+                self.logger.info(
+                    (
+                        "State Stats: nodes=%d accts=%d prog=%.2f%% stores=%d"
+                        " storing=%.1f%% of %d walked=%.1fppm tnps=%.0f"
+                    ),
+                    self._total_added_nodes,
+                    self._num_accounts_completed,
+                    self._complete_trie_fraction(self._account_tracker) * 100,
+                    self._num_storage_completed,
+                    active_storage_completion * 100,
+                    num_storage_trackers,
+                    self._contiguous_accounts_complete_fraction() * 1e6,
+                    self._num_added / timer.elapsed,
+                )
+
+    def _complete_trie_fraction(self, tracker: TrieNodeRequestTracker) -> float:
+        """
+        Calculate stats for logging: estimate what percent of the trie is completed,
+        by looking at unexplored prefixes in the account trie.
+
+        :return: a number in the range [0, 1] (+/- rounding error) estimating
+            trie completion
+
+        One awkward thing: there will be no apparent progress while filling in
+        the storage of a single large account. Progress is slow enough anyway
+        that this is probably immaterial.
+        """
+        # Move this logic into HexaryTrieFog someday
+
+        unknown_prefixes = tracker._trie_fog._unexplored_prefixes
+
+        # Basic estimation logic:
+        # - An unknown prefix 0xf means that we are missing 1/16 of the trie
+        # - An unknown prefix 0x12 means that we are missing 1/(16^2) of the trie
+        # - Add up all the unknown prefixes to estimate the total collected fraction.
+
+        unknown_fraction = sum(
+            (1 / 16) ** len(prefix)
+            for prefix in unknown_prefixes
+        )
+
+        return 1 - unknown_fraction
+
+    def _contiguous_accounts_complete_fraction(self) -> float:
+        """
+        Estimate the completed fraction of the trie that is contiguous with
+        the current index (which rotates every 32 blocks)
+
+        It will be probably be quite noticeable that it will get "stuck" when
+        downloading a lot of storage, because we'll have to blow it up to more
+        than a percentage to see any significant change within 32 blocks. (when
+        the index will change again anyway)
+
+        :return: a number in the range [0, 1] (+/- rounding error) estimating
+            trie completion contiguous with the current backfill index key
+        """
+        starting_index = bytes_to_nibbles(self._next_trie_root_hash)
+        unknown_prefixes = self._account_tracker._trie_fog._unexplored_prefixes
+        if len(unknown_prefixes) == 0:
+            return 1
+
+        # find the nearest unknown prefix (typically, on the right)
+        nearest_index = unknown_prefixes.bisect(starting_index)
+
+        # Get the nearest unknown prefix to the left
+        if nearest_index == 0:
+            left_prefix = (0, ) * 64
+        else:
+            left_prefix = unknown_prefixes[nearest_index - 1]
+            if key_starts_with(starting_index, left_prefix):
+                # The prefix of the starting index is unknown, so the index
+                #   itself is unknown.
+                return 0
+
+        # Get the nearest unknown prefix to the right
+        if len(unknown_prefixes) == nearest_index:
+            right_prefix = (0xf, ) * 64
+        else:
+            right_prefix = unknown_prefixes[nearest_index]
+
+        # Use the space between the unknown prefixes to estimate the completed contiguous fraction
+
+        # At the base, every gap in the first nibble is a full 1/16th of the state complete
+        known_first_nibbles = right_prefix[0] - left_prefix[0] - 1
+        completed_fraction_base = (1 / 16) * known_first_nibbles
+
+        # Underneath, you can count completed subtrees on the right, each child 1/16 of the parent
+        right_side_completed = sum(
+            nibble * (1 / 16) ** nibble_depth
+            for nibble_depth, nibble
+            in enumerate(right_prefix[1:], 2)
+        )
+        # Do the same on the left
+        left_side_completed = sum(
+            (0xf - nibble) * (1 / 16) ** nibble_depth
+            for nibble_depth, nibble
+            in enumerate(left_prefix[1:], 2)
+        )
+
+        # Add up all completed areas
+        return left_side_completed + completed_fraction_base + right_side_completed
 
 
 class TrieNodeRequestTracker:
