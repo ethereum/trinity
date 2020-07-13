@@ -769,6 +769,8 @@ async def test_sequential_header_gapfill_syncer(request,
             chaindb_with_gaps,
             MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
         )
+        # Ensure we use small chunks to be able to test pause/resume properly
+        client._max_backfill_header_at_once = 100
         server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
 
         async with run_peer_pool_event_server(
@@ -781,6 +783,29 @@ async def test_sequential_header_gapfill_syncer(request,
             client_peer.logger.info("%s is syncing up 1000", client_peer)
 
             async with background_asyncio_service(client):
+                # We intentionally only sync up to a block *below* the first gap to have a more
+                # difficult scenario for pause/resume. We want to make sure we not only can pause
+                # at the times where we synced up to an actual gap. Instead we want to be sure
+                # we can pause after we synced up to the `_max_backfill_header_at_once` limit which
+                # may be shorter than the actual gap in the chain.
+                await wait_for_head(
+                    chaindb_with_gaps, chaindb_1000.get_canonical_block_header_by_number(100)
+                )
+
+                # Pause the syncer for a moment and check if it continued syncing (it should not!)
+                client.pause()
+                # Verify that we stopped the chain fast enough, before the gap was fully filled
+                # This is a potential source of test flakiness
+                with pytest.raises(HeaderNotFound):
+                    chaindb_with_gaps.get_canonical_block_header_by_number(249)
+                await asyncio.sleep(1)
+                # Make sure that the gap filling doesn't complete for a while. We could
+                # theoretically get false positives if it's not paused but very slow to fill headers
+                with pytest.raises(HeaderNotFound):
+                    chaindb_with_gaps.get_canonical_block_header_by_number(249)
+                # Now resume syncing
+                client.resume()
+
                 await wait_for_head(
                     # We check for 499 because 500 is there from the very beginning (the checkpoint)
                     chaindb_with_gaps, chaindb_1000.get_canonical_block_header_by_number(499)

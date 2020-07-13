@@ -5,6 +5,10 @@ EMPTY_PEER_RESPONSE_PENALTY = 15.0
 # which covers about 6 days at 15s blocks
 MAX_SKELETON_REORG_DEPTH = 35000
 
+# The maximum number of headers that the backfill can sync in one uninterrupted stretch.
+# Depending on the lag, the job may get paused but will continue until the current stretch
+# has processed this number of headers.
+MAX_BACKFILL_HEADERS_AT_ONCE = 100_000
 
 # How many headers/blocks should we queue up waiting to be persisted?
 # This buffer size is estimated using: NUM_BLOCKS_PERSISTED_PER_SEC * BUFFER_SECONDS * MARGIN
