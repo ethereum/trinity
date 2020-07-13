@@ -42,12 +42,13 @@ class BeaconNodeConfig:
         trinity_config: TrinityConfig,
         beacon_app_config: BeaconAppConfig,
         validator_api_port: int,
+        bootstrap_nodes: Collection[Multiaddr],
     ) -> "BeaconNodeConfig":
         chain_config = beacon_app_config.get_chain_config()
         return cls(
             beacon_app_config.database_dir,
             beacon_app_config.orchestration_profile,
-            beacon_app_config.bootstrap_nodes,
+            bootstrap_nodes,
             beacon_app_config.preferred_nodes,
             chain_config,
             trinity_config.nodekey,

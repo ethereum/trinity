@@ -227,6 +227,7 @@ def beacon_node(
         p2p_maddr,
         "a",
         (),
+        (),
     )
 
 
