@@ -207,7 +207,7 @@ class BeamSyncer(Service):
 
             # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
             self.manager.run_daemon_child_service(self._block_backfill)
-            self.manager.run_daemon_task(self._monitor_block_backfill)
+            self.manager.run_daemon_task(self._monitor_historical_backfill)
 
         self.manager.run_daemon_child_service(self._block_importer)
         self.manager.run_daemon_child_service(self._header_syncer)
@@ -332,7 +332,7 @@ class BeamSyncer(Service):
                 return False
         return True
 
-    async def _monitor_block_backfill(self) -> None:
+    async def _monitor_historical_backfill(self) -> None:
         while self.manager.is_running:
             await asyncio.sleep(PREDICTED_BLOCK_TIME)
             if self._block_backfill.get_manager().is_cancelled:
@@ -341,16 +341,18 @@ class BeamSyncer(Service):
                 lag = self.get_block_count_lag()
                 if lag >= PAUSE_BACKFILL_AT_LAG and not self._block_backfill.is_paused:
                     self.logger.debug(
-                        "Pausing historical block sync because we lag %s blocks",
+                        "Pausing historical header/block sync because we lag %s blocks",
                         lag,
                     )
                     self._block_backfill.pause()
+                    self._header_backfill.pause()
                 elif lag <= RESUME_BACKFILL_AT_LAG and self._block_backfill.is_paused:
                     self.logger.debug(
-                        "Resuming historical block sync because we lag %s blocks",
+                        "Resuming historical header/block sync because we lag %s blocks",
                         lag,
                     )
                     self._block_backfill.resume()
+                    self._header_backfill.resume()
 
 
 class RigorousFastChainBodySyncer(Service):

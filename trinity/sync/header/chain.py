@@ -6,13 +6,17 @@ from eth.abc import BlockHeaderAPI
 from eth.exceptions import CheckpointsMustBeCanonical
 from eth_typing import BlockNumber
 
+from trinity._utils.pauser import Pauser
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity._utils.logging import get_logger
 from trinity.sync.common.checkpoint import Checkpoint
-from trinity.sync.common.constants import MAX_SKELETON_REORG_DEPTH
+from trinity.sync.common.constants import (
+    MAX_BACKFILL_HEADERS_AT_ONCE,
+    MAX_SKELETON_REORG_DEPTH,
+)
 from trinity.sync.common.headers import persist_headers
 from trinity.sync.common.strategies import (
     FromCheckpointLaunchStrategy,
@@ -100,12 +104,14 @@ class HeaderChainGapSyncer(Service):
     def __init__(self,
                  chain: AsyncChainAPI,
                  db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool) -> None:
+                 peer_pool: ETHPeerPool,
+                 max_headers: int = None) -> None:
 
         self.logger = get_logger('trinity.sync.header.chain.HeaderChainGapSyncer')
         self._chain = chain
         self._db = db
         self._peer_pool = peer_pool
+        self._max_headers = max_headers
 
     async def run(self) -> None:
 
@@ -120,14 +126,22 @@ class HeaderChainGapSyncer(Service):
         self.logger.info(f"Launching from %s", launch_block_number)
         launch_strategy = FromBlockNumberLaunchStrategy(self._db, launch_block_number)
 
+        gap_length = gap[1] - gap[0]
+        if self._max_headers and gap_length > self._max_headers:
+            final_block_number = BlockNumber(gap[0] + self._max_headers)
+        else:
+            final_block_number = gap[1]
+
         self._header_syncer = ETHHeaderChainSyncer(
             self._chain, self._db, self._peer_pool, launch_strategy)
 
         await launch_strategy.fulfill_prerequisites()
-        self.logger.info("Initializing gap-fill header-sync; filling gap: %s", gap)
+        self.logger.info(
+            "Initializing gap-fill header-sync; filling gap: %s", (gap[0], final_block_number)
+        )
 
         self.manager.run_child_service(self._header_syncer)
-        self.manager.run_task(self._persist_headers, gap[1])
+        self.manager.run_task(self._persist_headers, final_block_number)
         # run sync until cancelled
         await self.manager.wait_finished()
 
@@ -166,9 +180,32 @@ class SequentialHeaderChainGapSyncer(Service):
         self._chain = chain
         self._db = db
         self._peer_pool = peer_pool
+        self._pauser = Pauser()
+        self._max_backfill_header_at_once = MAX_BACKFILL_HEADERS_AT_ONCE
+
+    def pause(self) -> None:
+        """
+        Pause the sync after the current operation has finished.
+        """
+        # We just switch the toggle but let the sync finish the current segment. It will wait for
+        # the resume call before it starts a new segment.
+        self._pauser.pause()
+        self.logger.debug2(
+            "Pausing SequentialHeaderChainGapSyncer after current operation finishs"
+        )
+
+    def resume(self) -> None:
+        """
+        Resume the sync.
+        """
+        self._pauser.resume()
+        self.logger.debug2("SequentialHeaderChainGapSyncer resumed")
 
     async def run(self) -> None:
         while self.manager.is_running:
+            if self._pauser.is_paused:
+                await self._pauser.await_resume()
+
             gaps, _ = self._db.get_header_chain_gaps()
             if len(gaps) < 1:
                 self.logger.info("No more gaps to fill. Exiting")
@@ -176,6 +213,11 @@ class SequentialHeaderChainGapSyncer(Service):
                 return
             else:
                 self.logger.debug(f"Starting gap sync at {gaps[0]}")
-                syncer = HeaderChainGapSyncer(self._chain, self._db, self._peer_pool)
+                syncer = HeaderChainGapSyncer(
+                    self._chain,
+                    self._db,
+                    self._peer_pool,
+                    max_headers=self._max_backfill_header_at_once,
+                )
             async with background_asyncio_service(syncer) as manager:
                 await manager.wait_finished()
