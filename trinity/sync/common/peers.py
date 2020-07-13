@@ -16,6 +16,7 @@ from eth_utils import (
 )
 
 from p2p.abc import CommandAPI
+from p2p.exceptions import PeerConnectionLost
 from p2p.exchange import PerformanceAPI
 
 from trinity.protocol.common.peer import BaseChainPeer
@@ -79,7 +80,11 @@ class WaitingPeers(Generic[TChainPeer]):
         return sum(scores) / len(scores)
 
     def put_nowait(self, peer: TChainPeer) -> None:
-        self._waiting_peers.put_nowait(self._peer_wrapper(peer))
+        try:
+            wrapped_peer = self._peer_wrapper(peer)
+        except PeerConnectionLost:
+            return
+        self._waiting_peers.put_nowait(wrapped_peer)
 
     async def get_fastest(self) -> TChainPeer:
         wrapped_peer = await self._waiting_peers.get()
