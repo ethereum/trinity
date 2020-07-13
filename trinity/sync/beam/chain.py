@@ -80,12 +80,12 @@ from trinity.sync.header.chain import SequentialHeaderChainGapSyncer
 from trinity.sync.beam.state import (
     BeamDownloader,
 )
+from trinity._utils.pauser import Pauser
 from trinity._utils.timer import Timer
 from trinity._utils.logging import get_logger
 from trinity._utils.headers import body_for_header_exists
 
 from .backfill import BeamStateBackfill
-
 
 STATS_DISPLAY_PERIOD = 10
 
@@ -417,16 +417,15 @@ class BodyChainGapSyncer(Service):
         self._chain = chain
         self._db = db
         self._peer_pool = peer_pool
-        self._paused = False
+        self._pauser = Pauser()
         self._body_syncer: FastChainBodySyncer = None
-        self._resumed = asyncio.Event()
 
     async def _setup_for_next_gap(self) -> None:
         gap_start, gap_end = self._get_next_gap()
         start_num = BlockNumber(gap_start - 1)
         _starting_tip = await self._db.coro_get_canonical_block_header_by_number(start_num)
 
-        if self._paused:
+        if self._pauser.is_paused:
             # If the syncer was paused while we were busy setting it up throw the current setup
             # away. A new setup will be performed as soon as `resume()` was called again.
             raise ValidationError("Syncer was paused by the user")
@@ -474,16 +473,13 @@ class BodyChainGapSyncer(Service):
         """
         Return ``True`` if the sync is currently paused, otherwise ``False``.
         """
-        return self._paused
+        return self._pauser.is_paused
 
     def pause(self) -> None:
         """
         Pause the sync. Pause and resume are wasteful actions and should not happen too frequently.
         """
-        if self._paused:
-            raise RuntimeError("Invalid action. Can not pause service that is already paused.")
-
-        self._paused = True
+        self._pauser.pause()
         if self._body_syncer:
             # Pausing the syncer is valid at any point that the service is running but that might
             # hit a point where we are still resolving the gaps and have no body_syncer set up yet.
@@ -494,21 +490,16 @@ class BodyChainGapSyncer(Service):
         """
         Resume the sync.
         """
-        if not self._paused:
-            raise RuntimeError("Invalid action. Can not resume service that isn't paused.")
-
-        self._paused = False
+        self._pauser.resume()
         self.logger.debug2("BodyChainGapSyncer resumed")
-        self._resumed.set()
 
     async def run(self) -> None:
         """
         Run the sync indefinitely until it is cancelled externally.
         """
         while True:
-            if self._paused:
-                await self._resumed.wait()
-                self._resumed.clear()
+            if self._pauser.is_paused:
+                await self._pauser.await_resume()
             try:
                 await self._setup_for_next_gap()
             except ValidationError:
