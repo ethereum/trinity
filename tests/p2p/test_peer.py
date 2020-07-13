@@ -60,12 +60,14 @@ class CrashingLogic(BaseLogic):
 
 
 @pytest.mark.asyncio
-async def test_stops_if_behavior_crashes(monkeypatch):
+async def test_propagates_behavior_crashes(monkeypatch):
 
     def init(self):
         self.add_child_behavior(CrashingLogic().as_behavior(always))
 
     monkeypatch.setattr(ParagonAPI, '__init__', init)
-    async with ParagonPeerPairFactory() as (alice, _):
-        await asyncio.wait_for(alice.ready.wait(), timeout=0.5)
-        assert alice.manager.is_cancelled
+    with pytest.raises(BehaviorCrash):
+        async with ParagonPeerPairFactory() as (alice, _):
+            await asyncio.wait_for(alice.manager.wait_finished(), timeout=0.5)
+
+    assert alice.manager.is_cancelled

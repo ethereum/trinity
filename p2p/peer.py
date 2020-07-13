@@ -293,19 +293,21 @@ class BasePeer(Service):
                 self.connection.start_protocol_streams()
                 self.ready.set()
 
-                try:
-                    await wait_first(futures)
-                except asyncio.CancelledError:
-                    raise
-                except BaseException:
-                    self.logger.exception("Behavior finished before us, cancelling ourselves")
-                    self.manager.cancel()
+                await wait_first(futures)
+        except PeerConnectionLost:
+            # Any of our behaviors (as well as the conn.get_logic() call above) may propagate a
+            # PeerConnectionLost, which is to be expected as many Connection APIs will raise that.
+            pass
         finally:
+            self.manager.cancel()
             for callback in self._finished_callbacks:
                 callback(self)
-            if (self.local_disconnect_reason is None and
-                    self.remote_disconnect_reason is None):
-                self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
+            # We may have crashed before setting self._p2p_api; in that case don't attempt to send
+            # a disconnect.
+            if hasattr(self, '_p2p_api'):
+                if (self.local_disconnect_reason is None and
+                        self.remote_disconnect_reason is None):
+                    self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
             # We run as a child service of the connection, but we don't want to leave a connection
             # open if somebody cancels just us, so this ensures the connection gets closed as well.
             if not self.connection.get_manager().is_cancelled:

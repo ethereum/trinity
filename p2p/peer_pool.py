@@ -404,7 +404,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             if not batch:
                 return
 
-            self.logger.info(
+            self.logger.debug(
                 'Initiating %d peer connection attempts with %d open peer slots',
                 len(batch),
                 self.available_slots,
