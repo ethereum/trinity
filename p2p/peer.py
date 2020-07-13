@@ -115,7 +115,7 @@ class BasePeer(Service):
     _event_bus: EndpointAPI = None
 
     base_protocol: BaseP2PProtocol
-    _p2p_api: P2PAPI
+    p2p_api: P2PAPI
 
     def __init__(self,
                  connection: ConnectionAPI,
@@ -252,19 +252,11 @@ class BasePeer(Service):
         pass
 
     async def _handle_disconnect(self, connection: ConnectionAPI, cmd: Disconnect) -> None:
-        self._p2p_api.remote_disconnect_reason = cmd.payload
+        self.p2p_api.remote_disconnect_reason = cmd.payload
         # We run as a daemon child of the connection, so cancel the connection instead of
         # ourselves to ensure asyncio-service doesn't think we're exiting when the connection is
         # still active, as that would cause a DaemonTaskExit.
         self.connection.get_manager().cancel()
-
-    @property
-    def is_alive(self) -> bool:
-        # We need this because when a remote disconnects from us the connection may be closed
-        # before the Disconnect msg is processed and cancels ourselves.
-        if not hasattr(self, 'manager'):
-            return False
-        return self.manager.is_running and not self.connection.is_closing
 
     async def run(self) -> None:
         self._start_time = time.monotonic()
@@ -273,7 +265,7 @@ class BasePeer(Service):
             async with contextlib.AsyncExitStack() as stack:
                 fut = await stack.enter_async_context(P2PAPI().as_behavior().apply(self.connection))
                 futures = [fut]
-                self._p2p_api = self.connection.get_logic('p2p', P2PAPI)
+                self.p2p_api = self.connection.get_logic('p2p', P2PAPI)
 
                 for behavior in self.get_behaviors():
                     if behavior.should_apply_to(self.connection):
@@ -303,8 +295,8 @@ class BasePeer(Service):
         finally:
             for callback in self._finished_callbacks:
                 callback(self)
-            if (self.local_disconnect_reason is None and
-                    self.remote_disconnect_reason is None):
+            if (self.p2p_api.local_disconnect_reason is None and
+                    self.p2p_api.remote_disconnect_reason is None):
                 self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
             # We run as a child service of the connection, but we don't want to leave a connection
             # open if somebody cancels just us, so this ensures the connection gets closed as well.
@@ -339,21 +331,9 @@ class BasePeer(Service):
 
     def _send_disconnect(self, reason: DisconnectReason) -> None:
         try:
-            self._p2p_api.disconnect(reason)
+            self.p2p_api.disconnect(reason)
         except PeerConnectionLost:
             self.logger.debug("Tried to disconnect from %s, but already disconnected", self)
-
-    @property
-    def safe_client_version_string(self) -> str:
-        return self._p2p_api.safe_client_version_string
-
-    @property
-    def local_disconnect_reason(self) -> DisconnectReason:
-        return self._p2p_api.local_disconnect_reason
-
-    @property
-    def remote_disconnect_reason(self) -> DisconnectReason:
-        return self._p2p_api.remote_disconnect_reason
 
 
 class PeerMessage(NamedTuple):

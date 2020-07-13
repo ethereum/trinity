@@ -298,13 +298,7 @@ class BeamDownloader(Service, PeerSubscriber):
             # Get best peer, by GetNodeData speed
             peer = await self._queen_tracker.get_queen_peer()
 
-            try:
-                peer_is_requesting = peer.get_eth_api().get_node_data.is_requesting
-            except PeerConnectionLost:
-                self.logger.debug("%s disconnected before we could request nodes", peer)
-                continue
-
-            if urgent_batch_id is not None and peer_is_requesting:
+            if urgent_batch_id is not None and peer.eth_api.get_node_data.is_requesting:
                 # Our best peer for node data has an in-flight GetNodeData request
                 # Probably, backfill is asking this peer for data
                 # This is right in the critical path, so we'd prefer this never happen
@@ -379,6 +373,7 @@ class BeamDownloader(Service, PeerSubscriber):
             urgent_node_hashes: Tuple[Hash32, ...],
             predictive_node_hashes: Tuple[Hash32, ...],
             predictive_batch_id: int) -> None:
+
         nodes = await self._request_nodes(peer, node_hashes)
 
         urgent_nodes = {
@@ -451,13 +446,9 @@ class BeamDownloader(Service, PeerSubscriber):
     async def _request_nodes(
             self,
             peer: ETHPeer,
-            original_node_hashes: Tuple[Hash32, ...]) -> NodeDataBundles:
-        node_hashes = tuple(set(original_node_hashes))
-        num_nodes = len(node_hashes)
-        self.logger.debug2("Requesting %d nodes from %s", num_nodes, peer)
+            node_hashes: Tuple[Hash32, ...]) -> NodeDataBundles:
         try:
-            completed_nodes = await peer.get_eth_api().get_node_data(
-                node_hashes, timeout=self._reply_timeout)
+            completed_nodes = await self._make_node_request(peer, node_hashes)
         except PeerConnectionLost:
             self.logger.debug("%s went away, cancelling the nodes request and moving on...", peer)
             self._queen_tracker.penalize_queen(peer)
@@ -471,13 +462,6 @@ class BeamDownloader(Service, PeerSubscriber):
             self.logger.debug("Pending nodes call to %r future cancelled", peer)
             self._queen_tracker.penalize_queen(peer)
             raise
-        except asyncio.TimeoutError:
-            # This kind of exception shouldn't necessarily *drop* the peer,
-            # so capture error, log and swallow
-            self.logger.debug("Timed out requesting %d nodes from %s", num_nodes, peer)
-            self._queen_tracker.penalize_queen(peer)
-            self._total_timeouts += 1
-            return tuple()
         except Exception as exc:
             self.logger.info("Unexpected err while downloading nodes from %s: %s", peer, exc)
             self.logger.debug(
@@ -496,6 +480,22 @@ class BeamDownloader(Service, PeerSubscriber):
                 self.logger.debug("%s returned 0 state trie nodes, penalize...", peer)
                 self._queen_tracker.penalize_queen(peer)
             return completed_nodes
+
+    async def _make_node_request(
+            self,
+            peer: ETHPeer,
+            original_node_hashes: Tuple[Hash32, ...]) -> NodeDataBundles:
+        node_hashes = tuple(set(original_node_hashes))
+        num_nodes = len(node_hashes)
+        self.logger.debug2("Requesting %d nodes from %s", num_nodes, peer)
+        try:
+            return await peer.eth_api.get_node_data(node_hashes, timeout=self._reply_timeout)
+        except asyncio.TimeoutError:
+            # This kind of exception shouldn't necessarily *drop* the peer,
+            # so capture error, log and swallow
+            self.logger.debug("Timed out requesting %d nodes from %s", num_nodes, peer)
+            self._total_timeouts += 1
+            return tuple()
 
     async def run(self) -> None:
         """

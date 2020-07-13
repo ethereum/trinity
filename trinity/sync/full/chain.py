@@ -52,7 +52,7 @@ from eth.exceptions import HeaderNotFound
 
 from p2p.abc import CommandAPI
 from p2p.disconnect import DisconnectReason
-from p2p.exceptions import BaseP2PError, PeerConnectionLost
+from p2p.exceptions import BaseP2PError, PeerConnectionLost, UnknownAPI
 from p2p.peer import BasePeer, PeerSubscriber
 from p2p.stats.ema import EMA
 from p2p.token_bucket import TokenBucket
@@ -419,7 +419,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
         """
         self.logger.debug("Requesting block bodies for %d headers from %s", len(batch), peer)
         try:
-            block_body_bundles = await peer.get_eth_api().get_block_bodies(tuple(batch))
+            block_body_bundles = await peer.eth_api.get_block_bodies(tuple(batch))
         except asyncio.TimeoutError:
             self.logger.debug(
                 "Timed out requesting block bodies for %d headers from %s", len(batch), peer,
@@ -430,6 +430,12 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
             return tuple()
         except PeerConnectionLost:
             self.logger.debug("Peer went away, cancelling the block body request and moving on...")
+            return tuple()
+        except UnknownAPI as exc:
+            self.logger.debug(
+                "Peer was missing API, cancelling the block body request and moving on... %r",
+                exc,
+            )
             return tuple()
         except Exception:
             self.logger.exception("Unknown error when getting block bodies from %s", peer)
@@ -946,7 +952,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         """
         self.logger.debug("Requesting receipts for %d headers from %s", len(batch), peer)
         try:
-            receipt_bundles = await peer.get_eth_api().get_receipts(tuple(batch))
+            receipt_bundles = await peer.eth_api.get_receipts(tuple(batch))
         except asyncio.TimeoutError:
             self.logger.debug(
                 "Timed out requesting receipts for %d headers from %s", len(batch), peer,

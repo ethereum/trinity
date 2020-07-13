@@ -64,7 +64,7 @@ class WaitingPeers(Generic[TChainPeer]):
     def _get_peer_rank(self, peer: TChainPeer) -> float:
         scores = [
             self._sort_key(exchange.tracker)
-            for exchange in peer.get_chain_api().exchanges
+            for exchange in peer.chain_api.exchanges
             if issubclass(exchange.get_response_cmd_type(), self._response_command_type)
         ]
 
@@ -86,7 +86,7 @@ class WaitingPeers(Generic[TChainPeer]):
         peer = wrapped_peer.original
 
         # make sure the peer has not gone offline while waiting in the queue
-        while not peer.is_alive:
+        while not peer.manager.is_running:
             # if so, look for the next best peer
             wrapped_peer = await self._waiting_peers.get()
             peer = wrapped_peer.original

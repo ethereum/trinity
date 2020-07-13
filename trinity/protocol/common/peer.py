@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import asyncio
 import functools
+import operator
 import random
 from typing import (
     Container,
@@ -18,6 +19,7 @@ from lahja import EndpointAPI
 from pyformance.meters import SimpleGauge
 
 from eth_utils.toolz import (
+    excepts,
     groupby,
 )
 
@@ -37,6 +39,7 @@ from p2p.exceptions import (
     MalformedMessage,
     NoConnectedPeers,
     PeerConnectionLost,
+    UnknownAPI,
 )
 from p2p.metrics import (
     PeerReporterRegistry,
@@ -90,46 +93,16 @@ class BaseChainPeer(BasePeer):
     boot_manager_class = DAOCheckBootManager
     context: ChainContext
 
-    def get_chain_api(self) -> AnyETHLESAPI:
-        """
-        Returns the ETH/LES API for this peer.
-
-        Raises PeerConnectionLost if the peer is no longer alive.
-        """
-        if not self.is_alive:
-            raise PeerConnectionLost(f"{self} is no longer alive")
-        return self._chain_api
-
-    def get_head_info(self) -> HeadInfoAPI:
-        """
-        Returns the HeadInfoAPI for this peer.
-
-        Raises PeerConnectionLost if the peer is no longer alive.
-        """
-        if not self.is_alive:
-            raise PeerConnectionLost(f"{self} is no longer alive")
-        return self._head_info
-
-    def get_chain_info(self) -> ChainInfoAPI:
-        """
-        Returns the ChainInfoAPI for this peer.
-
-        Raises PeerConnectionLost if the peer is no longer alive.
-        """
-        if not self.is_alive:
-            raise PeerConnectionLost(f"{self} is no longer alive")
-        return self._chain_info
-
     @cached_property
-    def _chain_api(self) -> AnyETHLESAPI:
+    def chain_api(self) -> AnyETHLESAPI:
         return choose_eth_or_les_api(self.connection)
 
     @cached_property
-    def _head_info(self) -> HeadInfoAPI:
+    def head_info(self) -> HeadInfoAPI:
         return self.connection.get_logic(HeadInfo.name, HeadInfo)
 
     @cached_property
-    def _chain_info(self) -> ChainInfoAPI:
+    def chain_info(self) -> ChainInfoAPI:
         return self.connection.get_logic(ChainInfo.name, ChainInfo)
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
@@ -192,7 +165,7 @@ class BaseChainPeerReporterRegistry(PeerReporterRegistry[BaseChainPeer]):
         td_gauge = self._get_td_gauge(peer_id)
 
         try:
-            head_info = peer.get_head_info()
+            head_info = peer.head_info
         except PeerConnectionLost:
             head_gauge.set_value(0)
             td_gauge.set_value(0)
@@ -291,12 +264,11 @@ class BaseChainPeerPool(BasePeerPool):
         if not peers:
             raise NoConnectedPeers("No connected peers")
 
-        def td_getter(peer: BaseChainPeer) -> int:
-            try:
-                return peer.get_head_info().head_td
-            except PeerConnectionLost:
-                return 0
-
+        td_getter = excepts(
+            (PeerConnectionLost, UnknownAPI),
+            operator.attrgetter('head_info.head_td'),
+            lambda _: 0,
+        )
         peers_by_td = groupby(td_getter, peers)
         max_td = max(peers_by_td.keys())
         return random.choice(peers_by_td[max_td])
@@ -306,7 +278,7 @@ class BaseChainPeerPool(BasePeerPool):
         # harder for callsites to get a list of peers while making blocking calls, as those peers
         # might disconnect in the meantime.
         peers = tuple(self.connected_nodes.values())
-        return [peer for peer in peers if peer.get_head_info().head_td >= min_td]
+        return [peer for peer in peers if peer.head_info.head_td >= min_td]
 
     def setup_connection_tracker(self) -> BaseConnectionTracker:
         if self.has_event_bus:

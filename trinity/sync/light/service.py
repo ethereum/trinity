@@ -301,7 +301,7 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
             # our best peer doesn't have the header we want, there are no eligible peers.
             raise NoEligiblePeers(f"Our best peer does not have the header {block_hash.hex()}")
 
-        head_number = peer.get_head_info().head_number
+        head_number = peer.head_info.head_number
         if head_number - header.block_number > MAX_REORG_DEPTH:
             # The peer claims to be far ahead of the header we requested
             if await self.headerdb.coro_get_canonical_block_hash(header.block_number) == block_hash:
@@ -335,14 +335,13 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
         A single attempt to get the block header from the given peer.
 
         :raise BadLESResponse: if the peer replies with a header that has a different hash
-        :raise PeerConnectionLost: if the peer is no longer alive.
         """
         self.logger.debug("Fetching header %s from %s", encode_hex(block_hash), peer)
         max_headers = 1
 
         # TODO: Figure out why mypy thinks the first parameter to `get_block_headers`
         # should be of type `int`
-        headers = await peer.get_chain_api().get_block_headers(
+        headers = await peer.chain_api.get_block_headers(
             block_hash,
             max_headers,
             skip=0,

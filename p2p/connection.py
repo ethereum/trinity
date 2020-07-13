@@ -277,8 +277,6 @@ class Connection(ConnectionAPI, Service):
 
     def has_logic(self, name: str) -> bool:
         if self.is_closing:
-            # This is a safety net, really, as the Peer should never call this if it is no longer
-            # alive.
             raise PeerConnectionLost("Cannot look up subprotocol when connection is closing")
         return name in self._logics
 

@@ -507,7 +507,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         self._num_requests_by_peer[peer] += 1
         request_hashes = tuple(set(request.node_hash for request in request_data))
         try:
-            nodes = await peer.get_eth_api().get_node_data(request_hashes)
+            nodes = await peer.eth_api.get_node_data(request_hashes)
         except asyncio.TimeoutError:
             self._queening_queue.readd_peasant(peer, GAP_BETWEEN_TESTS * 2)
         except PeerConnectionLost:
