@@ -474,7 +474,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         This is passed as a callback to be called when a peer finishes.
         """
         if peer.session in self.connected_nodes:
-            self.logger.info(
+            self.logger.debug(
                 "Removing %s from pool: local_reason=%s remote_reason=%s",
                 peer,
                 peer.p2p_api.local_disconnect_reason,
