@@ -615,6 +615,9 @@ def create_mock_signed_attestations_at_slot(
     """
     Create the mocking attestations of the given ``attestation_slot`` slot with ``keymap``.
     """
+    if voted_attesters_ratio == 0:
+        return ()
+
     committees_per_slot = get_committee_count_at_slot(
         state,
         attestation_slot,

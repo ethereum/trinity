@@ -25,7 +25,6 @@ async def test_slot_ticker_ticking(event_bus, event_loop):
     await slot_ticker.cancel()
 
 
-@pytest.mark.slow
 @pytest.mark.asyncio
 async def test_slot_ticker_all_ticks(event_bus, event_loop):
     seconds_per_slot = 3

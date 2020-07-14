@@ -25,5 +25,8 @@ class Checkpoint(HashableContainer):
     def __str__(self) -> str:
         return f"{self.epoch}, {humanize_hash(self.root)}"
 
+    def __repr__(self) -> str:
+        return f"{super().__repr__()}({self.epoch}, {humanize_hash(self.root)})"
+
 
 default_checkpoint = Checkpoint.create()

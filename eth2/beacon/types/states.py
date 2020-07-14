@@ -177,6 +177,12 @@ class BeaconState(HashableContainer):
             f"[hash_tree_root]={humanize_hash(self.hash_tree_root)}, slot={self.slot}"
         )
 
+    def __repr__(self) -> str:
+        return (
+            f"{super().__repr__()}: [hash_tree_root]={humanize_hash(self.hash_tree_root)},"
+            f" slot={self.slot}"
+        )
+
     @property
     def validator_count(self) -> int:
         return len(self.validators)

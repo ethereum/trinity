@@ -16,7 +16,6 @@ from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
 
 
-@pytest.mark.slow
 @pytest.mark.parametrize(
     ("validator_count", "target_committee_size", "slots_per_epoch"), [(1000, 100, 10)]
 )

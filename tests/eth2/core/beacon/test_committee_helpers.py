@@ -60,14 +60,13 @@ def test_compute_proposer_index(genesis_validators, config):
     validators = tuple()
     # NOTE: validators supplied to ``compute_proposer_index``
     # should at a minimum have 17 ETH as ``effective_balance``.
-    # Using 1 ETH should maintain the same spirit of the test and
+    # Using 0 ETH should maintain the same spirit of the test and
     # ensure we can know the candidate ahead of time.
-    one_eth_in_gwei = 1 * 10 ** 9
     for index, validator in enumerate(genesis_validators):
         if index == proposer_index:
             validators += (validator,)
         else:
-            validators += (validator.set("effective_balance", one_eth_in_gwei),)
+            validators += (validator.set("effective_balance", 0),)
 
     assert (
         compute_proposer_index(

@@ -31,3 +31,6 @@ class Tick:
 
     def slot_in_epoch(self, slots_per_epoch: int) -> Slot:
         return Slot(self.slot % slots_per_epoch)
+
+    def is_first_in_slot(self) -> bool:
+        return self.count == 0
