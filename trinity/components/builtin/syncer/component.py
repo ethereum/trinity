@@ -106,22 +106,12 @@ def add_sync_from_checkpoint_arg(arg_group: _ArgumentGroup) -> None:
     )
 
 
-def add_disable_backfill_for_beam_sync_arg(arg_group: _ArgumentGroup) -> None:
+def add_disable_backfill_arg(arg_group: _ArgumentGroup) -> None:
     add_shared_argument(
         arg_group,
         '--disable-backfill',
         action="store_true",
-        help="Disable backfilling entirely (headers, blocks, state)",
-        default=False,
-    )
-
-
-def add_disable_backfill_for_header_sync_arg(arg_group: _ArgumentGroup) -> None:
-    add_shared_argument(
-        arg_group,
-        '--disable-backfill',
-        action="store_true",
-        help="Disable backfilling of headers (introduced through checkpointing)",
+        help="Disable backfilling of historical headers and blocks",
         default=False,
     )
 
@@ -207,7 +197,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
             help="Force beam sync to activate on a specific block number (for testing)",
             default=None,
         )
-        add_disable_backfill_for_beam_sync_arg(arg_group)
+        add_disable_backfill_arg(arg_group)
         add_sync_from_checkpoint_arg(arg_group)
 
     async def sync(self,
@@ -242,7 +232,7 @@ class HeaderSyncStrategy(BaseSyncStrategy):
     @classmethod
     def configure_parser(cls, arg_group: _ArgumentGroup) -> None:
         add_sync_from_checkpoint_arg(arg_group)
-        add_disable_backfill_for_header_sync_arg(arg_group)
+        add_disable_backfill_arg(arg_group)
 
     async def sync(self,
                    args: Namespace,
