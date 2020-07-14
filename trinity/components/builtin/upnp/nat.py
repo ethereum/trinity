@@ -163,30 +163,31 @@ def setup_device_port_map(upnp_dev: upnpclient.upnp.Device,
 
     external_ip = wan_service.GetExternalIPAddress()['NewExternalIPAddress']
 
-    try:
-        wan_service.AddPortMapping(
-            NewRemoteHost=external_ip,
-            NewExternalPort=port,
-            NewProtocol='UDP',
-            NewInternalPort=port,
-            NewInternalClient=internal_ip,
-            NewEnabled='1',
-            NewPortMappingDescription='trinity',
-            NewLeaseDuration=duration,
-        )
-    except upnpclient.soap.SOAPError as exc:
-        if exc.args == (718, 'ConflictInMappingEntry'):
-            # An entry already exists with the parameters we specified. Maybe the router
-            # didn't clean it up after it expired or it has been configured by other piece
-            # of software, either way we should not override it.
-            # https://tools.ietf.org/id/draft-ietf-pcp-upnp-igd-interworking-07.html#errors
-            logger.debug("NAT port mapping already configured, not overriding it")
-            return internal_ip, external_ip
-        else:
-            logger.debug(
-                "Failed to setup NAT portmap on device: %s",
-                upnp_dev.location,
+    for protocol in ('UDP', 'TCP'):
+        try:
+            wan_service.AddPortMapping(
+                NewRemoteHost=external_ip,
+                NewExternalPort=port,
+                NewProtocol=protocol,
+                NewInternalPort=port,
+                NewInternalClient=internal_ip,
+                NewEnabled='1',
+                NewPortMappingDescription=f'trinity[{protocol}]',
+                NewLeaseDuration=duration,
             )
-            raise PortMapFailed from exc
-    else:
-        return internal_ip, external_ip
+        except upnpclient.soap.SOAPError as exc:
+            if exc.args == (718, 'ConflictInMappingEntry'):
+                # An entry already exists with the parameters we specified. Maybe the router
+                # didn't clean it up after it expired or it has been configured by other piece
+                # of software, either way we should not override it.
+                # https://tools.ietf.org/id/draft-ietf-pcp-upnp-igd-interworking-07.html#errors
+                logger.debug("NAT port mapping already configured, not overriding it")
+                continue
+            else:
+                logger.debug(
+                    "Failed to setup NAT portmap on device: %s",
+                    upnp_dev.location,
+                )
+                raise PortMapFailed from exc
+
+    return internal_ip, external_ip
