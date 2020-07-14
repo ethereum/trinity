@@ -173,8 +173,8 @@ class Eth(Eth1ChainRPCModule):
         num = self.chain.get_canonical_head().block_number
         return hex(num)
 
-    @retryable(which_block_arg_name='at_block')
     @format_params(identity, to_int_if_hex)
+    @retryable(which_block_arg_name='at_block')
     async def call(self, txn_dict: Dict[str, Any], at_block: Union[str, int]) -> str:
         header = await get_header(self.chain, at_block)
         validate_transaction_call_dict(txn_dict, self.chain.get_vm(header))
@@ -185,8 +185,8 @@ class Eth(Eth1ChainRPCModule):
     async def coinbase(self) -> str:
         raise NotImplementedError("Trinity does not support mining")
 
-    @retryable(which_block_arg_name='at_block')
     @format_params(identity, to_int_if_hex)
+    @retryable(which_block_arg_name='at_block')
     async def estimateGas(self, txn_dict: Dict[str, Any], at_block: Union[str, int]) -> str:
         header = await get_header(self.chain, at_block)
         validate_transaction_gas_estimation_dict(txn_dict, self.chain.get_vm(header))
@@ -197,8 +197,8 @@ class Eth(Eth1ChainRPCModule):
     async def gasPrice(self) -> str:
         return hex(int(os.environ.get('TRINITY_GAS_PRICE', to_wei(1, 'gwei'))))
 
-    @retryable(which_block_arg_name='at_block')
     @format_params(decode_hex, to_int_if_hex)
+    @retryable(which_block_arg_name='at_block')
     async def getBalance(self, address: Address, at_block: Union[str, int]) -> str:
         state = await state_at_block(self.chain, at_block)
         balance = state.get_balance(address)
@@ -240,15 +240,15 @@ class Eth(Eth1ChainRPCModule):
         block = await get_block_at_number(self.chain, at_block)
         return hex(len(block.transactions))
 
-    @retryable(which_block_arg_name='at_block')
     @format_params(decode_hex, to_int_if_hex)
+    @retryable(which_block_arg_name='at_block')
     async def getCode(self, address: Address, at_block: Union[str, int]) -> str:
         state = await state_at_block(self.chain, at_block)
         code = state.get_code(address)
         return encode_hex(code)
 
-    @retryable(which_block_arg_name='at_block')
     @format_params(decode_hex, to_int_if_hex, to_int_if_hex)
+    @retryable(which_block_arg_name='at_block')
     async def getStorageAt(self, address: Address, position: int, at_block: Union[str, int]) -> str:
         if not is_integer(position) or position < 0:
             raise TypeError("Position of storage must be a whole number, but was: %r" % position)
@@ -280,8 +280,8 @@ class Eth(Eth1ChainRPCModule):
         transaction = block.transactions[index]
         return transaction_to_dict(transaction)
 
-    @retryable(which_block_arg_name='at_block')
     @format_params(decode_hex, to_int_if_hex)
+    @retryable(which_block_arg_name='at_block')
     async def getTransactionCount(self, address: Address, at_block: Union[str, int]) -> str:
 
         state = await state_at_block(self.chain, at_block)
