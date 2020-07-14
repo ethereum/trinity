@@ -201,9 +201,6 @@ def fake_beam_syncer(chain, event_bus):
     return fake_beam_sync
 
 
-# Test that eth_getBalance works during beam sync
-
-
 @pytest.mark.parametrize(
     "at_block", ('latest', '0x0', 0)
 )
@@ -234,8 +231,6 @@ async def test_getBalance_during_beam_sync(
         assert 'error' not in response
         assert response['result'] == hex(funded_address_initial_balance)
 
-
-# Test that eth_getTransactionCount works during beam sync
 
 @pytest.mark.parametrize(
     "at_block", ('latest', '0x0', 0)
@@ -298,9 +293,6 @@ async def test_getCode_during_beam_sync(
         response = await ipc_request('eth_getCode', [simple_contract_address.hex(), at_block])
         assert 'error' not in response
         assert keccak(decode_hex(response['result'])) == contract_code_hash
-
-
-# Test that eth_getStorageAt works during Beam Sync
 
 
 @pytest.fixture
