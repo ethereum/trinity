@@ -91,7 +91,7 @@ class Eth2Config:
     @to_dict
     def to_formatted_dict(self) -> Iterable[Tuple[str, EncodedConfigTypes]]:
         for field in fields(self):
-            if field.type is bytes:
+            if field.type in (bytes, Version):
                 encoded_value = encode_hex(getattr(self, field.name))
             else:
                 encoded_value = getattr(self, field.name)
