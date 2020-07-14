@@ -809,13 +809,15 @@ async def test_header_gap_fill_detects_invalid_attempt(caplog,
     )
     async with peer_pair as (client_peer, server_peer):
 
+        client_peer_pool = MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
         client = SequentialHeaderChainGapSyncer(
             LatestTestChain(chaindb_with_gaps.db),
             chaindb_with_gaps,
-            MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
+            client_peer_pool
         )
         server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
         uncle_chaindb = AsyncChainDB(chaindb_uncle.db)
+
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
@@ -827,11 +829,12 @@ async def test_header_gap_fill_detects_invalid_attempt(caplog,
 
             # We check for 499 because 500 exists from the very beginning (the checkpoint)
             expected_block_number = 499
+            final_header = chaindb_1000.get_canonical_block_header_by_number(expected_block_number)
             async with background_asyncio_service(client):
                 try:
                     await wait_for_head(
                         chaindb_with_gaps,
-                        chaindb_1000.get_canonical_block_header_by_number(expected_block_number),
+                        final_header,
                         sync_timeout=5,
                     )
                 except asyncio.TimeoutError:
@@ -839,9 +842,18 @@ async def test_header_gap_fill_detects_invalid_attempt(caplog,
                     # Monkey patch the uncle chaindb to effectively make the attacker peer
                     # switch to the correct chain.
                     uncle_chaindb.db = chaindb_1000.db
+                    # The hack goes on: Now that our attacker peer turned friendly we may be stuck
+                    # waiting for a new skeleton peer forever. This isn't a real life scenario
+                    # because: a.) an attacker probably won't turn friendly and b.) new blocks and
+                    # peers will constantly yield new skeleton peers.
+                    # This ugly hack will tick the chain tip monitor as we simulate a joining peer.
+                    for subscriber in client_peer_pool._subscribers:
+                        subscriber.register_peer(client_peer)
+
                     await wait_for_head(
                         chaindb_with_gaps,
-                        chaindb_1000.get_canonical_block_header_by_number(expected_block_number)
+                        final_header,
+                        sync_timeout=20,
                     )
                 else:
                     raise AssertionError("Succeeded when it was expected to fail")
