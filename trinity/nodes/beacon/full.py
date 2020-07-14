@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from typing import Any, Collection, Optional, Set, Tuple, Type
+from typing import Any, Collection, Optional, Set, Tuple, Type, Iterable
 
 from async_service import background_trio_service
 from eth.db.backends.level import LevelDB
 from eth.exceptions import BlockNotFound
 from eth_keys.datatypes import PrivateKey
+from eth_utils import to_tuple
 from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.id import ID as PeerID
 from multiaddr import Multiaddr
@@ -34,7 +35,7 @@ from trinity.nodes.beacon.config import BeaconNodeConfig
 from trinity.nodes.beacon.host import Host
 from trinity.nodes.beacon.metadata import MetaData
 from trinity.nodes.beacon.metadata import SeqNumber as MetaDataSeqNumber
-from trinity.nodes.beacon.request_responder import GoodbyeReason
+from trinity.nodes.beacon.request_responder import GoodbyeReason, MAX_REQUEST_BLOCKS
 from trinity.nodes.beacon.status import Status
 
 
@@ -388,25 +389,24 @@ class BeaconNode:
         async for block in self._host.stream_block_gossip():
             self.on_block(block)
 
-    def _determine_sync_request(
+    @to_tuple
+    def _determine_sync_requests(
         self, peer_id: PeerID, status: Status
-    ) -> Optional[SyncRequest]:
+    ) -> Iterable[SyncRequest]:
         """
         If the peer has a higher finalized epoch or head slot, sync blocks from them.
         """
         head_state = self._chain.get_head_state()
-        finalized_epoch = head_state.finalized_checkpoint.epoch
-        if finalized_epoch <= status.finalized_epoch:
-            if head_state.slot >= status.head_slot:
-                return None
-            finalized_slot = compute_start_slot_at_epoch(
-                finalized_epoch, self._eth2_config.SLOTS_PER_EPOCH
+        finalized_slot = compute_start_slot_at_epoch(
+            head_state.finalized_checkpoint.epoch,
+            self._eth2_config.SLOTS_PER_EPOCH
+        )
+        while finalized_slot < status.head_slot:
+            count = min(status.head_slot - finalized_slot, MAX_REQUEST_BLOCKS)
+            yield SyncRequest(
+                peer_id, Slot(finalized_slot + 1), count
             )
-            return SyncRequest(
-                peer_id, Slot(finalized_slot + 1), status.head_slot - finalized_slot
-            )
-        else:
-            return None
+            finalized_slot += count
 
     async def _manage_peers(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
@@ -415,9 +415,8 @@ class BeaconNode:
         async with self._peer_updates:
             async for peer_id, update in self._peer_updates:
                 if isinstance(update, Status):
-                    sync_request = self._determine_sync_request(peer_id, update)
-                    if sync_request:
-                        await self._sync_notifier.send(sync_request)
+                    for request in self._determine_sync_requests(peer_id, update):
+                        await self._sync_notifier.send(request)
                 elif isinstance(update, GoodbyeReason):
                     self.logger.debug(
                         "recv'd goodbye from %s with reason: %s", peer_id, update
