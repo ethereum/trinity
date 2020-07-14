@@ -70,7 +70,7 @@ class DefaultTransactionValidator():
         elif network_id == GOERLI_NETWORK_ID:
             return cls(chain, ISTANBUL_GOERLI_BLOCK)
         else:
-            raise Exception("This code path should not be reachable")
+            raise NotImplementedError(f"Unsupported network id {network_id}")
 
     def __call__(self, transaction: SignedTransactionAPI) -> bool:
 
