@@ -7,6 +7,7 @@ from ssz.tools.dump import to_formatted_dict
 from typing_extensions import Literal
 
 from eth2.beacon.genesis import initialize_beacon_state_from_eth1
+from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
     MINIMAL_SERENITY_CONFIG,
@@ -73,7 +74,8 @@ def genesis_config_from_state_file(
 
 
 def genesis_config_with_default_state(
-    config_profile: Literal["minimal", "mainnet"], genesis_time: Timestamp = None
+    config_profile: Literal["minimal", "mainnet", "altona"],
+    genesis_time: Timestamp = None,
 ) -> Dict[str, Any]:
     eth2_config = _get_eth2_config(config_profile)
     override_lengths(eth2_config)
@@ -95,7 +97,7 @@ def format_genesis_config(config: Dict[str, Any]) -> str:
 
 
 def _create_genesis_config(
-    config_profile: Literal["minimal", "mainnet"],
+    config_profile: Literal["minimal", "mainnet", "altona"],
     eth2_config: Eth2Config,
     genesis_state: BeaconState,
     key_pairs: Iterable[Dict[str, str]],
@@ -110,4 +112,8 @@ def _create_genesis_config(
 
 
 def _get_eth2_config(profile: str) -> Eth2Config:
-    return {"minimal": MINIMAL_SERENITY_CONFIG, "mainnet": SERENITY_CONFIG}[profile]
+    return {
+        "minimal": MINIMAL_SERENITY_CONFIG,
+        "mainnet": SERENITY_CONFIG,
+        "altona": ALTONA_CONFIG,
+    }[profile]

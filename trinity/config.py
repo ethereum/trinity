@@ -57,9 +57,6 @@ from multiaddr import (
     Multiaddr,
 )
 
-from eth2.beacon.chains.testnet import (
-    SkeletonLakeChain,
-)
 from eth2.beacon.tools.builder.initializer import load_genesis_key_map
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
@@ -110,6 +107,10 @@ from trinity.constants import (
 from trinity.network_configurations import (
     PRECONFIGURED_NETWORKS
 )
+
+from eth2.beacon.chains.testnet import SkeletonLakeChain
+from eth2.beacon.chains.testnet.altona import BeaconChain as AltonaChain
+from eth2.beacon.chains.base import BeaconChain
 
 
 if TYPE_CHECKING:
@@ -693,10 +694,12 @@ class BeaconChainConfig:
     def __init__(self,
                  genesis_state: BeaconState,
                  genesis_config: Eth2Config,
-                 genesis_validator_key_map: Dict[BLSPubkey, int]) -> None:
+                 genesis_validator_key_map: Dict[BLSPubkey, int],
+                 beacon_chain_class: Type['BaseBeaconChain'] = SkeletonLakeChain) -> None:
         self._genesis_state = genesis_state
         self._eth2_config = genesis_config
         self._key_map = genesis_validator_key_map
+        self._beacon_chain_class = beacon_chain_class
 
     @property
     def genesis_config(self) -> Eth2Config:
@@ -713,20 +716,26 @@ class BeaconChainConfig:
 
     @property
     def beacon_chain_class(self) -> Type['BaseBeaconChain']:
-        if self._beacon_chain_class is None:
-            # TODO: we should be able to customize configs for tests/ instead of using the configs
-            # from the specific chain
-            self._beacon_chain_class = SkeletonLakeChain
         return self._beacon_chain_class
 
     @classmethod
-    def from_genesis_config(cls) -> 'BeaconChainConfig':
+    def from_genesis_config(cls, config_profile: str) -> 'BeaconChainConfig':
         """
         Construct an instance of ``cls`` reading the genesis configuration
         data under the local data directory.
         """
+        if config_profile == "mainnet":
+            beacon_chain_class = BeaconChain
+        elif config_profile == "altona":
+            # TODO: (g-r-a-n-t) We have two different `BaseBeaconChain` classes, which are
+            # used by different chains. This causes some typing issues, which we'll just ignore
+            # until the older one is removed and all chains use the same base class.
+            beacon_chain_class = AltonaChain  # type: ignore
+        else:
+            beacon_chain_class = SkeletonLakeChain
+
         try:
-            with open(_get_eth2_genesis_config_file_path("minimal")) as config_file:
+            with open(_get_eth2_genesis_config_file_path(config_profile)) as config_file:
                 genesis_config = json.load(config_file)
         except FileNotFoundError as e:
             raise Exception("unable to load genesis config: %s", e)
@@ -739,7 +748,12 @@ class BeaconChainConfig:
         genesis_validator_key_map = load_genesis_key_map(
             genesis_config["genesis_validator_key_pairs"]
         )
-        return cls(genesis_state, eth2_config, genesis_validator_key_map)
+        return cls(
+            genesis_state,
+            eth2_config,
+            genesis_validator_key_map,
+            beacon_chain_class=beacon_chain_class
+        )
 
     @classmethod
     def get_genesis_config_file_path(cls, profile: str) -> Path:
@@ -799,11 +813,11 @@ class BeaconAppConfig(BaseEth2AppConfig):
         path = self.trinity_config.data_dir / DATABASE_DIR_NAME
         return self.trinity_config.with_app_suffix(path) / f"full_{self.orchestration_profile}"
 
-    def get_chain_config(self) -> BeaconChainConfig:
+    def get_chain_config(self, config_profile: str = "minimal") -> BeaconChainConfig:
         """
         Return the :class:`~trinity.config.BeaconChainConfig` that is derived from the genesis file
         """
-        return BeaconChainConfig.from_genesis_config()
+        return BeaconChainConfig.from_genesis_config(config_profile)
 
 
 class ValidatorClientAppConfig(BaseEth2AppConfig):

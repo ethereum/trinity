@@ -30,6 +30,7 @@ class BeaconNodeComponent(TrioComponent):
         trinity_config = self._boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
         config = BeaconNodeConfig.from_platform_config(
+            boot_info.args.config_profile,
             trinity_config,
             beacon_app_config,
             boot_info.args.validator_api_port,
@@ -74,6 +75,13 @@ class BeaconNodeComponent(TrioComponent):
             "--orchestration-profile",
             help="[temporary developer option] manage several beacon nodes on one machine",
             default="a",
+        )
+
+        arg_parser.add_argument(
+            "--config-profile",
+            help="the profile used to generate the genesis config",
+            choices=("minimal", "mainnet", "altona"),
+            default="minimal",
         )
 
     @property

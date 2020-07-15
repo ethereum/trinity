@@ -189,7 +189,10 @@ class BeaconNode:
             config.eth2_config,
             config.chain_config,
             config.database_dir,
-            config.chain_class,
+            # TODO: (g-r-a-n-t) We have two different `BaseBeaconChain` classes, which are
+            # used by different chains. This causes some typing issues, which we'll just ignore
+            # until the older one is removed and all chains use the same base class.
+            config.chain_class,  # type: ignore
             clock,
             config.validator_api_port,
             config.client_identifier,

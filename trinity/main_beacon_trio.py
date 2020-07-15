@@ -40,7 +40,7 @@ def _initialize_beacon_filesystem_and_db(boot_info: BootInfo) -> None:
     ensure_beacon_dirs(app_config)
 
     base_db = LevelDB(db_path=app_config.database_dir)
-    chain_config = app_config.get_chain_config()
+    chain_config = app_config.get_chain_config(boot_info.args.config_profile)
     chaindb = BeaconChainDB(base_db)
 
     if not is_beacon_database_initialized(chaindb):
