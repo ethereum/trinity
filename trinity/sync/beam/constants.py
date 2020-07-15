@@ -27,7 +27,7 @@ MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS = MAX_CONCURRENT_SPECULATIVE_EXECUTIONS /
 # If a peer does something not ideal, give it a little time to breath,
 # and maybe to try out another peeer. Then reinsert it relatively soon.
 # Measured in seconds.
-NON_IDEAL_RESPONSE_PENALTY = 0.5
+NON_IDEAL_RESPONSE_PENALTY = 2.0
 
 # If Beam Sync wants to use a queen, but is stuck waiting for it to show up,
 #   then log a warning if it's been too long. If it's been more than this

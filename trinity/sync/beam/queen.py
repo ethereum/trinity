@@ -38,7 +38,7 @@ class QueenTrackerAPI(ABC):
         ...
 
     @abstractmethod
-    def penalize_queen(self, peer: ETHPeer) -> None:
+    def penalize_queen(self, peer: ETHPeer, delay: float = NON_IDEAL_RESPONSE_PENALTY) -> None:
         ...
 
 
@@ -91,7 +91,7 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
 
         queen_starve_time = t.elapsed
         if queen_starve_time > WARN_AFTER_QUEEN_STARVED:
-            self.logger.info(
+            self.logger.debug(
                 "Blocked for %.2fs waiting for queen=%s",
                 queen_starve_time,
                 self._queen_peer,
