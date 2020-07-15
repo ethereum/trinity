@@ -210,7 +210,13 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         raise asyncio.CancelledError()
 
     def insert_peer(self, peer: ETHPeer, delay: float = 0) -> None:
-        if delay > 0:
+        if not peer.is_alive:
+            # Peer exited, dropping it...
+            return
+        elif self._should_be_queen(peer):
+            self.logger.debug("Fast-tracking peasant to promote to queen: %s", peer)
+            self._insert_peer(peer)
+        elif delay > 0:
             loop = asyncio.get_event_loop()
             loop.call_later(delay, functools.partial(self._insert_peer, peer))
         else:
