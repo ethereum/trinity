@@ -27,6 +27,8 @@ def _decoder(
             yield field.name, Second(cast(int, data[field.name]))
         elif field.type is bytes:
             yield field.name, decode_hex(cast(str, data[field.name]))
+        elif field.type is Version:
+            yield field.name, decode_hex(cast(str, data[field.name]))
         else:
             yield field.name, int(data[field.name])
 
