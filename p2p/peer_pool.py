@@ -280,7 +280,12 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         await asyncio.wait_for(
             peer.connection.get_manager().wait_started(), timeout=PEER_READY_TIMEOUT)
 
-        await peer.connection.run_peer(peer)
+        try:
+            await peer.connection.run_peer(peer)
+        except asyncio.TimeoutError as err:
+            self.logger.debug('Timout waiting for peer to start: %s', err)
+            return
+
         if peer.get_manager().is_running:
             self._add_peer(peer, ())
         else:
