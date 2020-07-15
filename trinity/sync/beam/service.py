@@ -100,7 +100,14 @@ class BeamSyncService(Service):
                         logger = self.logger.info
                     else:
                         logger = self.logger.debug
-                    logger("Beam Sync is lagging behind the latest known header by %d blocks", lag)
+                    logger(
+                        (
+                            "Beam Sync is lagging behind the latest known header by %d blocks,"
+                            " will pivot at %d"
+                        ),
+                        lag,
+                        ESTIMATED_BEAMABLE_BLOCKS,
+                    )
 
                     # Keep monitoring
                     continue

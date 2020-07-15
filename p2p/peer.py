@@ -295,9 +295,10 @@ class BasePeer(Service):
         finally:
             for callback in self._finished_callbacks:
                 callback(self)
-            if (self.p2p_api.local_disconnect_reason is None and
-                    self.p2p_api.remote_disconnect_reason is None):
-                self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
+            if hasattr(self, 'p2p_api'):
+                if (self.p2p_api.local_disconnect_reason is None and
+                        self.p2p_api.remote_disconnect_reason is None):
+                    self._send_disconnect(DisconnectReason.CLIENT_QUITTING)
             # We run as a child service of the connection, but we don't want to leave a connection
             # open if somebody cancels just us, so this ensures the connection gets closed as well.
             if not self.connection.get_manager().is_cancelled:
