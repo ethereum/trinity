@@ -13,7 +13,7 @@ import pytest
 import trio
 
 from eth2._utils.bls import Eth2BLS, bls
-from eth2.beacon.chains.testnet import SkeletonLakeChain
+from eth2.beacon.chains.testnet.altona import BeaconChain
 from eth2.beacon.constants import FAR_FUTURE_EPOCH
 from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
     MINIMAL_SERENITY_CONFIG,
@@ -125,7 +125,7 @@ def database_dir(tmp_path):
 
 @pytest.fixture
 def chain_class():
-    return SkeletonLakeChain
+    return BeaconChain
 
 
 @pytest.fixture

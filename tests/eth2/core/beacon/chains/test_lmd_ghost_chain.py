@@ -36,7 +36,7 @@ def _build_chain_of_blocks_with_states(
     blocks = ()
     states = ()
     for slot in range(parent_block.slot + 1, parent_block.slot + 1 + slots):
-        sm = chain._get_state_machine(state.slot)
+        sm = chain.get_state_machine(state.slot)
         pre_state, _ = sm.apply_state_transition(state, future_slot=slot)
         proposer_index = get_beacon_proposer_index(pre_state, config)
         public_key = state.validators[proposer_index].pubkey
@@ -74,7 +74,7 @@ def _build_chain_of_blocks_with_states(
 @to_tuple
 def _mk_attestations_from(blocks, states, chain, config, keymap):
     for block, state in zip(blocks, states):
-        sm = chain._get_state_machine(block.slot)
+        sm = chain.get_state_machine(block.slot)
         yield from create_mock_signed_attestations_at_slot(
             state, config, sm, block.slot, block.message.hash_tree_root, keymap
         )

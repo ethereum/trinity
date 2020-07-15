@@ -217,7 +217,9 @@ async def _get_block_proposal_from_beacon_node(
     try:
         return from_formatted_dict(block_proposal_response, BeaconBlock)
     except Exception as e:
-        logger.exception(e)
+        logger.exception(
+            "%s %s", e, f"while processing response {block_proposal_response}"
+        )
         return None
 
 

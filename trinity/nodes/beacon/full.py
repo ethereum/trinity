@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from typing import Any, Collection, Optional, Set, Tuple, Type, Iterable
+from typing import Any, Collection, Iterable, Optional, Set, Tuple, Type
 
 from async_service import background_trio_service
 from eth.db.backends.level import LevelDB
@@ -17,25 +17,20 @@ from trio_typing import TaskStatus
 from eth2.api.http.validator import BlockBroadcasterAPI, Context
 from eth2.api.http.validator import ServerHandlers as ValidatorAPIHandlers
 from eth2.api.http.validator import SyncerAPI, SyncStatus
-from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.chains.abc import BaseBeaconChain
 from eth2.beacon.chains.exceptions import ParentNotFoundError, SlashableBlockError
-from eth2.beacon.db.chain import BeaconChainDB
 from eth2.beacon.helpers import compute_fork_digest, compute_start_slot_at_epoch
-from eth2.beacon.types.blocks import SignedBeaconBlock
+from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.typing import Epoch, ForkDigest, Root, Slot
 from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
 from trinity._utils.trio_utils import JSONHTTPServer
 from trinity.config import BeaconChainConfig
-from trinity.initialization import (
-    initialize_beacon_database,
-    is_beacon_database_initialized,
-)
 from trinity.nodes.beacon.config import BeaconNodeConfig
 from trinity.nodes.beacon.host import Host
 from trinity.nodes.beacon.metadata import MetaData
 from trinity.nodes.beacon.metadata import SeqNumber as MetaDataSeqNumber
-from trinity.nodes.beacon.request_responder import GoodbyeReason, MAX_REQUEST_BLOCKS
+from trinity.nodes.beacon.request_responder import MAX_REQUEST_BLOCKS, GoodbyeReason
 from trinity.nodes.beacon.status import Status
 
 
@@ -122,11 +117,9 @@ class BeaconNode:
         self._block_pool: Set[SignedBeaconBlock] = set()
         self._slashable_block_pool: Set[SignedBeaconBlock] = set()
 
-        self._base_db = LevelDB(db_path=database_dir)
-        self._chain_db = BeaconChainDB(self._base_db)
-        if not is_beacon_database_initialized(self._chain_db):
-            initialize_beacon_database(chain_config, self._chain_db, self._base_db)
-        self._chain = chain_class(self._chain_db)
+        base_db = LevelDB(db_path=database_dir)
+        genesis_state = chain_config._genesis_state
+        self._chain = chain_class.from_genesis(base_db, genesis_state)
 
         # FIXME: can we provide `p2p_maddr` as a default listening interface for `_mk_host`?
         p2p_maddr = _derive_port(p2p_maddr, orchestration_profile)
@@ -212,26 +205,28 @@ class BeaconNode:
 
     def _get_fork_digest(self) -> ForkDigest:
         # TODO: handle updates of fork digest
-        state = self._chain.get_head_state()
+        state = self._chain.get_canonical_head_state()
         return compute_fork_digest(
             state.fork.current_version, state.genesis_validators_root
         )
 
     def _get_block_by_slot(self, slot: Slot) -> Optional[SignedBeaconBlock]:
-        try:
-            return self._chain.get_canonical_block_by_slot(slot)
-        except BlockNotFound:
-            return None
+        return self._chain.get_block_by_slot(slot)
 
     def _get_block_by_root(self, root: Root) -> Optional[SignedBeaconBlock]:
         try:
-            return self._chain.get_block_by_root(root)
+            block = self._chain.db.get_block_by_root(root, BeaconBlock)
+            signature = self._chain.db.get_block_signature_by_root(block.hash_tree_root)
+            return SignedBeaconBlock.create(message=block, signature=signature)
         except BlockNotFound:
             return None
 
     def _get_finalized_root_by_epoch(self, epoch: Epoch) -> Optional[Root]:
+        """
+        Return the (finalized) checkpoint root in the given ``epoch``.
+        """
         slots_per_epoch = self._eth2_config.SLOTS_PER_EPOCH
-        head_state = self._chain.get_head_state()
+        head_state = self._chain.get_canonical_head_state()
         finalized_checkpoint = head_state.finalized_checkpoint
 
         if epoch > finalized_checkpoint.epoch:
@@ -245,16 +240,17 @@ class BeaconNode:
         # in our canonical chain as implied by having a more recent
         # finalized head.
         slot = compute_start_slot_at_epoch(epoch, slots_per_epoch)
-        return self._chain.get_canonical_block_root(slot)
+        block = self._get_block_by_slot(slot)
+        return block.message.hash_tree_root
 
     def _get_status(self) -> Status:
-        head_state = self._chain.get_head_state()
+        head_state = self._chain.get_canonical_head_state()
         head = self._chain.get_canonical_head()
         return Status.create(
             fork_digest=self._get_fork_digest(),
             finalized_root=head_state.finalized_checkpoint.root,
             finalized_epoch=head_state.finalized_checkpoint.epoch,
-            head_root=head.message.hash_tree_root,
+            head_root=head.hash_tree_root,
             head_slot=head.slot,
         )
 
@@ -396,16 +392,13 @@ class BeaconNode:
         """
         If the peer has a higher finalized epoch or head slot, sync blocks from them.
         """
-        head_state = self._chain.get_head_state()
+        head_state = self._chain.get_canonical_head_state()
         finalized_slot = compute_start_slot_at_epoch(
-            head_state.finalized_checkpoint.epoch,
-            self._eth2_config.SLOTS_PER_EPOCH
+            head_state.finalized_checkpoint.epoch, self._eth2_config.SLOTS_PER_EPOCH
         )
         while finalized_slot < status.head_slot:
             count = min(status.head_slot - finalized_slot, MAX_REQUEST_BLOCKS)
-            yield SyncRequest(
-                peer_id, Slot(finalized_slot + 1), count
-            )
+            yield SyncRequest(peer_id, Slot(finalized_slot + 1), count)
             finalized_slot += count
 
     async def _manage_peers(

@@ -7,13 +7,12 @@ from enum import Enum, unique
 import logging
 from typing import Collection, Iterable, Optional, Set
 
-from eth.exceptions import BlockNotFound
 from eth_typing import BLSPubkey, BLSSignature
 from eth_utils import decode_hex, encode_hex, to_tuple
 from ssz.tools.dump import to_formatted_dict
 from ssz.tools.parse import from_formatted_dict
 
-from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.chains.abc import BaseBeaconChain, advance_state_to_slot
 from eth2.beacon.constants import GENESIS_EPOCH
 from eth2.beacon.exceptions import NoCommitteeAssignment
 from eth2.beacon.helpers import (
@@ -118,7 +117,7 @@ class Context:
             return ()
 
         current_tick = self.clock.compute_current_tick()
-        state = self.chain.advance_state_to_slot(current_tick.slot)
+        state = advance_state_to_slot(self.chain, current_tick.slot)
         for public_key in public_keys:
             validator_index = state.get_validator_index_for_public_key(public_key)
             try:
@@ -156,10 +155,9 @@ class Context:
         NOTE: The expected number of skipped slots during normal protocol operation is very low.
         """
         for _slot in range(target_slot - 1, target_slot - 1 - MAX_SEARCH_SLOTS, -1):
-            try:
-                return self.chain.get_canonical_block_by_slot(Slot(_slot))
-            except BlockNotFound:
-                continue
+            block = self.chain.get_block_by_slot(Slot(_slot))
+            if block:
+                return block
         return None
 
     def get_block_proposal(
@@ -169,9 +167,8 @@ class Context:
             raise InvalidRequest()
 
         parent_slot = Slot(max(slot - 1, 0))
-        try:
-            parent = self.chain.get_canonical_block_by_slot(parent_slot)
-        except BlockNotFound:
+        parent = self.chain.get_block_by_slot(parent_slot)
+        if not parent:
             # as an optimization, try checking the head
             parent = self.chain.get_canonical_head()
             if parent.slot > parent_slot:
@@ -184,14 +181,16 @@ class Context:
                 parent = self._search_linearly_for_parent(parent_slot)
                 if not parent:
                     raise ServerError()
+                parent_block_root = parent.message.hash_tree_root
             else:
                 # the head is a satisfactory parent, continue!
-                pass
+                parent_block_root = parent.hash_tree_root
+        else:
+            parent_block_root = parent.message.hash_tree_root
 
-        parent_block_root = parent.message.hash_tree_root
-        parent_state = self.chain.get_state_by_root(parent.state_root)
-        parent_state = self.chain.advance_state_to_slot(parent_slot, parent_state)
-        state_machine = self.chain.get_state_machine(at_slot=slot)
+        parent_state = self.chain.db.get_state_by_root(parent.state_root, BeaconState)
+        parent_state = advance_state_to_slot(self.chain, parent_slot, parent_state)
+        state_machine = self.chain.get_state_machine(slot)
 
         # TODO: query for latest eth1 data...
         eth1_data = parent_state.eth1_data
@@ -218,14 +217,15 @@ class Context:
         self, public_key: BLSPubkey, slot: Slot, committee_index: CommitteeIndex
     ) -> Attestation:
         current_tick = self.clock.compute_current_tick()
-        state = self.chain.advance_state_to_slot(current_tick.slot)
-        try:
-            block = self.chain.get_canonical_block_by_slot(slot)
-        except BlockNotFound:
+        state = advance_state_to_slot(self.chain, current_tick.slot)
+        block = self.chain.get_block_by_slot(slot)
+        if not block:
             # try to find earlier block, assuming skipped slots
             block = self.chain.get_canonical_head()
             # sanity check the assumption in this leg of the conditional
             assert block.slot < slot
+        else:
+            block = block.message
 
         target_checkpoint = _get_target_checkpoint(
             state, block.hash_tree_root, self.eth2_config

@@ -44,6 +44,9 @@ class BaseForkChoice(ABC):
 
     @abstractmethod
     def on_block(self, block: BaseBeaconBlock) -> None:
+        """
+        Assumes the parent of ``block`` has already been supplied to an instance of this class.
+        """
         ...
 
     @abstractmethod

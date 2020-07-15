@@ -6,6 +6,7 @@ import trio
 
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
+from eth2.beacon.types.states import BeaconState
 
 
 @pytest.mark.trio
@@ -39,11 +40,12 @@ def _mk_minimum_viable_signed_beacon_blocks(
 
 def _build_branch_across_slots(number_of_slots, chain, config):
     head = chain.get_canonical_head()
-    state = chain.get_state_by_root(head.message.state_root)
+    state = chain.db.get_state_by_root(head.state_root, BeaconState)
 
+    head = SignedBeaconBlock.create(message=head)
     return _mk_minimum_viable_signed_beacon_blocks(
-        range(head.message.slot + 1, head.message.slot + 1 + number_of_slots),
-        lambda slot: chain.get_state_machine(at_slot=slot),
+        range(head.slot + 1, head.slot + 1 + number_of_slots),
+        lambda slot: chain.get_state_machine(slot),
         state,
         head,
         config,
@@ -128,8 +130,9 @@ async def test_beacon_node_yields_slashable_block(
 
     assert not beacon_node._slashable_block_pool
 
+    # NOTE: ``b"\xdd"`` chosen as to not change the head via tie-breaking the fork choice.
     slashable_block = blocks[number_of_slots // 2].transform(
-        ("message", "state_root"), 32 * b"\xaa"
+        ("message", "state_root"), 32 * b"\xdd"
     )
     beacon_node.on_block(slashable_block)
 

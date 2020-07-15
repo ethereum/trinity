@@ -1,8 +1,11 @@
+from typing import cast
+
 from cancel_token import CancelToken
 from eth_typing import BLSSignature
 from lahja import EndpointAPI
 
 from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
 from eth2.beacon.tools.builder.proposer import create_block_proposal
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.typing import Slot
@@ -70,7 +73,7 @@ class ValidatorHandler(BaseValidator):
             eth1_vote,
             ready_attestations,
             state,
-            state_machine,
+            cast(BaseBeaconStateMachine, state_machine),
         )
 
     #

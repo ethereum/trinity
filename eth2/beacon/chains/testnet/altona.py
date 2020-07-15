@@ -126,9 +126,13 @@ class BeaconChain(BaseBeaconChain):
         fork_choice = fork_choice_class.from_genesis(genesis_state, config, block_sink)
         return cls(chain_db, fork_choice)
 
+    @property
+    def db(self) -> BaseBeaconChainDB:
+        return self._chain_db
+
     def _get_fork_choice(self, slot: Slot) -> BaseForkChoice:
         # NOTE: ignoring slot polymorphism for now...
-        expected_class = self._get_state_machine(slot).fork_choice_class
+        expected_class = self.get_state_machine(slot).fork_choice_class
         if expected_class == self._fork_choice.__class__:
             return self._fork_choice
         else:
@@ -136,7 +140,7 @@ class BeaconChain(BaseBeaconChain):
                 "a fork choice different than the one implemented was requested by slot"
             )
 
-    def _get_state_machine(self, slot: Slot) -> BaseBeaconStateMachine:
+    def get_state_machine(self, slot: Slot) -> BaseBeaconStateMachine:
         """
         Return the ``StateMachine`` instance for the given slot number.
         """
@@ -150,11 +154,19 @@ class BeaconChain(BaseBeaconChain):
     def get_canonical_head(self) -> BeaconBlock:
         return self._current_head
 
+    def get_canonical_head_state(self) -> BeaconState:
+        head = self.get_canonical_head()
+        return self._chain_db.get_state_by_root(head.state_root, BeaconState)
+
     def on_tick(self, tick: Tick) -> None:
         if tick.is_first_in_slot():
             fork_choice = self._get_fork_choice(tick.slot)
             head = fork_choice.find_head()
             self._update_head_if_new(head)
+
+    def get_block_by_slot(self, slot: Slot) -> Optional[BaseSignedBeaconBlock]:
+        state_machine = self.get_state_machine(slot)
+        return self._get_block_by_slot(slot, state_machine.signed_block_class)
 
     def _get_block_by_slot(
         self, slot: Slot, block_class: Type[SignedBeaconBlock]
@@ -224,7 +236,7 @@ class BeaconChain(BaseBeaconChain):
                     f"attempt to import {block} but canonical chain is not as far ahead",
                 )
 
-        state_machine = self._get_state_machine(block.slot)
+        state_machine = self.get_state_machine(block.slot)
         state_class = state_machine.state_class
         pre_state = self._chain_db.get_state_by_root(
             parent_block.state_root, state_class
@@ -302,7 +314,7 @@ class BeaconChain(BaseBeaconChain):
             # NOTE: re: bounds here; worst case, we return the genesis state.
             for slot in range(block.slot, GENESIS_SLOT - 1, -1):
                 try:
-                    state_machine = self._get_state_machine(Slot(slot))
+                    state_machine = self.get_state_machine(Slot(slot))
                     state = self._chain_db.get_state_by_root(
                         block.state_root, state_machine.state_class
                     )
@@ -338,7 +350,7 @@ class BeaconChain(BaseBeaconChain):
         state, blocks = self._find_present_ancestor_state(target_block.parent_root)
 
         for block in reversed(blocks):
-            state_machine = self._get_state_machine(block.slot)
+            state_machine = self.get_state_machine(block.slot)
             state, _ = state_machine.apply_state_transition(state, block)
             self._chain_db.persist_state(state)
 
@@ -356,7 +368,7 @@ class BeaconChain(BaseBeaconChain):
             )
         except StateNotFound:
             target_state = self._compute_missing_state(target_block)
-        sm = self._get_state_machine(target_block.slot)
+        sm = self.get_state_machine(target_block.slot)
         return get_attesting_indices(
             target_state, attestation.data, attestation.aggregation_bits, sm.config
         )
