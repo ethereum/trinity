@@ -293,7 +293,12 @@ class BasePeer(Service):
             self.ready.set()
 
             await self.manager.wait_finished()
+        except PeerConnectionLost:
+            pass
         finally:
+            # Ensure we're cancelled, as that may not be the case if this block executes before we
+            # reach the `await self.manager.wait_finished()` statement above.
+            self.manager.cancel()
             for callback in self._finished_callbacks:
                 callback(self)
             # We may have crashed before setting self._p2p_api; in that case don't attempt to send
