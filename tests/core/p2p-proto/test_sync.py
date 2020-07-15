@@ -37,13 +37,14 @@ from trie.iter import (
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
+from trinity.protocol.eth.payloads import NewBlockHash
 from trinity.protocol.eth.peer import ETHPeerPoolEventServer
+from trinity.protocol.eth.sync import ETHHeaderChainSyncer
+from trinity.protocol.les.servers import LightRequestServer
 from trinity.sync.beam.importer import (
     make_pausing_beam_chain,
     BlockImportServer,
 )
-from trinity.protocol.eth.sync import ETHHeaderChainSyncer
-from trinity.protocol.les.servers import LightRequestServer
 from trinity.sync.common.checkpoint import Checkpoint
 from trinity.sync.common.chain import (
     SimpleBlockImporter,
@@ -577,14 +578,14 @@ async def test_header_syncer(request,
         bob_peer_context=server_context,
         event_bus=event_bus,
     )
-    async with peer_pair as (client_peer, server_peer):
+    async with peer_pair as (client_to_server, server_to_client):
 
         client = HeaderChainSyncer(
             LatestTestChain(chaindb_fresh.db),
             chaindb_fresh,
-            MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus)
+            MockPeerPoolWithConnectedPeers([client_to_server], event_bus=event_bus)
         )
-        server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+        server_peer_pool = MockPeerPoolWithConnectedPeers([server_to_client], event_bus=event_bus)
 
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
@@ -592,8 +593,8 @@ async def test_header_syncer(request,
             event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
         )):
 
-            server_peer.logger.info("%s is serving 1000 blocks", server_peer)
-            client_peer.logger.info("%s is syncing up 1000", client_peer)
+            server_to_client.logger.info("%s is serving 1000 blocks", server_to_client)
+            client_to_server.logger.info("%s is syncing up 1000", client_to_server)
 
             # Artificially split header sync into two parts, to verify that
             #   cycling to the next sync works properly. Split by erasing the canonical
@@ -624,10 +625,17 @@ async def test_header_syncer(request,
                 for dbkey, canonical_hash in erased_canonicals:
                     chaindb_1000.db[dbkey] = canonical_hash
 
-                # Do we have to do anything here to have the server notify the client
-                #   that it's capable of serving more headers now? ... Apparently not.
+                complete_chain_tip = chaindb_1000.get_canonical_head()
 
-                await wait_for_head(chaindb_fresh, chaindb_1000.get_canonical_head())
+                # Not entirely certain that sending new block hashes is necessary, but...
+                #   it shouldn't hurt anything. Trying to fix this flaky test:
+                # https://app.circleci.com/pipelines/github/ethereum/trinity/6855/workflows/131f9b03-8c99-4419-8e88-d2ef216e3dbb/jobs/259263/steps  # noqa: E501
+
+                server_to_client.eth_api.send_new_block_hashes(
+                    NewBlockHash(complete_chain_tip.hash, complete_chain_tip.block_number),
+                )
+
+                await wait_for_head(chaindb_fresh, complete_chain_tip)
 
 
 @pytest.mark.asyncio
