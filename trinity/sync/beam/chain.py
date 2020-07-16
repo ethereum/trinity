@@ -76,6 +76,7 @@ from trinity.sync.full.chain import (
     FastChainBodySyncer,
     RegularChainBodySyncer,
 )
+from trinity.sync.header.chain import SequentialHeaderChainGapSyncer
 from trinity.sync.beam.state import (
     BeamDownloader,
 )
@@ -84,7 +85,6 @@ from trinity._utils.logging import get_logger
 from trinity._utils.headers import body_for_header_exists
 
 from .backfill import BeamStateBackfill
-from ..header.chain import SequentialHeaderChainGapSyncer
 
 
 STATS_DISPLAY_PERIOD = 10
