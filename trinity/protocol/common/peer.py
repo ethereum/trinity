@@ -6,7 +6,6 @@ import random
 from typing import (
     Container,
     Dict,
-    List,
     Tuple,
     Type,
 )
@@ -92,6 +91,7 @@ class BaseChainPeer(BasePeer):
     def _pre_run(self) -> None:
         super()._pre_run()
 
+        # These may raise PeerConnectionLost but that's ok as Peer.run() will handle that.
         self.chain_api = choose_eth_or_les_api(self.connection)
         self.head_info = self.connection.get_logic(HeadInfo.name, HeadInfo)
         self.chain_info = self.connection.get_logic(ChainInfo.name, ChainInfo)
@@ -262,13 +262,6 @@ class BaseChainPeerPool(BasePeerPool):
         peers_by_td = groupby(td_getter, peers)
         max_td = max(peers_by_td.keys())
         return random.choice(peers_by_td[max_td])
-
-    def get_peers(self, min_td: int) -> List[BaseChainPeer]:
-        # TODO: Consider turning this into a method that returns an AsyncIterator, to make it
-        # harder for callsites to get a list of peers while making blocking calls, as those peers
-        # might disconnect in the meantime.
-        peers = tuple(self.connected_nodes.values())
-        return [peer for peer in peers if peer.head_info.head_td >= min_td]
 
     def setup_connection_tracker(self) -> BaseConnectionTracker:
         if self.has_event_bus:
