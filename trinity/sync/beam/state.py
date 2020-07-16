@@ -74,6 +74,7 @@ class BeamDownloader(Service, PeerSubscriber):
     _total_timeouts = 0
     _predictive_only_requests = 0
     _total_requests = 0
+    _time_on_urgent = 0.0
     _timer = Timer(auto_start=False)
     _report_interval = 10  # Number of seconds between progress reports.
     _reply_timeout = 10  # seconds
@@ -375,6 +376,9 @@ class BeamDownloader(Service, PeerSubscriber):
             urgent_node_hashes: Tuple[Hash32, ...],
             predictive_node_hashes: Tuple[Hash32, ...],
             predictive_batch_id: int) -> None:
+        if urgent_batch_id is not None:
+            urgent_timer = Timer()
+
         nodes = await self._request_nodes(peer, node_hashes)
 
         urgent_nodes = {
@@ -411,6 +415,19 @@ class BeamDownloader(Service, PeerSubscriber):
         if len(nodes):
             for new_data in self._new_data_events:
                 new_data.set()
+
+        if urgent_batch_id is not None:
+            time_on_urgent = urgent_timer.elapsed
+            self.logger.debug(
+                "beam-rtt: got %d/%d urgent nodes in %.3fs with %d/%d predictive from %s",
+                len(urgent_nodes),
+                len(urgent_node_hashes),
+                time_on_urgent,
+                len(predictive_nodes),
+                len(predictive_node_hashes),
+                peer.remote,
+            )
+            self._time_on_urgent += time_on_urgent
 
     def _is_node_present(self, node_hash: Hash32) -> bool:
         """
@@ -505,8 +522,15 @@ class BeamDownloader(Service, PeerSubscriber):
 
     async def _periodically_report_progress(self) -> None:
         while self.manager.is_running:
+            self._time_on_urgent = 0
+            interval_timer = Timer()
+            await asyncio.sleep(self._report_interval)
+
             msg = "all=%d  " % self._total_processed_nodes
             msg += "urgent=%d  " % self._urgent_processed_nodes
+            # The percent of time spent in the last interval waiting on an urgent node
+            #   from the queen peer:
+            msg += "crit=%.0f%%  " % (100 * self._time_on_urgent / interval_timer.elapsed)
             msg += "pred=%d  " % self._predictive_processed_nodes
             msg += "all/sec=%d  " % (self._total_processed_nodes / self._timer.elapsed)
             msg += "urgent/sec=%d  " % (self._urgent_processed_nodes / self._timer.elapsed)
@@ -517,7 +541,7 @@ class BeamDownloader(Service, PeerSubscriber):
             msg += "  u_prog=%d" % self._node_tasks.num_in_progress()
             msg += "  p_pend=%d" % self._maybe_useful_nodes.num_pending()
             msg += "  p_prog=%d" % self._maybe_useful_nodes.num_in_progress()
-            self.logger.debug("Beam-Sync: %s", msg)
+            self.logger.debug("beam-sync: %s", msg)
 
             # log peer counts
             show_top_n_peers = 3
@@ -535,4 +559,3 @@ class BeamDownloader(Service, PeerSubscriber):
             )
             self._num_urgent_requests_by_peer.clear()
             self._num_predictive_requests_by_peer.clear()
-            await asyncio.sleep(self._report_interval)
