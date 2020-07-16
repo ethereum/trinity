@@ -9,9 +9,6 @@ class ChainInfoAPI(ABC):
 
 
 class HeadInfoAPI(ABC):
-    """
-    NOTE: Accessing any of the attributes here can raise PeerConnectionLost!
-    """
 
     @property
     @abstractmethod

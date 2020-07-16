@@ -163,6 +163,11 @@ async def test_eth_api_properties(alice, ETHAPI_class, ETHHandshakeReceipt_class
     assert eth_api.head_info.head_td == eth_receipt.total_difficulty
     assert not hasattr(eth_api, 'head_number')
 
+    # The head_info attributes are accessible even after the connection has been closed.
+    await alice.connection.manager.stop()
+    assert alice.eth_api.head_info.head_hash == eth_receipt.head_hash
+    assert alice.eth_api.head_info.head_td == eth_receipt.total_difficulty
+
 
 @pytest.mark.asyncio
 async def test_eth_api_head_info_updates_with_newblock(alice, bob, bob_chain, ETHAPI_class):
