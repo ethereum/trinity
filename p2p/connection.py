@@ -205,7 +205,7 @@ class Connection(ConnectionAPI, Service):
         # `start_protocol_streams` has been called and the multiplexer is
         # active.
         try:
-            await asyncio.wait_for(asyncio.gather(self._handlers_ready.wait()), timeout=10)
+            await asyncio.wait_for(self._handlers_ready.wait(), timeout=10)
         except asyncio.TimeoutError as err:
             self.logger.info('Timedout waiting for handler ready signal')
             raise asyncio.TimeoutError(
