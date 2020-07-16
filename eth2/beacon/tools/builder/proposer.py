@@ -8,7 +8,7 @@ from eth2.beacon.constants import EMPTY_SIGNATURE
 from eth2.beacon.exceptions import ProposerIndexError
 from eth2.beacon.helpers import compute_epoch_at_slot, compute_signing_root, get_domain
 from eth2.beacon.signature_domain import SignatureDomain
-from eth2.beacon.state_machines.base import BaseBeaconStateMachine
+from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
 from eth2.beacon.tools.builder.validator import sign_transaction
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock

@@ -4,7 +4,7 @@ from typing import Collection
 from eth_keys.datatypes import PrivateKey
 from multiaddr import Multiaddr
 
-from eth2.beacon.chains.testnet import SkeletonLakeChain as MinimalChain
+from eth2.beacon.chains.testnet.altona import BeaconChain
 from eth2.configs import Eth2Config
 from trinity.config import BeaconAppConfig, BeaconChainConfig, TrinityConfig
 
@@ -34,7 +34,7 @@ class BeaconNodeConfig:
         self.client_identifier = client_identifier
         self.p2p_maddr = p2p_maddr
 
-        self.chain_class = MinimalChain
+        self.chain_class = BeaconChain
 
     @classmethod
     def from_platform_config(

@@ -1,5 +1,5 @@
 from itertools import groupby
-from typing import Dict, Iterable, Set, Tuple
+from typing import Dict, Iterable, Set, Tuple, cast
 
 from cancel_token import CancelToken
 from eth_typing import BLSSignature
@@ -8,6 +8,9 @@ from lahja import EndpointAPI
 
 from eth2.beacon.chains.base import BaseBeaconChain
 from eth2.beacon.helpers import compute_epoch_at_slot
+from eth2.beacon.state_machines.abc import (
+    BaseBeaconStateMachine as BaseBeaconStateMachine2,
+)
 from eth2.beacon.state_machines.base import BaseBeaconStateMachine
 from eth2.beacon.tools.builder.aggregator import (
     get_aggregate_from_valid_committee_attestations,
@@ -244,7 +247,7 @@ class Validator(BaseValidator):
             eth1_vote,
             ready_attestations,
             state,
-            state_machine,
+            cast(BaseBeaconStateMachine2, state_machine),
         )
 
         block = sign_block(state, block, private_key, self.slots_per_epoch)

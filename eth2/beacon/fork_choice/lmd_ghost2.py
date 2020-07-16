@@ -180,7 +180,7 @@ class ProtoArray(Generic[T]):
     def on_block(
         self,
         block: BlockNode[T],
-        parent_opt: Optional[Root],
+        parent_root: Root,
         justified_epoch: Epoch,
         finalized_epoch: Epoch,
     ) -> None:
@@ -195,9 +195,13 @@ class ProtoArray(Generic[T]):
 
         node_index = ProtoNodeIndex(self._index_offset + len(self.nodes))
 
-        parent_index = (
-            None if parent_opt is None else self.indices.get(parent_opt, None)
-        )
+        # NOTE: if the parent root is missing, then we take the convention that the parent
+        # is the genesis block. This convention handles the alias of the "empty" root as
+        # a block root for the genesis block.
+        if parent_root in self.indices:
+            parent_index = self.indices[parent_root]
+        else:
+            parent_index = self.indices.get(default_root, None)
 
         node = ProtoNode[T](block, parent_index, justified_epoch, finalized_epoch)
 
@@ -430,11 +434,6 @@ class ProtoArrayForkChoice(Generic[T]):
         justified_epoch: Epoch,
         finalized_epoch: Epoch,
     ) -> None:
-        # NOTE: we need to patch the chain towards genesis
-        # where we take the convention that the block root of the
-        # genesis block is the ``default_root``.
-        if block.slot == 1:
-            parent_root = default_root
         self.proto_array.on_block(block, parent_root, justified_epoch, finalized_epoch)
 
     def update_justified(
@@ -596,6 +595,13 @@ class LMDGHOSTForkChoice(BaseForkChoice):
             yield _block_node_to_block(block_node)
 
     def on_block(self, block: BaseBeaconBlock) -> None:
+        """
+        NOTE: assumes that only ``block``s are supplied to this method
+        if their parent has already been registered.
+
+        Otherwise, the way this module handles the genesis alias may break things.
+        Refer to ``ProtoArray.on_block`` for more information.
+        """
         self._impl.process_block(
             _block_to_block_node(block),
             block.parent_root,

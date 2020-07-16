@@ -29,7 +29,7 @@ async def test_beacon_node_and_validator_client_can_talk(
     # NOTE: temporarily disable BLS while it standardizes
     no_op_bls,
 ):
-    starting_head_slot = beacon_node._chain.get_canonical_head().message.slot
+    starting_head_slot = beacon_node._chain.get_canonical_head().slot
     assert starting_head_slot == GENESIS_SLOT
 
     async with trio.open_nursery() as nursery:

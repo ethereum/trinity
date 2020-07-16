@@ -1,7 +1,7 @@
 import logging
 from typing import cast
 
-from eth_typing import BLSSignature
+from eth_typing import BLSSignature, Hash32
 from eth_utils import ValidationError
 
 from eth2._utils.bls import bls
@@ -9,7 +9,7 @@ from eth2._utils.humanize import humanize_bytes
 from eth2.beacon.helpers import compute_domain, compute_signing_root
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
-from eth2.beacon.typing import Operation, SignedOperation
+from eth2.beacon.typing import Operation, Root, SignedOperation
 from eth2.validator_client.abc import BeaconNodeAPI, SignatoryDatabaseAPI
 from eth2.validator_client.duty import Duty, DutyType
 from eth2.validator_client.typing import PrivateKeyProvider
@@ -37,7 +37,17 @@ def sign(
     # TODO use correct ``domain`` value
     # NOTE currently only uses part of the domain value
     # need to get fork from the state and compute the full domain value locally
-    domain = compute_domain(duty.signature_domain)
+    # NOTE: hardcoded for testing, based on generating the minimal set of validators
+    genesis_validators_root = Root(
+        Hash32(
+            bytes.fromhex(
+                "83431ec7fcf92cfc44947fc0418e831c25e1d0806590231c439830db7ad54fda"
+            )
+        )
+    )
+    domain = compute_domain(
+        duty.signature_domain, genesis_validators_root=genesis_validators_root
+    )
     signing_root = compute_signing_root(operation, domain)
 
     return bls.sign(privkey, signing_root)
