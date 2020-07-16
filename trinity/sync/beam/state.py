@@ -419,13 +419,14 @@ class BeamDownloader(Service, PeerSubscriber):
         if urgent_batch_id is not None:
             time_on_urgent = urgent_timer.elapsed
             self.logger.debug(
-                "beam-rtt: got %d/%d urgent nodes in %.3fs with %d/%d predictive from %s",
+                "beam-rtt: got %d/%d urgent nodes in %.3fs with %d/%d predictive from %s (%s)",
                 len(urgent_nodes),
                 len(urgent_node_hashes),
                 time_on_urgent,
                 len(predictive_nodes),
                 len(predictive_node_hashes),
                 peer.remote,
+                urgent_node_hashes[0][:2].hex()
             )
             self._time_on_urgent += time_on_urgent
 

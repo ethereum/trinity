@@ -285,6 +285,14 @@ def pausing_vm_decorator(
                         loop,
                     )
                     account_event = account_future.result(timeout=self.node_retrieval_timeout)
+                    if urgent:
+                        self.logger.debug(
+                            "Paused for account nodes (%d) for %.3fs, %.3fs avg (starts on %s)",
+                            account_event.num_nodes_collected,
+                            t.elapsed,
+                            t.elapsed / (account_event.num_nodes_collected or 1),
+                            exc.missing_node_hash[:2].hex(),
+                        )
 
                     # Collect the amount of paused time before checking if we should exit, so
                     #   it shows up in logged statistics.
@@ -303,6 +311,12 @@ def pausing_vm_decorator(
                         loop,
                     )
                     bytecode_event = bytecode_future.result(timeout=self.node_retrieval_timeout)
+                    if urgent:
+                        self.logger.debug(
+                            "Got bytecode to importer in %.3fs (%s)",
+                            t.elapsed,
+                            exc.missing_code_hash[:2].hex(),
+                        )
                     self.stats_counter.data_pause_time += t.elapsed
                     if not bytecode_event.is_retry_acceptable:
                         raise StateUnretrievable("Server asked us to stop trying")
@@ -320,6 +334,14 @@ def pausing_vm_decorator(
                         loop,
                     )
                     storage_event = storage_future.result(timeout=self.node_retrieval_timeout)
+                    if urgent:
+                        self.logger.debug(
+                            "Paused for storage nodes (%d) for %.3fs, %.3fs avg (starts on %s)",
+                            storage_event.num_nodes_collected,
+                            t.elapsed,
+                            t.elapsed / (storage_event.num_nodes_collected or 1),
+                            exc.missing_node_hash[:2].hex(),
+                        )
                     self.stats_counter.data_pause_time += t.elapsed
                     if not storage_event.is_retry_acceptable:
                         raise StateUnretrievable("Server asked us to stop trying")
