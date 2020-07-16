@@ -29,6 +29,11 @@ MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS = MAX_CONCURRENT_SPECULATIVE_EXECUTIONS /
 # Measured in seconds.
 NON_IDEAL_RESPONSE_PENALTY = 0.5
 
+# If Beam Sync wants to use a queen, but is stuck waiting for it to show up,
+#   then log a warning if it's been too long. If it's been more than this
+#   many seconds, then log the warning:
+WARN_AFTER_QUEEN_STARVED = 0.1
+
 # How many seconds should we leave the backfill peer idle, in between
 # backfill requests? This is called "tests" because we are importantly
 # checking how fast a peer is.
