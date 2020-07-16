@@ -8,7 +8,7 @@ import logging
 from typing import Collection, Iterable, Optional, Set
 
 from eth_typing import BLSPubkey, BLSSignature
-from eth_utils import decode_hex, encode_hex, to_tuple
+from eth_utils import decode_hex, encode_hex, humanize_hash, to_tuple
 from ssz.tools.dump import to_formatted_dict
 from ssz.tools.parse import from_formatted_dict
 
@@ -61,6 +61,7 @@ def _get_target_checkpoint(
 
 @unique
 class Paths(Enum):
+    chain_info = "/chain/info"
     node_version = "/node/version"
     genesis_time = "/node/genesis_time"
     sync_status = "/node/syncing"
@@ -329,11 +330,17 @@ async def _post_attestation(context: Context, request: Request) -> Response:
     return await context.broadcast_attestation(attestation)
 
 
+async def _get_chain_info(context: Context, request: Request) -> Response:
+    head = context.chain.get_canonical_head()
+    return {"slot": head.slot, "root": humanize_hash(head.hash_tree_root)}
+
+
 GET = "GET"
 POST = "POST"
 
 
 ServerHandlers = {
+    Paths.chain_info.value: {GET: _get_chain_info},
     Paths.node_version.value: {GET: _get_node_version},
     Paths.genesis_time.value: {GET: _get_genesis_time},
     Paths.sync_status.value: {GET: _get_sync_status},
