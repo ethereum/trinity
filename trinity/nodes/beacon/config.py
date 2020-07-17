@@ -4,9 +4,9 @@ from typing import Collection, Type
 from eth_keys.datatypes import PrivateKey
 from multiaddr import Multiaddr
 
-from eth2.beacon.chains.base import BaseBeaconChain
+from eth2.beacon.chains.abc import BaseBeaconChain
 from eth2.configs import Eth2Config
-from trinity.config import BeaconAppConfig, BeaconChainConfig, TrinityConfig
+from trinity.config import TrinityConfig, BeaconTrioAppConfig, BeaconTrioChainConfig
 
 
 class BeaconNodeConfig:
@@ -16,7 +16,7 @@ class BeaconNodeConfig:
         orchestration_profile: str,
         bootstrap_nodes: Collection[Multiaddr],
         preferred_nodes: Collection[Multiaddr],
-        chain_config: BeaconChainConfig,
+        chain_config: BeaconTrioChainConfig,
         local_node_key: PrivateKey,
         validator_api_port: int,
         eth2_config: Eth2Config,
@@ -41,7 +41,7 @@ class BeaconNodeConfig:
         cls,
         config_profile: str,
         trinity_config: TrinityConfig,
-        beacon_app_config: BeaconAppConfig,
+        beacon_app_config: BeaconTrioAppConfig,
         validator_api_port: int,
         bootstrap_nodes: Collection[Multiaddr],
     ) -> "BeaconNodeConfig":

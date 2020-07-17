@@ -57,6 +57,7 @@ from multiaddr import (
     Multiaddr,
 )
 
+from eth2.beacon.chains.testnet import SkeletonLakeChain
 from eth2.beacon.tools.builder.initializer import load_genesis_key_map
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.states import BeaconState
@@ -108,9 +109,8 @@ from trinity.network_configurations import (
     PRECONFIGURED_NETWORKS
 )
 
-from eth2.beacon.chains.testnet import SkeletonLakeChain
-from eth2.beacon.chains.testnet.altona import BeaconChain as AltonaChain
 from eth2.beacon.chains.base import BeaconChain
+from eth2.beacon.chains.testnet.altona import BeaconChain as AltonaChain
 
 
 if TYPE_CHECKING:
@@ -118,6 +118,7 @@ if TYPE_CHECKING:
     from trinity.nodes.base import Node  # noqa: F401
     from trinity.chains.full import FullChain  # noqa: F401
     from trinity.chains.light import LightDispatchChain  # noqa: F401
+    from eth2.beacon.chains.abc import BaseBeaconChain as ABCBaseBeaconChain  # noqa: F401
     from eth2.beacon.chains.base import BaseBeaconChain  # noqa: F401
     from eth2.beacon.state_machines.base import BaseBeaconStateMachine  # noqa: F401
 
@@ -726,11 +727,6 @@ class BeaconChainConfig:
         """
         if config_profile == "mainnet":
             beacon_chain_class = BeaconChain
-        elif config_profile == "altona":
-            # TODO: (g-r-a-n-t) We have two different `BaseBeaconChain` classes, which are
-            # used by different chains. This causes some typing issues, which we'll just ignore
-            # until the older one is removed and all chains use the same base class.
-            beacon_chain_class = AltonaChain  # type: ignore
         else:
             beacon_chain_class = SkeletonLakeChain
 
@@ -818,6 +814,130 @@ class BeaconAppConfig(BaseEth2AppConfig):
         Return the :class:`~trinity.config.BeaconChainConfig` that is derived from the genesis file
         """
         return BeaconChainConfig.from_genesis_config(config_profile)
+
+
+class BeaconTrioChainConfig:
+    _genesis_state: BeaconState
+    _beacon_chain_class: Type['ABCBaseBeaconChain'] = None
+    _genesis_config: Eth2Config = None
+    _key_map: Dict[BLSPubkey, int]
+
+    def __init__(self,
+                 genesis_state: BeaconState,
+                 genesis_config: Eth2Config,
+                 genesis_validator_key_map: Dict[BLSPubkey, int],
+                 beacon_chain_class: Type['ABCBaseBeaconChain'] = AltonaChain) -> None:
+        self._genesis_state = genesis_state
+        self._eth2_config = genesis_config
+        self._key_map = genesis_validator_key_map
+        self._beacon_chain_class = beacon_chain_class
+
+    @property
+    def genesis_config(self) -> Eth2Config:
+        """
+        NOTE: this ``genesis_config`` means something slightly different from the
+        genesis config referenced in other places in this class...
+        TODO:(ralexstokes) patch up the names here...
+        """
+        return self._eth2_config
+
+    @property
+    def genesis_time(self) -> Timestamp:
+        return self._genesis_state.genesis_time
+
+    @property
+    def beacon_chain_class(self) -> Type['ABCBaseBeaconChain']:
+        return self._beacon_chain_class
+
+    @classmethod
+    def from_genesis_config(cls, config_profile: str) -> 'BeaconTrioChainConfig':
+        """
+        Construct an instance of ``cls`` reading the genesis configuration
+        data under the local data directory.
+        """
+        try:
+            with open(_get_eth2_genesis_config_file_path(config_profile)) as config_file:
+                genesis_config = json.load(config_file)
+        except FileNotFoundError as e:
+            raise Exception("unable to load genesis config: %s", e)
+
+        eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
+        # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
+        override_lengths(eth2_config)
+
+        genesis_state = from_formatted_dict(genesis_config["genesis_state"], BeaconState)
+        genesis_validator_key_map = load_genesis_key_map(
+            genesis_config["genesis_validator_key_pairs"]
+        )
+        return cls(
+            genesis_state,
+            eth2_config,
+            genesis_validator_key_map,
+        )
+
+    @classmethod
+    def get_genesis_config_file_path(cls, profile: str) -> Path:
+        return _get_eth2_genesis_config_file_path(profile)
+
+    def initialize_chain(self,
+                         base_db: AtomicDatabaseAPI) -> 'ABCBaseBeaconChain':
+        return self.beacon_chain_class.from_genesis(
+            base_db=base_db,
+            genesis_state=self._genesis_state,
+        )
+
+
+class BeaconTrioAppConfig(BaseEth2AppConfig):
+    def __init__(
+        self,
+        config: TrinityConfig,
+        p2p_maddr: Multiaddr,
+        orchestration_profile: str,
+        bootstrap_nodes: Tuple[Multiaddr, ...] = (),
+        preferred_nodes: Tuple[Multiaddr, ...] = (),
+    ) -> None:
+        super().__init__(config)
+        self.p2p_maddr = p2p_maddr
+        self.bootstrap_nodes = config.bootstrap_nodes
+        self.preferred_nodes = config.preferred_nodes
+        self.client_identifier = construct_trinity_client_identifier()
+        self.orchestration_profile = orchestration_profile
+
+    @classmethod
+    def from_parser_args(
+        cls, args: argparse.Namespace, trinity_config: TrinityConfig
+    ) -> "BaseAppConfig":
+        """
+        Initialize from the namespace object produced by
+        an ``argparse.ArgumentParser`` and the :class:`~trinity.config.TrinityConfig`
+        """
+        bootstrap_nodes = args.bootstrap_nodes
+        preferred_nodes = args.preferred_nodes
+        p2p_maddr = args.p2p_maddr
+
+        return cls(
+            trinity_config,
+            p2p_maddr,
+            args.orchestration_profile,
+            bootstrap_nodes,
+            preferred_nodes
+        )
+
+    @property
+    def database_dir(self) -> Path:
+        """
+        Return the path where the chain database is stored.
+
+        This is resolved relative to the ``data_dir``
+        """
+        path = self.trinity_config.data_dir / DATABASE_DIR_NAME
+        return self.trinity_config.with_app_suffix(path) / f"full_{self.orchestration_profile}"
+
+    def get_chain_config(self, config_profile: str = "altona") -> BeaconTrioChainConfig:
+        """
+        Return the :class:`~trinity.config.BeaconChainConfig` that is derived from the genesis file
+        """
+        return BeaconTrioChainConfig.from_genesis_config(config_profile)
 
 
 class ValidatorClientAppConfig(BaseEth2AppConfig):
