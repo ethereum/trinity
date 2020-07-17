@@ -524,8 +524,14 @@ class BeamDownloader(Service, PeerSubscriber):
             self.logger.debug(
                 "beam-queen-usage-top-%d: urgent=%s, predictive=%s",
                 show_top_n_peers,
-                self._num_urgent_requests_by_peer.most_common(show_top_n_peers),
-                self._num_predictive_requests_by_peer.most_common(show_top_n_peers),
+                [
+                    (str(peer.remote), num) for peer, num in
+                    self._num_urgent_requests_by_peer.most_common(show_top_n_peers)
+                ],
+                [
+                    (str(peer.remote), num) for peer, num in
+                    self._num_predictive_requests_by_peer.most_common(show_top_n_peers)
+                ],
             )
             self._num_urgent_requests_by_peer.clear()
             self._num_predictive_requests_by_peer.clear()

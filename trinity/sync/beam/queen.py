@@ -10,9 +10,13 @@ from p2p.exchange import PerformanceAPI
 from p2p.peer import BasePeer, PeerSubscriber
 from trinity.protocol.eth.commands import NodeDataV65
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
-from trinity.sync.beam.constants import NON_IDEAL_RESPONSE_PENALTY
+from trinity.sync.beam.constants import (
+    NON_IDEAL_RESPONSE_PENALTY,
+    WARN_AFTER_QUEEN_STARVED,
+)
 from trinity.sync.common.peers import WaitingPeers
 from trinity._utils.logging import get_logger
+from trinity._utils.timer import Timer
 
 
 def queen_peer_performance_sort(tracker: PerformanceAPI) -> float:
@@ -80,9 +84,18 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         """
         Wait until a queen peer is designated, then return it.
         """
+        t = Timer()
         while self._queen_peer is None:
             await self._queen_updated.wait()
             self._queen_updated.clear()
+
+        queen_starve_time = t.elapsed
+        if queen_starve_time > WARN_AFTER_QUEEN_STARVED:
+            self.logger.info(
+                "Blocked for %.2fs waiting for queen=%s",
+                queen_starve_time,
+                self._queen_peer,
+            )
 
         return self._queen_peer
 

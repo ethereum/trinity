@@ -1,5 +1,7 @@
 from eth.constants import MAX_UNCLE_DEPTH
 
+from trinity.sync.common.constants import PREDICTED_BLOCK_TIME
+
 # Peers are typically expected to have predicted nodes available,
 #   so it's reasonable to ask for all-predictive nodes from a peer.
 # Urgent node requests usually come in pretty fast, so
@@ -27,6 +29,11 @@ MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS = MAX_CONCURRENT_SPECULATIVE_EXECUTIONS /
 # Measured in seconds.
 NON_IDEAL_RESPONSE_PENALTY = 0.5
 
+# If Beam Sync wants to use a queen, but is stuck waiting for it to show up,
+#   then log a warning if it's been too long. If it's been more than this
+#   many seconds, then log the warning:
+WARN_AFTER_QUEEN_STARVED = 0.1
+
 # How many seconds should we leave the backfill peer idle, in between
 # backfill requests? This is called "tests" because we are importantly
 # checking how fast a peer is.
@@ -46,7 +53,6 @@ GAP_BETWEEN_TESTS = 0.25
 ESTIMATED_BEAMABLE_BLOCKS = 75
 
 # It's also useful to estimate the amount of time covered by those beamable blocks.
-PREDICTED_BLOCK_TIME = 14
 ESTIMATED_BEAMABLE_SECONDS = ESTIMATED_BEAMABLE_BLOCKS * PREDICTED_BLOCK_TIME
 
 # To make up for clients that are configured with unusually low block times,

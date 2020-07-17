@@ -189,7 +189,7 @@ async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
         await manager.wait_started()
         await initiator_peer_pool.connect_to_nodes(nodes)
 
-        await asyncio.wait_for(peer_started.wait(), timeout=5)
+        await asyncio.wait_for(peer_started.wait(), timeout=10)
 
         assert len(initiator_peer_pool.connected_nodes) == 1
 

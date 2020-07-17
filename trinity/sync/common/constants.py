@@ -10,6 +10,9 @@ MAX_SKELETON_REORG_DEPTH = 35000
 # has processed this number of headers.
 MAX_BACKFILL_HEADERS_AT_ONCE = 100_000
 
+# Estimated time in between each block
+PREDICTED_BLOCK_TIME = 13
+
 # How many headers/blocks should we queue up waiting to be persisted?
 # This buffer size is estimated using: NUM_BLOCKS_PERSISTED_PER_SEC * BUFFER_SECONDS * MARGIN
 #
