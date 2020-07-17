@@ -3,7 +3,8 @@
   "version": "0.1.3",
   "description": "Ethereum Python Client (experimental)",
   "avatar": "/ipfs/QmRyJJwuCEYHPf7xkRcoPJqiHQgAN3ay2voSCTrAY1nMet",
-  "type": "service",
+  "type": "library",
+  "chain": "ethereum",
   "image": {
     "path": "trinity.public.dappnode.eth_0.1.3.tar.xz",
     "hash": "/ipfs/QmZfnAJNHoGESss7gQAjfiyV9RP3Rt1bEh4Btcz2LNFAVh",
@@ -18,7 +19,7 @@
       "trinity_src:/usr/src/app"
     ],
     "environment": [
-      "EXTRA_OPTS=--trinity-root-dir /trinity"
+      "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http"
     ],
     "restart": "always"
   },
