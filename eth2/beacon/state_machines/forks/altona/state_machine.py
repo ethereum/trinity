@@ -1,4 +1,4 @@
-from typing import Tuple, Type  # noqa: F401
+from typing import Tuple, Type
 
 from eth2.beacon.fork_choice.abc import BaseForkChoice
 from eth2.beacon.fork_choice.lmd_ghost2 import LMDGHOSTForkChoice
