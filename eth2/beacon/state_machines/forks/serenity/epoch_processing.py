@@ -19,7 +19,6 @@ from eth2.beacon.epoch_processing_helpers import (
     get_total_balance,
     get_unslashed_attesting_indices,
     get_validator_churn_limit,
-    increase_balance,
 )
 from eth2.beacon.helpers import get_block_root, get_randao_mix
 from eth2.beacon.types.checkpoints import Checkpoint
@@ -404,12 +403,16 @@ def process_rewards_and_penalties(
         state, config
     )
 
-    for index in range(len(state.validators)):
-        index = ValidatorIndex(index)
-        state = increase_balance(state, index, Gwei(rewards_for_attestations[index]))
-        state = decrease_balance(state, index, Gwei(penalties_for_attestations[index]))
+    new_balances = (
+        max(balance + reward - penalty, 0)
+        for balance, reward, penalty in zip(
+            state.balances, rewards_for_attestations, penalties_for_attestations
+        )
+    )
 
-    return state
+    return state.set(
+        "balances", HashableList.from_iterable(new_balances, state.balances.sedes)
+    )
 
 
 @curry
