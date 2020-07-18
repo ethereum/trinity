@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import TYPE_CHECKING, Callable, Sequence, Set, Tuple
 
 from eth_typing import Hash32
@@ -37,6 +38,9 @@ def compute_start_slot_at_epoch(epoch: Epoch, slots_per_epoch: int) -> Slot:
     return Slot(epoch * slots_per_epoch)
 
 
+# Cache the active validators in a given epoch (maxsize == 1).
+# A bigger cache size here would only help when processing e.g. a re-org across many epochs.
+@lru_cache(maxsize=1)
 def get_active_validator_indices(
     validators: Sequence[Validator], epoch: Epoch
 ) -> Tuple[ValidatorIndex, ...]:

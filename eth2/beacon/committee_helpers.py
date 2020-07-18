@@ -1,3 +1,4 @@
+from functools import lru_cache
 import logging
 from typing import Iterable, Sequence, Tuple
 
@@ -85,6 +86,9 @@ def compute_proposer_index(
         i += 1
 
 
+# size the cache to remember the proposer across one set of slots in a given epoch.
+# NOTE: maxsize == 32 is tuned to mainnet configuration (refer: SLOTS_PER_EPOCH)
+@lru_cache(maxsize=32)
 def get_beacon_proposer_index(state: BeaconState, config: Eth2Config) -> ValidatorIndex:
     """
     Return the current beacon proposer index.
@@ -170,6 +174,9 @@ def _compute_committee(
         yield indices[shuffled_index]
 
 
+# NOTE: cache of 1024 covers "worst case" of every committee
+# getting an attestation on-chain at 4mm ETH at stake.
+@lru_cache(maxsize=1024)
 def get_beacon_committee(
     state: BeaconState, slot: Slot, index: CommitteeIndex, config: Eth2Config
 ) -> Tuple[ValidatorIndex, ...]:

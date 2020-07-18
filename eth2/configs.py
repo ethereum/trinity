@@ -33,7 +33,7 @@ def _decoder(
             yield field.name, int(data[field.name])
 
 
-@dataclass
+@dataclass(eq=True, frozen=True)
 class Eth2Config:
     # Misc
     MAX_COMMITTEES_PER_SLOT: int

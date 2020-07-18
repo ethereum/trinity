@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Iterable, Sequence, Set, Tuple
 
 from eth_utils import to_tuple
@@ -36,6 +37,9 @@ def decrease_balance(
     )
 
 
+# NOTE: cache of 1024 covers "worst case" of every committee
+# getting an attestation on-chain at 4mm ETH at stake.
+@lru_cache(maxsize=1024)
 def get_attesting_indices(
     state: BeaconState,
     attestation_data: AttestationData,
@@ -87,6 +91,9 @@ def get_validator_churn_limit(state: BeaconState, config: Eth2Config) -> int:
     )
 
 
+# Cache the balance in a given epoch (maxsize == 1).
+# A bigger cache size here would only help when processing e.g. a re-org across many epochs.
+@lru_cache(maxsize=1)
 def get_total_active_balance(state: BeaconState, config: Eth2Config) -> Gwei:
     current_epoch = state.current_epoch(config.SLOTS_PER_EPOCH)
     active_validator_indices = get_active_validator_indices(
@@ -131,6 +138,9 @@ def get_matching_head_attestations(
             yield a
 
 
+# NOTE: cache of 1024 covers "worst case" of every committee
+# getting an attestation on-chain at 4mm ETH at stake.
+@lru_cache(maxsize=1024)
 def get_unslashed_attesting_indices(
     state: BeaconState, attestations: Sequence[PendingAttestation], config: Eth2Config
 ) -> Set[ValidatorIndex]:
@@ -142,6 +152,9 @@ def get_unslashed_attesting_indices(
     return set(filter(lambda index: not state.validators[index].slashed, output))
 
 
+# NOTE: cache of 1024 covers "worst case" of every committee
+# getting an attestation on-chain at 4mm ETH at stake.
+@lru_cache(maxsize=1024)
 def get_attesting_balance(
     state: BeaconState, attestations: Sequence[PendingAttestation], config: Eth2Config
 ) -> Gwei:
