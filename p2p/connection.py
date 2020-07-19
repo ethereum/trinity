@@ -105,6 +105,10 @@ class Connection(ConnectionAPI, Service):
     def __repr__(self) -> str:
         return f"<Connection {self.session!r} {self._multiplexer!r} dial_out={self.is_dial_out}>"
 
+    @property
+    def is_streaming_messages(self) -> bool:
+        return self._handlers_ready.is_set()
+
     def start_protocol_streams(self) -> None:
         self._handlers_ready.set()
 
@@ -207,7 +211,7 @@ class Connection(ConnectionAPI, Service):
         try:
             await asyncio.wait_for(self._handlers_ready.wait(), timeout=10)
         except asyncio.TimeoutError as err:
-            self.logger.info('Timedout waiting for handler ready signal')
+            self.logger.warning('Timedout waiting for handler ready signal')
             raise asyncio.TimeoutError(
                 "The handlers ready event was never set.  Ensure that "
                 "`Connection.start_protocol_streams()` is being called"

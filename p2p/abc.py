@@ -665,6 +665,11 @@ class ConnectionAPI(ServiceAPI):
     def start_protocol_streams(self) -> None:
         ...
 
+    @property
+    @abstractmethod
+    def is_streaming_messages(self) -> bool:
+        ...
+
     @abstractmethod
     def add_protocol_handler(self,
                              protocol_type: Type[ProtocolAPI],

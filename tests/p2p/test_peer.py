@@ -52,6 +52,9 @@ class BehaviorCrash(Exception):
 
 class CrashingLogic(BaseLogic):
     async def crash(self):
+        # If we crash immediately the peer may not have enough time to start and the test will
+        # fail, so wait a bit before crashing.
+        await asyncio.sleep(0.01)
         raise BehaviorCrash()
 
     @contextlib.asynccontextmanager

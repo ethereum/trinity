@@ -12,17 +12,20 @@ from eth.db.chain import ChainDB
 from p2p.auth import HandshakeInitiator, _handshake
 from p2p.connection import Connection
 from p2p.handshake import negotiate_protocol_handshakes
+from p2p.peer import PeerSubscriber
 from p2p.tools.factories import (
     get_open_port,
     DevP2PHandshakeParamsFactory,
     NodeFactory,
 )
 from p2p.tools.paragon import (
+    ParagonAPI,
     ParagonContext,
     ParagonPeer,
     ParagonPeerPool,
     ParagonPeerFactory,
 )
+from p2p.tools.paragon.commands import BroadcastData
 from p2p.transport import Transport
 
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
@@ -166,6 +169,11 @@ async def test_server_incoming_connection(server, receiver_remote):
     await receiver_peer.connection._multiplexer.stop_streaming()
 
 
+class BroadcastMsgCollector(PeerSubscriber):
+    msg_queue_maxsize = 1
+    subscription_msg_types = frozenset({BroadcastData})
+
+
 @pytest.mark.asyncio
 async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
     peer_started = asyncio.Event()
@@ -180,6 +188,9 @@ async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
 
     monkeypatch.setattr(server.peer_pool, 'start_peer', mock_start_peer)
 
+    broadcast_msg_buffer = BroadcastMsgCollector()
+    server.peer_pool.subscribe(broadcast_msg_buffer)
+
     initiator_peer_pool = ParagonPeerPool(
         privkey=INITIATOR_PRIVKEY,
         context=ParagonContext(),
@@ -192,6 +203,17 @@ async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
         await asyncio.wait_for(peer_started.wait(), timeout=10)
 
         assert len(initiator_peer_pool.connected_nodes) == 1
+
+        peer = list(initiator_peer_pool.connected_nodes.values())[0]
+
+        receiving_peer = list(server.peer_pool.connected_nodes.values())[0]
+        # Once our peer is running, it will start streaming messages, which will be stored in our
+        # msg buffer.
+        assert receiving_peer.connection.is_streaming_messages
+
+        peer.connection.get_logic(ParagonAPI.name, ParagonAPI).send_broadcast_data(b'data')
+        msg = await asyncio.wait_for(broadcast_msg_buffer.msg_queue.get(), timeout=0.5)
+        assert msg.command.payload.data == b'data'
 
 
 @pytest.mark.asyncio

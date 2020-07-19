@@ -26,8 +26,6 @@ from lahja import EndpointAPI
 from cached_property import cached_property
 
 from eth_utils import (
-    to_tuple,
-    ExtendedDebugLogger,
     ValidationError,
 )
 
@@ -220,10 +218,6 @@ class BasePeer(Service):
     def session(self) -> SessionAPI:
         return self.connection.session
 
-    @property
-    def is_closing(self) -> bool:
-        return self.connection.is_closing
-
     def get_extra_stats(self) -> Tuple[str, ...]:
         return tuple()
 
@@ -241,17 +235,13 @@ class BasePeer(Service):
         return self.connection.get_multiplexer().last_msg_time
 
     def add_subscriber(self, subscriber: 'PeerSubscriber') -> None:
+        if not self.manager.is_running:
+            raise LifecycleError("Cannot add subscriber when peer is not running")
         self._subscribers.append(subscriber)
 
     def remove_subscriber(self, subscriber: 'PeerSubscriber') -> None:
         if subscriber in self._subscribers:
             self._subscribers.remove(subscriber)
-
-    def setup_protocol_handlers(self) -> None:
-        """
-        Hook for subclasses to setup handlers for protocols specific messages.
-        """
-        pass
 
     async def _handle_disconnect(self, connection: ConnectionAPI, cmd: Disconnect) -> None:
         self._p2p_api.remote_disconnect_reason = cmd.payload
@@ -268,6 +258,20 @@ class BasePeer(Service):
             return False
         return self.manager.is_running and not self.connection.is_closing
 
+    def start_protocol_streams(self) -> None:
+        if not self.manager.is_running:
+            raise LifecycleError("Cannot start protocol streams when peer is not running")
+        elif self.connection.is_streaming_messages:
+            raise LifecycleError("Connection is already streaming messages")
+
+        if len(self._subscribers) == 0:
+            self.logger.warning(
+                "Starting protocol streams while peer has no subscribers. Messages may be dropped")
+        else:
+            self.logger.debug(
+                "Starting protocol streams for %s. Subscribers: %s", self, self._subscribers)
+        self.connection.start_protocol_streams()
+
     async def run(self) -> None:
         if not self.connection.behaviors_applied.is_set():
             raise LifecycleError("Cannot run peer when behaviors haven't been applied")
@@ -281,17 +285,21 @@ class BasePeer(Service):
 
             self.connection.add_msg_handler(self._handle_subscriber_message)
 
-            self.setup_protocol_handlers()
-
             # The `boot` process is run in the background to allow the `run` loop
             # to continue so that all of the Peer APIs can be used within the
             # `boot` task.
             self.manager.run_child_service(self.boot_manager)
 
-            # Trigger the connection to start feeding messages though the handlers
-            self.connection.start_protocol_streams()
             self.ready.set()
 
+            if self.connection.is_streaming_messages:
+                raise LifecycleError(
+                    "Connection should not start streaming messages until peer is running "
+                    "and had its subscribers added.")
+
+            self.logger.debug(
+                "Peer %s is running but won't start streaming messages until "
+                "start_protocol_streams() is called")
             await self.manager.wait_finished()
         except PeerConnectionLost:
             pass
@@ -318,6 +326,7 @@ class BasePeer(Service):
                                          cmd: CommandAPI[Any]) -> None:
         subscriber_msg = PeerMessage(self, cmd)
         for subscriber in self._subscribers:
+            self.logger.debug2("Adding %s msg to queue of %s", type(cmd), subscriber)
             subscriber.add_msg(subscriber_msg)
 
     async def disconnect(self, reason: DisconnectReason) -> None:
@@ -443,35 +452,37 @@ class PeerSubscriber(ABC):
         """
         peer, cmd = msg
 
+        if hasattr(self, 'logger'):
+            logger = self.logger  # type: ignore
+        else:
+            logger = get_logger('p2p.peer.BasePeer')
+
         if not self.is_subscription_command(type(cmd)):
-            if hasattr(self, 'logger'):
-                self.logger.debug2(  # type: ignore
-                    "Discarding %s msg from %s; not subscribed to msg type; "
-                    "subscriptions: %s",
-                    loggable(cmd),
-                    peer,
-                    self.subscription_msg_types,
-                )
+            logger.debug2(
+                "Discarding %s msg from %s; not subscribed to msg type; "
+                "subscriptions: %s",
+                loggable(cmd),
+                peer,
+                self.subscription_msg_types,
+            )
             return False
 
         try:
-            if hasattr(self, 'logger'):
-                self.logger.debug2(  # type: ignore
-                    "Adding %s msg from %s to queue; queue_size=%d",
-                    loggable(cmd),
-                    peer,
-                    self.queue_size,
-                )
+            logger.debug2(
+                "Adding %s msg from %s to queue; queue_size=%d",
+                loggable(cmd),
+                peer,
+                self.queue_size,
+            )
             self.msg_queue.put_nowait(msg)
             return True
         except asyncio.queues.QueueFull:
-            if hasattr(self, 'logger'):
-                self.logger.warning(  # type: ignore
-                    "%s msg queue is full; discarding %s msg from %s",
-                    self.__class__.__name__,
-                    loggable(cmd),
-                    peer,
-                )
+            logger.warning(
+                "%s msg queue is full; discarding %s msg from %s",
+                self.__class__.__name__,
+                loggable(cmd),
+                peer,
+            )
             return False
 
     @contextlib.contextmanager
@@ -510,20 +521,6 @@ class PeerSubscriber(ABC):
             yield
         finally:
             peer.remove_subscriber(self)
-
-
-class MsgBuffer(PeerSubscriber):
-    msg_queue_maxsize = 500
-    subscription_msg_types = frozenset({BaseCommand})
-
-    @cached_property
-    def logger(self) -> ExtendedDebugLogger:
-        return get_logger('p2p.peer.MsgBuffer')
-
-    @to_tuple
-    def get_messages(self) -> Iterator[PeerMessage]:
-        while not self.msg_queue.empty():
-            yield self.msg_queue.get_nowait()
 
 
 class BasePeerFactory(ABC):
