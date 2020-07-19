@@ -56,6 +56,7 @@ async def PeerPairFactory(*,
         bob_private_key=bob_private_key,
         bob_client_version=bob_client_version,
         bob_p2p_version=bob_p2p_version,
+        start_streams=False,
     )
 
     async with connection_pair as (alice_connection, bob_connection):
@@ -66,6 +67,8 @@ async def PeerPairFactory(*,
         await bob_connection.run_peer(bob)
         await asyncio.wait_for(alice.ready.wait(), timeout=1)
         await asyncio.wait_for(bob.ready.wait(), timeout=1)
+        alice.start_protocol_streams()
+        bob.start_protocol_streams()
         yield alice, bob
 
 

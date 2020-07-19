@@ -63,7 +63,6 @@ from p2p.peer import (
     BasePeer,
     BasePeerFactory,
     BasePeerContext,
-    PeerMessage,
     PeerSubscriber,
 )
 from p2p.peer_backend import (
@@ -287,10 +286,12 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             return
 
         if peer.get_manager().is_running:
-            self._add_peer(peer, ())
+            self._add_peer(peer)
         else:
             self.logger.debug("%s was cancelled immediately, not adding to pool", peer)
+            return
 
+        peer.start_protocol_streams()
         try:
             await asyncio.wait_for(
                 peer.boot_manager.get_manager().wait_finished(),
@@ -304,13 +305,11 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             if not peer.get_manager().is_running:
                 self.logger.debug('%s disconnected during boot-up, dropped from pool', peer)
 
-    def _add_peer(self,
-                  peer: BasePeer,
-                  msgs: Tuple[PeerMessage, ...]) -> None:
+    def _add_peer(self, peer: BasePeer) -> None:
         """Add the given peer to the pool.
 
-        Appart from adding it to our list of connected nodes and adding each of our subscriber's
-        to the peer, we also add the given messages to our subscriber's queues.
+        Add the peer to our list of connected nodes and add each of our subscribers
+        to the peer.
         """
         if len(self) < QUIET_PEER_POOL_SIZE:
             logger = self.logger.info
@@ -324,8 +323,6 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         for subscriber in self._subscribers:
             subscriber.register_peer(peer)
             peer.add_subscriber(subscriber)
-            for msg in msgs:
-                subscriber.add_msg(msg)
 
     @abstractmethod
     async def maybe_connect_more_peers(self) -> None:
@@ -504,7 +501,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             # Yield control to ensure we process any disconnection requests from peers. Otherwise
             # we could return peers that should have been disconnected already.
             await asyncio.sleep(0)
-            if peer.get_manager().is_running and not peer.is_closing:
+            if peer.is_alive:
                 yield peer
 
     async def _periodically_report_metrics(self) -> None:

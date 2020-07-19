@@ -1,3 +1,6 @@
+from .api import (  # noqa: F401
+    ParagonAPI,
+)
 from .commands import (  # noqa: F401
     BroadcastData,
     GetSum,
