@@ -43,7 +43,7 @@ deps = {
         "termcolor>=1.1.0,<2.0.0",
         "uvloop==0.14.0;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
         "websockets>=8.1.0",
-        "jsonschema==3.0.1",
+        "jsonschema>=3.2,<4",
         "mypy-extensions>=0.4.3,<0.5.0",
         "ruamel.yaml==0.16.10",
         "argcomplete>=1.10.0,<2",
