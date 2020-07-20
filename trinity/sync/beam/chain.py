@@ -719,7 +719,12 @@ class BeamBlockImporter(BaseBlockImporter, Service):
     async def import_block(
             self,
             block: BlockAPI) -> BlockImportResult:
-        self.logger.info("Beam importing %s (%d txns) ...", block.header, len(block.transactions))
+        self.logger.debug(
+            "Beam importing %s (%d txns, %s gas) ...",
+            block.header,
+            len(block.transactions),
+            f'{block.header.gas_used:,d}',
+        )
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)
         new_account_nodes, collection_time = await self._load_address_state(
