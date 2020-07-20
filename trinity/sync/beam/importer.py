@@ -2,10 +2,12 @@ from abc import abstractmethod
 import asyncio
 from concurrent import futures
 from operator import attrgetter
+import time
 from typing import (
     Any,
     Callable,
     Optional,
+    Sequence,
     Tuple,
     Type,
     TypeVar,
@@ -19,7 +21,9 @@ from eth.abc import (
     BlockAPI,
     BlockHeaderAPI,
     BlockImportResult,
+    ComputationAPI,
     ConsensusContextAPI,
+    ReceiptAPI,
     SignedTransactionAPI,
     StateAPI,
     VirtualMachineAPI,
@@ -52,6 +56,7 @@ from trinity.chains.full import FullChain
 from trinity.exceptions import StateUnretrievable
 from trinity.sync.beam.constants import (
     MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS,
+    MIN_GAS_LOG_WAIT,
     NUM_PREVIEW_SHARDS,
 )
 from trinity.sync.common.events import (
@@ -405,12 +410,43 @@ def pausing_vm_decorator(
     class PausingVM(original_vm_class):  # type: ignore
         logger = get_logger(f'eth.vm.base.VM.{original_vm_class.__name__}')
 
+        last_log_time = 0.0
+
         @classmethod
         def get_state_class(cls) -> Type[StateAPI]:
             return PausingVMState
 
         def get_beam_stats(self) -> BeamStats:
             return self.state.stats_counter
+
+        def transaction_applied_hook(
+                self,
+                transaction_index: int,
+                transactions: Sequence[SignedTransactionAPI],
+                base_header: BlockHeaderAPI,
+                partial_header: BlockHeaderAPI,
+                computation: ComputationAPI,
+                receipt: ReceiptAPI) -> None:
+
+            num_transactions = len(transactions)
+
+            now = time.monotonic()
+            if now - self.last_log_time > MIN_GAS_LOG_WAIT:
+                if urgent:
+                    logger = self.logger.info
+                else:
+                    logger = self.logger.debug
+
+                logger(
+                    "Beaming: #%d txn %d/%d, gas: %s/%s (%.1f%%)",
+                    base_header.block_number,
+                    transaction_index + 1,
+                    num_transactions,
+                    f"{partial_header.gas_used:,d}",
+                    f"{base_header.gas_used:,d}",
+                    100 * partial_header.gas_used / base_header.gas_used,
+                )
+                self.last_log_time = now
 
     return PausingVM
 
