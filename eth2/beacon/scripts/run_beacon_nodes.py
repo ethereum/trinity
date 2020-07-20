@@ -131,7 +131,7 @@ class Node:
             f"--beacon-nodekey={remove_0x_prefix(encode_hex(self.node_privkey.to_bytes()))}",
             f"--preferred_nodes={','.join(str(node.maddr) for node in self.preferred_nodes)}",
             f"--http-port={self.http_port}",
-            "--enable-http",
+            "--enable-http-apis='beacon'",
             "--enable-metrics",
             "--enable-api",
             f"--api-port={self.api_port}",
