@@ -1,4 +1,5 @@
 import logging
+import os
 import shutil
 from typing import Collection, Sequence, Tuple, Type
 
@@ -63,8 +64,10 @@ def main_entry_trio(
     _initialize_beacon_filesystem_and_db(boot_info)
 
     logger = logging.getLogger("trinity")
+    pid = os.getpid()
+    identifier = construct_trinity_client_identifier()
     logger.info(
-        "Booted client with identifier: %s", construct_trinity_client_identifier()
+        "Booted client with identifier: %s and process id %d", identifier, pid
     )
 
     runtime_component_types = tuple(
