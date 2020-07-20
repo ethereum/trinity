@@ -4,6 +4,7 @@ from eth2.beacon.fork_choice.abc import BaseForkChoice
 from eth2.beacon.fork_choice.lmd_ghost2 import LMDGHOSTForkChoice
 from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
+from eth2.beacon.state_machines.forks.altona.eth2fastspec import EpochsContext
 from eth2.beacon.state_machines.forks.serenity.state_transitions import (
     apply_state_transition,
 )
@@ -42,6 +43,19 @@ class AltonaStateMachine(BaseBeaconStateMachine):
             )
 
         return state, signed_block
+
+
+class AltonaStateMachineFast(AltonaStateMachine):
+    _epochs_ctx: EpochsContext = EpochsContext()
+
+    def apply_state_transition(
+        self,
+        state: BeaconState,
+        signed_block: BaseSignedBeaconBlock = None,
+        future_slot: Slot = None,
+        check_proposer_signature: bool = True,
+    ) -> Tuple[BeaconState, BaseSignedBeaconBlock]:
+        pass
 
 
 class AltonaStateMachineTest(AltonaStateMachine):
