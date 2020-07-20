@@ -13,7 +13,8 @@ We can also generate an always up-to-date version of them by running ``trinity -
                    [--network-id NETWORK_ID | --ropsten | --goerli]
                    [--preferred-node PREFERRED_NODES] [--max-peers MAX_PEERS]
                    [--genesis GENESIS] [--data-dir DATA_DIR] [--nodekey NODEKEY]
-                   [--profile] [--disable-rpc] [--enable-http]
+                   [--profile] [--disable-rpc]
+                   [--enable-http-apis ENABLE_HTTP_APIS]
                    [--http-listen-address HTTP_LISTEN_ADDRESS]
                    [--http-port HTTP_PORT]
                    [--network-tracking-backend {sqlite3,memory,do-not-track}]
@@ -62,7 +63,11 @@ We can also generate an always up-to-date version of them by running ``trinity -
     optional arguments:
       -h, --help            show this help message and exit
       --disable-rpc         Disables the JSON-RPC server
-      --enable-http         Enables the HTTP server
+      --enable-http-apis ENABLE_HTTP_APIS
+                            Enable HTTP access to specified JSON-RPC APIs (e.g.
+                            'eth,net'). Use '*' to enable HTTP access to all
+                            modules (including eth_admin).
+
       --http-listen-address HTTP_LISTEN_ADDRESS
                             Address for the HTTP server to listen on
       --http-port HTTP_PORT

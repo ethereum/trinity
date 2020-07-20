@@ -5,6 +5,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    Type,
 )
 
 from lahja import EndpointAPI
@@ -14,6 +15,7 @@ from eth_utils import (
     ValidationError,
     ExtendedDebugLogger,
 )
+from eth_utils.toolz import curry
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
@@ -76,7 +78,7 @@ class RPCServer:
         self.logger: ExtendedDebugLogger = get_logger('trinity.rpc.main.RPCServer')
 
         for module in modules:
-            name = module.name.lower()
+            name = module.get_name()
 
             if name in self.modules:
                 raise ValueError(
@@ -85,7 +87,9 @@ class RPCServer:
 
             self.modules[name] = module
 
-    def _lookup_method(self, rpc_method: str) -> Any:
+    def _lookup_method(self,
+                       rpc_method: str,
+                       disallowed_modules: Sequence[Type[BaseRPCModule]]) -> Any:
         method_pieces = rpc_method.split('_')
 
         if len(method_pieces) != 2:
@@ -99,6 +103,9 @@ class RPCServer:
             raise ValueError("Module unavailable: %r" % module_name)
         module = self.modules[module_name]
 
+        if type(module) in disallowed_modules:
+            raise ValidationError(f"Access of {module.get_name()} module prohibited")
+
         try:
             return getattr(module, method_name)
         except AttributeError:
@@ -106,6 +113,7 @@ class RPCServer:
 
     async def _get_result(self,
                           request: Dict[str, Any],
+                          disallowed_modules: Sequence[Type[BaseRPCModule]] = (),
                           debug: bool = False) -> Tuple[Any, Union[Exception, str]]:
         """
         :returns: (result, error) - result is None if error is provided. Error must be
@@ -117,7 +125,8 @@ class RPCServer:
             if request.get('jsonrpc', None) != '2.0':
                 raise NotImplementedError("Only the 2.0 jsonrpc protocol is supported")
 
-            method = self._lookup_method(request['method'])
+            method = self._lookup_method(request['method'], disallowed_modules)
+
             params = request.get('params', [])
 
             result = await execute_with_retries(
@@ -147,9 +156,25 @@ class RPCServer:
         else:
             return result, None
 
-    async def execute(self, request: Dict[str, Any]) -> str:
+    async def execute(self,
+                      request: Dict[str, Any]) -> str:
         """
-        The key entry point for all incoming requests
+        Delegate to :meth:`~trinity.rpc.main.RPCServer.execute_with_access_control` with
+        unrestricted access.
         """
-        result, error = await self._get_result(request)
+        return await self.execute_with_access_control((), request)
+
+    @curry
+    async def execute_with_access_control(
+            self,
+            disallowed_modules: Sequence[Type[BaseRPCModule]],
+            request: Dict[str, Any]) -> str:
+        """
+        The key entry point for all incoming requests. Execution of requests to certain modules
+        can be restricted by providing a sequence of ``disallowed_modules`` to this API. An empty
+        sequence of modules allows requests to be made for all modules.
+        Access restriction happens on this level because one instance of the server may allow or
+        prevent execution of certain requests based on external conditions (e.g request origin).
+        """
+        result, error = await self._get_result(request, disallowed_modules)
         return generate_response(request, result, error)

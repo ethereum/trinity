@@ -3,9 +3,10 @@ from argparse import (
     _SubParsersAction,
 )
 import contextlib
-from typing import Iterator, Tuple, Union
+from typing import Iterator, Tuple, Union, Sequence, Type
 
 from async_service import Service
+from eth_utils import ValidationError, to_tuple
 
 from lahja import EndpointAPI
 
@@ -32,6 +33,7 @@ from trinity.rpc.main import (
     RPCServer,
 )
 from trinity.rpc.modules import (
+    BaseRPCModule,
     initialize_beacon_modules,
     initialize_eth1_modules,
 )
@@ -91,6 +93,32 @@ def chain_for_config(trinity_config: TrinityConfig,
         raise Exception("Unsupported Node Type")
 
 
+@to_tuple
+def get_http_enabled_modules(
+        enabled_modules: str,
+        available_modules: Sequence[BaseRPCModule]) -> Iterator[Type[BaseRPCModule]]:
+    all_module_types = set(type(mod) for mod in available_modules)
+    normalized_str = enabled_modules.lower().strip()
+    if not normalized_str:
+        return
+    elif normalized_str == "*":
+        yield from all_module_types
+    else:
+        for module_name in normalized_str.split(','):
+            stripped_module_name = module_name.strip()
+            match = tuple(
+                mod for mod in available_modules if mod.get_name() == stripped_module_name
+            )
+            if len(match) == 0:
+                raise ValidationError(f"Unknown module {stripped_module_name}")
+            elif len(match) > 1:
+                raise ValidationError(
+                    f"Invalid, {match} all share identifier {stripped_module_name}"
+                )
+            else:
+                yield type(match[0])
+
+
 class JsonRpcServerComponent(AsyncioIsolatedComponent):
     name = "JSON-RPC API"
 
@@ -106,9 +134,13 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
             help="Disables the JSON-RPC server",
         )
         arg_parser.add_argument(
-            "--enable-http",
-            action="store_true",
-            help="Enables the HTTP server",
+            "--enable-http-apis",
+            type=str,
+            default="",
+            help=(
+                "Enable HTTP access to specified JSON-RPC APIs (e.g. 'eth,net'). "
+                "Use '*' to enable HTTP access to all modules (including eth_admin)."
+            )
         )
         arg_parser.add_argument(
             "--http-listen-address",
@@ -143,11 +175,16 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
                 ipc_server,
             )
 
-            # Run HTTP Server
-            if boot_info.args.enable_http:
+            http_modules = get_http_enabled_modules(boot_info.args.enable_http_apis, modules)
+            # Run HTTP Server if there are http enabled APIs
+            if len(http_modules) > 0:
+                enabled_module_names = tuple(mod.get_name() for mod in http_modules)
+                self.logger.info("JSON-RPC modules exposed via HTTP: %s", enabled_module_names)
+                non_http_modules = set(type(mod) for mod in modules) - set(http_modules)
+                exec = rpc.execute_with_access_control(non_http_modules)
                 http_server = HTTPServer(
                     host=boot_info.args.http_listen_address,
-                    handler=RPCHandler.handle(rpc.execute),
+                    handler=RPCHandler.handle(exec),
                     port=boot_info.args.http_port,
                 )
                 services_to_exit += (http_server,)
