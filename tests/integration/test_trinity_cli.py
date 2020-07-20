@@ -1,4 +1,5 @@
 import pathlib
+import requests
 import signal
 import sys
 import tempfile
@@ -285,6 +286,37 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
     # This is our last line of defence. This test basically observes the first
     # 20 seconds of the Trinity boot process and fails if Trinity logs any exceptions
     await run_command_and_detect_errors(command, 20)
+
+
+@pytest.mark.asyncio
+async def test_does_not_throw_errors_with_metrics_reporting_enabled(unused_tcp_port):
+    enabled_metrics_command = (
+        'trinity',
+        '--enable-metrics',
+        '--metrics-host=test',
+        '--metrics-influx-server=localhost',
+        '--metrics-influx-password=trinity'
+    )
+    command = amend_command_for_unused_port(enabled_metrics_command, unused_tcp_port)
+
+    async with AsyncProcessRunner.run(command, timeout_sec=120) as runner:
+        assert await contains_all(runner.stderr, {
+            'MetricsService',
+            'Reporting metrics to localhost',
+        })
+        t1 = time.time()
+        while (time.time() - t1) < 30:
+            r = requests.get(
+                'http://localhost:8086/query?db=trinity&epoch=ns&q=select+%2A'
+                '+from+%22trinity.p2p%2Fpeers.counter%22'
+            )
+            json_response = r.json()
+            if 'series' in json_response['results'][0]:
+                break
+        else:
+            raise Exception('Influxdb request timeout')
+
+        assert len(json_response['results'][0]['series'][0]['values']) > 0
 
 
 @pytest.mark.parametrize(

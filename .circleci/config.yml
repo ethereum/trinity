@@ -71,6 +71,49 @@ geth_steps: &geth_steps
           - ~/.py-geth
         key: cache-v2-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum "./.circleci/build_geth.sh" }}
 
+wheel_cli_steps: &wheel_cli_steps
+  working_directory: ~/repo
+  steps:
+    - checkout
+    - run:
+        name: checkout fixtures submodule
+        command: git submodule update --init --recursive
+    - run:
+        name: merge pull request base
+        command: ./.circleci/merge_pr.sh
+    - run:
+        name: merge pull request base (2nd try)
+        command: ./.circleci/merge_pr.sh
+        when: on_fail
+    - run:
+        name: merge pull request base (3nd try)
+        command: ./.circleci/merge_pr.sh
+        when: on_fail
+    - restore_cache:
+        keys:
+          - cache-v4-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum "./.circleci/build_influxdb.sh" }}
+    - run:
+        name: install libsnappy-dev
+        command: sudo apt install -y libsnappy-dev
+    - run:
+        name: build influxdb
+        background: true
+        command: ./.circleci/build_influxdb.sh
+    - run:
+        name: install dependencies
+        command: pip install --user tox
+    - run:
+        name: run tox
+        command: ~/.local/bin/tox
+    - save_cache:
+        paths:
+          - .hypothesis
+          - .tox
+          - ~/.cache/pip
+          - ~/.local
+          - ./eggs
+        key: cache-v4-{{ arch }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "setup.py" }}-{{ checksum "tox.ini" }}-{{ checksum "./.circleci/build_influxdb.sh" }}
+
 jobs:
   py38-lint:
     <<: *common
@@ -185,7 +228,7 @@ jobs:
         environment:
           TOXENV: py38-p2p-trio
   py38-wheel-cli:
-    <<: *common
+    <<: *wheel_cli_steps
     docker:
       - image: circleci/python:3.8
         environment:
@@ -241,7 +284,7 @@ jobs:
         environment:
           TOXENV: py37-p2p-trio
   py37-wheel-cli:
-    <<: *common
+    <<: *wheel_cli_steps
     docker:
       - image: circleci/python:3.7
         environment:
