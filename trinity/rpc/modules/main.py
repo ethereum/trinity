@@ -26,12 +26,12 @@ class ChainReplacementEvent(BaseEvent, Generic[TChain]):
 
 class BaseRPCModule(ABC):
 
-    @property
-    def name(self) -> str:
+    @classmethod
+    def get_name(cls) -> str:
         # By default the name is the lower-case class name.
         # This encourages a standard name of the module, but can
         # be overridden if necessary.
-        return self.__class__.__name__.lower()
+        return cls.__name__.lower()
 
 
 class ChainBasedRPCModule(BaseRPCModule, Generic[TChain]):
