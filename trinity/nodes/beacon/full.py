@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 import logging
 from pathlib import Path
+import time
 from typing import Any, Collection, Iterable, Optional, Set, Tuple, Type
 
 from async_service import background_trio_service
 from eth.db.backends.level import LevelDB
 from eth.exceptions import BlockNotFound
 from eth_keys.datatypes import PrivateKey
-from eth_utils import to_tuple
 from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.id import ID as PeerID
 from multiaddr import Multiaddr
@@ -88,6 +88,14 @@ class SyncRequest:
     peer_id: PeerID
     start_slot: Slot
     count: int
+
+    def get_batches(self, max_size: int) -> Iterable["SyncRequest"]:
+        last_slot = self.start_slot + self.count
+        batch_offsets = range(self.start_slot, self.start_slot + self.count, max_size)
+        for offset in batch_offsets:
+            remainder = last_slot - offset
+            batch_size = max_size if remainder > max_size else remainder
+            yield self.__class__(self.peer_id, Slot(offset), batch_size)
 
 
 class BeaconNode:
@@ -385,10 +393,9 @@ class BeaconNode:
         async for block in self._host.stream_block_gossip():
             self.on_block(block)
 
-    @to_tuple
-    def _determine_sync_requests(
+    def _determine_sync_request(
         self, peer_id: PeerID, status: Status
-    ) -> Iterable[SyncRequest]:
+    ) -> Optional[SyncRequest]:
         """
         If the peer has a higher finalized epoch or head slot, sync blocks from them.
         """
@@ -396,10 +403,11 @@ class BeaconNode:
         finalized_slot = compute_start_slot_at_epoch(
             head_state.finalized_checkpoint.epoch, self._eth2_config.SLOTS_PER_EPOCH
         )
-        while finalized_slot < status.head_slot:
-            count = min(status.head_slot - finalized_slot, MAX_REQUEST_BLOCKS)
-            yield SyncRequest(peer_id, Slot(finalized_slot + 1), count)
-            finalized_slot += count
+        if finalized_slot < status.head_slot:
+            span = status.head_slot - finalized_slot
+            return SyncRequest(peer_id, Slot(finalized_slot + 1), span)
+        else:
+            return None
 
     async def _manage_peers(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
@@ -408,7 +416,8 @@ class BeaconNode:
         async with self._peer_updates:
             async for peer_id, update in self._peer_updates:
                 if isinstance(update, Status):
-                    for request in self._determine_sync_requests(peer_id, update):
+                    request = self._determine_sync_request(peer_id, update)
+                    if request:
                         await self._sync_notifier.send(request)
                 elif isinstance(update, GoodbyeReason):
                     self.logger.debug(
@@ -427,14 +436,29 @@ class BeaconNode:
         task_status.started()
         async with self._sync_requests:
             async for request in self._sync_requests:
-                async for block in self._host.get_blocks_by_range(
-                    request.peer_id, request.start_slot, request.count
-                ):
-                    imported = self.on_block(block)
-                    if not imported:
-                        self.logger.warning(
-                            "an issue with sync of this block %s", block
-                        )
+                start_time = time.time()
+                self.logger.info(
+                    "starting sync of %d slots at %s", request.count, time.ctime()
+                )
+
+                for batch in request.get_batches(MAX_REQUEST_BLOCKS):
+                    async for block in self._host.get_blocks_by_range(
+                        batch.peer_id, batch.start_slot, batch.count
+                    ):
+                        imported = self.on_block(block)
+                        if not imported:
+                            self.logger.warning(
+                                "an issue with sync of this block %s", block
+                            )
+                        else:
+                            now = time.time()
+                            slots = block.slot - request.start_slot
+                            slots_per_second = slots / (now - start_time)
+                            self.logger.info(
+                                "synced to slot %d, syncing at [ %2f slots/sec ]",
+                                block.slot,
+                                slots_per_second,
+                            )
 
     async def run(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
