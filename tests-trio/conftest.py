@@ -3,6 +3,7 @@ import secrets
 import tempfile
 import uuid
 
+from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONFIG
 from eth_keys.datatypes import PrivateKey
 from lahja import ConnectionConfig
 from lahja.trio.endpoint import TrioEndpoint
@@ -13,11 +14,8 @@ import pytest
 import trio
 
 from eth2._utils.bls import Eth2BLS, bls
-from eth2.beacon.chains.testnet.altona import BeaconChain
+from eth2.beacon.chains.testnet.altona import BeaconChainTest
 from eth2.beacon.constants import FAR_FUTURE_EPOCH
-from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
-    MINIMAL_SERENITY_CONFIG,
-)
 from eth2.beacon.tools.builder.initializer import create_key_pairs_for
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.blocks import BeaconBlockBody, BeaconBlockHeader, BeaconBlock
@@ -114,8 +112,8 @@ def genesis_block(genesis_state):
 
 
 @pytest.fixture
-def chain_config(genesis_state, eth2_config):
-    return BeaconChainConfig(genesis_state, eth2_config, {})
+def chain_config(genesis_state, eth2_config, chain_class):
+    return BeaconChainConfig(genesis_state, eth2_config, {}, beacon_chain_class=chain_class)
 
 
 @pytest.fixture
@@ -125,7 +123,7 @@ def database_dir(tmp_path):
 
 @pytest.fixture
 def chain_class():
-    return BeaconChain
+    return BeaconChainTest
 
 
 @pytest.fixture

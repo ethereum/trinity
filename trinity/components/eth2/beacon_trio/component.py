@@ -6,7 +6,7 @@ from eth_utils import to_tuple
 from multiaddr import Multiaddr
 
 from trinity.boot_info import BootInfo
-from trinity.config import BeaconAppConfig
+from trinity.config import BeaconTrioAppConfig
 from trinity.constants import BEACON_TESTNET_NETWORK_ID
 from trinity.extensibility import TrioComponent
 from trinity.nodes.beacon.config import BeaconNodeConfig
@@ -27,9 +27,14 @@ class BeaconNodeComponent(TrioComponent):
     def __init__(self, boot_info: BootInfo) -> None:
         super().__init__(boot_info)
 
+        config_profile = boot_info.args.config_profile
+        if config_profile != "altona":
+            raise NotImplementedError(f"config profile not supported: {config_profile}")
+
         trinity_config = self._boot_info.trinity_config
-        beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
+        beacon_app_config = trinity_config.get_app_config(BeaconTrioAppConfig)
         config = BeaconNodeConfig.from_platform_config(
+            boot_info.args.config_profile,
             trinity_config,
             beacon_app_config,
             boot_info.args.validator_api_port,
@@ -76,9 +81,16 @@ class BeaconNodeComponent(TrioComponent):
             default="a",
         )
 
+        arg_parser.add_argument(
+            "--config-profile",
+            help="the profile used to generate the genesis config",
+            choices=("minimal", "mainnet", "altona"),
+            default="minimal",
+        )
+
     @property
     def is_enabled(self) -> bool:
-        return self._boot_info.trinity_config.has_app_config(BeaconAppConfig)
+        return self._boot_info.trinity_config.has_app_config(BeaconTrioAppConfig)
 
     async def run(self) -> None:
         logging.getLogger("libp2p.pubsub").setLevel(logging.INFO)

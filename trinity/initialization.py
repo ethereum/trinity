@@ -14,6 +14,8 @@ from trinity.config import (
     Eth1AppConfig,
     Eth1ChainConfig,
     TrinityConfig,
+    BeaconTrioAppConfig,
+    BeaconTrioChainConfig,
 )
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from trinity.exceptions import (
@@ -148,11 +150,25 @@ def initialize_beacon_database(chain_config: BeaconChainConfig,
         chain_config.initialize_chain(base_db)
 
 
+def initialize_beacon_trio_database(chain_config: BeaconTrioChainConfig,
+                                    chaindb: BaseBeaconChainDB,
+                                    base_db: AtomicDatabaseAPI) -> None:
+    try:
+        chaindb.get_canonical_head_root()
+    except CanonicalHeadNotFound:
+        chain_config.initialize_chain(base_db)
+
+
 def ensure_eth1_dirs(app_config: Eth1AppConfig) -> None:
     if not app_config.database_dir.exists():
         app_config.database_dir.mkdir(parents=True, exist_ok=True)
 
 
 def ensure_beacon_dirs(app_config: BeaconAppConfig) -> None:
+    if not app_config.database_dir.exists():
+        app_config.database_dir.mkdir(parents=True, exist_ok=True)
+
+
+def ensure_beacon_trio_dirs(app_config: BeaconTrioAppConfig) -> None:
     if not app_config.database_dir.exists():
         app_config.database_dir.mkdir(parents=True, exist_ok=True)

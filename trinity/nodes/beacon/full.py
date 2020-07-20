@@ -25,7 +25,7 @@ from eth2.beacon.typing import Epoch, ForkDigest, Root, Slot
 from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
 from trinity._utils.trio_utils import JSONHTTPServer
-from trinity.config import BeaconChainConfig
+from trinity.config import BeaconTrioChainConfig
 from trinity.nodes.beacon.config import BeaconNodeConfig
 from trinity.nodes.beacon.host import Host
 from trinity.nodes.beacon.metadata import MetaData
@@ -97,7 +97,7 @@ class BeaconNode:
         self,
         local_node_key: PrivateKey,
         eth2_config: Eth2Config,
-        chain_config: BeaconChainConfig,
+        chain_config: BeaconTrioChainConfig,
         database_dir: Path,
         chain_class: Type[BaseBeaconChain],
         clock: Clock,

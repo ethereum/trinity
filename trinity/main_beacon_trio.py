@@ -11,14 +11,12 @@ from trinity._utils.version import construct_trinity_client_identifier
 from trinity.boot_info import BootInfo
 from trinity.bootstrap import construct_boot_info
 from trinity.components.registry import get_components_for_trio_beacon_client
-from trinity.config import BaseAppConfig, BeaconAppConfig
+from trinity.config import BaseAppConfig, BeaconTrioAppConfig
 from trinity.constants import APP_IDENTIFIER_BEACON
 from trinity.extensibility import BaseComponentAPI
 from trinity.extensibility.trio import TrioComponent
 from trinity.initialization import (
-    ensure_beacon_dirs,
-    initialize_beacon_database,
-    is_beacon_database_initialized,
+    is_beacon_database_initialized, ensure_beacon_trio_dirs, initialize_beacon_trio_database,
 )
 
 
@@ -36,15 +34,15 @@ async def _run_trio_components_until_interrupt(
 
 
 def _initialize_beacon_filesystem_and_db(boot_info: BootInfo) -> None:
-    app_config = boot_info.trinity_config.get_app_config(BeaconAppConfig)
-    ensure_beacon_dirs(app_config)
+    app_config = boot_info.trinity_config.get_app_config(BeaconTrioAppConfig)
+    ensure_beacon_trio_dirs(app_config)
 
     base_db = LevelDB(db_path=app_config.database_dir)
-    chain_config = app_config.get_chain_config()
+    chain_config = app_config.get_chain_config(boot_info.args.config_profile)
     chaindb = BeaconChainDB(base_db)
 
     if not is_beacon_database_initialized(chaindb):
-        initialize_beacon_database(chain_config, chaindb, base_db)
+        initialize_beacon_trio_database(chain_config, chaindb, base_db)
 
 
 def main_entry_trio(
@@ -83,5 +81,5 @@ def main_entry_trio(
 def main_beacon() -> None:
     app_identifier = APP_IDENTIFIER_BEACON
     component_types = get_components_for_trio_beacon_client()
-    sub_configs = (BeaconAppConfig,)
+    sub_configs = (BeaconTrioAppConfig,)
     main_entry_trio(app_identifier, component_types, sub_configs)

@@ -43,7 +43,7 @@ class NetworkGeneratorComponent(Application):
         network_generator_parser.add_argument(
             "--config-profile",
             help=CONFIG_PROFILE_HELP,
-            choices=("minimal", "mainnet"),
+            choices=("minimal", "mainnet", "altona"),
             default="minimal",
         )
         network_generator_parser.add_argument(

@@ -1,12 +1,12 @@
 from pathlib import Path
-from typing import Collection
+from typing import Collection, Type
 
 from eth_keys.datatypes import PrivateKey
 from multiaddr import Multiaddr
 
-from eth2.beacon.chains.testnet.altona import BeaconChain
+from eth2.beacon.chains.abc import BaseBeaconChain
 from eth2.configs import Eth2Config
-from trinity.config import BeaconAppConfig, BeaconChainConfig, TrinityConfig
+from trinity.config import TrinityConfig, BeaconTrioAppConfig, BeaconTrioChainConfig
 
 
 class BeaconNodeConfig:
@@ -16,12 +16,13 @@ class BeaconNodeConfig:
         orchestration_profile: str,
         bootstrap_nodes: Collection[Multiaddr],
         preferred_nodes: Collection[Multiaddr],
-        chain_config: BeaconChainConfig,
+        chain_config: BeaconTrioChainConfig,
         local_node_key: PrivateKey,
         validator_api_port: int,
         eth2_config: Eth2Config,
         client_identifier: str,
         p2p_maddr: Multiaddr,
+        chain_class: Type[BaseBeaconChain]
     ) -> None:
         self.database_dir = database_dir
         self.orchestration_profile = orchestration_profile
@@ -33,18 +34,18 @@ class BeaconNodeConfig:
         self.eth2_config = eth2_config
         self.client_identifier = client_identifier
         self.p2p_maddr = p2p_maddr
-
-        self.chain_class = BeaconChain
+        self.chain_class = chain_class
 
     @classmethod
     def from_platform_config(
         cls,
+        config_profile: str,
         trinity_config: TrinityConfig,
-        beacon_app_config: BeaconAppConfig,
+        beacon_app_config: BeaconTrioAppConfig,
         validator_api_port: int,
         bootstrap_nodes: Collection[Multiaddr],
     ) -> "BeaconNodeConfig":
-        chain_config = beacon_app_config.get_chain_config()
+        chain_config = beacon_app_config.get_chain_config(config_profile)
         return cls(
             beacon_app_config.database_dir,
             beacon_app_config.orchestration_profile,
@@ -56,4 +57,5 @@ class BeaconNodeConfig:
             chain_config._eth2_config,
             beacon_app_config.client_identifier,
             beacon_app_config.p2p_maddr,
+            chain_config.beacon_chain_class,
         )

@@ -3,12 +3,11 @@ from typing import Tuple, Type  # noqa: F401
 from eth2.beacon.fork_choice.abc import BaseForkChoice
 from eth2.beacon.fork_choice.lmd_ghost2 import LMDGHOSTForkChoice
 from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
+from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
 from eth2.beacon.state_machines.forks.serenity.state_transitions import (
     apply_state_transition,
 )
-from eth2.beacon.state_machines.forks.skeleton_lake.configs import (
-    MINIMAL_SERENITY_CONFIG,
-)
+from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONFIG
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
     BaseSignedBeaconBlock,
@@ -20,7 +19,7 @@ from eth2.beacon.typing import Slot
 
 
 class AltonaStateMachine(BaseBeaconStateMachine):
-    config = MINIMAL_SERENITY_CONFIG
+    config = ALTONA_CONFIG
     block_class: Type[BaseBeaconBlock] = BeaconBlock
     signed_block_class: Type[BaseSignedBeaconBlock] = SignedBeaconBlock
     state_class: Type[BeaconState] = BeaconState
@@ -43,3 +42,7 @@ class AltonaStateMachine(BaseBeaconStateMachine):
             )
 
         return state, signed_block
+
+
+class AltonaStateMachineTest(AltonaStateMachine):
+    config = MINIMAL_SERENITY_CONFIG

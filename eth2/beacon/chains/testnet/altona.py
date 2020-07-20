@@ -14,7 +14,10 @@ from eth2.beacon.db.chain2 import BeaconChainDB, StateNotFound
 from eth2.beacon.epoch_processing_helpers import get_attesting_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
 from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
-from eth2.beacon.state_machines.forks.altona.state_machine import AltonaStateMachine
+from eth2.beacon.state_machines.forks.altona.state_machine import (
+    AltonaStateMachine,
+    AltonaStateMachineTest,
+)
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import (
@@ -394,3 +397,7 @@ class BeaconChain(BaseBeaconChain):
         """
         fork_choice = self._get_fork_choice(attestation.data.slot)
         self._update_fork_choice_with_attestation(fork_choice, attestation)
+
+
+class BeaconChainTest(BeaconChain):
+    _sm_configuration = ((GENESIS_SLOT, AltonaStateMachineTest),)
