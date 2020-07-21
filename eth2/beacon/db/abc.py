@@ -6,6 +6,7 @@ from eth.abc import AtomicDatabaseAPI
 from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import BLSSignature, Root, Slot
+from eth2.configs import Eth2Config
 
 
 class BaseBeaconChainDB(ABC):
@@ -32,6 +33,7 @@ class BaseBeaconChainDB(ABC):
         db: AtomicDatabaseAPI,
         genesis_state: BeaconState,
         signed_block_class: Type[BaseSignedBeaconBlock],
+        config: Eth2Config,
     ) -> "BaseBeaconChainDB":
         ...
 
@@ -87,5 +89,5 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
-    def persist_state(self, state: BeaconState) -> None:
+    def persist_state(self, state: BeaconState, config: Eth2Config) -> None:
         ...
