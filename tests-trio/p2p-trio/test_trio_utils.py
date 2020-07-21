@@ -1,3 +1,5 @@
+from functools import partial
+
 import pytest
 
 import trio
@@ -6,6 +8,7 @@ from p2p.trio_utils import (
     every,
     gather,
 )
+from trinity._utils.trio_utils import wait_first
 
 
 @pytest.mark.trio
@@ -97,3 +100,16 @@ async def test_every_late(autojump_clock):
     third_time = await every_generator.__anext__()
     assert third_time == pytest.approx(second_time + 2)
     assert trio.current_time() == pytest.approx(third_time)
+
+
+@pytest.mark.trio
+async def test_wait_first(autojump_clock):
+    count = 0
+
+    async def _sleep_and_count(duration):
+        await trio.sleep(duration)
+        nonlocal count
+        count += 1
+
+    await wait_first([partial(_sleep_and_count, 1), partial(_sleep_and_count, 2)])
+    assert count == 1
