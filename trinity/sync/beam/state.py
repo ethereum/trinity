@@ -2,9 +2,11 @@ import asyncio
 from collections import Counter
 from concurrent.futures import CancelledError
 import itertools
+import time
 import typing
 from typing import (
     Any,
+    Collection,
     FrozenSet,
     Iterable,
     Set,
@@ -56,6 +58,7 @@ from trinity.sync.beam.queen import (
 )
 from trinity.sync.beam.constants import (
     DELAY_BEFORE_NON_URGENT_REQUEST,
+    ESTIMATED_BEAMABLE_SECONDS,
     REQUEST_BUFFER_MULTIPLIER,
 )
 
@@ -179,7 +182,7 @@ class BeamDownloader(Service, PeerSubscriber):
 
     async def download_accounts(
             self,
-            account_addresses: Iterable[Address],
+            account_addresses: Collection[Address],
             root_hash: Hash32,
             urgent: bool = True) -> int:
         """
@@ -187,6 +190,11 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: total number of trie node downloads that were required to locally prove
         """
+        if len(account_addresses) == 0:
+            return 0
+
+        last_log_time = time.monotonic()
+
         missing_account_hashes = set(keccak(address) for address in account_addresses)
         completed_account_hashes = set()
         nodes_downloaded = 0
@@ -201,6 +209,17 @@ class BeamDownloader(Service, PeerSubscriber):
                         need_nodes.add(exc.missing_node_hash)
                     else:
                         completed_account_hashes.add(account_hash)
+
+            # Log if taking a long time to download addresses
+            now = time.monotonic()
+            if urgent and now - last_log_time > ESTIMATED_BEAMABLE_SECONDS:
+                self.logger.info(
+                    "Beam account download: %d/%d (%.0f%%)",
+                    len(completed_account_hashes),
+                    len(account_addresses),
+                    100 * len(completed_account_hashes) / len(account_addresses),
+                )
+                last_log_time = now
 
             await self.ensure_nodes_present(need_nodes, urgent)
             nodes_downloaded += len(need_nodes)
