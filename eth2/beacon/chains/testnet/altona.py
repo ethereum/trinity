@@ -15,7 +15,7 @@ from eth2.beacon.epoch_processing_helpers import get_attesting_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
 from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
 from eth2.beacon.state_machines.forks.altona.state_machine import (
-    AltonaStateMachine,
+    AltonaStateMachineFast,
     AltonaStateMachineTest,
 )
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
@@ -82,7 +82,7 @@ class BeaconChain(BaseBeaconChain):
     logger = logging.getLogger("eth2.beacon.chains.BeaconChain")
 
     _chain_db: BaseBeaconChainDB
-    _sm_configuration = ((GENESIS_SLOT, AltonaStateMachine),)
+    _sm_configuration = ((GENESIS_SLOT, AltonaStateMachineFast),)
     _fork_choice: BaseForkChoice
     _current_head: BeaconBlock
     _justified_checkpoint: Checkpoint = default_checkpoint
