@@ -37,6 +37,7 @@ from lahja import (
 from pyformance import MetricsRegistry
 
 from p2p.abc import NodeAPI, SessionAPI
+from p2p.asyncio_utils import create_task
 from p2p.constants import (
     DEFAULT_MAX_PEERS,
     DEFAULT_PEER_BOOT_TIMEOUT,
@@ -351,7 +352,8 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
 
         try:
             self.logger.debug("Connecting to %s...", remote)
-            task = asyncio.ensure_future(self.get_peer_factory().handshake(remote))
+            task_name = f'PeerPool/Handshake/{remote}'
+            task = create_task(self.get_peer_factory().handshake(remote), task_name)
             return await asyncio.wait_for(task, timeout=HANDSHAKE_TIMEOUT)
         except BadAckMessage:
             # This is kept separate from the

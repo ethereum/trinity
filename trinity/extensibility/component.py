@@ -260,7 +260,7 @@ async def _run_eventbus_for_component(
 
 def run_asyncio_eth1_component(component_type: Type['AsyncioIsolatedComponent']) -> None:
     import asyncio
-    from p2p.logic import wait_first
+    from p2p.asyncio_utils import wait_first
     loop = asyncio.get_event_loop()
     got_sigint = asyncio.Event()
     loop.add_signal_handler(signal.SIGINT, got_sigint.set)

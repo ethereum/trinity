@@ -11,6 +11,7 @@ from typing import (
 from async_service import background_asyncio_service
 
 from p2p.abc import ConnectionAPI
+from p2p.asyncio_utils import create_task
 
 from .abc import ExchangeAPI, NormalizerAPI, ValidatorAPI
 from .candidate_stream import ResponseCandidateStream
@@ -42,7 +43,8 @@ class BaseExchange(ExchangeAPI[TRequestCommand, TResponseCommand, TResult]):
                 connection,
                 response_stream,
             )
-            yield asyncio.create_task(response_stream_manager.wait_finished())
+            name = f'{self.__class__.__name__}/{connection.remote}'
+            yield create_task(response_stream_manager.wait_finished(), name=name)
 
     async def get_result(
             self,

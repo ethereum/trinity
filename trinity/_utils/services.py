@@ -9,7 +9,7 @@ from async_service import (
     ServiceAPI,
 )
 
-from p2p.logic import wait_first
+from p2p.asyncio_utils import wait_first
 
 
 async def run_background_asyncio_services(services: Sequence[ServiceAPI]) -> None:
