@@ -66,9 +66,7 @@ def main_entry_trio(
     logger = logging.getLogger("trinity")
     pid = os.getpid()
     identifier = construct_trinity_client_identifier()
-    logger.info(
-        "Booted client with identifier: %s and process id %d", identifier, pid
-    )
+    logger.info("Booted client with identifier: %s and process id %d", identifier, pid)
 
     runtime_component_types = tuple(
         component_cls

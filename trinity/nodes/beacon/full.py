@@ -8,6 +8,7 @@ from async_service import background_trio_service
 from eth.db.backends.level import LevelDB
 from eth.exceptions import BlockNotFound
 from eth_keys.datatypes import PrivateKey
+from eth_utils import humanize_hash
 from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.id import ID as PeerID
 from multiaddr import Multiaddr
@@ -288,7 +289,11 @@ class BeaconNode:
                     return
 
     def _on_block_imported(self, block: SignedBeaconBlock) -> None:
-        self.logger.debug("successfully imported block %s", block)
+        self.logger.debug(
+            "successfully imported signed block at slot %d with root %s",
+            block.slot,
+            humanize_hash(block.hash_tree_root),
+        )
         self._try_import_orphan(block.message.hash_tree_root)
         # TODO: synchronize any operations from pools that are now on-chain
 
@@ -297,9 +302,13 @@ class BeaconNode:
         # TODO: do not drop block?
 
     def _on_orphan_block(
-        self, block: SignedBeaconBlock, exc: ParentNotFoundError
+        self, block: SignedBeaconBlock, _exc: ParentNotFoundError
     ) -> None:
-        self.logger.debug("failed to import block %s: %s", block, exc)
+        self.logger.debug(
+            "failed to import block %s: missing parent with root %s",
+            humanize_hash(block.hash_tree_root),
+            humanize_hash(block.parent_root),
+        )
         self._block_pool.add(block)
 
     def _on_slashable_block(
@@ -448,7 +457,8 @@ class BeaconNode:
                         imported = self.on_block(block)
                         if not imported:
                             self.logger.warning(
-                                "an issue with sync of this block %s", block
+                                "an issue with sync of this block %s",
+                                humanize_hash(block.hash_tree_root),
                             )
                         else:
                             now = time.time()
