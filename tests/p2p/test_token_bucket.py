@@ -87,9 +87,9 @@ async def test_token_bucket_refills_itself():
     # since the capacity should have been fully refilled, second loop time
     # should take near zero time
     expected = await measure_zero(10)
-    # drift is allowed to be up to 200% since we're working with very small
-    # numbers.
-    assert_fuzzy_equal(delta, expected, allowed_drift=2)
+    # drift is allowed to be up to 300% since we're working with very small
+    # numbers, and the performance in CI varies widely.
+    assert_fuzzy_equal(delta, expected, allowed_drift=3)
 
 
 @pytest.mark.asyncio

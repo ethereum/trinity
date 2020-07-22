@@ -49,6 +49,7 @@ from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import (
     EPOCH_BLOCK_LENGTH,
     GAP_BETWEEN_TESTS,
+    NON_IDEAL_RESPONSE_PENALTY,
     PAUSE_SECONDS_IF_STATE_BACKFILL_STARVED,
 )
 from trinity._utils.async_iter import async_take
@@ -108,8 +109,8 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
     async def get_queen_peer(self) -> ETHPeer:
         return await self._queening_queue.get_queen_peer()
 
-    def penalize_queen(self, peer: ETHPeer) -> None:
-        self._queening_queue.penalize_queen(peer)
+    def penalize_queen(self, peer: ETHPeer, delay: float = NON_IDEAL_RESPONSE_PENALTY) -> None:
+        self._queening_queue.penalize_queen(peer, delay=delay)
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._periodically_report_progress)

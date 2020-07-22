@@ -103,7 +103,7 @@ class BeamSyncService(Service):
                     logger(
                         (
                             "Beam Sync is lagging behind the latest known header by %d blocks,"
-                            " will pivot at %d"
+                            " will pivot above %d"
                         ),
                         lag,
                         ESTIMATED_BEAMABLE_BLOCKS,
