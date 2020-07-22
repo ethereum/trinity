@@ -19,7 +19,7 @@
       "trinity_src:/usr/src/app"
     ],
     "environment": [
-      "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http"
+      "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http --http-listen-address 0.0.0.0"
     ],
     "restart": "always"
   },
