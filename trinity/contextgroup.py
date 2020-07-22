@@ -5,6 +5,8 @@ from typing import Any, AsyncContextManager, List, Optional, Sequence, Tuple, Ty
 
 from trio import MultiError
 
+from p2p.asyncio_utils import create_task
+
 
 class AsyncContextGroup:
 
@@ -13,7 +15,7 @@ class AsyncContextGroup:
         self.cms_to_exit: Sequence[AsyncContextManager[Any]] = tuple()
 
     async def __aenter__(self) -> Tuple[Any, ...]:
-        futures = [asyncio.ensure_future(cm.__aenter__()) for cm in self.cms]
+        futures = [create_task(cm.__aenter__(), f'AsyncContextGroup/{repr(cm)}') for cm in self.cms]
         await asyncio.wait(futures)
         # Exclude futures not successfully entered from the list so that we don't attempt to exit
         # them.

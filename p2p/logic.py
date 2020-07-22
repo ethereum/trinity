@@ -6,14 +6,10 @@ from typing import (
     cast,
     AsyncIterator,
     Generic,
-    Iterable,
     List,
-    Sequence,
     Tuple,
     Type,
 )
-
-from trio import MultiError
 
 from p2p.abc import (
     BehaviorAPI,
@@ -23,6 +19,7 @@ from p2p.abc import (
     QualifierFn,
     TCommand,
 )
+from p2p.asyncio_utils import create_task, wait_first
 from p2p.behaviors import Behavior
 from p2p.qualifiers import HasCommand
 
@@ -75,35 +72,6 @@ class CommandHandler(BaseLogic, Generic[TCommand]):
         ...
 
 
-async def wait_first(futures: Sequence[asyncio.Future[None]]) -> None:
-    """
-    Wait for the first of the given futures to complete, then cancels all others.
-
-    If the completed future raised an exception, re-raise it.
-
-    If the task running us is cancelled, all futures will be cancelled.
-    """
-    for future in futures:
-        if not isinstance(future, asyncio.Future):
-            raise ValueError("{future} is not an asyncio.Future")
-
-    try:
-        done, pending = await asyncio.wait(futures, return_when=asyncio.FIRST_COMPLETED)
-    except asyncio.CancelledError:
-        await cancel_futures(futures)
-        raise
-    else:
-        if pending:
-            await cancel_futures(pending)
-        if len(done) != 1:
-            raise Exception(
-                "Invariant: asyncio.wait() returned more than one future even "
-                "though we used return_when=asyncio.FIRST_COMPLETED: %s", done)
-        done_future = list(done)[0]
-        if done_future.exception():
-            raise done_future.exception()
-
-
 class Application(BaseLogic):
     """
     Wrapper arround a collection of behaviors.  Primarily used to aggregate
@@ -144,27 +112,5 @@ class Application(BaseLogic):
 
             # Now register ourselves with the connection.
             with connection.add_logic(self.name, self):
-                yield asyncio.create_task(wait_first(futures))
-
-
-async def cancel_futures(futures: Iterable[asyncio.Future[None]]) -> None:
-    """
-    Cancel and await for the given futures, ignoring any asyncio.CancelledErrors.
-    """
-    for fut in futures:
-        fut.cancel()
-
-    errors: List[BaseException] = []
-    # Wait for all futures in parallel so if any of them catches CancelledError and performs a
-    # slow cleanup the othders don't have to wait for it. The timeout is long as our component
-    # tasks can do a lot of stuff during their cleanup.
-    done, pending = await asyncio.wait(futures, timeout=5)
-    if pending:
-        errors.append(
-            asyncio.TimeoutError("Tasks never returned after being cancelled: %s", pending))
-    for task in done:
-        with contextlib.suppress(asyncio.CancelledError):
-            if task.exception():
-                errors.append(task.exception())
-    if errors:
-        raise MultiError(errors)
+                name = f'Application/{self.name}/apply/{connection.remote}'
+                yield create_task(wait_first(futures), name=name)

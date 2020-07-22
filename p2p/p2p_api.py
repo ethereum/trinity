@@ -11,6 +11,7 @@ from async_service import (
 )
 
 from p2p.abc import CommandAPI, ConnectionAPI, HandlerFn
+from p2p.asyncio_utils import create_task
 from p2p import constants
 from p2p.disconnect import DisconnectReason
 from p2p.exceptions import PeerConnectionLost
@@ -98,7 +99,8 @@ class DisconnectIfIdle(BaseLogic):
     async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
         service = PingAndDisconnectIfIdle(connection, self.idle_timeout)
         async with background_asyncio_service(service) as manager:
-            yield asyncio.create_task(manager.wait_finished())
+            task_name = f'PingAndDisconnectIfIdleService/{connection.remote}'
+            yield create_task(manager.wait_finished(), name=task_name)
 
 
 class P2PAPI(Application):

@@ -84,7 +84,7 @@ class ComponentManager(Service):
 
             # a little bit of extra try/finally structure here to produce good
             # logging messages about the component lifecycle.
-            from p2p.logic import wait_first
+            from p2p.asyncio_utils import wait_first
             try:
                 self.logger.info(
                     "Starting components: %s",
