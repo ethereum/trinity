@@ -205,7 +205,7 @@ class ExchangeAPI(ABC, Generic[TRequestCommand, TResponseCommand, TResult]):
 
     @abstractmethod
     @contextlib.asynccontextmanager
-    def run_exchange(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+    def run_exchange(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Task[Any]]:
         ...
 
     @abstractmethod

@@ -6,6 +6,7 @@ from typing import cast
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKeyWithSerialization
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.constant_time import bytes_eq
 
@@ -44,7 +45,9 @@ class _InvalidPublicKey(Exception):
 
 def generate_privkey() -> datatypes.PrivateKey:
     """Generate a new SECP256K1 private key and return it"""
-    privkey = ec.generate_private_key(CURVE, default_backend())
+    privkey = cast(
+        EllipticCurvePrivateKeyWithSerialization,
+        ec.generate_private_key(CURVE, default_backend()))
     return keys.PrivateKey(pad32(int_to_big_endian(privkey.private_numbers().private_value)))
 
 
@@ -147,7 +150,9 @@ def kdf(key_material: bytes) -> bytes:
     https://github.com/ethereum/go-ethereum/blob/673007d7aed1d2678ea3277eceb7b55dc29cf092/crypto/ecies/ecies.go#L167
     """
     key = b""
-    hash_blocksize = hashes.SHA256().block_size
+    hash_ = hashes.SHA256()
+    # FIXME: Need to find out why mypy thinks SHA256 has no 'block_size' attribute
+    hash_blocksize = hash_.block_size  # type: ignore
     reps = ((KEY_LEN + 7) * 8) / (hash_blocksize * 8)
     counter = 0
     while counter <= reps:

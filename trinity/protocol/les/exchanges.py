@@ -44,7 +44,8 @@ BaseGetBlockHeadersExchange = BaseExchange[
 class GetBlockHeadersExchange(BaseGetBlockHeadersExchange):
     _normalizer = DefaultNormalizer(
         BlockHeaders,
-        Tuple[BlockHeaderAPI, ...],
+        tuple,
+        # Tuple[BlockHeaderAPI, ...],
         normalize_fn=lambda res: res.payload.headers
     )
     tracker_class = GetBlockHeadersTracker

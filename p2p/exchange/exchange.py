@@ -3,6 +3,7 @@ import asyncio
 from functools import partial
 import contextlib
 from typing import (
+    Any,
     AsyncIterator,
     Callable,
     Type,
@@ -30,7 +31,7 @@ class BaseExchange(ExchangeAPI[TRequestCommand, TResponseCommand, TResult]):
 
     @contextlib.asynccontextmanager
     async def run_exchange(
-            self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+            self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Task[Any]]:
         protocol = connection.get_protocol_for_command_type(self.get_request_cmd_type())
 
         response_stream: ResponseCandidateStream[TRequestCommand, TResponseCommand] = ResponseCandidateStream(  # noqa: E501

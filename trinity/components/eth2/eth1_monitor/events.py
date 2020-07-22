@@ -22,7 +22,12 @@ class SSZSerializableEvent(BaseEvent, Generic[TData]):
 
     @classmethod
     def from_data(cls: Type[T], data: TData) -> T:
-        return cls(sedes=cls.sedes, data_bytes=ssz.encode(data))
+        # FIXME: Find out why mypy complains with the following error here:
+        #   Access to generic instance variables via class is ambiguous
+        return cls(
+            sedes=cls.sedes,  # type: ignore
+            data_bytes=ssz.encode(data),
+        )
 
     def to_data(self) -> TData:
         if self.error is not None:

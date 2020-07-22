@@ -96,7 +96,7 @@ class DisconnectIfIdle(BaseLogic):
         self.idle_timeout = idle_timeout
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Task[Any]]:
         service = PingAndDisconnectIfIdle(connection, self.idle_timeout)
         async with background_asyncio_service(service) as manager:
             task_name = f'PingAndDisconnectIfIdleService/{connection.remote}'

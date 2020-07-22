@@ -115,7 +115,7 @@ class Connection(ConnectionAPI, Service):
 
     async def run_behaviors(self, behaviors: Tuple[BehaviorAPI, ...]) -> None:
         async with contextlib.AsyncExitStack() as stack:
-            futures: List[asyncio.Future[None]] = [
+            futures: List[asyncio.Task[Any]] = [
                 create_task(self.manager.wait_finished(), 'Connection/run_behaviors/wait_finished')]
             for behavior in behaviors:
                 if behavior.should_apply_to(self):

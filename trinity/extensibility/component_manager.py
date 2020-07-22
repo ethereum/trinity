@@ -1,8 +1,6 @@
 import asyncio
 import logging
 from typing import (
-    cast,
-    List,
     Sequence,
     Type,
     Tuple,
@@ -95,7 +93,7 @@ class ComponentManager(Service):
                     # AsyncContextGroup() yields a Sequence[Any], so we cast to a list of Futures
                     # here to ensure mypy can come to our aid if we forget the create_task() when
                     # adding new entries to the list of Futures we want to wait for.
-                    futures = cast(List["asyncio.Future[None]"], list(futs))
+                    futures = list(futs)
                     futures.append(asyncio.create_task(self._trigger_component_exit.wait()))
                     self.logger.info("Components started")
                     try:
