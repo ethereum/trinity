@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from typing import (
+    Any,
     AsyncIterator,
 )
 
@@ -41,7 +42,7 @@ class Behavior(BehaviorAPI):
         self.logic.post_apply()
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Task[Any]]:
         if self._applied_to is not None:
             raise ValidationError(
                 f"Reentrance: Behavior has already been applied to a "

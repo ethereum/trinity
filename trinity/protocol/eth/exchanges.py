@@ -63,7 +63,7 @@ BaseGetBlockHeadersV65Exchange = BaseExchange[
 
 
 class GetBlockHeadersV65Exchange(BaseGetBlockHeadersV65Exchange):
-    _normalizer = DefaultNormalizer(BlockHeadersV65, Tuple[BlockHeaderAPI, ...])
+    _normalizer = DefaultNormalizer(BlockHeadersV65, tuple)
     tracker_class = GetBlockHeadersTracker
 
     _request_command_type = GetBlockHeadersV65
@@ -174,7 +174,7 @@ BasePooledTransactionsV65Exchange = BaseExchange[
 
 
 class GetPooledTransactionsV65Exchange(BasePooledTransactionsV65Exchange):
-    _normalizer = DefaultNormalizer(PooledTransactionsV65, Tuple[SignedTransactionAPI, ...])
+    _normalizer = DefaultNormalizer(PooledTransactionsV65, tuple)
     tracker_class = GetPooledTransactionsTracker
 
     _request_command_type = GetPooledTransactionsV65

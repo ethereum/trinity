@@ -268,13 +268,13 @@ class SQLiteEth1PeerTracker(BaseEth1PeerTracker):
             if len(self.protocols) == 1:
                 yield Remote.protocol == self.protocols[0]
             else:
-                yield Remote.protocol.in_(self.protocols)  # type: ignore
+                yield Remote.protocol.in_(self.protocols)
 
         if self.protocol_versions is not None:
             if len(self.protocol_versions) == 1:
                 yield Remote.protocol_version == self.protocol_versions[0]
             else:
-                yield Remote.protocol_version.in_(self.protocol_versions)  # type: ignore
+                yield Remote.protocol_version.in_(self.protocol_versions)
 
         if self.network_id is not None:
             yield Remote.network_id == self.network_id
@@ -309,7 +309,7 @@ class SQLiteEth1PeerTracker(BaseEth1PeerTracker):
             *metadata_filters,
         ).order_by(
             # We want the ones that we have recently connected to succesfully to be first.
-            Remote.last_connected_at.desc(),  # type: ignore
+            Remote.last_connected_at.desc(),
         )
 
         # Return them as an iterator to allow the consuming process to

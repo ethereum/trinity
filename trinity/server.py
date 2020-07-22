@@ -119,8 +119,7 @@ class BaseServer(Service, Generic[TPeerPool]):
             port=self.port,
         )
         try:
-            # mypy doesn't know that the Server returned above is an async contextmanager.
-            async with tcp_listener:  # type: ignore
+            async with tcp_listener:
                 self.manager.run_daemon_child_service(self.peer_pool)
                 await tcp_listener.serve_forever()
         finally:

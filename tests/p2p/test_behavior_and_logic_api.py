@@ -10,6 +10,7 @@ from p2p.logic import (
     BaseLogic,
     Application,
     CommandHandler,
+    _never_ending_coro,
 )
 from p2p.qualifiers import always
 
@@ -19,7 +20,7 @@ from p2p.tools.factories import ConnectionPairFactory
 class SimpleLogic(BaseLogic):
     @contextlib.asynccontextmanager
     async def apply(self, connection):
-        yield asyncio.Future()
+        yield asyncio.create_task(_never_ending_coro())
 
 
 class BehaviorCrash(Exception):

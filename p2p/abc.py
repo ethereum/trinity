@@ -573,7 +573,7 @@ class LogicAPI(ABC):
 
     @abstractmethod
     @contextlib.asynccontextmanager
-    def apply(self, connection: 'ConnectionAPI') -> AsyncIterator[asyncio.Future[None]]:
+    def apply(self, connection: 'ConnectionAPI') -> AsyncIterator[asyncio.Task[Any]]:
         """
         Apply this behavior to the given connection.
 
@@ -603,7 +603,7 @@ class BehaviorAPI(ABC):
 
     @abstractmethod
     @contextlib.asynccontextmanager
-    def apply(self, connection: 'ConnectionAPI') -> AsyncIterator[asyncio.Future[None]]:
+    def apply(self, connection: 'ConnectionAPI') -> AsyncIterator[asyncio.Task[Any]]:
         """
         Context manager API used programatically by the `ContextManager` to
         apply the behavior to the connection during the lifecycle of the

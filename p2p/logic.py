@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 from typing import (
     cast,
+    Any,
     AsyncIterator,
     Generic,
     List,
@@ -55,7 +56,7 @@ class CommandHandler(BaseLogic, Generic[TCommand]):
         return HasCommand(self.command_type)
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Task[Any]]:
         """
         See LogicAPI.apply()
 
@@ -65,7 +66,8 @@ class CommandHandler(BaseLogic, Generic[TCommand]):
         self.connection = connection
 
         with connection.add_command_handler(self.command_type, cast(HandlerFn, self.handle)):
-            yield asyncio.Future()
+            yield create_task(
+                _never_ending_coro(), f'CommandHandler/{self.__class__.__name__}/apply')
 
     @abstractmethod
     async def handle(self, connection: ConnectionAPI, command: TCommand) -> None:
@@ -88,7 +90,7 @@ class Application(BaseLogic):
         self._behaviors += (behavior,)
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Task[Any]]:
         """
         See LogicAPI.apply()
 
@@ -98,19 +100,24 @@ class Application(BaseLogic):
         self.connection = connection
 
         async with contextlib.AsyncExitStack() as stack:
-            futures: List[asyncio.Future[None]] = []
+            futures: List[asyncio.Task[Any]] = []
             # First apply all the child behaviors
             for behavior in self._behaviors:
                 if behavior.should_apply_to(connection):
                     fut = await stack.enter_async_context(behavior.apply(connection))
                     futures.append(fut)
 
-            # If none of our behaviors were applied, use a never-ending Future so that callsites
+            # If none of our behaviors were applied, use a never-ending task so that callsites
             # can wait on it like when behaviors are applied.
             if not futures:
-                futures.append(asyncio.Future())
+                futures.append(
+                    create_task(_never_ending_coro(), f'Application/{self.name}/no-behaviors-fut'))
 
             # Now register ourselves with the connection.
             with connection.add_logic(self.name, self):
                 name = f'Application/{self.name}/apply/{connection.remote}'
                 yield create_task(wait_first(futures), name=name)
+
+
+async def _never_ending_coro() -> None:
+    await asyncio.Future()

@@ -88,8 +88,8 @@ deps = {
     'lint': [
         "flake8==3.7.9",
         "flake8-bugbear==19.8.0",
-        "mypy==0.740",
-        "sqlalchemy-stubs==0.1",
+        "mypy==0.782",
+        "sqlalchemy-stubs==0.3",
     ],
     'doc': [
         "pytest~=5.3",

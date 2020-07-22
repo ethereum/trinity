@@ -144,7 +144,7 @@ class BaseIsolatedComponent(BaseComponent):
             return cls.endpoint_name
 
     @contextlib.asynccontextmanager
-    async def run(self) -> AsyncIterator[asyncio.Future[None]]:
+    async def run(self) -> AsyncIterator[asyncio.Task[Any]]:
         future = asyncio.create_task(
             self._run_in_process(self._do_run, subprocess_kwargs=self.get_subprocess_kwargs()))
         yield future
@@ -154,13 +154,12 @@ class BaseIsolatedComponent(BaseComponent):
 async def _run_asyncio_component_in_proc(
         component: 'AsyncioIsolatedComponent',
         event_bus: EndpointAPI,
-) -> AsyncIterator[asyncio.Future[None]]:
+) -> AsyncIterator[asyncio.Task[Any]]:
     """
     Run the given AsyncioIsolatedComponent in the same process as ourselves.
     """
-    task = asyncio.ensure_future(component.do_run(event_bus))
     logger.info("Starting component: %s", component.name)
-    yield task
+    yield asyncio.create_task(component.do_run(event_bus))
 
 
 @contextlib.asynccontextmanager

@@ -31,6 +31,6 @@ class ExchangeLogic(BaseLogic):
             return protocol.supports_command(self.exchange.get_response_cmd_type())
 
     @contextlib.asynccontextmanager
-    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Future[None]]:
+    async def apply(self, connection: ConnectionAPI) -> AsyncIterator[asyncio.Task[Any]]:
         async with self.exchange.run_exchange(connection) as future:
             yield future
