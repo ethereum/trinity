@@ -3,6 +3,7 @@ from eth_utils import ValidationError, to_tuple
 import pytest
 
 from eth2._utils.hash import hash_eth2
+from eth2._utils.tuple import update_tuple_item
 from eth2.beacon.constants import FAR_FUTURE_EPOCH, GWEI_PER_ETH
 from eth2.beacon.helpers import (
     _get_fork_version,
@@ -147,25 +148,31 @@ def test_get_state_root_at_slot(
 def test_get_active_validator_indices(sample_validator_record_params):
     current_epoch = 1
     # 3 validators are ACTIVE
-    validators = [
+    validators = tuple(
         Validator.create(**sample_validator_record_params).mset(
             "activation_epoch", 0, "exit_epoch", FAR_FUTURE_EPOCH
         )
         for i in range(3)
-    ]
+    )
     active_validator_indices = get_active_validator_indices(validators, current_epoch)
     assert len(active_validator_indices) == 3
 
-    validators[0] = validators[0].set(
-        "activation_epoch", current_epoch + 1  # activation_epoch > current_epoch
+    # activation_epoch > current_epoch
+    two_active_vals = update_tuple_item(
+        validators, 0, validators[0].set("activation_epoch", current_epoch + 1)
     )
-    active_validator_indices = get_active_validator_indices(validators, current_epoch)
+    active_validator_indices = get_active_validator_indices(
+        two_active_vals, current_epoch
+    )
     assert len(active_validator_indices) == 2
 
-    validators[1] = validators[1].set(
-        "exit_epoch", current_epoch  # current_epoch == exit_epoch
+    # current_epoch == exit_epoch
+    one_active_val = update_tuple_item(
+        two_active_vals, 1, validators[1].set("exit_epoch", current_epoch)
     )
-    active_validator_indices = get_active_validator_indices(validators, current_epoch)
+    active_validator_indices = get_active_validator_indices(
+        one_active_val, current_epoch
+    )
     assert len(active_validator_indices) == 1
 
 
