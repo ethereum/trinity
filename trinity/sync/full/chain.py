@@ -149,10 +149,6 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
         buffer_size = MAX_BODIES_FETCH * REQUEST_BUFFER_MULTIPLIER
         self._block_body_tasks = TaskQueue(buffer_size, attrgetter('block_number'))
 
-        # Track if there is capacity for more block importing
-        self._db_buffer_capacity = asyncio.Event()
-        self._db_buffer_capacity.set()  # start with capacity
-
         # Track if any headers have been received yet
         self._got_first_header = asyncio.Event()
 
@@ -196,7 +192,8 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                 # We might end up with duplicates that can be safely ignored.
                 # Likely scenario: switched which peer downloads headers, and the new peer isn't
                 # aware of some of the in-progress headers
-                new_headers = task_integrator.register_tasks(headers, ignore_duplicates=True)
+                # Also, pause when adding tasks, if the task_integrator has too many tasks queued.
+                new_headers = await task_integrator.wait_add_tasks(headers, ignore_duplicates=True)
             except MissingDependency as missing_exc:
                 # The parent of this header is not registered as a dependency yet.
                 # Some reasons this might happen, in rough descending order of likelihood:
@@ -258,6 +255,8 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
 
                 # Re-register the header tasks, which will now succeed
                 # Be sure to filter out any duplicates, so we don't re-register them for processing
+                # We don't need to wait here, because we already checked there was room in the
+                #   first attempt to register tasks.
                 new_headers = task_integrator.register_tasks(fresh_headers, ignore_duplicates=True)
 
             if not new_headers:
@@ -267,9 +266,6 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                 self._highest_header_number = max(self._highest_header_number, *header_numbers)
 
             yield new_headers
-
-            # Don't race ahead of the database, by blocking when the persistance queue is too long
-            await self._db_buffer_capacity.wait()
 
             highest_block_num = max(new_headers[-1].block_number, highest_block_num)
 
@@ -624,6 +620,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             id_extractor=attrgetter('hash'),
             # make sure that a block is not persisted until the parent block is persisted
             dependency_extractor=attrgetter('parent_hash'),
+            max_tasks=buffer_size,
         )
         # Track whether the fast chain syncer completed its goal
         self.is_complete = False
@@ -673,12 +670,11 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
         while self.manager.is_running:
             await asyncio.sleep(5)
             self.logger.debug(
-                "(in progress, queued, max size) of bodies, receipts: %r. Write capacity? %s",
+                "(in progress, queued, max size) of bodies, receipts: %r",
                 [(q.num_in_progress(), len(q), q._maxsize) for q in (
                     self._block_body_tasks,
                     self._receipt_tasks,
                 )],
-                "yes" if self._db_buffer_capacity.is_set() else "no",
             )
 
             stats = self.tracker.report()
@@ -719,14 +715,6 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             completed_headers = await get_completed_coro
 
             self.chain.validate_chain_extension(completed_headers)
-
-            if self._block_persist_tracker.has_ready_tasks():
-                # Even after clearing out a big batch, there is no available capacity, so
-                # pause any coroutines that might wait for capacity
-                self._db_buffer_capacity.clear()
-            else:
-                # There is available capacity, let any waiting coroutines continue
-                self._db_buffer_capacity.set()
 
             await self._persist_blocks(completed_headers)
 
@@ -1016,6 +1004,8 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
             dependency_extractor=attrgetter('parent_hash'),
             # Avoid problems by keeping twice as much data as the import queue size
             max_depth=BLOCK_IMPORT_QUEUE_SIZE * 2,
+            # After this many blocks are queued for import, halt header & block body downloads
+            max_tasks=BLOCK_IMPORT_QUEUE_SIZE,
         )
         self._block_importer = block_importer
 
@@ -1094,16 +1084,7 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         while self.manager.is_running:
             # This tracker waits for all prerequisites to be complete, and returns headers in
             # order, so that each header's parent is already persisted.
-            get_ready_coro = self._block_import_tracker.ready_tasks(1)
-            completed_headers = await get_ready_coro
-
-            if self._block_import_tracker.has_ready_tasks():
-                # Even after clearing out a big batch, there is no available capacity, so
-                # pause any coroutines that might wait for capacity
-                self._db_buffer_capacity.clear()
-            else:
-                # There is available capacity, let any waiting coroutines continue
-                self._db_buffer_capacity.set()
+            completed_headers = await self._block_import_tracker.ready_tasks(1)
 
             header = completed_headers[0]
             block = self._header_to_block(header)
@@ -1255,11 +1236,16 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
         while self.manager.is_running:
             await asyncio.sleep(5)
             self.logger.debug(
-                "(progress, queued, max) of bodies, receipts: %r. Write capacity? %s Importing? %s",
+                (
+                    "(progress, queued, max) of bodies: %r;"
+                    " Linearizing for import (%d unready, %d ready);"
+                    " Importing? %s"
+                ),
                 [(q.num_in_progress(), len(q), q._maxsize) for q in (
                     self._block_body_tasks,
                 )],
-                self._db_buffer_capacity.is_set(),
+                self._block_import_tracker.num_unready(),
+                self._block_import_tracker.num_ready(),
                 self._import_active,
             )
 

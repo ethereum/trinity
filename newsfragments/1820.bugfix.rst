@@ -1,0 +1,2 @@
+Syncing seemed to race ahead and halt and race ahead. Header and block body buffering was reworked
+to run a bit smoother.

@@ -45,6 +45,8 @@ class TwoPrereqs(Enum):
 
 
 async def assert_nothing_ready(otp):
+    assert otp.num_ready() == 0
+
     try:
         finished = await wait(otp.ready_tasks())
     except asyncio.TimeoutError:
@@ -57,10 +59,35 @@ async def assert_nothing_ready(otp):
 async def test_simplest_path():
     ti = OrderedTaskPreparation(TwoPrereqs, identity, lambda x: x - 1)
     ti.set_finished_dependency(3)
+
+    assert ti.num_unready() == 0
+    assert ti.num_ready() == 0
+    assert ti.num_tasks() == 0
+
     ti.register_tasks((4, ))
+
+    assert ti.num_unready() == 1
+    assert ti.num_ready() == 0
+    assert ti.num_tasks() == 1
+
     ti.finish_prereq(TwoPrereqs.PREREQ1, (4, ))
+
+    assert ti.num_unready() == 1
+    assert ti.num_ready() == 0
+    assert ti.num_tasks() == 1
+
     ti.finish_prereq(TwoPrereqs.PREREQ2, (4, ))
+
+    assert ti.num_unready() == 0
+    assert ti.num_ready() == 1
+    assert ti.num_tasks() == 1
+
     ready = await wait(ti.ready_tasks())
+
+    assert ti.num_unready() == 0
+    assert ti.num_ready() == 0
+    assert ti.num_tasks() == 0
+
     assert ready == (4, )
 
 
@@ -82,6 +109,34 @@ async def test_two_steps_simultaneous_complete():
 
     completed = await wait(ti.ready_tasks())
     assert completed == (4, 5)
+
+
+@pytest.mark.asyncio
+async def test_wait_if_too_many_ready_tasks():
+    ti = OrderedTaskPreparation(OnePrereq, identity, lambda x: x - 1, max_tasks=1)
+    ti.set_finished_dependency(3)
+    ti.register_tasks((4, ))
+
+    # This should raise a timeout error because it gets locked waiting for the task to be finished
+    with pytest.raises(asyncio.TimeoutError):
+        await wait(ti.wait_add_tasks((5, )))
+
+    ti.finish_prereq(OnePrereq.ONE, (4, ))
+
+    # This should raise a timeout error because it gets locked waiting for the task to be picked up
+    with pytest.raises(asyncio.TimeoutError):
+        await wait(ti.wait_add_tasks((5, )))
+
+    completed = await wait(ti.ready_tasks())
+    assert completed == (4, )
+
+    # Now we can add the other task
+    await wait(ti.wait_add_tasks((5, )))
+
+    # ... and finish & pick up the completed one
+    ti.finish_prereq(OnePrereq.ONE, (5, ))
+    completed = await wait(ti.ready_tasks())
+    assert completed == (5, )
 
 
 @pytest.mark.asyncio

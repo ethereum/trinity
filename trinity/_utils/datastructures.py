@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from asyncio import (
     AbstractEventLoop,
+    Event,
     Lock,
     PriorityQueue,
     Queue,
@@ -16,10 +17,10 @@ from itertools import (
 from typing import (
     Any,
     Callable,
+    Collection,
     Dict,
     Generic,
     Iterable,
-    Sequence,
     Set,
     Tuple,
     Type,
@@ -241,7 +242,7 @@ class TaskQueue(Generic[TTask]):
 
         return (next_id, pending_tasks)
 
-    def complete(self, batch_id: int, completed: Sequence[TTask]) -> None:
+    def complete(self, batch_id: int, completed: Collection[TTask]) -> None:
         if batch_id not in self._in_progress:
             raise ValidationError(f"batch id {batch_id} not recognized, with tasks {completed!r}")
 
@@ -338,7 +339,7 @@ class DuplicateTasks(Exception, Generic[TTask]):
     """
     Tried to register a task that was already registered
     """
-    def __init__(self, msg: str, duplicates: Sequence[TTask]) -> None:
+    def __init__(self, msg: str, duplicates: Collection[TTask]) -> None:
         super().__init__(msg)
         self.duplicates = duplicates
 
@@ -362,7 +363,14 @@ class BaseOrderedTaskPreparation(ABC, Generic[TTask, TTaskID]):
     @abstractmethod
     def register_tasks(
             self,
-            tasks: Sequence[TTask],
+            tasks: Collection[TTask],
+            ignore_duplicates: bool = False) -> Tuple[TTask, ...]:
+        ...
+
+    @abstractmethod
+    async def wait_add_tasks(
+            self,
+            tasks: Collection[TTask],
             ignore_duplicates: bool = False) -> Tuple[TTask, ...]:
         ...
 
@@ -478,7 +486,8 @@ class OrderedTaskPreparation(
             id_extractor: Callable[[TTask], TTaskID],
             dependency_extractor: Callable[[TTask], TTaskID],
             accept_dangling_tasks: bool = False,
-            max_depth: int = None) -> None:
+            max_depth: int = None,
+            max_tasks: int = None) -> None:
 
         self._prereq_tracker = BaseTaskPrerequisites.from_enum(prerequisites)
         self._id_of = id_extractor
@@ -492,6 +501,9 @@ class OrderedTaskPreparation(
             raise ValidationError(f"The maximum depth must be at least 0, not {max_depth}")
         else:
             self._max_depth = max_depth
+
+        self._max_tasks = max_tasks
+        self._ready_count_dropped = Event()
 
         # all of the tasks that have been completed, and not pruned
         self._tasks: Dict[TTaskID, BaseTaskPrerequisites[TTask, TPrerequisite]] = {}
@@ -543,7 +555,7 @@ class OrderedTaskPreparation(
     @to_tuple
     def register_tasks(
             self,
-            tasks: Sequence[TTask],
+            tasks: Collection[TTask],
             ignore_duplicates: bool = False) -> Iterable[TTask]:
         """
         Initiate a task into tracking. By default, each task must be registered
@@ -602,7 +614,18 @@ class OrderedTaskPreparation(
 
                 yield prereq_tracker.task
 
-    def finish_prereq(self, prereq: TPrerequisite, tasks: Sequence[TTask]) -> None:
+    async def wait_add_tasks(
+            self,
+            tasks: Collection[TTask],
+            ignore_duplicates: bool = False) -> Tuple[TTask, ...]:
+        """Like :meth:`register_tasks` but pauses if there are too many tasks in the pipeline"""
+        if self._max_tasks is not None:
+            while self.num_tasks() >= self._max_tasks:
+                self._ready_count_dropped.clear()
+                await self._ready_count_dropped.wait()
+        return self.register_tasks(tasks, ignore_duplicates=ignore_duplicates)
+
+    def finish_prereq(self, prereq: TPrerequisite, tasks: Collection[TTask]) -> None:
         """For every task in tasks, mark the given prerequisite as completed"""
         if len(self._tasks) == 0:
             raise ValidationError("Cannot finish a task until set_last_completion() is called")
@@ -634,6 +657,7 @@ class OrderedTaskPreparation(
             self._prune_finished(task_id)
 
         self._last_yielded_tasks = await queue_get_batch(self._ready_tasks, max_results)
+        self._ready_count_dropped.set()
         return self._last_yielded_tasks
 
     def has_ready_tasks(self) -> bool:
@@ -720,3 +744,16 @@ class OrderedTaskPreparation(
         del self._tasks[prune_task_id]
         if prune_task_id in self._declared_finished:
             self._declared_finished.remove(prune_task_id)
+
+    def num_ready(self) -> int:
+        """How many tasks are waiting to be picked up by :meth:`ready_tasks`?"""
+        return self._ready_tasks.qsize()
+
+    def num_unready(self) -> int:
+        """How many tasks are pending completion?"""
+        return len(self._unready)
+
+    def num_tasks(self) -> int:
+        """How many tasks are unfinished or ready?"""
+        # Can't use len(self._tasks), because it includes unpruned tasks
+        return self.num_ready() + self.num_unready()
