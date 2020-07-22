@@ -1,5 +1,4 @@
 import json
-import random
 
 import pytest
 from eth import MainnetChain
@@ -11,7 +10,7 @@ from trinity.rpc.modules import initialize_eth1_modules, Admin, Net
 
 
 def build_request(method, params):
-    return {"jsonrpc": "2.0", "method": method, "params": params, "id": random.randrange(1000)}
+    return {"jsonrpc": "2.0", "method": method, "params": params, "id": 3}
 
 
 def result_from_response(response_str):
