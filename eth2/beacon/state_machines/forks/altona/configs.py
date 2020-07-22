@@ -24,7 +24,7 @@ ALTONA_CONFIG = Eth2Config(
     EJECTION_BALANCE=Gwei(2 ** 4 * GWEI_PER_ETH),  # (= 16,000,000,000) Gwei
     EFFECTIVE_BALANCE_INCREMENT=Gwei(2 ** 0 * GWEI_PER_ETH),  # (= 1,000,000,000) Gwei
     # Initial values
-    GENESIS_FORK_VERSION=Version(b"\x00000121"),
+    GENESIS_FORK_VERSION=Version(b"\x00\x00\x01\x21"),
     BLS_WITHDRAWAL_PREFIX=b"\x00",
     # Time parameters
     GENESIS_DELAY=Second(172800),
