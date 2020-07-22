@@ -17,10 +17,10 @@ from itertools import (
 from typing import (
     Any,
     Callable,
+    Collection,
     Dict,
     Generic,
     Iterable,
-    Sequence,
     Set,
     Tuple,
     Type,
@@ -242,7 +242,7 @@ class TaskQueue(Generic[TTask]):
 
         return (next_id, pending_tasks)
 
-    def complete(self, batch_id: int, completed: Sequence[TTask]) -> None:
+    def complete(self, batch_id: int, completed: Collection[TTask]) -> None:
         if batch_id not in self._in_progress:
             raise ValidationError(f"batch id {batch_id} not recognized, with tasks {completed!r}")
 
@@ -339,7 +339,7 @@ class DuplicateTasks(Exception, Generic[TTask]):
     """
     Tried to register a task that was already registered
     """
-    def __init__(self, msg: str, duplicates: Sequence[TTask]) -> None:
+    def __init__(self, msg: str, duplicates: Collection[TTask]) -> None:
         super().__init__(msg)
         self.duplicates = duplicates
 
@@ -363,14 +363,14 @@ class BaseOrderedTaskPreparation(ABC, Generic[TTask, TTaskID]):
     @abstractmethod
     def register_tasks(
             self,
-            tasks: Sequence[TTask],
+            tasks: Collection[TTask],
             ignore_duplicates: bool = False) -> Tuple[TTask, ...]:
         ...
 
     @abstractmethod
     async def wait_add_tasks(
             self,
-            tasks: Sequence[TTask],
+            tasks: Collection[TTask],
             ignore_duplicates: bool = False) -> Tuple[TTask, ...]:
         ...
 
@@ -555,7 +555,7 @@ class OrderedTaskPreparation(
     @to_tuple
     def register_tasks(
             self,
-            tasks: Sequence[TTask],
+            tasks: Collection[TTask],
             ignore_duplicates: bool = False) -> Iterable[TTask]:
         """
         Initiate a task into tracking. By default, each task must be registered
@@ -616,7 +616,7 @@ class OrderedTaskPreparation(
 
     async def wait_add_tasks(
             self,
-            tasks: Sequence[TTask],
+            tasks: Collection[TTask],
             ignore_duplicates: bool = False) -> Tuple[TTask, ...]:
         """Like :meth:`register_tasks` but pauses if there are too many tasks in the pipeline"""
         if self._max_tasks is not None:
@@ -625,7 +625,7 @@ class OrderedTaskPreparation(
                 await self._ready_count_dropped.wait()
         return self.register_tasks(tasks, ignore_duplicates=ignore_duplicates)
 
-    def finish_prereq(self, prereq: TPrerequisite, tasks: Sequence[TTask]) -> None:
+    def finish_prereq(self, prereq: TPrerequisite, tasks: Collection[TTask]) -> None:
         """For every task in tasks, mark the given prerequisite as completed"""
         if len(self._tasks) == 0:
             raise ValidationError("Cannot finish a task until set_last_completion() is called")
