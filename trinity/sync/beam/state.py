@@ -384,9 +384,10 @@ class BeamDownloader(Service, PeerSubscriber):
 
             time_on_urgent = urgent_timer.elapsed
             self.logger.debug(
-                "beam-rtt: got %d/%d urgent nodes in %.3fs from %s (%s)",
+                "beam-rtt: got %d/%d +%d urgent nodes in %.3fs from %s (%s)",
                 len(nodes),
                 len(node_hashes),
+                len(new_nodes),
                 time_on_urgent,
                 peer.remote,
                 node_hashes[0][:2].hex()
