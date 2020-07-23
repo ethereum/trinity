@@ -559,7 +559,8 @@ class HeaderLaunchpointSyncer(HeaderSyncerAPI):
         await self._at_launchpoint.wait()
 
         self.logger.info(
-            "Choosing %s as launchpoint headers to sync from", self._launchpoint_headers
+            "Choosing %s as launchpoint headers to sync from",
+            [str(header) for header in self._launchpoint_headers],
         )
         yield self._launchpoint_headers
 
