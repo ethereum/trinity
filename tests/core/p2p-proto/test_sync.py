@@ -411,7 +411,7 @@ async def test_beam_syncer_backfills_all_state(
     caplog.set_level(logging.INFO)
     async with sync_test_service as beam_syncer:
         # Manually verify that all state is in the state database now
-        await wait_for_full_state_db(chaindb_fresh, beam_to_block, timeout=10)
+        await wait_for_full_state_db(chaindb_fresh, beam_to_block, timeout=20)
         beam_syncer.logger.info("State DB complete by manual inspection")
 
         # Check that backfiller exits on state completion
