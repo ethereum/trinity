@@ -595,7 +595,6 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 show_top_n_peers,
                 self._num_requests_by_peer.most_common(show_top_n_peers),
             )
-            self._num_requests_by_peer.clear()
 
             # For now, report every 30s (1/3 as often as the debug report above)
             if step % 3 == 0:
@@ -622,10 +621,16 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 #       total account trie)
                 #   - tnps: trie nodes collected per second, since the last debug log (in the
                 #       last 10 seconds, at comment time)
-                self.logger.info(
+                num_requests = sum(self._num_requests_by_peer.values())
+                if num_requests == 0:
+                    log = self.logger.debug
+                else:
+                    log = self.logger.info
+
+                log(
                     (
                         "State Stats: nodes=%d accts=%d prog=%.2f%% stores=%d"
-                        " storing=%.1f%% of %d walked=%.1fppm tnps=%.0f"
+                        " storing=%.1f%% of %d walked=%.1fppm tnps=%.0f req=%d"
                     ),
                     self._total_added_nodes,
                     self._num_accounts_completed,
@@ -635,7 +640,10 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                     num_storage_trackers,
                     self._contiguous_accounts_complete_fraction() * 1e6,
                     self._num_added / timer.elapsed,
+                    num_requests,
                 )
+
+            self._num_requests_by_peer.clear()
 
     def _complete_trie_fraction(self, tracker: TrieNodeRequestTracker) -> float:
         """
