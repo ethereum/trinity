@@ -45,6 +45,9 @@ from trinity.sync.beam.constants import (
     RESUME_BACKFILL_AT_LAG,
     PREDICTED_BLOCK_TIME,
 )
+from trinity.sync.common.constants import (
+    MAX_BACKFILL_BLOCK_BODIES_AT_ONCE,
+)
 from trinity.sync.common.checkpoint import (
     Checkpoint,
 )
@@ -428,7 +431,11 @@ class BodyChainGapSyncer(Service):
 
     async def _setup_for_next_gap(self) -> None:
         gap_start, gap_end = self._get_next_gap()
-        start_num = BlockNumber(gap_start - 1)
+        fill_start = BlockNumber(max(
+            gap_start,
+            gap_end - MAX_BACKFILL_BLOCK_BODIES_AT_ONCE,
+        ))
+        start_num = BlockNumber(fill_start - 1)
         _starting_tip = await self._db.coro_get_canonical_block_header_by_number(start_num)
 
         if self._pauser.is_paused:
@@ -439,13 +446,13 @@ class BodyChainGapSyncer(Service):
         async def _get_launch_header() -> BlockHeaderAPI:
             return _starting_tip
 
-        self.logger.debug("Starting to sync missing blocks from #%s to #%s", gap_start, gap_end)
+        self.logger.debug("Starting to sync missing blocks from #%s to #%s", fill_start, gap_end)
 
         self._body_syncer = FastChainBodySyncer(
             self._chain,
             self._db,
             self._peer_pool,
-            DatabaseBlockRangeHeaderSyncer(self._db, (gap_start, gap_end,)),
+            DatabaseBlockRangeHeaderSyncer(self._db, (fill_start, gap_end,)),
             launch_header_fn=_get_launch_header,
             should_skip_header_fn=body_for_header_exists(self._db, self._chain)
         )
