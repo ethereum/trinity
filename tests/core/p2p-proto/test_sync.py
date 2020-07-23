@@ -295,7 +295,7 @@ async def _beam_syncing(
             )
 
             client_peer.logger.info("%s is serving churner blocks", client_peer)
-            backfill_peer.logger.info("%s is serving backfill state", client_peer)
+            backfill_peer.logger.info("%s is serving backfill state", backfill_peer)
             server_peer.logger.info("%s is syncing up churner blocks", server_peer)
 
             import_server = BlockImportServer(
