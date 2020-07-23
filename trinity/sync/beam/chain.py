@@ -445,6 +445,7 @@ class BodyChainGapSyncer(Service):
             launch_header_fn=_get_launch_header,
             should_skip_header_fn=body_for_header_exists(self._db, self._chain)
         )
+        self._body_syncer.logger = self.logger
 
     def _get_next_gap(self) -> BlockRange:
         gaps, future_tip_block = self._db.get_chain_gaps()

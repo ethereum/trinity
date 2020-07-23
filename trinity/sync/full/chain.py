@@ -590,6 +590,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
                  should_skip_header_fn: Callable[[BlockHeaderAPI], Awaitable[bool]] = None,
                  ) -> None:
         super().__init__(chain, db, peer_pool, header_syncer)
+        self.logger = get_logger('trinity.sync.full.chain.FastChainBodySyncer')
 
         if launch_header_fn is None:
             self._launch_header_fn: Callable[
