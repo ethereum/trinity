@@ -10,6 +10,9 @@ MAX_SKELETON_REORG_DEPTH = 35000
 # has processed this number of headers.
 MAX_BACKFILL_HEADERS_AT_ONCE = 100_000
 
+# Maximum block bodies to sync at once, prefering the most recent ones.
+MAX_BACKFILL_BLOCK_BODIES_AT_ONCE = MAX_BACKFILL_HEADERS_AT_ONCE
+
 # Estimated time in between each block
 PREDICTED_BLOCK_TIME = 13
 
