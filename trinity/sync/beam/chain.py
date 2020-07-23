@@ -473,7 +473,7 @@ class BodyChainGapSyncer(Service):
             else:
                 raise ValidationError("No gaps in the chain of blocks")
         else:
-            return gaps[0]
+            return gaps[-1]
 
     @property
     def is_paused(self) -> bool:
