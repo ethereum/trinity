@@ -19,6 +19,7 @@ from lahja import EndpointAPI
 
 from eth_hash.auto import keccak
 from eth_utils import (
+    clamp,
     to_checksum_address,
     ValidationError,
 )
@@ -30,6 +31,10 @@ from eth_typing import (
 from eth.abc import AtomicDatabaseAPI
 
 from p2p.abc import CommandAPI
+from p2p.asyncio_utils import (
+    cleanup_tasks,
+    create_task,
+)
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
 
@@ -53,7 +58,9 @@ from trinity.sync.beam.queen import (
     QueenTrackerAPI,
 )
 from trinity.sync.beam.constants import (
+    TOO_LONG_PREDICTIVE_PEER_DELAY,
     ESTIMATED_BEAMABLE_SECONDS,
+    MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE,
     REQUEST_BUFFER_MULTIPLIER,
 )
 from trinity.sync.common.constants import (
@@ -79,6 +86,14 @@ class BeamDownloader(Service, PeerSubscriber):
 
     _num_urgent_requests_by_peer: typing.Counter[ETHPeer]
     _num_predictive_requests_by_peer: typing.Counter[ETHPeer]
+
+    _num_peers = 0
+    # How many extra peers (besides the queen) should we ask for the urgently-needed trie node?
+    _spread_factor = 0
+    # We periodically reduce the "spread factor" once every N seconds:
+    _reduce_spread_factor_interval = 120
+    # We might reserve some peers to ask for predictive nodes, if we start to fall behind
+    _min_predictive_peers = 0
 
     # We are only interested in peers entering or leaving the pool
     subscription_msg_types: FrozenSet[Type[CommandAPI[Any]]] = frozenset()
@@ -122,7 +137,7 @@ class BeamDownloader(Service, PeerSubscriber):
 
     async def ensure_nodes_present(
             self,
-            node_hashes: Iterable[Hash32],
+            node_hashes: Collection[Hash32],
             urgent: bool = True) -> int:
         """
         Wait until the nodes that are the preimages of `node_hashes` are available in the database.
@@ -137,13 +152,40 @@ class BeamDownloader(Service, PeerSubscriber):
         :return: how many nodes had to be downloaded
         """
         if urgent:
-            queue = self._node_tasks
-            timeout = PREDICTED_BLOCK_TIME
+            t = Timer()
+            num_nodes_found = await self._wait_for_nodes(
+                node_hashes,
+                self._node_tasks,
+                PREDICTED_BLOCK_TIME,
+            )
+            # If it took to long to get a single urgent node, then increase "spread" factor
+            if len(node_hashes) == 1 and t.elapsed > MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE:
+                new_spread_factor = clamp(
+                    0,
+                    self._max_spread_beam_factor(),
+                    self._spread_factor + 1,
+                )
+                if new_spread_factor != self._spread_factor:
+                    self.logger.debug(
+                        "spread-beam-update: Urgent node latency=%.3fs, update factor %d to %d",
+                        t.elapsed,
+                        self._spread_factor,
+                        new_spread_factor,
+                    )
+                    self._queen_tracker.set_desired_knight_count(new_spread_factor)
+                    self._spread_factor = new_spread_factor
         else:
-            queue = self._maybe_useful_nodes
-            timeout = PREDICTED_BLOCK_TIME * 10
+            num_nodes_found = await self._wait_for_nodes(
+                node_hashes,
+                self._maybe_useful_nodes,
+                PREDICTED_BLOCK_TIME * 10,
+            )
 
-        return await self._wait_for_nodes(node_hashes, queue, timeout)
+        return num_nodes_found
+
+    def _max_spread_beam_factor(self) -> int:
+        max_factor = self._num_peers - 1 - self._min_predictive_peers
+        return max(0, max_factor)
 
     async def _wait_for_nodes(
             self,
@@ -302,31 +344,87 @@ class BeamDownloader(Service, PeerSubscriber):
             )
 
             # Get best peer, by GetNodeData speed
-            peer = await self._queen_tracker.get_queen_peer()
+            queen = await self._queen_tracker.get_queen_peer()
 
-            peer_is_requesting = peer.eth_api.get_node_data.is_requesting
+            queen_is_requesting = queen.eth_api.get_node_data.is_requesting
 
-            if peer_is_requesting:
+            if queen_is_requesting:
                 # Our best peer for node data has an in-flight GetNodeData request
                 # Probably, backfill is asking this peer for data
                 # This is right in the critical path, so we'd prefer this never happen
                 self.logger.debug(
                     "Want to download urgent data, but %s is locked on other request",
-                    peer,
+                    queen,
                 )
                 # Don't do anything different, allow the request lock to handle the situation
 
-            self._num_urgent_requests_by_peer[peer] += 1
+            self._num_urgent_requests_by_peer[queen] += 1
             self._urgent_requests += 1
 
-            # Request all the urgent nodes from the queen peer. EVM execution is blocked
-            #   anyway, so just hang on this peer to return.
-            await self._get_nodes_from_peer(
-                peer,
+            await self._find_urgent_nodes(
+                queen,
                 urgent_hashes,
                 urgent_batch_id,
-                urgent=True,
             )
+
+    async def _find_urgent_nodes(
+            self,
+            queen: ETHPeer,
+            urgent_hashes: Tuple[Hash32, ...],
+            batch_id: int) -> None:
+
+        # Generate and schedule the tasks to request the urgent node(s) from multiple peers
+        knights = tuple(self._queen_tracker.pop_knights())
+        urgent_requests = [
+            create_task(
+                self._store_nodes(peer, urgent_hashes, urgent=True),
+                name=f"BeamDownloader._store_nodes({peer.remote}, ...)",
+            )
+            for peer in (queen,) + knights
+        ]
+
+        # Process the returned nodes, in the order they complete
+        urgent_timer = Timer()
+        async with cleanup_tasks(*urgent_requests):
+            for result_coro in asyncio.as_completed(urgent_requests):
+                nodes_returned, new_nodes, peer = await result_coro
+                time_on_urgent = urgent_timer.elapsed
+
+                # After the first peer returns something, cancel all other pending tasks
+                if len(nodes_returned) > 0:
+                    # Stop waiting for other peer responses
+                    break
+                elif peer == queen:
+                    self.logger.debug("queen %s returned 0 urgent nodes of %r", peer, urgent_hashes)
+                    # Wait for the next peer response
+
+        # Log the received urgent nodes
+        if peer == queen:
+            log_header = "beam-queen-urgent-rtt"
+        else:
+            log_header = "spread-beam-urgent-rtt"
+        self.logger.debug(
+            "%s: got %d/%d +%d nodes in %.3fs from %s (%s)",
+            log_header,
+            len(nodes_returned),
+            len(urgent_hashes),
+            len(new_nodes),
+            time_on_urgent,
+            peer.remote,
+            urgent_hashes[0][:2].hex(),
+        )
+
+        # Stat updates
+        self._total_processed_nodes += len(new_nodes)
+        self._urgent_processed_nodes += len(new_nodes)
+        self._time_on_urgent += time_on_urgent
+
+        # Complete the task in the TaskQueue
+        self._node_tasks.complete(batch_id, tuple(node_hash for node_hash, _ in nodes_returned))
+
+        # Re-insert the peers for the next request
+        for knight in knights:
+            self._queen_tracker.insert_peer(knight)
 
     async def _match_predictive_node_requests_to_peers(self) -> None:
         """
@@ -339,8 +437,45 @@ class BeamDownloader(Service, PeerSubscriber):
         predictive trie nodes are requested. Repeat indefinitely.
         """
         while self.manager.is_running:
-            batch_id, hashes = await self._maybe_useful_nodes.get(eth_constants.MAX_STATE_FETCH)
-            peer = await self._queen_tracker.pop_fastest_peasant()
+            try:
+                batch_id, hashes = await asyncio.wait_for(
+                    self._maybe_useful_nodes.get(eth_constants.MAX_STATE_FETCH),
+                    timeout=TOO_LONG_PREDICTIVE_PEER_DELAY,
+                )
+            except asyncio.TimeoutError:
+                # Reduce the number of predictive peers, we seem to have plenty
+                if self._min_predictive_peers > 0:
+                    self._min_predictive_peers -= 1
+                    self.logger.debug(
+                        "Decremented predictive peers to %d",
+                        self._min_predictive_peers,
+                    )
+                # Re-attempt
+                continue
+
+            try:
+                peer = await asyncio.wait_for(
+                    self._queen_tracker.pop_fastest_peasant(),
+                    timeout=TOO_LONG_PREDICTIVE_PEER_DELAY,
+                )
+            except asyncio.TimeoutError:
+                # Increase the minimum number of predictive peers, we seem to not have enough
+                new_predictive_peers = min(
+                    self._min_predictive_peers + 1,
+                    # Don't reserve more than half the peers for prediction
+                    self._num_peers // 2,
+                )
+                if new_predictive_peers != self._min_predictive_peers:
+                    self.logger.debug(
+                        "Updating predictive peer count from %d to %d",
+                        self._min_predictive_peers,
+                        new_predictive_peers,
+                    )
+                    self._min_predictive_peers = new_predictive_peers
+
+                # Prepare to restart
+                self._maybe_useful_nodes.complete(batch_id, ())
+                continue
 
             self._num_predictive_requests_by_peer[peer] += 1
             self._predictive_requests += 1
@@ -352,61 +487,27 @@ class BeamDownloader(Service, PeerSubscriber):
                 batch_id,
             )
 
-    @staticmethod
-    def _append_unique_hashes(
-            first_hashes: Tuple[Hash32, ...],
-            non_unique_hashes: Tuple[Hash32, ...]) -> Tuple[Hash32, ...]:
-        unique_hashes_to_add = tuple(set(non_unique_hashes).difference(first_hashes))
-        return first_hashes + unique_hashes_to_add
-
     async def _get_predictive_nodes_from_peer(
             self,
             peer: ETHPeer,
             node_hashes: Tuple[Hash32, ...],
             batch_id: int) -> None:
-        await self._get_nodes_from_peer(peer, node_hashes, batch_id, urgent=False)
-        self._queen_tracker.insert_peer(peer)
 
-    async def _get_nodes_from_peer(
-            self,
-            peer: ETHPeer,
-            node_hashes: Tuple[Hash32, ...],
-            batch_id: int,
-            urgent: bool) -> None:
-        if urgent:
-            urgent_timer = Timer()
-
-        nodes, new_nodes = await self._store_nodes(peer, node_hashes, urgent)
-
-        if len(nodes) == 0 and urgent:
-            self.logger.debug("%s returned no urgent nodes from %r", peer, node_hashes)
+        nodes, new_nodes, _ = await self._store_nodes(peer, node_hashes, urgent=False)
 
         self._total_processed_nodes += len(nodes)
+        self._predictive_processed_nodes += len(new_nodes)
 
-        if urgent:
-            self._node_tasks.complete(batch_id, tuple(node_hash for node_hash, _ in nodes))
-            self._urgent_processed_nodes += len(nodes)
+        self._maybe_useful_nodes.complete(batch_id, tuple(node_hash for node_hash, _ in nodes))
 
-            time_on_urgent = urgent_timer.elapsed
-            self.logger.debug(
-                "beam-rtt: got %d/%d +%d urgent nodes in %.3fs from %s (%s)",
-                len(nodes),
-                len(node_hashes),
-                len(new_nodes),
-                time_on_urgent,
-                peer.remote,
-                node_hashes[0][:2].hex()
-            )
-            self._time_on_urgent += time_on_urgent
-        else:
-            self._maybe_useful_nodes.complete(batch_id, tuple(node_hash for node_hash, _ in nodes))
-            self._predictive_processed_nodes += len(nodes)
+        # Re-insert the peasant into the tracker
+        self._queen_tracker.insert_peer(peer)
 
     async def _store_nodes(
             self,
             peer: ETHPeer,
             node_hashes: Tuple[Hash32, ...],
-            urgent: bool) -> Tuple[NodeDataBundles, NodeDataBundles]:
+            urgent: bool) -> Tuple[NodeDataBundles, NodeDataBundles, ETHPeer]:
         nodes = await self._request_nodes(peer, node_hashes)
 
         new_nodes = tuple(
@@ -430,7 +531,7 @@ class BeamDownloader(Service, PeerSubscriber):
             for new_data in self._new_data_events:
                 new_data.set()
 
-        return nodes, new_nodes
+        return nodes, new_nodes, peer
 
     def _is_node_present(self, node_hash: Hash32) -> bool:
         """
@@ -465,8 +566,10 @@ class BeamDownloader(Service, PeerSubscriber):
         self._new_data_events.remove(new_data)
 
     def register_peer(self, peer: BasePeer) -> None:
-        super().register_peer(peer)
-        # when a new peer is added to the pool, add it to the idle peer list
+        self._num_peers += 1
+
+    def deregister_peer(self, peer: BasePeer) -> None:
+        self._num_peers -= 1
 
     async def _request_nodes(
             self,
@@ -523,10 +626,26 @@ class BeamDownloader(Service, PeerSubscriber):
         """
         self._timer.start()
         self.logger.info("Starting beam state sync")
-        self.manager.run_task(self._periodically_report_progress)
+        self.manager.run_daemon_task(self._periodically_report_progress)
+        self.manager.run_daemon_task(self._reduce_spread_factor)
         with self.subscribe(self._peer_pool):
             self.manager.run_daemon_task(self._match_predictive_node_requests_to_peers)
             await self._match_urgent_node_requests_to_peers()
+
+    async def _reduce_spread_factor(self) -> None:
+        # The number of backup urgent requester peers increases when the RTT is too high
+        #   This method makes sure that it eventually drops back to 0 in a healthy sync
+        #   environment.
+        while self.manager.is_running:
+            await asyncio.sleep(self._reduce_spread_factor_interval)
+            if self._spread_factor > 0:
+                self.logger.debug(
+                    "spread-beam-update: Reduce spread beam factor %d to %d",
+                    self._spread_factor,
+                    self._spread_factor - 1,
+                )
+                self._spread_factor -= 1
+                self._queen_tracker.set_desired_knight_count(self._spread_factor)
 
     async def _periodically_report_progress(self) -> None:
         while self.manager.is_running:
@@ -554,7 +673,7 @@ class BeamDownloader(Service, PeerSubscriber):
             # log peer counts
             show_top_n_peers = 5
             self.logger.debug(
-                "beam-queen-usage-top-%d: urgent=%s, predictive=%s",
+                "beam-queen-usage-top-%d: urgent=%s, predictive=%s, spread=%d, reserve_pred=%d",
                 show_top_n_peers,
                 [
                     (str(peer.remote), num) for peer, num in
@@ -564,6 +683,8 @@ class BeamDownloader(Service, PeerSubscriber):
                     (str(peer.remote), num) for peer, num in
                     self._num_predictive_requests_by_peer.most_common(show_top_n_peers)
                 ],
+                self._spread_factor,
+                self._min_predictive_peers,
             )
             self._num_urgent_requests_by_peer.clear()
             self._num_predictive_requests_by_peer.clear()

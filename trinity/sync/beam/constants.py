@@ -2,11 +2,13 @@ from eth.constants import MAX_UNCLE_DEPTH
 
 from trinity.sync.common.constants import PREDICTED_BLOCK_TIME
 
-# Peers are typically expected to have predicted nodes available,
-#   so it's reasonable to ask for all-predictive nodes from a peer.
-# Urgent node requests usually come in pretty fast, so
-#   even at a small value (like 1ms), this timeout is rarely triggered.
-DELAY_BEFORE_NON_URGENT_REQUEST = 0.05
+# If we are waiting for predictive nodes requests to come in and
+#   they don't for this long, then reduce the minimum predictive
+#   peer response.
+# Also, if we are waiting for a peer to ask for predictive nodes
+#   for this long, then maybe increase the number of predictive peers.
+# Picked this value from thin air.
+TOO_LONG_PREDICTIVE_PEER_DELAY = 2.0
 
 # How much large should our buffer be? This is a multiplier on how many
 # nodes we can request at once from a single peer.
@@ -33,6 +35,16 @@ MIN_GAS_LOG_WAIT = PREDICTED_BLOCK_TIME / 5
 # and maybe to try out another peeer. Then reinsert it relatively soon.
 # Measured in seconds.
 NON_IDEAL_RESPONSE_PENALTY = 2.0
+
+# Sometimes, Beam Sync will ask for the "urgent" trie node from more than one
+#   peer, to reduce the latency. We call this "Spread Beam". When a request for
+#   a single urgent node takes longer than this many seconds to return, we
+#   increase the number of peers that we ask for urgent nodes, the spread beam factor.
+# Where did this number come from? Rough estimates: say that we need to import
+#   a block within a pivot, which happens every ~120 blocks. At 13 seconds per block,
+#   that's ~1500 seconds. We download ~4000 new trie nodes, with high variance on the
+#   block. 1500 / 4000 ~= 0.4
+MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE = 0.4
 
 # If Beam Sync wants to use a queen, but is stuck waiting for it to show up,
 #   then log a warning if it's been too long. If it's been more than this

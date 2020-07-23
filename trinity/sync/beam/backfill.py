@@ -128,6 +128,12 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         async with self._external_peasant_usage.make_noise():
             return await self._queening_queue.pop_fastest_peasant()
 
+    def pop_knights(self) -> Iterable[ETHPeer]:
+        return self._queening_queue.pop_knights()
+
+    def set_desired_knight_count(self, desired_knights: int) -> None:
+        self._queening_queue.set_desired_knight_count(desired_knights)
+
     async def run(self) -> None:
         self.manager.run_daemon_task(self._periodically_report_progress)
 

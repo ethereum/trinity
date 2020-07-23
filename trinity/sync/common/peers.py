@@ -97,3 +97,21 @@ class WaitingPeers(Generic[TChainPeer]):
             peer = wrapped_peer.original
 
         return peer
+
+    def pop_nowait(self) -> TChainPeer:
+        """
+        :raise QueueEmpty: if no peer is available
+        """
+        wrapped_peer = self._waiting_peers.get_nowait()
+        peer = wrapped_peer.original
+
+        # make sure the peer has not gone offline while waiting in the queue
+        while not peer.is_alive:
+            # if so, look for the next best peer
+            wrapped_peer = self._waiting_peers.get_nowait()
+            peer = wrapped_peer.original
+
+        return peer
+
+    def __len__(self) -> int:
+        return self._waiting_peers.qsize()

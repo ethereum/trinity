@@ -2,7 +2,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import sys
-from typing import Any, Awaitable, cast, Iterable, List, Sequence, Set, TypeVar
+from typing import (
+    Any,
+    AsyncIterator,
+    Awaitable,
+    cast,
+    Iterable,
+    List,
+    Sequence,
+    Set,
+    TypeVar,
+)
 
 from trio import MultiError
 
@@ -72,3 +82,35 @@ async def cancel_tasks(tasks: Iterable[asyncio.Task[Any]]) -> None:
                 errors.append(future.exception())
     if errors:
         raise MultiError(errors)
+
+
+# Ripped from async_service/asyncio.py at v0.1.0-alpha.8
+@contextlib.asynccontextmanager
+async def cleanup_tasks(*tasks: "asyncio.Future[Any]") -> AsyncIterator[None]:
+    """
+    Context manager that ensures that all tasks are properly cancelled and awaited.
+
+    The order in which tasks are cleaned is such that the first task will be
+    the last to be cancelled/awaited.
+
+    This function **must** be called with at least one task.
+    """
+    try:
+        task = tasks[0]
+    except IndexError:
+        raise TypeError("cleanup_tasks must be called with at least one task")
+
+    try:
+        if len(tasks) > 1:
+            async with cleanup_tasks(*tasks[1:]):
+                yield
+        else:
+            yield
+    finally:
+        if not task.done():
+            task.cancel()
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
