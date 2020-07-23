@@ -3,6 +3,7 @@ from typing import Optional, Type
 from eth.abc import AtomicDatabaseAPI
 from eth.exceptions import BlockNotFound
 from eth.typing import Hash32
+from lru import LRU
 import ssz
 
 from eth2.beacon.db.abc import BaseBeaconChainDB
@@ -17,9 +18,17 @@ class StateNotFound(Exception):
     pass
 
 
+# two epochs of blocks
+BLOCK_CACHE_SIZE = 64
+# two epochs of states
+STATE_CACHE_SIZE = 64
+
+
 class BeaconChainDB(BaseBeaconChainDB):
     def __init__(self, db: AtomicDatabaseAPI) -> None:
         self.db = db
+        self._block_cache = LRU(BLOCK_CACHE_SIZE)
+        self._state_cache = LRU(STATE_CACHE_SIZE)
 
     @classmethod
     def from_genesis(
@@ -55,6 +64,9 @@ class BeaconChainDB(BaseBeaconChainDB):
     def get_block_by_root(
         self, block_root: Root, block_class: Type[BaseBeaconBlock]
     ) -> BaseBeaconBlock:
+        if block_root in self._block_cache:
+            return self._block_cache[block_root]
+
         key = SchemaV1.block_root_to_block(block_root)
         try:
             block_data = self.db[key]
@@ -76,6 +88,8 @@ class BeaconChainDB(BaseBeaconChainDB):
     def persist_block(self, signed_block: BaseSignedBeaconBlock) -> None:
         block = signed_block.message
         block_root = block.hash_tree_root
+
+        self._block_cache[block_root] = block
 
         block_root_to_block = SchemaV1.block_root_to_block(block_root)
         self.db[block_root_to_block] = ssz.encode(block)
@@ -113,6 +127,9 @@ class BeaconChainDB(BaseBeaconChainDB):
     def get_state_by_root(
         self, state_root: Root, state_class: Type[BeaconState]
     ) -> BeaconState:
+        if state_root in self._state_cache:
+            return self._state_cache[state_root]
+
         key = SchemaV1.state_root_to_state(state_root)
         try:
             state_data = self.db[key]
@@ -122,5 +139,8 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     def persist_state(self, state: BeaconState) -> None:
         state_root = state.hash_tree_root
+
+        self._state_cache[state_root] = state
+
         state_root_to_state = SchemaV1.state_root_to_state(state_root)
         self.db[state_root_to_state] = ssz.encode(state)
