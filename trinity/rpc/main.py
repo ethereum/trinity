@@ -149,7 +149,7 @@ class RPCServer:
             self.logger.info(exc)
             return None, exc
         except Exception as exc:
-            self.logger.warning("RPC method caused exception", exc_info=True)
+            self.logger.warning("RPC method caused exception")
             if debug:
                 raise Exception("failure during rpc call with %s" % request) from exc
             return None, exc
