@@ -200,15 +200,6 @@ class BeamSyncer(Service):
             self.manager.cancel()
             return
 
-        if self._enable_backfill:
-            # There's no chance to introduce new gaps after this point. Therefore we can run this
-            # until it has filled all gaps and let it finish.
-            self.manager.run_child_service(self._header_backfill)
-
-            # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
-            self.manager.run_daemon_child_service(self._block_backfill)
-            self.manager.run_daemon_task(self._monitor_historical_backfill)
-
         self.manager.run_daemon_child_service(self._block_importer)
         self.manager.run_daemon_child_service(self._header_syncer)
 
@@ -241,6 +232,19 @@ class BeamSyncer(Service):
 
         # Now let the beam sync importer kick in
         self._launchpoint_header_syncer.set_launchpoint_headers(final_headers)
+
+        # We wait until beam sync has launched before starting backfill, because
+        #   they both request block bodies, but beam sync needs them urgently.
+        if self._enable_backfill:
+            # There's no chance to introduce new gaps after this point. Therefore we can run this
+            # until it has filled all gaps and let it finish.
+            self.manager.run_child_service(self._header_backfill)
+
+            # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
+            self.manager.run_daemon_child_service(self._block_backfill)
+
+            # Now we can check the lag (presumably ~0) and start backfill
+            self.manager.run_daemon_task(self._monitor_historical_backfill)
 
         # TODO wait until first header with a body comes in?...
         # Start state downloader service
