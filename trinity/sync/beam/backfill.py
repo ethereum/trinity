@@ -398,11 +398,11 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             return
 
         storage_tracker = self._get_storage_tracker(address_hash_nibbles)
-        storage_iterator = self._request_tracking_trie_items(
-            storage_tracker,
-            storage_root,
-        )
         while self.manager.is_running:
+            storage_iterator = self._request_tracking_trie_items(
+                storage_tracker,
+                storage_root,
+            )
             try:
                 async for path_to_leaf, hashed_key, _storage_value in storage_iterator:
                     # We don't actually care to look at the storage keys/values during backfill
