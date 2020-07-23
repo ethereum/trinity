@@ -1,9 +1,9 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 import asyncio
 import functools
 from typing import Any, FrozenSet, Optional, Type
 
-from async_service import Service
+from async_service import Service, ServiceAPI
 
 from p2p.abc import CommandAPI
 from p2p.exchange import PerformanceAPI
@@ -29,7 +29,7 @@ def _peer_sort_key(peer: ETHPeer) -> float:
     return queen_peer_performance_sort(peer.eth_api.get_node_data.tracker)
 
 
-class QueenTrackerAPI(ABC):
+class QueenTrackerAPI(ServiceAPI):
     """
     Keep track of the single best peer
     """

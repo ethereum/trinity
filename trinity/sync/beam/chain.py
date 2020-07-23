@@ -45,6 +45,10 @@ from trinity.sync.beam.constants import (
     RESUME_BACKFILL_AT_LAG,
     PREDICTED_BLOCK_TIME,
 )
+from trinity.sync.beam.queen import (
+    QueenTrackerAPI,
+    QueeningQueue,
+)
 from trinity.sync.common.constants import (
     MAX_BACKFILL_BLOCK_BODIES_AT_ONCE,
 )
@@ -120,7 +124,8 @@ class BeamSyncer(Service):
             event_bus: EndpointAPI,
             checkpoint: Checkpoint = None,
             force_beam_block_number: BlockNumber = None,
-            enable_backfill: bool = True) -> None:
+            enable_backfill: bool = True,
+            enable_state_backfill: bool = True) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamSyncer')
 
         self._body_for_header_exists = body_for_header_exists(chain_db, chain)
@@ -150,10 +155,15 @@ class BeamSyncer(Service):
 
         self._backfiller = BeamStateBackfill(db, peer_pool)
 
+        if enable_state_backfill:
+            self._queen_queue: QueenTrackerAPI = self._backfiller
+        else:
+            self._queen_queue = QueeningQueue(peer_pool)
+
         self._state_downloader = BeamDownloader(
             db,
             peer_pool,
-            self._backfiller,
+            self._queen_queue,
             event_bus,
         )
         self._data_hunter = MissingDataEventHandler(
@@ -190,6 +200,7 @@ class BeamSyncer(Service):
 
         self._chain = chain
         self._enable_backfill = enable_backfill
+        self._enable_state_backfill = enable_state_backfill
 
     async def run(self) -> None:
 
@@ -249,12 +260,12 @@ class BeamSyncer(Service):
             # Now we can check the lag (presumably ~0) and start backfill
             self.manager.run_daemon_task(self._monitor_historical_backfill)
 
+        # Will start the state background service or the basic queen queue
+        self.manager.run_child_service(self._queen_queue)
+
         # TODO wait until first header with a body comes in?...
         # Start state downloader service
         self.manager.run_daemon_child_service(self._state_downloader)
-
-        # Start state background service
-        self.manager.run_child_service(self._backfiller)
 
         # run sync until cancelled
         await self.manager.wait_finished()

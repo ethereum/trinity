@@ -167,11 +167,13 @@ async def test_fast_syncer(request, event_loop, event_bus, chaindb_fresh, chaind
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('enable_state_backfill', [False, True])
 async def test_beam_syncer_with_checkpoint_too_close_to_tip(
         caplog,
         request,
         event_loop,
         event_bus,
+        enable_state_backfill,
         chaindb_fresh,
         chaindb_churner):
 
@@ -189,6 +191,7 @@ async def test_beam_syncer_with_checkpoint_too_close_to_tip(
             chaindb_fresh,
             chaindb_churner,
             beam_to_block=66,
+            enable_state_backfill=enable_state_backfill,
             checkpoint=checkpoint,
         )
     except asyncio.TimeoutError:
@@ -198,10 +201,12 @@ async def test_beam_syncer_with_checkpoint_too_close_to_tip(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('enable_state_backfill', [False, True])
 async def test_beam_syncer_with_checkpoint(
         request,
         event_loop,
         event_bus,
+        enable_state_backfill,
         chaindb_fresh,
         chaindb_churner):
 
@@ -217,6 +222,7 @@ async def test_beam_syncer_with_checkpoint(
         chaindb_fresh,
         chaindb_churner,
         beam_to_block=66,
+        enable_state_backfill=enable_state_backfill,
         checkpoint=checkpoint,
     )
 
@@ -231,6 +237,7 @@ async def _beam_syncing(
         beam_to_block,
         checkpoint=None,
         VM_at_0=PetersburgVM,
+        enable_state_backfill=False,
 ):
 
     client_context = ChainContextFactory(headerdb__db=chaindb_fresh.db)
@@ -291,6 +298,7 @@ async def _beam_syncing(
                 gatherer_endpoint,
                 force_beam_block_number=beam_to_block,
                 checkpoint=checkpoint,
+                enable_state_backfill=enable_state_backfill,
                 enable_backfill=False,
             )
 
@@ -325,6 +333,7 @@ async def _beam_syncing(
 # range(1, 130) for beam_to_block. (and optionally follow the instructions at target_head)
 @pytest.mark.asyncio
 @pytest.mark.parametrize('beam_to_block', [1, 2, 7, 66, 68, 129])
+@pytest.mark.parametrize('enable_state_backfill', [False, True])
 async def test_beam_syncer_loads_recent_state_root(
         request,
         event_loop,
@@ -332,6 +341,7 @@ async def test_beam_syncer_loads_recent_state_root(
         chaindb_fresh,
         chaindb_churner,
         beam_to_block,
+        enable_state_backfill,
         checkpoint=None):
 
     sync_test_service = _beam_syncing(
@@ -395,6 +405,7 @@ async def test_beam_syncer_backfills_all_state(
         beam_to_block,
         checkpoint,
         VM_at_0=MuirGlacierVM,
+        enable_state_backfill=True,
     )
 
     caplog.set_level(logging.INFO)
