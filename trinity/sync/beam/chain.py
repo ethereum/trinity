@@ -200,15 +200,6 @@ class BeamSyncer(Service):
             self.manager.cancel()
             return
 
-        if self._enable_backfill:
-            # There's no chance to introduce new gaps after this point. Therefore we can run this
-            # until it has filled all gaps and let it finish.
-            self.manager.run_child_service(self._header_backfill)
-
-            # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
-            self.manager.run_daemon_child_service(self._block_backfill)
-            self.manager.run_daemon_task(self._monitor_historical_backfill)
-
         self.manager.run_daemon_child_service(self._block_importer)
         self.manager.run_daemon_child_service(self._header_syncer)
 
@@ -248,6 +239,15 @@ class BeamSyncer(Service):
 
         # Start state background service
         self.manager.run_child_service(self._backfiller)
+
+        if self._enable_backfill:
+            # There's no chance to introduce new gaps after this point. Therefore we can run this
+            # until it has filled all gaps and let it finish.
+            self.manager.run_child_service(self._header_backfill)
+
+            # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
+            self.manager.run_daemon_child_service(self._block_backfill)
+            self.manager.run_daemon_task(self._monitor_historical_backfill)
 
         # run sync until cancelled
         await self.manager.wait_finished()
