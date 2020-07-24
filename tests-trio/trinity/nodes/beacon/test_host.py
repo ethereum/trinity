@@ -4,7 +4,7 @@ import pytest
 import trio
 
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
-from trinity.nodes.beacon.request_responder import GoodbyeReason
+from trinity.nodes.beacon.request_responder import SHUTTING_DOWN_CODE, GoodbyeReason
 
 
 @asynccontextmanager
@@ -92,6 +92,6 @@ async def test_hosts_can_do_req_resp(host_factory):
                 b_metadata = await host_a.get_metadata(peer_b)
                 assert b_metadata.seq_number == b_seq_number
 
-                await host_a.send_goodbye_to(peer_b, GoodbyeReason.shutting_down)
+                await host_a.send_goodbye_to(peer_b, GoodbyeReason(SHUTTING_DOWN_CODE))
                 assert len(host_a.get_network().connections) == 0
                 assert len(host_b.get_network().connections) == 0
