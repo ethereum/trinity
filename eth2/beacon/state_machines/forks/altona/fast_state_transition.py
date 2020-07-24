@@ -1,4 +1,8 @@
-from eth2.beacon.state_machines.forks.altona.eth2fastspec import process_slots, EpochsContext, process_block
+from eth2.beacon.state_machines.forks.altona.eth2fastspec import (
+    EpochsContext,
+    process_block,
+    process_slots,
+)
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot

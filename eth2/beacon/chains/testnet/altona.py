@@ -400,4 +400,4 @@ class BeaconChain(BaseBeaconChain):
 
 
 class BeaconChainTest(BeaconChain):
-    _sm_configuration = ((GENESIS_SLOT, AltonaStateMachineTest),)
+    _sm_configuration = ((GENESIS_SLOT, AltonaStateMachineTest),)  # type: ignore
