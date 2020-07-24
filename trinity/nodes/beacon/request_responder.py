@@ -1,4 +1,4 @@
-from enum import Enum, IntEnum, unique
+from enum import Enum, unique
 import io
 import logging
 from typing import (
@@ -43,22 +43,21 @@ PeerUpdater = Callable[[PeerID, Any], Awaitable[None]]
 
 StreamHandler = Callable[[INetStream], Awaitable[None]]
 
+SHUTTING_DOWN_CODE = 1
+IRRELEVANT_NETWORK_CODE = 2
+INTERNAL_ERROR_CODE = 3
 
-@unique
-class GoodbyeReason(IntEnum):
-    shutting_down = 1
-    irrelevant_network = 2
-    some_error = 3
 
-    def __str__(self) -> str:
-        if self == self.shutting_down:
+class GoodbyeReason(int):
+    def __repr__(self) -> str:
+        if self == SHUTTING_DOWN_CODE:
             return "peer is shutting down"
-        elif self == self.irrelevant_network:
+        elif self == IRRELEVANT_NETWORK_CODE:
             return "peer is on irrelevant network"
-        elif self == self.some_error:
+        elif self == INTERNAL_ERROR_CODE:
             return "peer has some internal error"
         else:
-            raise Exception(f"unknown variant of {self}")
+            return f"unknown goodbye reason: {self}"
 
 
 TBlocksByRangeRequest = TypeVar("TBlocksByRangeRequest", bound="BlocksByRangeRequest")
@@ -251,7 +250,7 @@ class RequestResponder:
         await self._peer_updater(peer_id, remote_status)
 
     async def send_goodbye(self, stream: INetStream, reason: GoodbyeReason) -> None:
-        request_payload = _serialize_ssz(reason.value, ssz.uint64)
+        request_payload = _serialize_ssz(reason, ssz.uint64)
 
         await _write_request(request_payload, stream)
         await stream.close()
