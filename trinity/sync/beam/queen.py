@@ -139,8 +139,7 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
             if peer_is_requesting:
                 # skip the peer if there's an active request
                 self.logger.debug("QueenQueuer is skipping active peer %s", peer)
-                loop = asyncio.get_event_loop()
-                loop.call_later(10, functools.partial(self._insert_peer, peer))
+                self.insert_peer(peer, delay=NON_IDEAL_RESPONSE_PENALTY)
                 continue
 
             return peer
