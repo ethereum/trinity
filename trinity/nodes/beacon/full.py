@@ -31,8 +31,10 @@ from trinity.nodes.beacon.config import BeaconNodeConfig
 from trinity.nodes.beacon.host import Host
 from trinity.nodes.beacon.metadata import MetaData
 from trinity.nodes.beacon.metadata import SeqNumber as MetaDataSeqNumber
-from trinity.nodes.beacon.request_responder import MAX_REQUEST_BLOCKS, GoodbyeReason
+from trinity.nodes.beacon.request_responder import GoodbyeReason
 from trinity.nodes.beacon.status import Status
+
+SYNC_REATTEMPT_COUNT = 10
 
 
 def _mk_clock(
@@ -439,6 +441,36 @@ class BeaconNode:
                         "recv'd ping from %s with seq number: %s", peer_id, update
                     )
 
+    async def _sync_batch(
+        self, batch: SyncRequest, start_time: float, start_slot: Slot
+    ) -> bool:
+        try:
+            count = 0
+            async for block in self._host.get_blocks_by_range(
+                batch.peer_id, batch.start_slot, batch.count
+            ):
+                count += 1
+                imported = self.on_block(block)
+                if not imported:
+                    self.logger.warning(
+                        "an issue with sync of this block %s",
+                        humanize_hash(block.hash_tree_root),
+                    )
+                    return False
+                if count % 8 == 0:
+                    now = time.time()
+                    slots = block.slot - start_slot
+                    slots_per_second = slots / (now - start_time)
+                    self.logger.info(
+                        "synced to slot %d, syncing at [ %2f slots/sec ]",
+                        block.slot,
+                        slots_per_second,
+                    )
+        except Exception as e:
+            self.logger.exception(e)
+            return False
+        return True
+
     async def _manage_sync_requests(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
     ) -> None:
@@ -446,29 +478,21 @@ class BeaconNode:
         async with self._sync_requests:
             async for request in self._sync_requests:
                 start_time = time.time()
+                start_slot = request.start_slot
                 self.logger.info(
                     "starting sync of %d slots at %s", request.count, time.ctime()
                 )
 
-                for batch in request.get_batches(MAX_REQUEST_BLOCKS):
-                    async for block in self._host.get_blocks_by_range(
-                        batch.peer_id, batch.start_slot, batch.count
-                    ):
-                        imported = self.on_block(block)
-                        if not imported:
-                            self.logger.warning(
-                                "an issue with sync of this block %s",
-                                humanize_hash(block.hash_tree_root),
+                # NOTE: seeing more robust operation with lower batch size...
+                for batch in request.get_batches(128):
+                    success = await self._sync_batch(batch, start_time, start_slot)
+                    for _ in range(SYNC_REATTEMPT_COUNT):
+                        if not success:
+                            success = await self._sync_batch(
+                                batch, start_time, start_slot
                             )
                         else:
-                            now = time.time()
-                            slots = block.slot - request.start_slot
-                            slots_per_second = slots / (now - start_time)
-                            self.logger.info(
-                                "synced to slot %d, syncing at [ %2f slots/sec ]",
-                                block.slot,
-                                slots_per_second,
-                            )
+                            break
 
     async def run(
         self, task_status: TaskStatus[None] = trio.TASK_STATUS_IGNORED
