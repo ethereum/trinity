@@ -287,7 +287,10 @@ class BeaconNode:
                 self._block_pool.discard(orphan)
                 imported = self.on_block(orphan)
                 if not imported:
-                    self.logger.warning("failed to import orphan %s", orphan)
+                    self.logger.warning(
+                        "failed to import orphan with root %s",
+                        humanize_hash(orphan.hash_tree_root),
+                    )
                     return
 
     def _on_block_imported(self, block: SignedBeaconBlock) -> None:
@@ -300,14 +303,18 @@ class BeaconNode:
         # TODO: synchronize any operations from pools that are now on-chain
 
     def _on_block_failure(self, block: SignedBeaconBlock, exc: Exception) -> None:
-        self.logger.exception("failed to import block %s: %s", block, exc)
+        self.logger.exception(
+            "failed to import block with root %s: %s",
+            humanize_hash(block.hash_tree_root),
+            exc,
+        )
         # TODO: do not drop block?
 
     def _on_orphan_block(
         self, block: SignedBeaconBlock, _exc: ParentNotFoundError
     ) -> None:
         self.logger.debug(
-            "failed to import block %s: missing parent with root %s",
+            "failed to import block with root %s: missing parent with root %s",
             humanize_hash(block.hash_tree_root),
             humanize_hash(block.parent_root),
         )
@@ -316,7 +323,11 @@ class BeaconNode:
     def _on_slashable_block(
         self, block: SignedBeaconBlock, exc: SlashableBlockError
     ) -> None:
-        self.logger.warning("failed to import block %s: %s", block, exc)
+        self.logger.warning(
+            "failed to import block with root %s: %s",
+            humanize_hash(block.hash_tree_root),
+            exc,
+        )
         # NOTE: chain will write the block in ``on_block`` but not the block's state
         # See the place that exception is raised for further rationale.
         # TODO: pipe to "slasher" software...
