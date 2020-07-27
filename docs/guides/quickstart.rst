@@ -59,6 +59,12 @@ Now, install Snappy Library with brew as follows:
 .. code:: sh
 
   brew install snappy
+  
+Then, install gmp with brew as follows:
+
+.. code:: sh
+
+  brew install gmp
 
 Finally, install the ``trinity`` package via pip:
 
