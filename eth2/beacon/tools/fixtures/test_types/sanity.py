@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional, Tuple, Type
 
 from eth_utils import ValidationError
+from ssz.sedes import uint64
 
 from eth2.beacon.state_machines.forks.serenity.slot_processing import process_slots
 from eth2.beacon.state_machines.forks.serenity.state_transitions import (
@@ -72,7 +73,7 @@ class SlotsHandler(TestHandler[Tuple[BeaconState, int], BeaconState]):
     ) -> Tuple[BeaconState, int]:
         return (
             test_case_parts["pre"].load(BeaconState),
-            test_case_parts["slots"].load(),
+            test_case_parts["slots"].load(uint64),
         )
 
     @staticmethod

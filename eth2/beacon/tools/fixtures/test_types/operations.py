@@ -90,7 +90,7 @@ class OperationHandler(
             # check if the exception is expected...
             for exception in cls.expected_exceptions:
                 if isinstance(e, exception):
-                    raise ValidationError(e)
+                    raise ValidationError() from e
             # else raise (and fail the pytest test case ...)
             raise e
 
@@ -110,7 +110,7 @@ class AttesterSlashingHandler(OperationHandler):
     name = "attester_slashing"
     operation_type = AttesterSlashing
     processor = staticmethod(process_attester_slashings)
-    expected_exceptions = (SignatureError,)
+    expected_exceptions = (SignatureError, IndexError)
 
 
 class BlockHeaderHandler(OperationHandler):
