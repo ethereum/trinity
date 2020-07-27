@@ -318,7 +318,7 @@ def pausing_vm_decorator(
                     bytecode_event = bytecode_future.result(timeout=self.node_retrieval_timeout)
                     if urgent:
                         self.logger.debug(
-                            "Got bytecode to importer in %.3fs (%s)",
+                            "Paused for bytecode for %.3fs (%s)",
                             t.elapsed,
                             exc.missing_code_hash[:2].hex(),
                         )
