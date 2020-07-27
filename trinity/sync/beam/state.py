@@ -371,7 +371,7 @@ class BeamDownloader(Service, PeerSubscriber):
         if urgent:
             urgent_timer = Timer()
 
-        nodes, new_nodes = await self._store_nodes(peer, node_hashes)
+        nodes, new_nodes = await self._store_nodes(peer, node_hashes, urgent)
 
         if len(nodes) == 0 and urgent:
             self.logger.debug("%s returned no urgent nodes from %r", peer, node_hashes)
@@ -400,7 +400,8 @@ class BeamDownloader(Service, PeerSubscriber):
     async def _store_nodes(
             self,
             peer: ETHPeer,
-            node_hashes: Tuple[Hash32, ...]) -> Tuple[NodeDataBundles, NodeDataBundles]:
+            node_hashes: Tuple[Hash32, ...],
+            urgent: bool) -> Tuple[NodeDataBundles, NodeDataBundles]:
         nodes = await self._request_nodes(peer, node_hashes)
 
         new_nodes = tuple(
@@ -414,7 +415,13 @@ class BeamDownloader(Service, PeerSubscriber):
                 for node_hash, node in new_nodes:
                     batch[node_hash] = node
 
-        if len(new_nodes):
+        # If there are any new nodes returned, then notify any coros that are waiting on
+        #   node data to resume.
+        # Note that we notify waiting coros even if no new data returned, but they are urgent.
+        # We do this in case the urgent data was retrieved by backfill, or generated locally.
+        #   That way, urgent coros don't get stuck hanging until a timeout. This can cause an
+        #   especially flaky test_beam_syncer_backfills_all_state[42].
+        if urgent or new_nodes:
             for new_data in self._new_data_events:
                 new_data.set()
 
