@@ -45,6 +45,9 @@ from trie.typing import (
 
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 
+from trinity.protocol.eth.constants import (
+    MAX_STATE_FETCH,
+)
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import (
     EPOCH_BLOCK_LENGTH,
@@ -62,7 +65,8 @@ from .queen import (
     QueenTrackerAPI,
 )
 
-REQUEST_SIZE = 16
+# How many trie nodes to request in each backfill message to peers:
+REQUEST_SIZE = MAX_STATE_FETCH
 
 
 class BeamStateBackfill(Service, QueenTrackerAPI):
