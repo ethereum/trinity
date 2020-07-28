@@ -13,7 +13,7 @@ from eth2.beacon.helpers import (
     compute_signing_root,
     get_domain,
     get_seed, compute_epoch_at_slot, compute_start_slot_at_epoch, get_block_root,
-    get_block_root_at_slot,
+    get_block_root_at_slot, get_randao_mix,
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
@@ -392,7 +392,7 @@ def compute_proposer_index(
                 ALTONA_CONFIG.SHUFFLE_ROUND_COUNT,
             )
         ]
-        random_byte = hash_eth2(seed + int_to_bytes(i // 32, length=8))[i % 32]
+        random_byte = hash_eth2(seed + (i // 32).to_bytes(length=8, byteorder=ENDIANNESS))[i % 32]
         effective_balance = state.validators[candidate_index].effective_balance
         if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE * random_byte:
             return ValidatorIndex(candidate_index)
@@ -869,20 +869,6 @@ def prepare_epoch_process_state(
     return out
 
 
-def get_randao_mix(state: BeaconState, epoch: Epoch) -> bytes:
-    """
-    Return the randao mix at a recent ``epoch``.
-    """
-    return state.randao_mixes[epoch % EPOCHS_PER_HISTORICAL_VECTOR]
-
-
-def int_to_bytes(n: int, length: int) -> bytes:
-    """
-    Return the ``length``-byte serialization of ``n`` in ``ENDIANNESS``-endian.
-    """
-    return n.to_bytes(length=length, byteorder=ENDIANNESS)
-
-
 def process_justification_and_finalization(
     epochs_ctx: EpochsContext, process: EpochProcess, state: BeaconState
 ) -> BeaconState:
@@ -1247,7 +1233,11 @@ def process_final_updates(
     # Set randao mix
     state = state.transform(
         ("randao_mixes", next_epoch % EPOCHS_PER_HISTORICAL_VECTOR),
-        lambda _: get_randao_mix(state, current_epoch),
+        lambda _: get_randao_mix(
+            state,
+            current_epoch,
+            ALTONA_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR,
+        ),
     )
 
     # Set historical root accumulator
@@ -1309,7 +1299,10 @@ def process_randao(
     signing_root = compute_signing_root(SerializableUint64(epoch), domain)
     assert bls_Verify(proposer_pubkey, signing_root, body.randao_reveal)
     # Mix in RANDAO reveal
-    mix = xor(get_randao_mix(state, epoch), hash_eth2(body.randao_reveal))
+    mix = xor(
+        get_randao_mix(state, epoch, ALTONA_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR),
+        hash_eth2(body.randao_reveal)
+    )
     return state.transform(
         ("randao_mixes", epoch % EPOCHS_PER_HISTORICAL_VECTOR), lambda _: mix
     )
