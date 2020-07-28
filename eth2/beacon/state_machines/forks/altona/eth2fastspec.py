@@ -1,27 +1,38 @@
 from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple
 
 from eth_typing import BLSPubkey, Hash32
-from eth_utils import decode_hex, ValidationError, encode_hex
+from eth_utils import ValidationError, decode_hex, encode_hex
 import milagro_bls_binding as milagro_bls
 
 from eth2._utils.hash import hash_eth2
 from eth2._utils.merkle.common import verify_merkle_branch
 from eth2.beacon.attestation_helpers import is_slashable_attestation_data
 from eth2.beacon.committee_helpers import compute_shuffled_index
-from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance, \
-    compute_activation_exit_epoch
+from eth2.beacon.epoch_processing_helpers import (
+    compute_activation_exit_epoch,
+    decrease_balance,
+    increase_balance,
+)
 from eth2.beacon.helpers import (
     compute_domain,
+    compute_epoch_at_slot,
     compute_signing_root,
+    compute_start_slot_at_epoch,
+    get_block_root,
+    get_block_root_at_slot,
     get_domain,
-    get_seed, compute_epoch_at_slot, compute_start_slot_at_epoch, get_block_root,
-    get_block_root_at_slot, get_randao_mix,
+    get_randao_mix,
+    get_seed,
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
-from eth2.beacon.state_machines.forks.serenity.block_validation import \
-    _validate_validator_is_active, validate_block_slot, validate_block_is_new, \
-    validate_block_parent_root, validate_randao_reveal
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    _validate_validator_is_active,
+    validate_block_is_new,
+    validate_block_parent_root,
+    validate_block_slot,
+    validate_randao_reveal,
+)
 from eth2.beacon.state_machines.forks.serenity.slot_processing import _process_slot
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
@@ -41,8 +52,6 @@ from eth2.beacon.typing import (
     DomainType,
     Epoch,
     Gwei,
-    Root,
-    SerializableUint64,
     Slot,
     ValidatorIndex,
     Version,
@@ -396,11 +405,13 @@ def compute_proposer_index(
             compute_shuffled_index(
                 ValidatorIndex(i % len(indices)),
                 len(indices),
-                seed,
+                Hash32(seed),
                 ALTONA_CONFIG.SHUFFLE_ROUND_COUNT,
             )
         ]
-        random_byte = hash_eth2(seed + (i // 32).to_bytes(length=8, byteorder=ENDIANNESS))[i % 32]
+        random_byte = hash_eth2(
+            seed + (i // 32).to_bytes(length=8, byteorder=ENDIANNESS)
+        )[i % 32]
         effective_balance = state.validators[candidate_index].effective_balance
         if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE * random_byte:
             return ValidatorIndex(candidate_index)
@@ -456,8 +467,7 @@ class EpochsContext(object):
             ALTONA_CONFIG,
         )
         start_slot = compute_start_slot_at_epoch(
-            self.current_shuffling.epoch,
-            ALTONA_CONFIG.SLOTS_PER_EPOCH,
+            self.current_shuffling.epoch, ALTONA_CONFIG.SLOTS_PER_EPOCH
         )
         self.proposers = [
             compute_proposer_index(
@@ -684,7 +694,9 @@ def prepare_epoch_process_state(
     out.prev_epoch = prev_epoch
 
     slashings_epoch = current_epoch + (EPOCHS_PER_SLASHINGS_VECTOR // 2)
-    exit_queue_end = compute_activation_exit_epoch(current_epoch, ALTONA_CONFIG.MAX_SEED_LOOKAHEAD)
+    exit_queue_end = compute_activation_exit_epoch(
+        current_epoch, ALTONA_CONFIG.MAX_SEED_LOOKAHEAD
+    )
 
     active_count = int(0)
     # fast read-only iterate over tree-structured validator set.
@@ -782,7 +794,7 @@ def prepare_epoch_process_state(
             att_bits = list(aggregation_bits)
             att_voted_target_root = att_target.root == actual_target_block_root
             att_voted_head_root = att_beacon_block_root == get_block_root_at_slot(
-                state, att_slot, ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT,
+                state, att_slot, ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT
             )
 
             # attestation-target is already known to be this epoch, get it from the pre-computed
@@ -833,7 +845,10 @@ def prepare_epoch_process_state(
     # When used in a non-epoch transition, it may be the absolute start of the epoch,
     # and the current epoch will not have any attestations (or a target block root to match them
     # against)
-    if compute_start_slot_at_epoch(current_epoch, ALTONA_CONFIG.SLOTS_PER_EPOCH) < state.slot:
+    if (
+        compute_start_slot_at_epoch(current_epoch, ALTONA_CONFIG.SLOTS_PER_EPOCH)
+        < state.slot
+    ):
         status_process_epoch(
             out.statuses,
             state.current_epoch_attestations,
@@ -917,8 +932,8 @@ def process_justification_and_finalization(
                     state,
                     previous_epoch,
                     ALTONA_CONFIG.SLOTS_PER_EPOCH,
-                    ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT
-                )
+                    ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT,
+                ),
             ),
         )
         bits[1] = True
@@ -932,15 +947,14 @@ def process_justification_and_finalization(
                     current_epoch,
                     ALTONA_CONFIG.SLOTS_PER_EPOCH,
                     ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT,
-                )
+                ),
             ),
         )
         bits[0] = True
     state = state.set("justification_bits", tuple(bits))
     if len(bits) != 4:
         raise ValidationError(
-            "justification_bits length does not equal 4  "
-            f"bits length: {len(bits)}"
+            "justification_bits length does not equal 4  " f"bits length: {len(bits)}"
         )
 
     # Process finalizations
@@ -1191,9 +1205,8 @@ def process_registry_updates(
             lambda validator: validator.set(
                 "activation_epoch",
                 compute_activation_exit_epoch(
-                    process.current_epoch,
-                    ALTONA_CONFIG.MAX_SEED_LOOKAHEAD
-                )
+                    process.current_epoch, ALTONA_CONFIG.MAX_SEED_LOOKAHEAD
+                ),
             ),
         )
 
@@ -1257,9 +1270,7 @@ def process_final_updates(
     state = state.transform(
         ("randao_mixes", next_epoch % EPOCHS_PER_HISTORICAL_VECTOR),
         lambda _: get_randao_mix(
-            state,
-            current_epoch,
-            ALTONA_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR,
+            state, current_epoch, ALTONA_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR
         ),
     )
 
@@ -1311,7 +1322,9 @@ def process_block_header(
     # Verify proposer is not slashed
     proposer = state.validators[proposer_index]
     if proposer.slashed:
-        raise ValidationError(f"Proposer for block {encode_hex(block.hash_tree_root)} is slashed")
+        raise ValidationError(
+            f"Proposer for block {encode_hex(block.hash_tree_root)} is slashed"
+        )
     return state
 
 
@@ -1327,7 +1340,7 @@ def process_randao(
     # Mix in RANDAO reveal
     mix = xor(
         get_randao_mix(state, epoch, ALTONA_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR),
-        hash_eth2(body.randao_reveal)
+        hash_eth2(body.randao_reveal),
     )
     return state.transform(
         ("randao_mixes", epoch % EPOCHS_PER_HISTORICAL_VECTOR), lambda _: mix
@@ -1398,10 +1411,14 @@ def initiate_validator_exit(
     exit_epochs = [
         v.exit_epoch for v in state.validators if v.exit_epoch != FAR_FUTURE_EPOCH
     ]
-    exit_queue_epoch = max(exit_epochs + [compute_activation_exit_epoch(
-        current_epoch,
-        ALTONA_CONFIG.MAX_SEED_LOOKAHEAD
-    )])
+    exit_queue_epoch = max(
+        exit_epochs
+        + [
+            compute_activation_exit_epoch(
+                current_epoch, ALTONA_CONFIG.MAX_SEED_LOOKAHEAD
+            )
+        ]
+    )
     exit_queue_churn = len(
         [v for v in state.validators if v.exit_epoch == exit_queue_epoch]
     )
@@ -1487,7 +1504,9 @@ def process_proposer_slashing(
             state,
             SignatureDomain.DOMAIN_BEACON_PROPOSER,
             ALTONA_CONFIG.SLOTS_PER_EPOCH,
-            compute_epoch_at_slot(signed_header.message.slot, ALTONA_CONFIG.SLOTS_PER_EPOCH),
+            compute_epoch_at_slot(
+                signed_header.message.slot, ALTONA_CONFIG.SLOTS_PER_EPOCH
+            ),
         )
         signing_root = compute_signing_root(signed_header.message, domain)
         assert bls_Verify(proposer.pubkey, signing_root, signed_header.signature)
@@ -1551,7 +1570,9 @@ def process_attestation(
         epochs_ctx.previous_shuffling.epoch,
         epochs_ctx.current_shuffling.epoch,
     )
-    assert data.target.epoch == compute_epoch_at_slot(data.slot, ALTONA_CONFIG.SLOTS_PER_EPOCH)
+    assert data.target.epoch == compute_epoch_at_slot(
+        data.slot, ALTONA_CONFIG.SLOTS_PER_EPOCH
+    )
     assert (
         data.slot + MIN_ATTESTATION_INCLUSION_DELAY
         <= slot
