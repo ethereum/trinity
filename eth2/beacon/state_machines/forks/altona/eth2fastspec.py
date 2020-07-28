@@ -5,6 +5,7 @@ from eth_utils import decode_hex
 import milagro_bls_binding as milagro_bls
 
 from eth2._utils.hash import hash_eth2
+from eth2.beacon.attestation_helpers import is_slashable_attestation_data
 from eth2.beacon.committee_helpers import compute_shuffled_index
 from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance, \
     compute_activation_exit_epoch
@@ -19,7 +20,6 @@ from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
 from eth2.beacon.state_machines.forks.serenity.block_validation import _validate_validator_is_active
 from eth2.beacon.state_machines.forks.serenity.slot_processing import _process_slot
-from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.block_headers import BeaconBlockHeader
@@ -1354,32 +1354,6 @@ def process_operations(
     return state
 
 
-def is_slashable_validator(validator: Validator, epoch: Epoch) -> bool:
-    """
-    Check if ``validator`` is slashable.
-    """
-    return (not validator.slashed) and (
-        validator.activation_epoch <= epoch < validator.withdrawable_epoch
-    )
-
-
-def is_slashable_attestation_data(
-    data_1: AttestationData, data_2: AttestationData
-) -> bool:
-    """
-    Check if ``data_1`` and ``data_2`` are slashable according to Casper FFG rules.
-    """
-    return (
-        # Double vote
-        (data_1 != data_2 and data_1.target.epoch == data_2.target.epoch)
-        # Surround vote
-        or (
-            data_1.source.epoch < data_2.source.epoch
-            and data_2.target.epoch < data_1.target.epoch
-        )
-    )
-
-
 def initiate_validator_exit(
     epochs_ctx: EpochsContext, state: BeaconState, index: ValidatorIndex
 ) -> BeaconState:
@@ -1476,7 +1450,7 @@ def process_proposer_slashing(
     assert header_1 != header_2
     # Verify the proposer is slashable
     proposer = state.validators[header_1.proposer_index]
-    assert is_slashable_validator(proposer, epochs_ctx.current_shuffling.epoch)
+    assert proposer.is_slashable(epochs_ctx.current_shuffling.epoch)
     # Verify signatures
     for signed_header in (
         proposer_slashing.signed_header_1,
@@ -1509,9 +1483,7 @@ def process_attester_slashing(
     indices = att_set_1.intersection(att_set_2)
     validators = state.validators
     for index in sorted(indices):
-        if is_slashable_validator(
-            validators[index], epochs_ctx.current_shuffling.epoch
-        ):
+        if validators[index].is_slashable(epochs_ctx.current_shuffling.epoch):
             state = slash_validator(epochs_ctx, state, index)
             slashed_any = True
     assert slashed_any
