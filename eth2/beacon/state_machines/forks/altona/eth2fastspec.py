@@ -6,12 +6,14 @@ import milagro_bls_binding as milagro_bls
 
 from eth2._utils.hash import hash_eth2
 from eth2.beacon.committee_helpers import compute_shuffled_index
-from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance
+from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance, \
+    compute_activation_exit_epoch
 from eth2.beacon.helpers import (
     compute_domain,
     compute_signing_root,
     get_domain,
-    get_seed, compute_epoch_at_slot,
+    get_seed, compute_epoch_at_slot, compute_start_slot_at_epoch, get_block_root,
+    get_block_root_at_slot,
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
@@ -445,7 +447,10 @@ class EpochsContext(object):
             DomainType(DOMAIN_BEACON_PROPOSER),
             ALTONA_CONFIG,
         )
-        start_slot = compute_start_slot_at_epoch(self.current_shuffling.epoch)
+        start_slot = compute_start_slot_at_epoch(
+            self.current_shuffling.epoch,
+            ALTONA_CONFIG.SLOTS_PER_EPOCH,
+        )
         self.proposers = [
             compute_proposer_index(
                 state,
@@ -651,36 +656,6 @@ def is_active_flat_validator(v: FlatValidator, epoch: Epoch) -> bool:
     return v.activation_epoch <= epoch < v.exit_epoch
 
 
-def compute_activation_exit_epoch(epoch: Epoch) -> Epoch:
-    """
-    Return the epoch during which validator activations and exits initiated in ``epoch``
-    take effect.
-    """
-    return Epoch(epoch + 1 + MAX_SEED_LOOKAHEAD)
-
-
-def compute_start_slot_at_epoch(epoch: Epoch) -> Slot:
-    """
-    Return the start slot of ``epoch``.
-    """
-    return Slot(epoch * SLOTS_PER_EPOCH)
-
-
-def get_block_root_at_slot(state: BeaconState, slot: Slot) -> Root:
-    """
-    Return the block root at a recent ``slot``.
-    """
-    assert slot < state.slot <= slot + SLOTS_PER_HISTORICAL_ROOT
-    return state.block_roots[slot % SLOTS_PER_HISTORICAL_ROOT]
-
-
-def get_block_root(state: BeaconState, epoch: Epoch) -> Root:
-    """
-    Return the block root at the start of a recent ``epoch``.
-    """
-    return get_block_root_at_slot(state, compute_start_slot_at_epoch(epoch))
-
-
 def prepare_epoch_process_state(
     epochs_ctx: EpochsContext, state: BeaconState
 ) -> EpochProcess:
@@ -693,7 +668,7 @@ def prepare_epoch_process_state(
     out.prev_epoch = prev_epoch
 
     slashings_epoch = current_epoch + (EPOCHS_PER_SLASHINGS_VECTOR // 2)
-    exit_queue_end = compute_activation_exit_epoch(current_epoch)
+    exit_queue_end = compute_activation_exit_epoch(current_epoch, ALTONA_CONFIG.MAX_SEED_LOOKAHEAD)
 
     active_count = int(0)
     # fast read-only iterate over tree-structured validator set.
@@ -776,7 +751,9 @@ def prepare_epoch_process_state(
         head_flag: int,
     ) -> None:
         actual_target_block_root = get_block_root_at_slot(
-            state, compute_start_slot_at_epoch(epoch)
+            state,
+            compute_start_slot_at_epoch(epoch, ALTONA_CONFIG.SLOTS_PER_EPOCH),
+            ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT,
         )
 
         for att in attestations:
@@ -789,7 +766,7 @@ def prepare_epoch_process_state(
             att_bits = list(aggregation_bits)
             att_voted_target_root = att_target.root == actual_target_block_root
             att_voted_head_root = att_beacon_block_root == get_block_root_at_slot(
-                state, att_slot
+                state, att_slot, ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT,
             )
 
             # attestation-target is already known to be this epoch, get it from the pre-computed
@@ -840,7 +817,7 @@ def prepare_epoch_process_state(
     # When used in a non-epoch transition, it may be the absolute start of the epoch,
     # and the current epoch will not have any attestations (or a target block root to match them
     # against)
-    if compute_start_slot_at_epoch(current_epoch) < state.slot:
+    if compute_start_slot_at_epoch(current_epoch, ALTONA_CONFIG.SLOTS_PER_EPOCH) < state.slot:
         status_process_epoch(
             out.statuses,
             state.current_epoch_attestations,
@@ -933,7 +910,13 @@ def process_justification_and_finalization(
         state = state.set(
             "current_justified_checkpoint",
             Checkpoint.create(
-                epoch=previous_epoch, root=get_block_root(state, previous_epoch)
+                epoch=previous_epoch,
+                root=get_block_root(
+                    state,
+                    previous_epoch,
+                    ALTONA_CONFIG.SLOTS_PER_EPOCH,
+                    ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT
+                )
             ),
         )
         bits[1] = True
@@ -941,7 +924,13 @@ def process_justification_and_finalization(
         state = state.set(
             "current_justified_checkpoint",
             Checkpoint.create(
-                epoch=current_epoch, root=get_block_root(state, current_epoch)
+                epoch=current_epoch,
+                root=get_block_root(
+                    state,
+                    current_epoch,
+                    ALTONA_CONFIG.SLOTS_PER_EPOCH,
+                    ALTONA_CONFIG.SLOTS_PER_HISTORICAL_ROOT,
+                )
             ),
         )
         bits[0] = True
@@ -1194,7 +1183,8 @@ def process_registry_updates(
         state = state.transform(
             ("validators", index),
             lambda validator: validator.set(
-                "activation_epoch", compute_activation_exit_epoch(process.current_epoch)
+                "activation_epoch",
+                compute_activation_exit_epoch(process.current_epoch, ALTONA_CONFIG)
             ),
         )
 
@@ -1414,7 +1404,10 @@ def initiate_validator_exit(
     exit_epochs = [
         v.exit_epoch for v in state.validators if v.exit_epoch != FAR_FUTURE_EPOCH
     ]
-    exit_queue_epoch = max(exit_epochs + [compute_activation_exit_epoch(current_epoch)])
+    exit_queue_epoch = max(exit_epochs + [compute_activation_exit_epoch(
+        current_epoch,
+        ALTONA_CONFIG.MAX_SEED_LOOKAHEAD
+    )])
     exit_queue_churn = len(
         [v for v in state.validators if v.exit_epoch == exit_queue_epoch]
     )
