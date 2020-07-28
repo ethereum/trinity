@@ -1,7 +1,7 @@
 from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple
 
 from eth_typing import BLSPubkey, Hash32
-from eth_utils import decode_hex
+from eth_utils import decode_hex, ValidationError, encode_hex
 import milagro_bls_binding as milagro_bls
 
 from eth2._utils.hash import hash_eth2
@@ -19,7 +19,9 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
-from eth2.beacon.state_machines.forks.serenity.block_validation import _validate_validator_is_active
+from eth2.beacon.state_machines.forks.serenity.block_validation import \
+    _validate_validator_is_active, validate_block_slot, validate_block_is_new, \
+    validate_block_parent_root, validate_randao_reveal
 from eth2.beacon.state_machines.forks.serenity.slot_processing import _process_slot
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
@@ -363,7 +365,11 @@ class ShufflingEpoch(object):
             index = (slot * committees_per_slot) + comm_index
             start_offset = (active_validator_count * index) // committee_count
             end_offset = (active_validator_count * (index + 1)) // committee_count
-            assert start_offset <= end_offset
+            if start_offset > end_offset:
+                raise ValidationError(
+                    f"start offset greater than end offset  "
+                    f"{start_offset} > {end_offset}"
+                )
             return self.shuffling[start_offset:end_offset]
 
         self.committees = [
@@ -381,7 +387,8 @@ def compute_proposer_index(
     """
     Return from ``indices`` a random index sampled by effective balance.
     """
-    assert len(indices) > 0
+    if len(indices) == 0:
+        raise ValidationError("There are no active validators.")
     MAX_RANDOM_BYTE = 2 ** 8 - 1
     i = 0
     while True:
@@ -480,7 +487,11 @@ class EpochsContext(object):
             self.index2pubkey = []
 
         current_count = len(self.pubkey2index)
-        assert current_count == len(self.index2pubkey)
+        if current_count != len(self.index2pubkey):
+            raise ValidationError(
+                f"length of pubkey2index and index2pubkey do not match  "
+                f"{current_count} != {len(self.index2pubkey)}"
+            )
         for i in range(current_count, len(state.validators)):
             pubkey: BLSPubkey = state.validators[i].pubkey
             index = ValidatorIndex(i)
@@ -528,7 +539,11 @@ class EpochsContext(object):
 
     def get_beacon_proposer(self, slot: Slot) -> ValidatorIndex:
         epoch = compute_epoch_at_slot(slot, ALTONA_CONFIG.SLOTS_PER_EPOCH)
-        assert epoch == self.current_shuffling.epoch
+        if epoch != self.current_shuffling.epoch:
+            raise ValidationError(
+                "slot's epoch does not match current epoch  "
+                f"{epoch} != {self.current_shuffling.epoch}"
+            )
         return self.proposers[slot % SLOTS_PER_EPOCH]
 
 
@@ -922,7 +937,11 @@ def process_justification_and_finalization(
         )
         bits[0] = True
     state = state.set("justification_bits", tuple(bits))
-    assert len(bits) == 4
+    if len(bits) != 4:
+        raise ValidationError(
+            "justification_bits length does not equal 4  "
+            f"bits length: {len(bits)}"
+        )
 
     # Process finalizations
     # The 2nd/3rd/4th most recent epochs are justified, the 2nd using the 4th as source
@@ -1171,7 +1190,10 @@ def process_registry_updates(
             ("validators", index),
             lambda validator: validator.set(
                 "activation_epoch",
-                compute_activation_exit_epoch(process.current_epoch, ALTONA_CONFIG)
+                compute_activation_exit_epoch(
+                    process.current_epoch,
+                    ALTONA_CONFIG.MAX_SEED_LOOKAHEAD
+                )
             ),
         )
 
@@ -1262,14 +1284,19 @@ def process_block_header(
     epochs_ctx: EpochsContext, state: BeaconState, block: BeaconBlock
 ) -> BeaconState:
     # Verify that the slots match
-    assert block.slot == state.slot
+    validate_block_slot(state, block)
     # Verify that the block is newer than latest block header
-    assert block.slot > state.latest_block_header.slot
+    validate_block_is_new(state, block)
     # Verify that proposer index is the correct index
     proposer_index = epochs_ctx.get_beacon_proposer(state.slot)
-    assert block.proposer_index == proposer_index
+    if block.proposer_index != proposer_index:
+        raise ValidationError(
+            f"block.proposer_index "
+            f"({block.proposer_index}) does not equal expected_proposer ({proposer_index}) "
+            f"at block.slot {state.slot}"
+        )
     # Verify that the parent matches
-    assert block.parent_root == state.latest_block_header.hash_tree_root
+    validate_block_parent_root(state, block)
     # Cache current block as the new latest block
     state = state.set(
         "latest_block_header",
@@ -1283,7 +1310,8 @@ def process_block_header(
 
     # Verify proposer is not slashed
     proposer = state.validators[proposer_index]
-    assert not proposer.slashed
+    if proposer.slashed:
+        raise ValidationError(f"Proposer for block {encode_hex(block.hash_tree_root)} is slashed")
     return state
 
 
@@ -1293,12 +1321,9 @@ def process_randao(
     epoch = epochs_ctx.current_shuffling.epoch
     # Verify RANDAO reveal
     proposer_index = epochs_ctx.get_beacon_proposer(state.slot)
-    proposer_pubkey = epochs_ctx.index2pubkey[proposer_index]
-    domain = get_domain(
-        state, SignatureDomain.DOMAIN_RANDAO, ALTONA_CONFIG.SLOTS_PER_EPOCH
+    validate_randao_reveal(
+        state, proposer_index, epoch, body.randao_reveal, ALTONA_CONFIG.SLOTS_PER_EPOCH
     )
-    signing_root = compute_signing_root(SerializableUint64(epoch), domain)
-    assert bls_Verify(proposer_pubkey, signing_root, body.randao_reveal)
     # Mix in RANDAO reveal
     mix = xor(
         get_randao_mix(state, epoch, ALTONA_CONFIG.EPOCHS_PER_HISTORICAL_VECTOR),
@@ -1338,9 +1363,10 @@ def process_operations(
     epochs_ctx: EpochsContext, state: BeaconState, body: BeaconBlockBody
 ) -> BeaconState:
     # Verify that outstanding deposits are processed up to the maximum number of deposits
-    assert len(body.deposits) == min(
+    if len(body.deposits) != min(
         MAX_DEPOSITS, state.eth1_data.deposit_count - state.eth1_deposit_index
-    )
+    ):
+        raise ValidationError(f"Incorrect number of deposits ({len(body.deposits)})")
 
     for operations, function in (
         (body.proposer_slashings, process_proposer_slashing),
