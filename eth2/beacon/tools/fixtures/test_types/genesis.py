@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional, Tuple, Type, cast
 
 from eth_typing import Hash32
-from ssz.sedes import bytes32
+from ssz.sedes import bytes32, uint64
 
 from eth2.beacon.genesis import (
     initialize_beacon_state_from_eth1,
@@ -54,7 +54,7 @@ class InitializationHandler(
         deposits_count = metadata["deposits_count"]
         return (
             cast(Hash32, test_case_parts["eth1_block_hash"].load(bytes32)),
-            Timestamp(test_case_parts["eth1_timestamp"].load()),
+            Timestamp(test_case_parts["eth1_timestamp"].load(uint64)),
             tuple(
                 cast(Deposit, test_case_parts[f"deposits_{i}"].load(Deposit))
                 for i in range(deposits_count)

@@ -4,7 +4,7 @@ from typing import Optional
 
 class ConfigType(abc.ABC):
     name: str
-    path: Optional[str] = "config.yaml"
+    path: Optional[str] = "config/phase0.yaml"
 
     @classmethod
     def has_config(cls) -> bool:

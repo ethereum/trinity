@@ -88,6 +88,8 @@ class Eth2Config:
     # Fork choice
     SAFE_SLOTS_TO_UPDATE_JUSTIFIED: int
     # Deposit contract
+    DEPOSIT_CHAIN_ID: int
+    DEPOSIT_NETWORK_ID: int
     DEPOSIT_CONTRACT_ADDRESS: bytes
 
     @to_dict

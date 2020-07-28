@@ -273,6 +273,16 @@ def deposit_contract_tree_depth():
 
 
 @pytest.fixture
+def deposit_chain_id():
+    return MINIMAL_SERENITY_CONFIG.DEPOSIT_CHAIN_ID
+
+
+@pytest.fixture
+def deposit_network_id():
+    return MINIMAL_SERENITY_CONFIG.DEPOSIT_NETWORK_ID
+
+
+@pytest.fixture
 def deposit_contract_address():
     return MINIMAL_SERENITY_CONFIG.DEPOSIT_CONTRACT_ADDRESS
 
@@ -322,6 +332,8 @@ def config(
     max_deposits,
     max_voluntary_exits,
     safe_slots_to_update_justified,
+    deposit_chain_id,
+    deposit_network_id,
     deposit_contract_address,
 ):
     return Eth2Config(
@@ -368,6 +380,8 @@ def config(
         MAX_DEPOSITS=max_deposits,
         MAX_VOLUNTARY_EXITS=max_voluntary_exits,
         SAFE_SLOTS_TO_UPDATE_JUSTIFIED=safe_slots_to_update_justified,
+        DEPOSIT_CHAIN_ID=deposit_chain_id,
+        DEPOSIT_NETWORK_ID=deposit_network_id,
         DEPOSIT_CONTRACT_ADDRESS=deposit_contract_address,
     )
 
