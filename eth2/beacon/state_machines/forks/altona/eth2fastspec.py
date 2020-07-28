@@ -1,10 +1,10 @@
-from hashlib import sha256
 from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple
 
 from eth_typing import BLSPubkey, Hash32
 from eth_utils import decode_hex
 import milagro_bls_binding as milagro_bls
 
+from eth2._utils.hash import hash_eth2
 from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance
 from eth2.beacon.helpers import (
     compute_domain,
@@ -148,10 +148,6 @@ def xor(bytes_1: bytes, bytes_2: bytes) -> bytes:
     return bytes(a ^ b for a, b in zip(bytes_1, bytes_2))
 
 
-def hash(x: bytes) -> bytes:
-    return sha256(x).digest()
-
-
 def compute_fork_data_root(
     current_version: Version, genesis_validators_root: Root
 ) -> Root:
@@ -202,13 +198,13 @@ def _inner_shuffle_list(input: List[ValidatorIndex], seed: Hash32, dir: bool) ->
     # buffer.
     buf[:_SHUFFLE_H_SEED_SIZE] = seed[:]
     while True:
-        # spec: pivot = bytes_to_int(hash(seed + int_to_bytes1(round))[0:8]) % list_size
+        # spec: pivot = bytes_to_int(hash_eth2(seed + int_to_bytes1(round))[0:8]) % list_size
         # This is the "int_to_bytes1(round)", appended to the seed.
         buf[_SHUFFLE_H_SEED_SIZE] = r
         # Seed is already in place, now just hash the correct part of the buffer, and take a int
         # from it,
         #  and modulo it to get a pivot within range.
-        h = hash(buf[:_SHUFFLE_H_PIVOT_VIEW_SIZE])
+        h = hash_eth2(buf[:_SHUFFLE_H_PIVOT_VIEW_SIZE])
         pivot = int.from_bytes(h[:8], byteorder=ENDIANNESS) % listSize
 
         # Split up the for-loop in two:
@@ -228,7 +224,7 @@ def _inner_shuffle_list(input: List[ValidatorIndex], seed: Hash32, dir: bool) ->
         # We only need it consecutively (we are going through each in reverse order however, but
         # same thing)
         #
-        # spec: source = hash(seed + int_to_bytes1(round) + int_to_bytes4(position # 256))
+        # spec: source = hash_eth2(seed + int_to_bytes1(round) + int_to_bytes4(position # 256))
         # - seed is still in 0:32 (excl., 32 bytes)
         # - round number is still in 32
         # - mix in the position for randomness, except the last byte of it,
@@ -240,7 +236,7 @@ def _inner_shuffle_list(input: List[ValidatorIndex], seed: Hash32, dir: bool) ->
         buf[_SHUFFLE_H_PIVOT_VIEW_SIZE:] = ((pivot >> 8) & 0xFFFF_FFFF).to_bytes(
             length=4, byteorder=ENDIANNESS
         )
-        source = hash(buf)
+        source = hash_eth2(buf)
         byteV = source[(pivot & 0xFF) >> 3]
         i, j = 0, pivot
         while i < mirror:
@@ -252,7 +248,7 @@ def _inner_shuffle_list(input: List[ValidatorIndex], seed: Hash32, dir: bool) ->
                 buf[_SHUFFLE_H_PIVOT_VIEW_SIZE:] = ((j >> 8) & 0xFFFF_FFFF).to_bytes(
                     length=4, byteorder=ENDIANNESS
                 )
-                source = hash(buf)
+                source = hash_eth2(buf)
 
             # Same trick with byte retrieval. Only every 8th.
             if j & 0x7 == 0x7:
@@ -276,7 +272,7 @@ def _inner_shuffle_list(input: List[ValidatorIndex], seed: Hash32, dir: bool) ->
         buf[_SHUFFLE_H_PIVOT_VIEW_SIZE:] = ((end >> 8) & 0xFFFF_FFFF).to_bytes(
             length=4, byteorder=ENDIANNESS
         )
-        source = hash(buf)
+        source = hash_eth2(buf)
         byteV = source[(end & 0xFF) >> 3]
         i, j = pivot + 1, end
         while i < mirror:
@@ -290,7 +286,7 @@ def _inner_shuffle_list(input: List[ValidatorIndex], seed: Hash32, dir: bool) ->
                 buf[_SHUFFLE_H_PIVOT_VIEW_SIZE:] = ((j >> 8) & 0xFFFF_FFFF).to_bytes(
                     length=4, byteorder=ENDIANNESS
                 )
-                source = hash(buf)
+                source = hash_eth2(buf)
 
             # Same trick with byte retrieval. Only every 8th.
             if j & 0x7 == 0x7:
@@ -329,11 +325,11 @@ def compute_shuffled_index(
     # Swap or not (https://link.springer.com/content/pdf/10.1007%2F978-3-642-32009-5_1.pdf)
     # See the 'generalized domain' algorithm on page 3
     for current_round in range(SHUFFLE_ROUND_COUNT):
-        pivot_bytez = hash(seed + int_to_bytes(current_round, length=1))[0:8]
+        pivot_bytez = hash_eth2(seed + int_to_bytes(current_round, length=1))[0:8]
         pivot = int.from_bytes(pivot_bytez, byteorder=ENDIANNESS) % index_count
         flip = ValidatorIndex((pivot + index_count - index) % index_count)
         position = max(index, flip)
-        source = hash(
+        source = hash_eth2(
             seed
             + int_to_bytes(current_round, length=1)
             + int_to_bytes(position // 256, length=4)
@@ -427,7 +423,7 @@ def compute_proposer_index(
         candidate_index = indices[
             compute_shuffled_index(ValidatorIndex(i % len(indices)), len(indices), seed)
         ]
-        random_byte = hash(seed + int_to_bytes(i // 32, length=8))[i % 32]
+        random_byte = hash_eth2(seed + int_to_bytes(i // 32, length=8))[i % 32]
         effective_balance = state.validators[candidate_index].effective_balance
         if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE * random_byte:
             return ValidatorIndex(candidate_index)
@@ -487,7 +483,7 @@ class EpochsContext(object):
             compute_proposer_index(
                 state,
                 self.current_shuffling.active_indices,
-                hash(epoch_seed + slot.to_bytes(length=8, byteorder=ENDIANNESS)),
+                hash_eth2(epoch_seed + slot.to_bytes(length=8, byteorder=ENDIANNESS)),
             )
             for slot in range(start_slot, start_slot + SLOTS_PER_EPOCH)
         ]
@@ -1367,7 +1363,7 @@ def process_randao(
     signing_root = compute_signing_root(SerializableUint64(epoch), domain)
     assert bls_Verify(proposer_pubkey, signing_root, body.randao_reveal)
     # Mix in RANDAO reveal
-    mix = xor(get_randao_mix(state, epoch), hash(body.randao_reveal))
+    mix = xor(get_randao_mix(state, epoch), hash_eth2(body.randao_reveal))
     return state.transform(
         ("randao_mixes", epoch % EPOCHS_PER_HISTORICAL_VECTOR), lambda _: mix
     )
@@ -1672,9 +1668,9 @@ def is_valid_merkle_branch(
     value = leaf
     for i in range(depth):
         if (index >> i) & 1 == 1:
-            value = hash(branch[i] + value)
+            value = hash_eth2(branch[i] + value)
         else:
-            value = hash(value + branch[i])
+            value = hash_eth2(value + branch[i])
     return value == root
 
 
