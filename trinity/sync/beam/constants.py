@@ -53,8 +53,8 @@ GAP_BETWEEN_TESTS = 0.25
 # to establish it (partially because we measure using an exponential average).
 
 # About how long after a block can we request trie data from peers?
-# The value is configurable by client, but tends to be around 75 blocks.
-ESTIMATED_BEAMABLE_BLOCKS = 75
+# The value is configurable by client, but tends to be around 120 blocks.
+ESTIMATED_BEAMABLE_BLOCKS = 120
 
 # It's also useful to estimate the amount of time covered by those beamable blocks.
 ESTIMATED_BEAMABLE_SECONDS = ESTIMATED_BEAMABLE_BLOCKS * PREDICTED_BLOCK_TIME
