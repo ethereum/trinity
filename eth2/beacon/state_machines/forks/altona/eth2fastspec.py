@@ -5,6 +5,7 @@ from eth_utils import decode_hex
 import milagro_bls_binding as milagro_bls
 
 from eth2._utils.hash import hash_eth2
+from eth2.beacon.committee_helpers import compute_shuffled_index
 from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance
 from eth2.beacon.helpers import (
     compute_domain,
@@ -302,33 +303,6 @@ def _inner_shuffle_list(input: List[ValidatorIndex], seed: Hash32, dir: bool) ->
             r -= 1
 
 
-def compute_shuffled_index(
-    index: ValidatorIndex, index_count: int, seed: bytes
-) -> ValidatorIndex:
-    """
-    Return the shuffled validator index corresponding to ``seed`` (and ``index_count``).
-    """
-    assert index < index_count
-
-    # Swap or not (https://link.springer.com/content/pdf/10.1007%2F978-3-642-32009-5_1.pdf)
-    # See the 'generalized domain' algorithm on page 3
-    for current_round in range(SHUFFLE_ROUND_COUNT):
-        pivot_bytez = hash_eth2(seed + int_to_bytes(current_round, length=1))[0:8]
-        pivot = int.from_bytes(pivot_bytez, byteorder=ENDIANNESS) % index_count
-        flip = ValidatorIndex((pivot + index_count - index) % index_count)
-        position = max(index, flip)
-        source = hash_eth2(
-            seed
-            + int_to_bytes(current_round, length=1)
-            + int_to_bytes(position // 256, length=4)
-        )
-        byte = source[(position % 256) // 8]
-        bit = (byte >> (position % 8)) % 2
-        index = flip if bit else index
-
-    return ValidatorIndex(index)
-
-
 def compute_committee_count(active_validators_count: int) -> int:
     validators_per_slot = active_validators_count // SLOTS_PER_EPOCH
     committees_per_slot = validators_per_slot // TARGET_COMMITTEE_SIZE
@@ -409,7 +383,12 @@ def compute_proposer_index(
     i = 0
     while True:
         candidate_index = indices[
-            compute_shuffled_index(ValidatorIndex(i % len(indices)), len(indices), seed)
+            compute_shuffled_index(
+                ValidatorIndex(i % len(indices)),
+                len(indices),
+                seed,
+                ALTONA_CONFIG.SHUFFLE_ROUND_COUNT,
+            )
         ]
         random_byte = hash_eth2(seed + int_to_bytes(i // 32, length=8))[i % 32]
         effective_balance = state.validators[candidate_index].effective_balance
