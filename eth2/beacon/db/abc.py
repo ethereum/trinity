@@ -58,7 +58,7 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
-    def mark_canonical_block(self, block: BaseBeaconBlock) -> None:
+    def mark_canonical_block(self, slot: Slot, root: Root) -> None:
         """
         Record the ``block`` as part of the canonical ("finalized") chain.
         """

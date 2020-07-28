@@ -189,6 +189,10 @@ class BeaconNode:
         if recent_state.slot == GENESIS_SLOT:
             chain_db.register_genesis(recent_state, SignedBeaconBlock)
 
+        # NOTE: if ``recent_state`` is an ancestor of our finalized head,
+        # then we can "fast forward" the chain state to that head.
+        recent_state = _find_finalized_descendant_state(recent_state, chain_db)
+
         chain = config.chain_class.from_recent_state(chain_db, recent_state)
 
         genesis_time = recent_state.genesis_time
@@ -538,8 +542,12 @@ def _resolve_recent_state(
             # TODO ensure genesis state has been supplied, at some point.
             chain_db.persist_state(supplied_state)
             chain_db.persist_weak_subjectivity_state_root(supplied_state.hash_tree_root)
+            return supplied_state
         else:
-            if supplied_state.slot >= last_recorded_state.slot:
+            if supplied_state == last_recorded_state:
+                return last_recorded_state
+
+            if supplied_state.slot > last_recorded_state.slot:
                 logger.info(
                     "using supplied weak subjectivity state with root %s"
                     " as it is newer than existing state in DB with root %s",
@@ -550,6 +558,7 @@ def _resolve_recent_state(
                 chain_db.persist_weak_subjectivity_state_root(
                     supplied_state.hash_tree_root
                 )
+                return supplied_state
             else:
                 logger.info(
                     "using last weak subjectivity state in DB with root %s"
@@ -569,6 +578,47 @@ def _resolve_recent_state(
                 humanize_hash(last_recorded_state.hash_tree_root),
             )
             return last_recorded_state
+
+
+def _find_finalized_descendant_state(
+    recent_state: BeaconState, chain_db: BaseBeaconChainDB
+) -> BeaconState:
+    """
+    Given a ``recent_state``, try to advance the state of the node to the last finalized state
+    we have recorded. If ``recent_state`` is consistent with this history, then we should be
+    able to do so.
+    """
+    finalized_head = chain_db.get_finalized_head(BeaconBlock)
+
+    if recent_state.slot == finalized_head.slot:
+        if recent_state.hash_tree_root != finalized_head.state_root:
+            raise Exception(
+                "recent state supplied by the user is not consistent with local history"
+            )
+        else:
+            return recent_state
+    elif recent_state.slot > finalized_head.slot:
+        # TODO: support this...
+        # 1. key security property: the ``recent_state`` is consistent w/ our local history
+        # - NOTE: it could still be on our chain but just part of it we don't have yet...
+        # 2. may need to update some stuff in the DB to fast-forward everything
+        # and maintain invariants
+        raise NotImplementedError(
+            "supplying a recent state after the last finalized head is not supported"
+        )
+    else:  # recent_state.slot < finalized_head.slot
+        # we can simply check that the state at this slot matches
+        # given how we are handling finality/canonicality in the DB layer...
+        local_state = chain_db.get_state_by_slot(recent_state.slot)
+        if local_state == recent_state:
+            finalized_state = chain_db.get_state_by_root(
+                finalized_head.state_root, BeaconState
+            )
+            return finalized_state
+        else:
+            raise Exception(
+                "recent state supplied by the user is not consistent with local history"
+            )
 
 
 def _mk_block_broadcaster(node: BeaconNode) -> BlockBroadcasterAPI:

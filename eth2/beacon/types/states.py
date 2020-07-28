@@ -208,3 +208,16 @@ class BeaconState(HashableContainer):
                 return ValidatorIndex(index)
         else:
             return None
+
+    def get_block_header(self) -> BeaconBlockHeader:
+        """
+        Return the beacon block header contained in this state.
+
+        NOTE: we have to patch the state root of the header
+        if it is the empty root.
+        """
+        header = self.latest_block_header
+        if header.state_root == default_root:
+            return header.set("state_root", self.hash_tree_root)
+        else:
+            return header

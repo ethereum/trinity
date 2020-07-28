@@ -119,6 +119,8 @@ from eth2.beacon.db.chain2 import BeaconChainDB as AltonaChainDB
 from eth2.beacon.chains.testnet.altona import BeaconChain as AltonaChain
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
 from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
+from eth2.beacon.chains.abc import BaseBeaconChain as ABCBaseBeaconChain
+from eth2.beacon.chains.base import BaseBeaconChain
 
 
 if TYPE_CHECKING:
@@ -126,9 +128,7 @@ if TYPE_CHECKING:
     from trinity.nodes.base import Node  # noqa: F401
     from trinity.chains.full import FullChain  # noqa: F401
     from trinity.chains.light import LightDispatchChain  # noqa: F401
-    from eth2.beacon.chains.abc import BaseBeaconChain as ABCBaseBeaconChain  # noqa: F401
-    from eth2.beacon.chains.base import BaseBeaconChain  # noqa: F401
-    from eth2.beacon.state_machines.base import BaseBeaconStateMachine  # noqa: F401
+
 
 DATABASE_DIR_NAME = 'chain'
 

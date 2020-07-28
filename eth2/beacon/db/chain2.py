@@ -9,7 +9,7 @@ import ssz
 from eth2.beacon.db.abc import BaseBeaconChainDB
 import eth2.beacon.db.schema2 as SchemaV1
 from eth2.beacon.genesis import get_genesis_block
-from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock, BeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import BLSSignature, Root, Slot
 
@@ -42,7 +42,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         self.persist_block(signed_block_class.create(message=genesis_block))
         self.persist_state(genesis_state)
 
-        self.mark_canonical_block(genesis_block)
+        self.mark_canonical_block(genesis_block.slot, genesis_block.hash_tree_root)
         self.mark_finalized_head(genesis_block)
 
     def get_block_by_slot(
@@ -92,11 +92,12 @@ class BeaconChainDB(BaseBeaconChainDB):
         block_root_to_signature = SchemaV1.block_root_to_signature(block_root)
         self.db[block_root_to_signature] = signature
 
-    def mark_canonical_block(self, block: BaseBeaconBlock) -> None:
-        slot_to_block_root = SchemaV1.slot_to_block_root(block.slot)
-        self.db[slot_to_block_root] = block.hash_tree_root
+    def mark_canonical_block(self, slot: Slot, root: Root) -> None:
+        slot_to_block_root = SchemaV1.slot_to_block_root(slot)
+        self.db[slot_to_block_root] = root
 
-        slot_to_state_root = SchemaV1.slot_to_state_root(block.slot)
+        block = self.get_block_by_root(root, BeaconBlock)
+        slot_to_state_root = SchemaV1.slot_to_state_root(slot)
         self.db[slot_to_state_root] = block.state_root
 
     def mark_finalized_head(self, block: BaseBeaconBlock) -> None:

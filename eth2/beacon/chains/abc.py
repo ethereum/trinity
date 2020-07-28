@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from eth.abc import AtomicDatabaseAPI
-
 from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
 from eth2.beacon.types.attestations import Attestation
@@ -15,8 +13,8 @@ from eth2.clock import Tick
 class BaseBeaconChain(ABC):
     @classmethod
     @abstractmethod
-    def from_genesis(
-        cls, base_db: AtomicDatabaseAPI, genesis_state: BeaconState
+    def from_recent_state(
+        cls, chain_db: BaseBeaconChainDB, recent_state: BeaconState
     ) -> "BaseBeaconChain":
         ...
 

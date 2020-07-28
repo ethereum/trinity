@@ -19,7 +19,6 @@ from eth2.beacon.state_machines.forks.altona.state_machine import (
 )
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import (
-    BaseBeaconBlock,
     BaseSignedBeaconBlock,
     BeaconBlock,
     SignedBeaconBlock,
@@ -71,9 +70,9 @@ class ChainDBBlockSink(BlockSink):
     def __init__(self, chain_db: BaseBeaconChainDB) -> None:
         self._chain_db = chain_db
 
-    def on_pruned_block(self, block: BaseBeaconBlock, canonical: bool) -> None:
+    def on_pruned_block(self, slot: Slot, root: Root, canonical: bool) -> None:
         if canonical:
-            self._chain_db.mark_canonical_block(block)
+            self._chain_db.mark_canonical_block(slot, root)
 
 
 class BeaconChain(BaseBeaconChain):
@@ -95,7 +94,8 @@ class BeaconChain(BaseBeaconChain):
         self._state_machines_by_range = _load_state_machines(self._sm_configuration)
 
         self._fork_choice = fork_choice
-        self._current_head = fork_choice.find_head()
+        head_root = fork_choice.find_head()
+        self._current_head = self._chain_db.get_block_by_root(head_root, BeaconBlock)
         head_state = self._chain_db.get_state_by_root(
             self._current_head.state_root, BeaconState
         )
@@ -119,6 +119,7 @@ class BeaconChain(BaseBeaconChain):
         fork_choice = fork_choice_class.from_recent_state(
             recent_state, config, block_sink
         )
+        # fork_choice.load_context(chain_db)
         return cls(chain_db, fork_choice)
 
     @property
@@ -156,7 +157,8 @@ class BeaconChain(BaseBeaconChain):
     def on_tick(self, tick: Tick) -> None:
         if tick.is_first_in_slot():
             fork_choice = self._get_fork_choice(tick.slot)
-            head = fork_choice.find_head()
+            head_root = fork_choice.find_head()
+            head = self._chain_db.get_block_by_root(head_root, BeaconBlock)
             self._update_head_if_new(head)
 
     def get_block_by_slot(self, slot: Slot) -> Optional[BaseSignedBeaconBlock]:
@@ -174,11 +176,9 @@ class BeaconChain(BaseBeaconChain):
         else:
             # check in the canonical chain according to fork choice
             # NOTE: likely want a more efficient way to determine block by slot...
-            for block in self._fork_choice.get_canonical_chain():
-                if block.slot == slot:
-                    signature = self._chain_db.get_block_signature_by_root(
-                        block.hash_tree_root
-                    )
+            for canonical_slot, root in self._fork_choice.get_canonical_chain():
+                if canonical_slot == slot:
+                    signature = self._chain_db.get_block_signature_by_root(root)
                     return SignedBeaconBlock.create(message=block, signature=signature)
             else:
                 return None
@@ -286,7 +286,8 @@ class BeaconChain(BaseBeaconChain):
         fork_choice.on_block(block)
         for attestation in block.body.attestations:
             self._update_fork_choice_with_attestation(fork_choice, attestation)
-        head = fork_choice.find_head()
+        head_root = fork_choice.find_head()
+        head = self._chain_db.get_block_by_root(head_root, BeaconBlock)
         self._update_head_if_new(head)
 
     def _update_fork_choice_with_attestation(

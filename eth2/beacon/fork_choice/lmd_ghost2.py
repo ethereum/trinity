@@ -1,17 +1,7 @@
 from dataclasses import dataclass
-from typing import (
-    Dict,
-    Generic,
-    Iterable,
-    List,
-    NewType,
-    Optional,
-    Sequence,
-    TypeVar,
-    cast,
-)
+from typing import Dict, Iterable, List, NewType, Optional, Sequence, Tuple
 
-from eth2.beacon.db.abc import BaseBeaconChainDB
+from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.epoch_processing_helpers import get_active_validator_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
 from eth2.beacon.helpers import compute_epoch_at_slot
@@ -33,22 +23,16 @@ from eth2.configs import Eth2Config
 
 ProtoNodeIndex = NewType("ProtoNodeIndex", int)
 
-T = TypeVar("T")
 
-
-class BlockNode(Generic[T]):
+@dataclass(eq=True, frozen=True)
+class BlockNode:
     slot: Slot
+    # beacon block root
     root: Root
-    data: T
-
-    def __init__(self, slot: Slot, root: Root, data: T):
-        self.slot = slot
-        self.root = root
-        self.data = data
 
 
-class ProtoNode(Generic[T]):
-    block: BlockNode[T]
+class ProtoNode:
+    block: BlockNode
     parent: Optional[ProtoNodeIndex]
     justified_epoch: Epoch
     finalized_epoch: Epoch
@@ -58,7 +42,7 @@ class ProtoNode(Generic[T]):
 
     def __init__(
         self,
-        block: BlockNode[T],
+        block: BlockNode,
         parent: Optional[ProtoNodeIndex],
         justified_epoch: Epoch,
         finalized_epoch: Epoch,
@@ -72,19 +56,19 @@ class ProtoNode(Generic[T]):
         self.best_descendant = None
 
 
-class ProtoArray(Generic[T]):
+class ProtoArray:
     _block_sink: BlockSink
     _index_offset: ProtoNodeIndex
     _finalized_root: Root
     _justified_epoch: Epoch
     _finalized_epoch: Epoch
-    nodes: List[ProtoNode[T]]
+    nodes: List[ProtoNode]
     indices: Dict[Root, ProtoNodeIndex]
 
     def __init__(
         self,
         justified_epoch: Epoch,
-        finalized_block: BlockNode[T],
+        finalized_block: BlockNode,
         block_sink: BlockSink,
         config: Eth2Config,
     ):
@@ -95,7 +79,7 @@ class ProtoArray(Generic[T]):
             finalized_block.slot, config.SLOTS_PER_EPOCH
         )
         self._finalized_epoch = finalized_epoch
-        finalized_node = ProtoNode[T](
+        finalized_node = ProtoNode(
             block=finalized_block,
             parent=None,
             justified_epoch=justified_epoch,
@@ -104,7 +88,7 @@ class ProtoArray(Generic[T]):
         self.nodes = [finalized_node]
         self.indices = {finalized_block.root: ProtoNodeIndex(0)}
 
-    def _get_node(self, index: ProtoNodeIndex) -> ProtoNode[T]:
+    def _get_node(self, index: ProtoNodeIndex) -> ProtoNode:
         if index < self._index_offset:
             raise IndexError(f"Minimum proto-array index is {self._index_offset}")
         i = index - self._index_offset
@@ -114,7 +98,7 @@ class ProtoArray(Generic[T]):
             )
         return self.nodes[i]
 
-    def canonical_chain(self, anchor_root: Root) -> Iterable[BlockNode[T]]:
+    def canonical_chain(self, anchor_root: Root) -> Iterable[BlockNode]:
         """From head back to anchor root (including the anchor itself)"""
         index: Optional[ProtoNodeIndex] = self.indices[
             self.find_head(anchor_root).root
@@ -178,7 +162,7 @@ class ProtoArray(Generic[T]):
 
     def on_block(
         self,
-        block: BlockNode[T],
+        block: BlockNode,
         parent_root: Root,
         justified_epoch: Epoch,
         finalized_epoch: Epoch,
@@ -202,7 +186,7 @@ class ProtoArray(Generic[T]):
         else:
             parent_index = self.indices.get(default_root, None)
 
-        node = ProtoNode[T](block, parent_index, justified_epoch, finalized_epoch)
+        node = ProtoNode(block, parent_index, justified_epoch, finalized_epoch)
 
         self.indices[block.root] = node_index
         self.nodes.append(node)
@@ -210,7 +194,7 @@ class ProtoArray(Generic[T]):
         if node.parent is not None:
             self._maybe_update_best_child_and_descendant(node.parent, node_index)
 
-    def find_head(self, anchor_root: Root) -> BlockNode[T]:
+    def find_head(self, anchor_root: Root) -> BlockNode:
         """
         Finds the head, starting from the anchor_root
         subtree. (justified_root for regular fork-choice)
@@ -253,7 +237,7 @@ class ProtoArray(Generic[T]):
         for idx, node in zip(range(self._index_offset, anchor_index), self.nodes):
             canonical = node.best_descendant == best_index
             self._block_sink.on_pruned_block(
-                _block_node_to_block(node.block), canonical
+                node.block.slot, node.block.root, canonical
             )
             root = self.nodes[idx - self._index_offset].block.root
             del self.indices[root]
@@ -345,7 +329,7 @@ class ProtoArray(Generic[T]):
                 # There is no current best-child but the child is not viable.
                 no_change()
 
-    def _node_leads_to_viable_head(self, node: ProtoNode[T]) -> bool:
+    def _node_leads_to_viable_head(self, node: ProtoNode) -> bool:
         """Indicates if the node itself is viable for the head,
            or if it's best descendant is viable for the head."""
         if node.best_descendant is not None:
@@ -354,7 +338,7 @@ class ProtoArray(Generic[T]):
         else:
             return self._node_is_viable_for_head(node)
 
-    def _node_is_viable_for_head(self, node: ProtoNode[T]) -> bool:
+    def _node_is_viable_for_head(self, node: ProtoNode) -> bool:
         """
         This is the equivalent to the `filter_block_tree` function in the eth2 spec:
 
@@ -377,8 +361,8 @@ class VoteTracker:
     next_epoch: Epoch
 
 
-class ProtoArrayForkChoice(Generic[T]):
-    proto_array: ProtoArray[T]
+class ProtoArrayForkChoice:
+    proto_array: ProtoArray
     votes: List[VoteTracker]
     balances: Sequence[Gwei]
 
@@ -387,7 +371,7 @@ class ProtoArrayForkChoice(Generic[T]):
 
     def __init__(
         self,
-        finalized_block: BlockNode[T],
+        finalized_block: BlockNode,
         finalized: Checkpoint,
         justified: Checkpoint,
         block_sink: BlockSink,
@@ -406,7 +390,7 @@ class ProtoArrayForkChoice(Generic[T]):
     def on_prune(self, anchor_root: Root) -> None:
         self.proto_array.on_prune(anchor_root)
 
-    def get_canonical_chain(self, anchor_root: Root) -> Iterable[BlockNode[T]]:
+    def get_canonical_chain(self, anchor_root: Root) -> Iterable[BlockNode]:
         self._reconcile_changes()
         for block in self.proto_array.canonical_chain(anchor_root):
             yield block
@@ -428,7 +412,7 @@ class ProtoArrayForkChoice(Generic[T]):
 
     def process_block(
         self,
-        block: BlockNode[T],
+        block: BlockNode,
         parent_root: Root,
         justified_epoch: Epoch,
         finalized_epoch: Epoch,
@@ -478,7 +462,7 @@ class ProtoArrayForkChoice(Generic[T]):
             deltas, self.justified.epoch, self.finalized.epoch
         )
 
-    def find_head(self) -> BlockNode[T]:
+    def find_head(self) -> BlockNode:
         self._reconcile_changes()
         # NOTE: can skip some work by starting from justified, rather than finalized head
         return self.proto_array.find_head(self.justified.root)
@@ -525,18 +509,14 @@ def _compute_deltas(
     return deltas
 
 
-def _block_node_to_block(node: BlockNode[T]) -> BaseBeaconBlock:
-    return cast(BaseBeaconBlock, node.data)
-
-
-def _block_to_block_node(block: BaseBeaconBlock) -> BlockNode[BaseBeaconBlock]:
-    return BlockNode(block.slot, block.hash_tree_root, block)
+def _block_to_block_node(block: BaseBeaconBlock) -> BlockNode:
+    return BlockNode(block.slot, block.hash_tree_root)
 
 
 class LMDGHOSTForkChoice(BaseForkChoice):
     def __init__(
         self,
-        finalized_block_node: BlockNode[BaseBeaconBlock],
+        finalized_block_node: BlockNode,
         finalized_state: BeaconState,
         config: Eth2Config,
         block_sink: BlockSink,
@@ -553,29 +533,48 @@ class LMDGHOSTForkChoice(BaseForkChoice):
 
     @classmethod
     def from_recent_state(
-        cls, recent_state: BeaconState, config: Eth2Config, block_sink: BlockSink
+        cls, finalized_state: BeaconState, config: Eth2Config, block_sink: BlockSink
     ) -> "LMDGHOSTForkChoice":
-        # NOTE: patch up genesis state to reflect the genesis block as an initial checkpoint
-        # this only has to be patched once at genesis
-        # genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-        # genesis_block_node = BlockNode(genesis_block.slot, default_root, genesis_block)
-        finalized_state = _get_finalized_state(recent_state.finalized_checkpoint)
-        # TODO convert to BlockNode[BeaconBlockHeader], then can grab from the state...
-        finalized_header = finalized_state.get_block_header()
-        finalized_block_node = BlockNode(
-            finalized_state.slot, finalized_header.hash_tree_root, finalized_header
-        )
+        if finalized_state.slot == GENESIS_SLOT:
+            # NOTE: patch up genesis state to reflect the genesis block as an initial checkpoint
+            # this only has to be patched once at genesis...
+            finalized_block_node = BlockNode(GENESIS_SLOT, default_root)
+        else:
+            finalized_header = finalized_state.get_block_header()
+            finalized_block_node = BlockNode(
+                finalized_state.slot, finalized_header.hash_tree_root
+            )
         return cls(finalized_block_node, finalized_state, config, block_sink)
 
-    def load_context(cls, chain_db: BaseBeaconChainDB) -> None:
-        # finalized_head = chain_db.get_finalized_head(BeaconBlock)
-        # finalized_state = chain_db.get_state_by_root(
-        #     finalized_head.state_root, BeaconState
-        # )
-        # finalized_head_node = _block_to_block_node(finalized_head)
-        # # TODO: need genesis patch up here as well....
-        # return cls(finalized_head_node, finalized_state, config, block_sink)
-        ...
+    # def load_context(self, chain_db: BaseBeaconChainDB) -> None:
+    #     """
+    #     Load the opaque context if it exists from the ``chain_db``.
+
+    #     NOTE: this opaque context is in fact just the canonical chain
+    #     determined during the last run of an instance of this class...
+    #     """
+    #     # finalized_head = chain_db.get_finalized_head(BeaconBlock)
+    #     # finalized_state = chain_db.get_state_by_root(
+    #     #     finalized_head.state_root, BeaconState
+    #     # )
+    #     # finalized_head_node = _block_to_block_node(finalized_head)
+    #     # # TODO: need genesis patch up here as well....
+    #     # return cls(finalized_head_node, finalized_state, config, block_sink)
+    #     context = self.chain_db.get_fork_choice_context()
+    #     self._load_context(context)
+
+    # def _load_context(self, context: bytes) -> None:
+    #     """
+    #     just reload the last known canonical tree?
+    #     """
+    #     ...
+
+    # def store_context(self, chain_db: BaseBeaconChainDB) -> None:
+    #     """
+    #     NOTE: i think we can just write the canonical subset of block tree
+    #     as seen at runtime...
+    #     """
+    #     ...
 
     def update_justified(self, state: BeaconState) -> None:
         """
@@ -593,9 +592,9 @@ class LMDGHOSTForkChoice(BaseForkChoice):
         )
         self._impl.update_justified(self._justified, self._finalized, balances)
 
-    def get_canonical_chain(self) -> Iterable[BaseBeaconBlock]:
+    def get_canonical_chain(self) -> Iterable[Tuple[Slot, Root]]:
         for block_node in self._impl.get_canonical_chain(self._finalized.root):
-            yield _block_node_to_block(block_node)
+            yield block_node.slot, block_node.root
 
     def on_block(self, block: BaseBeaconBlock) -> None:
         """
@@ -618,6 +617,6 @@ class LMDGHOSTForkChoice(BaseForkChoice):
         for validator_index in indices:
             self._impl.process_attestation(validator_index, block_root, target_epoch)
 
-    def find_head(self) -> BaseBeaconBlock:
+    def find_head(self) -> Root:
         node = self._impl.find_head()
-        return _block_node_to_block(node)
+        return node.root

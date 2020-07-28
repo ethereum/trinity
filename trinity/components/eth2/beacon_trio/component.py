@@ -73,7 +73,7 @@ class BeaconNodeComponent(TrioComponent):
         arg_parser.add_argument(
             "--recent-state-ssz",
             type=Path,
-            help="path to a recent ssz-encoded state (for use in weak subjectivity)",
+            help="path to a recent finalized ssz-encoded state (for use in weak subjectivity)",
         )
 
         network_description_group = arg_parser.add_mutually_exclusive_group()
