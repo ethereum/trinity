@@ -5,7 +5,7 @@ from eth_utils import decode_hex
 import milagro_bls_binding as milagro_bls
 
 from eth2._utils.hash import hash_eth2
-from eth2.beacon.committee_helpers import compute_shuffled_index, compute_proposer_index
+from eth2.beacon.committee_helpers import compute_shuffled_index
 from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance
 from eth2.beacon.helpers import (
     compute_domain,
@@ -372,6 +372,31 @@ class ShufflingEpoch(object):
         ]
 
 
+def compute_proposer_index(
+    state: BeaconState, indices: Sequence[ValidatorIndex], seed: bytes
+) -> ValidatorIndex:
+    """
+    Return from ``indices`` a random index sampled by effective balance.
+    """
+    assert len(indices) > 0
+    MAX_RANDOM_BYTE = 2 ** 8 - 1
+    i = 0
+    while True:
+        candidate_index = indices[
+            compute_shuffled_index(
+                ValidatorIndex(i % len(indices)),
+                len(indices),
+                seed,
+                ALTONA_CONFIG.SHUFFLE_ROUND_COUNT,
+            )
+        ]
+        random_byte = hash_eth2(seed + int_to_bytes(i // 32, length=8))[i % 32]
+        effective_balance = state.validators[candidate_index].effective_balance
+        if effective_balance * MAX_RANDOM_BYTE >= MAX_EFFECTIVE_BALANCE * random_byte:
+            return ValidatorIndex(candidate_index)
+        i += 1
+
+
 class EpochsContext(object):
     pubkey2index: Dict[BLSPubkey, ValidatorIndex]
     index2pubkey: List[BLSPubkey]
@@ -423,11 +448,9 @@ class EpochsContext(object):
         start_slot = compute_start_slot_at_epoch(self.current_shuffling.epoch)
         self.proposers = [
             compute_proposer_index(
-                state.validators,
+                state,
                 self.current_shuffling.active_indices,
                 hash_eth2(epoch_seed + slot.to_bytes(length=8, byteorder=ENDIANNESS)),
-                ALTONA_CONFIG.MAX_EFFECTIVE_BALANCE,
-                ALTONA_CONFIG.SHUFFLE_ROUND_COUNT,
             )
             for slot in range(start_slot, start_slot + SLOTS_PER_EPOCH)
         ]
