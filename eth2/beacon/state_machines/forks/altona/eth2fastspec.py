@@ -148,18 +148,6 @@ def xor(bytes_1: bytes, bytes_2: bytes) -> bytes:
     return bytes(a ^ b for a, b in zip(bytes_1, bytes_2))
 
 
-def compute_fork_data_root(
-    current_version: Version, genesis_validators_root: Root
-) -> Root:
-    """
-    Return the 32-byte fork data root for the ``current_version`` and ``genesis_validators_root``.
-    This is used primarily in signature domains to avoid collisions across forks/chains.
-    """
-    return ForkData.create(
-        current_version=current_version, genesis_validators_root=genesis_validators_root
-    ).hash_tree_root
-
-
 # ShuffleList shuffles a list, using the given seed for randomness. Mutates the input list.
 def shuffle_list(input: List[ValidatorIndex], seed: Hash32) -> None:
     _inner_shuffle_list(input, seed, True)
