@@ -185,13 +185,12 @@ class BeaconNode:
         base_db = LevelDB(db_path=config.database_dir)
         chain_db = config.chain_db_class(base_db)
         recent_state = _resolve_recent_state(cls.logger, chain_db, config)
-
-        if recent_state.slot == GENESIS_SLOT:
-            chain_db.register_genesis(recent_state, SignedBeaconBlock)
-
         # NOTE: if ``recent_state`` is an ancestor of our finalized head,
         # then we can "fast forward" the chain state to that head.
         recent_state = _find_finalized_descendant_state(recent_state, chain_db)
+
+        if recent_state.slot == GENESIS_SLOT:
+            chain_db.register_genesis(recent_state, SignedBeaconBlock)
 
         chain = config.chain_class.from_recent_state(chain_db, recent_state)
 
@@ -588,7 +587,10 @@ def _find_finalized_descendant_state(
     we have recorded. If ``recent_state`` is consistent with this history, then we should be
     able to do so.
     """
-    finalized_head = chain_db.get_finalized_head(BeaconBlock)
+    try:
+        finalized_head = chain_db.get_finalized_head(BeaconBlock)
+    except KeyError:
+        return recent_state
 
     if recent_state.slot == finalized_head.slot:
         if recent_state.hash_tree_root != finalized_head.state_root:
@@ -609,7 +611,7 @@ def _find_finalized_descendant_state(
     else:  # recent_state.slot < finalized_head.slot
         # we can simply check that the state at this slot matches
         # given how we are handling finality/canonicality in the DB layer...
-        local_state = chain_db.get_state_by_slot(recent_state.slot)
+        local_state = chain_db.get_state_by_slot(recent_state.slot, BeaconState)
         if local_state == recent_state:
             finalized_state = chain_db.get_state_by_root(
                 finalized_head.state_root, BeaconState

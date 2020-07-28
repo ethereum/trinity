@@ -6,12 +6,13 @@ from eth.typing import Hash32
 from lru import LRU
 import ssz
 
+from eth2.beacon.constants import EMPTY_SIGNATURE
 from eth2.beacon.db.abc import BaseBeaconChainDB
 import eth2.beacon.db.schema2 as SchemaV1
 from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock, BeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import BLSSignature, Root, Slot
+from eth2.beacon.typing import BLSSignature, Root, Slot, default_root
 
 
 class StateNotFound(Exception):
@@ -40,6 +41,8 @@ class BeaconChainDB(BaseBeaconChainDB):
         )
 
         self.persist_block(signed_block_class.create(message=genesis_block))
+        # NOTE: alias the genesis block by empty root
+        self._persist_block_with_signature(default_root, genesis_block, EMPTY_SIGNATURE)
         self.persist_state(genesis_state)
 
         self.mark_canonical_block(genesis_block.slot, genesis_block.hash_tree_root)
@@ -81,15 +84,20 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     def persist_block(self, signed_block: BaseSignedBeaconBlock) -> None:
         block = signed_block.message
+        signature = signed_block.signature
         block_root = block.hash_tree_root
 
         self._block_cache[block_root] = block
 
-        block_root_to_block = SchemaV1.block_root_to_block(block_root)
+        self._persist_block_with_signature(block_root, block, signature)
+
+    def _persist_block_with_signature(
+        self, root: Root, block: BaseBeaconBlock, signature: BLSSignature
+    ) -> None:
+        block_root_to_block = SchemaV1.block_root_to_block(root)
         self.db[block_root_to_block] = ssz.encode(block)
 
-        signature = signed_block.signature
-        block_root_to_signature = SchemaV1.block_root_to_signature(block_root)
+        block_root_to_signature = SchemaV1.block_root_to_signature(root)
         self.db[block_root_to_signature] = signature
 
     def mark_canonical_block(self, slot: Slot, root: Root) -> None:
