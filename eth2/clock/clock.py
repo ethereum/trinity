@@ -4,7 +4,7 @@ from typing import AsyncIterable, AsyncIterator, Callable, Tuple
 
 import trio
 
-from eth2.beacon.typing import Epoch, Slot
+from eth2.beacon.typing import Epoch, Slot, Timestamp
 from eth2.clock.tick import Tick
 
 TICKS_PER_SLOT = 2
@@ -35,7 +35,7 @@ def _compute_tick_multiplier(interval: float) -> int:
 
 
 class Clock(AsyncIterable[Tick]):
-    logger = logging.getLogger("eth2.validator_client.clock")
+    logger = logging.getLogger("eth2.clock.Clock")
 
     def __init__(
         self,
@@ -60,6 +60,10 @@ class Clock(AsyncIterable[Tick]):
         self._slots_per_epoch = slots_per_epoch
         self._seconds_per_epoch = seconds_per_epoch
         self._genesis_lookahead = genesis_lookahead
+
+    @property
+    def genesis_time(self) -> Timestamp:
+        return Timestamp(self._genesis_time)
 
     def _compute_slot_and_alignment(self, t: float) -> Tuple[Slot, bool]:
         """
