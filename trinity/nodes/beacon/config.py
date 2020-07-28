@@ -1,19 +1,17 @@
 from pathlib import Path
-from typing import Collection, Type
+from typing import Collection, Optional
 
 from eth_keys.datatypes import PrivateKey
 from multiaddr import Multiaddr
 
-from eth2.beacon.chains.abc import BaseBeaconChain
 from eth2.configs import Eth2Config
-from trinity.config import TrinityConfig, BeaconTrioAppConfig, BeaconTrioChainConfig
+from trinity.config import BeaconTrioAppConfig, BeaconTrioChainConfig, TrinityConfig
 
 
 class BeaconNodeConfig:
     def __init__(
         self,
         database_dir: Path,
-        orchestration_profile: str,
         bootstrap_nodes: Collection[Multiaddr],
         preferred_nodes: Collection[Multiaddr],
         chain_config: BeaconTrioChainConfig,
@@ -22,40 +20,37 @@ class BeaconNodeConfig:
         eth2_config: Eth2Config,
         client_identifier: str,
         p2p_maddr: Multiaddr,
-        chain_class: Type[BaseBeaconChain]
+        recent_state_ssz: Optional[Path],
     ) -> None:
-        self.database_dir = database_dir
-        self.orchestration_profile = orchestration_profile
+        self.eth2_config = eth2_config
+
+        self.client_identifier = client_identifier
+        self.p2p_maddr = p2p_maddr
         self.bootstrap_nodes = bootstrap_nodes
         self.preferred_nodes = preferred_nodes
+
+        self.database_dir = database_dir
         self.chain_config = chain_config
         self.local_node_key = local_node_key
         self.validator_api_port = validator_api_port
-        self.eth2_config = eth2_config
-        self.client_identifier = client_identifier
-        self.p2p_maddr = p2p_maddr
-        self.chain_class = chain_class
+
+        self.chain_db_class = chain_config.chain_db_class
+        self.chain_class = chain_config.chain_class
+        self.recent_state_ssz = recent_state_ssz
 
     @classmethod
     def from_platform_config(
-        cls,
-        config_profile: str,
-        trinity_config: TrinityConfig,
-        beacon_app_config: BeaconTrioAppConfig,
-        validator_api_port: int,
-        bootstrap_nodes: Collection[Multiaddr],
+        cls, trinity_config: TrinityConfig, beacon_app_config: BeaconTrioAppConfig
     ) -> "BeaconNodeConfig":
-        chain_config = beacon_app_config.get_chain_config(config_profile)
         return cls(
             beacon_app_config.database_dir,
-            beacon_app_config.orchestration_profile,
-            bootstrap_nodes,
+            beacon_app_config.bootstrap_nodes,
             beacon_app_config.preferred_nodes,
-            chain_config,
+            beacon_app_config.get_chain_config(),
             trinity_config.nodekey,
-            validator_api_port,
-            chain_config._eth2_config,
+            beacon_app_config.validator_api_port,
+            beacon_app_config.network_config,
             beacon_app_config.client_identifier,
             beacon_app_config.p2p_maddr,
-            chain_config.beacon_chain_class,
+            beacon_app_config.recent_state_ssz,
         )

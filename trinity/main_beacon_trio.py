@@ -1,12 +1,9 @@
-import logging
-import os
 import shutil
 from typing import Collection, Sequence, Tuple, Type
 
 import trio
 
 from trinity._utils.trio_utils import wait_for_interrupts
-from trinity._utils.version import construct_trinity_client_identifier
 from trinity.boot_info import BootInfo
 from trinity.bootstrap import construct_boot_info
 from trinity.components.registry import get_components_for_trio_beacon_client
@@ -51,11 +48,6 @@ def main_entry_trio(
         return
 
     _initialize_beacon_filesystem(boot_info)
-
-    logger = logging.getLogger("trinity")
-    pid = os.getpid()
-    identifier = construct_trinity_client_identifier()
-    logger.info("Booted client with identifier: %s and process id %d", identifier, pid)
 
     runtime_component_types = tuple(
         component_cls

@@ -25,3 +25,7 @@ def slot_to_state_root(slot: Slot) -> bytes:
 
 def state_root_to_state(root: Root) -> bytes:
     return b"v1:beacon:state-root-to-state:" + root
+
+
+def weak_subjectivity_state_root() -> bytes:
+    return b"v1:beacon:weak-subjectivity-state-root"

@@ -25,14 +25,12 @@ class BaseBeaconChainDB(ABC):
     def __init__(self, db: AtomicDatabaseAPI) -> None:
         ...
 
-    @classmethod
     @abstractmethod
-    def from_genesis(
-        cls,
-        db: AtomicDatabaseAPI,
+    def register_genesis(
+        self,
         genesis_state: BeaconState,
         signed_block_class: Type[BaseSignedBeaconBlock],
-    ) -> "BaseBeaconChainDB":
+    ) -> None:
         ...
 
     @abstractmethod
@@ -84,6 +82,14 @@ class BaseBeaconChainDB(ABC):
     def get_state_by_root(
         self, state_root: Root, state_class: Type[BeaconState]
     ) -> BeaconState:
+        ...
+
+    @abstractmethod
+    def get_weak_subjectivity_state(self) -> Optional[BeaconState]:
+        ...
+
+    @abstractmethod
+    def persist_weak_subjectivity_state_root(self, state_root: Root) -> None:
         ...
 
     @abstractmethod

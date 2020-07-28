@@ -22,8 +22,8 @@ class BlockSink(Protocol):
 class BaseForkChoice(ABC):
     @classmethod
     @abstractmethod
-    def from_genesis(
-        cls, genesis_state: BeaconState, config: Eth2Config, block_sink: BlockSink
+    def from_recent_state(
+        cls, recent_state: BeaconState, config: Eth2Config, block_sink: BlockSink
     ) -> "BaseForkChoice":
         ...
 

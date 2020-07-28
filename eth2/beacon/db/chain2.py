@@ -30,26 +30,20 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._block_cache = LRU(BLOCK_CACHE_SIZE)
         self._state_cache = LRU(STATE_CACHE_SIZE)
 
-    @classmethod
-    def from_genesis(
-        cls,
-        db: AtomicDatabaseAPI,
+    def register_genesis(
+        self,
         genesis_state: BeaconState,
         signed_block_class: Type[BaseSignedBeaconBlock],
     ) -> "BeaconChainDB":
-        chain_db = cls(db)
-
         genesis_block = get_genesis_block(
             genesis_state.hash_tree_root, signed_block_class.block_class
         )
 
-        chain_db.persist_block(signed_block_class.create(message=genesis_block))
-        chain_db.persist_state(genesis_state)
+        self.persist_block(signed_block_class.create(message=genesis_block))
+        self.persist_state(genesis_state)
 
-        chain_db.mark_canonical_block(genesis_block)
-        chain_db.mark_finalized_head(genesis_block)
-
-        return chain_db
+        self.mark_canonical_block(genesis_block)
+        self.mark_finalized_head(genesis_block)
 
     def get_block_by_slot(
         self, slot: Slot, block_class: Type[BaseBeaconBlock]
@@ -136,6 +130,16 @@ class BeaconChainDB(BaseBeaconChainDB):
         except KeyError:
             raise StateNotFound()
         return ssz.decode(state_data, state_class)
+
+    def get_weak_subjectivity_state(self) -> Optional[BeaconState]:
+        try:
+            root = self.db[SchemaV1.weak_subjectivity_state_root()]
+        except KeyError:
+            return None
+        return self.get_state_by_root(root, BeaconState)
+
+    def persist_weak_subjectivity_state_root(self, state_root: Root) -> None:
+        self.db[SchemaV1.weak_subjectivity_state_root()] = state_root
 
     def persist_state(self, state: BeaconState) -> None:
         state_root = state.hash_tree_root

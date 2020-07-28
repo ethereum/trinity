@@ -1,7 +1,6 @@
 import logging
 from typing import Collection, Container, Iterable, Optional, Tuple, Type
 
-from eth.abc import AtomicDatabaseAPI
 from eth.exceptions import BlockNotFound
 from eth_utils import to_dict, toolz
 
@@ -10,14 +9,14 @@ from eth2.beacon.chains.abc import BaseBeaconChain
 from eth2.beacon.chains.exceptions import ParentNotFoundError, SlashableBlockError
 from eth2.beacon.constants import FAR_FUTURE_SLOT, GENESIS_SLOT
 from eth2.beacon.db.abc import BaseBeaconChainDB
-from eth2.beacon.db.chain2 import BeaconChainDB, StateNotFound
+from eth2.beacon.db.chain2 import StateNotFound
+from eth2.beacon.epoch_processing_helpers import get_attesting_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
 from eth2.beacon.state_machines.forks.altona.eth2fastspec import get_attesting_indices
 from eth2.beacon.state_machines.forks.altona.state_machine import (
     AltonaStateMachineFast,
     AltonaStateMachineTest,
 )
-from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import (
     BaseBeaconBlock,
@@ -104,28 +103,22 @@ class BeaconChain(BaseBeaconChain):
         self._reconcile_justification_and_finality(head_state)
 
     @classmethod
-    def from_genesis(
-        cls, base_db: AtomicDatabaseAPI, genesis_state: BeaconState
+    def from_recent_state(
+        cls, chain_db: BaseBeaconChainDB, recent_state: BeaconState
     ) -> "BeaconChain":
         for starting_slot, state_machine_class in cls._sm_configuration:
+            # TODO allow for slot polymorphism...
             if starting_slot == GENESIS_SLOT:
-                signed_block_class = state_machine_class.signed_block_class
                 fork_choice_class = state_machine_class.fork_choice_class
                 config = state_machine_class.config
-                # NOTE: important this happens as soon as it can...
-                override_lengths(config)
                 break
         else:
             raise Exception("state machine configuration missing genesis era")
 
-        assert genesis_state.slot == GENESIS_SLOT
-
-        chain_db = BeaconChainDB.from_genesis(
-            base_db, genesis_state, signed_block_class
-        )
-
         block_sink = ChainDBBlockSink(chain_db)
-        fork_choice = fork_choice_class.from_genesis(genesis_state, config, block_sink)
+        fork_choice = fork_choice_class.from_recent_state(
+            recent_state, config, block_sink
+        )
         return cls(chain_db, fork_choice)
 
     @property

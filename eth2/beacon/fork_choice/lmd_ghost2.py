@@ -14,9 +14,8 @@ from typing import (
 from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.epoch_processing_helpers import get_active_validator_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
-from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.helpers import compute_epoch_at_slot
-from eth2.beacon.types.blocks import BaseBeaconBlock, BeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Gwei, Root, Slot, ValidatorIndex, default_root
@@ -553,26 +552,30 @@ class LMDGHOSTForkChoice(BaseForkChoice):
         self.update_justified(finalized_state)
 
     @classmethod
-    def from_genesis(
-        cls, genesis_state: BeaconState, config: Eth2Config, block_sink: BlockSink
+    def from_recent_state(
+        cls, recent_state: BeaconState, config: Eth2Config, block_sink: BlockSink
     ) -> "LMDGHOSTForkChoice":
         # NOTE: patch up genesis state to reflect the genesis block as an initial checkpoint
         # this only has to be patched once at genesis
-        genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-        genesis_block_node = BlockNode(genesis_block.slot, default_root, genesis_block)
-        return cls(genesis_block_node, genesis_state, config, block_sink)
-
-    @classmethod
-    def from_db(
-        cls, chain_db: BaseBeaconChainDB, config: Eth2Config, block_sink: BlockSink
-    ) -> "LMDGHOSTForkChoice":
-        finalized_head = chain_db.get_finalized_head(BeaconBlock)
-        finalized_state = chain_db.get_state_by_root(
-            finalized_head.state_root, BeaconState
+        # genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
+        # genesis_block_node = BlockNode(genesis_block.slot, default_root, genesis_block)
+        finalized_state = _get_finalized_state(recent_state.finalized_checkpoint)
+        # TODO convert to BlockNode[BeaconBlockHeader], then can grab from the state...
+        finalized_header = finalized_state.get_block_header()
+        finalized_block_node = BlockNode(
+            finalized_state.slot, finalized_header.hash_tree_root, finalized_header
         )
-        finalized_head_node = _block_to_block_node(finalized_head)
-        # TODO: need genesis patch up here as well....
-        return cls(finalized_head_node, finalized_state, config, block_sink)
+        return cls(finalized_block_node, finalized_state, config, block_sink)
+
+    def load_context(cls, chain_db: BaseBeaconChainDB) -> None:
+        # finalized_head = chain_db.get_finalized_head(BeaconBlock)
+        # finalized_state = chain_db.get_state_by_root(
+        #     finalized_head.state_root, BeaconState
+        # )
+        # finalized_head_node = _block_to_block_node(finalized_head)
+        # # TODO: need genesis patch up here as well....
+        # return cls(finalized_head_node, finalized_state, config, block_sink)
+        ...
 
     def update_justified(self, state: BeaconState) -> None:
         """
