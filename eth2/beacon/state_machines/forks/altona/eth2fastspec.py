@@ -11,10 +11,11 @@ from eth2.beacon.helpers import (
     compute_domain,
     compute_signing_root,
     get_domain,
-    get_seed,
+    get_seed, compute_epoch_at_slot,
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
+from eth2.beacon.state_machines.forks.serenity.block_validation import _validate_validator_is_active
 from eth2.beacon.state_machines.forks.serenity.slot_processing import _process_slot
 from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
@@ -24,7 +25,6 @@ from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconB
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositMessage
 from eth2.beacon.types.deposits import Deposit
-from eth2.beacon.types.fork_data import ForkData
 from eth2.beacon.types.historical_batch import HistoricalBatch
 from eth2.beacon.types.pending_attestations import PendingAttestation
 from eth2.beacon.types.proposer_slashings import ProposerSlashing
@@ -415,7 +415,7 @@ class EpochsContext(object):
 
     def load_state(self, state: BeaconState) -> None:
         self.sync_pubkeys(state)
-        current_epoch = compute_epoch_at_slot(state.slot)
+        current_epoch = compute_epoch_at_slot(state.slot, ALTONA_CONFIG.SLOTS_PER_EPOCH)
         previous_epoch = (
             GENESIS_EPOCH
             if current_epoch == GENESIS_EPOCH
@@ -493,7 +493,7 @@ class EpochsContext(object):
         self._reset_proposers(state)
 
     def _get_slot_comms(self, slot: Slot) -> SlotCommittees:
-        epoch = compute_epoch_at_slot(slot)
+        epoch = compute_epoch_at_slot(slot, ALTONA_CONFIG.SLOTS_PER_EPOCH)
         epoch_slot = slot % SLOTS_PER_EPOCH
         if epoch == self.previous_shuffling.epoch:
             return self.previous_shuffling.committees[epoch_slot]
@@ -521,7 +521,7 @@ class EpochsContext(object):
         return int(len(self._get_slot_comms(slot)))
 
     def get_beacon_proposer(self, slot: Slot) -> ValidatorIndex:
-        epoch = compute_epoch_at_slot(slot)
+        epoch = compute_epoch_at_slot(slot, ALTONA_CONFIG.SLOTS_PER_EPOCH)
         assert epoch == self.current_shuffling.epoch
         return self.proposers[slot % SLOTS_PER_EPOCH]
 
@@ -641,21 +641,10 @@ class EpochProcess(object):
         self.churn_limit = 0
 
 
-def compute_epoch_at_slot(slot: Slot) -> Epoch:
-    """
-    Return the epoch number at ``slot``.
-    """
-    return Epoch(slot // SLOTS_PER_EPOCH)
-
-
 def get_churn_limit(active_validator_count: int) -> int:
     return max(
         MIN_PER_EPOCH_CHURN_LIMIT, active_validator_count // CHURN_LIMIT_QUOTIENT
     )
-
-
-def is_active_validator(v: Validator, epoch: Epoch) -> bool:
-    return v.activation_epoch <= epoch < v.exit_epoch
 
 
 def is_active_flat_validator(v: FlatValidator, epoch: Epoch) -> bool:
@@ -1511,7 +1500,7 @@ def process_proposer_slashing(
             state,
             SignatureDomain.DOMAIN_BEACON_PROPOSER,
             ALTONA_CONFIG.SLOTS_PER_EPOCH,
-            compute_epoch_at_slot(signed_header.message.slot),
+            compute_epoch_at_slot(signed_header.message.slot, ALTONA_CONFIG.SLOTS_PER_EPOCH),
         )
         signing_root = compute_signing_root(signed_header.message, domain)
         assert bls_Verify(proposer.pubkey, signing_root, signed_header.signature)
@@ -1577,7 +1566,7 @@ def process_attestation(
         epochs_ctx.previous_shuffling.epoch,
         epochs_ctx.current_shuffling.epoch,
     )
-    assert data.target.epoch == compute_epoch_at_slot(data.slot)
+    assert data.target.epoch == compute_epoch_at_slot(data.slot, ALTONA_CONFIG.SLOTS_PER_EPOCH)
     assert (
         data.slot + MIN_ATTESTATION_INCLUSION_DELAY
         <= slot
@@ -1712,7 +1701,7 @@ def process_voluntary_exit(
     validator = state.validators[voluntary_exit.validator_index]
     current_epoch = epochs_ctx.current_shuffling.epoch
     # Verify the validator is active
-    assert is_active_validator(validator, current_epoch)
+    _validate_validator_is_active(validator, current_epoch)
     # Verify exit has not been initiated
     assert validator.exit_epoch == FAR_FUTURE_EPOCH
     # Exits must specify an epoch when they become valid; they are not valid before then
