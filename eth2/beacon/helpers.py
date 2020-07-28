@@ -238,11 +238,11 @@ def compute_fork_digest(
     )
 
 
-def compute_signing_root(object: ssz.Serializable, domain: Domain) -> Root:
+def compute_signing_root(obj: ssz.Serializable, domain: Domain) -> Root:
     """
     Return the signing root of an object by calculating the root of the object-domain tree.
     """
     domain_wrapped_object = SigningData.create(
-        object_root=object.hash_tree_root, domain=domain
+        object_root=obj.hash_tree_root, domain=domain
     )
     return domain_wrapped_object.hash_tree_root
