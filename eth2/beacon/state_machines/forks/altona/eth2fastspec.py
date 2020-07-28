@@ -5,6 +5,7 @@ from eth_utils import decode_hex
 import milagro_bls_binding as milagro_bls
 
 from eth2._utils.hash import hash_eth2
+from eth2._utils.merkle.common import verify_merkle_branch
 from eth2.beacon.attestation_helpers import is_slashable_attestation_data
 from eth2.beacon.committee_helpers import compute_shuffled_index
 from eth2.beacon.epoch_processing_helpers import decrease_balance, increase_balance, \
@@ -1573,28 +1574,13 @@ def process_attestation(
     return state
 
 
-def is_valid_merkle_branch(
-    leaf: bytes, branch: Sequence[bytes], depth: int, index: int, root: Root
-) -> bool:
-    """
-    Check if ``leaf`` at ``index`` verifies against the Merkle ``root`` and ``branch``.
-    """
-    value = leaf
-    for i in range(depth):
-        if (index >> i) & 1 == 1:
-            value = hash_eth2(branch[i] + value)
-        else:
-            value = hash_eth2(value + branch[i])
-    return value == root
-
-
 def process_deposit(
     epochs_ctx: EpochsContext, state: BeaconState, deposit: Deposit
 ) -> BeaconState:
     # Verify the Merkle branch
-    assert is_valid_merkle_branch(
+    assert verify_merkle_branch(
         leaf=deposit.data.hash_tree_root,
-        branch=deposit.proof,
+        proof=deposit.proof,
         depth=DEPOSIT_CONTRACT_TREE_DEPTH + 1,  # Add 1 for the List length mix-in
         index=state.eth1_deposit_index,
         root=state.eth1_data.deposit_root,
