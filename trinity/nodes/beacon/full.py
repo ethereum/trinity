@@ -173,7 +173,6 @@ class BeaconNode:
 
         api_context = Context(
             client_identifier,
-            chain_config.genesis_time,
             eth2_config,
             self._syncer,
             self._chain,
