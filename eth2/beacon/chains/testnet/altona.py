@@ -121,7 +121,7 @@ class BeaconChain(BaseBeaconChain):
         assert genesis_state.slot == GENESIS_SLOT
 
         chain_db = BeaconChainDB.from_genesis(
-            base_db, genesis_state, signed_block_class
+            base_db, genesis_state, signed_block_class, config
         )
 
         block_sink = ChainDBBlockSink(chain_db)
@@ -253,7 +253,7 @@ class BeaconChain(BaseBeaconChain):
 
         # NOTE: if we have a valid block/state, then record in the database.
         self._chain_db.persist_block(block)
-        self._chain_db.persist_state(state)
+        self._chain_db.persist_state(state, state_machine.config)
 
         self._reconcile_justification_and_finality(state)
 
@@ -354,7 +354,7 @@ class BeaconChain(BaseBeaconChain):
         for block in reversed(blocks):
             state_machine = self.get_state_machine(block.slot)
             state, _ = state_machine.apply_state_transition(state, block)
-            self._chain_db.persist_state(state)
+            self._chain_db.persist_state(state, state_machine.config)
 
         return state
 

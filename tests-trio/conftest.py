@@ -87,8 +87,7 @@ async def current_time():
 
 @pytest.fixture
 def genesis_time(current_time, eth2_config):
-    slots_after_genesis = 10
-    return int(current_time - slots_after_genesis * eth2_config.SECONDS_PER_SLOT)
+    return int(current_time)
 
 
 @pytest.fixture

@@ -5,9 +5,11 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 
 
-def test_chain2_at_genesis(base_db, genesis_state, genesis_block):
+def test_chain2_at_genesis(base_db, genesis_state, genesis_block, config):
     genesis_block = genesis_block.message
-    chain_db = BeaconChainDB.from_genesis(base_db, genesis_state, SignedBeaconBlock)
+    chain_db = BeaconChainDB.from_genesis(
+        base_db, genesis_state, SignedBeaconBlock, config
+    )
 
     block_at_genesis = chain_db.get_block_by_slot(GENESIS_SLOT, BeaconBlock)
     assert block_at_genesis == genesis_block
