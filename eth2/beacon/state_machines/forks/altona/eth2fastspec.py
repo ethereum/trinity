@@ -1,4 +1,4 @@
-from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from eth_typing import BLSPubkey, Hash32
 from eth_utils import ValidationError, decode_hex, encode_hex
@@ -34,6 +34,7 @@ from eth2.beacon.state_machines.forks.serenity.block_validation import (
     validate_randao_reveal,
 )
 from eth2.beacon.state_machines.forks.serenity.slot_processing import _process_slot
+from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.block_headers import BeaconBlockHeader
@@ -48,6 +49,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.types.voluntary_exits import SignedVoluntaryExit
 from eth2.beacon.typing import (
+    Bitfield,
     CommitteeIndex,
     DomainType,
     Epoch,
@@ -1619,6 +1621,18 @@ def process_attestation(
         epochs_ctx, state, get_indexed_attestation(attestation)
     )
     return state
+
+
+def get_attesting_indices(
+    epochs_ctx: EpochsContext, attestation_data: AttestationData, bitfield: Bitfield
+) -> Set[ValidatorIndex]:
+    """
+    Return the attesting indices corresponding to ``attestation_data`` and ``bitfield``.
+    """
+    committee = epochs_ctx.get_beacon_committee(
+        attestation_data.slot, attestation_data.index
+    )
+    return set(index for i, index in enumerate(committee) if bitfield[i])
 
 
 def process_deposit(
