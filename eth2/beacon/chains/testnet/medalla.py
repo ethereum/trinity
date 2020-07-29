@@ -265,6 +265,10 @@ class BeaconChain(BaseBeaconChain):
 
         if justified_checkpoint.epoch > self._justified_checkpoint.epoch:
             self._justified_checkpoint = justified_checkpoint
+            justified_head = self._chain_db.get_block_by_root(
+                self._justified_checkpoint.root, BeaconBlock
+            )
+            self._chain_db.mark_justified_head(justified_head)
             self._fork_choice.update_justified(state)
 
         if finalized_checkpoint.epoch > self._finalized_checkpoint.epoch:
