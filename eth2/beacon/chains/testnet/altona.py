@@ -11,9 +11,8 @@ from eth2.beacon.chains.exceptions import ParentNotFoundError, SlashableBlockErr
 from eth2.beacon.constants import FAR_FUTURE_SLOT, GENESIS_SLOT
 from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.db.chain2 import BeaconChainDB, StateNotFound
-from eth2.beacon.epoch_processing_helpers import get_attesting_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
-from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
+from eth2.beacon.state_machines.forks.altona.eth2fastspec import get_attesting_indices
 from eth2.beacon.state_machines.forks.altona.state_machine import (
     AltonaStateMachineFast,
     AltonaStateMachineTest,
@@ -31,7 +30,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Root, Slot, ValidatorIndex
 from eth2.clock import Tick
 
-StateMachineConfiguration = Tuple[Tuple[Slot, Type[BaseBeaconStateMachine]], ...]
+StateMachineConfiguration = Tuple[Tuple[Slot, Type[AltonaStateMachineFast]], ...]
 
 
 def _sm_configuration_has_increasing_slot(
@@ -61,7 +60,7 @@ def _validate_sm_configuration(sm_configuration: StateMachineConfiguration) -> N
 @to_dict
 def _load_state_machines(
     sm_configuration: StateMachineConfiguration
-) -> Iterable[Tuple[Container[int], BaseBeaconStateMachine]]:
+) -> Iterable[Tuple[Container[int], AltonaStateMachineFast]]:
     sm_configuration += ((FAR_FUTURE_SLOT, None),)
     for (first_fork, second_fork) in toolz.sliding_window(2, sm_configuration):
         valid_range = range(first_fork[0], second_fork[0])
@@ -143,7 +142,7 @@ class BeaconChain(BaseBeaconChain):
                 "a fork choice different than the one implemented was requested by slot"
             )
 
-    def get_state_machine(self, slot: Slot) -> BaseBeaconStateMachine:
+    def get_state_machine(self, slot: Slot) -> AltonaStateMachineFast:
         """
         Return the ``StateMachine`` instance for the given slot number.
         """
@@ -365,15 +364,9 @@ class BeaconChain(BaseBeaconChain):
         target_block = self._chain_db.get_block_by_root(
             attestation.data.target.root, BeaconBlock
         )
-        try:
-            target_state = self._chain_db.get_state_by_root(
-                target_block.state_root, BeaconState
-            )
-        except StateNotFound:
-            target_state = self._compute_missing_state(target_block)
         sm = self.get_state_machine(target_block.slot)
         return get_attesting_indices(
-            target_state, attestation.data, attestation.aggregation_bits, sm.config
+            sm._epochs_ctx, attestation.data, attestation.aggregation_bits
         )
 
     def on_block(
