@@ -65,6 +65,14 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
+    def mark_justified_head(self, block: BaseBeaconBlock) -> None:
+        ...
+
+    @abstractmethod
+    def get_justified_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
+        ...
+
+    @abstractmethod
     def mark_finalized_head(self, block: BaseBeaconBlock) -> None:
         ...
 

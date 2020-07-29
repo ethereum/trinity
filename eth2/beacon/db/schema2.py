@@ -3,6 +3,10 @@ import ssz
 from eth2.beacon.typing import Root, Slot
 
 
+def justified_head_root() -> bytes:
+    return b"v1:beacon:justified-head-root"
+
+
 def finalized_head_root() -> bytes:
     return b"v1:beacon:finalized-head-root"
 

@@ -46,6 +46,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         self.persist_state(genesis_state)
 
         self.mark_canonical_block(genesis_block.slot, genesis_block.hash_tree_root)
+        self.mark_justified_head(genesis_block)
         self.mark_finalized_head(genesis_block)
 
     def get_block_by_slot(
@@ -107,6 +108,15 @@ class BeaconChainDB(BaseBeaconChainDB):
         block = self.get_block_by_root(root, BeaconBlock)
         slot_to_state_root = SchemaV1.slot_to_state_root(slot)
         self.db[slot_to_state_root] = block.state_root
+
+    def mark_justified_head(self, block: BaseBeaconBlock) -> None:
+        justified_head_root = SchemaV1.justified_head_root()
+        self.db[justified_head_root] = block.hash_tree_root
+
+    def get_justified_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
+        justified_head_root_key = SchemaV1.justified_head_root()
+        justified_head_root = Root(Hash32(self.db[justified_head_root_key]))
+        return self.get_block_by_root(justified_head_root, block_class)
 
     def mark_finalized_head(self, block: BaseBeaconBlock) -> None:
         finalized_head_root = SchemaV1.finalized_head_root()
