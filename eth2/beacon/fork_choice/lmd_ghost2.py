@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, Iterable, List, NewType, Optional, Sequence, Tuple
 
 from eth2.beacon.constants import GENESIS_SLOT
+from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.epoch_processing_helpers import get_active_validator_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
 from eth2.beacon.helpers import compute_epoch_at_slot
@@ -386,6 +387,8 @@ class ProtoArrayForkChoice:
         )
         self.balances = []
         self.votes = []
+        self.justified = justified
+        self.finalized = finalized
 
     def on_prune(self, anchor_root: Root) -> None:
         self.proto_array.on_prune(anchor_root)
@@ -516,52 +519,66 @@ def _block_to_block_node(block: BaseBeaconBlock) -> BlockNode:
 class LMDGHOSTForkChoice(BaseForkChoice):
     def __init__(
         self,
-        finalized_block_node: BlockNode,
+        justified_head: Checkpoint,
+        justified_state: BeaconState,
+        finalized_head: Checkpoint,
         finalized_state: BeaconState,
         config: Eth2Config,
         block_sink: BlockSink,
     ) -> None:
         self._config = config
-        self._impl = ProtoArrayForkChoice(
-            finalized_block_node,
-            finalized_state.finalized_checkpoint,
-            finalized_state.current_justified_checkpoint,
-            block_sink,
-            config,
-        )
-        self.update_justified(finalized_state)
 
-    @classmethod
-    def from_recent_state(
-        cls, finalized_state: BeaconState, config: Eth2Config, block_sink: BlockSink
-    ) -> "LMDGHOSTForkChoice":
         if finalized_state.slot == GENESIS_SLOT:
             # NOTE: patch up genesis state to reflect the genesis block as an initial checkpoint
             # this only has to be patched once at genesis...
-            finalized_block_node = BlockNode(GENESIS_SLOT, default_root)
+            finalized_root = default_root
         else:
             finalized_header = finalized_state.get_block_header()
-            finalized_block_node = BlockNode(
-                finalized_state.slot, finalized_header.hash_tree_root
-            )
-        return cls(finalized_block_node, finalized_state, config, block_sink)
+            finalized_root = finalized_header.hash_tree_root
 
-    # def load_context(self, chain_db: BaseBeaconChainDB) -> None:
-    #     """
-    #     Load the opaque context if it exists from the ``chain_db``.
+        finalized_block_node = BlockNode(finalized_state.slot, finalized_root)
+        self._impl = ProtoArrayForkChoice(
+            finalized_block_node, finalized_head, justified_head, block_sink, config
+        )
+        self._justified = justified_head
+        self._finalized = finalized_head
 
-    #     NOTE: this opaque context is in fact just the canonical chain
-    #     determined during the last run of an instance of this class...
-    #     """
-    #     # finalized_head = chain_db.get_finalized_head(BeaconBlock)
-    #     # finalized_state = chain_db.get_state_by_root(
-    #     #     finalized_head.state_root, BeaconState
-    #     # )
-    #     # finalized_head_node = _block_to_block_node(finalized_head)
-    #     # # TODO: need genesis patch up here as well....
-    #     # return cls(finalized_head_node, finalized_state, config, block_sink)
-    #     context = self.chain_db.get_fork_choice_context()
-    #     self._load_context(context)
+    # @classmethod
+    # def from_recent_state(
+    #     cls, config: Eth2Config, block_sink: BlockSink
+    # ) -> "LMDGHOSTForkChoice":
+    #     if finalized_state.slot == GENESIS_SLOT:
+    #         # NOTE: patch up genesis state to reflect the genesis block as an initial checkpoint
+    #         # this only has to be patched once at genesis...
+    #         finalized_block_node = BlockNode(GENESIS_SLOT, default_root)
+    #     else:
+    #         finalized_header = finalized_state.get_block_header()
+    #         finalized_root = finalized_header.hash_tree_root
+    #         finalized_block_node = BlockNode(finalized_state.slot, finalized_root)
+    #         finalized_epoch = compute_epoch_at_slot(
+    #             finalized_header.slot, config.SLOTS_PER_EPOCH
+    #         )
+    #         finalized_checkpoint = Checkpoint.create(
+    #             root=finalized_root, epoch=finalized_epoch
+    #         )
+    #     return cls(finalized_block_node, finalized_state, config, block_sink)
+
+    def from_db(self, chain_db: BaseBeaconChainDB) -> None:
+        """
+        Load the opaque context if it exists from the ``chain_db``.
+
+        NOTE: this opaque context is in fact just the canonical chain
+        determined during the last run of an instance of this class...
+        """
+        # finalized_head = chain_db.get_finalized_head(BeaconBlock)
+        # finalized_state = chain_db.get_state_by_root(
+        #     finalized_head.state_root, BeaconState
+        # )
+        # finalized_head_node = _block_to_block_node(finalized_head)
+        # # TODO: need genesis patch up here as well....
+        # return cls(finalized_head_node, finalized_state, config, block_sink)
+        context = self.chain_db.get_fork_choice_context()
+        self._load_context(context)
 
     # def _load_context(self, context: bytes) -> None:
     #     """

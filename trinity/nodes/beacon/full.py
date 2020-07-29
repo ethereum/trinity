@@ -184,6 +184,7 @@ class BeaconNode:
     ) -> "BeaconNode":
         base_db = LevelDB(db_path=config.database_dir)
         chain_db = config.chain_db_class(base_db)
+
         recent_state = _resolve_recent_state(cls.logger, chain_db, config)
         # NOTE: if ``recent_state`` is an ancestor of our finalized head,
         # then we can "fast forward" the chain state to that head.
@@ -420,10 +421,8 @@ class BeaconNode:
         """
         If the peer has a higher finalized epoch or head slot, sync blocks from them.
         """
-        head_state = self._chain.get_canonical_head_state()
-        finalized_slot = compute_start_slot_at_epoch(
-            head_state.finalized_checkpoint.epoch, self._eth2_config.SLOTS_PER_EPOCH
-        )
+        finalized_head = self._chain.get_finalized_head()
+        finalized_slot = finalized_head.slot
         if finalized_slot < status.head_slot:
             span = status.head_slot - finalized_slot
             return SyncRequest(peer_id, Slot(finalized_slot + 1), span)
@@ -490,7 +489,10 @@ class BeaconNode:
                 start_time = time.time()
                 start_slot = request.start_slot
                 self.logger.info(
-                    "starting sync of %d slots at %s", request.count, time.ctime()
+                    "starting sync of %d slots at %s starting from slot %d",
+                    request.count,
+                    time.ctime(),
+                    start_slot - 1,
                 )
 
                 # NOTE: seeing more robust operation with lower batch size...

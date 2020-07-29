@@ -12,6 +12,7 @@ from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.db.chain2 import StateNotFound
 from eth2.beacon.epoch_processing_helpers import get_attesting_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
+from eth2.beacon.helpers import compute_epoch_at_slot
 from eth2.beacon.state_machines.forks.altona.eth2fastspec import get_attesting_indices
 from eth2.beacon.state_machines.forks.altona.state_machine import (
     AltonaStateMachineFast,
@@ -19,6 +20,7 @@ from eth2.beacon.state_machines.forks.altona.state_machine import (
 )
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import (
+    BaseBeaconBlock,
     BaseSignedBeaconBlock,
     BeaconBlock,
     SignedBeaconBlock,
@@ -27,6 +29,7 @@ from eth2.beacon.types.checkpoints import Checkpoint, default_checkpoint
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Root, Slot, ValidatorIndex
 from eth2.clock import Tick
+from eth2.configs import Eth2Config
 
 StateMachineConfiguration = Tuple[Tuple[Slot, Type[AltonaStateMachineFast]], ...]
 
@@ -75,6 +78,12 @@ class ChainDBBlockSink(BlockSink):
             self._chain_db.mark_canonical_block(slot, root)
 
 
+def _as_checkpoint(block: BaseBeaconBlock, config: Eth2Config) -> Checkpoint:
+    root = block.hash_tree_root
+    epoch = compute_epoch_at_slot(block.slot, config.SLOTS_PER_EPOCH)
+    return Checkpoint.create(root=root, epoch=epoch)
+
+
 class BeaconChain(BaseBeaconChain):
     logger = logging.getLogger("eth2.beacon.chains.BeaconChain")
 
@@ -95,16 +104,19 @@ class BeaconChain(BaseBeaconChain):
 
         self._fork_choice = fork_choice
         head_root = fork_choice.find_head()
+        # print(f">>> {head_root.hex()}")
         self._current_head = self._chain_db.get_block_by_root(head_root, BeaconBlock)
         head_state = self._chain_db.get_state_by_root(
             self._current_head.state_root, BeaconState
         )
+        # print(head_root.hex())
+        # print(head_state)
 
         self._reconcile_justification_and_finality(head_state)
 
     @classmethod
     def from_recent_state(
-        cls, chain_db: BaseBeaconChainDB, recent_state: BeaconState
+        cls, chain_db: BaseBeaconChainDB, _recent_finalized_state: BeaconState
     ) -> "BeaconChain":
         for starting_slot, state_machine_class in cls._sm_configuration:
             # TODO allow for slot polymorphism...
@@ -115,9 +127,31 @@ class BeaconChain(BaseBeaconChain):
         else:
             raise Exception("state machine configuration missing genesis era")
 
+        finalized_head = chain_db.get_finalized_head(BeaconBlock)
+        finalized_state = chain_db.get_state_by_root(
+            finalized_head.state_root, BeaconState
+        )
+        justified_head = chain_db.get_justified_head(BeaconBlock)
+        justified_state = chain_db.get_state_by_root(
+            justified_head.state_root, BeaconState
+        )
+
         block_sink = ChainDBBlockSink(chain_db)
-        fork_choice = fork_choice_class.from_recent_state(
-            recent_state, config, block_sink
+        finalized_head = chain_db.get_finalized_head(BeaconBlock)
+        finalized_state = chain_db.get_state_by_root(
+            finalized_head.state_root, BeaconState
+        )
+        justified_head = chain_db.get_justified_head(BeaconBlock)
+        justified_state = chain_db.get_state_by_root(
+            justified_head.state_root, BeaconState
+        )
+        fork_choice = fork_choice_class(
+            _as_checkpoint(justified_head, config),
+            justified_state,
+            _as_checkpoint(finalized_head, config),
+            finalized_state,
+            config,
+            block_sink,
         )
         # fork_choice.load_context(chain_db)
         return cls(chain_db, fork_choice)
@@ -153,6 +187,10 @@ class BeaconChain(BaseBeaconChain):
     def get_canonical_head_state(self) -> BeaconState:
         head = self.get_canonical_head()
         return self._chain_db.get_state_by_root(head.state_root, BeaconState)
+
+    def get_finalized_head(self) -> BeaconBlock:
+        finalized_head = self._chain_db.get_finalized_head(BeaconBlock)
+        return finalized_head
 
     def on_tick(self, tick: Tick) -> None:
         if tick.is_first_in_slot():
@@ -258,6 +296,10 @@ class BeaconChain(BaseBeaconChain):
 
         if justified_checkpoint.epoch > self._justified_checkpoint.epoch:
             self._justified_checkpoint = justified_checkpoint
+            justified_head = self._chain_db.get_block_by_root(
+                self._justified_checkpoint.root, BeaconBlock
+            )
+            self._chain_db.mark_justified_head(justified_head)
             self._fork_choice.update_justified(state)
 
         if finalized_checkpoint.epoch > self._finalized_checkpoint.epoch:

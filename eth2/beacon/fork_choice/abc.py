@@ -6,7 +6,6 @@ from typing_extensions import Protocol
 from eth2.beacon.types.blocks import BaseBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, Root, Slot, ValidatorIndex
-from eth2.configs import Eth2Config
 
 
 class BlockSink(Protocol):
@@ -19,19 +18,6 @@ class BlockSink(Protocol):
 
 
 class BaseForkChoice(ABC):
-    @classmethod
-    @abstractmethod
-    def from_recent_state(
-        cls, recent_state: BeaconState, config: Eth2Config, block_sink: BlockSink
-    ) -> "BaseForkChoice":
-        ...
-
-    # @abstractmethod
-    # def load_context(
-    #     cls, chain_db: BaseBeaconChainDB, config: Eth2Config, block_sink: BlockSink
-    # ) -> "BaseForkChoice":
-    #     ...
-
     @abstractmethod
     def update_justified(self, state: BeaconState) -> None:
         ...
