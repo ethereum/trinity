@@ -41,6 +41,7 @@ from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.sync.beam.constants import (
     BEAM_PIVOT_BUFFER_FRACTION,
     BLOCK_BACKFILL_IDLE_TIME,
+    BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
     ESTIMATED_BEAMABLE_SECONDS,
     FULL_BLOCKS_NEEDED_TO_START_BEAM,
     PAUSE_BACKFILL_AT_LAG,
@@ -989,7 +990,10 @@ class MissingDataEventHandler(Service):
 
     async def _hang_until_account_served(self, event: CollectMissingAccount) -> None:
         try:
-            await self._serve_account(event)
+            await asyncio.wait_for(
+                self._serve_account(event),
+                timeout=BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
+            )
         except asyncio.CancelledError:
             # Beam sync is shutting down, probably either because the node is closing, or
             #   a pivot is required. So communicate that import should stop.
@@ -998,26 +1002,38 @@ class MissingDataEventHandler(Service):
                 event.broadcast_config(),
             )
             raise
+        except asyncio.TimeoutError:
+            pass
 
     async def _hang_until_bytecode_served(self, event: CollectMissingBytecode) -> None:
         try:
-            await self._serve_bytecode(event)
+            await asyncio.wait_for(
+                self._serve_bytecode(event),
+                timeout=BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
+            )
         except asyncio.CancelledError:
             await self._event_bus.broadcast(
                 MissingBytecodeResult(is_retry_acceptable=False),
                 event.broadcast_config(),
             )
             raise
+        except asyncio.TimeoutError:
+            pass
 
     async def _hang_until_storage_served(self, event: CollectMissingStorage) -> None:
         try:
-            await self._serve_storage(event)
+            await asyncio.wait_for(
+                self._serve_storage(event),
+                timeout=BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
+            )
         except asyncio.CancelledError:
             await self._event_bus.broadcast(
                 MissingStorageResult(is_retry_acceptable=False),
                 event.broadcast_config(),
             )
             raise
+        except asyncio.TimeoutError:
+            pass
 
     async def _serve_account(self, event: CollectMissingAccount) -> None:
         _, num_nodes_collected = await self._state_downloader.download_account(
