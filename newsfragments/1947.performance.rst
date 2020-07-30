@@ -1,0 +1,2 @@
+Spead up Beam Sync a bit by only asking for critical state data from our fastest peer, instead of
+bundling in the state data needed for pending blocks.

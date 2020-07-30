@@ -112,6 +112,12 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
     def penalize_queen(self, peer: ETHPeer, delay: float = NON_IDEAL_RESPONSE_PENALTY) -> None:
         self._queening_queue.penalize_queen(peer, delay=delay)
 
+    def insert_peer(self, peer: ETHPeer, delay: float = 0) -> None:
+        self._queening_queue.insert_peer(peer, delay=delay)
+
+    async def pop_fastest_peasant(self) -> ETHPeer:
+        return await self._queening_queue.pop_fastest_peasant()
+
     async def run(self) -> None:
         self.manager.run_daemon_task(self._periodically_report_progress)
 
@@ -142,7 +148,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                     # There are active requests to peers, and we don't have enough information to
                     #   ask for any more trie nodes (for example, near the beginning, when the top
                     #   of the trie isn't available).
-                    self._queening_queue.readd_peasant(peer)
+                    self._queening_queue.insert_peer(peer)
                     self.logger.debug(
                         "Backfill is waiting for more hashes to arrive, putting %s back in queue",
                         peer,
@@ -530,16 +536,16 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         try:
             nodes = await peer.eth_api.get_node_data(request_hashes)
         except asyncio.TimeoutError:
-            self._queening_queue.readd_peasant(peer, GAP_BETWEEN_TESTS * 2)
+            self._queening_queue.insert_peer(peer, GAP_BETWEEN_TESTS * 2)
         except PeerConnectionLost:
             # Something unhappy, but we don't really care, peer will be gone by next loop
             pass
         except (BaseP2PError, Exception) as exc:
             self.logger.info("Unexpected err while getting background nodes from %s: %s", peer, exc)
             self.logger.debug("Problem downloading background nodes from peer...", exc_info=True)
-            self._queening_queue.readd_peasant(peer, GAP_BETWEEN_TESTS * 2)
+            self._queening_queue.insert_peer(peer, GAP_BETWEEN_TESTS * 2)
         else:
-            self._queening_queue.readd_peasant(peer, GAP_BETWEEN_TESTS)
+            self._queening_queue.insert_peer(peer, GAP_BETWEEN_TESTS)
             self._insert_results(request_hashes, nodes)
         finally:
             for request in request_data:
