@@ -136,6 +136,7 @@ class BasePeerRequestHandler:
         Generates the headers requested, halting on the first header that is not locally available.
         """
         for block_num in block_numbers:
+            await asyncio.sleep(0)
             try:
                 yield await self.db.coro_get_canonical_block_header_by_number(block_num)
             except HeaderNotFound:

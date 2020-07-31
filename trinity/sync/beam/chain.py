@@ -340,6 +340,7 @@ class BeamSyncer(Service):
             yield parent
             headers_returned += 1
             header = parent
+            await asyncio.sleep(0)
 
     async def _all_verification_bodies_present(
             self,
@@ -574,9 +575,11 @@ class HeaderLaunchpointSyncer(HeaderSyncerAPI):
             [str(header) for header in self._launchpoint_headers],
         )
         yield self._launchpoint_headers
+        await asyncio.sleep(0)
 
         async for headers in self._real_syncer.new_sync_headers(max_batch_size):
             yield headers
+            await asyncio.sleep(0)
 
     def get_target_header_hash(self) -> Hash32:
         return self._real_syncer.get_target_header_hash()

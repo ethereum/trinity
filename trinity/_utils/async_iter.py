@@ -1,3 +1,4 @@
+import asyncio
 from typing import (
     AsyncIterable,
     Set,
@@ -39,3 +40,4 @@ async def async_take(take_count: int, iterator: AsyncIterable[TYield]) -> AsyncI
             yield val
             if taken == take_count:
                 break
+            await asyncio.sleep(0)

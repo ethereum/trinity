@@ -184,6 +184,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
         highest_block_num = -1
 
         async for headers in get_headers_coro:
+            await asyncio.sleep(0)
             self._got_first_header.set()
             for h in headers:
                 self._block_hash_to_state_root[h.hash] = h.state_root

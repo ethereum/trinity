@@ -278,15 +278,8 @@ class Multiplexer(MultiplexerAPI):
             self.raise_if_streaming_error()
             msg_queue = self._protocol_queues[protocol_class]
             while self.is_streaming:
-                try:
-                    # We use an optimistic strategy here of using
-                    # `get_nowait()` to reduce the number of times we yield to
-                    # the event loop.  Since this is an async generator it will
-                    # yield to the loop each time it returns a value so we
-                    # don't have to worry about this blocking other processes.
-                    yield msg_queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    yield await msg_queue.get()
+                await asyncio.sleep(0)
+                yield await msg_queue.get()
 
     #
     # Message reading and streaming API
