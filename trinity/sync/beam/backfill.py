@@ -201,6 +201,8 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
 
         try:
             while self.manager.is_running:
+                await asyncio.sleep(0)
+
                 # Get the next account
 
                 # We have to rebuild the account iterator every time because...
@@ -295,6 +297,8 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         starting_index = bytes_to_nibbles(root_hash)
 
         while self.manager.is_running:
+            await asyncio.sleep(0)
+
             try:
                 path_to_node = request_tracker.next_path_to_explore(starting_index)
             except trie_exceptions.PerfectVisibility:
@@ -405,6 +409,8 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
 
         storage_tracker = self._get_storage_tracker(address_hash_nibbles)
         while self.manager.is_running:
+            await asyncio.sleep(0)
+
             storage_iterator = self._request_tracking_trie_items(
                 storage_tracker,
                 storage_root,
@@ -460,6 +466,8 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         if bytecode_tracker.is_complete:
             # All bytecode has been collected
             return
+
+        await asyncio.sleep(0)
 
         # If there is an active request (for now, there can only be one), then skip
         #   any database checks until the active request is resolved.
