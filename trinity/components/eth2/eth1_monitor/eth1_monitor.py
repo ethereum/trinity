@@ -303,6 +303,7 @@ class Eth1Monitor(Service):
                             f"Block does not exist for block number={block_number}"
                         )
                     yield block
+                    await trio.hazmat.checkpoint()
             await trio.sleep(self._polling_period)
 
     def _handle_block_data(self, block: Eth1Block) -> None:

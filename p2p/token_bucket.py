@@ -2,7 +2,7 @@ import asyncio
 import time
 from typing import (
     Union,
-    AsyncGenerator,
+    AsyncIterator,
 )
 
 
@@ -25,7 +25,7 @@ class TokenBucket:
         self._seconds_per_token = 1 / self._rate
         self._take_lock = asyncio.Lock()
 
-    async def __aiter__(self) -> AsyncGenerator[None, None]:
+    async def __aiter__(self) -> AsyncIterator[None]:
         """
         Can be used as an async iterator to limit the rate at which a loop can
         run.
@@ -79,6 +79,8 @@ class TokenBucket:
         if self._num_tokens < 0:
             sleep_for = abs(self._num_tokens) * self._seconds_per_token
             await asyncio.sleep(sleep_for)
+        else:
+            await asyncio.sleep(0)
 
     def take_nowait(self, num: Union[int, float] = 1) -> None:
         # we calculate this value locally to ensure that in the case of not
