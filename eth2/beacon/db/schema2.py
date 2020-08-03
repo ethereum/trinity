@@ -35,6 +35,10 @@ def state_root_to_block_header_root(root: Root) -> bytes:
     return b"v1:beacon:state-root-to-block-header-root:" + root
 
 
+def slot_to_block_header_root(slot: Slot) -> bytes:
+    return b"v1:beacon:slot-to-block-header-root:" + ssz.encode(slot, ssz.uint64)
+
+
 def state_root_to_block_root(root: Root) -> bytes:
     return b"v1:beacon:state-root-to-block-root:" + root
 
@@ -77,6 +81,10 @@ def state_root_to_balances_root(root: Root) -> bytes:
 
 def state_root_to_randao_mix(root: Root) -> bytes:
     return b"v1:beacon:state-root-to-randao-mix:" + root
+
+
+def slot_to_randao_mix(slot: Slot) -> bytes:
+    return b"v1:beacon:slot-to-randao-mix:" + ssz.encode(slot, ssz.uint64)
 
 
 def state_root_to_slashings_root(root: Root) -> bytes:
