@@ -59,11 +59,16 @@ class AltonaStateMachineFast(AltonaStateMachine):
         check_proposer_signature: bool = True,
     ) -> Tuple[BeaconState, BaseSignedBeaconBlock]:
         if not self._epochs_ctx:
-            self._epochs_ctx = EpochsContext()
+            self._epochs_ctx = EpochsContext(self.config)
             self._epochs_ctx.load_state(state)
 
         state = apply_fast_state_transition(
-            self._epochs_ctx, state, signed_block, future_slot, check_proposer_signature
+            self._epochs_ctx,
+            self.config,
+            state,
+            signed_block,
+            future_slot,
+            check_proposer_signature,
         )
 
         if signed_block:
