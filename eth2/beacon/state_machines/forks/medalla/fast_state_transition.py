@@ -1,4 +1,4 @@
-from eth2.beacon.state_machines.forks.altona.eth2fastspec import (
+from eth2.beacon.state_machines.forks.medalla.eth2fastspec import (
     EpochsContext,
     process_block,
     process_slots,

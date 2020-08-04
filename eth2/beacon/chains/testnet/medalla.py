@@ -12,10 +12,10 @@ from eth2.beacon.constants import FAR_FUTURE_SLOT, GENESIS_SLOT
 from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.db.chain2 import BeaconChainDB, StateNotFound
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
-from eth2.beacon.state_machines.forks.altona.eth2fastspec import get_attesting_indices
-from eth2.beacon.state_machines.forks.altona.state_machine import (
-    AltonaStateMachineFast,
-    AltonaStateMachineTest,
+from eth2.beacon.state_machines.forks.medalla.eth2fastspec import get_attesting_indices
+from eth2.beacon.state_machines.forks.medalla.state_machine import (
+    MedallaStateMachineFast,
+    MedallaStateMachineTest,
 )
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
 from eth2.beacon.types.attestations import Attestation
@@ -30,7 +30,7 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Root, Slot, ValidatorIndex
 from eth2.clock import Tick
 
-StateMachineConfiguration = Tuple[Tuple[Slot, Type[AltonaStateMachineFast]], ...]
+StateMachineConfiguration = Tuple[Tuple[Slot, Type[MedallaStateMachineFast]], ...]
 
 
 def _sm_configuration_has_increasing_slot(
@@ -60,7 +60,7 @@ def _validate_sm_configuration(sm_configuration: StateMachineConfiguration) -> N
 @to_dict
 def _load_state_machines(
     sm_configuration: StateMachineConfiguration
-) -> Iterable[Tuple[Container[int], AltonaStateMachineFast]]:
+) -> Iterable[Tuple[Container[int], MedallaStateMachineFast]]:
     sm_configuration += ((FAR_FUTURE_SLOT, None),)
     for (first_fork, second_fork) in toolz.sliding_window(2, sm_configuration):
         valid_range = range(first_fork[0], second_fork[0])
@@ -81,7 +81,7 @@ class BeaconChain(BaseBeaconChain):
     logger = logging.getLogger("eth2.beacon.chains.BeaconChain")
 
     _chain_db: BaseBeaconChainDB
-    _sm_configuration = ((GENESIS_SLOT, AltonaStateMachineFast),)
+    _sm_configuration = ((GENESIS_SLOT, MedallaStateMachineFast),)
     _fork_choice: BaseForkChoice
     _current_head: BeaconBlock
     _justified_checkpoint: Checkpoint = default_checkpoint
@@ -142,7 +142,7 @@ class BeaconChain(BaseBeaconChain):
                 "a fork choice different than the one implemented was requested by slot"
             )
 
-    def get_state_machine(self, slot: Slot) -> AltonaStateMachineFast:
+    def get_state_machine(self, slot: Slot) -> MedallaStateMachineFast:
         """
         Return the ``StateMachine`` instance for the given slot number.
         """
@@ -393,4 +393,4 @@ class BeaconChain(BaseBeaconChain):
 
 
 class BeaconChainTest(BeaconChain):
-    _sm_configuration = ((GENESIS_SLOT, AltonaStateMachineTest),)  # type: ignore
+    _sm_configuration = ((GENESIS_SLOT, MedallaStateMachineTest),)  # type: ignore

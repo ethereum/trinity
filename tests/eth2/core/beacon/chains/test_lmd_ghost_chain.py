@@ -4,7 +4,7 @@ from eth_utils import to_tuple
 import pytest
 
 from eth2.beacon.chains.exceptions import SlashableBlockError
-from eth2.beacon.chains.testnet.altona import BeaconChain
+from eth2.beacon.chains.testnet.medalla import BeaconChain
 from eth2.beacon.committee_helpers import get_beacon_proposer_index
 from eth2.beacon.constants import ZERO_HASH32
 from eth2.beacon.tools.builder.proposer import create_block, generate_randao_reveal
