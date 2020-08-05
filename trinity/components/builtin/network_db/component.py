@@ -42,7 +42,6 @@ from trinity.components.builtin.network_db.eth1_peer_db.tracker import (
     SQLiteEth1PeerTracker,
     MemoryEth1PeerTracker,
 )
-from trinity._utils.logging import get_logger
 from trinity._utils.services import run_background_asyncio_services
 
 
@@ -50,8 +49,6 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
     name = "Network Database"
 
     endpoint_name = "network-db"
-
-    logger = get_logger('trinity.components.network_db.NetworkDB')
 
     @property
     def is_enabled(self) -> bool:

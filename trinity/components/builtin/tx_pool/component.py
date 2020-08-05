@@ -26,14 +26,11 @@ from trinity.components.builtin.tx_pool.pool import (
     TxPool,
 )
 from trinity.protocol.eth.peer import ETHProxyPeerPool
-from trinity._utils.logging import get_logger
 from trinity._utils.transactions import DefaultTransactionValidator
 
 
 class TxComponent(AsyncioIsolatedComponent):
     name = "TxComponent"
-
-    logger = get_logger('trinity.components.tx_pool.TxPool')
 
     @classmethod
     def configure_parser(cls, arg_parser: ArgumentParser, subparser: _SubParsersAction) -> None:

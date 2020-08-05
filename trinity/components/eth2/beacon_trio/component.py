@@ -5,6 +5,7 @@ from typing import Iterable
 from eth_utils import to_tuple
 from multiaddr import Multiaddr
 
+from trinity._utils.logging import get_logger
 from trinity.boot_info import BootInfo
 from trinity.config import BeaconTrioAppConfig
 from trinity.constants import BEACON_TESTNET_NETWORK_ID
@@ -22,7 +23,7 @@ def _parse_multiaddrs_from_args(multiaddrs: str) -> Iterable[Multiaddr]:
 class BeaconNodeComponent(TrioComponent):
     name = "Beacon Node"
 
-    logger = logging.getLogger("trinity.components.beacon.BeaconNode[trio]")
+    logger = get_logger("trinity.components.beacon.BeaconNode[trio]")
 
     def __init__(self, boot_info: BootInfo) -> None:
         super().__init__(boot_info)
