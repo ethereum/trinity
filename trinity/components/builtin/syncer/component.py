@@ -75,7 +75,6 @@ from trinity.sync.header.chain import (
 from trinity.sync.light.chain import (
     LightChainSyncer,
 )
-from trinity._utils.logging import get_logger
 
 
 def add_shared_argument(arg_group: _ArgumentGroup, arg_name: str, **kwargs: Any) -> None:
@@ -292,8 +291,6 @@ class SyncerComponent(AsyncioIsolatedComponent):
 
     endpoint_name = NETWORKING_EVENTBUS_ENDPOINT
 
-    logger = get_logger('trinity.components.sync.Sync')
-
     @property
     def is_enabled(self) -> bool:
         return True
@@ -380,8 +377,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
                 node_manager.wait_finished(), f'{NodeClass.__name__} wait_finished() task')
             await wait_first([sync_task, node_manager_task])
 
-    @classmethod
-    async def launch_sync(cls,
+    async def launch_sync(self,
                           node: Node[BasePeer],
                           strategy: BaseSyncStrategy,
                           boot_info: BootInfo,
@@ -389,7 +385,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
         await node.get_manager().wait_started()
         await strategy.sync(
             boot_info.args,
-            cls.logger,
+            self.logger,
             node.get_chain(),
             node.base_db,
             node.get_peer_pool(),

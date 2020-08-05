@@ -85,9 +85,15 @@ class ComponentAPI(BaseComponentAPI):
 
 
 class BaseComponent(ComponentAPI):
+    # This is a bit of a hack so that we have a logger to use in our @classmethods. Once we
+    # are instantiated this will be overwritten with another logger that uses the component's
+    # name.
+    logger = get_logger(f'trinity.components.BaseComponent')
+
     def __init__(self, boot_info: BootInfo) -> None:
         if not hasattr(self, 'name'):
             raise AttributeError(f"No name attribute defined for {self.__class__}")
+        self.logger = get_logger(f'trinity.components.{self.name}')
         self._boot_info = boot_info
 
     @classmethod
@@ -110,6 +116,8 @@ class BaseIsolatedComponent(BaseComponent):
     It is up to the component to handle these signals accordingly.
     """
     endpoint_name: str = None
+    loop_monitoring_wakeup_interval = 2
+    loop_monitoring_max_delay = 0.1
     logger: eth_utils.ExtendedDebugLogger = None
 
     @abstractmethod
@@ -145,8 +153,10 @@ class BaseIsolatedComponent(BaseComponent):
 
     @contextlib.asynccontextmanager
     async def run(self) -> AsyncIterator[asyncio.Task[Any]]:
-        future = asyncio.create_task(
-            self._run_in_process(self._do_run, subprocess_kwargs=self.get_subprocess_kwargs()))
+        from p2p.asyncio_utils import create_task
+        future = create_task(
+            self._run_in_process(self._do_run, subprocess_kwargs=self.get_subprocess_kwargs()),
+            f'IsolatedComponent/{self.name}/run_in_process')
         yield future
 
 

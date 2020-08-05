@@ -54,13 +54,13 @@ class TxPool(Service):
         This is a minimal viable implementation that only relays transactions but doesn't actually
         hold on to them yet. It's still missing many features of a grown up transaction pool.
     """
-    logger = get_logger('trinity.components.txpool.TxPool')
 
     def __init__(self,
                  event_bus: EndpointAPI,
                  peer_pool: ETHProxyPeerPool,
                  tx_validation_fn: Callable[[SignedTransactionAPI], bool],
                  ) -> None:
+        self.logger = get_logger('trinity.components.txpool.TxPoolService')
         self._event_bus = event_bus
         self._peer_pool = peer_pool
 
