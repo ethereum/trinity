@@ -25,8 +25,9 @@ MAX_CONCURRENT_SPECULATIVE_EXECUTIONS = 40
 MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS = MAX_CONCURRENT_SPECULATIVE_EXECUTIONS // NUM_PREVIEW_SHARDS
 
 # How many seconds to wait in between each progress log, in the middle of a block
-#   Intuition: somewhere around the time it takes to import a block
-MIN_GAS_LOG_WAIT = PREDICTED_BLOCK_TIME
+#   Intuition: Report about 5 times per block. If progressing in at least real time,
+#   then we should see the % jump by ~20% in each report.
+MIN_GAS_LOG_WAIT = PREDICTED_BLOCK_TIME / 5
 
 # If a peer does something not ideal, give it a little time to breath,
 # and maybe to try out another peeer. Then reinsert it relatively soon.
@@ -53,8 +54,8 @@ GAP_BETWEEN_TESTS = 0.25
 # to establish it (partially because we measure using an exponential average).
 
 # About how long after a block can we request trie data from peers?
-# The value is configurable by client, but tends to be around 75 blocks.
-ESTIMATED_BEAMABLE_BLOCKS = 75
+# The value is configurable by client, but tends to be around 120 blocks.
+ESTIMATED_BEAMABLE_BLOCKS = 120
 
 # It's also useful to estimate the amount of time covered by those beamable blocks.
 ESTIMATED_BEAMABLE_SECONDS = ESTIMATED_BEAMABLE_BLOCKS * PREDICTED_BLOCK_TIME

@@ -331,7 +331,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
             if len(non_trivial_headers) == 0:
                 # peer had nothing to do, so have it get back in line for processing
                 self._body_peers.put_nowait(peer)
-            elif len(completed_headers) > 0:
+            elif len(received_headers) > 0:
                 # peer completed with at least 1 result, so have it get back in line for processing
                 self._body_peers.put_nowait(peer)
             else:

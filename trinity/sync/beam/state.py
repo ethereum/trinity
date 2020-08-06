@@ -1,7 +1,6 @@
 import asyncio
 from collections import Counter
 from concurrent.futures import CancelledError
-import itertools
 import time
 import typing
 from typing import (
@@ -56,6 +55,9 @@ from trinity.sync.beam.queen import (
 from trinity.sync.beam.constants import (
     ESTIMATED_BEAMABLE_SECONDS,
     REQUEST_BUFFER_MULTIPLIER,
+)
+from trinity.sync.common.constants import (
+    PREDICTED_BLOCK_TIME,
 )
 
 
@@ -136,15 +138,18 @@ class BeamDownloader(Service, PeerSubscriber):
         """
         if urgent:
             queue = self._node_tasks
+            timeout = PREDICTED_BLOCK_TIME
         else:
             queue = self._maybe_useful_nodes
+            timeout = PREDICTED_BLOCK_TIME * 10
 
-        return await self._wait_for_nodes(node_hashes, queue)
+        return await self._wait_for_nodes(node_hashes, queue, timeout)
 
     async def _wait_for_nodes(
             self,
             node_hashes: Iterable[Hash32],
-            queue: TaskQueue[Hash32]) -> int:
+            queue: TaskQueue[Hash32],
+            timeout: float) -> int:
         missing_nodes = set(
             node_hash for node_hash in node_hashes if self._is_node_missing(node_hash)
         )
@@ -154,7 +159,7 @@ class BeamDownloader(Service, PeerSubscriber):
         if unrequested_nodes:
             await queue.add(unrequested_nodes)
         if missing_nodes:
-            await self._node_hashes_present(missing_nodes)
+            await self._node_hashes_present(missing_nodes, timeout)
         return len(unrequested_nodes)
 
     def _is_node_missing(self, node_hash: Hash32) -> bool:
@@ -433,16 +438,15 @@ class BeamDownloader(Service, PeerSubscriber):
         """
         return node_hash in self._db
 
-    async def _node_hashes_present(self, node_hashes: Set[Hash32]) -> None:
+    async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> None:
         remaining_hashes = node_hashes.copy()
 
         # save an event that gets triggered when new data comes in
         new_data = asyncio.Event()
         self._new_data_events.add(new_data)
 
-        iterations = itertools.count()
-
-        while remaining_hashes and next(iterations) < 1000:
+        start_time = time.monotonic()
+        while remaining_hashes and time.monotonic() - start_time < timeout:
             await new_data.wait()
 
             found_hashes = set(found for found in remaining_hashes if self._is_node_present(found))
@@ -451,7 +455,12 @@ class BeamDownloader(Service, PeerSubscriber):
             new_data.clear()
 
         if remaining_hashes:
-            self.logger.error("Never collected node data for hashes %r", remaining_hashes)
+            self.logger.error(
+                "Could not collect node data for hashes %r within %.0f seconds (took %.1fs)",
+                remaining_hashes,
+                timeout,
+                time.monotonic() - start_time,
+            )
 
         self._new_data_events.remove(new_data)
 

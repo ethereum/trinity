@@ -45,6 +45,9 @@ from trie.typing import (
 
 from p2p.exceptions import BaseP2PError, PeerConnectionLost
 
+from trinity.protocol.eth.constants import (
+    MAX_STATE_FETCH,
+)
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.sync.beam.constants import (
     EPOCH_BLOCK_LENGTH,
@@ -54,6 +57,7 @@ from trinity.sync.beam.constants import (
 )
 from trinity._utils.async_iter import async_take
 from trinity._utils.logging import get_logger
+from trinity._utils.priority import SilenceObserver
 from trinity._utils.timer import Timer
 
 from .queen import (
@@ -61,7 +65,8 @@ from .queen import (
     QueenTrackerAPI,
 )
 
-REQUEST_SIZE = 16
+# How many trie nodes to request in each backfill message to peers:
+REQUEST_SIZE = MAX_STATE_FETCH
 
 
 class BeamStateBackfill(Service, QueenTrackerAPI):
@@ -106,6 +111,10 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         self._next_trie_root_hash: Optional[Hash32] = None
         self._begin_backfill = asyncio.Event()
 
+        # Only acquire peasant peers for backfill if there are no other coros
+        #   waiting for a peasant. Any other waiter is assumed to be higher priority.
+        self._external_peasant_usage = SilenceObserver(minimum_silence_duration=GAP_BETWEEN_TESTS)
+
     async def get_queen_peer(self) -> ETHPeer:
         return await self._queening_queue.get_queen_peer()
 
@@ -116,7 +125,8 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         self._queening_queue.insert_peer(peer, delay=delay)
 
     async def pop_fastest_peasant(self) -> ETHPeer:
-        return await self._queening_queue.pop_fastest_peasant()
+        async with self._external_peasant_usage.make_noise():
+            return await self._queening_queue.pop_fastest_peasant()
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._periodically_report_progress)
@@ -132,6 +142,16 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             raise RuntimeError("Cannot start backfill when a recent trie root hash is unknown")
 
         while self.manager.is_running:
+            await asyncio.wait(
+                (
+                    self._external_peasant_usage.until_silence(),
+                    self.manager.wait_finished(),
+                ),
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not self.manager.is_running:
+                break
+
             peer = await self._queening_queue.pop_fastest_peasant()
 
             # collect node hashes that might be missing

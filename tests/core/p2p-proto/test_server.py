@@ -100,13 +100,13 @@ async def test_server_incoming_connection(server, receiver_remote):
         pubkey=INITIATOR_PUBKEY,
         address__ip='127.0.0.1',
     )
-    for _ in range(10):
+    for num_retries in range(10):
         # The server isn't listening immediately so we give it a short grace
         # period while trying to connect.
         try:
             reader, writer = await initiator.connect()
         except ConnectionRefusedError:
-            await asyncio.sleep(0)
+            await asyncio.sleep(0 + 0.001 * num_retries)
         else:
             break
     else:
