@@ -65,6 +65,7 @@ deps = {
         "pytest-cov>=2.8.1,<2.9",
         "pytest-mock>=1.12.1,<1.13",
         "pytest-randomly>=3.1.0,<3.2",
+        "pytest-timeout>=1.4.2,<2",
         "pytest-watch>=4.2.0,<4.3",
         # xdist pinned at <1.29 due to: https://github.com/pytest-dev/pytest-xdist/issues/472
         "pytest-xdist>=1.29.0,<1.30",
