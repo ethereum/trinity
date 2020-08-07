@@ -69,7 +69,7 @@ async def cancel_tasks(tasks: Iterable[asyncio.Task[Any]]) -> None:
     # Wait for all tasks in parallel so if any of them catches CancelledError and performs a
     # slow cleanup the othders don't have to wait for it. The timeout is long as our component
     # tasks can do a lot of stuff during their cleanup.
-    done, pending = await asyncio.wait(tasks, timeout=5)
+    done, pending = await asyncio.wait(tasks, timeout=10)
     if pending:
         errors.append(
             asyncio.TimeoutError("Tasks never returned after being cancelled: %s", pending))
