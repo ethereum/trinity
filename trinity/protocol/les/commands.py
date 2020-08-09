@@ -12,7 +12,8 @@ from eth_utils import (
     to_tuple,
     ValidationError,
 )
-from eth_utils.curried import (
+# For some weird reason mypy thinks eth_utils.curried doesn't have those, but it clearly does.
+from eth_utils.curried import (  # type: ignore
     apply_formatter_at_index,
     apply_formatter_to_array,
 )
