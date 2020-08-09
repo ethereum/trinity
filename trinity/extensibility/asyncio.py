@@ -1,12 +1,7 @@
 from abc import abstractmethod
 import asyncio
-from typing import (
-    Any,
-    Callable,
-)
 
 from asyncio_run_in_process import run_in_process
-from asyncio_run_in_process.typing import SubprocessKwargs
 from async_service import background_asyncio_service
 from async_service.asyncio import cleanup_tasks
 from lahja import EndpointAPI
@@ -17,34 +12,22 @@ from trinity._utils.logging import child_process_logging
 from trinity._utils.profiling import profiler
 from trinity._utils.timer import Timer
 
-from .component import BaseIsolatedComponent, TReturn
+from .component import BaseIsolatedComponent
 from .event_bus import AsyncioEventBusService
 
 
 class AsyncioIsolatedComponent(BaseIsolatedComponent):
 
-    async def _run_in_process(
-            self,
-            async_fn: Callable[..., TReturn],
-            *args: Any,
-            subprocess_kwargs: 'SubprocessKwargs' = None,
-    ) -> TReturn:
-        return await run_in_process(async_fn, *args, subprocess_kwargs=subprocess_kwargs)
+    async def _run_in_process(self) -> None:
+        return await run_in_process(self._do_run, subprocess_kwargs=self.get_subprocess_kwargs())
 
     # FIXME: Disabled by default
     async def _loop_monitoring_task(self) -> None:
-        debug_log_since = 0
         while True:
             timer = Timer()
             await asyncio.sleep(self.loop_monitoring_wakeup_interval)
             delay = timer.elapsed - self.loop_monitoring_wakeup_interval
-            # FIXME: Ideally we'd use a debug2 here, but because of
-            # https://github.com/ethereum/trinity/issues/1971 we need to use debug so only log
-            # every 10th time we're called.
-            debug_log_since += 1
-            if debug_log_since == 10:
-                self.logger.debug("Loop monitoring task called; delay=%.3fs", delay)
-                debug_log_since = 0
+            self.logger.debug2("Loop monitoring task called; delay=%.3fs", delay)
             if delay > self.loop_monitoring_max_delay:
                 pending_tasks = len([task for task in asyncio.all_tasks() if not task.done()])
                 self.logger.warning(
