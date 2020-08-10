@@ -300,6 +300,13 @@ class Multiplexer(MultiplexerAPI):
         return self._streaming_task is not None and not self._streaming_task.done()
 
     async def wait_streaming_finished(self) -> None:
+        """
+        Wait for our streaming task to finish.
+
+        The streaming must have been started via stream_in_background().
+
+        Upon returning, the multiplexer and transport will be closed.
+        """
         if self._streaming_task is None:
             raise Exception("Multiplexer has not started streaming")
         await self._streaming_task
@@ -320,8 +327,10 @@ class Multiplexer(MultiplexerAPI):
 
     async def _do_multiplexing(self) -> None:
         """
-        Background task that reads messages from the transport and feeds them
-        into individual queues for each of the protocols.
+        Read messages from the transport and feeds them into individual queues for each of the
+        protocols.
+
+        Will close ourselves before returning.
         """
         self._started_streaming.set()
         msg_stream = stream_transport_messages(

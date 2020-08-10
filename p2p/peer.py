@@ -256,7 +256,7 @@ class BasePeer(Service):
         # before the Disconnect msg is processed and cancels ourselves.
         if not hasattr(self, 'manager'):
             return False
-        return self.manager.is_running and not self.connection.is_closing
+        return self.manager.is_running and self.connection.is_alive
 
     def start_protocol_streams(self) -> None:
         if not self.manager.is_running:
@@ -299,7 +299,7 @@ class BasePeer(Service):
 
             self.logger.debug(
                 "Peer %s is running but won't start streaming messages until "
-                "start_protocol_streams() is called")
+                "start_protocol_streams() is called", self)
             await self.manager.wait_finished()
         except PeerConnectionLost:
             pass
