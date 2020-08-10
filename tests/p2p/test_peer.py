@@ -30,7 +30,8 @@ async def test_closes_connection_on_cancellation():
     async with ParagonPeerPairFactory() as (alice, _):
         await alice.manager.stop()
         await alice.connection.manager.wait_finished()
-        assert alice.connection.is_closing
+        assert not alice.connection.is_alive
+        assert alice.connection._multiplexer.is_closing
 
 
 @pytest.mark.asyncio
@@ -42,7 +43,7 @@ async def test_cancels_on_received_disconnect():
         # causing bob to detect it, close its own and cause the peer to be cancelled.
         alice._p2p_api.disconnect(DisconnectReason.CLIENT_QUITTING)
         await asyncio.wait_for(bob.connection.manager.wait_finished(), timeout=1)
-        assert bob.connection.is_closing
+        assert not bob.connection.is_alive
         assert bob.remote_disconnect_reason == DisconnectReason.CLIENT_QUITTING
 
 

@@ -167,13 +167,13 @@ class Connection(ConnectionAPI, Service):
         return self._multiplexer.session
 
     @property
-    def is_closing(self) -> bool:
-        return self._multiplexer.is_closing
+    def is_alive(self) -> bool:
+        return self.manager.is_running and not self._multiplexer.is_closing
 
     def __del__(self) -> None:
         # This is necessary because the multiplexer passed to our constructor will be streaming,
         # and if for some reason our run() method is not called, we'd leave the multiplexer
-        # streaming indefinitely. We might still get ayncio warnings (about a task being destroyed
+        # streaming indefinitely. We might still get asyncio warnings (about a task being destroyed
         # while still pending) if that happens, but this is the best we can do.
         self._multiplexer.cancel_streaming()
 
@@ -250,7 +250,7 @@ class Connection(ConnectionAPI, Service):
         # Disconnect+EOF from a remote, but before we've had a chance to process the disconnect,
         # which would cause a DaemonTaskExit error
         # (https://github.com/ethereum/trinity/issues/1733).
-        if self.is_closing:
+        if self._multiplexer.is_closing:
             try:
                 await asyncio.wait_for(self.manager.wait_finished(), timeout=2)
             except asyncio.TimeoutError:
@@ -306,23 +306,27 @@ class Connection(ConnectionAPI, Service):
                 f"There is already an API registered under the name '{name}': "
                 f"{self._logics[name]}"
             )
+        self.logger.debug("Adding '%s' logic to %s", name, self)
         self._logics[name] = logic
         cancel_fn = functools.partial(self.remove_logic, name)
         return Subscription(cancel_fn)
 
     def remove_logic(self, name: str) -> None:
+        self.logger.debug("Removing '%s' logic from %s", name, self)
         self._logics.pop(name)
 
     def has_logic(self, name: str) -> bool:
-        if self.is_closing:
+        if not self.is_alive:
             # This is a safety net, really, as the Peer should never call this if it is no longer
             # alive.
-            raise PeerConnectionLost("Cannot look up subprotocol when connection is closing")
+            raise PeerConnectionLost("Cannot look up subprotocol when connection is not alive")
         return name in self._logics
 
     def get_logic(self, name: str, logic_type: Type[TLogic]) -> TLogic:
         if not self.has_logic(name):
-            raise UnknownAPI(f"No API registered for the name '{name}'")
+            raise UnknownAPI(
+                f"No '{name}' logic registered on {self}. "
+                f"Registered ones are: {self._logics.keys()} ")
         logic = self._logics[name]
         if isinstance(logic, logic_type):
             return logic

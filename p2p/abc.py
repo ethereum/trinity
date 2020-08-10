@@ -651,7 +651,7 @@ class ConnectionAPI(ServiceAPI):
 
     @property
     @abstractmethod
-    def is_closing(self) -> bool:
+    def is_alive(self) -> bool:
         ...
 
     @abstractmethod
