@@ -3,9 +3,9 @@ from typing import Tuple, Type
 from eth2.beacon.fork_choice.abc import BaseForkChoice
 from eth2.beacon.fork_choice.lmd_ghost2 import LMDGHOSTForkChoice
 from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
-from eth2.beacon.state_machines.forks.altona.configs import ALTONA_CONFIG
-from eth2.beacon.state_machines.forks.altona.eth2fastspec import EpochsContext
-from eth2.beacon.state_machines.forks.altona.fast_state_transition import (
+from eth2.beacon.state_machines.forks.medalla.configs import MEDALLA_CONFIG
+from eth2.beacon.state_machines.forks.medalla.eth2fastspec import EpochsContext
+from eth2.beacon.state_machines.forks.medalla.fast_state_transition import (
     apply_fast_state_transition,
 )
 from eth2.beacon.state_machines.forks.serenity.state_transitions import (
@@ -22,8 +22,8 @@ from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
 
 
-class AltonaStateMachine(BaseBeaconStateMachine):
-    config = ALTONA_CONFIG
+class MedallaStateMachine(BaseBeaconStateMachine):
+    config = MEDALLA_CONFIG
     block_class: Type[BaseBeaconBlock] = BeaconBlock
     signed_block_class: Type[BaseSignedBeaconBlock] = SignedBeaconBlock
     state_class: Type[BeaconState] = BeaconState
@@ -48,7 +48,7 @@ class AltonaStateMachine(BaseBeaconStateMachine):
         return state, signed_block
 
 
-class AltonaStateMachineFast(AltonaStateMachine):
+class MedallaStateMachineFast(MedallaStateMachine):
     _epochs_ctx: EpochsContext = None
 
     def apply_state_transition(
@@ -79,5 +79,5 @@ class AltonaStateMachineFast(AltonaStateMachine):
         return state, signed_block
 
 
-class AltonaStateMachineTest(AltonaStateMachine):
+class MedallaStateMachineTest(MedallaStateMachine):
     config = MINIMAL_SERENITY_CONFIG

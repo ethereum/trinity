@@ -110,7 +110,7 @@ from trinity.network_configurations import (
 )
 
 from eth2.beacon.chains.base import BeaconChain
-from eth2.beacon.chains.testnet.altona import BeaconChain as AltonaChain
+from eth2.beacon.chains.testnet.medalla import BeaconChain as MedallaChain
 
 
 if TYPE_CHECKING:
@@ -826,7 +826,7 @@ class BeaconTrioChainConfig:
                  genesis_state: BeaconState,
                  genesis_config: Eth2Config,
                  genesis_validator_key_map: Dict[BLSPubkey, int],
-                 beacon_chain_class: Type['ABCBaseBeaconChain'] = AltonaChain) -> None:
+                 beacon_chain_class: Type['ABCBaseBeaconChain'] = MedallaChain) -> None:
         self._genesis_state = genesis_state
         self._eth2_config = genesis_config
         self._key_map = genesis_validator_key_map
@@ -933,7 +933,7 @@ class BeaconTrioAppConfig(BaseEth2AppConfig):
         path = self.trinity_config.data_dir / DATABASE_DIR_NAME
         return self.trinity_config.with_app_suffix(path) / f"full_{self.orchestration_profile}"
 
-    def get_chain_config(self, config_profile: str = "altona") -> BeaconTrioChainConfig:
+    def get_chain_config(self, config_profile: str = "medalla") -> BeaconTrioChainConfig:
         """
         Return the :class:`~trinity.config.BeaconChainConfig` that is derived from the genesis file
         """

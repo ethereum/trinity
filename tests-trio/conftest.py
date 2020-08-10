@@ -14,7 +14,7 @@ import pytest
 import trio
 
 from eth2._utils.bls import Eth2BLS, bls
-from eth2.beacon.chains.testnet.altona import BeaconChainTest
+from eth2.beacon.chains.testnet.medalla import BeaconChainTest
 from eth2.beacon.constants import FAR_FUTURE_EPOCH
 from eth2.beacon.tools.builder.initializer import create_key_pairs_for
 from eth2.beacon.tools.misc.ssz_vector import override_lengths

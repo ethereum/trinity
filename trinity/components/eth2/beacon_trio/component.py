@@ -29,7 +29,7 @@ class BeaconNodeComponent(TrioComponent):
         super().__init__(boot_info)
 
         config_profile = boot_info.args.config_profile
-        if config_profile != "altona":
+        if config_profile != "medalla":
             raise NotImplementedError(f"config profile not supported: {config_profile}")
 
         trinity_config = self._boot_info.trinity_config
@@ -85,7 +85,7 @@ class BeaconNodeComponent(TrioComponent):
         arg_parser.add_argument(
             "--config-profile",
             help="the profile used to generate the genesis config",
-            choices=("minimal", "mainnet", "altona"),
+            choices=("minimal", "mainnet", "medalla"),
             default="minimal",
         )
 
