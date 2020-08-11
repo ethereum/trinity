@@ -898,6 +898,7 @@ class BeamBlockImporter(BaseBlockImporter, Service):
         collected_nodes = await self._state_downloader.download_accounts(
             addresses,
             parent_state_root,
+            header.block_number,
             urgent=urgent,
         )
         return len(addresses), collected_nodes
@@ -1039,10 +1040,12 @@ class MissingDataEventHandler(Service):
         _, num_nodes_collected = await self._state_downloader.download_account(
             event.address_hash,
             event.state_root_hash,
+            event.block_number,
             event.urgent,
         )
         bonus_node = await self._state_downloader.ensure_nodes_present(
             {event.missing_node_hash},
+            event.block_number,
             event.urgent,
         )
         await self._event_bus.broadcast(
@@ -1051,7 +1054,11 @@ class MissingDataEventHandler(Service):
         )
 
     async def _serve_bytecode(self, event: CollectMissingBytecode) -> None:
-        await self._state_downloader.ensure_nodes_present({event.bytecode_hash}, event.urgent)
+        await self._state_downloader.ensure_nodes_present(
+            {event.bytecode_hash},
+            event.block_number,
+            event.urgent,
+        )
         await self._event_bus.broadcast(MissingBytecodeResult(), event.broadcast_config())
 
     async def _serve_storage(self, event: CollectMissingStorage) -> None:
@@ -1059,10 +1066,12 @@ class MissingDataEventHandler(Service):
             event.storage_key,
             event.storage_root_hash,
             event.account_address,
+            event.block_number,
             event.urgent,
         )
         bonus_node = await self._state_downloader.ensure_nodes_present(
             {event.missing_node_hash},
+            event.block_number,
             event.urgent,
         )
         await self._event_bus.broadcast(
