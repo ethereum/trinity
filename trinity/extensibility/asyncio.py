@@ -21,8 +21,8 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
     async def _run_in_process(self) -> None:
         return await run_in_process(self._do_run, subprocess_kwargs=self.get_subprocess_kwargs())
 
-    # FIXME: Disabled by default
-    async def _loop_monitoring_task(self) -> None:
+    # The EndpointAPI argument here is currently only used by tests.
+    async def _loop_monitoring_task(self, _: EndpointAPI) -> None:
         while True:
             timer = Timer()
             await asyncio.sleep(self.loop_monitoring_wakeup_interval)
@@ -43,15 +43,15 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
                 self._boot_info.trinity_config,
                 endpoint_name,
             )
-            loop_monitoring_task = create_task(
-                self._loop_monitoring_task(),
-                f'AsyncioIsolatedComponent/{self.name}/loop_monitoring_task')
-            # FIXME: Must terminate component if loop_monitoring_task terminates.
-            async with cleanup_tasks(loop_monitoring_task):
-                # FIXME: Must terminate component if event_bus_service terminates.
-                async with background_asyncio_service(event_bus_service):
-                    event_bus = await event_bus_service.get_event_bus()
+            # FIXME: Must terminate component if event_bus_service terminates.
+            async with background_asyncio_service(event_bus_service):
+                event_bus = await event_bus_service.get_event_bus()
+                loop_monitoring_task = create_task(
+                    self._loop_monitoring_task(event_bus),
+                    f'AsyncioIsolatedComponent/{self.name}/loop_monitoring_task')
 
+                # FIXME: Must terminate component if loop_monitoring_task terminates.
+                async with cleanup_tasks(loop_monitoring_task):
                     try:
                         if self._boot_info.profile:
                             with profiler(f'profile_{self.get_endpoint_name()}'):

@@ -43,8 +43,8 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
             # These are expected, when trinity is terminating because of a Ctrl-C
             raise
 
-    # FIXME: Disabled by default
-    async def _loop_monitoring_task(self) -> None:
+    # The EndpointAPI argument here is currently only used by tests.
+    async def _loop_monitoring_task(self, _: EndpointAPI) -> None:
         while True:
             timer = Timer()
             await trio.sleep(self.loop_monitoring_wakeup_interval)
@@ -68,7 +68,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
             async with background_trio_service(event_bus_service):
                 event_bus = await event_bus_service.get_event_bus()
                 async with trio.open_nursery() as nursery:
-                    nursery.start_soon(self._loop_monitoring_task)
+                    nursery.start_soon(self._loop_monitoring_task, event_bus)
                     nursery.start_soon(self.run_process, event_bus)
                     try:
                         await trio.sleep_forever()

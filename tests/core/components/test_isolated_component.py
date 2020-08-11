@@ -16,6 +16,7 @@ from trinity.tools._component_isolation import (
     AsyncioBrokenComponent,
     ComponentException,
     IsStarted,
+    MonitoringTaskCalled,
     TrioBrokenComponent,
     TrioComponentForTest,
 )
@@ -62,6 +63,7 @@ async def test_isolated_component(boot_info, log_listener, component, request, m
     # so we need a high timeout here.
     component_timeout = 10
     monkeypatch.setenv('ASYNCIO_RUN_IN_PROCESS_STARTUP_TIMEOUT', str(component_timeout))
+
     # Test the lifecycle management for isolated process components to be sure
     # they start and stop as expected
     component_manager = ComponentManager(boot_info, (component,))
@@ -70,10 +72,13 @@ async def test_isolated_component(boot_info, log_listener, component, request, m
         event_bus = await component_manager.get_event_bus()
 
         got_started = asyncio.Future()
+        monitoring_task_called = asyncio.Event()
 
         event_bus.subscribe(IsStarted, lambda ev: got_started.set_result(ev.path))
+        event_bus.subscribe(MonitoringTaskCalled, lambda _: monitoring_task_called.set())
 
         touch_path = await asyncio.wait_for(got_started, timeout=component_timeout)
+        await asyncio.wait_for(monitoring_task_called.wait(), timeout=1)
 
         def delete_touch_path():
             if touch_path.exists():
