@@ -118,6 +118,8 @@ deps = {
         "asks>=2.3.6,<3",  # validator client
         "anyio>1.3,<1.4",
         "eth-keyfile",  # validator client
+    ],
+    'eth2-extra': [
         "milagro-bls-binding==1.3.0",
     ],
     'eth2-lint': [
@@ -157,6 +159,7 @@ deps['dev'] = (
 deps['eth2-dev'] = (
     deps['dev'] +
     deps['eth2'] +
+    deps['eth2-extra'] +
     deps['eth2-lint']
 )
 

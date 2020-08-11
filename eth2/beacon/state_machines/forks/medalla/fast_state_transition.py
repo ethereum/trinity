@@ -3,6 +3,9 @@ from eth2.beacon.state_machines.forks.medalla.eth2fastspec import (
     process_block,
     process_slots,
 )
+from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    validate_proposer_signature,
+)
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Slot
@@ -29,8 +32,7 @@ def apply_fast_state_transition(
 
     if signed_block:
         if check_proposer_signature:
-            # validate_proposer_signature(state, signed_block)
-            pass
+            validate_proposer_signature(state, signed_block, config)
         state = process_block(epochs_ctx, state, signed_block.message, config)
 
     return state
