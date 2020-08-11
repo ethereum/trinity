@@ -122,8 +122,15 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         """
         t = Timer()
         while self._queen_peer is None:
-            await self._queen_updated.wait()
-            self._queen_updated.clear()
+            try:
+                promote_knight = self._knights.pop_nowait()
+            except asyncio.QueueEmpty:
+                # There are no knights available. Wait for a new queen to appear.
+                await self._queen_updated.wait()
+                self._queen_updated.clear()
+            else:
+                # There is a knight who can be promoted to queen immediately.
+                self._insert_peer(promote_knight)
 
         queen_starve_time = t.elapsed
         if queen_starve_time > WARN_AFTER_QUEEN_STARVED:
