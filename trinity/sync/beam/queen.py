@@ -1,7 +1,7 @@
 from abc import abstractmethod
 import asyncio
 import functools
-from typing import Any, FrozenSet, Optional, Type
+from typing import Any, FrozenSet, Iterable, Optional, Type
 
 from async_service import Service, ServiceAPI
 
@@ -49,6 +49,13 @@ class QueenTrackerAPI(ServiceAPI):
     async def pop_fastest_peasant(self) -> ETHPeer:
         ...
 
+    def pop_knights(self) -> Iterable[ETHPeer]:
+        ...
+
+    @abstractmethod
+    def set_desired_knight_count(self, desired_knights: int) -> None:
+        ...
+
 
 class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
     # The best peer gets skipped for backfill, because we prefer to use it for
@@ -56,6 +63,7 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
     #   in _insert_peer(). It may be set to None anywhere.
     _queen_peer: ETHPeer = None
     _queen_updated: asyncio.Event
+    _knights: WaitingPeers[ETHPeer]
     _peasants: WaitingPeers[ETHPeer]
 
     # We are only interested in peers entering or leaving the pool
@@ -66,20 +74,39 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
     # now.
     msg_queue_maxsize: int = 2000
 
+    _report_interval = 30
+
     def __init__(self, peer_pool: ETHPeerPool) -> None:
         self.logger = get_logger('trinity.sync.beam.queen.QueeningQueue')
         self._peer_pool = peer_pool
+        self._knights = WaitingPeers(NodeDataV65)
         self._peasants = WaitingPeers(NodeDataV65)
         self._queen_updated = asyncio.Event()
+        self._desired_knights = 0
+        self._num_peers = 0
 
     async def run(self) -> None:
         with self.subscribe(self._peer_pool):
+            self.manager.run_daemon_task(self._report_statistics)
             await self.manager.wait_finished()
+
+    async def _report_statistics(self) -> None:
+        while self.manager.is_running:
+            await asyncio.sleep(self._report_interval)
+            self.logger.debug(
+                "queen-stats: free_knights=%d/%d free_peasants=%d/%d queen=%s",
+                len(self._knights),
+                self._desired_knights,
+                len(self._peasants),
+                self._num_peers - self._desired_knights - 1,
+                self._queen_peer,
+            )
 
     def register_peer(self, peer: BasePeer) -> None:
         super().register_peer(peer)
 
         self._insert_peer(peer)  # type: ignore
+        self._num_peers += 1
 
     def deregister_peer(self, peer: BasePeer) -> None:
         super().deregister_peer(peer)
@@ -87,6 +114,7 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
             self._queen_peer = None
         # If it's not the queen, we will catch the peer as cancelled when we try to draw it
         #   as a peasant. (We can't drop an element from the middle of a Queue)
+        self._num_peers -= 1
 
     async def get_queen_peer(self) -> ETHPeer:
         """
@@ -113,6 +141,38 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         Might be None. If None is unacceptable, use :meth:`get_queen_peer`
         """
         return self._queen_peer
+
+    def set_desired_knight_count(self, desired_knights: int) -> None:
+        self._desired_knights = desired_knights
+
+        # Promote knights if there are not enough
+        while len(self._knights) < self._desired_knights:
+            try:
+                promoted_knight = self._peasants.pop_nowait()
+            except asyncio.QueueEmpty:
+                # no peasants available to promote
+                break
+            else:
+                self._knights.put_nowait(promoted_knight)
+
+    def pop_knights(self) -> Iterable[ETHPeer]:
+        for _ in range(self._desired_knights):
+            try:
+                yield self._knights.pop_nowait()
+            except asyncio.QueueEmpty:
+                try:
+                    yield self._peasants.pop_nowait()
+                except asyncio.QueueEmpty:
+                    break
+
+        # Push all remaining knights down to peasants
+        while len(self._knights):
+            try:
+                demoted_knight = self._knights.pop_nowait()
+            except asyncio.QueueEmpty:
+                break
+            else:
+                self._peasants.put_nowait(demoted_knight)
 
     async def pop_fastest_peasant(self) -> ETHPeer:
         """
@@ -205,6 +265,18 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
                 self._queen_updated.set()
 
                 if old_queen is not None:
-                    self._peasants.put_nowait(old_queen)
+                    self._insert_peer(old_queen)
         else:
             self._peasants.put_nowait(peer)
+
+            # If the number of knights is too low, add one.
+            # Insert the peasant before promoting a knight, in case a former peasant is
+            #   now faster than the peer being inserted now.
+            if len(self._knights) < self._desired_knights:
+                try:
+                    promoted_knight = self._peasants.pop_nowait()
+                except asyncio.QueueEmpty:
+                    # no peasants available to promote, exit cleanly
+                    return
+                else:
+                    self._knights.put_nowait(promoted_knight)
