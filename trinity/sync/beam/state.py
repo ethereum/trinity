@@ -123,7 +123,7 @@ class BeamDownloader(Service, PeerSubscriber):
 
         self._peer_pool = peer_pool
 
-        # Track node data that might be useful: hashes we bumped into while getting urgent nodes
+        # Track node data for upcoming blocks
         self._maybe_useful_nodes = TaskQueue[Hash32](
             buffer_size,
             # Everything is the same priority, for now
@@ -192,17 +192,24 @@ class BeamDownloader(Service, PeerSubscriber):
             node_hashes: Iterable[Hash32],
             queue: TaskQueue[Hash32],
             timeout: float) -> int:
+        """
+        Insert the given node hashes into the queue to be retrieved, then block
+        until they become present in the database.
+
+        :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
+        """
         missing_nodes = set(
             node_hash for node_hash in node_hashes if self._is_node_missing(node_hash)
         )
         unrequested_nodes = tuple(
             node_hash for node_hash in missing_nodes if node_hash not in queue
         )
-        if unrequested_nodes:
-            await queue.add(unrequested_nodes)
         if missing_nodes:
-            await self._node_hashes_present(missing_nodes, timeout)
-        return len(unrequested_nodes)
+            if unrequested_nodes:
+                await queue.add(unrequested_nodes)
+            return await self._node_hashes_present(missing_nodes, timeout)
+        else:
+            return 0
 
     def _is_node_missing(self, node_hash: Hash32) -> bool:
         if len(node_hash) != 32:
@@ -539,7 +546,12 @@ class BeamDownloader(Service, PeerSubscriber):
         """
         return node_hash in self._db
 
-    async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> None:
+    async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> int:
+        """
+        Block until the supplied node hashes have been inserted into the database.
+
+        :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
+        """
         remaining_hashes = node_hashes.copy()
 
         # save an event that gets triggered when new data comes in
@@ -564,6 +576,7 @@ class BeamDownloader(Service, PeerSubscriber):
             )
 
         self._new_data_events.remove(new_data)
+        return len(node_hashes) - len(remaining_hashes)
 
     def register_peer(self, peer: BasePeer) -> None:
         self._num_peers += 1
