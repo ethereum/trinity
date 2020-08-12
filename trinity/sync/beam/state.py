@@ -58,13 +58,11 @@ from trinity.sync.beam.queen import (
     QueenTrackerAPI,
 )
 from trinity.sync.beam.constants import (
-    TOO_LONG_PREDICTIVE_PEER_DELAY,
+    BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
     ESTIMATED_BEAMABLE_SECONDS,
     MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE,
     REQUEST_BUFFER_MULTIPLIER,
-)
-from trinity.sync.common.constants import (
-    PREDICTED_BLOCK_TIME,
+    TOO_LONG_PREDICTIVE_PEER_DELAY,
 )
 
 
@@ -156,7 +154,7 @@ class BeamDownloader(Service, PeerSubscriber):
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
                 self._node_tasks,
-                PREDICTED_BLOCK_TIME,
+                BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
             )
             # If it took to long to get a single urgent node, then increase "spread" factor
             if len(node_hashes) == 1 and t.elapsed > MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE:
@@ -178,7 +176,7 @@ class BeamDownloader(Service, PeerSubscriber):
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
                 self._maybe_useful_nodes,
-                PREDICTED_BLOCK_TIME * 10,
+                BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
             )
 
         return num_nodes_found

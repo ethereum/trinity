@@ -46,6 +46,10 @@ NON_IDEAL_RESPONSE_PENALTY = 2.0
 #   block. 1500 / 4000 ~= 0.4
 MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE = 0.4
 
+# How long before the block importer gives up on waiting for a missing trie
+#   node, and reissues the event to request it again.
+BLOCK_IMPORT_MISSING_STATE_TIMEOUT = 600
+
 # If Beam Sync wants to use a queen, but is stuck waiting for it to show up,
 #   then log a warning if it's been too long. If it's been more than this
 #   many seconds, then log the warning:

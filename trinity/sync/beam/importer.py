@@ -55,6 +55,7 @@ from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
 from trinity.exceptions import StateUnretrievable
 from trinity.sync.beam.constants import (
+    BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
     MAX_SPECULATIVE_EXECUTIONS_PER_PROCESS,
     MIN_GAS_LOG_WAIT,
     NUM_PREVIEW_SHARDS,
@@ -234,7 +235,7 @@ def pausing_vm_decorator(
         A custom version of VMState that pauses EVM execution when required data is missing.
         """
         stats_counter: BeamStats
-        node_retrieval_timeout = 20
+        node_retrieval_timeout = BLOCK_IMPORT_MISSING_STATE_TIMEOUT
 
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             super().__init__(*args, **kwargs)
