@@ -361,10 +361,7 @@ class BeaconChain(BaseBeaconChain):
     def _get_indices_from_attestation(
         self, attestation: Attestation
     ) -> Collection[ValidatorIndex]:
-        target_block = self._chain_db.get_block_by_root(
-            attestation.data.target.root, BeaconBlock
-        )
-        sm = self.get_state_machine(target_block.slot)
+        sm = self.get_state_machine(attestation.data.slot)
         return get_attesting_indices(
             sm._epochs_ctx, attestation.data, attestation.aggregation_bits
         )
