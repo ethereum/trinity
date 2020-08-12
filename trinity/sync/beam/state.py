@@ -58,13 +58,11 @@ from trinity.sync.beam.queen import (
     QueenTrackerAPI,
 )
 from trinity.sync.beam.constants import (
-    TOO_LONG_PREDICTIVE_PEER_DELAY,
+    BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
     ESTIMATED_BEAMABLE_SECONDS,
     MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE,
     REQUEST_BUFFER_MULTIPLIER,
-)
-from trinity.sync.common.constants import (
-    PREDICTED_BLOCK_TIME,
+    TOO_LONG_PREDICTIVE_PEER_DELAY,
 )
 
 
@@ -123,7 +121,7 @@ class BeamDownloader(Service, PeerSubscriber):
 
         self._peer_pool = peer_pool
 
-        # Track node data that might be useful: hashes we bumped into while getting urgent nodes
+        # Track node data for upcoming blocks
         self._maybe_useful_nodes = TaskQueue[Hash32](
             buffer_size,
             # Everything is the same priority, for now
@@ -156,7 +154,7 @@ class BeamDownloader(Service, PeerSubscriber):
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
                 self._node_tasks,
-                PREDICTED_BLOCK_TIME,
+                BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
             )
             # If it took to long to get a single urgent node, then increase "spread" factor
             if len(node_hashes) == 1 and t.elapsed > MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE:
@@ -178,7 +176,7 @@ class BeamDownloader(Service, PeerSubscriber):
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
                 self._maybe_useful_nodes,
-                PREDICTED_BLOCK_TIME * 10,
+                BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
             )
 
         return num_nodes_found
@@ -192,17 +190,24 @@ class BeamDownloader(Service, PeerSubscriber):
             node_hashes: Iterable[Hash32],
             queue: TaskQueue[Hash32],
             timeout: float) -> int:
+        """
+        Insert the given node hashes into the queue to be retrieved, then block
+        until they become present in the database.
+
+        :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
+        """
         missing_nodes = set(
             node_hash for node_hash in node_hashes if self._is_node_missing(node_hash)
         )
         unrequested_nodes = tuple(
             node_hash for node_hash in missing_nodes if node_hash not in queue
         )
-        if unrequested_nodes:
-            await queue.add(unrequested_nodes)
         if missing_nodes:
-            await self._node_hashes_present(missing_nodes, timeout)
-        return len(unrequested_nodes)
+            if unrequested_nodes:
+                await queue.add(unrequested_nodes)
+            return await self._node_hashes_present(missing_nodes, timeout)
+        else:
+            return 0
 
     def _is_node_missing(self, node_hash: Hash32) -> bool:
         if len(node_hash) != 32:
@@ -539,7 +544,12 @@ class BeamDownloader(Service, PeerSubscriber):
         """
         return node_hash in self._db
 
-    async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> None:
+    async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> int:
+        """
+        Block until the supplied node hashes have been inserted into the database.
+
+        :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
+        """
         remaining_hashes = node_hashes.copy()
 
         # save an event that gets triggered when new data comes in
@@ -564,6 +574,7 @@ class BeamDownloader(Service, PeerSubscriber):
             )
 
         self._new_data_events.remove(new_data)
+        return len(node_hashes) - len(remaining_hashes)
 
     def register_peer(self, peer: BasePeer) -> None:
         self._num_peers += 1

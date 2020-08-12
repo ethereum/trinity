@@ -122,8 +122,15 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         """
         t = Timer()
         while self._queen_peer is None:
-            await self._queen_updated.wait()
-            self._queen_updated.clear()
+            try:
+                promote_knight = self._knights.pop_nowait()
+            except asyncio.QueueEmpty:
+                # There are no knights available. Wait for a new queen to appear.
+                await self._queen_updated.wait()
+                self._queen_updated.clear()
+            else:
+                # There is a knight who can be promoted to queen immediately.
+                self._insert_peer(promote_knight)
 
         queen_starve_time = t.elapsed
         if queen_starve_time > WARN_AFTER_QUEEN_STARVED:
@@ -210,7 +217,13 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         raise asyncio.CancelledError()
 
     def insert_peer(self, peer: ETHPeer, delay: float = 0) -> None:
-        if delay > 0:
+        if not peer.is_alive:
+            # Peer exited, dropping it...
+            return
+        elif self._should_be_queen(peer):
+            self.logger.debug("Fast-tracking peasant to promote to queen: %s", peer)
+            self._insert_peer(peer)
+        elif delay > 0:
             loop = asyncio.get_event_loop()
             loop.call_later(delay, functools.partial(self._insert_peer, peer))
         else:

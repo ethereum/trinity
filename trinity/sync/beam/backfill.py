@@ -382,6 +382,10 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 # If this is just an intermediate node, then we can mark it as confirmed.
                 request_tracker.confirm_prefix(path_to_node, node)
 
+            # We made some DB calls and didn't find anything missing. Yield to the event loop
+            # too avoid holding it for too long.
+            await asyncio.sleep(0)
+
     async def _missing_subcomponent_hashes(
             self,
             address_hash_nibbles: Nibbles,
