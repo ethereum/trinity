@@ -18,6 +18,8 @@ from trio import MultiError
 
 from eth_utils.toolz import first
 
+from p2p._utils import get_logger
+
 
 TReturn = TypeVar('TReturn')
 
@@ -41,12 +43,19 @@ async def wait_first(tasks: Sequence[asyncio.Task[Any]]) -> None:
         if not isinstance(task, asyncio.Task):
             raise ValueError(f"{task} is not an asyncio.Task")
 
+    logger = get_logger('p2p.asyncio_utils.wait_first')
     try:
         done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-    except asyncio.CancelledError:
+    except (KeyboardInterrupt, asyncio.CancelledError) as err:
+        logger.debug("Got %r waiting for %s, cancelling them all", err, tasks)
+        await cancel_tasks(tasks)
+        raise
+    except BaseException:
+        logger.exception("Unexpected error waiting for %s", tasks)
         await cancel_tasks(tasks)
         raise
     else:
+        logger.debug("Task %s finished, cancelling remaining ones: %s", done, pending)
         if pending:
             await cancel_tasks(cast(Set['asyncio.Task[Any]'], pending))
         if len(done) != 1:

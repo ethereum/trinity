@@ -28,20 +28,15 @@ class TrioComponent(BaseComponent):
 
 class TrioIsolatedComponent(BaseIsolatedComponent):
 
-    async def _run_in_process(self) -> None:
-        return await run_in_process_with_trio(
-            self._do_run, subprocess_kwargs=self.get_subprocess_kwargs())
+    async def run_in_process(self) -> None:
+        await run_in_process_with_trio(self._do_run, subprocess_kwargs=self.get_subprocess_kwargs())
 
     async def run_process(self, event_bus: EndpointAPI) -> None:
-        try:
-            if self._boot_info.profile:
-                with profiler(f'profile_{self.get_endpoint_name()}'):
-                    await self.do_run(event_bus)
-            else:
+        if self._boot_info.profile:
+            with profiler(f'profile_{self.get_endpoint_name()}'):
                 await self.do_run(event_bus)
-        except (trio.Cancelled, trio.MultiError):
-            # These are expected, when trinity is terminating because of a Ctrl-C
-            raise
+        else:
+            await self.do_run(event_bus)
 
     # The EndpointAPI argument here is currently only used by tests.
     async def _loop_monitoring_task(self, _: EndpointAPI) -> None:

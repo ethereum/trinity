@@ -1,6 +1,8 @@
 import asyncio
 import logging
 from typing import (
+    Any,
+    List,
     Sequence,
     Type,
     Tuple,
@@ -14,7 +16,6 @@ from trinity.boot_info import BootInfo
 from trinity.constants import (
     MAIN_EVENTBUS_ENDPOINT,
 )
-from trinity.contextgroup import AsyncContextGroup
 from trinity.events import (
     AvailableEndpointsUpdated,
     EventBusConnected,
@@ -82,24 +83,26 @@ class ComponentManager(Service):
 
             # a little bit of extra try/finally structure here to produce good
             # logging messages about the component lifecycle.
-            from p2p.asyncio_utils import wait_first
+            from p2p.asyncio_utils import create_task, wait_first
             try:
                 self.logger.info(
                     "Starting components: %s",
                     '/'.join(component.name for component in enabled_components),
                 )
-                context_managers = [component.run() for component in enabled_components]
-                async with AsyncContextGroup(context_managers) as futs:
-                    # AsyncContextGroup() yields a Sequence[Any], so we cast to a list of Futures
-                    # here to ensure mypy can come to our aid if we forget the create_task() when
-                    # adding new entries to the list of Futures we want to wait for.
-                    futures = list(futs)
-                    futures.append(asyncio.create_task(self._trigger_component_exit.wait()))
-                    self.logger.info("Components started")
-                    try:
-                        await wait_first(futures)
-                    finally:
-                        self.logger.info("Stopping components")
+                tasks: List[asyncio.Task[Any]] = []
+                for component in enabled_components:
+                    tasks.append(
+                        create_task(
+                            component.run_in_process(),
+                            f'IsolatedComponent/{component.name}/run_in_process'
+                        )
+                    )
+                tasks.append(asyncio.create_task(self._trigger_component_exit.wait()))
+                self.logger.info("Components started")
+                try:
+                    await wait_first(tasks)
+                finally:
+                    self.logger.info("Stopping components")
             finally:
                 self.logger.info("Components stopped.")
                 self.manager.cancel()
