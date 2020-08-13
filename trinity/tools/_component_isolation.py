@@ -40,11 +40,12 @@ class ComponentTestService(Service):
             await self.event_bus.broadcast(IsStarted(path))
             self.logger.info('Waiting for cancellation')
             await self.manager.wait_finished()
-        except BaseException as err:
-            self.logger.info('Exiting due to error: `%r`', err)
-        finally:
-            self.logger.info('Got cancellation: touching `%s`', path)
+        except (asyncio.CancelledError, trio.Cancelled) as err:
+            self.logger.info('Got %r: touching `%s`', err, path)
             path.touch()
+        except BaseException:
+            self.logger.exception("Unexpected error in ComponentTestService")
+            raise
 
 
 class AsyncioComponentForTest(AsyncioIsolatedComponent):
@@ -84,9 +85,6 @@ class AsyncioComponentForTest(AsyncioIsolatedComponent):
                 finally:
                     self.logger.info('Exiting `do_run`')
         finally:
-            # XXX: We never reach this line, so if you run test_isolated_component.py by itself it
-            # will pass but hang forever after pytest reports success.
-            # Figuring this out is probably the key to fixing our shutdown.
             self.logger.info('Finished: `do_run`')
 
 
