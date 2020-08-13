@@ -431,6 +431,7 @@ class JSONHTTPServer(Generic[TContext]):
 
     def __init__(self, handlers: Handlers[TContext], context: TContext, port: int = 0):
         router = make_router(handlers)
+        self.context = context
         self.handler = http_serve_json_api(router, context)
         self.port = port
 

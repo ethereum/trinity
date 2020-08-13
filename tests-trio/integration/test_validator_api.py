@@ -52,7 +52,9 @@ async def test_beacon_node_and_validator_client_can_talk(
                     await trio.sleep(seconds_per_epoch * 2)
             nursery.cancel_scope.cancel()
     sent_operations_for_broadcast = api_client._broadcast_operations
-    received_operations_for_broadcast = beacon_node._api_context._broadcast_operations
+    received_operations_for_broadcast = (
+        beacon_node._validator_api_server.context._broadcast_operations
+    )
 
     # temporary until we update to the new API
     # NOTE: with new API, remove assertion and deletion

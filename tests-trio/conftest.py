@@ -3,7 +3,7 @@ import secrets
 import tempfile
 import uuid
 
-from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONFIG
+from eth.db.backends.level import LevelDB
 from eth_keys.datatypes import PrivateKey
 from lahja import ConnectionConfig
 from lahja.trio.endpoint import TrioEndpoint
@@ -16,10 +16,11 @@ import trio
 from eth2._utils.bls import Eth2BLS, bls
 from eth2.beacon.chains.testnet.medalla import BeaconChainTest
 from eth2.beacon.constants import FAR_FUTURE_EPOCH
+from eth2.beacon.genesis import get_genesis_block
+from eth2.beacon.state_machines.forks.skeleton_lake import MINIMAL_SERENITY_CONFIG
 from eth2.beacon.tools.builder.initializer import create_key_pairs_for
 from eth2.beacon.tools.misc.ssz_vector import override_lengths
-from eth2.beacon.types.blocks import BeaconBlockBody, BeaconBlockHeader, BeaconBlock
-from eth2.beacon.genesis import get_genesis_block
+from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, BeaconBlockHeader
 from eth2.beacon.types.states import BeaconState
 from eth2.beacon.types.validators import Validator
 from eth2.beacon.typing import ForkDigest
@@ -112,7 +113,9 @@ def genesis_block(genesis_state):
 
 @pytest.fixture
 def chain_config(genesis_state, eth2_config, chain_class):
-    return BeaconChainConfig(genesis_state, eth2_config, {}, beacon_chain_class=chain_class)
+    return BeaconChainConfig(
+        genesis_state, eth2_config, {}, beacon_chain_class=chain_class
+    )
 
 
 @pytest.fixture
@@ -201,28 +204,26 @@ def p2p_maddr():
 
 
 @pytest.fixture
-def beacon_node(
-    eth2_config,
-    chain_config,
-    node_key,
-    database_dir,
-    chain_class,
-    clock,
-    client_id,
-    p2p_maddr,
-):
+def base_db(tmpdir):
+    return LevelDB(db_path=tmpdir)
+
+
+@pytest.fixture
+def chain(base_db, chain_class, genesis_state):
+    return chain_class.from_genesis(base_db, genesis_state)
+
+
+@pytest.fixture
+def beacon_node(eth2_config, node_key, clock, chain, client_id, p2p_maddr):
     validator_api_port = 0
     return BeaconNode(
         node_key,
         eth2_config,
-        chain_config,
-        database_dir,
-        chain_class,
         clock,
+        chain,
         validator_api_port,
         client_id,
         p2p_maddr,
-        "a",
         (),
         (),
     )

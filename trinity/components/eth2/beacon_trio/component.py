@@ -1,14 +1,14 @@
 from argparse import ArgumentParser, _SubParsersAction
 import logging
+from pathlib import Path
 from typing import Iterable
 
-from eth_utils import to_tuple
+from eth_utils import humanize_hash, to_tuple
 from multiaddr import Multiaddr
 
 from trinity._utils.logging import get_logger
 from trinity.boot_info import BootInfo
-from trinity.config import BeaconTrioAppConfig
-from trinity.constants import BEACON_TESTNET_NETWORK_ID
+from trinity.config import ETH2_NETWORKS, BeaconTrioAppConfig
 from trinity.extensibility import TrioComponent
 from trinity.nodes.beacon.config import BeaconNodeConfig
 from trinity.nodes.beacon.full import BeaconNode
@@ -28,18 +28,17 @@ class BeaconNodeComponent(TrioComponent):
     def __init__(self, boot_info: BootInfo) -> None:
         super().__init__(boot_info)
 
-        config_profile = boot_info.args.config_profile
-        if config_profile != "medalla":
-            raise NotImplementedError(f"config profile not supported: {config_profile}")
-
         trinity_config = self._boot_info.trinity_config
         beacon_app_config = trinity_config.get_app_config(BeaconTrioAppConfig)
         config = BeaconNodeConfig.from_platform_config(
-            boot_info.args.config_profile,
-            trinity_config,
-            beacon_app_config,
-            boot_info.args.validator_api_port,
-            boot_info.args.bootstrap_nodes,
+            trinity_config, beacon_app_config
+        )
+        self.logger.info(
+            "using peer identity %s",
+            humanize_hash(config.local_node_key.public_key.to_bytes()),
+        )
+        self.logger.info(
+            "booting beacon node on network: %s", beacon_app_config.network_name
         )
         node = BeaconNode.from_config(config)
         self._node = node
@@ -48,45 +47,46 @@ class BeaconNodeComponent(TrioComponent):
     def configure_parser(
         cls, arg_parser: ArgumentParser, subparser: _SubParsersAction
     ) -> None:
-        # NOTE: this workaround puts the testnet data into its own `datadir`
-        # TODO integrate into the greater trinity config so we do not need workarounds like this
-        arg_parser.set_defaults(network_id=BEACON_TESTNET_NETWORK_ID)
-
         arg_parser.add_argument(
-            "--bootstrap-nodes",
-            type=_parse_multiaddrs_from_args,
-            help="bootstrap nodes",
-            default=(),
+            "--nodekey-seed", help="hex-encoded seed to use for local node key"
         )
-        arg_parser.add_argument(
-            "--preferred-nodes",
-            type=_parse_multiaddrs_from_args,
-            help="preferred nodes",
-            default=(),
-        )
-
-        arg_parser.add_argument(
-            "--validator-api-port", type=int, help="API server port", default=5005
-        )
-
         arg_parser.add_argument(
             "--p2p-maddr",
             type=Multiaddr,
             help="p2p host multiaddress",
             default="/ip4/127.0.0.1/tcp/13000",
         )
-
         arg_parser.add_argument(
-            "--orchestration-profile",
-            help="[temporary developer option] manage several beacon nodes on one machine",
-            default="a",
+            "--bootstrap-maddrs",
+            type=_parse_multiaddrs_from_args,
+            help="comma-separated list of maddrs for bootstrap nodes",
+            default=(),
+        )
+        arg_parser.add_argument(
+            "--preferred-maddrs",
+            type=_parse_multiaddrs_from_args,
+            help="comma-separated list of maddrs for preferred nodes",
+            default=(),
+        )
+        arg_parser.add_argument(
+            "--validator-api-port", type=int, help="API server port", default=5005
+        )
+        arg_parser.add_argument(
+            "--recent-state-ssz",
+            type=Path,
+            help="path to a recent ssz-encoded state (for use in weak subjectivity)",
         )
 
-        arg_parser.add_argument(
-            "--config-profile",
-            help="the profile used to generate the genesis config",
-            choices=("minimal", "mainnet", "medalla"),
-            default="minimal",
+        network_description_group = arg_parser.add_mutually_exclusive_group()
+        network_description_group.add_argument(
+            "--network",
+            choices=ETH2_NETWORKS.keys(),
+            default="medalla",
+            help="Name of a pre-defined network",
+        )
+        network_description_group.add_argument(
+            "--network-config",
+            help="Path to a YAML configuration file describing a network",
         )
 
     @property

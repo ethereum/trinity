@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 import logging
-from pathlib import Path
 import time
-from typing import Any, Collection, Iterable, Optional, Set, Tuple, Type
+from typing import Any, Collection, Iterable, Optional, Set, Tuple
 
 from async_service import background_trio_service
 from eth.db.backends.level import LevelDB
@@ -12,6 +11,7 @@ from eth_utils import humanize_hash
 from libp2p.crypto.secp256k1 import create_new_key_pair
 from libp2p.peer.id import ID as PeerID
 from multiaddr import Multiaddr
+import ssz
 import trio
 from trio_typing import TaskStatus
 
@@ -22,11 +22,11 @@ from eth2.beacon.chains.abc import BaseBeaconChain
 from eth2.beacon.chains.exceptions import ParentNotFoundError, SlashableBlockError
 from eth2.beacon.helpers import compute_fork_digest, compute_start_slot_at_epoch
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
+from eth2.beacon.types.states import BeaconState
 from eth2.beacon.typing import Epoch, ForkDigest, Root, Slot
 from eth2.clock import Clock, Tick, TimeProvider, get_unix_time
 from eth2.configs import Eth2Config
 from trinity._utils.trio_utils import JSONHTTPServer
-from trinity.config import BeaconTrioChainConfig
 from trinity.nodes.beacon.config import BeaconNodeConfig
 from trinity.nodes.beacon.host import Host
 from trinity.nodes.beacon.metadata import MetaData
@@ -71,21 +71,6 @@ def _mk_validator_api_server(
     )
 
 
-def _derive_local_node_key(_key: PrivateKey, orchestration_profile: str) -> PrivateKey:
-    return PrivateKey(orchestration_profile[:1].encode() * 32)
-
-
-def _derive_port(maddr: Multiaddr, orchestration_profile: str) -> Multiaddr:
-    offset = ord(orchestration_profile[:1]) - ord("a")
-    port = int(maddr.value_for_protocol("tcp")) + offset
-    return Multiaddr.join(f"/ip4/{maddr.value_for_protocol('ip4')}", f"/tcp/{port}")
-
-
-def _derive_api_port(port: int, orchestration_profile: str) -> int:
-    offset = ord(orchestration_profile[:1]) - ord("a")
-    return port + offset
-
-
 @dataclass
 class SyncRequest:
     peer_id: PeerID
@@ -108,32 +93,24 @@ class BeaconNode:
         self,
         local_node_key: PrivateKey,
         eth2_config: Eth2Config,
-        chain_config: BeaconTrioChainConfig,
-        database_dir: Path,
-        chain_class: Type[BaseBeaconChain],
         clock: Clock,
+        chain: BaseBeaconChain,
         validator_api_port: int,
         client_identifier: str,
         p2p_maddr: Multiaddr,
-        orchestration_profile: str,
         preferred_nodes: Collection[Multiaddr],
         bootstrap_nodes: Collection[Multiaddr],
     ) -> None:
-        local_node_key = _derive_local_node_key(local_node_key, orchestration_profile)
         self._local_key_pair = create_new_key_pair(local_node_key.to_bytes())
         self._eth2_config = eth2_config
 
         self._clock = clock
+        self._chain = chain
 
         self._block_pool: Set[SignedBeaconBlock] = set()
         self._slashable_block_pool: Set[SignedBeaconBlock] = set()
 
-        base_db = LevelDB(db_path=database_dir)
-        genesis_state = chain_config._genesis_state
-        self._chain = chain_class.from_genesis(base_db, genesis_state)
-
         # FIXME: can we provide `p2p_maddr` as a default listening interface for `_mk_host`?
-        p2p_maddr = _derive_port(p2p_maddr, orchestration_profile)
         peer_id = PeerID.from_pubkey(self._local_key_pair.public_key)
         if "p2p" in p2p_maddr:
             existing_peer_id = p2p_maddr.value_for_protocol("p2p")
@@ -179,10 +156,7 @@ class BeaconNode:
             self._clock,
             _mk_block_broadcaster(self),
         )
-        self._api_context = api_context
-        self.validator_api_port = _derive_api_port(
-            validator_api_port, orchestration_profile
-        )
+        self.validator_api_port = validator_api_port
         self._validator_api_server = _mk_validator_api_server(
             self.validator_api_port, api_context
         )
@@ -191,20 +165,24 @@ class BeaconNode:
     def from_config(
         cls, config: BeaconNodeConfig, time_provider: TimeProvider = get_unix_time
     ) -> "BeaconNode":
-        clock = _mk_clock(
-            config.eth2_config, config.chain_config.genesis_time, time_provider
-        )
+        base_db = LevelDB(db_path=config.database_dir)
+
+        recent_state = _resolve_recent_state(cls.logger, config)
+
+        chain = config.chain_class.from_genesis(base_db, recent_state)
+
+        genesis_time = recent_state.genesis_time
+        clock = _mk_clock(config.eth2_config, genesis_time, time_provider)
+
+        clock = _mk_clock(config.eth2_config, genesis_time, time_provider)
         return cls(
             config.local_node_key,
             config.eth2_config,
-            config.chain_config,
-            config.database_dir,
-            config.chain_class,
             clock,
+            chain,
             config.validator_api_port,
             config.client_identifier,
             config.p2p_maddr,
-            config.orchestration_profile,
             config.preferred_nodes,
             config.bootstrap_nodes,
         )
@@ -519,6 +497,14 @@ class BeaconNode:
             for task in tasks:
                 await nursery.start(task)
             task_status.started()
+
+
+def _resolve_recent_state(
+    logger: logging.Logger, config: BeaconNodeConfig
+) -> BeaconState:
+    # NOTE: temporary...
+    with open(config.recent_state_ssz, "rb") as recent_state_file:
+        return ssz.decode(recent_state_file.read(), BeaconState)
 
 
 def _mk_block_broadcaster(node: BeaconNode) -> BlockBroadcasterAPI:
