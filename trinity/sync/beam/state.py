@@ -243,6 +243,10 @@ class BeamDownloader(Service, PeerSubscriber):
 
         return need_nodes, completed_account_hashes
 
+    def _get_unique_hashes(self, addresses: Collection[Address]) -> Set[Hash32]:
+        uniques = set(addresses)
+        return {keccak(address) for address in uniques}
+
     async def download_accounts(
             self,
             account_addresses: Collection[Address],
@@ -259,7 +263,11 @@ class BeamDownloader(Service, PeerSubscriber):
         last_log_time = time.monotonic()
 
         loop = asyncio.get_event_loop()
-        missing_account_hashes = set(keccak(address) for address in account_addresses)
+        missing_account_hashes = await loop.run_in_executor(
+            None,
+            self._get_unique_hashes,
+            account_addresses,
+        )
         completed_account_hashes = set()
         nodes_downloaded = 0
         # will never take more than 64 attempts to get a full account
