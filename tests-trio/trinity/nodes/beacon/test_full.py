@@ -40,7 +40,7 @@ def _mk_minimum_viable_signed_beacon_blocks(
 
 def _build_branch_across_slots(number_of_slots, chain, config):
     head = chain.get_canonical_head()
-    state = chain.db.get_state_by_root(head.state_root, BeaconState)
+    state = chain.db.get_state_by_root(head.state_root, BeaconState, config)
 
     head = SignedBeaconBlock.create(message=head)
     return _mk_minimum_viable_signed_beacon_blocks(

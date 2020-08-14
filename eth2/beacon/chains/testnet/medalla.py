@@ -99,7 +99,7 @@ class BeaconChain(BaseBeaconChain):
         self._current_head = fork_choice.find_head()
         state_machine = self.get_state_machine(self._current_head.slot)
         head_state = self._chain_db.get_state_by_root(
-            self._current_head.state_root, state_machine.config
+            self._current_head.state_root, BeaconState, state_machine.config
         )
 
         self._reconcile_justification_and_finality(head_state)
@@ -160,7 +160,9 @@ class BeaconChain(BaseBeaconChain):
     def get_canonical_head_state(self) -> BeaconState:
         head = self.get_canonical_head()
         state_machine = self.get_state_machine(head.slot)
-        return self._chain_db.get_state_by_root(head.state_root, state_machine.config)
+        return self._chain_db.get_state_by_root(
+            head.state_root, BeaconState, state_machine.config
+        )
 
     def on_tick(self, tick: Tick) -> None:
         if tick.is_first_in_slot():
@@ -242,7 +244,7 @@ class BeaconChain(BaseBeaconChain):
 
         state_machine = self.get_state_machine(block.slot)
         pre_state = self._chain_db.get_state_by_root(
-            parent_block.state_root, state_machine.config
+            parent_block.state_root, state_machine.state_class, state_machine.config
         )
 
         state, imported_block = state_machine.apply_state_transition(
@@ -319,7 +321,9 @@ class BeaconChain(BaseBeaconChain):
                 try:
                     state_machine = self.get_state_machine(Slot(slot))
                     state = self._chain_db.get_state_by_root(
-                        block.state_root, state_machine.config
+                        block.state_root,
+                        state_machine.state_class,
+                        state_machine.config,
                     )
                     return (state, blocks)
                 except StateNotFound:

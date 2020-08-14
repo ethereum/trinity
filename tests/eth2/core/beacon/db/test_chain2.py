@@ -1,8 +1,9 @@
+from typing import Optional
+
 from eth_typing import BLSPubkey, Hash32
 
 from eth2.beacon.constants import EMPTY_SIGNATURE, GENESIS_SLOT
 from eth2.beacon.db.chain2 import BeaconChainDB
-from eth2.beacon.types.block_headers import BeaconBlockHeader
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.eth1_data import Eth1Data
@@ -32,62 +33,69 @@ def test_chain2_at_genesis(base_db, genesis_state, genesis_block, config):
     )
     assert genesis_signature == EMPTY_SIGNATURE
 
-    state_at_genesis = chain_db.get_state_by_slot(GENESIS_SLOT, BeaconState)
+    state_at_genesis = chain_db.get_state_by_slot(GENESIS_SLOT, BeaconState, config)
     assert state_at_genesis == genesis_state
 
     state_at_genesis = chain_db.get_state_by_root(
-        genesis_state.hash_tree_root, BeaconState
+        genesis_state.hash_tree_root, BeaconState, config
     )
     assert state_at_genesis == genesis_state
 
     finalized_head = chain_db.get_finalized_head(BeaconBlock)
     assert finalized_head == genesis_block
 
-    some_future_slot = Slot(22)
-    assert not chain_db.get_block_by_slot(some_future_slot, BeaconBlock)
-    assert not chain_db.get_state_by_slot(some_future_slot, BeaconState)
 
-    block_at_future_slot = SignedBeaconBlock.create(
-        message=BeaconBlock.create(slot=some_future_slot)
-    )
-    chain_db.persist_block(block_at_future_slot)
-    future_block = chain_db.get_block_by_root(
-        block_at_future_slot.message.hash_tree_root, BeaconBlock
-    )
-    assert block_at_future_slot.message == future_block
-
-    # NOTE: only finalized blocks are stored by slot in the DB
-    # non-finalized but canonical blocks are determined by fork choice, separately from the DB
-    assert not chain_db.get_block_by_slot(some_future_slot, BeaconBlock)
-
-    # assume the fork choice did finalize this block...
-    chain_db.mark_canonical_block(block_at_future_slot.message)
-    assert chain_db.get_block_by_slot(some_future_slot, BeaconBlock) == future_block
-
-
-def test_chain2_persist_state(base_db, genesis_state, config):
+def test_chain2_full(base_db, genesis_state, config):
     chain_db = BeaconChainDB.from_genesis(
         base_db, genesis_state, SignedBeaconBlock, config
     )
 
     state = genesis_state
     states = [genesis_state]
+    blocks = {}
 
     num_slots = 500
+    skip_slots = [5, 64, 100, 300, 301, 302, 401]
+    finalized_slots = [8, 24, 32, 72, 152, 160, 328, 336, 344, 352, 400]
 
-    # create a new state at each slot using ``mini_stf()`` and persist it
+    # create a new state at each slot using ``_mini_stf()`` and persist it
     for _ in range(1, num_slots):
-        state = _mini_stf(state, config)
+        if state.slot not in skip_slots:
+            new_block = BeaconBlock.create(
+                slot=state.slot, state_root=state.hash_tree_root
+            )
+            blocks[state.slot] = new_block
+            chain_db.persist_block(SignedBeaconBlock.create(message=new_block))
+        else:
+            new_block = None
+
+        state = _mini_stf(state, new_block, config)
         chain_db.persist_state(state, config)
         states.append(state)
 
     # test that each state created above equals the state stored at its root
     for state in states:
-        retrieved_state = chain_db._read_state(state.hash_tree_root, config)
+        # finalize a slot two epochs after processing it
+        # this is here to test the reconstruction of ``state.randao_mixes``
+        maybe_finalized_slot = state.slot - config.SLOTS_PER_EPOCH * 2
+        if maybe_finalized_slot in finalized_slots:
+            chain_db.mark_finalized_head(blocks[maybe_finalized_slot])
+
+        retrieved_state = chain_db._read_state(
+            state.hash_tree_root, BeaconState, config
+        )
         assert retrieved_state == state
 
+    for slot in range(0, num_slots):
+        if slot in blocks and slot <= finalized_slots[-1]:
+            assert chain_db.get_block_by_slot(Slot(slot), BeaconBlock) == blocks[slot]
+        else:
+            assert chain_db.get_block_by_slot(Slot(slot), BeaconBlock) is None
 
-def _mini_stf(state: BeaconState, config: Eth2Config) -> BeaconState:
+
+def _mini_stf(
+    state: BeaconState, block: Optional[BeaconBlock], config: Eth2Config
+) -> BeaconState:
     """
     A simplified state transition for testing state storage.
 
@@ -100,11 +108,12 @@ def _mini_stf(state: BeaconState, config: Eth2Config) -> BeaconState:
     current_slot = state.slot + 1
     current_epoch = current_slot // config.SLOTS_PER_EPOCH
 
+    if block:
+        latest_block_header = block.header
+    else:
+        latest_block_header = state.latest_block_header
+
     # state changes that depend on the previous state for retrieval
-    latest_block_header = BeaconBlockHeader.create(
-        slot=current_slot,
-        body_root=Root(Hash32(current_slot.to_bytes(32, byteorder="little"))),
-    )
     randao_mix = Root(Hash32(current_slot.to_bytes(32, byteorder="little")))
     state = (
         state.transform(

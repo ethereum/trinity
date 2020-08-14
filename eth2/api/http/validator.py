@@ -191,7 +191,7 @@ class Context:
 
         state_machine = self.chain.get_state_machine(slot)
         parent_state = self.chain.db.get_state_by_root(
-            parent.state_root, state_machine.config
+            parent.state_root, BeaconState, state_machine.config
         )
         parent_state = advance_state_to_slot(self.chain, parent_slot, parent_state)
 

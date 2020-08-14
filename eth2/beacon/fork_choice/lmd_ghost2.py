@@ -567,7 +567,9 @@ class LMDGHOSTForkChoice(BaseForkChoice):
         cls, chain_db: BaseBeaconChainDB, config: Eth2Config, block_sink: BlockSink
     ) -> "LMDGHOSTForkChoice":
         finalized_head = chain_db.get_finalized_head(BeaconBlock)
-        finalized_state = chain_db.get_state_by_root(finalized_head.state_root, config)
+        finalized_state = chain_db.get_state_by_root(
+            finalized_head.state_root, BeaconState, config
+        )
         finalized_head_node = _block_to_block_node(finalized_head)
         # TODO: need genesis patch up here as well....
         return cls(finalized_head_node, finalized_state, config, block_sink)

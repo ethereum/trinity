@@ -3,7 +3,7 @@ from typing import Iterable, Optional, Sequence, Tuple, Type
 from eth.abc import AtomicDatabaseAPI
 from eth.exceptions import BlockNotFound
 from eth.typing import Hash32
-from eth_utils import to_tuple
+from eth_utils import reversed_return, to_tuple
 from lru import LRU
 import ssz
 from ssz.hashable_list import HashableList
@@ -16,7 +16,7 @@ import eth2.beacon.db.schema2 as SchemaV1
 from eth2.beacon.genesis import get_genesis_block
 from eth2.beacon.helpers import compute_epoch_at_slot
 from eth2.beacon.types.block_headers import BeaconBlockHeader
-from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
+from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock, BeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.eth1_data import Eth1Data
 from eth2.beacon.types.forks import Fork
@@ -53,6 +53,8 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._block_cache = LRU(BLOCK_CACHE_SIZE)
         self._state_cache = LRU(STATE_CACHE_SIZE)
         self._state_bytes_written = 0
+
+        self._genesis_time, self._genesis_validators_root = self._get_genesis_data()
 
     @classmethod
     def from_genesis(
@@ -120,19 +122,41 @@ class BeaconChainDB(BaseBeaconChainDB):
         block_root_to_block = SchemaV1.block_root_to_block(block_root)
         self.db[block_root_to_block] = ssz.encode(block)
 
+        block_root_to_block_header = SchemaV1.block_root_to_block_header(block_root)
+        self.db[block_root_to_block_header] = ssz.encode(block.header)
+
         signature = signed_block.signature
         block_root_to_signature = SchemaV1.block_root_to_signature(block_root)
         self.db[block_root_to_signature] = signature
 
     def mark_canonical_block(self, block: BaseBeaconBlock) -> None:
-        slot_to_block_root = SchemaV1.slot_to_block_root(block.slot)
-        self.db[slot_to_block_root] = block.hash_tree_root
-
-        slot_to_state_root = SchemaV1.slot_to_state_root(block.slot)
-        self.db[slot_to_state_root] = block.state_root
+        key = SchemaV1.canonical_head_root()
+        self.db[key] = block.hash_tree_root
 
     def mark_finalized_head(self, block: BaseBeaconBlock) -> None:
+        """
+        Marks the given ``block`` as finalized and stores each newly finalized state and block at
+        their corresponding slot.
+        """
         finalized_head_root = SchemaV1.finalized_head_root()
+        if finalized_head_root in self.db:
+            newly_finalized_states = self.get_state_parents(
+                block.state_root, block.slot - self.get_finalized_head(BeaconBlock).slot
+            ) + (block.state_root,)
+        else:
+            newly_finalized_states = (block.state_root,)
+
+        for state_root in newly_finalized_states:
+            slot = ssz.decode(
+                self.db[SchemaV1.state_root_to_slot(state_root)], ssz.uint64
+            )
+            self.db[SchemaV1.slot_to_state_root(slot)] = state_root
+
+            latest_block_header = self._read_state_block_header(state_root)
+            slot_to_block_root = SchemaV1.slot_to_block_root(latest_block_header.slot)
+            self.db[slot_to_block_root] = latest_block_header.hash_tree_root
+
+        self.db[SchemaV1.slot_to_block_root(block.slot)] = block.hash_tree_root
         self.db[finalized_head_root] = block.hash_tree_root
 
     def get_finalized_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
@@ -141,28 +165,39 @@ class BeaconChainDB(BaseBeaconChainDB):
         return self.get_block_by_root(finalized_head_root, block_class)
 
     def get_state_by_slot(
-        self, slot: Slot, config: Eth2Config
+        self, slot: Slot, state_class: Type[BeaconState], config: Eth2Config
     ) -> Optional[BeaconState]:
         key = SchemaV1.slot_to_state_root(slot)
         try:
             root = Root(Hash32(self.db[key]))
         except KeyError:
             return None
-        return self.get_state_by_root(root, config)
+        return self.get_state_by_root(root, state_class, config)
 
-    def get_state_by_root(self, state_root: Root, config: Eth2Config) -> BeaconState:
+    def get_state_by_root(
+        self, state_root: Root, state_class: Type[BeaconState], config: Eth2Config
+    ) -> BeaconState:
         if state_root in self._state_cache:
             return self._state_cache[state_root]
 
-        return self._read_state(state_root, config)
+        return self._read_state(state_root, state_class, config)
+
+    @to_tuple
+    @reversed_return
+    def get_state_parents(self, state_root: Root, count: int) -> Iterable[Root]:
+        """
+        Returns a tuple of size ``count`` that contains the state roots from oldest to newest
+        that precede the given ``state_root``.
+        """
+        for _ in range(0, count):
+            state_root = self._read_state_parent_state_root(state_root)
+            yield state_root
 
     def _write_state_slot(self, state_root: Root, slot: Slot) -> None:
         state_to_slot = SchemaV1.state_root_to_slot(state_root)
-        slot_to_state = SchemaV1.slot_to_state_root(slot)
         encoding = ssz.encode(slot, ssz.uint64)
         self._state_bytes_written += len(encoding)
         self.db[state_to_slot] = encoding
-        self.db[slot_to_state] = state_root
 
     def _write_state_fork(self, state_root: Root, fork: Fork) -> None:
         fork_root = fork.hash_tree_root
@@ -177,22 +212,15 @@ class BeaconChainDB(BaseBeaconChainDB):
     def _write_state_block_header(
         self, state_root: Root, block_header: BeaconBlockHeader
     ) -> None:
-        # NOTE: can further optimize by filling state_root into block_header
-        # and skipping encoding if block is present (it likely will be...)
-        block_header_root = block_header.hash_tree_root
-        if block_header_root not in self.db:
-            encoding = ssz.encode(block_header)
-            self._state_bytes_written += len(encoding)
-            self.db[block_header_root] = encoding
-
-        state_root_to_block_header_root = SchemaV1.state_root_to_block_header_root(
+        block_root = Root(block_header.hash_tree_root)
+        state_root_to_latest_block_header_root = SchemaV1.state_root_to_latest_block_header_root(
             state_root
         )
-        slot_to_block_header_root = SchemaV1.slot_to_block_header_root(
-            block_header.slot
-        )
-        self.db[state_root_to_block_header_root] = block_header_root
-        self.db[slot_to_block_header_root] = block_header_root
+        self.db[state_root_to_latest_block_header_root] = block_root
+
+        block_root_to_block_header = SchemaV1.block_root_to_block_header(block_root)
+        if block_root_to_block_header not in self.db:
+            self.db[block_root_to_block_header] = ssz.encode(block_header)
 
     def _write_state_historical_roots(
         self, state_root: Root, historical_roots: HashableList[Root]
@@ -287,11 +315,8 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._state_bytes_written += len(balances_root)
         self.db[key] = balances_root
 
-    def _write_state_randao_mix(self, slot: Slot, mix: Root) -> None:
-        """
-        NOTE: only the root at the current epoch can have changed.
-        """
-        key = SchemaV1.slot_to_randao_mix(slot)
+    def _write_state_randao_mix(self, state_root: Root, mix: Root) -> None:
+        key = SchemaV1.state_root_to_randao_mix(state_root)
         self.db[key] = mix
 
     def _write_state_slashings(
@@ -400,6 +425,15 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._state_bytes_written += len(root)
         self.db[key] = root
 
+    def _write_state_parent_state_root(
+        self, state: BeaconState, SLOTS_PER_HISTORIC_ROOT: int
+    ) -> None:
+        if state.slot == 0:
+            return
+
+        key = SchemaV1.state_root_to_parent_state_root(state.hash_tree_root)
+        self.db[key] = state.state_roots[(state.slot - 1) % SLOTS_PER_HISTORIC_ROOT]
+
     def _write_state(self, state: BeaconState, config: Eth2Config) -> None:
         """
         Each field of the state is treated as to minimize redundant encodings of
@@ -418,7 +452,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._write_state_validators(state_root, state.validators)
         self._write_state_balances(state_root, state.balances)
         self._write_state_randao_mix(
-            state.slot,
+            state_root,
             state.randao_mixes[current_epoch % config.EPOCHS_PER_HISTORICAL_VECTOR],
         )
         self._write_state_slashings(state_root, state.slashings)
@@ -436,6 +470,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             state_root, state.current_justified_checkpoint
         )
         self._write_state_finalized_checkpoint(state_root, state.finalized_checkpoint)
+        self._write_state_parent_state_root(state, config.SLOTS_PER_HISTORICAL_ROOT)
 
     def _read_state_slot(self, state_root: Root) -> Slot:
         key = SchemaV1.state_root_to_slot(state_root)
@@ -447,9 +482,11 @@ class BeaconChainDB(BaseBeaconChainDB):
         return ssz.decode(self.db[fork_root], Fork)
 
     def _read_state_block_header(self, state_root: Root) -> BeaconBlockHeader:
-        key = SchemaV1.state_root_to_block_header_root(state_root)
-        block_header_root = self.db[key]
-        return ssz.decode(self.db[block_header_root], BeaconBlockHeader)
+        block_root = Root(
+            Hash32(self.db[SchemaV1.state_root_to_latest_block_header_root(state_root)])
+        )
+        key = SchemaV1.block_root_to_block_header(block_root)
+        return ssz.decode(self.db[key], BeaconBlockHeader)
 
     @to_tuple
     def _read_state_block_roots(
@@ -457,50 +494,29 @@ class BeaconChainDB(BaseBeaconChainDB):
     ) -> Iterable[Root]:
         """
         Reconstructs ``state.block_roots`` at a given state root.
-
-        For the sake of efficiency, the ``block_roots`` vector is not stored in
-        the database. Instead, we reconstruct what the vector would have been based on the
-        the block root stored at each slot within the range of ``SLOTS_PER_HISTORIC_ROOT``.
         """
-        state_slot = self._read_state_slot(state_root)
-        slots = [
-            Slot(n) for n in range(state_slot - SLOTS_PER_HISTORICAL_ROOT, state_slot)
-        ]
-        offset = SLOTS_PER_HISTORICAL_ROOT - slots[0] % SLOTS_PER_HISTORICAL_ROOT
-        slots = slots[offset:] + slots[:offset]
-        for slot in slots:
-            if slot < 0:
+        for root in self._read_state_state_roots(state_root, SLOTS_PER_HISTORICAL_ROOT):
+            if root == default_root:
                 yield default_root
             else:
-                key = SchemaV1.slot_to_block_header_root(slot)
+                key = SchemaV1.state_root_to_latest_block_header_root(root)
                 yield Root(Hash32(self.db[key]))
 
-    @to_tuple
     def _read_state_state_roots(
         self, state_root: Root, SLOTS_PER_HISTORICAL_ROOT: int
-    ) -> Iterable[Root]:
+    ) -> Tuple[Root, ...]:
         """
         Reconstructs ``state.state_roots`` at a given state root.
-
-        For the sake of efficiency, the ``state_roots`` vector is not stored in
-        the database. Instead, we reconstruct what the vector would have been based on the
-        the state root stored at each slot within the range of ``SLOTS_PER_HISTORIC_ROOT``.
         """
         state_slot = self._read_state_slot(state_root)
+        state_roots = self.get_state_parents(
+            state_root, min(state_slot, SLOTS_PER_HISTORICAL_ROOT)
+        )
+        padding = (default_root,) * (SLOTS_PER_HISTORICAL_ROOT - len(state_roots))
+        state_roots = padding + state_roots
 
-        # create a list of slots corresponding to each root in ``state.state_roots``
-        slots = [
-            Slot(n) for n in range(state_slot - SLOTS_PER_HISTORICAL_ROOT, state_slot)
-        ]
-        offset = SLOTS_PER_HISTORICAL_ROOT - slots[0] % SLOTS_PER_HISTORICAL_ROOT
-        slots = slots[offset:] + slots[:offset]
-
-        for slot in slots:
-            if slot < 0:
-                yield default_root
-            else:
-                key = SchemaV1.slot_to_state_root(slot)
-                yield Root(Hash32(self.db[key]))
+        offset = SLOTS_PER_HISTORICAL_ROOT - state_slot % SLOTS_PER_HISTORICAL_ROOT
+        return state_roots[offset:] + state_roots[:offset]
 
     def _read_state_historical_roots(
         self, state_root: Root, HISTORICAL_ROOTS_LIMIT: int
@@ -556,26 +572,21 @@ class BeaconChainDB(BaseBeaconChainDB):
 
     @to_tuple
     def _read_state_randao_mixes(
-        self,
-        state_root: Root,
-        genesis_eth1_block_hash: Root,
-        EPOCHS_PER_HISTORICAL_VECTOR: int,
-        SLOTS_PER_EPOCH: int,
+        self, state_root: Root, EPOCHS_PER_HISTORICAL_VECTOR: int, SLOTS_PER_EPOCH: int
     ) -> Iterable[Root]:
         """
-        Reconstructs the ``randa_mixes`` at a given state root.
-
-        Everytime a block is processed, the ``randao_mixes`` vector is updated with a new
-        mix at the current epoch...
-
-        ``state.randao_mixes[state.epoch % EPOCHS_PER_HISTORICAL_ROOT] = mix``
-
-        To reconstruct the mixes of an arbitrary state, we must find the mix value for the
-        state's slot and the mix value for the last slot in each epoch within range, then
-        we return a tuple that is properly offset.
+        Reconstructs the ``randao_mixes`` at a given state root.
         """
         state_slot = self._read_state_slot(state_root)
         state_epoch = compute_epoch_at_slot(state_slot, SLOTS_PER_EPOCH)
+
+        finalized_slot = self.get_finalized_head(BeaconBlock).slot
+        non_finalized_state_roots = dict(
+            enumerate(
+                self.get_state_parents(state_root, state_slot - finalized_slot),
+                finalized_slot,
+            )
+        )
 
         # create a list of epochs that corresponds to each mix in ``state.randao_mixes``
         epochs = [
@@ -587,18 +598,27 @@ class BeaconChainDB(BaseBeaconChainDB):
         offset = EPOCHS_PER_HISTORICAL_VECTOR - epochs[0] % EPOCHS_PER_HISTORICAL_VECTOR
         epochs = epochs[offset:] + epochs[:offset]
 
+        genesis_root = self._read_state_root_at_slot(Slot(0))
+        genesis_randao_mix = Root(
+            Hash32(self.db[SchemaV1.state_root_to_randao_mix(genesis_root)])
+        )
+
         for epoch in epochs:
             if epoch < 0:
-                yield genesis_eth1_block_hash
+                yield genesis_randao_mix
             elif epoch == state_epoch:
                 # yield the randao mix at the particular slot
-                key = SchemaV1.slot_to_randao_mix(state_slot)
+                key = SchemaV1.state_root_to_randao_mix(state_root)
                 yield Root(Hash32(self.db[key]))
             else:
                 # yield the randao mix at the last slot in the epoch
-                key = SchemaV1.slot_to_randao_mix(
-                    Slot((epoch + 1) * SLOTS_PER_EPOCH - 1)
-                )
+                slot = Slot((epoch + 1) * SLOTS_PER_EPOCH - 1)
+                if slot in non_finalized_state_roots:
+                    root = non_finalized_state_roots[slot]
+                else:
+                    root = self._read_state_root_at_slot(slot)
+
+                key = SchemaV1.state_root_to_randao_mix(root)
                 yield Root(Hash32(self.db[key]))
 
     def _read_state_slashings(
@@ -649,14 +669,18 @@ class BeaconChainDB(BaseBeaconChainDB):
         root = self.db[key]
         return ssz.decode(self.db[root], Checkpoint)
 
-    def _read_state(self, state_root: Root, config: Eth2Config) -> BeaconState:
-        (
-            genesis_time,
-            genesis_validators_root,
-            genesis_eth1_data_hash,
-        ) = self._get_genesis_data()
+    def _read_state_parent_state_root(self, state_root: Root) -> Root:
+        key = SchemaV1.state_root_to_parent_state_root(state_root)
+        return Root(Hash32(self.db[key]))
 
-        return BeaconState.create(
+    def _read_state_root_at_slot(self, slot: Slot) -> Root:
+        key = SchemaV1.slot_to_state_root(slot)
+        return Root(Hash32(self.db[key]))
+
+    def _read_state(
+        self, state_root: Root, state_class: Type[BeaconState], config: Eth2Config
+    ) -> BeaconState:
+        return state_class.create(
             slot=self._read_state_slot(state_root),
             fork=self._read_state_fork(state_root),
             latest_block_header=self._read_state_block_header(state_root),
@@ -677,10 +701,7 @@ class BeaconChainDB(BaseBeaconChainDB):
                 state_root, config.VALIDATOR_REGISTRY_LIMIT
             ),
             randao_mixes=self._read_state_randao_mixes(
-                state_root,
-                genesis_eth1_data_hash,
-                config.EPOCHS_PER_HISTORICAL_VECTOR,
-                config.SLOTS_PER_EPOCH,
+                state_root, config.EPOCHS_PER_HISTORICAL_VECTOR, config.SLOTS_PER_EPOCH
             ),
             slashings=self._read_state_slashings(
                 state_root, config.EPOCHS_PER_SLASHINGS_VECTOR
@@ -699,8 +720,8 @@ class BeaconChainDB(BaseBeaconChainDB):
                 state_root
             ),
             finalized_checkpoint=self._read_state_finalized_checkpoint(state_root),
-            genesis_time=genesis_time,
-            genesis_validators_root=genesis_validators_root,
+            genesis_time=self._genesis_time,
+            genesis_validators_root=self._genesis_validators_root,
             config=config,
         )
 
@@ -710,32 +731,28 @@ class BeaconChainDB(BaseBeaconChainDB):
 
         self._write_state(state, config)
 
-    def _get_genesis_data(self) -> Tuple[Timestamp, Root, Root]:
+    def _get_genesis_data(self) -> Tuple[Timestamp, Root]:
         key = SchemaV1.genesis_data()
         try:
             data = self.db[key]
         except KeyError:
-            return default_timestamp, default_root, default_root
+            return default_timestamp, default_root
         genesis_time = ssz.decode(data[:8], ssz.sedes.uint64)
-        genesis_validators_root = ssz.decode(data[8:40], ssz.sedes.bytes32)
-        genesis_eth1_block_hash = ssz.decode(data[40:], ssz.sedes.bytes32)
-        return (
-            Timestamp(genesis_time),
-            Root(genesis_validators_root),
-            Root(genesis_eth1_block_hash),
-        )
+        genesis_validators_root = ssz.decode(data[8:], ssz.sedes.bytes32)
+        return Timestamp(genesis_time), Root(genesis_validators_root)
 
     def _persist_genesis_data(self, genesis_state: BeaconState) -> None:
         """
         Store data in the database that will never change.
         """
-        genesis_time = ssz.encode(genesis_state.genesis_time, ssz.uint64)
-        genesis_validators_root = ssz.encode(
+        self._genesis_time = genesis_state.genesis_time
+        self._genesis_validators_root = genesis_state.genesis_validators_root
+        encoded_genesis_time = ssz.encode(genesis_state.genesis_time, ssz.uint64)
+        encoded_genesis_validators_root = ssz.encode(
             genesis_state.genesis_validators_root, ssz.bytes32
         )
-        genesis_eth1_block_hash = genesis_state.eth1_data.block_hash
         key = SchemaV1.genesis_data()
-        self.db[key] = genesis_time + genesis_validators_root + genesis_eth1_block_hash
+        self.db[key] = encoded_genesis_time + encoded_genesis_validators_root
 
 
 @to_tuple

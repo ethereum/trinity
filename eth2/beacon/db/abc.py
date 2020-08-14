@@ -78,12 +78,14 @@ class BaseBeaconChainDB(ABC):
 
     @abstractmethod
     def get_state_by_slot(
-        self, slot: Slot, config: Eth2Config
+        self, slot: Slot, state_class: Type[BeaconState], config: Eth2Config
     ) -> Optional[BeaconState]:
         ...
 
     @abstractmethod
-    def get_state_by_root(self, state_root: Root, config: Eth2Config) -> BeaconState:
+    def get_state_by_root(
+        self, state_root: Root, state_class: Type[BeaconState], config: Eth2Config
+    ) -> BeaconState:
         ...
 
     @abstractmethod
