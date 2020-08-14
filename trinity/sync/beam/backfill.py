@@ -5,9 +5,9 @@ from functools import partial
 import itertools
 import typing
 from typing import (
-    AsyncIterator,
     Dict,
     Iterable,
+    Iterator,
     NamedTuple,
     Optional,
     Set,
@@ -23,6 +23,7 @@ from eth.abc import (
 from eth.constants import EMPTY_SHA3
 from eth.rlp.accounts import Account
 from eth_typing import Hash32
+from eth_utils.toolz import take
 import rlp
 from trie import (
     HexaryTrie,
@@ -55,7 +56,6 @@ from trinity.sync.beam.constants import (
     NON_IDEAL_RESPONSE_PENALTY,
     PAUSE_SECONDS_IF_STATE_BACKFILL_STARVED,
 )
-from trinity._utils.async_iter import async_take
 from trinity._utils.logging import get_logger
 from trinity._utils.priority import SilenceObserver
 from trinity._utils.timer import Timer
@@ -142,12 +142,40 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
         await self._run_backfill()
         self.manager.cancel()
 
+    def _batch_of_missing_hashes(self) -> Tuple[TrackedRequest, ...]:
+        """
+        Take a batch of missing trie hashes, sized for a single peer request
+        """
+        return tuple(take(
+            REQUEST_SIZE,
+            self._missing_trie_hashes(),
+        ))
+
     async def _run_backfill(self) -> None:
         await self._begin_backfill.wait()
         if self._next_trie_root_hash is None:
             raise RuntimeError("Cannot start backfill when a recent trie root hash is unknown")
 
+        loop = asyncio.get_event_loop()
         while self.manager.is_running:
+            # Collect node hashes that might be missing; enough for a single request.
+            # Collect batch before asking for peer, because we don't want to hold the
+            #   peer idle, for a long time.
+            required_data = await loop.run_in_executor(None, self._batch_of_missing_hashes)
+
+            if len(required_data) == 0:
+                # Nothing available to request, for one of two reasons:
+                if self._check_complete():
+                    self.logger.info("Downloaded all accounts, storage and bytecode state")
+                    return
+                else:
+                    # There are active requests to peers, and we don't have enough information to
+                    #   ask for any more trie nodes (for example, near the beginning, when the top
+                    #   of the trie isn't available).
+                    self.logger.debug("Backfill is waiting for more hashes to arrive")
+                    await asyncio.sleep(PAUSE_SECONDS_IF_STATE_BACKFILL_STARVED)
+                    continue
+
             await asyncio.wait(
                 (
                     self._external_peasant_usage.until_silence(),
@@ -159,28 +187,6 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 break
 
             peer = await self._queening_queue.pop_fastest_peasant()
-
-            # collect node hashes that might be missing
-            required_data = tuple([
-                request async for request in async_take(REQUEST_SIZE, self._missing_trie_hashes())
-            ])
-
-            if len(required_data) == 0:
-                # Nothing available to request, for one of two reasons:
-                if self._check_complete():
-                    self.logger.info("Downloaded all accounts, storage and bytecode state")
-                    return
-                else:
-                    # There are active requests to peers, and we don't have enough information to
-                    #   ask for any more trie nodes (for example, near the beginning, when the top
-                    #   of the trie isn't available).
-                    self._queening_queue.insert_peer(peer)
-                    self.logger.debug(
-                        "Backfill is waiting for more hashes to arrive, putting %s back in queue",
-                        peer,
-                    )
-                    await asyncio.sleep(PAUSE_SECONDS_IF_STATE_BACKFILL_STARVED)
-                    continue
 
             self.manager.run_task(self._make_request, peer, required_data)
 
@@ -204,7 +210,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             # At least one account trie node is missing
             return False
 
-    async def _missing_trie_hashes(self) -> AsyncIterator[TrackedRequest]:
+    def _missing_trie_hashes(self) -> Iterator[TrackedRequest]:
         """
         Walks through the full state trie, yielding one missing node hash/prefix
         at a time.
@@ -236,7 +242,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                     starting_root_hash,
                 )
                 try:
-                    next_account_info = await account_iterator.__anext__()
+                    next_account_info = next(account_iterator)
                 except trie_exceptions.MissingTraversalNode as exc:
                     # Found a missing trie node while looking for the next account
                     yield self._account_tracker.generate_request(
@@ -244,7 +250,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                         exc.nibbles_traversed,
                     )
                     continue
-                except StopAsyncIteration:
+                except StopIteration:
                     # Finished iterating over all available accounts
                     break
 
@@ -258,7 +264,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                     account,
                     starting_root_hash,
                 )
-                async for node_request in subcomponent_hashes_iterator:
+                for node_request in subcomponent_hashes_iterator:
                     yield node_request
 
                 # Check if account is fully downloaded
@@ -302,10 +308,10 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             #   exit and let the caller deal with it, using a _check_complete() check.
             return
 
-    async def _request_tracking_trie_items(
+    def _request_tracking_trie_items(
             self,
             request_tracker: TrieNodeRequestTracker,
-            root_hash: Hash32) -> AsyncIterator[Tuple[Nibbles, Nibbles, bytes]]:
+            root_hash: Hash32) -> Iterator[Tuple[Nibbles, Nibbles, bytes]]:
         """
         Walk through the supplied trie, yielding the request tracker and node
         request for any missing trie nodes.
@@ -382,22 +388,18 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 # If this is just an intermediate node, then we can mark it as confirmed.
                 request_tracker.confirm_prefix(path_to_node, node)
 
-            # We made some DB calls and didn't find anything missing. Yield to the event loop
-            # too avoid holding it for too long.
-            await asyncio.sleep(0)
-
-    async def _missing_subcomponent_hashes(
+    def _missing_subcomponent_hashes(
             self,
             address_hash_nibbles: Nibbles,
             account: Account,
-            starting_main_root: Hash32) -> AsyncIterator[TrackedRequest]:
+            starting_main_root: Hash32) -> Iterator[TrackedRequest]:
 
         storage_node_iterator = self._missing_storage_hashes(
             address_hash_nibbles,
             account.storage_root,
             starting_main_root,
         )
-        async for node_request in storage_node_iterator:
+        for node_request in storage_node_iterator:
             yield node_request
 
         bytecode_node_iterator = self._missing_bytecode_hashes(
@@ -405,18 +407,18 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             account.code_hash,
             starting_main_root,
         )
-        async for node_request in bytecode_node_iterator:
+        for node_request in bytecode_node_iterator:
             yield node_request
 
         # Note that completing this iterator does NOT mean we're done with the
         #   account. It just means that all known missing hashes are actively
         #   being requested.
 
-    async def _missing_storage_hashes(
+    def _missing_storage_hashes(
             self,
             address_hash_nibbles: Nibbles,
             storage_root: Hash32,
-            starting_main_root: Hash32) -> AsyncIterator[TrackedRequest]:
+            starting_main_root: Hash32) -> Iterator[TrackedRequest]:
         """
         Walks through the storage trie at the given root, yielding one missing
         storage node hash/prefix at a time.
@@ -440,7 +442,7 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 storage_root,
             )
             try:
-                async for path_to_leaf, hashed_key, _storage_value in storage_iterator:
+                for path_to_leaf, _hashed_key, _storage_value in storage_iterator:
                     # We don't actually care to look at the storage keys/values during backfill
                     storage_tracker.confirm_leaf(path_to_leaf)
 
@@ -465,11 +467,11 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
                 #   exit and let the caller deal with it.
                 return
 
-    async def _missing_bytecode_hashes(
+    def _missing_bytecode_hashes(
             self,
             address_hash_nibbles: Nibbles,
             code_hash: Hash32,
-            starting_main_root: Hash32) -> AsyncIterator[TrackedRequest]:
+            starting_main_root: Hash32) -> Iterator[TrackedRequest]:
         """
         Checks if this bytecode is missing. If so, yield it and then exit.
         If not, then exit immediately.
