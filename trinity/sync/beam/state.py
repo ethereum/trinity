@@ -21,7 +21,6 @@ from eth_hash.auto import keccak
 from eth_utils import (
     clamp,
     to_checksum_address,
-    ValidationError,
 )
 from eth_typing import (
     Address,
@@ -185,6 +184,16 @@ class BeamDownloader(Service, PeerSubscriber):
         max_factor = self._num_peers - 1 - self._min_predictive_peers
         return max(0, max_factor)
 
+    def _get_unique_missing_hashes(self, hashes: Iterable[Hash32]) -> Set[Hash32]:
+        return set(
+            node_hash for node_hash in hashes if node_hash not in self._db
+        )
+
+    def _get_unique_present_hashes(self, hashes: Iterable[Hash32]) -> Set[Hash32]:
+        return set(
+            node_hash for node_hash in hashes if node_hash in self._db
+        )
+
     async def _wait_for_nodes(
             self,
             node_hashes: Iterable[Hash32],
@@ -196,9 +205,13 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
         """
-        missing_nodes = set(
-            node_hash for node_hash in node_hashes if self._is_node_missing(node_hash)
+        loop = asyncio.get_event_loop()
+        missing_nodes = await loop.run_in_executor(
+            None,
+            self._get_unique_missing_hashes,
+            node_hashes,
         )
+
         unrequested_nodes = tuple(
             node_hash for node_hash in missing_nodes if node_hash not in queue
         )
@@ -209,13 +222,26 @@ class BeamDownloader(Service, PeerSubscriber):
         else:
             return 0
 
-    def _is_node_missing(self, node_hash: Hash32) -> bool:
-        if len(node_hash) != 32:
-            raise ValidationError(f"Must request node by its 32-byte hash: 0x{node_hash.hex()}")
+    def _account_review(
+            self,
+            account_address_hashes: Iterable[Hash32],
+            root_hash: Hash32) -> Tuple[Set[Hash32], Set[Hash32]]:
+        """
+        Check these accounts in the trie.
+        :return: (missing trie nodes, completed_account_hashes)
+        """
+        need_nodes = set()
+        completed_account_hashes = set()
+        with self._trie_db.at_root(root_hash) as snapshot:
+            for account_hash in account_address_hashes:
+                try:
+                    snapshot[account_hash]
+                except MissingTrieNode as exc:
+                    need_nodes.add(exc.missing_node_hash)
+                else:
+                    completed_account_hashes.add(account_hash)
 
-        self.logger.debug2("checking if node 0x%s is present", node_hash.hex())
-
-        return node_hash not in self._db
+        return need_nodes, completed_account_hashes
 
     async def download_accounts(
             self,
@@ -232,20 +258,19 @@ class BeamDownloader(Service, PeerSubscriber):
 
         last_log_time = time.monotonic()
 
+        loop = asyncio.get_event_loop()
         missing_account_hashes = set(keccak(address) for address in account_addresses)
         completed_account_hashes = set()
         nodes_downloaded = 0
         # will never take more than 64 attempts to get a full account
         for _ in range(64):
-            need_nodes = set()
-            with self._trie_db.at_root(root_hash) as snapshot:
-                for account_hash in missing_account_hashes:
-                    try:
-                        snapshot[account_hash]
-                    except MissingTrieNode as exc:
-                        need_nodes.add(exc.missing_node_hash)
-                    else:
-                        completed_account_hashes.add(account_hash)
+            need_nodes, newly_completed = await loop.run_in_executor(
+                None,
+                self._account_review,
+                missing_account_hashes,
+                root_hash,
+            )
+            completed_account_hashes.update(newly_completed)
 
             # Log if taking a long time to download addresses
             now = time.monotonic()
@@ -382,8 +407,8 @@ class BeamDownloader(Service, PeerSubscriber):
         knights = tuple(self._queen_tracker.pop_knights())
         urgent_requests = [
             create_task(
-                self._store_nodes(peer, urgent_hashes, urgent=True),
-                name=f"BeamDownloader._store_nodes({peer.remote}, ...)",
+                self._get_nodes(peer, urgent_hashes, urgent=True),
+                name=f"BeamDownloader._get_nodes({peer.remote}, ...)",
             )
             for peer in (queen,) + knights
         ]
@@ -498,7 +523,7 @@ class BeamDownloader(Service, PeerSubscriber):
             node_hashes: Tuple[Hash32, ...],
             batch_id: int) -> None:
 
-        nodes, new_nodes, _ = await self._store_nodes(peer, node_hashes, urgent=False)
+        nodes, new_nodes, _ = await self._get_nodes(peer, node_hashes, urgent=False)
 
         self._total_processed_nodes += len(nodes)
         self._predictive_processed_nodes += len(new_nodes)
@@ -508,16 +533,46 @@ class BeamDownloader(Service, PeerSubscriber):
         # Re-insert the peasant into the tracker
         self._queen_tracker.insert_peer(peer)
 
-    async def _store_nodes(
+    async def _get_nodes(
             self,
             peer: ETHPeer,
             node_hashes: Tuple[Hash32, ...],
             urgent: bool) -> Tuple[NodeDataBundles, NodeDataBundles, ETHPeer]:
         nodes = await self._request_nodes(peer, node_hashes)
 
+        loop = asyncio.get_event_loop()
+        (
+            new_nodes,
+            found_independent,
+        ) = await loop.run_in_executor(None, self._store_nodes, node_hashes, nodes, urgent)
+
+        if new_nodes:
+            # If there are any new nodes returned, then notify any coros that are waiting on
+            #   node data to resume.
+            self._new_data_event.set()
+        elif urgent and found_independent:
+            # If urgent, and the data was retrieved another way (like backfilled), then
+            #   still trigger a new data event. That way, urgent coros don't
+            #   get stuck hanging until a timeout. This can cause an especially
+            #   flaky test_beam_syncer_backfills_all_state[42].
+            self._new_data_event.set()
+
+        return nodes, new_nodes, peer
+
+    def _store_nodes(
+            self,
+            node_hashes: Tuple[Hash32, ...],
+            nodes: NodeDataBundles,
+            urgent: bool) -> Tuple[NodeDataBundles, bool]:
+        """
+        Store supplied nodes in the database, return the subset of them that are new.
+        Also, return whether the requested nodes were found another way, if the
+        nodes are urgently-needed.
+        """
+
         new_nodes = tuple(
             (node_hash, node) for node_hash, node in nodes
-            if self._is_node_missing(node_hash)
+            if node_hash not in self._db
         )
 
         if new_nodes:
@@ -526,22 +581,21 @@ class BeamDownloader(Service, PeerSubscriber):
                 for node_hash, node in new_nodes:
                     batch[node_hash] = node
 
-        # If there are any new nodes returned, then notify any coros that are waiting on
-        #   node data to resume.
-        # Note that we notify waiting coros even if no new data returned, but they are urgent.
-        # We do this in case the urgent data was retrieved by backfill, or generated locally.
-        #   That way, urgent coros don't get stuck hanging until a timeout. This can cause an
-        #   especially flaky test_beam_syncer_backfills_all_state[42].
-        if urgent or new_nodes:
-            self._new_data_event.set()
+            # Don't bother checking if the nodes were found another way
+            found_independent = False
+        elif urgent:
+            # Check if the nodes were found another way, if they are urgently needed
+            for requested_hash in node_hashes:
+                if requested_hash in self._db:
+                    found_independent = True
+                    break
+            else:
+                found_independent = False
+        else:
+            # Don't bother checking if the nodes were found another way, if they are predictive
+            found_independent = False
 
-        return nodes, new_nodes, peer
-
-    def _is_node_present(self, node_hash: Hash32) -> bool:
-        """
-        Check if node_hash has data in the database or in the predicted node set.
-        """
-        return node_hash in self._db
+        return new_nodes, found_independent
 
     async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> int:
         """
@@ -551,14 +605,18 @@ class BeamDownloader(Service, PeerSubscriber):
         """
         remaining_hashes = node_hashes.copy()
 
+        loop = asyncio.get_event_loop()
         start_time = time.monotonic()
         while remaining_hashes and time.monotonic() - start_time < timeout:
             await self._new_data_event.wait()
-
-            found_hashes = set(found for found in remaining_hashes if self._is_node_present(found))
-            remaining_hashes -= found_hashes
-
             self._new_data_event.clear()
+
+            found_hashes = await loop.run_in_executor(
+                None,
+                self._get_unique_present_hashes,
+                remaining_hashes,
+            )
+            remaining_hashes -= found_hashes
 
         if remaining_hashes:
             self.logger.error(
