@@ -117,7 +117,7 @@ class BeamDownloader(Service, PeerSubscriber):
         self._node_tasks = TaskQueue[Hash32](buffer_size, lambda task: 0)
 
         # list of events waiting on new data
-        self._new_data_events: Set[asyncio.Event] = set()
+        self._new_data_event: asyncio.Event = asyncio.Event()
 
         self._peer_pool = peer_pool
 
@@ -533,8 +533,7 @@ class BeamDownloader(Service, PeerSubscriber):
         #   That way, urgent coros don't get stuck hanging until a timeout. This can cause an
         #   especially flaky test_beam_syncer_backfills_all_state[42].
         if urgent or new_nodes:
-            for new_data in self._new_data_events:
-                new_data.set()
+            self._new_data_event.set()
 
         return nodes, new_nodes, peer
 
@@ -552,18 +551,14 @@ class BeamDownloader(Service, PeerSubscriber):
         """
         remaining_hashes = node_hashes.copy()
 
-        # save an event that gets triggered when new data comes in
-        new_data = asyncio.Event()
-        self._new_data_events.add(new_data)
-
         start_time = time.monotonic()
         while remaining_hashes and time.monotonic() - start_time < timeout:
-            await new_data.wait()
+            await self._new_data_event.wait()
 
             found_hashes = set(found for found in remaining_hashes if self._is_node_present(found))
             remaining_hashes -= found_hashes
 
-            new_data.clear()
+            self._new_data_event.clear()
 
         if remaining_hashes:
             self.logger.error(
@@ -573,7 +568,6 @@ class BeamDownloader(Service, PeerSubscriber):
                 time.monotonic() - start_time,
             )
 
-        self._new_data_events.remove(new_data)
         return len(node_hashes) - len(remaining_hashes)
 
     def register_peer(self, peer: BasePeer) -> None:
