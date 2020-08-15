@@ -375,7 +375,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
             # returns.
             node_manager_task = create_task(
                 node_manager.wait_finished(), f'{NodeClass.__name__} wait_finished() task')
-            await wait_first([sync_task, node_manager_task])
+            await wait_first([sync_task, node_manager_task], max_wait_after_cancellation=2)
 
     async def launch_sync(self,
                           node: Node[BasePeer],

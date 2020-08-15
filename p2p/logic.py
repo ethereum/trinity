@@ -116,7 +116,10 @@ class Application(BaseLogic):
             # Now register ourselves with the connection.
             with connection.add_logic(self.name, self):
                 name = f'Application/{self.name}/apply/{connection.remote}'
-                yield create_task(wait_first(futures), name=name)
+                yield create_task(
+                    wait_first(futures, max_wait_after_cancellation=2),
+                    name=name,
+                )
 
 
 async def _never_ending_coro() -> None:

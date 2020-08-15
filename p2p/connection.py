@@ -130,7 +130,7 @@ class Connection(ConnectionAPI, Service):
                 try:
                     for behavior in behaviors:
                         behavior.post_apply()
-                    await wait_first(futures)
+                    await wait_first(futures, max_wait_after_cancellation=2)
                 except PeerConnectionLost:
                     # Any of our behaviors may propagate a PeerConnectionLost, which is to be
                     # expected as many Connection APIs used by them can raise that. To avoid a
