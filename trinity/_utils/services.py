@@ -19,10 +19,10 @@ async def run_background_asyncio_services(services: Sequence[ServiceAPI]) -> Non
             for service in services
         ])
         # If any of the services terminate, we do so as well.
-        await wait_first_asyncio([
-            asyncio.create_task(manager.wait_finished())
-            for manager in managers
-        ])
+        await wait_first_asyncio(
+            [asyncio.create_task(manager.wait_finished()) for manager in managers],
+            max_wait_after_cancellation=2
+        )
 
 
 async def run_background_trio_services(services: Sequence[ServiceAPI]) -> None:

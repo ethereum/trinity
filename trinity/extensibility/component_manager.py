@@ -100,7 +100,9 @@ class ComponentManager(Service):
                 tasks.append(asyncio.create_task(self._trigger_component_exit.wait()))
                 self.logger.info("Components started")
                 try:
-                    await wait_first(tasks)
+                    # The timeout is long as our component tasks can do a lot of stuff during
+                    # their cleanup.
+                    await wait_first(tasks, max_wait_after_cancellation=10)
                 finally:
                     self.logger.info("Stopping components")
             finally:
