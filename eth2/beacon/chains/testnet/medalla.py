@@ -281,6 +281,7 @@ class BeaconChain(BaseBeaconChain):
     def _update_head_if_new(self, block: BeaconBlock) -> None:
         if block != self._current_head:
             self._current_head = block
+            self._chain_db.mark_canonical_head(block)
             self.logger.debug("new head of chain: %s", block)
 
     def _update_fork_choice_with_block(self, block: BeaconBlock) -> None:
