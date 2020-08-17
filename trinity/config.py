@@ -887,7 +887,7 @@ class BeaconTrioAppConfig(BaseEth2AppConfig):
         validator_api_port: int,
         bootstrap_nodes: Tuple[Multiaddr, ...] = (),
         preferred_nodes: Tuple[Multiaddr, ...] = (),
-        recent_state_ssz: Optional[Path] = None,
+        genesis_state_ssz: Optional[Path] = None,
     ) -> None:
         super().__init__(config)
         self.p2p_maddr = p2p_maddr
@@ -897,7 +897,7 @@ class BeaconTrioAppConfig(BaseEth2AppConfig):
         self.bootstrap_nodes = bootstrap_nodes
         self.preferred_nodes = preferred_nodes
         self.client_identifier = construct_trinity_client_identifier()
-        self.recent_state_ssz = recent_state_ssz
+        self.genesis_state_ssz = genesis_state_ssz
 
     @classmethod
     def from_parser_args(
@@ -923,7 +923,7 @@ class BeaconTrioAppConfig(BaseEth2AppConfig):
         bootstrap_nodes = args.bootstrap_maddrs
         preferred_nodes = args.preferred_maddrs
         validator_api_port = args.validator_api_port
-        recent_state_ssz = args.recent_state_ssz
+        genesis_state_ssz = args.genesis_state_ssz
 
         _resolve_node_key(trinity_config, args.nodekey_seed)
 
@@ -935,7 +935,7 @@ class BeaconTrioAppConfig(BaseEth2AppConfig):
             validator_api_port,
             bootstrap_nodes,
             preferred_nodes,
-            recent_state_ssz,
+            genesis_state_ssz,
         )
 
     @property

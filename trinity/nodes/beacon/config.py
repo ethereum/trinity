@@ -20,7 +20,7 @@ class BeaconNodeConfig:
         eth2_config: Eth2Config,
         client_identifier: str,
         p2p_maddr: Multiaddr,
-        recent_state_ssz: Optional[Path],
+        genesis_state_ssz: Optional[Path],
     ) -> None:
         self.eth2_config = eth2_config
 
@@ -36,7 +36,7 @@ class BeaconNodeConfig:
 
         self.chain_db_class = chain_config.chain_db_class
         self.chain_class = chain_config.chain_class
-        self.recent_state_ssz = recent_state_ssz
+        self.genesis_state_ssz = genesis_state_ssz
 
     @classmethod
     def from_platform_config(
@@ -52,5 +52,5 @@ class BeaconNodeConfig:
             beacon_app_config.network_config,
             beacon_app_config.client_identifier,
             beacon_app_config.p2p_maddr,
-            beacon_app_config.recent_state_ssz,
+            beacon_app_config.genesis_state_ssz,
         )

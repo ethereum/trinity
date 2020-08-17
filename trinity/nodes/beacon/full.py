@@ -167,11 +167,13 @@ class BeaconNode:
     ) -> "BeaconNode":
         base_db = LevelDB(db_path=config.database_dir)
 
-        recent_state = _resolve_recent_state(cls.logger, config)
+        with open(config.genesis_state_ssz, "rb") as genesis_state_ssz_file:
+            genesis_state_ssz = genesis_state_ssz_file.read()
+            genesis_state = ssz.decode(genesis_state_ssz, BeaconState)
 
-        chain = config.chain_class.from_genesis(base_db, recent_state)
+        chain = config.chain_class.from_genesis(base_db, genesis_state)
 
-        genesis_time = recent_state.genesis_time
+        genesis_time = genesis_state.genesis_time
         clock = _mk_clock(config.eth2_config, genesis_time, time_provider)
 
         clock = _mk_clock(config.eth2_config, genesis_time, time_provider)
@@ -497,14 +499,6 @@ class BeaconNode:
             for task in tasks:
                 await nursery.start(task)
             task_status.started()
-
-
-def _resolve_recent_state(
-    logger: logging.Logger, config: BeaconNodeConfig
-) -> BeaconState:
-    # NOTE: temporary...
-    with open(config.recent_state_ssz, "rb") as recent_state_file:
-        return ssz.decode(recent_state_file.read(), BeaconState)
 
 
 def _mk_block_broadcaster(node: BeaconNode) -> BlockBroadcasterAPI:

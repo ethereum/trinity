@@ -72,9 +72,9 @@ class BeaconNodeComponent(TrioComponent):
             "--validator-api-port", type=int, help="API server port", default=5005
         )
         arg_parser.add_argument(
-            "--recent-state-ssz",
+            "--genesis-state-ssz",
             type=Path,
-            help="path to a recent ssz-encoded state (for use in weak subjectivity)",
+            help="path to the genesis state for the selected network",
         )
 
         network_description_group = arg_parser.add_mutually_exclusive_group()
