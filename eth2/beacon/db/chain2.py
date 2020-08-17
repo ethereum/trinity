@@ -132,6 +132,15 @@ class BeaconChainDB(BaseBeaconChainDB):
         slot_to_state_root = SchemaV1.slot_to_state_root(block.slot)
         self.db[slot_to_state_root] = block.state_root
 
+    def mark_canonical_head(self, block: BaseBeaconBlock) -> None:
+        canonical_head_root = SchemaV1.canonical_head_root()
+        self.db[canonical_head_root] = block.hash_tree_root
+
+    def get_canonical_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
+        canonical_head_root_key = SchemaV1.canonical_head_root()
+        canonical_head_root = Root(Hash32(self.db[canonical_head_root_key]))
+        return self.get_block_by_root(canonical_head_root, block_class)
+
     def mark_justified_head(self, block: BaseBeaconBlock) -> None:
         justified_head_root = SchemaV1.justified_head_root()
         self.db[justified_head_root] = block.hash_tree_root

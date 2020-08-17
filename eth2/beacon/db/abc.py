@@ -69,6 +69,20 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
+    def mark_canonical_head(self, block: BaseBeaconBlock) -> None:
+        ...
+
+    @abstractmethod
+    def get_canonical_head(self, block: BaseBeaconBlock) -> None:
+        """
+        Prefer to read the canonical head from the fork choice module.
+
+        This method primarily exists to help the fork choice module restore
+        context from disk, e.g. in between periods of running a beacon node.
+        """
+        ...
+
+    @abstractmethod
     def mark_justified_head(self, block: BaseBeaconBlock) -> None:
         ...
 
