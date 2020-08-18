@@ -15,7 +15,6 @@ from trinity.config import (
     Eth1ChainConfig,
     TrinityConfig,
     BeaconTrioAppConfig,
-    BeaconTrioChainConfig,
 )
 from eth2.beacon.db.chain import BaseBeaconChainDB
 from trinity.exceptions import (
@@ -144,15 +143,6 @@ def initialize_database(chain_config: Eth1ChainConfig,
 def initialize_beacon_database(chain_config: BeaconChainConfig,
                                chaindb: BaseBeaconChainDB,
                                base_db: AtomicDatabaseAPI) -> None:
-    try:
-        chaindb.get_canonical_head_root()
-    except CanonicalHeadNotFound:
-        chain_config.initialize_chain(base_db)
-
-
-def initialize_beacon_trio_database(chain_config: BeaconTrioChainConfig,
-                                    chaindb: BaseBeaconChainDB,
-                                    base_db: AtomicDatabaseAPI) -> None:
     try:
         chaindb.get_canonical_head_root()
     except CanonicalHeadNotFound:

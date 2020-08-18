@@ -10,6 +10,7 @@ from enum import (
     Enum,
     auto,
 )
+import hashlib
 import json
 from pathlib import (
     Path,
@@ -19,6 +20,7 @@ from typing import (
     Any,
     Dict,
     Iterable,
+    Optional,
     Tuple,
     Type,
     TypeVar,
@@ -48,6 +50,7 @@ from eth_keys import (
 from eth_keys.datatypes import (
     PrivateKey,
 )
+from eth_utils import encode_hex
 from eth_typing import (
     Address,
     BLSPubkey,
@@ -67,6 +70,7 @@ from eth2.beacon.typing import (
 from eth2.configs import (
     Eth2Config,
 )
+import p2p.ecies as ecies
 from p2p.kademlia import (
     Node as KademliaNode,
 )
@@ -111,6 +115,11 @@ from trinity.network_configurations import (
 
 from eth2.beacon.chains.base import BeaconChain
 from eth2.beacon.chains.testnet.medalla import BeaconChain as MedallaChain
+from eth2.beacon.chains.abc import BaseBeaconChain as ABCBaseBeaconChain
+from eth2.beacon.db.abc import BaseBeaconChainDB
+from eth2.beacon.db.chain2 import BeaconChainDB as MedallaChainDB
+from eth2.beacon.state_machines.forks.medalla.configs import MEDALLA_CONFIG
+from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 
 
 if TYPE_CHECKING:
@@ -118,9 +127,8 @@ if TYPE_CHECKING:
     from trinity.nodes.base import Node  # noqa: F401
     from trinity.chains.full import FullChain  # noqa: F401
     from trinity.chains.light import LightDispatchChain  # noqa: F401
-    from eth2.beacon.chains.abc import BaseBeaconChain as ABCBaseBeaconChain  # noqa: F401
+
     from eth2.beacon.chains.base import BaseBeaconChain  # noqa: F401
-    from eth2.beacon.state_machines.base import BaseBeaconStateMachine  # noqa: F401
 
 DATABASE_DIR_NAME = 'chain'
 
@@ -816,92 +824,80 @@ class BeaconAppConfig(BaseEth2AppConfig):
         return BeaconChainConfig.from_genesis_config(config_profile)
 
 
-class BeaconTrioChainConfig:
-    _genesis_state: BeaconState
-    _beacon_chain_class: Type['ABCBaseBeaconChain'] = None
-    _genesis_config: Eth2Config = None
-    _key_map: Dict[BLSPubkey, int]
+class BeaconTrioChainConfig(ABC):
+    chain_db_class: Type[BaseBeaconChainDB]
+    chain_class: Type[ABCBaseBeaconChain]
 
-    def __init__(self,
-                 genesis_state: BeaconState,
-                 genesis_config: Eth2Config,
-                 genesis_validator_key_map: Dict[BLSPubkey, int],
-                 beacon_chain_class: Type['ABCBaseBeaconChain'] = MedallaChain) -> None:
-        self._genesis_state = genesis_state
-        self._eth2_config = genesis_config
-        self._key_map = genesis_validator_key_map
-        self._beacon_chain_class = beacon_chain_class
 
-    @property
-    def genesis_config(self) -> Eth2Config:
-        """
-        NOTE: this ``genesis_config`` means something slightly different from the
-        genesis config referenced in other places in this class...
-        TODO:(ralexstokes) patch up the names here...
-        """
-        return self._eth2_config
+class MedallaChainConfig(BeaconTrioChainConfig):
+    chain_db_class: Type[BaseBeaconChainDB] = MedallaChainDB
+    chain_class: Type[ABCBaseBeaconChain] = MedallaChain
 
-    @property
-    def genesis_time(self) -> Timestamp:
-        return self._genesis_state.genesis_time
 
-    @property
-    def beacon_chain_class(self) -> Type['ABCBaseBeaconChain']:
-        return self._beacon_chain_class
+class MainnetChainConfig(BeaconTrioChainConfig):
+    # TODO: update to mainnet instances
+    chain_db_class: Type[BaseBeaconChainDB] = MedallaChainDB
+    chain_class: Type[ABCBaseBeaconChain] = MedallaChain
 
-    @classmethod
-    def from_genesis_config(cls, config_profile: str) -> 'BeaconTrioChainConfig':
-        """
-        Construct an instance of ``cls`` reading the genesis configuration
-        data under the local data directory.
-        """
-        try:
-            with open(_get_eth2_genesis_config_file_path(config_profile)) as config_file:
-                genesis_config = json.load(config_file)
-        except FileNotFoundError as e:
-            raise Exception("unable to load genesis config: %s", e)
 
-        eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
-        # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
-        override_lengths(eth2_config)
+ETH2_NETWORKS = {
+    "medalla": MEDALLA_CONFIG,
+    "mainnet": SERENITY_CONFIG,
+}
 
-        genesis_state = from_formatted_dict(genesis_config["genesis_state"], BeaconState)
-        genesis_validator_key_map = load_genesis_key_map(
-            genesis_config["genesis_validator_key_pairs"]
-        )
-        return cls(
-            genesis_state,
-            eth2_config,
-            genesis_validator_key_map,
-        )
+ETH2_CHAIN_CONFIGS = {
+    "medalla": MedallaChainConfig,
+    "mainnet": MainnetChainConfig,
+}
 
-    @classmethod
-    def get_genesis_config_file_path(cls, profile: str) -> Path:
-        return _get_eth2_genesis_config_file_path(profile)
 
-    def initialize_chain(self,
-                         base_db: AtomicDatabaseAPI) -> 'ABCBaseBeaconChain':
-        return self.beacon_chain_class.from_genesis(
-            base_db=base_db,
-            genesis_state=self._genesis_state,
-        )
+def _load_predefined_eth2_network(network: str) -> Eth2Config:
+    """
+    NOTE: ``network`` should exist given the argparse configuration
+    which references ``ETH2_NETWORKS``.
+    """
+    return ETH2_NETWORKS[network]
+
+
+def _load_eth2_network_from_yaml(network_config_path: str) -> Eth2Config:
+    raise NotImplementedError("loading network from YAML config is unsupported")
+
+
+def _resolve_node_key(trinity_config: TrinityConfig, nodekey_seed: Optional[str]) -> PrivateKey:
+    if nodekey_seed:
+        private_key_bytes = hashlib.sha256(nodekey_seed.encode()).digest()
+        nodekey = PrivateKey(private_key_bytes)
+        trinity_config.nodekey = nodekey
+        return
+
+    if trinity_config.nodekey is None:
+        nodekey = ecies.generate_privkey()
+        with open(trinity_config.nodekey_path, 'wb') as nodekey_file:
+            nodekey_file.write(nodekey.to_bytes())
+        trinity_config.nodekey = nodekey
 
 
 class BeaconTrioAppConfig(BaseEth2AppConfig):
     def __init__(
         self,
         config: TrinityConfig,
+        network_name: str,
+        network_config: Eth2Config,
         p2p_maddr: Multiaddr,
-        orchestration_profile: str,
+        validator_api_port: int,
         bootstrap_nodes: Tuple[Multiaddr, ...] = (),
         preferred_nodes: Tuple[Multiaddr, ...] = (),
+        genesis_state_ssz: Optional[Path] = None,
     ) -> None:
         super().__init__(config)
         self.p2p_maddr = p2p_maddr
-        self.bootstrap_nodes = config.bootstrap_nodes
-        self.preferred_nodes = config.preferred_nodes
+        self.network_name = network_name
+        self.network_config = network_config
+        self.validator_api_port = validator_api_port
+        self.bootstrap_nodes = bootstrap_nodes
+        self.preferred_nodes = preferred_nodes
         self.client_identifier = construct_trinity_client_identifier()
-        self.orchestration_profile = orchestration_profile
+        self.genesis_state_ssz = genesis_state_ssz
 
     @classmethod
     def from_parser_args(
@@ -911,16 +907,35 @@ class BeaconTrioAppConfig(BaseEth2AppConfig):
         Initialize from the namespace object produced by
         an ``argparse.ArgumentParser`` and the :class:`~trinity.config.TrinityConfig`
         """
-        bootstrap_nodes = args.bootstrap_nodes
-        preferred_nodes = args.preferred_nodes
+        # NOTE: ``args.network`` has a default so check for an override in
+        # the ``network_config`` first...
+        if args.network_config:
+            network_config = _load_eth2_network_from_yaml(args.network_config)
+            network_name = "custom network"
+        else:
+            network_config = _load_predefined_eth2_network(args.network)
+            network_name = args.network
+
+        # NOTE: required for SSZ types to work correctly...
+        override_lengths(network_config)
+
         p2p_maddr = args.p2p_maddr
+        bootstrap_nodes = args.bootstrap_maddrs
+        preferred_nodes = args.preferred_maddrs
+        validator_api_port = args.validator_api_port
+        genesis_state_ssz = args.genesis_state_ssz
+
+        _resolve_node_key(trinity_config, args.nodekey_seed)
 
         return cls(
             trinity_config,
+            network_name,
+            network_config,
             p2p_maddr,
-            args.orchestration_profile,
+            validator_api_port,
             bootstrap_nodes,
-            preferred_nodes
+            preferred_nodes,
+            genesis_state_ssz,
         )
 
     @property
@@ -930,14 +945,28 @@ class BeaconTrioAppConfig(BaseEth2AppConfig):
 
         This is resolved relative to the ``data_dir``
         """
-        path = self.trinity_config.data_dir / DATABASE_DIR_NAME
-        return self.trinity_config.with_app_suffix(path) / f"full_{self.orchestration_profile}"
+        root_dir = self.trinity_config.trinity_root_dir
+        path = self.trinity_config.with_app_suffix(root_dir)
+        network_identifier = _build_network_identifier(self.network_config)
+        peer_identifier = self.trinity_config.nodekey.to_hex()[2:]
+        return path / network_identifier / peer_identifier
 
-    def get_chain_config(self, config_profile: str = "medalla") -> BeaconTrioChainConfig:
-        """
-        Return the :class:`~trinity.config.BeaconChainConfig` that is derived from the genesis file
-        """
-        return BeaconTrioChainConfig.from_genesis_config(config_profile)
+    def get_chain_config(self) -> BeaconTrioChainConfig:
+        if self.network_name in ETH2_CHAIN_CONFIGS:
+            return ETH2_CHAIN_CONFIGS[self.network_name]()
+
+        raise Exception(
+            f"unknown chain config for network name {self.network_name}."
+            " please define before use."
+        )
+
+
+def _build_network_identifier(config: Eth2Config) -> str:
+    return (
+        f"{config.DEPOSIT_CHAIN_ID}"
+        f"{config.DEPOSIT_NETWORK_ID}"
+        f"{encode_hex(config.DEPOSIT_CONTRACT_ADDRESS)[2:]}"
+    )
 
 
 class ValidatorClientAppConfig(BaseEth2AppConfig):

@@ -202,8 +202,7 @@ setup(
     entry_points={
         'console_scripts': [
             'trinity=trinity:main',
-            'trinity-beacon=trinity:main_beacon',
-            'trinity-beacon-trio=trinity:main_beacon_trio',
+            'trinity-beacon=trinity:main_beacon_trio',
             'trinity-validator=trinity:main_validator'
         ],
     },
