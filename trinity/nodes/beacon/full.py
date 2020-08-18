@@ -20,6 +20,8 @@ from eth2.api.http.validator import ServerHandlers as ValidatorAPIHandlers
 from eth2.api.http.validator import SyncerAPI, SyncStatus
 from eth2.beacon.chains.abc import BaseBeaconChain
 from eth2.beacon.chains.exceptions import ParentNotFoundError, SlashableBlockError
+from eth2.beacon.chains.testnet.medalla import ChainDBBlockSink
+from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.helpers import compute_fork_digest, compute_start_slot_at_epoch
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
@@ -167,14 +169,28 @@ class BeaconNode:
     ) -> "BeaconNode":
         base_db = LevelDB(db_path=config.database_dir)
 
-        with open(config.genesis_state_ssz, "rb") as genesis_state_ssz_file:
-            genesis_state_ssz = genesis_state_ssz_file.read()
-            genesis_state = ssz.decode(genesis_state_ssz, BeaconState)
+        chain_db = config.chain_db_class(base_db)
+        genesis_block = chain_db.get_block_by_slot(GENESIS_SLOT, BeaconBlock)
 
-        chain = config.chain_class.from_genesis(base_db, genesis_state)
+        if genesis_block is None and config.genesis_state_ssz is None:
+            raise Exception("node cannot proceed with out genesis state")
 
-        genesis_time = genesis_state.genesis_time
-        clock = _mk_clock(config.eth2_config, genesis_time, time_provider)
+        if genesis_block is None:
+            with open(config.genesis_state_ssz, "rb") as genesis_state_ssz_file:
+                genesis_state_ssz = genesis_state_ssz_file.read()
+                genesis_state = ssz.decode(genesis_state_ssz, BeaconState)
+
+            chain = config.chain_class.from_genesis(base_db, genesis_state)
+            genesis_time = genesis_state.genesis_time
+        else:
+            # TODO fix slot polymorphism...
+            # NOTE: accessing private property, ignoring type for now...
+            sm = config.chain_class._sm_configuration[0][1]  # type: ignore
+            fork_choice_class = sm.fork_choice_class
+            block_sink = ChainDBBlockSink(chain_db)
+            fork_choice = fork_choice_class.from_db(chain_db, config, block_sink)
+            chain = config.chain_class(chain_db, fork_choice)
+            genesis_time = chain_db.genesis_time
 
         clock = _mk_clock(config.eth2_config, genesis_time, time_provider)
         return cls(

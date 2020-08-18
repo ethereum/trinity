@@ -52,7 +52,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._state_cache = LRU(STATE_CACHE_SIZE)
         self._state_bytes_written = 0
 
-        self._genesis_time, self._genesis_validators_root = self._get_genesis_data()
+        self.genesis_time, self._genesis_validators_root = self._get_genesis_data()
 
     @classmethod
     def from_genesis(
