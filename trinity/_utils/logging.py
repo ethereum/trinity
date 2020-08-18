@@ -2,14 +2,17 @@ import contextlib
 import copy
 import logging
 from logging import (
-    StreamHandler
+    StreamHandler,
 )
 from logging.handlers import (
+    QueueHandler,
+    QueueListener,
     RotatingFileHandler,
 )
 import os
 from pathlib import Path
 import pickle
+from queue import Queue
 import socket
 import sys
 from types import TracebackType
@@ -225,7 +228,18 @@ def child_process_logging(boot_info: BootInfo) -> Iterator[None]:
     ipc_handler = IPCHandler.connect(boot_info.trinity_config.logging_ipc_path)
     ipc_handler.setLevel(boot_info.min_log_level)
 
-    logger.addHandler(ipc_handler)
+    # Push all logs into a queue, because sometimes pushing into the socket is
+    #   slow and we don't want to block the event loop. Inspired by:
+    # https://docs.python.org/3.8/howto/logging-cookbook.html#dealing-with-handlers-that-block
+    log_queue: Queue[str] = Queue(-1)
+    queue_handler = QueueHandler(log_queue)
+    queue_listener = QueueListener(
+        log_queue,
+        ipc_handler,
+        respect_handler_level=True,
+    )
+
+    logger.addHandler(queue_handler)
 
     logger.debug(
         'Logging initialized for file %s: PID=%s',
@@ -233,10 +247,12 @@ def child_process_logging(boot_info: BootInfo) -> Iterator[None]:
         os.getpid(),
     )
     with ipc_handler:
+        queue_listener.start()
         try:
             yield
         finally:
-            logger.removeHandler(ipc_handler)
+            logger.removeHandler(queue_handler)
+            queue_listener.stop()
 
 
 def _set_environ_if_missing(name: str, val: str) -> None:
