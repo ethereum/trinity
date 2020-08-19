@@ -6,6 +6,7 @@ import typing
 from typing import (
     Any,
     Collection,
+    Dict,
     FrozenSet,
     Iterable,
     Set,
@@ -225,23 +226,23 @@ class BeamDownloader(Service, PeerSubscriber):
     def _account_review(
             self,
             account_address_hashes: Iterable[Hash32],
-            root_hash: Hash32) -> Tuple[Set[Hash32], Set[Hash32]]:
+            root_hash: Hash32) -> Tuple[Set[Hash32], Dict[Hash32, bytes]]:
         """
         Check these accounts in the trie.
-        :return: (missing trie nodes, completed_account_hashes)
+        :return: (missing trie nodes, completed_hashes->encoded_account_rlp)
         """
         need_nodes = set()
-        completed_account_hashes = set()
+        completed_accounts = {}
         with self._trie_db.at_root(root_hash) as snapshot:
             for account_hash in account_address_hashes:
                 try:
-                    snapshot[account_hash]
+                    account_rlp = snapshot[account_hash]
                 except MissingTrieNode as exc:
                     need_nodes.add(exc.missing_node_hash)
                 else:
-                    completed_account_hashes.add(account_hash)
+                    completed_accounts[account_hash] = account_rlp
 
-        return need_nodes, completed_account_hashes
+        return need_nodes, completed_accounts
 
     def _get_unique_hashes(self, addresses: Collection[Address]) -> Set[Hash32]:
         uniques = set(addresses)
@@ -268,7 +269,7 @@ class BeamDownloader(Service, PeerSubscriber):
             self._get_unique_hashes,
             account_addresses,
         )
-        completed_account_hashes = set()
+        completed_account_hashes: Set[Hash32] = set()
         nodes_downloaded = 0
         # will never take more than 64 attempts to get a full account
         for _ in range(64):
@@ -278,7 +279,7 @@ class BeamDownloader(Service, PeerSubscriber):
                 missing_account_hashes,
                 root_hash,
             )
-            completed_account_hashes.update(newly_completed)
+            completed_account_hashes.update(newly_completed.keys())
 
             # Log if taking a long time to download addresses
             now = time.monotonic()
@@ -318,16 +319,20 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: The downloaded account rlp, and how many state trie node downloads were required
         """
+        loop = asyncio.get_event_loop()
         # will never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            try:
-                with self._trie_db.at_root(root_hash) as snapshot:
-                    account_rlp = snapshot[account_hash]
-            except MissingTrieNode as exc:
-                await self.ensure_nodes_present({exc.missing_node_hash}, urgent)
+            need_nodes, newly_completed = await loop.run_in_executor(
+                None,
+                self._account_review,
+                [account_hash],
+                root_hash,
+            )
+            if need_nodes:
+                await self.ensure_nodes_present(need_nodes, urgent)
             else:
                 # Account is fully available within the trie
-                return account_rlp, num_downloads_required
+                return newly_completed[account_hash], num_downloads_required
         else:
             raise Exception(
                 f"State Downloader failed to download 0x{account_hash.hex()} at "
@@ -350,14 +355,17 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: how many storage trie node downloads were required
         """
+        loop = asyncio.get_event_loop()
         # should never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            try:
-                with self._trie_db.at_root(storage_root_hash) as snapshot:
-                    # request the data just to see which part is missing
-                    snapshot[storage_key]
-            except MissingTrieNode as exc:
-                await self.ensure_nodes_present({exc.missing_node_hash}, urgent)
+            need_nodes = await loop.run_in_executor(
+                None,
+                self._storage_review,
+                storage_key,
+                storage_root_hash,
+            )
+            if need_nodes:
+                await self.ensure_nodes_present(need_nodes, urgent)
             else:
                 # Account is fully available within the trie
                 return num_downloads_required
@@ -367,6 +375,23 @@ class BeamDownloader(Service, PeerSubscriber):
                 f"{to_checksum_address(account)} at storage root 0x{storage_root_hash.hex()} "
                 f"in 64 runs."
             )
+
+    def _storage_review(
+            self,
+            storage_key: Hash32,
+            storage_root_hash: Hash32) -> Set[Hash32]:
+        """
+        Check this storage slot in the trie.
+        :return: missing trie nodes
+        """
+        with self._trie_db.at_root(storage_root_hash) as snapshot:
+            try:
+                # request the data just to see which part is missing
+                snapshot[storage_key]
+            except MissingTrieNode as exc:
+                return {exc.missing_node_hash}
+            else:
+                return set()
 
     async def _match_urgent_node_requests_to_peers(self) -> None:
         """
