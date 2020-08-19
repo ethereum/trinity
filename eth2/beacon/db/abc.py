@@ -5,7 +5,7 @@ from eth.abc import AtomicDatabaseAPI
 
 from eth2.beacon.types.blocks import BaseBeaconBlock, BaseSignedBeaconBlock
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import BLSSignature, Root, Slot
+from eth2.beacon.typing import BLSSignature, Root, Slot, Timestamp
 from eth2.configs import Eth2Config
 
 
@@ -21,6 +21,8 @@ class BaseBeaconChainDB(ABC):
     NOTE: Blocks and states are not stored by slot until they have
     been finalized. To get data for non-finalized slots, defer to the fork choice computation.
     """
+
+    genesis_time: Timestamp
 
     @abstractmethod
     def __init__(self, db: AtomicDatabaseAPI) -> None:
@@ -66,6 +68,28 @@ class BaseBeaconChainDB(ABC):
         """
         Record the ``block`` as part of the canonical ("finalized") chain.
         """
+        ...
+
+    @abstractmethod
+    def mark_canonical_head(self, block: BaseBeaconBlock) -> None:
+        ...
+
+    @abstractmethod
+    def get_canonical_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
+        """
+        Prefer to read the canonical head from the fork choice module.
+
+        This method primarily exists to help the fork choice module restore
+        context from disk, e.g. in between periods of running a beacon node.
+        """
+        ...
+
+    @abstractmethod
+    def mark_justified_head(self, block: BaseBeaconBlock) -> None:
+        ...
+
+    @abstractmethod
+    def get_justified_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
         ...
 
     @abstractmethod

@@ -4,6 +4,7 @@ from typing import Optional
 from eth.abc import AtomicDatabaseAPI
 
 from eth2.beacon.db.abc import BaseBeaconChainDB
+from eth2.beacon.fork_choice.abc import BaseForkChoice
 from eth2.beacon.state_machines.abc import BaseBeaconStateMachine
 from eth2.beacon.types.attestations import Attestation
 from eth2.beacon.types.blocks import BaseSignedBeaconBlock, BeaconBlock
@@ -13,6 +14,12 @@ from eth2.clock import Tick
 
 
 class BaseBeaconChain(ABC):
+    @abstractmethod
+    def __init__(
+        self, chain_db: BaseBeaconChainDB, fork_choice: BaseForkChoice
+    ) -> None:
+        ...
+
     @classmethod
     @abstractmethod
     def from_genesis(
