@@ -7,10 +7,12 @@ from typing import (
     NewType,
     Optional,
     Sequence,
+    Tuple,
     TypeVar,
     cast,
 )
 
+from eth2.beacon.constants import GENESIS_SLOT
 from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.epoch_processing_helpers import get_active_validator_indices
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
@@ -531,26 +533,41 @@ def _block_node_to_block(node: BlockNode[T]) -> BaseBeaconBlock:
 
 
 def _block_to_block_node(block: BaseBeaconBlock) -> BlockNode[BaseBeaconBlock]:
-    return BlockNode(block.slot, block.hash_tree_root, block)
+    if block.slot == GENESIS_SLOT:
+        root = default_root
+    else:
+        root = block.hash_tree_root
+
+    return BlockNode(block.slot, root, block)
 
 
 class LMDGHOSTForkChoice(BaseForkChoice):
     def __init__(
         self,
         finalized_block_node: BlockNode[BaseBeaconBlock],
-        finalized_state: BeaconState,
+        justified_checkpoint: Checkpoint,
+        justified_state: BeaconState,
         config: Eth2Config,
         block_sink: BlockSink,
     ) -> None:
         self._config = config
+        finalized_checkpoint = Checkpoint.create(
+            epoch=compute_epoch_at_slot(
+                finalized_block_node.slot, config.SLOTS_PER_EPOCH
+            ),
+            root=finalized_block_node.root,
+        )
         self._impl = ProtoArrayForkChoice(
             finalized_block_node,
-            finalized_state.finalized_checkpoint,
-            finalized_state.current_justified_checkpoint,
+            finalized_checkpoint,
+            justified_checkpoint,
             block_sink,
             config,
         )
-        self.update_justified(finalized_state)
+        self._justified = justified_checkpoint
+        self._finalized = finalized_checkpoint
+
+        self.update_justified(justified_state)
 
     @classmethod
     def from_genesis(
@@ -559,27 +576,63 @@ class LMDGHOSTForkChoice(BaseForkChoice):
         # NOTE: patch up genesis state to reflect the genesis block as an initial checkpoint
         # this only has to be patched once at genesis
         genesis_block = get_genesis_block(genesis_state.hash_tree_root, BeaconBlock)
-        genesis_block_node = BlockNode(genesis_block.slot, default_root, genesis_block)
-        return cls(genesis_block_node, genesis_state, config, block_sink)
+        genesis_block_node = _block_to_block_node(genesis_block)
+        justified_checkpoint = Checkpoint.create()
+        return cls(
+            genesis_block_node, justified_checkpoint, genesis_state, config, block_sink
+        )
 
     @classmethod
     def from_db(
         cls, chain_db: BaseBeaconChainDB, config: Eth2Config, block_sink: BlockSink
     ) -> "LMDGHOSTForkChoice":
+        canonical_head = chain_db.get_canonical_head(BeaconBlock)
+        justified_head = chain_db.get_justified_head(BeaconBlock)
         finalized_head = chain_db.get_finalized_head(BeaconBlock)
-        finalized_state = chain_db.get_state_by_root(
-            finalized_head.state_root, BeaconState, config
-        )
+
+        assert canonical_head.slot >= justified_head.slot >= finalized_head.slot
+
         finalized_head_node = _block_to_block_node(finalized_head)
-        # TODO: need genesis patch up here as well....
-        return cls(finalized_head_node, finalized_state, config, block_sink)
+        justified_checkpoint = Checkpoint.create(
+            epoch=compute_epoch_at_slot(justified_head.slot, config.SLOTS_PER_EPOCH),
+            root=justified_head.hash_tree_root,
+        )
+        justified_state = chain_db.get_state_by_root(
+            justified_head.state_root, BeaconState
+        )
+        fork_choice = cls(
+            finalized_head_node,
+            justified_checkpoint,
+            justified_state,
+            config,
+            block_sink,
+        )
+
+        is_consistent_with_justified = False
+        parent_root = canonical_head.parent_root
+        chain: Tuple[BaseBeaconBlock, ...] = (canonical_head,)
+        while parent_root != finalized_head.hash_tree_root:
+            if parent_root == justified_head.hash_tree_root:
+                is_consistent_with_justified = True
+            parent = chain_db.get_block_by_root(parent_root, BeaconBlock)
+            chain += (parent,)
+            parent_root = parent.parent_root
+
+        assert is_consistent_with_justified
+
+        for block in reversed(chain):
+            fork_choice.on_block(block)
+
+        return fork_choice
 
     def update_justified(self, state: BeaconState) -> None:
         """
         Call when a new ``state`` is justified.
         """
-        self._justified = state.current_justified_checkpoint
-        self._finalized = state.finalized_checkpoint
+        if state.current_justified_checkpoint.epoch > self._justified.epoch:
+            self._justified = state.current_justified_checkpoint
+        if state.finalized_checkpoint.epoch > self._finalized.epoch:
+            self._finalized = state.finalized_checkpoint
 
         # NOTE: prune before updating justified as it touches some internal state...
         self._impl.on_prune(self._finalized.root)

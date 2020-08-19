@@ -117,7 +117,7 @@ class BaseIsolatedComponent(BaseComponent):
     loop_monitoring_max_delay = 0.1
 
     @abstractmethod
-    async def _run_in_process(self) -> None:
+    async def run_in_process(self) -> None:
         ...
 
     @abstractmethod
@@ -141,11 +141,6 @@ class BaseIsolatedComponent(BaseComponent):
             return friendly_filename_or_url(cls.name)
         else:
             return cls.endpoint_name
-
-    @contextlib.asynccontextmanager
-    async def run(self) -> AsyncIterator[asyncio.Task[Any]]:
-        from p2p.asyncio_utils import create_task
-        yield create_task(self._run_in_process(), f'IsolatedComponent/{self.name}/run_in_process')
 
 
 @contextlib.asynccontextmanager

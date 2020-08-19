@@ -62,6 +62,11 @@ class MedallaStateMachineFast(MedallaStateMachine):
             self._epochs_ctx = EpochsContext(self.config)
             self._epochs_ctx.load_state(state)
 
+        if self._epochs_ctx.current_shuffling.epoch != state.current_epoch(
+            self.config.SLOTS_PER_EPOCH
+        ):
+            self._epochs_ctx.load_state(state)
+
         state = apply_fast_state_transition(
             self._epochs_ctx,
             self.config,

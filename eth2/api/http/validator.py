@@ -26,7 +26,7 @@ from eth2.beacon.types.attestations import Attestation, AttestationData
 from eth2.beacon.types.blocks import BeaconBlock, SignedBeaconBlock
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import Bitfield, CommitteeIndex, Epoch, Root, Slot
+from eth2.beacon.typing import Bitfield, CommitteeIndex, Epoch, Root, Slot, Timestamp
 from eth2.clock import Clock
 from eth2.configs import Eth2Config
 from trinity._utils.trio_utils import Request, Response
@@ -99,13 +99,16 @@ class ValidatorDuty:
 @dataclass
 class Context:
     client_identifier: str
-    genesis_time: int  # Unix timestamp
     eth2_config: Eth2Config
     syncer: SyncerAPI
     chain: BaseBeaconChain
     clock: Clock
     block_broadcaster: BlockBroadcasterAPI
     _broadcast_operations: Set[Root] = field(default_factory=set)
+
+    @property
+    def genesis_time(self) -> Timestamp:
+        return self.clock.genesis_time
 
     async def get_sync_status(self) -> SyncStatus:
         return await self.syncer.get_status()

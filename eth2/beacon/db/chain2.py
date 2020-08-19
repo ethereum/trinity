@@ -54,7 +54,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         self._state_cache = LRU(STATE_CACHE_SIZE)
         self._state_bytes_written = 0
 
-        self._genesis_time, self._genesis_validators_root = self._get_genesis_data()
+        self.genesis_time, self._genesis_validators_root = self._get_genesis_data()
 
     @classmethod
     def from_genesis(
@@ -75,6 +75,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         chain_db.persist_state(genesis_state, config)
 
         chain_db.mark_canonical_block(genesis_block)
+        chain_db.mark_justified_head(genesis_block)
         chain_db.mark_finalized_head(genesis_block)
 
         return chain_db
@@ -132,6 +133,24 @@ class BeaconChainDB(BaseBeaconChainDB):
     def mark_canonical_block(self, block: BaseBeaconBlock) -> None:
         key = SchemaV1.canonical_head_root()
         self.db[key] = block.hash_tree_root
+
+    def mark_canonical_head(self, block: BaseBeaconBlock) -> None:
+        canonical_head_root = SchemaV1.canonical_head_root()
+        self.db[canonical_head_root] = block.hash_tree_root
+
+    def get_canonical_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
+        canonical_head_root_key = SchemaV1.canonical_head_root()
+        canonical_head_root = Root(Hash32(self.db[canonical_head_root_key]))
+        return self.get_block_by_root(canonical_head_root, block_class)
+
+    def mark_justified_head(self, block: BaseBeaconBlock) -> None:
+        justified_head_root = SchemaV1.justified_head_root()
+        self.db[justified_head_root] = block.hash_tree_root
+
+    def get_justified_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
+        justified_head_root_key = SchemaV1.justified_head_root()
+        justified_head_root = Root(Hash32(self.db[justified_head_root_key]))
+        return self.get_block_by_root(justified_head_root, block_class)
 
     def mark_finalized_head(self, block: BaseBeaconBlock) -> None:
         """

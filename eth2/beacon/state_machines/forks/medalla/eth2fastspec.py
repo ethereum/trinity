@@ -2,11 +2,9 @@ from typing import Dict, Iterator, List, NamedTuple, Optional, Sequence, Set, Tu
 
 from eth_typing import BLSPubkey, Hash32
 from eth_utils import ValidationError, encode_hex
-import milagro_bls_binding as milagro_bls
 
+from eth2._utils.bls import bls
 from eth2._utils.hash import hash_eth2
-from eth2._utils.merkle.common import verify_merkle_branch
-from eth2.beacon.attestation_helpers import is_slashable_attestation_data
 from eth2.beacon.committee_helpers import compute_shuffled_index
 from eth2.beacon.constants import (
     BASE_REWARDS_PER_EPOCH,
@@ -14,6 +12,7 @@ from eth2.beacon.constants import (
     FAR_FUTURE_EPOCH,
     GENESIS_EPOCH,
 )
+from eth2.beacon.deposit_helpers import validate_deposit_proof
 from eth2.beacon.epoch_processing_helpers import (
     compute_activation_exit_epoch,
     decrease_balance,
@@ -33,10 +32,22 @@ from eth2.beacon.helpers import (
 )
 from eth2.beacon.signature_domain import SignatureDomain
 from eth2.beacon.state_machines.forks.serenity.block_validation import (
+    _validate_checkpoint,
+    _validate_eligible_exit_epoch,
+    _validate_eligible_target_epoch,
+    _validate_slot_matches_target_epoch,
+    _validate_validator_has_not_exited,
     _validate_validator_is_active,
+    _validate_validator_minimum_lifespan,
+    _validate_voluntary_exit_signature,
+    validate_attestation_slot,
+    validate_block_header_signature,
     validate_block_is_new,
     validate_block_parent_root,
     validate_block_slot,
+    validate_is_slashable_attestation_data,
+    validate_proposer_slashing_headers,
+    validate_proposer_slashing_slot,
     validate_randao_reveal,
 )
 from eth2.beacon.state_machines.forks.serenity.slot_processing import _process_slot
@@ -44,7 +55,7 @@ from eth2.beacon.types.attestation_data import AttestationData
 from eth2.beacon.types.attestations import Attestation, IndexedAttestation
 from eth2.beacon.types.attester_slashings import AttesterSlashing
 from eth2.beacon.types.block_headers import BeaconBlockHeader
-from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody, SignedBeaconBlock
+from eth2.beacon.types.blocks import BeaconBlock, BeaconBlockBody
 from eth2.beacon.types.checkpoints import Checkpoint
 from eth2.beacon.types.deposit_data import DepositMessage
 from eth2.beacon.types.deposits import Deposit
@@ -65,26 +76,6 @@ from eth2.beacon.typing import (
 from eth2.configs import Eth2Config
 
 ENDIANNESS = "little"
-
-
-def bls_Verify(PK: BLSPubkey, message: bytes, signature: bytes) -> bool:
-    try:
-        result = milagro_bls.Verify(PK, message, signature)
-    except Exception:
-        result = False
-    finally:
-        return result
-
-
-def bls_FastAggregateVerify(
-    pubkeys: Sequence[BLSPubkey], message: bytes, signature: bytes
-) -> bool:
-    try:
-        result = milagro_bls.FastAggregateVerify(list(pubkeys), message, signature)
-    except Exception:
-        result = False
-    finally:
-        return result
 
 
 def integer_squareroot(n: int) -> int:
@@ -1484,33 +1475,32 @@ def process_proposer_slashing(
     proposer_slashing: ProposerSlashing,
     config: Eth2Config,
 ) -> BeaconState:
-    header_1 = proposer_slashing.signed_header_1.message
-    header_2 = proposer_slashing.signed_header_2.message
+    proposer_index = proposer_slashing.signed_header_1.message.proposer_index
+    proposer = state.validators[proposer_index]
 
-    # Verify header slots match
-    assert header_1.slot == header_2.slot
-    # Verify header proposer indices match
-    assert header_1.proposer_index == header_2.proposer_index
-    # Verify the headers are different
-    assert header_1 != header_2
-    # Verify the proposer is slashable
-    proposer = state.validators[header_1.proposer_index]
-    assert proposer.is_slashable(epochs_ctx.current_shuffling.epoch)
-    # Verify signatures
-    for signed_header in (
-        proposer_slashing.signed_header_1,
-        proposer_slashing.signed_header_2,
-    ):
-        domain = get_domain(
-            state,
-            SignatureDomain.DOMAIN_BEACON_PROPOSER,
-            config.SLOTS_PER_EPOCH,
-            compute_epoch_at_slot(signed_header.message.slot, config.SLOTS_PER_EPOCH),
+    validate_proposer_slashing_slot(proposer_slashing)
+    validate_proposer_slashing_headers(proposer_slashing)
+    if not proposer.is_slashable(epochs_ctx.current_shuffling.epoch):
+        raise ValidationError(
+            f"Proposer {encode_hex(proposer.pubkey)} is not slashable in "
+            f"epoch {epochs_ctx.current_shuffling.epoch}."
         )
-        signing_root = compute_signing_root(signed_header.message, domain)
-        assert bls_Verify(proposer.pubkey, signing_root, signed_header.signature)
 
-    return slash_validator(epochs_ctx, state, header_1.proposer_index, config)
+    validate_block_header_signature(
+        state=state,
+        header=proposer_slashing.signed_header_1,
+        pubkey=proposer.pubkey,
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+    )
+
+    validate_block_header_signature(
+        state=state,
+        header=proposer_slashing.signed_header_2,
+        pubkey=proposer.pubkey,
+        slots_per_epoch=config.SLOTS_PER_EPOCH,
+    )
+
+    return slash_validator(epochs_ctx, state, proposer_index, config)
 
 
 def process_attester_slashing(
@@ -1521,9 +1511,11 @@ def process_attester_slashing(
 ) -> BeaconState:
     attestation_1 = attester_slashing.attestation_1
     attestation_2 = attester_slashing.attestation_2
-    assert is_slashable_attestation_data(attestation_1.data, attestation_2.data)
-    assert is_valid_indexed_attestation(epochs_ctx, state, attestation_1, config)
-    assert is_valid_indexed_attestation(epochs_ctx, state, attestation_2, config)
+    validate_is_slashable_attestation_data(attestation_1, attestation_2)
+    if not is_valid_indexed_attestation(epochs_ctx, state, attestation_1, config):
+        raise ValidationError(f"Invalid indexed attestation: {attestation_1}.")
+    if not is_valid_indexed_attestation(epochs_ctx, state, attestation_2, config):
+        raise ValidationError(f"Invalid indexed attestation: {attestation_2}.")
 
     slashed_any = False
     att_set_1 = set(attestation_1.attesting_indices)
@@ -1534,7 +1526,8 @@ def process_attester_slashing(
         if validators[index].is_slashable(epochs_ctx.current_shuffling.epoch):
             state = slash_validator(epochs_ctx, state, index, config)
             slashed_any = True
-    assert slashed_any
+    if not slashed_any:
+        raise ValidationError("No validators slashed.")
     return state
 
 
@@ -1560,7 +1553,9 @@ def is_valid_indexed_attestation(
         indexed_attestation.data.target.epoch,
     )  # TODO maybe optimize get_domain?
     signing_root = compute_signing_root(indexed_attestation.data, domain)
-    return bls_FastAggregateVerify(pubkeys, signing_root, indexed_attestation.signature)
+    return bls.fast_aggregate_verify(
+        signing_root, indexed_attestation.signature, *pubkeys
+    )
 
 
 def process_attestation(
@@ -1571,20 +1566,33 @@ def process_attestation(
 ) -> BeaconState:
     slot = state.slot
     data = attestation.data
-    assert data.index < epochs_ctx.get_committee_count_at_slot(data.slot)
-    assert data.target.epoch in (
-        epochs_ctx.previous_shuffling.epoch,
+    committees_per_slot = epochs_ctx.get_committee_count_at_slot(data.slot)
+    if data.index >= committees_per_slot:
+        raise ValidationError(
+            f"Attestation with committee index ({data.index}) must be"
+            f" less than the calculated committee per slot ({committees_per_slot})"
+            f" of slot {data.slot}"
+        )
+
+    _validate_eligible_target_epoch(
+        data.target.epoch,
         epochs_ctx.current_shuffling.epoch,
+        epochs_ctx.previous_shuffling.epoch,
     )
-    assert data.target.epoch == compute_epoch_at_slot(data.slot, config.SLOTS_PER_EPOCH)
-    assert (
-        data.slot + config.MIN_ATTESTATION_INCLUSION_DELAY
-        <= slot
-        <= data.slot + config.SLOTS_PER_EPOCH
+    _validate_slot_matches_target_epoch(
+        data.target.epoch, data.slot, config.SLOTS_PER_EPOCH
+    )
+    validate_attestation_slot(
+        data.slot, slot, config.SLOTS_PER_EPOCH, config.MIN_ATTESTATION_INCLUSION_DELAY
     )
 
     committee = epochs_ctx.get_beacon_committee(data.slot, data.index)
-    assert len(attestation.aggregation_bits) == len(committee)
+    if len(attestation.aggregation_bits) != len(committee):
+        raise ValidationError(
+            f"The attestation bit lengths not match:"
+            f"\tlen(attestation.aggregation_bits)={len(attestation.aggregation_bits)}\n"
+            f"\tlen(committee)={len(committee)}"
+        )
 
     pending_attestation = PendingAttestation.create(
         data=data,
@@ -1594,13 +1602,13 @@ def process_attestation(
     )
 
     if data.target.epoch == epochs_ctx.current_shuffling.epoch:
-        assert data.source == state.current_justified_checkpoint
+        _validate_checkpoint(data.source, state.current_justified_checkpoint)
         state = state.set(
             "current_epoch_attestations",
             state.current_epoch_attestations.append(pending_attestation),
         )
     else:
-        assert data.source == state.previous_justified_checkpoint
+        _validate_checkpoint(data.source, state.previous_justified_checkpoint)
         state = state.set(
             "previous_epoch_attestations",
             state.previous_epoch_attestations.append(pending_attestation),
@@ -1619,9 +1627,9 @@ def process_attestation(
         )
 
     # Verify signature
-    assert is_valid_indexed_attestation(
-        epochs_ctx, state, get_indexed_attestation(attestation), config
-    )
+    indexed_attestation = get_indexed_attestation(attestation)
+    if not is_valid_indexed_attestation(epochs_ctx, state, indexed_attestation, config):
+        raise ValidationError(f"Invalid indexed attestation: {indexed_attestation}.")
     return state
 
 
@@ -1640,14 +1648,7 @@ def get_attesting_indices(
 def process_deposit(
     epochs_ctx: EpochsContext, state: BeaconState, deposit: Deposit, config: Eth2Config
 ) -> BeaconState:
-    # Verify the Merkle branch
-    assert verify_merkle_branch(
-        leaf=deposit.data.hash_tree_root,
-        proof=deposit.proof,
-        depth=DEPOSIT_CONTRACT_TREE_DEPTH + 1,  # Add 1 for the List length mix-in
-        index=state.eth1_deposit_index,
-        root=state.eth1_data.deposit_root,
-    )
+    validate_deposit_proof(state, deposit, DEPOSIT_CONTRACT_TREE_DEPTH)
 
     # Deposits must be processed in order
     state = state.set("eth1_deposit_index", state.eth1_deposit_index + 1)
@@ -1666,7 +1667,7 @@ def process_deposit(
             SignatureDomain.DOMAIN_DEPOSIT, fork_version=config.GENESIS_FORK_VERSION
         )
         signing_root = compute_signing_root(deposit_message, domain)
-        if not bls_Verify(pubkey, signing_root, deposit.data.signature):
+        if not bls.verify(signing_root, deposit.data.signature, pubkey):
             return state
 
         # Add validator and balance entries
@@ -1708,23 +1709,15 @@ def process_voluntary_exit(
     voluntary_exit = signed_voluntary_exit.message
     validator = state.validators[voluntary_exit.validator_index]
     current_epoch = epochs_ctx.current_shuffling.epoch
-    # Verify the validator is active
     _validate_validator_is_active(validator, current_epoch)
-    # Verify exit has not been initiated
-    assert validator.exit_epoch == FAR_FUTURE_EPOCH
-    # Exits must specify an epoch when they become valid; they are not valid before then
-    assert current_epoch >= voluntary_exit.epoch
-    # Verify the validator has been active long enough
-    assert current_epoch >= validator.activation_epoch + config.SHARD_COMMITTEE_PERIOD
-    # Verify signature
-    domain = get_domain(
-        state,
-        SignatureDomain.DOMAIN_VOLUNTARY_EXIT,
-        config.SLOTS_PER_EPOCH,
-        voluntary_exit.epoch,
+    _validate_validator_has_not_exited(validator)
+    _validate_eligible_exit_epoch(voluntary_exit.epoch, current_epoch)
+    _validate_validator_minimum_lifespan(
+        validator, current_epoch, config.SHARD_COMMITTEE_PERIOD
     )
-    signing_root = compute_signing_root(voluntary_exit, domain)
-    assert bls_Verify(validator.pubkey, signing_root, signed_voluntary_exit.signature)
+    _validate_voluntary_exit_signature(
+        state, signed_voluntary_exit, validator, config.SLOTS_PER_EPOCH
+    )
     # Initiate exit
     # TODO could be optimized, but happens too rarely
     return initiate_validator_exit(
@@ -1735,7 +1728,10 @@ def process_voluntary_exit(
 def process_slots(
     epochs_ctx: EpochsContext, state: BeaconState, slot: Slot, config: Eth2Config
 ) -> BeaconState:
-    assert state.slot < slot
+    if state.slot >= slot:
+        raise ValidationError(
+            f"Requested a slot transition at {slot}, behind the current slot {state.slot}"
+        )
 
     while state.slot < slot:
         state = _process_slot(state, config)
@@ -1771,38 +1767,3 @@ def process_block(
     state = process_randao(epochs_ctx, state, block.body, config)
     state = process_eth1_data(epochs_ctx, state, block.body, config)
     return process_operations(epochs_ctx, state, block.body, config)
-
-
-def verify_block_signature(
-    state: BeaconState, signed_block: SignedBeaconBlock, config: Eth2Config
-) -> bool:
-    proposer = state.validators[signed_block.message.proposer_index]
-    domain = get_domain(
-        state, SignatureDomain.DOMAIN_BEACON_PROPOSER, config.SLOTS_PER_EPOCH
-    )
-    signing_root = compute_signing_root(signed_block.message, domain)
-    return bls_Verify(proposer.pubkey, signing_root, signed_block.signature)
-
-
-def state_transition(
-    epochs_ctx: EpochsContext,
-    state: BeaconState,
-    signed_block: SignedBeaconBlock,
-    config: Eth2Config,
-    validate_result: bool = True,
-) -> BeaconState:
-    block = signed_block.message
-    # Process slots (including those with no blocks) since block
-    state = process_slots(epochs_ctx, state, block.slot, config)
-    # Verify signature
-    if validate_result:
-        assert verify_block_signature(
-            state, signed_block, config
-        ), "invalid block signature"
-    # Process block
-    state = process_block(epochs_ctx, state, block, config)
-    # Verify state root
-    if validate_result:
-        assert block.state_root == state.hash_tree_root, "invalid block state root"
-    # Return post-state
-    return state

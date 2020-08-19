@@ -12,6 +12,7 @@ from eth2.beacon.constants import FAR_FUTURE_SLOT, GENESIS_SLOT
 from eth2.beacon.db.abc import BaseBeaconChainDB
 from eth2.beacon.db.chain2 import BeaconChainDB, StateNotFound
 from eth2.beacon.fork_choice.abc import BaseForkChoice, BlockSink
+from eth2.beacon.helpers import compute_epoch_at_slot
 from eth2.beacon.state_machines.forks.medalla.eth2fastspec import get_attesting_indices
 from eth2.beacon.state_machines.forks.medalla.state_machine import (
     MedallaStateMachineFast,
@@ -97,12 +98,23 @@ class BeaconChain(BaseBeaconChain):
 
         self._fork_choice = fork_choice
         self._current_head = fork_choice.find_head()
-        state_machine = self.get_state_machine(self._current_head.slot)
-        head_state = self._chain_db.get_state_by_root(
-            self._current_head.state_root, BeaconState, state_machine.config
-        )
 
-        self._reconcile_justification_and_finality(head_state)
+        self._load_checkpoints()
+
+    def _load_checkpoints(self) -> None:
+        justified = self._chain_db.get_justified_head(BeaconBlock)
+        finalized = self._chain_db.get_finalized_head(BeaconBlock)
+
+        state_machine = self.get_state_machine(self._current_head.slot)
+        config = state_machine.config
+        self._justified_checkpoint = Checkpoint.create(
+            epoch=compute_epoch_at_slot(justified.slot, config.SLOTS_PER_EPOCH),
+            root=justified.hash_tree_root,
+        )
+        self._finalized_checkpoint = Checkpoint.create(
+            epoch=compute_epoch_at_slot(finalized.slot, config.SLOTS_PER_EPOCH),
+            root=finalized.hash_tree_root,
+        )
 
     @classmethod
     def from_genesis(
@@ -268,6 +280,10 @@ class BeaconChain(BaseBeaconChain):
 
         if justified_checkpoint.epoch > self._justified_checkpoint.epoch:
             self._justified_checkpoint = justified_checkpoint
+            justified_head = self._chain_db.get_block_by_root(
+                self._justified_checkpoint.root, BeaconBlock
+            )
+            self._chain_db.mark_justified_head(justified_head)
             self._fork_choice.update_justified(state)
 
         if finalized_checkpoint.epoch > self._finalized_checkpoint.epoch:
@@ -280,6 +296,7 @@ class BeaconChain(BaseBeaconChain):
     def _update_head_if_new(self, block: BeaconBlock) -> None:
         if block != self._current_head:
             self._current_head = block
+            self._chain_db.mark_canonical_head(block)
             self.logger.debug("new head of chain: %s", block)
 
     def _update_fork_choice_with_block(self, block: BeaconBlock) -> None:

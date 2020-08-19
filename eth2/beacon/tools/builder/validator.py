@@ -644,7 +644,7 @@ def create_mock_signed_attestations_at_slot(
             target=Checkpoint.create(root=target_root, epoch=target_epoch),
         )
 
-        num_voted_attesters = int(len(committee) * voted_attesters_ratio)
+        num_voted_attesters = max(int(len(committee) * voted_attesters_ratio), 1)
 
         yield _create_mock_signed_attestation(
             state,
