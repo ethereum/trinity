@@ -74,7 +74,6 @@ class BeaconChainDB(BaseBeaconChainDB):
         chain_db._persist_genesis_data(genesis_state)
         chain_db.persist_state(genesis_state, config)
 
-        chain_db.mark_canonical_block(genesis_block)
         chain_db.mark_justified_head(genesis_block)
         chain_db.mark_finalized_head(genesis_block)
 
@@ -123,16 +122,9 @@ class BeaconChainDB(BaseBeaconChainDB):
         block_root_to_block = SchemaV1.block_root_to_block(block_root)
         self.db[block_root_to_block] = ssz.encode(block)
 
-        block_root_to_block_header = SchemaV1.block_root_to_block_header(block_root)
-        self.db[block_root_to_block_header] = ssz.encode(block.header)
-
         signature = signed_block.signature
         block_root_to_signature = SchemaV1.block_root_to_signature(block_root)
         self.db[block_root_to_signature] = signature
-
-    def mark_canonical_block(self, block: BaseBeaconBlock) -> None:
-        key = SchemaV1.canonical_head_root()
-        self.db[key] = block.hash_tree_root
 
     def mark_canonical_head(self, block: BaseBeaconBlock) -> None:
         canonical_head_root = SchemaV1.canonical_head_root()
@@ -157,8 +149,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         Marks the given ``block`` as finalized and stores each newly finalized state and block at
         their corresponding slot.
         """
-        finalized_head_root = SchemaV1.finalized_head_root()
-        if finalized_head_root in self.db:
+        if block.slot > 0:
             newly_finalized_states = self.get_state_parents(
                 block.state_root, block.slot - self.get_finalized_head(BeaconBlock).slot
             ) + (block.state_root,)
@@ -176,7 +167,7 @@ class BeaconChainDB(BaseBeaconChainDB):
             self.db[slot_to_block_root] = latest_block_header.hash_tree_root
 
         self.db[SchemaV1.slot_to_block_root(block.slot)] = block.hash_tree_root
-        self.db[finalized_head_root] = block.hash_tree_root
+        self.db[SchemaV1.finalized_head_root()] = block.hash_tree_root
 
     def get_finalized_head(self, block_class: Type[BaseBeaconBlock]) -> BaseBeaconBlock:
         finalized_head_root_key = SchemaV1.finalized_head_root()
@@ -208,7 +199,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         Returns a tuple of size ``count`` that contains the state roots from oldest to newest
         that precede the given ``state_root``.
         """
-        for _ in range(0, count):
+        for _ in range(count):
             state_root = self._read_state_parent_state_root(state_root)
             yield state_root
 
@@ -238,8 +229,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         self.db[state_root_to_latest_block_header_root] = block_root
 
         block_root_to_block_header = SchemaV1.block_root_to_block_header(block_root)
-        if block_root_to_block_header not in self.db:
-            self.db[block_root_to_block_header] = ssz.encode(block_header)
+        self.db[block_root_to_block_header] = ssz.encode(block_header)
 
     def _write_state_historical_roots(
         self, state_root: Root, historical_roots: HashableList[Root]
@@ -739,7 +729,7 @@ class BeaconChainDB(BaseBeaconChainDB):
                 state_root
             ),
             finalized_checkpoint=self._read_state_finalized_checkpoint(state_root),
-            genesis_time=self._genesis_time,
+            genesis_time=self.genesis_time,
             genesis_validators_root=self._genesis_validators_root,
             config=config,
         )
@@ -764,7 +754,7 @@ class BeaconChainDB(BaseBeaconChainDB):
         """
         Store data in the database that will never change.
         """
-        self._genesis_time = genesis_state.genesis_time
+        self.genesis_time = genesis_state.genesis_time
         self._genesis_validators_root = genesis_state.genesis_validators_root
         encoded_genesis_time = ssz.encode(genesis_state.genesis_time, ssz.uint64)
         encoded_genesis_validators_root = ssz.encode(

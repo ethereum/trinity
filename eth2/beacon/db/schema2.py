@@ -15,10 +15,6 @@ def finalized_head_root() -> bytes:
     return b"v1:beacon:finalized-head-root"
 
 
-def canonical_head_root() -> bytes:
-    return b"v1:beacon:canonical-head-root"
-
-
 def slot_to_block_root(slot: Slot) -> bytes:
     return b"v1:beacon:slot-to-block-root:" + ssz.encode(slot, ssz.uint64)
 

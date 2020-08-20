@@ -74,8 +74,7 @@ class ChainDBBlockSink(BlockSink):
         self._chain_db = chain_db
 
     def on_pruned_block(self, block: BaseBeaconBlock, canonical: bool) -> None:
-        if canonical:
-            self._chain_db.mark_canonical_block(block)
+        pass
 
 
 class BeaconChain(BaseBeaconChain):
