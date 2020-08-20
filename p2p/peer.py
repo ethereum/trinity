@@ -328,6 +328,7 @@ class BasePeer(Service):
         for subscriber in self._subscribers:
             self.logger.debug2("Adding %s msg to queue of %s", type(cmd), subscriber)
             subscriber.add_msg(subscriber_msg)
+            await asyncio.sleep(0)
 
     async def disconnect(self, reason: DisconnectReason) -> None:
         """
