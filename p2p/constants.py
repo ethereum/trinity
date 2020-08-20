@@ -227,3 +227,8 @@ NUM_ROUTING_TABLE_BUCKETS = 256  # number of buckets in the routing table
 #   - should be big enough not to clip typical logs (On a test DEBUG2 run
 #       on mainnet, the largest logs were <2k characters)
 LONGEST_ALLOWED_LOG_STRING = 10000
+
+# Decoding long messages can take a while. We don't want to hold the event
+#   loop for too long. So we push the decoding into a thread pool if the
+#   encoded message is more than this many bytes:
+MAX_IN_LOOP_DECODE_SIZE = 2000

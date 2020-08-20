@@ -29,6 +29,9 @@ from p2p.abc import (
     TransportAPI,
     TProtocol,
 )
+from p2p.constants import (
+    MAX_IN_LOOP_DECODE_SIZE,
+)
 from p2p.exceptions import (
     MalformedMessage,
     PeerConnectionLost,
@@ -52,6 +55,7 @@ async def stream_transport_messages(transport: TransportAPI,
     # A cache for looking up the proper protocol instance for a given command
     # id.
     command_id_cache: Dict[int, ProtocolAPI] = {}
+    loop = asyncio.get_event_loop()
 
     while not transport.is_closing:
         try:
@@ -87,7 +91,16 @@ async def stream_transport_messages(transport: TransportAPI,
         command_type = msg_proto.get_command_type_for_command_id(command_id)
 
         try:
-            cmd = command_type.decode(msg, msg_proto.snappy_support)
+            if len(msg.body) > MAX_IN_LOOP_DECODE_SIZE:
+                cmd = await loop.run_in_executor(
+                    None,
+                    command_type.decode,
+                    msg,
+                    msg_proto.snappy_support,
+                )
+            else:
+                cmd = command_type.decode(msg, msg_proto.snappy_support)
+
         except (rlp.exceptions.DeserializationError, snappy_CompressedLengthError) as err:
             raise MalformedMessage(f"Failed to decode {msg} for {command_type}") from err
 

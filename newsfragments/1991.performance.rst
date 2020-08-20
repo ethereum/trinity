@@ -1,0 +1,1 @@
+Move command decoding out of the event loop.
