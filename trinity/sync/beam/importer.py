@@ -88,11 +88,15 @@ class BeamStats:
     def num_nodes(self) -> int:
         return self.num_account_nodes + self.num_bytecodes + self.num_storage_nodes
 
-    def __str__(self) -> str:
+    @property
+    def avg_rtt(self) -> float:
         if self.num_nodes:
-            avg_rtt = self.data_pause_time / self.num_nodes
+            return self.data_pause_time / self.num_nodes
         else:
-            avg_rtt = 0
+            return 0
+
+    def __str__(self) -> str:
+        avg_rtt = self.avg_rtt
 
         wait_time = humanize_seconds(self.data_pause_time)
 
@@ -432,22 +436,44 @@ def pausing_vm_decorator(
             num_transactions = len(transactions)
 
             now = time.monotonic()
-            if now - self.last_log_time > MIN_GAS_LOG_WAIT:
-                if urgent:
+            if urgent:
+                # The currently-importing block
+                if transaction_index == num_transactions - 1:
                     logger = self.logger.info
+                    log_header = "Beamed"
+                elif now - self.last_log_time > MIN_GAS_LOG_WAIT:
+                    logger = self.logger.info
+                    log_header = "Beaming"
                 else:
-                    logger = self.logger.debug
+                    # Logged an update too recently, skipping...
+                    return
+            else:
+                # Don't log anything for preview executions, for now
+                return
 
-                logger(
-                    "Beaming: #%d txn %d/%d, gas: %s/%s (%.1f%%)",
-                    base_header.block_number,
-                    transaction_index + 1,
-                    num_transactions,
-                    f"{partial_header.gas_used:,d}",
-                    f"{base_header.gas_used:,d}",
-                    100 * partial_header.gas_used / base_header.gas_used,
-                )
-                self.last_log_time = now
+            beam_stats = self.get_beam_stats()
+            fraction_complete = partial_header.gas_used / base_header.gas_used
+            if fraction_complete:
+                total_est = beam_stats.data_pause_time / fraction_complete
+                est_time = humanize_seconds(total_est - beam_stats.data_pause_time)
+            else:
+                est_time = "?"
+
+            logger(
+                "%s: #%d txn %d/%d, rtt: %.3fs, wait: %s, nodes: %d, gas: %s/%s (%.1f%%) ETA %s",
+                log_header,
+                base_header.block_number,
+                transaction_index + 1,
+                num_transactions,
+                beam_stats.avg_rtt,
+                humanize_seconds(beam_stats.data_pause_time),
+                beam_stats.num_nodes,
+                f"{partial_header.gas_used:,d}",
+                f"{base_header.gas_used:,d}",
+                100 * fraction_complete,
+                est_time,
+            )
+            self.last_log_time = now
 
     return PausingVM
 
