@@ -74,8 +74,7 @@ class ChainDBBlockSink(BlockSink):
         self._chain_db = chain_db
 
     def on_pruned_block(self, block: BaseBeaconBlock, canonical: bool) -> None:
-        if canonical:
-            self._chain_db.mark_canonical_block(block)
+        pass
 
 
 class BeaconChain(BaseBeaconChain):
@@ -105,8 +104,7 @@ class BeaconChain(BaseBeaconChain):
         justified = self._chain_db.get_justified_head(BeaconBlock)
         finalized = self._chain_db.get_finalized_head(BeaconBlock)
 
-        # TODO fix slot polymorphism
-        state_machine = self.get_state_machine(GENESIS_SLOT)
+        state_machine = self.get_state_machine(self._current_head.slot)
         config = state_machine.config
         self._justified_checkpoint = Checkpoint.create(
             epoch=compute_epoch_at_slot(justified.slot, config.SLOTS_PER_EPOCH),
@@ -172,7 +170,10 @@ class BeaconChain(BaseBeaconChain):
 
     def get_canonical_head_state(self) -> BeaconState:
         head = self.get_canonical_head()
-        return self._chain_db.get_state_by_root(head.state_root, BeaconState)
+        state_machine = self.get_state_machine(head.slot)
+        return self._chain_db.get_state_by_root(
+            head.state_root, BeaconState, state_machine.config
+        )
 
     def on_tick(self, tick: Tick) -> None:
         if tick.is_first_in_slot():
@@ -253,9 +254,8 @@ class BeaconChain(BaseBeaconChain):
                 )
 
         state_machine = self.get_state_machine(block.slot)
-        state_class = state_machine.state_class
         pre_state = self._chain_db.get_state_by_root(
-            parent_block.state_root, state_class
+            parent_block.state_root, state_machine.state_class, state_machine.config
         )
 
         state, imported_block = state_machine.apply_state_transition(
@@ -337,7 +337,9 @@ class BeaconChain(BaseBeaconChain):
                 try:
                     state_machine = self.get_state_machine(Slot(slot))
                     state = self._chain_db.get_state_by_root(
-                        block.state_root, state_machine.state_class
+                        block.state_root,
+                        state_machine.state_class,
+                        state_machine.config,
                     )
                     return (state, blocks)
                 except StateNotFound:

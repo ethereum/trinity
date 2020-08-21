@@ -23,6 +23,10 @@ def block_root_to_block(root: Root) -> bytes:
     return b"v1:beacon:block-root-to-block:" + root
 
 
+def block_root_to_block_header(root: Root) -> bytes:
+    return b"v1:beacon:block-root-to-block-header:" + root
+
+
 def block_root_to_signature(root: Root) -> bytes:
     return b"v1:beacon:block-root-to-signature:" + root
 
@@ -39,16 +43,12 @@ def state_root_to_fork_root(root: Root) -> bytes:
     return b"v1:beacon:state-root-to-fork:" + root
 
 
-def state_root_to_block_header_root(root: Root) -> bytes:
-    return b"v1:beacon:state-root-to-block-header-root:" + root
+def state_root_to_latest_block_header_root(root: Root) -> bytes:
+    return b"v1:beacon:state-root-to-latest-block-header-root:" + root
 
 
-def state_root_to_block_root(root: Root) -> bytes:
-    return b"v1:beacon:state-root-to-block-root:" + root
-
-
-def state_root_to_state_root(root: Root) -> bytes:
-    return b"v1:beacon:state-root-to-state-root:" + root
+def state_root_to_parent_state_root(root: Root) -> bytes:
+    return b"v1:beacon:state-root-to-parent-state-root:" + root
 
 
 def state_root_to_historical_roots_root(root: Root) -> bytes:
@@ -68,7 +68,7 @@ def state_root_to_eth1_deposit_index(root: Root) -> bytes:
 
 
 def validators_root_to_roots_of_validators(root: Root) -> bytes:
-    return b"v1:beacon:validtors-root-to-roots-of-validators:" + root
+    return b"v1:beacon:validators-root-to-roots-of-validators:" + root
 
 
 def state_root_to_validators_root(root: Root) -> bytes:
@@ -85,6 +85,10 @@ def state_root_to_balances_root(root: Root) -> bytes:
 
 def state_root_to_randao_mix(root: Root) -> bytes:
     return b"v1:beacon:state-root-to-randao-mix:" + root
+
+
+def slot_to_randao_mix(slot: Slot) -> bytes:
+    return b"v1:beacon:slot-to-randao-mix:" + ssz.encode(slot, ssz.uint64)
 
 
 def state_root_to_slashings_root(root: Root) -> bytes:

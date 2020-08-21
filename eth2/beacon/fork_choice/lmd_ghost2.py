@@ -598,7 +598,7 @@ class LMDGHOSTForkChoice(BaseForkChoice):
             root=justified_head.hash_tree_root,
         )
         justified_state = chain_db.get_state_by_root(
-            justified_head.state_root, BeaconState
+            justified_head.state_root, BeaconState, config
         )
         fork_choice = cls(
             finalized_head_node,

@@ -64,13 +64,6 @@ class BaseBeaconChainDB(ABC):
         ...
 
     @abstractmethod
-    def mark_canonical_block(self, block: BaseBeaconBlock) -> None:
-        """
-        Record the ``block`` as part of the canonical ("finalized") chain.
-        """
-        ...
-
-    @abstractmethod
     def mark_canonical_head(self, block: BaseBeaconBlock) -> None:
         ...
 
@@ -102,13 +95,13 @@ class BaseBeaconChainDB(ABC):
 
     @abstractmethod
     def get_state_by_slot(
-        self, slot: Slot, state_class: Type[BeaconState]
+        self, slot: Slot, state_class: Type[BeaconState], config: Eth2Config
     ) -> Optional[BeaconState]:
         ...
 
     @abstractmethod
     def get_state_by_root(
-        self, state_root: Root, state_class: Type[BeaconState]
+        self, state_root: Root, state_class: Type[BeaconState], config: Eth2Config
     ) -> BeaconState:
         ...
 
