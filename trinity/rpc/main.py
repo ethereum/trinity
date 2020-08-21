@@ -18,7 +18,6 @@ from eth_utils import (
 from eth_utils.toolz import curry
 
 from trinity.chains.base import AsyncChainAPI
-from trinity.db.beacon.chain import BaseAsyncBeaconChainDB
 from trinity.exceptions import RpcError
 from trinity.rpc.modules import (
     BaseRPCModule,
@@ -70,7 +69,7 @@ class RPCServer:
 
     def __init__(self,
                  modules: Sequence[BaseRPCModule],
-                 chain: Union[AsyncChainAPI, BaseAsyncBeaconChainDB],
+                 chain: AsyncChainAPI,
                  event_bus: EndpointAPI = None) -> None:
         self.event_bus = event_bus
         self.modules: Dict[str, BaseRPCModule] = {}

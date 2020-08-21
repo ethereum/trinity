@@ -14,11 +14,6 @@ Trinity is a client for the Ethereum protocol including the existing 1.0 chain a
 
 - fully support mainnet as well as several testnets
 
-- provide a reference implementation of an Ethereum 2.0 / Serenity beacon node (pre-alpha)
-
-- provide a reference implementation of an Ethereum 2.0 / Serenity validator node (pre-alpha)
-
-
 ## Quickstart
 
 [Get started in 5 minutes](https://trinity-client.readthedocs.io/en/latest/quickstart.html)

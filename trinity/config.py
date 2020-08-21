@@ -10,7 +10,6 @@ from enum import (
     Enum,
     auto,
 )
-import hashlib
 import json
 from pathlib import (
     Path,
@@ -20,7 +19,6 @@ from typing import (
     Any,
     Dict,
     Iterable,
-    Optional,
     Tuple,
     Type,
     TypeVar,
@@ -50,31 +48,13 @@ from eth_keys import (
 from eth_keys.datatypes import (
     PrivateKey,
 )
-from eth_utils import encode_hex
 from eth_typing import (
     Address,
-    BLSPubkey,
 )
 
-from multiaddr import (
-    Multiaddr,
-)
-
-from eth2.beacon.chains.testnet import SkeletonLakeChain
-from eth2.beacon.tools.builder.initializer import load_genesis_key_map
-from eth2.beacon.tools.misc.ssz_vector import override_lengths
-from eth2.beacon.types.states import BeaconState
-from eth2.beacon.typing import (
-    Timestamp,
-)
-from eth2.configs import (
-    Eth2Config,
-)
-import p2p.ecies as ecies
 from p2p.kademlia import (
     Node as KademliaNode,
 )
-from ssz.tools.parse import from_formatted_dict
 
 from trinity._utils.chains import (
     construct_trinity_config_params,
@@ -94,7 +74,6 @@ from trinity._utils.eip1085 import (
 from trinity._utils.filesystem import (
     PidFile,
 )
-from trinity._utils.version import construct_trinity_client_identifier
 from trinity._utils.xdg import (
     get_xdg_trinity_root,
 )
@@ -107,19 +86,10 @@ from trinity.constants import (
     NODE_DB_DIR,
     PID_DIR,
     SYNC_LIGHT,
-    APP_IDENTIFIER_VALIDATOR_CLIENT,
 )
 from trinity.network_configurations import (
     PRECONFIGURED_NETWORKS
 )
-
-from eth2.beacon.chains.base import BeaconChain
-from eth2.beacon.chains.testnet.medalla import BeaconChain as MedallaChain
-from eth2.beacon.chains.abc import BaseBeaconChain as ABCBaseBeaconChain
-from eth2.beacon.db.abc import BaseBeaconChainDB
-from eth2.beacon.db.chain2 import BeaconChainDB as MedallaChainDB
-from eth2.beacon.state_machines.forks.medalla.configs import MEDALLA_CONFIG
-from eth2.beacon.state_machines.forks.serenity.configs import SERENITY_CONFIG
 
 
 if TYPE_CHECKING:
@@ -128,7 +98,6 @@ if TYPE_CHECKING:
     from trinity.chains.full import FullChain  # noqa: F401
     from trinity.chains.light import LightDispatchChain  # noqa: F401
 
-    from eth2.beacon.chains.base import BaseBeaconChain  # noqa: F401
 
 DATABASE_DIR_NAME = 'chain'
 
@@ -148,7 +117,6 @@ def _load_preconfigured_genesis_config(network_id: int) -> Dict[str, Any]:
             with _get_assets_path(network_id).open('r') as genesis_file:
                 return json.load(genesis_file)
         except FileNotFoundError:
-            # NOTE: this code path exists to shim eth2 into eth1
             return {}
 
 
@@ -157,10 +125,6 @@ def _get_preconfigured_chain_name(network_id: int) -> str:
         raise TypeError(f"Unknown or unsupported `network_id`: {network_id}")
     else:
         return PRECONFIGURED_NETWORKS[network_id].chain_name
-
-
-def _get_eth2_genesis_config_file_path(profile: str) -> Path:
-    return ASSETS_DIR / 'eth2' / profile / 'genesis_config.json'
 
 
 class Eth1ChainConfig:
@@ -375,8 +339,8 @@ class TrinityConfig:
     def app_suffix(self) -> str:
         """
         Return the suffix that Trinity uses to derive various application directories depending
-        on the current mode of operation (e.g. ``eth1`` or ``beacon`` to derive
-        ``<trinity-root-dir>/mainnet/logs-eth1`` vs ``<trinity-root-dir>/mainnet/logs-beacon``)
+        on the current mode of operation (e.g. ``eth1`` to derive
+        ``<trinity-root-dir>/mainnet/logs-eth1``)
         """
         return "" if len(self.app_identifier) == 0 else f"-{self.app_identifier}"
 
@@ -607,10 +571,6 @@ class BaseAppConfig(ABC):
         pass
 
 
-class BaseEth2AppConfig(BaseAppConfig):
-    pass
-
-
 class Eth1DbMode(Enum):
 
     FULL = auto()
@@ -692,303 +652,3 @@ class Eth1AppConfig(BaseAppConfig):
         Return the currently used sync mode
         """
         return self._sync_mode
-
-
-class BeaconChainConfig:
-    _genesis_state: BeaconState
-    _beacon_chain_class: Type['BaseBeaconChain'] = None
-    _genesis_config: Eth2Config = None
-    _key_map: Dict[BLSPubkey, int]
-
-    def __init__(self,
-                 genesis_state: BeaconState,
-                 genesis_config: Eth2Config,
-                 genesis_validator_key_map: Dict[BLSPubkey, int],
-                 beacon_chain_class: Type['BaseBeaconChain'] = SkeletonLakeChain) -> None:
-        self._genesis_state = genesis_state
-        self._eth2_config = genesis_config
-        self._key_map = genesis_validator_key_map
-        self._beacon_chain_class = beacon_chain_class
-
-    @property
-    def genesis_config(self) -> Eth2Config:
-        """
-        NOTE: this ``genesis_config`` means something slightly different from the
-        genesis config referenced in other places in this class...
-        TODO:(ralexstokes) patch up the names here...
-        """
-        return self._eth2_config
-
-    @property
-    def genesis_time(self) -> Timestamp:
-        return self._genesis_state.genesis_time
-
-    @property
-    def beacon_chain_class(self) -> Type['BaseBeaconChain']:
-        return self._beacon_chain_class
-
-    @classmethod
-    def from_genesis_config(cls, config_profile: str) -> 'BeaconChainConfig':
-        """
-        Construct an instance of ``cls`` reading the genesis configuration
-        data under the local data directory.
-        """
-        if config_profile == "mainnet":
-            beacon_chain_class = BeaconChain
-        else:
-            beacon_chain_class = SkeletonLakeChain
-
-        try:
-            with open(_get_eth2_genesis_config_file_path(config_profile)) as config_file:
-                genesis_config = json.load(config_file)
-        except FileNotFoundError as e:
-            raise Exception("unable to load genesis config: %s", e)
-
-        eth2_config = Eth2Config.from_formatted_dict(genesis_config["eth2_config"])
-        # NOTE: have to ``override_lengths`` before we can parse the ``BeaconState``
-        override_lengths(eth2_config)
-
-        genesis_state = from_formatted_dict(genesis_config["genesis_state"], BeaconState)
-        genesis_validator_key_map = load_genesis_key_map(
-            genesis_config["genesis_validator_key_pairs"]
-        )
-        return cls(
-            genesis_state,
-            eth2_config,
-            genesis_validator_key_map,
-            beacon_chain_class=beacon_chain_class
-        )
-
-    @classmethod
-    def get_genesis_config_file_path(cls, profile: str) -> Path:
-        return _get_eth2_genesis_config_file_path(profile)
-
-    def initialize_chain(self,
-                         base_db: AtomicDatabaseAPI) -> 'BaseBeaconChain':
-        return self.beacon_chain_class.from_genesis(
-            base_db=base_db,
-            genesis_state=self._genesis_state,
-        )
-
-
-class BeaconAppConfig(BaseEth2AppConfig):
-    def __init__(
-        self,
-        config: TrinityConfig,
-        p2p_maddr: Multiaddr,
-        orchestration_profile: str,
-        bootstrap_nodes: Tuple[Multiaddr, ...] = (),
-        preferred_nodes: Tuple[Multiaddr, ...] = (),
-    ) -> None:
-        super().__init__(config)
-        self.p2p_maddr = p2p_maddr
-        self.bootstrap_nodes = config.bootstrap_nodes
-        self.preferred_nodes = config.preferred_nodes
-        self.client_identifier = construct_trinity_client_identifier()
-        self.orchestration_profile = orchestration_profile
-
-    @classmethod
-    def from_parser_args(
-        cls, args: argparse.Namespace, trinity_config: TrinityConfig
-    ) -> "BaseAppConfig":
-        """
-        Initialize from the namespace object produced by
-        an ``argparse.ArgumentParser`` and the :class:`~trinity.config.TrinityConfig`
-        """
-        bootstrap_nodes = args.bootstrap_nodes
-        preferred_nodes = args.preferred_nodes
-        p2p_maddr = args.p2p_maddr
-
-        return cls(
-            trinity_config,
-            p2p_maddr,
-            args.orchestration_profile,
-            bootstrap_nodes,
-            preferred_nodes
-        )
-
-    @property
-    def database_dir(self) -> Path:
-        """
-        Return the path where the chain database is stored.
-
-        This is resolved relative to the ``data_dir``
-        """
-        path = self.trinity_config.data_dir / DATABASE_DIR_NAME
-        return self.trinity_config.with_app_suffix(path) / f"full_{self.orchestration_profile}"
-
-    def get_chain_config(self, config_profile: str = "minimal") -> BeaconChainConfig:
-        """
-        Return the :class:`~trinity.config.BeaconChainConfig` that is derived from the genesis file
-        """
-        return BeaconChainConfig.from_genesis_config(config_profile)
-
-
-class BeaconTrioChainConfig(ABC):
-    chain_db_class: Type[BaseBeaconChainDB]
-    chain_class: Type[ABCBaseBeaconChain]
-
-
-class MedallaChainConfig(BeaconTrioChainConfig):
-    chain_db_class: Type[BaseBeaconChainDB] = MedallaChainDB
-    chain_class: Type[ABCBaseBeaconChain] = MedallaChain
-
-
-class MainnetChainConfig(BeaconTrioChainConfig):
-    # TODO: update to mainnet instances
-    chain_db_class: Type[BaseBeaconChainDB] = MedallaChainDB
-    chain_class: Type[ABCBaseBeaconChain] = MedallaChain
-
-
-ETH2_NETWORKS = {
-    "medalla": MEDALLA_CONFIG,
-    "mainnet": SERENITY_CONFIG,
-}
-
-ETH2_CHAIN_CONFIGS = {
-    "medalla": MedallaChainConfig,
-    "mainnet": MainnetChainConfig,
-}
-
-
-def _load_predefined_eth2_network(network: str) -> Eth2Config:
-    """
-    NOTE: ``network`` should exist given the argparse configuration
-    which references ``ETH2_NETWORKS``.
-    """
-    return ETH2_NETWORKS[network]
-
-
-def _load_eth2_network_from_yaml(network_config_path: str) -> Eth2Config:
-    raise NotImplementedError("loading network from YAML config is unsupported")
-
-
-def _resolve_node_key(trinity_config: TrinityConfig, nodekey_seed: Optional[str]) -> PrivateKey:
-    if nodekey_seed:
-        private_key_bytes = hashlib.sha256(nodekey_seed.encode()).digest()
-        nodekey = PrivateKey(private_key_bytes)
-        trinity_config.nodekey = nodekey
-        return
-
-    if trinity_config.nodekey is None:
-        nodekey = ecies.generate_privkey()
-        with open(trinity_config.nodekey_path, 'wb') as nodekey_file:
-            nodekey_file.write(nodekey.to_bytes())
-        trinity_config.nodekey = nodekey
-
-
-class BeaconTrioAppConfig(BaseEth2AppConfig):
-    def __init__(
-        self,
-        config: TrinityConfig,
-        network_name: str,
-        network_config: Eth2Config,
-        p2p_maddr: Multiaddr,
-        validator_api_port: int,
-        bootstrap_nodes: Tuple[Multiaddr, ...] = (),
-        preferred_nodes: Tuple[Multiaddr, ...] = (),
-        genesis_state_ssz: Optional[Path] = None,
-    ) -> None:
-        super().__init__(config)
-        self.p2p_maddr = p2p_maddr
-        self.network_name = network_name
-        self.network_config = network_config
-        self.validator_api_port = validator_api_port
-        self.bootstrap_nodes = bootstrap_nodes
-        self.preferred_nodes = preferred_nodes
-        self.client_identifier = construct_trinity_client_identifier()
-        self.genesis_state_ssz = genesis_state_ssz
-
-    @classmethod
-    def from_parser_args(
-        cls, args: argparse.Namespace, trinity_config: TrinityConfig
-    ) -> "BaseAppConfig":
-        """
-        Initialize from the namespace object produced by
-        an ``argparse.ArgumentParser`` and the :class:`~trinity.config.TrinityConfig`
-        """
-        # NOTE: ``args.network`` has a default so check for an override in
-        # the ``network_config`` first...
-        if args.network_config:
-            network_config = _load_eth2_network_from_yaml(args.network_config)
-            network_name = "custom network"
-        else:
-            network_config = _load_predefined_eth2_network(args.network)
-            network_name = args.network
-
-        # NOTE: required for SSZ types to work correctly...
-        override_lengths(network_config)
-
-        p2p_maddr = args.p2p_maddr
-        bootstrap_nodes = args.bootstrap_maddrs
-        preferred_nodes = args.preferred_maddrs
-        validator_api_port = args.validator_api_port
-        genesis_state_ssz = args.genesis_state_ssz
-
-        _resolve_node_key(trinity_config, args.nodekey_seed)
-
-        return cls(
-            trinity_config,
-            network_name,
-            network_config,
-            p2p_maddr,
-            validator_api_port,
-            bootstrap_nodes,
-            preferred_nodes,
-            genesis_state_ssz,
-        )
-
-    @property
-    def database_dir(self) -> Path:
-        """
-        Return the path where the chain database is stored.
-
-        This is resolved relative to the ``data_dir``
-        """
-        root_dir = self.trinity_config.trinity_root_dir
-        path = self.trinity_config.with_app_suffix(root_dir)
-        network_identifier = _build_network_identifier(self.network_config)
-        peer_identifier = self.trinity_config.nodekey.to_hex()[2:]
-        return path / network_identifier / peer_identifier
-
-    def get_chain_config(self) -> BeaconTrioChainConfig:
-        if self.network_name in ETH2_CHAIN_CONFIGS:
-            return ETH2_CHAIN_CONFIGS[self.network_name]()
-
-        raise Exception(
-            f"unknown chain config for network name {self.network_name}."
-            " please define before use."
-        )
-
-
-def _build_network_identifier(config: Eth2Config) -> str:
-    return (
-        f"{config.DEPOSIT_CHAIN_ID}"
-        f"{config.DEPOSIT_NETWORK_ID}"
-        f"{encode_hex(config.DEPOSIT_CONTRACT_ADDRESS)[2:]}"
-    )
-
-
-class ValidatorClientAppConfig(BaseEth2AppConfig):
-    @classmethod
-    def from_parser_args(cls,
-                         args: argparse.Namespace,
-                         trinity_config: TrinityConfig) -> 'BaseAppConfig':
-        """
-        Initialize from the namespace object produced by
-        an ``argparse.ArgumentParser`` and the :class:`~trinity.config.TrinityConfig`
-        """
-        return cls(trinity_config)
-
-    @property
-    def root_dir(self) -> Path:
-        """
-        Return the root directory of the validator client data.
-
-        This is resolved relative to the ``data_dir``
-        """
-        return self.trinity_config.data_dir / APP_IDENTIFIER_VALIDATOR_CLIENT
-
-    @property
-    def genesis_config_path(self) -> Path:
-        return _get_eth2_genesis_config_file_path("minimal")

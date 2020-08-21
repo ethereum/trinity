@@ -18,12 +18,8 @@ from eth.db.backends.level import LevelDB
 
 from web3.types import RPCEndpoint, RPCResponse
 
-from eth2.beacon.db.chain import BeaconChainDB
-from eth2.beacon.types.blocks import BeaconBlock
-
 from trinity.config import (
     Eth1AppConfig,
-    BeaconAppConfig,
     TrinityConfig,
 )
 from trinity.db.manager import DBClient
@@ -179,34 +175,6 @@ def get_eth1_shell_context(database_dir: Path,
             'hex_hash': head.hex_hash,
             'state_root_hex': encode_hex(head.state_root),
             'trinity_already_running': trinity_already_running,
-        }
-
-
-@contextlib.contextmanager
-def get_beacon_shell_context(database_dir: Path,
-                             trinity_config: TrinityConfig) -> Iterator[Dict[str, Any]]:
-    app_config = trinity_config.get_app_config(BeaconAppConfig)
-    ipc_path = trinity_config.database_ipc_path
-    trinity_already_running = ipc_path.exists()
-
-    with _get_base_db(database_dir, ipc_path) as db:
-        chain_config = app_config.get_chain_config()
-        chaindb = BeaconChainDB(db)
-        chain = chain_config.beacon_chain_class(
-            chaindb,
-        )
-
-        head = chaindb.get_canonical_head(BeaconBlock)
-        yield {
-            'db': db,
-            'chaindb': chaindb,
-            'trinity_config': trinity_config,
-            'chain_config': chain_config,
-            'chain': chain,
-            'block_number': head.slot,
-            'hex_hash': head.hash_tree_root.hex(),
-            'state_root_hex': encode_hex(head.state_root),
-            'trinity_already_running': trinity_already_running
         }
 
 

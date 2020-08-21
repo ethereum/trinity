@@ -25,9 +25,3 @@ Eth1 App Config
 
 .. autoclass:: trinity.config.Eth1AppConfig
   :members:
-
-Beacon App Config
------------------
-
-.. autoclass:: trinity.config.BeaconAppConfig
-  :members:

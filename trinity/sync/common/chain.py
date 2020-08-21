@@ -15,13 +15,7 @@ from eth.abc import (
     SignedTransactionAPI,
 )
 
-from eth2.beacon.types.blocks import BaseBeaconBlock
-
 from trinity.chains.base import AsyncChainAPI
-
-from eth2.beacon.chains.base import (
-    BaseBeaconChain
-)
 
 
 class BaseBlockImporter(ABC):
@@ -62,24 +56,3 @@ class SimpleBlockImporter(BaseBlockImporter):
             self,
             block: BlockAPI) -> BlockImportResult:
         return await self._chain.coro_import_block(block, perform_validation=True)
-
-
-class BaseSyncBlockImporter(ABC):
-    @abstractmethod
-    def import_block(
-        self, block: BaseBeaconBlock
-    ) -> Tuple[
-        BaseBeaconBlock, Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]
-    ]:
-        ...
-
-
-class SyncBlockImporter(BaseSyncBlockImporter):
-    def __init__(self, chain: BaseBeaconChain) -> None:
-        self._chain = chain
-
-    def import_block(
-            self,
-            block: BaseBeaconBlock
-    ) -> Tuple[BaseBeaconBlock, Tuple[BaseBeaconBlock, ...], Tuple[BaseBeaconBlock, ...]]:
-        return self._chain.import_block(block, perform_validation=True)

@@ -31,15 +31,3 @@ if is_uvloop_supported():
 from .main import (  # noqa: F401
     main,
 )
-
-from .main_beacon import (  # noqa: F401
-    main_beacon,
-)
-
-from .main_beacon_trio import (  # noqa: F401
-    main_beacon as main_beacon_trio,
-)
-
-from .main_validator import (  # noqa: F401
-    main_validator
-)

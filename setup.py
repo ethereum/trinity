@@ -72,8 +72,6 @@ deps = {
         "pytest-watch>=4.2.0,<4.3",
         # xdist pinned at <1.29 due to: https://github.com/pytest-dev/pytest-xdist/issues/472
         "pytest-xdist>=1.29.0,<1.30",
-        # only for eth2
-        "ruamel.yaml==0.16.10",
         "eth-tester==0.4.0b2",
     ],
     # We have to keep some separation between trio and asyncio based tests
@@ -110,28 +108,6 @@ deps = {
         "tox==2.7.0",
         "twine",
     ],
-    'eth2': [
-        "cytoolz>=0.9.0,<1.0.0",
-        "eth-typing>=2.1.0,<3.0.0",
-        "lru-dict>=1.1.6",
-        "py-ecc==4.0.0",
-        "rlp>=1.1.0,<2.0.0",
-        PYEVM_DEPENDENCY,
-        "ssz==0.2.4",
-        "asks>=2.3.6,<3",  # validator client
-        "anyio>1.3,<1.4",
-        "eth-keyfile",  # validator client
-        # Temporary patch to match a py-trie pin. After it's loosened in py-evm, drop the
-        #   typing-extensions requirement altogether.
-        "typing-extensions==3.7.4.2",
-    ],
-    'eth2-extra': [
-        "milagro-bls-binding==1.3.0",
-    ],
-    'eth2-lint': [
-        "black==19.3b0",
-        "isort==4.3.21",
-    ],
 }
 
 
@@ -162,15 +138,7 @@ deps['dev'] = (
 )
 
 
-deps['eth2-dev'] = (
-    deps['dev'] +
-    deps['eth2'] +
-    deps['eth2-extra'] +
-    deps['eth2-lint']
-)
-
-
-install_requires = deps['trinity'] + deps['p2p'] + deps['eth2']
+install_requires = deps['trinity'] + deps['p2p']
 
 
 with open('./README.md') as readme:
@@ -188,7 +156,7 @@ setup(
     author_email='piper@pipermerriam.com',
     url='https://github.com/ethereum/trinity',
     include_package_data=True,
-    py_modules=['trinity', 'p2p', 'eth2'],
+    py_modules=['trinity', 'p2p'],
     python_requires=">=3.7,<4",
     install_requires=install_requires,
     extras_require=deps,
@@ -208,8 +176,6 @@ setup(
     entry_points={
         'console_scripts': [
             'trinity=trinity:main',
-            'trinity-beacon=trinity:main_beacon_trio',
-            'trinity-validator=trinity:main_validator'
         ],
     },
 )
