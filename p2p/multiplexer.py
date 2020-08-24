@@ -294,10 +294,12 @@ class Multiplexer(MultiplexerAPI):
                 try:
                     # We use an optimistic strategy here of using
                     # `get_nowait()` to reduce the number of times we yield to
-                    # the event loop.  Since this is an async generator it will
-                    # yield to the loop each time it returns a value so we
-                    # don't have to worry about this blocking other processes.
+                    # the event loop.
                     yield msg_queue.get_nowait()
+
+                    # Manually release the event loop if it won't happen during
+                    #   the queue get().
+                    await asyncio.sleep(0)
                 except asyncio.QueueEmpty:
                     yield await msg_queue.get()
 

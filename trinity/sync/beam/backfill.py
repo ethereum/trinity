@@ -795,7 +795,9 @@ class TrieNodeRequestTracker:
         Return the Trie Fog that can be searched, ignoring any nodes that are currently
         being requested.
         """
-        return self._trie_fog.mark_all_complete(self._active_prefixes)
+        # Must pass in a copy of prefixes, so the set doesn't get modified while
+        #   mark_all_complete is iterating over it.
+        return self._trie_fog.mark_all_complete(self._active_prefixes.copy())
 
     def next_path_to_explore(self, starting_index: Nibbles) -> Nibbles:
         return self._get_eligible_fog().nearest_unknown(starting_index)

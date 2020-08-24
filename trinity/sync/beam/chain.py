@@ -4,6 +4,7 @@ from typing import (
     AsyncIterator,
     Iterable,
     Sequence,
+    Set,
     Tuple,
 )
 
@@ -22,6 +23,7 @@ from eth.abc import (
 from eth.constants import GENESIS_PARENT_HASH
 from eth.typing import BlockRange
 from eth_typing import (
+    Address,
     BlockNumber,
     Hash32,
 )
@@ -865,6 +867,15 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             mean_stats,
         )
 
+    def _extract_relevant_accounts(
+            self,
+            header: BlockHeaderAPI,
+            transactions: Tuple[SignedTransactionAPI, ...]) -> Set[Address]:
+
+        senders = [transaction.sender for transaction in transactions]
+        recipients = [transaction.to for transaction in transactions if transaction.to]
+        return set(senders + recipients + [header.coinbase])
+
     async def _request_address_nodes(
             self,
             header: BlockHeaderAPI,
@@ -877,9 +888,12 @@ class BeamBlockImporter(BaseBlockImporter, Service):
         :param urgent: are these addresses needed immediately? If False, they should they queue
             up behind the urgent trie nodes.
         """
-        senders = [transaction.sender for transaction in transactions]
-        recipients = [transaction.to for transaction in transactions if transaction.to]
-        addresses = set(senders + recipients + [header.coinbase])
+        addresses = await asyncio.get_event_loop().run_in_executor(
+            None,
+            self._extract_relevant_accounts,
+            header,
+            transactions,
+        )
         collected_nodes = await self._state_downloader.download_accounts(
             addresses,
             parent_state_root,

@@ -55,6 +55,9 @@ deps = {
         "libp2p==0.1.5",
         # The direct dependency resolves a version conflict between multiaddr and libp2p
         "base58>=1.0.3,<2.0.0",
+        # Temporary patch to match a py-trie pin. After it's loosened in py-evm, drop the
+        #   typing-extensions requirement altogether.
+        "typing-extensions==3.7.4.2",
     ],
     'test': [
         "async-timeout>=3.0.1,<4",
@@ -118,6 +121,9 @@ deps = {
         "asks>=2.3.6,<3",  # validator client
         "anyio>1.3,<1.4",
         "eth-keyfile",  # validator client
+        # Temporary patch to match a py-trie pin. After it's loosened in py-evm, drop the
+        #   typing-extensions requirement altogether.
+        "typing-extensions==3.7.4.2",
     ],
     'eth2-extra': [
         "milagro-bls-binding==1.3.0",
