@@ -817,6 +817,12 @@ class DiscoveryService(Service):
         await self.process_pong_v4(node, token, enr_seq)
 
     async def recv_neighbours_v4(self, remote: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
+        try:
+            channel = self.neighbours_channels.get_channel(remote)
+        except KeyError:
+            self.logger.debug('Unexpected NEIGHBOURS from %s, probably came too late', remote)
+            return
+
         # The neighbours payload should have 2 elements: nodes, expiration
         if len(payload) < 2:
             self.logger.warning('Ignoring NEIGHBOURS msg with invalid payload: %s', payload)
@@ -824,13 +830,12 @@ class DiscoveryService(Service):
         nodes, expiration = payload[:2]
         if self._is_msg_expired(expiration):
             return
-        neighbours = _extract_nodes_from_payload(remote.address, nodes, self.logger)
-        self.logger.debug2('<<< neighbours from %s: %s', remote, neighbours)
         try:
-            channel = self.neighbours_channels.get_channel(remote)
-        except KeyError:
-            self.logger.debug(f'unexpected neighbours from {remote}, probably came too late')
+            neighbours = _extract_nodes_from_payload(remote.address, nodes, self.logger)
+        except ValueError:
+            self.logger.debug("Malformed NEIGHBOURS packet from %s: %s", remote, nodes)
             return
+        self.logger.debug2('<<< neighbours from %s: %s', remote, neighbours)
 
         try:
             await channel.send(neighbours)
