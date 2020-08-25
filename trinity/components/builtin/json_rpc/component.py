@@ -5,7 +5,7 @@ from argparse import (
     _SubParsersAction,
 )
 import contextlib
-from typing import Iterator, Tuple, Union, Sequence, Type, Any
+from typing import Iterator, Tuple, Sequence, Type, Any
 
 from async_service import Service
 from eth_utils import ValidationError, to_tuple
@@ -19,14 +19,12 @@ from eth.db.header import (
 from trinity.config import (
     Eth1AppConfig,
     Eth1DbMode,
-    BeaconAppConfig,
     TrinityConfig
 )
 from trinity.chains.base import AsyncChainAPI
 from trinity.chains.light_eventbus import (
     EventBusLightPeerChain,
 )
-from trinity.db.beacon.chain import AsyncBeaconChainDB
 from trinity.db.manager import DBClient
 from trinity.extensibility import (
     AsyncioIsolatedComponent,
@@ -36,7 +34,6 @@ from trinity.rpc.main import (
 )
 from trinity.rpc.modules import (
     BaseRPCModule,
-    initialize_beacon_modules,
     initialize_eth1_modules,
 )
 from trinity.rpc.ipc import (
@@ -71,23 +68,10 @@ def chain_for_eth1_config(trinity_config: TrinityConfig,
 
 
 @contextlib.contextmanager
-def chain_for_beacon_config(trinity_config: TrinityConfig,
-                            beacon_app_config: BeaconAppConfig,
-                            ) -> Iterator[AsyncBeaconChainDB]:
-    db = DBClient.connect(trinity_config.database_ipc_path)
-    with db:
-        yield AsyncBeaconChainDB(db)
-
-
-@contextlib.contextmanager
 def chain_for_config(trinity_config: TrinityConfig,
                      event_bus: EndpointAPI,
-                     ) -> Iterator[Union[AsyncChainAPI, AsyncBeaconChainDB]]:
-    if trinity_config.has_app_config(BeaconAppConfig):
-        beacon_app_config = trinity_config.get_app_config(BeaconAppConfig)
-        with chain_for_beacon_config(trinity_config, beacon_app_config) as beacon_chain:
-            yield beacon_chain
-    elif trinity_config.has_app_config(Eth1AppConfig):
+                     ) -> Iterator[AsyncChainAPI]:
+    if trinity_config.has_app_config(Eth1AppConfig):
         eth1_app_config = trinity_config.get_app_config(Eth1AppConfig)
         with chain_for_eth1_config(trinity_config, eth1_app_config, event_bus) as eth1_chain:
             yield eth1_chain
@@ -181,8 +165,6 @@ class JsonRpcServerComponent(AsyncioIsolatedComponent):
         with chain_for_config(trinity_config, event_bus) as chain:
             if trinity_config.has_app_config(Eth1AppConfig):
                 modules = initialize_eth1_modules(chain, event_bus, trinity_config)
-            elif trinity_config.has_app_config(BeaconAppConfig):
-                modules = initialize_beacon_modules(chain, event_bus)
             else:
                 raise Exception("Unsupported Node Type")
 

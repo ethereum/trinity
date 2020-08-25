@@ -32,8 +32,8 @@ from trinity._utils.os import friendly_filename_or_url
 from trinity._utils.logging import get_logger
 from trinity.boot_info import BootInfo
 from trinity.cli_parser import parser, subparser
-from trinity.config import BaseAppConfig, BeaconAppConfig, Eth1AppConfig, TrinityConfig
-from trinity.constants import APP_IDENTIFIER_BEACON, APP_IDENTIFIER_ETH1, SYNC_FULL
+from trinity.config import BaseAppConfig, Eth1AppConfig, TrinityConfig
+from trinity.constants import APP_IDENTIFIER_ETH1, SYNC_FULL
 from trinity.initialization import initialize_data_dir, is_data_dir_initialized
 
 if TYPE_CHECKING:
@@ -178,8 +178,6 @@ def _setup_standalone_component(
 ) -> Tuple[Union['TrioIsolatedComponent', 'AsyncioIsolatedComponent'], Tuple[str, ...]]:
     if app_identifier == APP_IDENTIFIER_ETH1:
         app_cfg: Type[BaseAppConfig] = Eth1AppConfig
-    elif app_identifier == APP_IDENTIFIER_BEACON:
-        app_cfg = BeaconAppConfig
     else:
         raise ValueError("Unknown app identifier: %s", app_identifier)
 
@@ -286,7 +284,3 @@ def _run_trio_component(component_type: Type['TrioIsolatedComponent'], app_ident
 
 def run_trio_eth1_component(component_type: Type['TrioIsolatedComponent']) -> None:
     _run_trio_component(component_type, APP_IDENTIFIER_ETH1)
-
-
-def run_trio_eth2_component(component_type: Type['TrioIsolatedComponent']) -> None:
-    _run_trio_component(component_type, APP_IDENTIFIER_BEACON)

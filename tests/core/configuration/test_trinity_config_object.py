@@ -32,7 +32,6 @@ from trinity._utils.filesystem import (
 @pytest.mark.parametrize(
     "app_identifier, expected_suffix",
     (
-        ("beacon", "-beacon"),
         ("", ""),
     ),
 )

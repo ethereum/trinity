@@ -29,7 +29,6 @@ from p2p.constants import (
     ROPSTEN_BOOTNODES,
 )
 from trinity.constants import (
-    BEACON_TESTNET_NETWORK_ID,
     GOERLI_NETWORK_ID,
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID
@@ -48,15 +47,6 @@ class Eth1NetworkConfiguration(NamedTuple):
 
 
 PRECONFIGURED_NETWORKS = {
-    BEACON_TESTNET_NETWORK_ID: Eth1NetworkConfiguration(
-        BEACON_TESTNET_NETWORK_ID,
-        'SkeletonLakeChain',
-        'beacon-testnet',
-        'eip-1085-na',
-        (),
-        BlockHeader(0, BlockNumber(0), 0),
-        (),
-    ),
     GOERLI_NETWORK_ID: Eth1NetworkConfiguration(
         GOERLI_NETWORK_ID,
         'GoerliChain',

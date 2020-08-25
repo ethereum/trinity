@@ -9,14 +9,10 @@ from eth.exceptions import CanonicalHeadNotFound
 from p2p import ecies
 
 from trinity.config import (
-    BeaconAppConfig,
-    BeaconChainConfig,
     Eth1AppConfig,
     Eth1ChainConfig,
     TrinityConfig,
-    BeaconTrioAppConfig,
 )
-from eth2.beacon.db.chain import BaseBeaconChainDB
 from trinity.exceptions import (
     MissingPath,
 )
@@ -63,16 +59,6 @@ def is_data_dir_initialized(trinity_config: TrinityConfig) -> bool:
 def is_database_initialized(chaindb: ChainDatabaseAPI) -> bool:
     try:
         chaindb.get_canonical_head()
-    except CanonicalHeadNotFound:
-        # empty chain database
-        return False
-    else:
-        return True
-
-
-def is_beacon_database_initialized(chaindb: BaseBeaconChainDB) -> bool:
-    try:
-        chaindb.get_canonical_head_root()
     except CanonicalHeadNotFound:
         # empty chain database
         return False
@@ -140,25 +126,6 @@ def initialize_database(chain_config: Eth1ChainConfig,
         chain_config.initialize_chain(base_db)
 
 
-def initialize_beacon_database(chain_config: BeaconChainConfig,
-                               chaindb: BaseBeaconChainDB,
-                               base_db: AtomicDatabaseAPI) -> None:
-    try:
-        chaindb.get_canonical_head_root()
-    except CanonicalHeadNotFound:
-        chain_config.initialize_chain(base_db)
-
-
 def ensure_eth1_dirs(app_config: Eth1AppConfig) -> None:
-    if not app_config.database_dir.exists():
-        app_config.database_dir.mkdir(parents=True, exist_ok=True)
-
-
-def ensure_beacon_dirs(app_config: BeaconAppConfig) -> None:
-    if not app_config.database_dir.exists():
-        app_config.database_dir.mkdir(parents=True, exist_ok=True)
-
-
-def ensure_beacon_trio_dirs(app_config: BeaconTrioAppConfig) -> None:
     if not app_config.database_dir.exists():
         app_config.database_dir.mkdir(parents=True, exist_ok=True)

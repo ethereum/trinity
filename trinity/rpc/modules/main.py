@@ -2,7 +2,6 @@ from abc import (
     ABC,
 )
 from typing import (
-    Any,
     Generic,
     TypeVar,
 )
@@ -50,4 +49,3 @@ class ChainBasedRPCModule(BaseRPCModule, Generic[TChain]):
 
 
 Eth1ChainRPCModule = ChainBasedRPCModule[AsyncChainAPI]
-BeaconChainRPCModule = ChainBasedRPCModule[Any]

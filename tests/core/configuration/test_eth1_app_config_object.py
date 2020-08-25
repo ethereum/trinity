@@ -16,8 +16,6 @@ from trinity.nodes.light import (
 @pytest.mark.parametrize(
     "app_identifier, sync_mode, expected_db_path, expected_db_name",
     (
-        ("beacon", "light", "chain-beacon", "light"),
-        ("beacon", "fast", "chain-beacon", "full"),
         ("eth1", "light", "chain-eth1", "light"),
         ("eth1", "fast", "chain-eth1", "full"),
         ("", "light", "chain", "light"),

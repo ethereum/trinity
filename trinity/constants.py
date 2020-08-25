@@ -18,8 +18,6 @@ from p2p.kademlia import Address, Node
 
 # application identifier
 APP_IDENTIFIER_ETH1 = "eth1"
-APP_IDENTIFIER_BEACON = "beacon"
-APP_IDENTIFIER_VALIDATOR_CLIENT = "validator-client"
 
 # The file path to the non-python assets
 ASSETS_DIR = Path(__file__).parent / "assets"
@@ -47,8 +45,6 @@ FIRE_AND_FORGET_BROADCASTING = BroadcastConfig(require_subscriber=False)
 MAINNET_NETWORK_ID = 1
 ROPSTEN_NETWORK_ID = 3
 GOERLI_NETWORK_ID = 5
-# TODO: integrate in a way that won't collide with eth1
-BEACON_TESTNET_NETWORK_ID = 99
 
 # Default preferred enodes
 DEFAULT_PREFERRED_NODES: Dict[int, Tuple[Node, ...]] = {
