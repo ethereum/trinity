@@ -29,6 +29,7 @@ from p2p.discovery import (
     CMD_PING,
     CMD_PONG,
     DiscoveryService,
+    NeighboursPacket,
     PROTO_VERSION,
     _get_msg_expiration,
     _extract_nodes_from_payload,
@@ -249,7 +250,7 @@ async def test_request_enr(nursery, manually_driven_discovery_pair):
 
 
 @pytest.mark.trio
-async def test_find_node_neighbours(manually_driven_discovery_pair):
+async def test_find_node_neighbours(manually_driven_discovery_pair, monkeypatch):
     alice, bob = manually_driven_discovery_pair
     nodes_in_rt = 0
     # Ensure we have plenty of nodes in our RT's buckets so that the NEIGHBOURS response sent by
@@ -268,7 +269,7 @@ async def test_find_node_neighbours(manually_driven_discovery_pair):
     async def recv_neighbours(node, payload, hash_):
         received_neighbours.append((node, payload))
 
-    alice.recv_neighbours_v4 = recv_neighbours
+    monkeypatch.setattr(alice, 'recv_neighbours_v4', recv_neighbours)
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
     bob.node_db.set_last_pong_time(alice.this_node.id, int(time.monotonic()))
 
@@ -294,6 +295,53 @@ async def test_find_node_neighbours(manually_driven_discovery_pair):
         neighbours.extend(_extract_nodes_from_payload(
             node.address, payload[0], bob.logger))
     assert len(neighbours) == constants.KADEMLIA_BUCKET_SIZE
+
+
+@pytest.mark.trio
+async def test_unsolicited_neighbours(manually_driven_discovery_pair):
+    # Ensure our routing table cannot be poisoned by malicious nodes sending us unsolicited
+    # neighbours packages.
+    alice, bob = manually_driven_discovery_pair
+
+    node = NodeFactory()
+    alice.send_neighbours_v4(bob.this_node, [node])
+
+    with trio.fail_after(1):
+        await bob.consume_datagram()
+
+    assert not bob.routing._contains(node.id, include_replacement_cache=True)
+
+
+@pytest.mark.trio
+async def test_malformed_neighbours(manually_driven_discovery_pair, monkeypatch, nursery):
+    alice, bob = manually_driven_discovery_pair
+
+    def send_malformed_neighbours_v4(node, _):
+        nodes = [(b'\xff' * 32, b'\xff', b'\xff', b'\xff')]
+        payload = NeighboursPacket(neighbours=nodes, expiration=_get_msg_expiration())
+        bob.send(node, CMD_NEIGHBOURS, payload)
+
+    monkeypatch.setattr(bob, 'send_neighbours_v4', send_malformed_neighbours_v4)
+
+    # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
+    bob.node_db.set_last_pong_time(alice.this_node.id, int(time.monotonic()))
+
+    # Here alice requests a NEIGHBOURS package from bob, which replies with a malformed message.
+    # That is simply ignored by alice.
+    alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
+    with trio.fail_after(1):
+        await bob.consume_datagram()
+        # We need to run alice.consume_datagram() in the background as that will feed the
+        # received packet into the channel where wait_neighbours() will be waiting.
+        nursery.start_soon(alice.consume_datagram)
+        neighbours = await alice.wait_neighbours(bob.this_node)
+        assert neighbours == ()
+
+    # Here bob sends an unsolicited, malformed NEIGHBOURS package, which alice consumes without
+    # crashing.
+    send_malformed_neighbours_v4(alice.this_node, [])
+    with trio.fail_after(1):
+        await alice.consume_datagram()
 
 
 @pytest.mark.trio
