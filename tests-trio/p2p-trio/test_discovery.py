@@ -273,7 +273,7 @@ async def test_find_node_neighbours(manually_driven_discovery_pair, monkeypatch)
     # Pretend that bob and alice have already bonded, otherwise bob will ignore alice's find_node.
     bob.node_db.set_last_pong_time(alice.this_node.id, int(time.monotonic()))
 
-    alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
+    await alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
 
     with trio.fail_after(1):
         await bob.consume_datagram()
@@ -304,7 +304,7 @@ async def test_unsolicited_neighbours(manually_driven_discovery_pair):
     alice, bob = manually_driven_discovery_pair
 
     node = NodeFactory()
-    alice.send_neighbours_v4(bob.this_node, [node])
+    await alice.send_neighbours_v4(bob.this_node, [node])
 
     with trio.fail_after(1):
         await bob.consume_datagram()
@@ -316,10 +316,10 @@ async def test_unsolicited_neighbours(manually_driven_discovery_pair):
 async def test_malformed_neighbours(manually_driven_discovery_pair, monkeypatch, nursery):
     alice, bob = manually_driven_discovery_pair
 
-    def send_malformed_neighbours_v4(node, _):
+    async def send_malformed_neighbours_v4(node, _):
         nodes = [(b'\xff' * 32, b'\xff', b'\xff', b'\xff')]
         payload = NeighboursPacket(neighbours=nodes, expiration=_get_msg_expiration())
-        bob.send(node, CMD_NEIGHBOURS, payload)
+        await bob.send(node, CMD_NEIGHBOURS, payload)
 
     monkeypatch.setattr(bob, 'send_neighbours_v4', send_malformed_neighbours_v4)
 
@@ -328,7 +328,7 @@ async def test_malformed_neighbours(manually_driven_discovery_pair, monkeypatch,
 
     # Here alice requests a NEIGHBOURS package from bob, which replies with a malformed message.
     # That is simply ignored by alice.
-    alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
+    await alice.send_find_node_v4(bob.this_node, alice.pubkey.to_bytes())
     with trio.fail_after(1):
         await bob.consume_datagram()
         # We need to run alice.consume_datagram() in the background as that will feed the
@@ -339,7 +339,7 @@ async def test_malformed_neighbours(manually_driven_discovery_pair, monkeypatch,
 
     # Here bob sends an unsolicited, malformed NEIGHBOURS package, which alice consumes without
     # crashing.
-    send_malformed_neighbours_v4(alice.this_node, [])
+    await send_malformed_neighbours_v4(alice.this_node, [])
     with trio.fail_after(1):
         await alice.consume_datagram()
 
@@ -732,7 +732,7 @@ class MockDiscoveryService(DiscoveryService):
         super().__init__(
             privkey, address.udp_port, address.tcp_port, bootnodes, event_bus, socket, node_db)
 
-    def send(self, node, msg_type, payload):
+    async def send(self, node, msg_type, payload):
         # Overwrite our parent's send() to ensure no tests attempt to use us to go over the
         # network as that wouldn't work.
         raise ValueError("MockDiscoveryService must not be used to send network messages")
@@ -745,10 +745,10 @@ class MockDiscoveryService(DiscoveryService):
     async def send_pong_v4(self, node, echo):
         self.messages.append((node, 'pong', echo))
 
-    def send_find_node_v4(self, node, nodeid):
+    async def send_find_node_v4(self, node, nodeid):
         self.messages.append((node, 'find_node', nodeid))
 
-    def send_neighbours_v4(self, node, neighbours):
+    async def send_neighbours_v4(self, node, neighbours):
         self.messages.append((node, 'neighbours', neighbours))
 
 

@@ -443,7 +443,7 @@ class DiscoveryService(Service):
         """
         # No need to use a timeout because bond() takes care of that internally.
         await self.bond(remote.id)
-        token = self.send_enr_request(remote)
+        token = await self.send_enr_request(remote)
         send_chan, recv_chan = trio.open_memory_channel[Tuple[ENR, Hash32]](1)
         try:
             with trio.fail_after(constants.KADEMLIA_REQUEST_TIMEOUT):
@@ -577,7 +577,7 @@ class DiscoveryService(Service):
         nodes_seen: Set[NodeAPI] = set()
 
         async def _find_node(target: bytes, remote: NodeAPI) -> Tuple[NodeAPI, ...]:
-            self.send_find_node_v4(remote, target)
+            await self.send_find_node_v4(remote, target)
             candidates = await self.wait_neighbours(remote)
             if not candidates:
                 self.logger.debug2("got no neighbors from %s, returning", remote)
@@ -719,22 +719,19 @@ class DiscoveryService(Service):
 
         await self.lookup_random()
 
-    async def _sendto(self, msg: bytes, ip: str, port: int) -> None:
-        try:
-            await self.socket.sendto(msg, (ip, port))
-        except OSError:
-            self.logger.exception("Unexpected error sending msg to %s", (ip, port))
-
-    def send(self, node: NodeAPI, msg_type: DiscoveryCommand, payload: Sequence[Any]) -> bytes:
+    async def send(
+            self, node: NodeAPI, msg_type: DiscoveryCommand, payload: Sequence[Any]) -> bytes:
         """
-        Pack the given payload using the given msg type and fire a background task to try and
-        send it over our socket.
+        Pack the given payload using the given msg type and send it over our socket.
 
         If we get an OSError from our socket when attempting to send it, that will be logged
         and the message will be lost.
         """
         message = _pack_v4(msg_type.id, payload, self.privkey)
-        self.manager.run_task(self._sendto, message, node.address.ip, node.address.udp_port)
+        try:
+            await self.socket.sendto(message, (node.address.ip, node.address.udp_port))
+        except OSError:
+            self.logger.exception("Unexpected error sending msg to %s", node.address)
         return message
 
     async def consume_datagram(self) -> None:
@@ -742,9 +739,11 @@ class DiscoveryService(Service):
             constants.DISCOVERY_DATAGRAM_BUFFER_SIZE)
         address = Address(ip_address, port, port)
         self.logger.debug2("Received datagram from %s", address)
-        self.manager.run_task(self.receive, address, datagram)
+        # Run the msg handler in the background so that we can move on to the next received
+        # message.
+        self.manager.run_task(self.handle_msg, address, datagram)
 
-    async def receive(self, address: AddressAPI, message: bytes) -> None:
+    async def handle_msg(self, address: AddressAPI, message: bytes) -> None:
         try:
             remote_pubkey, cmd_id, payload, message_hash = _unpack_v4(message)
         except DefectiveMessage as e:
@@ -799,6 +798,10 @@ class DiscoveryService(Service):
             self.logger.debug('Received message already expired')
             return True
         return False
+
+    #
+    # Message handlers
+    #
 
     async def recv_pong_v4(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The pong payload should have at least 3 elements: to, token, expiration
@@ -910,23 +913,7 @@ class DiscoveryService(Service):
                 "Ignoring find_node request from node (%s) we haven't bonded with", node)
             return
         target_id = NodeID(keccak(target))
-        self.send_neighbours_v4(node, self.get_neighbours(target_id))
-
-    @to_tuple
-    def get_neighbours(self, target_id: NodeID) -> Iterator[NodeAPI]:
-        """
-        Return (up to) the closest 16 nodes to the target id.
-        """
-        count = 0
-        for node_id in self.routing.iter_nodes_around(target_id):
-            try:
-                yield Node(self.node_db.get_enr(node_id))
-                count += 1
-            except KeyError:
-                self.logger.exception(
-                    "Node with ID %s is in routing table but not in node DB", encode_hex(node_id))
-            if count == constants.NEIGHBOURS_RESPONSE_ITEMS:
-                break
+        await self.send_neighbours_v4(node, self.get_neighbours(target_id))
 
     async def recv_enr_request(
             self, node: NodeAPI, payload: Sequence[Any], msg_hash: Hash32) -> None:
@@ -943,7 +930,7 @@ class DiscoveryService(Service):
         enr = await self.get_local_enr()
         self.logger.debug("Sending local ENR to %s: %s", node, enr)
         payload = (msg_hash, ENR.serialize(enr))
-        self.send(node, CMD_ENR_RESPONSE, payload)
+        await self.send(node, CMD_ENR_RESPONSE, payload)
 
     async def recv_enr_response(self, node: NodeAPI, payload: Sequence[Any], _: Hash32) -> None:
         # The enr_response payload should have at least two elements: request_hash, enr.
@@ -1008,8 +995,12 @@ class DiscoveryService(Service):
             # This means the receiver has already closed, probably because it timed out.
             pass
 
-    def send_enr_request(self, node: NodeAPI) -> Hash32:
-        message = self.send(node, CMD_ENR_REQUEST, [_get_msg_expiration()])
+    #
+    # Message senders
+    #
+
+    async def send_enr_request(self, node: NodeAPI) -> Hash32:
+        message = await self.send(node, CMD_ENR_REQUEST, [_get_msg_expiration()])
         token = Hash32(message[:MAC_SIZE])
         self.logger.debug("Sending ENR request with token: %s", encode_hex(token))
         return token
@@ -1020,7 +1011,7 @@ class DiscoveryService(Service):
         local_enr_seq = await self.get_local_enr_seq()
         payload = (version, self.this_node.address.to_endpoint(), node.address.to_endpoint(),
                    expiration, int_to_big_endian(local_enr_seq))
-        message = self.send(node, CMD_PING, payload)
+        message = await self.send(node, CMD_PING, payload)
         # Return the msg hash, which is used as a token to identify pongs.
         token = Hash32(message[:MAC_SIZE])
         self.logger.debug2('>>> ping (v4) %s (token == %s)', node, encode_hex(token))
@@ -1031,21 +1022,21 @@ class DiscoveryService(Service):
         self.parity_pong_tokens[parity_token] = token
         return token
 
-    def send_find_node_v4(self, node: NodeAPI, target_key: bytes) -> None:
+    async def send_find_node_v4(self, node: NodeAPI, target_key: bytes) -> None:
         if len(target_key) != constants.KADEMLIA_PUBLIC_KEY_SIZE // 8:
             raise ValueError(f"Invalid FIND_NODE target ({target_key!r}). Length is not 64")
         expiration = _get_msg_expiration()
         self.logger.debug2('>>> find_node to %s', node)
-        self.send(node, CMD_FIND_NODE, (target_key, expiration))
+        await self.send(node, CMD_FIND_NODE, (target_key, expiration))
 
     async def send_pong_v4(self, node: NodeAPI, token: Hash32) -> None:
         expiration = _get_msg_expiration()
         self.logger.debug2('>>> pong %s', node)
         local_enr_seq = await self.get_local_enr_seq()
         payload = (node.address.to_endpoint(), token, expiration, int_to_big_endian(local_enr_seq))
-        self.send(node, CMD_PONG, payload)
+        await self.send(node, CMD_PONG, payload)
 
-    def send_neighbours_v4(self, node: NodeAPI, neighbours: Tuple[NodeAPI, ...]) -> None:
+    async def send_neighbours_v4(self, node: NodeAPI, neighbours: Tuple[NodeAPI, ...]) -> None:
         nodes = []
         sorted_neighbours: List[NodeAPI] = sorted(neighbours)
         for n in sorted_neighbours:
@@ -1059,7 +1050,7 @@ class DiscoveryService(Service):
             payload = NeighboursPacket(
                 neighbours=nodes[i:i + max_neighbours],
                 expiration=expiration)
-            self.send(node, CMD_NEIGHBOURS, payload)
+            await self.send(node, CMD_NEIGHBOURS, payload)
 
     async def process_pong_v4(self, remote: NodeAPI, token: Hash32, enr_seq: int) -> None:
         # XXX: This hack is needed because there are lots of parity 1.10 nodes out there that send
@@ -1094,6 +1085,22 @@ class DiscoveryService(Service):
         except trio.BrokenResourceError:
             # This means the receiver has already closed, probably because it timed out.
             pass
+
+    @to_tuple
+    def get_neighbours(self, target_id: NodeID) -> Iterator[NodeAPI]:
+        """
+        Return (up to) the closest 16 nodes to the target id.
+        """
+        count = 0
+        for node_id in self.routing.iter_nodes_around(target_id):
+            try:
+                yield Node(self.node_db.get_enr(node_id))
+                count += 1
+            except KeyError:
+                self.logger.exception(
+                    "Node with ID %s is in routing table but not in node DB", encode_hex(node_id))
+            if count == constants.NEIGHBOURS_RESPONSE_ITEMS:
+                break
 
 
 class PreferredNodeDiscoveryService(DiscoveryService):
