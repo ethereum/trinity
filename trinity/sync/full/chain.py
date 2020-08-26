@@ -101,7 +101,7 @@ from trinity._utils.timer import Timer
 ReceiptBundle = Tuple[Tuple[ReceiptAPI, ...], Tuple[Hash32, Dict[Hash32, bytes]]]
 # (BlockBody, (txn_root, txn_trie_data), uncles_hash)
 BlockBodyBundle = Tuple[
-    BlockBody,
+    BlockAPI,
     Tuple[Hash32, Dict[Hash32, bytes]],
     Hash32,
 ]
