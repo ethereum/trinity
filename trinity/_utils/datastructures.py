@@ -170,9 +170,8 @@ class TaskQueue(Generic[TTask]):
                 # wait until there is room in the queue
                 await self._full_lock.acquire()
 
-                # the current number of tasks has changed, can't reuse num_tasks
-                num_tasks = len(self._tasks)
-                open_slots = self._maxsize - num_tasks
+                # the current number of tasks has changed, restart attempt
+                continue
 
             queueing, remaining = remaining[:open_slots], remaining[open_slots:]
 
@@ -235,7 +234,7 @@ class TaskQueue(Generic[TTask]):
 
         return (next_id, pending_tasks)
 
-    def complete(self, batch_id: int, completed: Collection[TTask]) -> None:
+    async def complete(self, batch_id: int, completed: Collection[TTask]) -> None:
         if batch_id not in self._in_progress:
             raise ValidationError(f"batch id {batch_id} not recognized, with tasks {completed!r}")
 
@@ -251,8 +250,17 @@ class TaskQueue(Generic[TTask]):
         incomplete = set(attempted).difference(completed)
 
         for task in incomplete:
-            # These tasks are already counted in the total task count, so there will be room
-            self._open_queue.put_nowait(self._task_wrapper(task))
+            # It seems like there should always be room here, so that a put_nowait would work,
+            #   but for some undiagnosed reason, it occasionally raises QueueFull. See:
+            #   https://github.com/ethereum/trinity/issues/1972
+            wrapped_task = self._task_wrapper(task)
+            try:
+                self._open_queue.put_nowait(wrapped_task)
+            except asyncio.QueueFull:
+                await self._open_queue.put(wrapped_task)
+            else:
+                # Make sure to release the event loop regularly. Sometimes _task_wrapper is slow.
+                await asyncio.sleep(0)
 
         self._tasks.difference_update(completed)
 
