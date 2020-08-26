@@ -1,12 +1,5 @@
 from abc import ABC, abstractmethod
-from asyncio import (
-    AbstractEventLoop,
-    Event,
-    Lock,
-    PriorityQueue,
-    Queue,
-    QueueFull,
-)
+import asyncio
 from enum import Enum
 from functools import (
     total_ordering,
@@ -127,7 +120,7 @@ class TaskQueue(Generic[TTask]):
     _in_progress: Dict[int, Tuple[TTask, ...]]
 
     # all tasks that have been placed in the queue and have not been started
-    _open_queue: 'PriorityQueue[SortableTask[TTask]]'
+    _open_queue: 'asyncio.PriorityQueue[SortableTask[TTask]]'
 
     # all tasks that have been placed in the queue and have not been completed
     _tasks: Set[TTask]
@@ -137,10 +130,10 @@ class TaskQueue(Generic[TTask]):
             maxsize: int = 0,
             order_fn: Callable[[TTask], Any] = identity,
             *,
-            loop: AbstractEventLoop = None) -> None:
+            loop: asyncio.AbstractEventLoop = None) -> None:
         self._maxsize = maxsize
-        self._full_lock = Lock(loop=loop)
-        self._open_queue = PriorityQueue(maxsize, loop=loop)
+        self._full_lock = asyncio.Lock(loop=loop)
+        self._open_queue = asyncio.PriorityQueue(maxsize, loop=loop)
         self._task_wrapper = SortableTask.orderable_by_func(order_fn)
         self._id_generator = count()
         self._tasks = set()
@@ -187,10 +180,10 @@ class TaskQueue(Generic[TTask]):
                 # There will always be room in _open_queue until _maxsize is reached
                 try:
                     self._open_queue.put_nowait(task)
-                except QueueFull as exc:
+                except asyncio.QueueFull as exc:
                     task_idx = queueing.index(task)
                     qsize = self._open_queue.qsize()
-                    raise QueueFull(
+                    raise asyncio.QueueFull(
                         f'TaskQueue unsuccessful in adding task {task.original!r} ',
                         f'because qsize={qsize}, '
                         f'num_tasks={num_tasks}, maxsize={self._maxsize}, open_slots={open_slots}, '
@@ -213,7 +206,7 @@ class TaskQueue(Generic[TTask]):
         :raise ~asyncio.QueueFull: if no tasks are available
         """
         if self._open_queue.empty():
-            raise QueueFull("No tasks are available to get")
+            raise asyncio.QueueFull("No tasks are available to get")
         else:
             ranked_tasks = queue_get_nowait(self._open_queue, max_results)
 
@@ -503,7 +496,7 @@ class OrderedTaskPreparation(
             self._max_depth = max_depth
 
         self._max_tasks = max_tasks
-        self._ready_count_dropped = Event()
+        self._ready_count_dropped = asyncio.Event()
 
         # all of the tasks that have been completed, and not pruned
         self._tasks: Dict[TTaskID, BaseTaskPrerequisites[TTask, TPrerequisite]] = {}
@@ -515,7 +508,7 @@ class OrderedTaskPreparation(
 
         # This is a queue of tasks that have become ready, in order.
         # They wait in this Queue until being returned by ready_tasks().
-        self._ready_tasks: 'Queue[TTask]' = Queue()
+        self._ready_tasks: 'asyncio.Queue[TTask]' = asyncio.Queue()
 
         # Declared finished with set_finished_dependency()
         self._declared_finished: Set[TTaskID] = set()
