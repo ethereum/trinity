@@ -4,7 +4,7 @@ import os
 import re
 from setuptools import setup, find_packages
 
-PYEVM_DEPENDENCY = "py-evm==0.3.0a18"
+PYEVM_DEPENDENCY = "py-evm@git+https://github.com/cburgdorf/py-evm.git@christoph/upgrade/pyrlp"
 
 
 deps = {
@@ -25,6 +25,7 @@ deps = {
         'trio>=0.13.0,<0.14',
         'trio-typing>=0.3.0,<0.4',
         "upnpclient>=0.0.8,<1",
+        "rlp@git+https://github.com/cburgdorf/pyrlp.git@christoph/feat/rusty-backend",
     ],
     'trinity': [
         "aiohttp==3.6.0",
