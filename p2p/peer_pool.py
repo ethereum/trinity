@@ -83,6 +83,7 @@ from p2p.tracking.connection import (
 )
 from p2p._utils import get_logger
 
+DIAL_IN_OUT_RATIO = 0.75
 COMMON_PEER_CONNECTION_EXCEPTIONS = cast(Tuple[Type[BaseP2PError], ...], (
     NoMatchingPeerCapabilities,
     PeerConnectionLost,
@@ -275,24 +276,63 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         for peer in self.connected_nodes.values():
             peer.remove_subscriber(subscriber)
 
-    async def start_peer(self, peer: BasePeer) -> None:
+    async def _start_peer(self, peer: BasePeer) -> None:
         self.manager.run_child_service(peer.connection)
         await asyncio.wait_for(
             peer.connection.get_manager().wait_started(), timeout=PEER_READY_TIMEOUT)
+        await peer.connection.run_peer(peer)
 
+    async def add_inbound_peer(self, peer: BasePeer) -> None:
         try:
-            await peer.connection.run_peer(peer)
+            await self._start_peer(peer)
         except asyncio.TimeoutError as err:
-            self.logger.debug('Timout waiting for peer to start: %s', err)
+            self.logger.debug('Timeout waiting for %s to start: %s', peer, err)
             return
 
-        if peer.get_manager().is_running:
-            self._add_peer(peer)
-        else:
-            self.logger.debug("%s was cancelled immediately, not adding to pool", peer)
+        if self.is_connected_to_node(peer.remote):
+            self.logger.debug("Aborting inbound connection attempt by %s. Already connected!", peer)
+            await peer.disconnect(DisconnectReason.ALREADY_CONNECTED)
             return
 
+        if self.is_full:
+            self.logger.debug("Aborting inbound connection attempt by %s. PeerPool is full", peer)
+            await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
+            return
+        elif not self.is_valid_connection_candidate(peer.remote):
+            self.logger.debug(
+                "Aborting inbound connection attempt by %s. Not a valid candidate", peer)
+            # XXX: Currently, is_valid_connection_candidate() only checks that we're connected
+            # to 2 or less nodes with the same IP, so TOO_MANY_PEERS is what makes the most sense
+            # here.
+            await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
+            return
+
+        total_peers = len(self)
+        inbound_peer_count = len(
+            tuple(peer for peer in self.connected_nodes.values() if peer.inbound))
+        if total_peers > 1 and inbound_peer_count / total_peers > DIAL_IN_OUT_RATIO:
+            self.logger.debug(
+                "Aborting inbound connection attempt by %s. Too many inbound peers", peer)
+            await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
+            return
+
+        await self._add_peer_and_bootstrap(peer)
+
+    async def add_outbound_peer(self, peer: BasePeer) -> None:
+        try:
+            await self._start_peer(peer)
+        except asyncio.TimeoutError as err:
+            self.logger.debug('Timeout waiting for %s to start: %s', peer, err)
+            return
+
+        await self._add_peer_and_bootstrap(peer)
+
+    async def _add_peer_and_bootstrap(self, peer: BasePeer) -> None:
+        # Add the peer to ourselves, ensuring it has subscribers before we start the protocol
+        # streams.
+        self._add_peer(peer)
         peer.start_protocol_streams()
+
         try:
             await asyncio.wait_for(
                 peer.boot_manager.get_manager().wait_finished(),
@@ -302,9 +342,6 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             self.logger.debug('Timout waiting for peer to boot: %s', err)
             await peer.disconnect(DisconnectReason.TIMEOUT)
             return
-        else:
-            if not peer.get_manager().is_running:
-                self.logger.debug('%s disconnected during boot-up, dropped from pool', peer)
 
     def _add_peer(self, peer: BasePeer) -> None:
         """Add the given peer to the pool.
@@ -470,7 +507,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
                 await peer.disconnect(DisconnectReason.CLIENT_QUITTING)
                 return
             else:
-                await self.start_peer(peer)
+                await self.add_outbound_peer(peer)
 
     def _peer_finished(self, peer: BasePeer) -> None:
         """
