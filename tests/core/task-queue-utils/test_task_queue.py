@@ -90,7 +90,7 @@ async def test_no_asyncio_exception_leaks(operations, queue_size, add_size, get_
             # wait to run the completion
             await cancel_token.cancellable_wait(complete_event.wait())
 
-            queue.complete(batch, tasks)
+            await queue.complete(batch, tasks)
             complete_event.clear()
 
     async def adder(queue, add_size, add_event, cancel_token):
@@ -151,7 +151,7 @@ async def test_queue_size_reset_after_complete():
 
     # do imaginary work here, then complete it all
 
-    q.complete(batch, tasks)
+    await q.complete(batch, tasks)
 
     # there should be room to add more now
     await wait(q.add((3, )))
@@ -177,7 +177,7 @@ async def test_queue_contains_task_until_complete(tasks):
     assert first_task in q
     assert q.num_pending() == 0
 
-    q.complete(batch, pending_tasks)
+    await q.complete(batch, pending_tasks)
 
     assert first_task not in q
     assert q.num_pending() == 0
@@ -271,7 +271,7 @@ async def test_unfinished_tasks_readded():
 
     assert q.num_pending() == 0
 
-    q.complete(batch, (2, ))
+    await q.complete(batch, (2, ))
 
     assert q.num_pending() == 2
 
@@ -302,11 +302,11 @@ async def test_cannot_complete_batch_with_wrong_task():
 
     # cannot complete a valid task with a task it wasn't given
     with pytest.raises(ValidationError):
-        q.complete(batch, (3, 4))
+        await q.complete(batch, (3, 4))
 
     # partially invalid completion calls leave the valid task in an incomplete state
     with pytest.raises(ValidationError):
-        q.complete(batch, (1, 3))
+        await q.complete(batch, (1, 3))
 
     assert 1 in q
 
@@ -319,7 +319,7 @@ async def test_cannot_complete_batch_unless_pending():
 
     # cannot complete a valid task without a batch id
     with pytest.raises(ValidationError):
-        q.complete(None, (1, 2))
+        await q.complete(None, (1, 2))
 
     assert 1 in q
 
@@ -327,7 +327,7 @@ async def test_cannot_complete_batch_unless_pending():
 
     # cannot complete a valid task with an invalid batch id
     with pytest.raises(ValidationError):
-        q.complete(batch + 1, (1, 2))
+        await q.complete(batch + 1, (1, 2))
 
     assert 1 in q
 
@@ -361,7 +361,7 @@ async def test_two_pending_adds_one_release():
     assert len(q) == 2
     assert q.num_in_progress() == 2
 
-    q.complete(batch, tasks)
+    await q.complete(batch, tasks)
 
     # tasks are drained, but new ones aren't added yet...
     assert q.num_in_progress() == 0
@@ -384,7 +384,7 @@ async def test_two_pending_adds_one_release():
     assert len(q) == 2
 
     # clean up, so the pending get() call can complete
-    q.complete(batch, tasks)
+    await q.complete(batch, tasks)
 
     # All current tasks finished
     assert q.num_in_progress() == 0
@@ -455,6 +455,6 @@ async def test_get_nowait(tasks, get_size, expected_tasks):
 
     assert tasks == expected_tasks
 
-    q.complete(batch, tasks)
+    await q.complete(batch, tasks)
 
     assert all(task not in q for task in tasks)

@@ -101,7 +101,7 @@ from trinity._utils.timer import Timer
 ReceiptBundle = Tuple[Tuple[ReceiptAPI, ...], Tuple[Hash32, Dict[Hash32, bytes]]]
 # (BlockBody, (txn_root, txn_trie_data), uncles_hash)
 BlockBodyBundle = Tuple[
-    BlockBody,
+    BlockAPI,
     Tuple[Hash32, Dict[Hash32, bytes]],
     Hash32,
 ]
@@ -341,13 +341,13 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
                 loop = asyncio.get_event_loop()
                 loop.call_later(delay, partial(self._body_peers.put_nowait, peer))
         finally:
-            self._mark_body_download_complete(batch_id, completed_headers)
+            await self._mark_body_download_complete(batch_id, completed_headers)
 
-    def _mark_body_download_complete(
+    async def _mark_body_download_complete(
             self,
             batch_id: int,
             completed_headers: Sequence[BlockHeaderAPI]) -> None:
-        self._block_body_tasks.complete(batch_id, completed_headers)
+        await self._block_body_tasks.complete(batch_id, completed_headers)
 
     async def _get_block_bodies(
             self,
@@ -774,11 +774,11 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             # stopped and run_task() will raise a LifecycleError.
             peer.manager.run_task(self._run_receipt_download_batch, peer, batch_id, headers)
 
-    def _mark_body_download_complete(
+    async def _mark_body_download_complete(
             self,
             batch_id: int,
             completed_headers: Sequence[BlockHeaderAPI]) -> None:
-        super()._mark_body_download_complete(batch_id, completed_headers)
+        await super()._mark_body_download_complete(batch_id, completed_headers)
         self._block_persist_tracker.finish_prereq(
             BlockPersistPrereqs.STORE_BLOCK_BODIES,
             completed_headers,
@@ -818,7 +818,7 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
                 loop = asyncio.get_event_loop()
                 loop.call_later(delay, partial(self._receipt_peers.put_nowait, peer))
         finally:
-            self._receipt_tasks.complete(batch_id, completed_headers)
+            await self._receipt_tasks.complete(batch_id, completed_headers)
 
     async def _block_body_bundle_processing(self, bundles: Tuple[BlockBodyBundle, ...]) -> None:
         """
@@ -1063,11 +1063,11 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
             # if the output queue gets full, hang until there is room
             await self._block_body_tasks.add(new_headers)
 
-    def _mark_body_download_complete(
+    async def _mark_body_download_complete(
             self,
             batch_id: int,
             completed_headers: Sequence[BlockHeaderAPI]) -> None:
-        super()._mark_body_download_complete(batch_id, completed_headers)
+        await super()._mark_body_download_complete(batch_id, completed_headers)
         self._block_import_tracker.finish_prereq(
             BlockImportPrereqs.STORE_BLOCK_BODIES,
             completed_headers,

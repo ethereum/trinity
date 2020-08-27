@@ -483,7 +483,8 @@ class BeamDownloader(Service, PeerSubscriber):
         self._time_on_urgent += time_on_urgent
 
         # Complete the task in the TaskQueue
-        self._node_tasks.complete(batch_id, tuple(node_hash for node_hash, _ in nodes_returned))
+        task_hashes = tuple(node_hash for node_hash, _ in nodes_returned)
+        await self._node_tasks.complete(batch_id, task_hashes)
 
         # Re-insert the peers for the next request
         for knight in knights:
@@ -537,7 +538,7 @@ class BeamDownloader(Service, PeerSubscriber):
                     self._min_predictive_peers = new_predictive_peers
 
                 # Prepare to restart
-                self._maybe_useful_nodes.complete(batch_id, ())
+                await self._maybe_useful_nodes.complete(batch_id, ())
                 continue
 
             self._num_predictive_requests_by_peer[peer] += 1
@@ -561,7 +562,8 @@ class BeamDownloader(Service, PeerSubscriber):
         self._total_processed_nodes += len(nodes)
         self._predictive_processed_nodes += len(new_nodes)
 
-        self._maybe_useful_nodes.complete(batch_id, tuple(node_hash for node_hash, _ in nodes))
+        task_hashes = tuple(node_hash for node_hash, _ in nodes)
+        await self._maybe_useful_nodes.complete(batch_id, task_hashes)
 
         # Re-insert the peasant into the tracker
         self._queen_tracker.insert_peer(peer)
