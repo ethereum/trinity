@@ -181,8 +181,7 @@ class BeamDownloader(Service, PeerSubscriber):
     async def _wait_for_nodes(
             self,
             node_hashes: Iterable[Hash32],
-            queue: TaskQueue[Hash32],
-            timeout: float) -> int:
+            urgent: bool) -> int:
         """
         Insert the given node hashes into the queue to be retrieved, then block
         until they become present in the database.
@@ -190,14 +189,16 @@ class BeamDownloader(Service, PeerSubscriber):
         :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
         """
         loop = asyncio.get_event_loop()
-        if queue == self._node_tasks:
+        if urgent:
             missing_nodes = self._get_unique_missing_hashes(node_hashes)
+            queue = self._node_tasks
         else:
             missing_nodes = await loop.run_in_executor(
                 None,
                 self._get_unique_missing_hashes,
                 node_hashes,
             )
+            queue = self._maybe_useful_nodes
 
         unrequested_nodes = tuple(
             node_hash for node_hash in missing_nodes if node_hash not in queue
@@ -205,7 +206,7 @@ class BeamDownloader(Service, PeerSubscriber):
         if missing_nodes:
             if unrequested_nodes:
                 await queue.add(unrequested_nodes)
-            return await self._node_hashes_present(missing_nodes, timeout)
+            return await self._node_hashes_present(missing_nodes, urgent)
         else:
             return 0
 
@@ -667,13 +668,14 @@ class BeamDownloader(Service, PeerSubscriber):
 
         return new_nodes, found_independent
 
-    async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> int:
+    async def _node_hashes_present(self, node_hashes: Set[Hash32], urgent: bool) -> int:
         """
         Block until the supplied node hashes have been inserted into the database.
 
         :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
         """
         remaining_hashes = node_hashes.copy()
+        timeout = BLOCK_IMPORT_MISSING_STATE_TIMEOUT
 
         loop = asyncio.get_event_loop()
         start_time = time.monotonic()
@@ -681,7 +683,7 @@ class BeamDownloader(Service, PeerSubscriber):
             await self._new_data_event.wait()
             self._new_data_event.clear()
 
-            if len(remaining_hashes) <= 1:
+            if urgent:
                 found_hashes = self._get_unique_present_hashes(remaining_hashes)
             else:
                 found_hashes = await loop.run_in_executor(
@@ -692,9 +694,15 @@ class BeamDownloader(Service, PeerSubscriber):
             remaining_hashes -= found_hashes
 
         if remaining_hashes:
-            self.logger.error(
-                "Could not collect node data for hashes %r within %.0f seconds (took %.1fs)",
-                remaining_hashes,
+            if urgent:
+                logger = self.logger.error
+            else:
+                logger = self.logger.warning
+            logger(
+                "Could not collect node data for %d %s hashes %r within %.0f seconds (took %.1fs)",
+                len(remaining_hashes),
+                "urgent" if urgent else "preview",
+                list(remaining_hashes)[0:2],
                 timeout,
                 time.monotonic() - start_time,
             )
