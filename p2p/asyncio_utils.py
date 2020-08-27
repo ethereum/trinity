@@ -99,8 +99,11 @@ async def cancel_pending_tasks(*tasks: asyncio.Task[Any], timeout: int) -> Async
             # slow cleanup the othders don't have to wait for it.
             done, pending = await asyncio.wait(cancelled, timeout=timeout)
             if pending:
+                # These tasks might need to be pickled to pass across the process boundary
+                unfinished = [repr(task) for task in pending]
                 errors.append(
-                    asyncio.TimeoutError("Tasks never returned after being cancelled: %s", pending))
+                    asyncio.TimeoutError("Tasks never returned after being cancelled", unfinished),
+                )
             # We use future as the variable name here because that's what asyncio.wait returns
             # above.
             for future in done:
