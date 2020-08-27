@@ -19,7 +19,6 @@ from eth.abc import AtomicDatabaseAPI, VirtualMachineAPI
 from pyformance import MetricsRegistry
 
 from p2p.constants import DEFAULT_MAX_PEERS, DEVP2P_V5
-from p2p.disconnect import DisconnectReason
 from p2p.exceptions import (
     HandshakeFailure,
     NoMatchingPeerCapabilities,
@@ -38,7 +37,6 @@ from trinity.protocol.les.peer import LESPeerPool
 from trinity._utils.logging import get_logger
 
 
-DIAL_IN_OUT_RATIO = 0.75
 BOUND_IP = '0.0.0.0'
 
 TPeerPool = TypeVar('TPeerPool', bound=BasePeerPool)
@@ -160,36 +158,8 @@ class BaseServer(Service, Generic[TPeerPool]):
         )
 
         async with self.peer_pool.lock_node_for_handshake(connection.remote):
-            if self.peer_pool.is_connected_to_node(connection.remote):
-                self.logger.debug(
-                    "Aborting inbound connection attempt by %s. Already connected!",
-                    connection,
-                )
-                return
-
-            # Create and register peer in peer_pool
             peer = factory.create_peer(connection)
-
-            if self.peer_pool.is_full:
-                await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
-                return
-            elif not self.peer_pool.is_valid_connection_candidate(peer.remote):
-                await peer.disconnect(DisconnectReason.USELESS_PEER)
-                return
-
-            total_peers = len(self.peer_pool)
-            inbound_peer_count = len(tuple(
-                peer
-                for peer
-                in self.peer_pool.connected_nodes.values()
-                if peer.inbound
-            ))
-            if total_peers > 1 and inbound_peer_count / total_peers > DIAL_IN_OUT_RATIO:
-                # make sure to have at least 1/4 outbound connections
-                await peer.disconnect(DisconnectReason.TOO_MANY_PEERS)
-                return
-
-            await self.peer_pool.start_peer(peer)
+            await self.peer_pool.add_inbound_peer(peer)
 
 
 class FullServer(BaseServer[ETHPeerPool]):

@@ -176,20 +176,21 @@ class BroadcastMsgCollector(PeerSubscriber):
 
 @pytest.mark.asyncio
 async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
+    receiving_peer_pool = server.peer_pool
     peer_started = asyncio.Event()
 
-    start_peer = server.peer_pool.start_peer
+    add_inbound_peer = receiving_peer_pool.add_inbound_peer
 
-    async def mock_start_peer(peer):
-        # Call the original start_peer() so that we create and run Peer/Connection objects,
+    async def mock_add_inbound_peer(peer):
+        # Call the original add_inbound_peer() so that we create and run Peer/Connection objects,
         # which will ensure everything is cleaned up properly.
-        await start_peer(peer)
+        await add_inbound_peer(peer)
         peer_started.set()
 
-    monkeypatch.setattr(server.peer_pool, 'start_peer', mock_start_peer)
+    monkeypatch.setattr(receiving_peer_pool, 'add_inbound_peer', mock_add_inbound_peer)
 
     broadcast_msg_buffer = BroadcastMsgCollector()
-    server.peer_pool.subscribe(broadcast_msg_buffer)
+    receiving_peer_pool.subscribe(broadcast_msg_buffer)
 
     initiator_peer_pool = ParagonPeerPool(
         privkey=INITIATOR_PRIVKEY,
@@ -206,7 +207,7 @@ async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
 
         peer = list(initiator_peer_pool.connected_nodes.values())[0]
 
-        receiving_peer = list(server.peer_pool.connected_nodes.values())[0]
+        receiving_peer = list(receiving_peer_pool.connected_nodes.values())[0]
         # Once our peer is running, it will start streaming messages, which will be stored in our
         # msg buffer.
         assert receiving_peer.connection.is_streaming_messages
