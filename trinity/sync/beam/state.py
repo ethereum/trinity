@@ -1,6 +1,6 @@
 import asyncio
 from collections import Counter, defaultdict
-from concurrent.futures import CancelledError
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 import time
 import typing
 from typing import (
@@ -147,6 +147,8 @@ class BeamDownloader(Service, PeerSubscriber):
         self._num_predictive_requests_by_peer = Counter()
 
         self._queen_tracker = queen_tracker
+        self._threadpool = ThreadPoolExecutor()
+        asyncio.get_event_loop().set_default_executor(self._threadpool)
 
     async def ensure_nodes_present(
             self,
@@ -858,10 +860,21 @@ class BeamDownloader(Service, PeerSubscriber):
                 self._queen_tracker.set_desired_knight_count(self._spread_factor)
 
     async def _periodically_report_progress(self) -> None:
+        try:
+            # _work_queue is only defined in python 3.8 -- don't report the stat otherwise
+            threadpool_queue = self._threadpool._work_queue  # type: ignore
+        except AttributeError:
+            threadpool_queue = None
+
         while self.manager.is_running:
             self._time_on_urgent = 0
             interval_timer = Timer()
             await asyncio.sleep(self._report_interval)
+
+            if threadpool_queue:
+                threadpool_queue_len = threadpool_queue.qsize()
+            else:
+                threadpool_queue_len = "?"
 
             msg = "all=%d  " % self._total_processed_nodes
             msg += "urgent=%d  " % self._urgent_processed_nodes
@@ -881,6 +894,7 @@ class BeamDownloader(Service, PeerSubscriber):
             msg += "  p_wait=%d" % len(self._preview_events)
             msg += "  p_woke=%d" % self._predictive_found_nodes_woke_up
             msg += "  p_found=%d" % self._predictive_found_nodes_during_timeout
+            msg += "  thread_Q=20+%s" % threadpool_queue_len
             self.logger.debug("beam-sync: %s", msg)
 
             self._predictive_found_nodes_woke_up = 0
