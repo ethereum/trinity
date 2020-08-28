@@ -947,7 +947,11 @@ class MissingDataEventHandler(Service):
     async def _provide_missing_account_tries(self) -> None:
         async for event in self._event_bus.stream(CollectMissingAccount):
             # If a request is coming in from an import on a block that's too old, cancel it
-            if event.block_number >= self.minimum_beam_block_number:
+            should_respond = (
+                event.block_number > self.minimum_beam_block_number
+                or (event.urgent and event.block_number == self.minimum_beam_block_number)
+            )
+            if should_respond:
                 self.manager.run_task(self._hang_until_account_served, event)
             else:
                 await self._event_bus.broadcast(
@@ -957,7 +961,11 @@ class MissingDataEventHandler(Service):
 
     async def _provide_missing_bytecode(self) -> None:
         async for event in self._event_bus.stream(CollectMissingBytecode):
-            if event.block_number >= self.minimum_beam_block_number:
+            should_respond = (
+                event.block_number > self.minimum_beam_block_number
+                or (event.urgent and event.block_number == self.minimum_beam_block_number)
+            )
+            if should_respond:
                 self.manager.run_task(self._hang_until_bytecode_served, event)
             else:
                 await self._event_bus.broadcast(
@@ -967,7 +975,11 @@ class MissingDataEventHandler(Service):
 
     async def _provide_missing_storage(self) -> None:
         async for event in self._event_bus.stream(CollectMissingStorage):
-            if event.block_number >= self.minimum_beam_block_number:
+            should_respond = (
+                event.block_number > self.minimum_beam_block_number
+                or (event.urgent and event.block_number == self.minimum_beam_block_number)
+            )
+            if should_respond:
                 self.manager.run_task(self._hang_until_storage_served, event)
             else:
                 await self._event_bus.broadcast(
