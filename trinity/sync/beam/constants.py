@@ -108,3 +108,7 @@ EPOCH_BLOCK_LENGTH = 32
 # The time that the block backfill should idle when there are concurrently no blocks to fill.
 # Once gaps are closed they can only re-occur when beam sync pivots so it's ok to idle a fair while.
 BLOCK_BACKFILL_IDLE_TIME = PREDICTED_BLOCK_TIME * 500
+
+# Preview blocks might be paused, waiting on data that comes in through another avenue, like
+#   urgent data requests, or backfill. Use the following period to check for new data.
+CHECK_PREVIEW_STATE_TIMEOUT = 20.0
