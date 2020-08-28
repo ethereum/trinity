@@ -141,12 +141,12 @@ class LESPeerFactory(BaseChainPeerFactory):
         v1_handshake_params = StatusPayload(
             version=1,
             announce_type=None,
-            **handshake_params_kwargs,
+            **handshake_params_kwargs,  # type: ignore
         )
         v2_handshake_params = StatusPayload(
             version=2,
             announce_type=2,
-            **handshake_params_kwargs
+            **handshake_params_kwargs,  # type: ignore
         )
 
         return (

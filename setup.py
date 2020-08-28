@@ -4,7 +4,7 @@ import os
 import re
 from setuptools import setup, find_packages
 
-PYEVM_DEPENDENCY = "py-evm==0.3.0a18"
+PYEVM_DEPENDENCY = "py-evm==0.3.0a19"
 
 
 deps = {
@@ -38,7 +38,7 @@ deps = {
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
         "plyvel==1.2.0",
         PYEVM_DEPENDENCY,
-        "web3>=5.10.0,<6",
+        "web3>=5.12.1,<6",
         "lahja>=0.16.0,<0.17",
         "termcolor>=1.1.0,<2.0.0",
         "uvloop==0.14.0;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
@@ -55,9 +55,6 @@ deps = {
         "libp2p==0.1.5",
         # The direct dependency resolves a version conflict between multiaddr and libp2p
         "base58>=1.0.3,<2.0.0",
-        # Temporary patch to match a py-trie pin. After it's loosened in py-evm, drop the
-        #   typing-extensions requirement altogether.
-        "typing-extensions==3.7.4.2",
     ],
     'test': [
         "async-timeout>=3.0.1,<4",
@@ -72,7 +69,7 @@ deps = {
         "pytest-watch>=4.2.0,<4.3",
         # xdist pinned at <1.29 due to: https://github.com/pytest-dev/pytest-xdist/issues/472
         "pytest-xdist>=1.29.0,<1.30",
-        "eth-tester==0.4.0b2",
+        "eth-tester==0.5.0b2",
     ],
     # We have to keep some separation between trio and asyncio based tests
     # because `pytest-asyncio` is greedy and tries to run all asyncio fixtures.

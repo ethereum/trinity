@@ -104,7 +104,7 @@ async def _main() -> None:
             peer = cast(LESPeer, peer)
             headers = await peer.les_api.get_block_headers(BlockNumber(2440319), max_headers=100)
             peer.les_api.send_get_block_bodies(list(hashes))
-            peer.les_api.send_get_receipts(hashes[0])
+            peer.les_api.send_get_receipts(hashes[:1])
 
     async with background_asyncio_service(peer_pool) as manager:
         for sig in [signal.SIGINT, signal.SIGTERM]:
