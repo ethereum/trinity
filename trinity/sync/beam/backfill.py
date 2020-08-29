@@ -638,9 +638,12 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
             if step % 3 == 0:
                 num_storage_trackers = len(self._storage_trackers)
                 if num_storage_trackers:
+                    # Need a copy to avoid changes to the dict in other threads,
+                    #   while the generator loops.
+                    trackers = tuple(self._storage_trackers.values())
                     active_storage_completion = sum(
                         self._complete_trie_fraction(store_tracker)
-                        for store_tracker in self._storage_trackers.values()
+                        for store_tracker in trackers
                     ) / num_storage_trackers
                 else:
                     active_storage_completion = 0
