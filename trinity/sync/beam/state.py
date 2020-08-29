@@ -566,7 +566,11 @@ class BeamDownloader(Service, PeerSubscriber):
         await self._maybe_useful_nodes.complete(batch_id, task_hashes)
 
         # Re-insert the peasant into the tracker
-        self._queen_tracker.insert_peer(peer)
+        if len(nodes):
+            delay = 0.0
+        else:
+            delay = 8.0
+        self._queen_tracker.insert_peer(peer, delay)
 
     async def _get_nodes(
             self,
