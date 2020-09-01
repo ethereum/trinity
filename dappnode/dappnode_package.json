@@ -30,7 +30,8 @@
     "Developer Tools"
   ],
   "links": {
-    "homepage": "http://trinity.ethereum.org"
+    "homepage": "http://trinity.ethereum.org",
+    "api": "http://trinity.public.dappnode:8545"
   },
   "license": "MIT"
 }
