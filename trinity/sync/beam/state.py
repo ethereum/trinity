@@ -190,11 +190,14 @@ class BeamDownloader(Service, PeerSubscriber):
         :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
         """
         loop = asyncio.get_event_loop()
-        missing_nodes = await loop.run_in_executor(
-            None,
-            self._get_unique_missing_hashes,
-            node_hashes,
-        )
+        if queue == self._node_tasks:
+            missing_nodes = self._get_unique_missing_hashes(node_hashes)
+        else:
+            missing_nodes = await loop.run_in_executor(
+                None,
+                self._get_unique_missing_hashes,
+                node_hashes,
+            )
 
         unrequested_nodes = tuple(
             node_hash for node_hash in missing_nodes if node_hash not in queue
@@ -247,21 +250,31 @@ class BeamDownloader(Service, PeerSubscriber):
         last_log_time = time.monotonic()
 
         loop = asyncio.get_event_loop()
-        missing_account_hashes = await loop.run_in_executor(
-            None,
-            self._get_unique_hashes,
-            account_addresses,
-        )
+        if urgent:
+            missing_account_hashes = self._get_unique_hashes(account_addresses)
+        else:
+            missing_account_hashes = await loop.run_in_executor(
+                None,
+                self._get_unique_hashes,
+                account_addresses,
+            )
+
         completed_account_hashes: Set[Hash32] = set()
         nodes_downloaded = 0
         # will never take more than 64 attempts to get a full account
         for _ in range(64):
-            need_nodes, newly_completed = await loop.run_in_executor(
-                None,
-                self._account_review,
-                missing_account_hashes,
-                root_hash,
-            )
+            if urgent:
+                need_nodes, newly_completed = self._account_review(
+                    missing_account_hashes,
+                    root_hash,
+                )
+            else:
+                need_nodes, newly_completed = await loop.run_in_executor(
+                    None,
+                    self._account_review,
+                    missing_account_hashes,
+                    root_hash,
+                )
             completed_account_hashes.update(newly_completed.keys())
 
             # Log if taking a long time to download addresses
@@ -305,12 +318,18 @@ class BeamDownloader(Service, PeerSubscriber):
         loop = asyncio.get_event_loop()
         # will never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            need_nodes, newly_completed = await loop.run_in_executor(
-                None,
-                self._account_review,
-                [account_hash],
-                root_hash,
-            )
+            if urgent:
+                need_nodes, newly_completed = self._account_review(
+                    [account_hash],
+                    root_hash,
+                )
+            else:
+                need_nodes, newly_completed = await loop.run_in_executor(
+                    None,
+                    self._account_review,
+                    [account_hash],
+                    root_hash,
+                )
             if need_nodes:
                 await self.ensure_nodes_present(need_nodes, urgent)
             else:
@@ -341,12 +360,18 @@ class BeamDownloader(Service, PeerSubscriber):
         loop = asyncio.get_event_loop()
         # should never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            need_nodes = await loop.run_in_executor(
-                None,
-                self._storage_review,
-                storage_key,
-                storage_root_hash,
-            )
+            if urgent:
+                need_nodes = self._storage_review(
+                    storage_key,
+                    storage_root_hash,
+                )
+            else:
+                need_nodes = await loop.run_in_executor(
+                    None,
+                    self._storage_review,
+                    storage_key,
+                    storage_root_hash,
+                )
             if need_nodes:
                 await self.ensure_nodes_present(need_nodes, urgent)
             else:
@@ -579,11 +604,17 @@ class BeamDownloader(Service, PeerSubscriber):
             urgent: bool) -> Tuple[NodeDataBundles, NodeDataBundles, ETHPeer]:
         nodes = await self._request_nodes(peer, node_hashes)
 
-        loop = asyncio.get_event_loop()
-        (
-            new_nodes,
-            found_independent,
-        ) = await loop.run_in_executor(None, self._store_nodes, node_hashes, nodes, urgent)
+        if urgent:
+            (
+                new_nodes,
+                found_independent,
+            ) = self._store_nodes(node_hashes, nodes, urgent)
+        else:
+            loop = asyncio.get_event_loop()
+            (
+                new_nodes,
+                found_independent,
+            ) = await loop.run_in_executor(None, self._store_nodes, node_hashes, nodes, urgent)
 
         if new_nodes:
             # If there are any new nodes returned, then notify any coros that are waiting on
@@ -650,11 +681,14 @@ class BeamDownloader(Service, PeerSubscriber):
             await self._new_data_event.wait()
             self._new_data_event.clear()
 
-            found_hashes = await loop.run_in_executor(
-                None,
-                self._get_unique_present_hashes,
-                remaining_hashes,
-            )
+            if len(remaining_hashes) <= 1:
+                found_hashes = self._get_unique_present_hashes(remaining_hashes)
+            else:
+                found_hashes = await loop.run_in_executor(
+                    None,
+                    self._get_unique_present_hashes,
+                    remaining_hashes,
+                )
             remaining_hashes -= found_hashes
 
         if remaining_hashes:
