@@ -20,9 +20,8 @@ from async_service import Service
 
 from cached_property import cached_property
 
-from eth_keys import (
-    datatypes,
-)
+from eth_keys import keys
+from eth_typing import NodeID
 from eth_utils import (
     clamp,
     humanize_seconds,
@@ -47,7 +46,6 @@ from p2p.constants import (
     QUIET_PEER_POOL_SIZE,
     REQUEST_PEER_CANDIDATE_TIMEOUT,
 )
-from p2p.typing import NodeID
 from p2p.exceptions import (
     BaseP2PError,
     IneligiblePeer,
@@ -117,7 +115,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
     peer_reporter_registry_class: Type[PeerReporterRegistry[Any]] = PeerReporterRegistry[BasePeer]
 
     def __init__(self,
-                 privkey: datatypes.PrivateKey,
+                 privkey: keys.PrivateKey,
                  context: BasePeerContext,
                  max_peers: int = DEFAULT_MAX_PEERS,
                  event_bus: EndpointAPI = None,

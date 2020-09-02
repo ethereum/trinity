@@ -1,3 +1,4 @@
+from eth_enr.tools.factories import ENRFactory
 from eth_hash.auto import keccak
 
 from p2p.kademlia import (
@@ -7,7 +8,6 @@ from p2p.kademlia import (
 )
 from p2p.tools.factories import (
     AddressFactory,
-    ENRFactory,
     PrivateKeyFactory,
 )
 

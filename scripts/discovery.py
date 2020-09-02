@@ -5,12 +5,12 @@ import pathlib
 from typing import Set
 import uuid
 
+from eth_typing import NodeID
 import trio
 
 from lahja import ConnectionConfig, TrioEndpoint
 
 from p2p.events import PeerCandidatesRequest
-from p2p.typing import NodeID
 
 from trinity.exceptions import ENRMissingForkID
 from trinity.network_configurations import PRECONFIGURED_NETWORKS

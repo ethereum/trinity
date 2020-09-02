@@ -8,13 +8,11 @@ from async_service import background_trio_service
 
 from eth_hash.auto import keccak
 
+from eth_enr import ENRDB
+
 from eth_keys import keys
 
-from eth.db.backends.memory import MemoryDB
-
 from p2p.discovery import DiscoveryService
-from p2p.node_db import NodeDB
-from p2p.identity_schemes import default_identity_scheme_registry
 
 
 # Silence factory-boy logs; we're not interested in them.
@@ -47,7 +45,8 @@ async def _manually_driven_discovery(seed, socket, nursery):
         bootstrap_nodes=[],
         event_bus=None,
         socket=socket,
-        node_db=NodeDB(default_identity_scheme_registry, MemoryDB()))
+        enr_db=ENRDB({}),
+    )
     async with background_trio_service(discovery):
         # Wait until we're fully initialized (i.e. until the ENR stub created in the constructor
         # is replaced with the real one).
@@ -67,8 +66,8 @@ async def manually_driven_discovery(nursery):
 async def manually_driven_discovery_pair(nursery, socket_pair):
     async with _manually_driven_discovery(b'seed1', socket_pair[0], nursery) as discovery1:
         async with _manually_driven_discovery(b'seed2', socket_pair[1], nursery) as discovery2:
-            discovery1.node_db.set_enr(discovery2.this_node.enr)
-            discovery2.node_db.set_enr(discovery1.this_node.enr)
+            discovery1.enr_db.set_enr(discovery2.this_node.enr)
+            discovery2.enr_db.set_enr(discovery1.this_node.enr)
             yield discovery1, discovery2
 
 

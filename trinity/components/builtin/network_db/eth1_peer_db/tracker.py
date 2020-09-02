@@ -12,6 +12,7 @@ from typing import (
     Tuple,
 )
 
+from eth_typing import NodeID
 from sqlalchemy.orm import (
     relationship,
     Session as BaseSession,
@@ -39,7 +40,6 @@ from eth_utils import (
 )
 
 from p2p.abc import CommandAPI, NodeAPI
-from p2p.typing import NodeID
 from p2p.events import PeerCandidatesRequest
 from p2p.kademlia import Node
 from p2p.peer_backend import BasePeerBackend

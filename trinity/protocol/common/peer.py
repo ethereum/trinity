@@ -15,6 +15,7 @@ from async_service import Service
 from lahja import EndpointAPI
 from pyformance.meters import SimpleGauge
 
+from eth_typing import NodeID
 from eth_utils.toolz import (
     excepts,
     groupby,
@@ -31,7 +32,6 @@ from p2p.constants import (
     PEER_CONNECT_INTERVAL,
 )
 from p2p.disconnect import DisconnectReason
-from p2p.typing import NodeID
 from p2p.exceptions import (
     MalformedMessage,
     NoConnectedPeers,

@@ -3,13 +3,13 @@ from dataclasses import (
 )
 from typing import Tuple, Type
 
+from eth_typing import NodeID
 from lahja import (
     BaseEvent,
     BaseRequestResponseEvent,
 )
 
 from p2p.abc import NodeAPI
-from p2p.typing import NodeID
 
 
 class BaseConnectionTrackerEvent(BaseEvent):

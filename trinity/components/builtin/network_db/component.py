@@ -112,7 +112,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
             'remove-network-db',
             help='Remove the on-disk sqlite database that tracks data about the p2p network',
         )
-        remove_db_parser.set_defaults(func=cls.clear_node_db)
+        remove_db_parser.set_defaults(func=cls.clear_enr_db)
 
     @classmethod
     def validate_cli(cls, boot_info: BootInfo) -> None:
@@ -125,7 +125,7 @@ class NetworkDBComponent(AsyncioIsolatedComponent):
             ) from err
 
     @classmethod
-    def clear_node_db(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
+    def clear_enr_db(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
         db_path = get_networkdb_path(trinity_config)
 
         if db_path.exists():

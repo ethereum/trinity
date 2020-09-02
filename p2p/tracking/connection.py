@@ -7,6 +7,7 @@ from typing import (
     Union,
 )
 
+from eth_typing import NodeID
 from eth_utils.logging import get_extended_debug_logger
 
 from p2p.abc import NodeAPI
@@ -19,7 +20,6 @@ from p2p.exceptions import (
     PeerConnectionLost,
     UnreachablePeer,
 )
-from p2p.typing import NodeID
 
 
 FAILURE_TIMEOUTS: Dict[Type[Exception], int] = {}
