@@ -150,28 +150,11 @@ class BeamDownloader(Service, PeerSubscriber):
         :return: how many nodes had to be downloaded
         """
         if urgent:
-            t = Timer()
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
                 self._node_tasks,
                 BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
             )
-            # If it took to long to get a single urgent node, then increase "spread" factor
-            if len(node_hashes) == 1 and t.elapsed > MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE:
-                new_spread_factor = clamp(
-                    0,
-                    self._max_spread_beam_factor(),
-                    self._spread_factor + 1,
-                )
-                if new_spread_factor != self._spread_factor:
-                    self.logger.debug(
-                        "spread-beam-update: Urgent node latency=%.3fs, update factor %d to %d",
-                        t.elapsed,
-                        self._spread_factor,
-                        new_spread_factor,
-                    )
-                    self._queen_tracker.set_desired_knight_count(new_spread_factor)
-                    self._spread_factor = new_spread_factor
         else:
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
@@ -482,6 +465,23 @@ class BeamDownloader(Service, PeerSubscriber):
         self._urgent_processed_nodes += len(new_nodes)
         self._time_on_urgent += time_on_urgent
 
+        # If it took to long to get a single urgent node, then increase "spread" factor
+        if len(urgent_hashes) == 1 and time_on_urgent > MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE:
+            new_spread_factor = clamp(
+                0,
+                self._max_spread_beam_factor(),
+                self._spread_factor + 1,
+            )
+            if new_spread_factor != self._spread_factor:
+                self.logger.debug(
+                    "spread-beam-update: Urgent node latency=%.3fs, update factor %d to %d",
+                    time_on_urgent,
+                    self._spread_factor,
+                    new_spread_factor,
+                )
+                self._queen_tracker.set_desired_knight_count(new_spread_factor)
+                self._spread_factor = new_spread_factor
+
         # Complete the task in the TaskQueue
         task_hashes = tuple(node_hash for node_hash, _ in nodes_returned)
         await self._node_tasks.complete(batch_id, task_hashes)
@@ -566,7 +566,11 @@ class BeamDownloader(Service, PeerSubscriber):
         await self._maybe_useful_nodes.complete(batch_id, task_hashes)
 
         # Re-insert the peasant into the tracker
-        self._queen_tracker.insert_peer(peer)
+        if len(nodes):
+            delay = 0.0
+        else:
+            delay = 8.0
+        self._queen_tracker.insert_peer(peer, delay)
 
     async def _get_nodes(
             self,
