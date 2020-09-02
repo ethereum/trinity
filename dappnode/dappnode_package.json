@@ -19,7 +19,7 @@
       "trinity_src:/usr/src/app"
     ],
     "environment": [
-      "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http"
+      "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http-apis=net,eth"
     ],
     "restart": "always"
   },
