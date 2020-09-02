@@ -21,7 +21,7 @@
       "/etc/localtime:/etc/localtime:ro"
     ],
     "environment": [
-      "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http-apis=net,eth"
+      "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http-apis=net,eth --http-listen-address 0.0.0.0"
     ],
     "restart": "always"
   },
