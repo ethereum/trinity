@@ -1,0 +1,2 @@
+Extend the DappNode guide with a paragraph that explains how to connect Trinity
+to DappNode's default Geth node.
