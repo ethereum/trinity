@@ -39,6 +39,9 @@ from eth_utils import (
 from trie import HexaryTrie
 from trie.exceptions import BadTrieProof
 
+from eth.abc import (
+    BlockHeaderAPI,
+)
 from eth.exceptions import (
     BlockNotFound,
     HeaderNotFound,
@@ -330,7 +333,7 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
                 f"It is on number {head_number}, maybe an uncle. Retry with an older block hash."
             )
 
-    async def _get_block_header_by_hash(self, block_hash: Hash32, peer: LESPeer) -> BlockHeader:
+    async def _get_block_header_by_hash(self, block_hash: Hash32, peer: LESPeer) -> BlockHeaderAPI:
         """
         A single attempt to get the block header from the given peer.
 

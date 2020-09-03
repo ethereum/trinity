@@ -1,8 +1,7 @@
 from typing import Tuple
 
 from eth_typing import Hash32
-# For some weird reason mypy thinks eth_utils.curried doesn't have those, but it clearly does.
-from eth_utils.curried import (  # type: ignore
+from eth_utils.curried import (
     apply_formatter_at_index,
     apply_formatter_to_array,
 )

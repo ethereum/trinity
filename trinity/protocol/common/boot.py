@@ -3,8 +3,10 @@ from typing import cast, TYPE_CHECKING
 
 from eth_utils import ValidationError
 
-from eth.abc import BlockNumber
-from eth.rlp.headers import BlockHeader
+from eth.abc import (
+    BlockHeaderAPI,
+    BlockNumber,
+)
 from eth.vm.forks import HomesteadVM
 
 from p2p.disconnect import DisconnectReason
@@ -99,7 +101,7 @@ class DAOCheckBootManager(BasePeerBootManager):
             except ValidationError as err:
                 raise DAOForkCheckFailure(f"{self.peer} failed DAO fork check validation: {err}")
 
-    async def _get_tip_header(self) -> BlockHeader:
+    async def _get_tip_header(self) -> BlockHeaderAPI:
         try:
             headers = await self.peer.chain_api.get_block_headers(
                 self.peer.head_info.head_hash,
