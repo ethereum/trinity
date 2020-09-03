@@ -5,6 +5,7 @@ import time
 import typing
 from typing import (
     Any,
+    Callable,
     Collection,
     Dict,
     FrozenSet,
@@ -12,6 +13,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    TypeVar,
 )
 
 from async_service import Service
@@ -65,6 +67,8 @@ from trinity.sync.beam.constants import (
     REQUEST_BUFFER_MULTIPLIER,
     TOO_LONG_PREDICTIVE_PEER_DELAY,
 )
+
+TReturn = TypeVar('TReturn')
 
 
 class BeamDownloader(Service, PeerSubscriber):
@@ -192,16 +196,15 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
         """
-        loop = asyncio.get_event_loop()
+        missing_nodes = await self._run_preview_in_thread(
+            urgent,
+            self._get_unique_missing_hashes,
+            node_hashes,
+        )
+
         if urgent:
-            missing_nodes = self._get_unique_missing_hashes(node_hashes)
             queue = self._node_tasks
         else:
-            missing_nodes = await loop.run_in_executor(
-                None,
-                self._get_unique_missing_hashes,
-                node_hashes,
-            )
             queue = self._maybe_useful_nodes
 
         unrequested_nodes = tuple(
@@ -254,32 +257,22 @@ class BeamDownloader(Service, PeerSubscriber):
 
         last_log_time = time.monotonic()
 
-        loop = asyncio.get_event_loop()
-        if urgent:
-            missing_account_hashes = self._get_unique_hashes(account_addresses)
-        else:
-            missing_account_hashes = await loop.run_in_executor(
-                None,
-                self._get_unique_hashes,
-                account_addresses,
-            )
+        missing_account_hashes = await self._run_preview_in_thread(
+            urgent,
+            self._get_unique_hashes,
+            account_addresses,
+        )
 
         completed_account_hashes: Set[Hash32] = set()
         nodes_downloaded = 0
         # will never take more than 64 attempts to get a full account
         for _ in range(64):
-            if urgent:
-                need_nodes, newly_completed = self._account_review(
-                    missing_account_hashes,
-                    root_hash,
-                )
-            else:
-                need_nodes, newly_completed = await loop.run_in_executor(
-                    None,
-                    self._account_review,
-                    missing_account_hashes,
-                    root_hash,
-                )
+            need_nodes, newly_completed = await self._run_preview_in_thread(
+                urgent,
+                self._account_review,
+                missing_account_hashes,
+                root_hash,
+            )
             completed_account_hashes.update(newly_completed.keys())
 
             # Log if taking a long time to download addresses
@@ -320,21 +313,14 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: The downloaded account rlp, and how many state trie node downloads were required
         """
-        loop = asyncio.get_event_loop()
         # will never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            if urgent:
-                need_nodes, newly_completed = self._account_review(
-                    [account_hash],
-                    root_hash,
-                )
-            else:
-                need_nodes, newly_completed = await loop.run_in_executor(
-                    None,
-                    self._account_review,
-                    [account_hash],
-                    root_hash,
-                )
+            need_nodes, newly_completed = await self._run_preview_in_thread(
+                urgent,
+                self._account_review,
+                [account_hash],
+                root_hash,
+            )
             if need_nodes:
                 await self.ensure_nodes_present(need_nodes, urgent)
             else:
@@ -362,21 +348,14 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: how many storage trie node downloads were required
         """
-        loop = asyncio.get_event_loop()
         # should never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            if urgent:
-                need_nodes = self._storage_review(
-                    storage_key,
-                    storage_root_hash,
-                )
-            else:
-                need_nodes = await loop.run_in_executor(
-                    None,
-                    self._storage_review,
-                    storage_key,
-                    storage_root_hash,
-                )
+            need_nodes = await self._run_preview_in_thread(
+                urgent,
+                self._storage_review,
+                storage_key,
+                storage_root_hash,
+            )
             if need_nodes:
                 await self.ensure_nodes_present(need_nodes, urgent)
             else:
@@ -609,17 +588,10 @@ class BeamDownloader(Service, PeerSubscriber):
             urgent: bool) -> Tuple[NodeDataBundles, NodeDataBundles, ETHPeer]:
         nodes = await self._request_nodes(peer, node_hashes)
 
-        if urgent:
-            (
-                new_nodes,
-                found_independent,
-            ) = self._store_nodes(node_hashes, nodes, urgent)
-        else:
-            loop = asyncio.get_event_loop()
-            (
-                new_nodes,
-                found_independent,
-            ) = await loop.run_in_executor(None, self._store_nodes, node_hashes, nodes, urgent)
+        (
+            new_nodes,
+            found_independent,
+        ) = await self._run_preview_in_thread(urgent, self._store_nodes, node_hashes, nodes, urgent)
 
         if urgent:
             if new_nodes or found_independent:
@@ -633,7 +605,7 @@ class BeamDownloader(Service, PeerSubscriber):
         elif new_nodes:
             # Wake up any coroutines waiting for the particular data that was returned.
             #   (If no data returned, then no coros should wake up, and we can skip the block)
-            preview_waiters = await loop.run_in_executor(
+            preview_waiters = await asyncio.get_event_loop().run_in_executor(
                 None,
                 self._get_preview_waiters,
                 new_nodes,
@@ -703,7 +675,6 @@ class BeamDownloader(Service, PeerSubscriber):
         remaining_hashes = node_hashes.copy()
         timeout = BLOCK_IMPORT_MISSING_STATE_TIMEOUT
 
-        loop = asyncio.get_event_loop()
         start_time = time.monotonic()
         if not urgent:
             wait_event = asyncio.Event()
@@ -727,14 +698,13 @@ class BeamDownloader(Service, PeerSubscriber):
                 finally:
                     wait_event.clear()
 
-            if urgent:
-                found_hashes = self._get_unique_present_hashes(remaining_hashes)
-            else:
-                found_hashes = await loop.run_in_executor(
-                    None,
-                    self._get_unique_present_hashes,
-                    remaining_hashes,
-                )
+            found_hashes = await self._run_preview_in_thread(
+                urgent,
+                self._get_unique_present_hashes,
+                remaining_hashes,
+            )
+
+            if not urgent:
                 if preview_timeout:
                     self._predictive_found_nodes_during_timeout += len(found_hashes)
                 else:
@@ -818,6 +788,21 @@ class BeamDownloader(Service, PeerSubscriber):
                 self.logger.debug("%s returned 0 state trie nodes, penalize...", peer)
                 self._queen_tracker.penalize_queen(peer)
             return completed_nodes
+
+    async def _run_preview_in_thread(
+            self,
+            urgent: bool,
+            method: Callable[..., TReturn],
+            *args: Any) -> TReturn:
+
+        if urgent:
+            return method(*args)
+        else:
+            return await asyncio.get_event_loop().run_in_executor(
+                None,
+                method,
+                *args,
+            )
 
     async def run(self) -> None:
         """
