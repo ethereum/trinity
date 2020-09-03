@@ -5,6 +5,7 @@ import time
 import typing
 from typing import (
     Any,
+    Callable,
     Collection,
     Dict,
     FrozenSet,
@@ -12,6 +13,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    TypeVar,
 )
 
 from async_service import Service
@@ -59,11 +61,14 @@ from trinity.sync.beam.queen import (
 )
 from trinity.sync.beam.constants import (
     BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
+    CHECK_PREVIEW_STATE_TIMEOUT,
     ESTIMATED_BEAMABLE_SECONDS,
     MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE,
     REQUEST_BUFFER_MULTIPLIER,
     TOO_LONG_PREDICTIVE_PEER_DELAY,
 )
+
+TReturn = TypeVar('TReturn')
 
 
 class BeamDownloader(Service, PeerSubscriber):
@@ -74,6 +79,8 @@ class BeamDownloader(Service, PeerSubscriber):
     _total_processed_nodes = 0
     _urgent_processed_nodes = 0
     _predictive_processed_nodes = 0
+    _predictive_found_nodes_woke_up = 0
+    _predictive_found_nodes_during_timeout = 0
     _total_timeouts = 0
     _predictive_requests = 0
     _urgent_requests = 0
@@ -84,6 +91,8 @@ class BeamDownloader(Service, PeerSubscriber):
 
     _num_urgent_requests_by_peer: typing.Counter[ETHPeer]
     _num_predictive_requests_by_peer: typing.Counter[ETHPeer]
+
+    _preview_events: Dict[asyncio.Event, Set[Hash32]]
 
     _num_peers = 0
     # How many extra peers (besides the queen) should we ask for the urgently-needed trie node?
@@ -118,6 +127,7 @@ class BeamDownloader(Service, PeerSubscriber):
 
         # list of events waiting on new data
         self._new_data_event: asyncio.Event = asyncio.Event()
+        self._preview_events = {}
 
         self._peer_pool = peer_pool
 
@@ -152,14 +162,12 @@ class BeamDownloader(Service, PeerSubscriber):
         if urgent:
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
-                self._node_tasks,
-                BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
+                urgent,
             )
         else:
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
-                self._maybe_useful_nodes,
-                BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
+                urgent,
             )
 
         return num_nodes_found
@@ -181,20 +189,23 @@ class BeamDownloader(Service, PeerSubscriber):
     async def _wait_for_nodes(
             self,
             node_hashes: Iterable[Hash32],
-            queue: TaskQueue[Hash32],
-            timeout: float) -> int:
+            urgent: bool) -> int:
         """
         Insert the given node hashes into the queue to be retrieved, then block
         until they become present in the database.
 
         :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
         """
-        loop = asyncio.get_event_loop()
-        missing_nodes = await loop.run_in_executor(
-            None,
+        missing_nodes = await self._run_preview_in_thread(
+            urgent,
             self._get_unique_missing_hashes,
             node_hashes,
         )
+
+        if urgent:
+            queue = self._node_tasks
+        else:
+            queue = self._maybe_useful_nodes
 
         unrequested_nodes = tuple(
             node_hash for node_hash in missing_nodes if node_hash not in queue
@@ -202,7 +213,7 @@ class BeamDownloader(Service, PeerSubscriber):
         if missing_nodes:
             if unrequested_nodes:
                 await queue.add(unrequested_nodes)
-            return await self._node_hashes_present(missing_nodes, timeout)
+            return await self._node_hashes_present(missing_nodes, urgent)
         else:
             return 0
 
@@ -246,18 +257,18 @@ class BeamDownloader(Service, PeerSubscriber):
 
         last_log_time = time.monotonic()
 
-        loop = asyncio.get_event_loop()
-        missing_account_hashes = await loop.run_in_executor(
-            None,
+        missing_account_hashes = await self._run_preview_in_thread(
+            urgent,
             self._get_unique_hashes,
             account_addresses,
         )
+
         completed_account_hashes: Set[Hash32] = set()
         nodes_downloaded = 0
         # will never take more than 64 attempts to get a full account
         for _ in range(64):
-            need_nodes, newly_completed = await loop.run_in_executor(
-                None,
+            need_nodes, newly_completed = await self._run_preview_in_thread(
+                urgent,
                 self._account_review,
                 missing_account_hashes,
                 root_hash,
@@ -302,11 +313,10 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: The downloaded account rlp, and how many state trie node downloads were required
         """
-        loop = asyncio.get_event_loop()
         # will never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            need_nodes, newly_completed = await loop.run_in_executor(
-                None,
+            need_nodes, newly_completed = await self._run_preview_in_thread(
+                urgent,
                 self._account_review,
                 [account_hash],
                 root_hash,
@@ -338,11 +348,10 @@ class BeamDownloader(Service, PeerSubscriber):
 
         :return: how many storage trie node downloads were required
         """
-        loop = asyncio.get_event_loop()
         # should never take more than 64 attempts to get a full account
         for num_downloads_required in range(64):
-            need_nodes = await loop.run_in_executor(
-                None,
+            need_nodes = await self._run_preview_in_thread(
+                urgent,
                 self._storage_review,
                 storage_key,
                 storage_root_hash,
@@ -579,24 +588,45 @@ class BeamDownloader(Service, PeerSubscriber):
             urgent: bool) -> Tuple[NodeDataBundles, NodeDataBundles, ETHPeer]:
         nodes = await self._request_nodes(peer, node_hashes)
 
-        loop = asyncio.get_event_loop()
         (
             new_nodes,
             found_independent,
-        ) = await loop.run_in_executor(None, self._store_nodes, node_hashes, nodes, urgent)
+        ) = await self._run_preview_in_thread(urgent, self._store_nodes, node_hashes, nodes, urgent)
 
-        if new_nodes:
-            # If there are any new nodes returned, then notify any coros that are waiting on
-            #   node data to resume.
-            self._new_data_event.set()
-        elif urgent and found_independent:
-            # If urgent, and the data was retrieved another way (like backfilled), then
-            #   still trigger a new data event. That way, urgent coros don't
-            #   get stuck hanging until a timeout. This can cause an especially
-            #   flaky test_beam_syncer_backfills_all_state[42].
-            self._new_data_event.set()
+        if urgent:
+            if new_nodes or found_independent:
+                # If there are any new nodes returned, then notify any coros that are waiting on
+                #   node data to resume.
+                # If the data was retrieved another way (like backfilled), then
+                #   still trigger a new data event. That way, urgent coros don't
+                #   get stuck hanging until a timeout. This can cause an especially
+                #   flaky test_beam_syncer_backfills_all_state[42].
+                self._new_data_event.set()
+        elif new_nodes:
+            # Wake up any coroutines waiting for the particular data that was returned.
+            #   (If no data returned, then no coros should wake up, and we can skip the block)
+            preview_waiters = await asyncio.get_event_loop().run_in_executor(
+                None,
+                self._get_preview_waiters,
+                new_nodes,
+            )
+            for waiter in preview_waiters:
+                waiter.set()
+                await asyncio.sleep(0)
 
         return nodes, new_nodes, peer
+
+    def _get_preview_waiters(self, new_nodes: NodeDataBundles) -> Tuple[asyncio.Event, ...]:
+        new_hashes = set(node_hash for node_hash, _ in new_nodes)
+
+        # defensive copy _preview_events, since this method runs in a thread
+        waiters = tuple(self._preview_events.items())
+
+        return tuple(
+            waiting_event
+            for waiting_event, node_hashes in waiters
+            if new_hashes & node_hashes
+        )
 
     def _store_nodes(
             self,
@@ -636,31 +666,68 @@ class BeamDownloader(Service, PeerSubscriber):
 
         return new_nodes, found_independent
 
-    async def _node_hashes_present(self, node_hashes: Set[Hash32], timeout: float) -> int:
+    async def _node_hashes_present(self, node_hashes: Set[Hash32], urgent: bool) -> int:
         """
         Block until the supplied node hashes have been inserted into the database.
 
         :return: number of new nodes received -- might be smaller than len(node_hashes) on timeout
         """
         remaining_hashes = node_hashes.copy()
+        timeout = BLOCK_IMPORT_MISSING_STATE_TIMEOUT
 
-        loop = asyncio.get_event_loop()
         start_time = time.monotonic()
+        if not urgent:
+            wait_event = asyncio.Event()
+            self._preview_events[wait_event] = node_hashes
         while remaining_hashes and time.monotonic() - start_time < timeout:
-            await self._new_data_event.wait()
-            self._new_data_event.clear()
+            if urgent:
+                await self._new_data_event.wait()
+                self._new_data_event.clear()
+            else:
+                try:
+                    await asyncio.wait_for(
+                        wait_event.wait(),
+                        timeout=CHECK_PREVIEW_STATE_TIMEOUT,
+                    )
+                except asyncio.TimeoutError:
+                    # Check if the data showed up due to an urgent import
+                    preview_timeout = True
+                    pass
+                else:
+                    preview_timeout = False
+                finally:
+                    wait_event.clear()
 
-            found_hashes = await loop.run_in_executor(
-                None,
+            found_hashes = await self._run_preview_in_thread(
+                urgent,
                 self._get_unique_present_hashes,
                 remaining_hashes,
             )
-            remaining_hashes -= found_hashes
+
+            if not urgent:
+                if preview_timeout:
+                    self._predictive_found_nodes_during_timeout += len(found_hashes)
+                else:
+                    self._predictive_found_nodes_woke_up += len(found_hashes)
+
+            if found_hashes:
+                remaining_hashes -= found_hashes
+                if not urgent and remaining_hashes:
+                    self._preview_events[wait_event] = remaining_hashes
+
+        if not urgent:
+            del self._preview_events[wait_event]
 
         if remaining_hashes:
-            self.logger.error(
-                "Could not collect node data for hashes %r within %.0f seconds (took %.1fs)",
-                remaining_hashes,
+            if urgent:
+                logger = self.logger.error
+            else:
+                logger = self.logger.warning
+            logger(
+                "Could not collect node data for %d %s hashes %r within %.0f seconds (took %.1fs)",
+                len(remaining_hashes),
+                "urgent" if urgent else "preview",
+                list(remaining_hashes)[0:2],
                 timeout,
                 time.monotonic() - start_time,
             )
@@ -722,6 +789,21 @@ class BeamDownloader(Service, PeerSubscriber):
                 self._queen_tracker.penalize_queen(peer)
             return completed_nodes
 
+    async def _run_preview_in_thread(
+            self,
+            urgent: bool,
+            method: Callable[..., TReturn],
+            *args: Any) -> TReturn:
+
+        if urgent:
+            return method(*args)
+        else:
+            return await asyncio.get_event_loop().run_in_executor(
+                None,
+                method,
+                *args,
+            )
+
     async def run(self) -> None:
         """
         Request all nodes in the queue, running indefinitely
@@ -770,7 +852,13 @@ class BeamDownloader(Service, PeerSubscriber):
             msg += "  u_prog=%d" % self._node_tasks.num_in_progress()
             msg += "  p_pend=%d" % self._maybe_useful_nodes.num_pending()
             msg += "  p_prog=%d" % self._maybe_useful_nodes.num_in_progress()
+            msg += "  p_wait=%d" % len(self._preview_events)
+            msg += "  p_woke=%d" % self._predictive_found_nodes_woke_up
+            msg += "  p_found=%d" % self._predictive_found_nodes_during_timeout
             self.logger.debug("beam-sync: %s", msg)
+
+            self._predictive_found_nodes_woke_up = 0
+            self._predictive_found_nodes_during_timeout = 0
 
             # log peer counts
             show_top_n_peers = 5
