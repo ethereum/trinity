@@ -16,6 +16,7 @@ from eth.abc import (
 
 from eth_typing import (
     Address,
+    BlockNumber,
     Hash32,
 )
 from lahja import (
@@ -65,7 +66,7 @@ class CollectMissingAccount(BaseRequestResponseEvent[MissingAccountResult]):
     address_hash: Hash32
     state_root_hash: Hash32
     urgent: bool
-    block_number: int
+    block_number: BlockNumber
 
     @staticmethod
     def expected_response_type() -> Type[MissingAccountResult]:
@@ -89,7 +90,7 @@ class CollectMissingBytecode(BaseRequestResponseEvent[MissingBytecodeResult]):
     """
     bytecode_hash: Hash32
     urgent: bool
-    block_number: int
+    block_number: BlockNumber
 
     @staticmethod
     def expected_response_type() -> Type[MissingBytecodeResult]:
@@ -118,7 +119,7 @@ class CollectMissingStorage(BaseRequestResponseEvent[MissingStorageResult]):
     storage_root_hash: Hash32
     account_address: Address
     urgent: bool
-    block_number: int
+    block_number: BlockNumber
 
     @staticmethod
     def expected_response_type() -> Type[MissingStorageResult]:

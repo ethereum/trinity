@@ -1,12 +1,13 @@
 import asyncio
-from collections import Counter
-from concurrent.futures import CancelledError
+from collections import Counter, defaultdict
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 import time
 import typing
 from typing import (
     Any,
     Callable,
     Collection,
+    DefaultDict,
     Dict,
     FrozenSet,
     Iterable,
@@ -27,6 +28,7 @@ from eth_utils import (
 )
 from eth_typing import (
     Address,
+    BlockNumber,
     Hash32,
 )
 
@@ -101,6 +103,8 @@ class BeamDownloader(Service, PeerSubscriber):
     _reduce_spread_factor_interval = 120
     # We might reserve some peers to ask for predictive nodes, if we start to fall behind
     _min_predictive_peers = 0
+    # Keep track of the block number for each predictive missing node hash
+    _block_number_lookup: DefaultDict[Hash32, BlockNumber]
 
     # We are only interested in peers entering or leaving the pool
     subscription_msg_types: FrozenSet[Type[CommandAPI[Any]]] = frozenset()
@@ -132,20 +136,24 @@ class BeamDownloader(Service, PeerSubscriber):
         self._peer_pool = peer_pool
 
         # Track node data for upcoming blocks
+        self._block_number_lookup = defaultdict(lambda: BlockNumber(0))
         self._maybe_useful_nodes = TaskQueue[Hash32](
             buffer_size,
-            # Everything is the same priority, for now
-            lambda node_hash: 0,
+            # Prefer trie nodes from earliest blocks
+            lambda node_hash: self._block_number_lookup[node_hash],
         )
 
         self._num_urgent_requests_by_peer = Counter()
         self._num_predictive_requests_by_peer = Counter()
 
         self._queen_tracker = queen_tracker
+        self._threadpool = ThreadPoolExecutor()
+        asyncio.get_event_loop().set_default_executor(self._threadpool)
 
     async def ensure_nodes_present(
             self,
             node_hashes: Collection[Hash32],
+            block_number: BlockNumber,
             urgent: bool = True) -> int:
         """
         Wait until the nodes that are the preimages of `node_hashes` are available in the database.
@@ -165,10 +173,27 @@ class BeamDownloader(Service, PeerSubscriber):
                 urgent,
             )
         else:
+            for node_hash in node_hashes:
+                # Priority is based on lowest block number that needs the given node
+                if self._block_number_lookup.get(node_hash, block_number + 1) > block_number:
+                    self._block_number_lookup[node_hash] = block_number
+
             num_nodes_found = await self._wait_for_nodes(
                 node_hashes,
                 urgent,
             )
+            requested_node_count = len(node_hashes)
+            if num_nodes_found == requested_node_count:
+                for node_hash in node_hashes:
+                    self._block_number_lookup.pop(node_hash, None)
+            elif num_nodes_found < requested_node_count:
+                found_hashes = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    self._get_unique_present_hashes,
+                    node_hashes,
+                )
+                for node_hash in found_hashes:
+                    self._block_number_lookup.pop(node_hash, None)
 
         return num_nodes_found
 
@@ -246,6 +271,7 @@ class BeamDownloader(Service, PeerSubscriber):
             self,
             account_addresses: Collection[Address],
             root_hash: Hash32,
+            block_number: BlockNumber,
             urgent: bool = True) -> int:
         """
         Like :meth:`download_account`, but waits for multiple addresses to be available.
@@ -286,7 +312,7 @@ class BeamDownloader(Service, PeerSubscriber):
                 )
                 last_log_time = now
 
-            await self.ensure_nodes_present(need_nodes, urgent)
+            await self.ensure_nodes_present(need_nodes, block_number, urgent)
             nodes_downloaded += len(need_nodes)
             missing_account_hashes -= completed_account_hashes
 
@@ -302,6 +328,7 @@ class BeamDownloader(Service, PeerSubscriber):
             self,
             account_hash: Hash32,
             root_hash: Hash32,
+            block_number: BlockNumber,
             urgent: bool = True) -> Tuple[bytes, int]:
         """
         Check the given account address for presence in the state database.
@@ -322,7 +349,7 @@ class BeamDownloader(Service, PeerSubscriber):
                 root_hash,
             )
             if need_nodes:
-                await self.ensure_nodes_present(need_nodes, urgent)
+                await self.ensure_nodes_present(need_nodes, block_number, urgent)
             else:
                 # Account is fully available within the trie
                 return newly_completed[account_hash], num_downloads_required
@@ -337,6 +364,7 @@ class BeamDownloader(Service, PeerSubscriber):
             storage_key: Hash32,
             storage_root_hash: Hash32,
             account: Address,
+            block_number: BlockNumber,
             urgent: bool = True) -> int:
         """
         Check the given storage key for presence in the account's storage database.
@@ -357,7 +385,7 @@ class BeamDownloader(Service, PeerSubscriber):
                 storage_root_hash,
             )
             if need_nodes:
-                await self.ensure_nodes_present(need_nodes, urgent)
+                await self.ensure_nodes_present(need_nodes, block_number, urgent)
             else:
                 # Account is fully available within the trie
                 return num_downloads_required
@@ -832,10 +860,21 @@ class BeamDownloader(Service, PeerSubscriber):
                 self._queen_tracker.set_desired_knight_count(self._spread_factor)
 
     async def _periodically_report_progress(self) -> None:
+        try:
+            # _work_queue is only defined in python 3.8 -- don't report the stat otherwise
+            threadpool_queue = self._threadpool._work_queue  # type: ignore
+        except AttributeError:
+            threadpool_queue = None
+
         while self.manager.is_running:
             self._time_on_urgent = 0
             interval_timer = Timer()
             await asyncio.sleep(self._report_interval)
+
+            if threadpool_queue:
+                threadpool_queue_len = threadpool_queue.qsize()
+            else:
+                threadpool_queue_len = "?"
 
             msg = "all=%d  " % self._total_processed_nodes
             msg += "urgent=%d  " % self._urgent_processed_nodes
@@ -855,6 +894,7 @@ class BeamDownloader(Service, PeerSubscriber):
             msg += "  p_wait=%d" % len(self._preview_events)
             msg += "  p_woke=%d" % self._predictive_found_nodes_woke_up
             msg += "  p_found=%d" % self._predictive_found_nodes_during_timeout
+            msg += "  thread_Q=20+%s" % threadpool_queue_len
             self.logger.debug("beam-sync: %s", msg)
 
             self._predictive_found_nodes_woke_up = 0
