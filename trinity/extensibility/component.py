@@ -114,7 +114,8 @@ class BaseIsolatedComponent(BaseComponent):
     """
     endpoint_name: str = None
     loop_monitoring_wakeup_interval = 2
-    loop_monitoring_max_delay = 0.1
+    loop_monitoring_max_delay_debug = 0.1
+    loop_monitoring_max_delay_warning = 1
 
     @abstractmethod
     async def run_in_process(self) -> None:

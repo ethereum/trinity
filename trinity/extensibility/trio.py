@@ -45,14 +45,22 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
             await trio.sleep(self.loop_monitoring_wakeup_interval)
             delay = timer.elapsed - self.loop_monitoring_wakeup_interval
             self.logger.debug2("Loop monitoring task called; delay=%.3fs", delay)
-            if delay > self.loop_monitoring_max_delay:
-                stats = trio.hazmat.current_statistics()
-                self.logger.warning(
-                    "Event loop blocked or overloaded: delay=%.3fs, tasks=%d, stats=%s",
-                    delay,
-                    stats.tasks_living,
-                    stats.io_statistics,
-                )
+
+            if delay < self.loop_monitoring_max_delay_debug:
+                continue
+
+            if delay >= self.loop_monitoring_max_delay_warning:
+                log_fn = self.logger.warning
+            else:
+                log_fn = self.logger.debug
+
+            stats = trio.hazmat.current_statistics()
+            log_fn(
+                "Event loop blocked or overloaded: delay=%.3fs, tasks=%d, stats=%s",
+                delay,
+                stats.tasks_living,
+                stats.io_statistics,
+            )
 
     async def _do_run(self) -> None:
         with child_process_logging(self._boot_info):
