@@ -54,7 +54,7 @@ class TrioIsolatedComponent(BaseIsolatedComponent):
             else:
                 log_fn = self.logger.debug
 
-            stats = trio.hazmat.current_statistics()
+            stats = trio.lowlevel.current_statistics()
             log_fn(
                 "Event loop blocked or overloaded: delay=%.3fs, tasks=%d, stats=%s",
                 delay,

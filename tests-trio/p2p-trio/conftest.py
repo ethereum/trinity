@@ -51,7 +51,7 @@ async def _manually_driven_discovery(seed, socket, nursery):
         # Wait until we're fully initialized (i.e. until the ENR stub created in the constructor
         # is replaced with the real one).
         while discovery.this_node.enr.sequence_number == 0:
-            await trio.hazmat.checkpoint()
+            await trio.lowlevel.checkpoint()
         yield discovery
 
 
@@ -85,4 +85,4 @@ class ManuallyDrivenDiscoveryService(DiscoveryService):
         # Our parent's consume_datagram() starts a background task to process the msg, so we yield
         # control here to give that a chance to run. This avoid us having to do so in every test
         # that calls consume_datagram().
-        await trio.hazmat.checkpoint()
+        await trio.lowlevel.checkpoint()
