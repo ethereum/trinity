@@ -23,19 +23,18 @@ import uuid
 
 from async_service.abc import ServiceAPI
 from cancel_token import CancelToken
-from eth.abc import DatabaseAPI
 
+from eth_typing import NodeID
 from eth_utils import ExtendedDebugLogger
 
 from eth_keys import keys
+from eth_enr.abc import ENRAPI
 
-from p2p.enr import ENR
-from p2p.identity_schemes import IdentitySchemeRegistry
 from p2p.typing import (
     Capabilities,
     Capability,
     TCommandPayload,
-    NodeID)
+)
 
 if TYPE_CHECKING:
     from p2p.handshake import DevP2PReceipt  # noqa: F401
@@ -119,7 +118,7 @@ class NodeAPI(ABC):
     """
 
     @abstractmethod
-    def __init__(self, enr: ENR) -> None:
+    def __init__(self, enr: ENRAPI) -> None:
         ...
 
     @classmethod
@@ -160,7 +159,7 @@ class NodeAPI(ABC):
 
     @property
     @abstractmethod
-    def enr(self) -> ENR:
+    def enr(self) -> ENRAPI:
         ...
 
     @abstractmethod
@@ -775,35 +774,4 @@ class ConnectionAPI(ServiceAPI):
     @property
     @abstractmethod
     def safe_client_version_string(self) -> str:
-        ...
-
-
-class NodeDBAPI(ABC):
-
-    @abstractmethod
-    def __init__(self, identity_scheme_registry: IdentitySchemeRegistry, db: DatabaseAPI) -> None:
-        ...
-
-    @abstractmethod
-    def set_enr(self, enr: ENR) -> None:
-        ...
-
-    @abstractmethod
-    def get_enr(self, node_id: NodeID) -> ENR:
-        ...
-
-    @abstractmethod
-    def delete_enr(self, node_id: NodeID) -> None:
-        ...
-
-    @abstractmethod
-    def set_last_pong_time(self, node_id: NodeID, last_pong: int) -> None:
-        ...
-
-    @abstractmethod
-    def get_last_pong_time(self, node_id: NodeID) -> int:
-        ...
-
-    @abstractmethod
-    def delete_last_pong_time(self, node_id: NodeID) -> None:
         ...

@@ -4,14 +4,14 @@ import pytest
 
 import rlp
 
+from eth_enr import ENR
+from eth_enr.tools.factories import ENRFactory
 from eth_utils import to_bytes
 
 from eth.chains.mainnet import MAINNET_VM_CONFIGURATION
 from eth.chains.ropsten import ROPSTEN_VM_CONFIGURATION
 
-from p2p.enr import ENR
 from p2p.exceptions import MalformedMessage
-from p2p.tools.factories.discovery import ENRFactory
 
 from trinity.exceptions import ENRMissingForkID, RemoteChainIsStale, LocalChainIncompatibleOrStale
 from trinity.protocol.eth.forkid import (

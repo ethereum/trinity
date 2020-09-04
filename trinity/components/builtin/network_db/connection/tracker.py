@@ -3,6 +3,7 @@ import math
 from pathlib import Path
 from typing import Tuple
 
+from eth_typing import NodeID
 from sqlalchemy import (
     Column,
     Integer,
@@ -24,7 +25,6 @@ from lahja import (
 from eth_utils import humanize_seconds, to_bytes, to_hex
 
 from p2p.abc import NodeAPI
-from p2p.typing import NodeID
 from p2p.tracking.connection import BaseConnectionTracker
 
 from trinity.constants import (

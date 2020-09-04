@@ -25,7 +25,7 @@ IPC_DIR = 'ipcs'
 LOG_DIR = 'logs'
 LOG_FILE = 'trinity.log'
 PID_DIR = 'pids'
-NODE_DB_DIR = 'discovery-node-records'
+ENR_DB_DIR = 'discovery-node-records'
 
 # sync modes
 SYNC_FULL = 'full'

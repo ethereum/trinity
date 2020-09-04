@@ -31,6 +31,7 @@ from typing import (
 
 import trio
 
+from lru import LRU
 import eth_utils.toolz
 from eth_utils import ExtendedDebugLogger
 
@@ -57,16 +58,22 @@ from eth_utils import (
 import eth_keys
 from eth_keys import datatypes
 
+from eth_enr import ENR, UnsignedENR, ENRAPI, V4IdentityScheme, ENRDatabaseAPI
+from eth_enr.constants import (
+    IDENTITY_SCHEME_ENR_KEY,
+    IP_V4_ADDRESS_ENR_KEY,
+    UDP_PORT_ENR_KEY,
+    TCP_PORT_ENR_KEY,
+)
+from eth_enr.exceptions import OldSequenceNumber
+
 from eth_hash.auto import keccak
+from eth_typing import NodeID
 
 from async_service import Service
 
 from p2p import constants
-from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI, NodeDBAPI
-from p2p.enr import ENR, UnsignedENR, IDENTITY_SCHEME_ENR_KEY
-from p2p.identity_schemes import V4IdentityScheme
-from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY
-from p2p.typing import NodeID
+from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI
 from p2p.events import (
     PeerCandidatesRequest,
     RandomBootnodeRequest,
@@ -138,18 +145,19 @@ class DiscoveryService(Service):
                  bootstrap_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
                  socket: trio.socket.SocketType,
-                 node_db: NodeDBAPI,
+                 enr_db: ENRDatabaseAPI,
                  enr_field_providers: Sequence[ENR_FieldProvider] = tuple(),
                  ) -> None:
         self.logger = get_logger('p2p.discovery.DiscoveryService')
         self.privkey = privkey
         self._event_bus = event_bus
-        self.enr_response_channels = ExpectedResponseChannels[Tuple[ENR, Hash32]]()
+        self.enr_response_channels = ExpectedResponseChannels[Tuple[ENRAPI, Hash32]]()
         self.pong_channels = ExpectedResponseChannels[Tuple[Hash32, int]]()
         self.neighbours_channels = ExpectedResponseChannels[List[NodeAPI]]()
         self.ping_channels = ExpectedResponseChannels[None]()
         self.enr_field_providers = enr_field_providers
-        self.node_db = node_db
+        self.enr_db = enr_db
+        self._last_pong_at = LRU(2048)
         self._local_enr_next_refresh: float = time.monotonic()
         self._local_enr_lock = trio.Lock()
         self._lookup_lock = trio.Lock()
@@ -168,9 +176,9 @@ class DiscoveryService(Service):
         for node in bootstrap_nodes:
             self._bootstrap_node_ids.append(node.id)
             try:
-                self.node_db.get_enr(node.id)
+                self.enr_db.get_enr(node.id)
             except KeyError:
-                self.node_db.set_enr(node.enr)
+                self.enr_db.set_enr(node.enr)
         if len(set(self._bootstrap_node_ids)) != len(self._bootstrap_node_ids):
             raise ValueError(
                 "Multiple bootnodes with the same ID are not allowed: {self._bootstrap_node_ids}")
@@ -187,7 +195,7 @@ class DiscoveryService(Service):
 
     async def _init(self) -> None:
         try:
-            enr = self.node_db.get_enr(self.this_node.id)
+            enr = self.enr_db.get_enr(self.this_node.id)
         except KeyError:
             pass
         else:
@@ -203,7 +211,7 @@ class DiscoveryService(Service):
     def bootstrap_nodes(self) -> Iterable[NodeAPI]:
         for node_id in self._bootstrap_node_ids:
             try:
-                enr = self.node_db.get_enr(node_id)
+                enr = self.enr_db.get_enr(node_id)
             except KeyError:
                 self.logger.exception("Bootnode not found in our DB")
             else:
@@ -211,7 +219,7 @@ class DiscoveryService(Service):
 
     def is_bond_valid_with(self, node_id: NodeID) -> bool:
         try:
-            pong_time = self.node_db.get_last_pong_time(node_id)
+            pong_time = self._last_pong_at[node_id]
         except KeyError:
             return False
         return pong_time > (time.monotonic() - constants.KADEMLIA_BOND_EXPIRATION)
@@ -302,7 +310,7 @@ class DiscoveryService(Service):
             return
 
         try:
-            enr = self.node_db.get_enr(node_id)
+            enr = self.enr_db.get_enr(node_id)
         except KeyError:
             self.logger.warning(
                 "Attempted to fetch ENR for Node (%s) not in our DB", encode_hex(node_id))
@@ -338,7 +346,7 @@ class DiscoveryService(Service):
     def update_routing_table(self, node: NodeAPI) -> None:
         """Update the routing table entry for the given node.
 
-        Also stores it in our NodeDB.
+        Also stores it in our ENRDB.
         """
         if not self.is_bond_valid_with(node.id):
             # TODO: Maybe this should raise an exception, but for now just log it as a warning.
@@ -356,8 +364,8 @@ class DiscoveryService(Service):
             self.manager.run_task(self.bond, eviction_candidate)
 
         try:
-            self.node_db.set_enr(node.enr)
-        except ValueError:
+            self.enr_db.set_enr(node.enr)
+        except OldSequenceNumber:
             self.logger.exception(
                 "Attempted to overwrite ENR of %s with a previous version",
                 node,
@@ -379,7 +387,7 @@ class DiscoveryService(Service):
             return False
 
         try:
-            node = Node(self.node_db.get_enr(node_id))
+            node = Node(self.enr_db.get_enr(node_id))
         except KeyError:
             self.logger.exception("Attempted to bond with node that doesn't exist in our DB")
             return False
@@ -433,7 +441,7 @@ class DiscoveryService(Service):
         except trio.WouldBlock:
             self.logger.warning("Failed to schedule ENR retrieval; channel buffer is full")
 
-    async def request_enr(self, remote: NodeAPI) -> ENR:
+    async def request_enr(self, remote: NodeAPI) -> ENRAPI:
         """Get the most recent ENR for the given node and update our local DB and routing table.
 
         The updating of the DB and RT happens in the handler called when we receive an ENR
@@ -444,7 +452,7 @@ class DiscoveryService(Service):
         # No need to use a timeout because bond() takes care of that internally.
         await self.bond(remote.id)
         token = await self.send_enr_request(remote)
-        send_chan, recv_chan = trio.open_memory_channel[Tuple[ENR, Hash32]](1)
+        send_chan, recv_chan = trio.open_memory_channel[Tuple[ENRAPI, Hash32]](1)
         try:
             with trio.fail_after(constants.KADEMLIA_REQUEST_TIMEOUT):
                 enr, received_token = await self.enr_response_channels.receive_one(
@@ -461,7 +469,8 @@ class DiscoveryService(Service):
         return enr
 
     async def _generate_local_enr(
-            self, sequence_number: int, ip_address: Optional[ipaddress.IPv4Address] = None) -> ENR:
+            self, sequence_number: int, ip_address: Optional[ipaddress.IPv4Address] = None
+    ) -> ENRAPI:
         if ip_address is None:
             ip_address = ipaddress.ip_address(self.this_node.address.ip)
         kv_pairs = {
@@ -481,7 +490,7 @@ class DiscoveryService(Service):
         unsigned_enr = UnsignedENR(sequence_number, kv_pairs)
         return unsigned_enr.to_signed_enr(self.privkey.to_bytes())
 
-    async def get_local_enr(self) -> ENR:
+    async def get_local_enr(self) -> ENRAPI:
         """
         Get our own ENR.
 
@@ -521,7 +530,7 @@ class DiscoveryService(Service):
             "Node details changed, generated new local ENR with sequence number %d",
             enr.sequence_number)
 
-        self.node_db.set_enr(enr)
+        self.enr_db.set_enr(enr)
 
     async def get_local_enr_seq(self) -> int:
         enr = await self.get_local_enr()
@@ -640,8 +649,8 @@ class DiscoveryService(Service):
     def _ensure_nodes_are_in_db(self, nodes: Tuple[NodeAPI, ...]) -> None:
         for node in nodes:
             try:
-                self.node_db.set_enr(node.enr)
-            except ValueError:
+                self.enr_db.set_enr(node.enr)
+            except OldSequenceNumber:
                 self.logger.debug2("DB entry for %s has a more recent ENR, keeping that", node)
 
     def get_random_bootnode(self) -> Iterator[NodeAPI]:
@@ -653,7 +662,7 @@ class DiscoveryService(Service):
     def iter_nodes(self) -> Iterator[NodeAPI]:
         for node_id in self.routing.iter_all_random():
             try:
-                yield Node(self.node_db.get_enr(node_id))
+                yield Node(self.enr_db.get_enr(node_id))
             except KeyError:
                 self.logger.exception(
                     "Node with ID %s is in routing table but not in node DB", encode_hex(node_id))
@@ -687,7 +696,7 @@ class DiscoveryService(Service):
 
     def invalidate_bond(self, node_id: NodeID) -> None:
         try:
-            self.node_db.delete_last_pong_time(node_id)
+            del self._last_pong_at[node_id]
         except KeyError:
             pass
 
@@ -761,7 +770,8 @@ class DiscoveryService(Service):
         handler = self._get_handler(cmd)
         await handler(node, payload, message_hash)
 
-    def lookup_and_maybe_update_enr(self, pubkey: datatypes.PublicKey, address: AddressAPI) -> ENR:
+    def lookup_and_maybe_update_enr(
+            self, pubkey: datatypes.PublicKey, address: AddressAPI) -> ENRAPI:
         """
         Lookup the ENR for the given pubkey in our node DB, returning that if the address matches.
 
@@ -772,10 +782,10 @@ class DiscoveryService(Service):
         and overwrite the existing one with that.
         """
         try:
-            enr = self.node_db.get_enr(node_id_from_pubkey(pubkey))
+            enr = self.enr_db.get_enr(node_id_from_pubkey(pubkey))
         except KeyError:
             enr = create_stub_enr(pubkey, address)
-            self.node_db.set_enr(enr)
+            self.enr_db.set_enr(enr)
         else:
             node = Node(enr)
             if node.address != address:
@@ -786,9 +796,9 @@ class DiscoveryService(Service):
                     address,
                     node.address,
                 )
-                self.node_db.delete_enr(enr.node_id)
+                self.enr_db.delete_enr(enr.node_id)
                 enr = create_stub_enr(pubkey, address)
-                self.node_db.set_enr(enr)
+                self.enr_db.set_enr(enr)
 
         return enr
 
@@ -963,7 +973,7 @@ class DiscoveryService(Service):
             "Received ENR %s (%s) with expected response token: %s",
             enr, enr.items(), encode_hex(token))
         try:
-            existing_enr = self.node_db.get_enr(enr.node_id)
+            existing_enr = self.enr_db.get_enr(enr.node_id)
         except KeyError:
             self.logger.warning("No existing ENR for %s, this shouldn't happen", node)
         else:
@@ -984,7 +994,7 @@ class DiscoveryService(Service):
                 "Received ENR with no endpoint info from %s, removing from DB/RT", node)
             self.routing.remove(node.id)
             try:
-                self.node_db.delete_enr(node.id)
+                self.enr_db.delete_enr(node.id)
             except KeyError:
                 pass
         else:
@@ -1075,7 +1085,7 @@ class DiscoveryService(Service):
             self.logger.debug(f'Unexpected pong from {remote} with token {encode_hex(token)}')
             return
 
-        self.node_db.set_last_pong_time(remote.id, int(time.monotonic()))
+        self._last_pong_at[remote.id] = time.monotonic()
         # Insert/update the Node in our DB and routing table as soon as we receive the pong, as
         # we want that to happen even if the original requestor (bond()) gives up waiting.
         self.update_routing_table(remote)
@@ -1094,7 +1104,7 @@ class DiscoveryService(Service):
         count = 0
         for node_id in self.routing.iter_nodes_around(target_id):
             try:
-                yield Node(self.node_db.get_enr(node_id))
+                yield Node(self.enr_db.get_enr(node_id))
                 count += 1
             except KeyError:
                 self.logger.exception(
@@ -1121,11 +1131,11 @@ class PreferredNodeDiscoveryService(DiscoveryService):
                  preferred_nodes: Sequence[NodeAPI],
                  event_bus: EndpointAPI,
                  socket: trio.socket.SocketType,
-                 node_db: NodeDBAPI,
+                 enr_db: ENRDatabaseAPI,
                  enr_field_providers: Optional[Sequence[ENR_FieldProvider]] = tuple()
                  ) -> None:
         super().__init__(
-            privkey, udp_port, tcp_port, bootstrap_nodes, event_bus, socket, node_db,
+            privkey, udp_port, tcp_port, bootstrap_nodes, event_bus, socket, enr_db,
             enr_field_providers)
         self.preferred_nodes = preferred_nodes
         self.logger.info('Preferred peers: %s', self.preferred_nodes)

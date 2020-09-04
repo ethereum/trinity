@@ -1,12 +1,12 @@
 import pytest
 
+from eth_enr.tools.factories import ENRFactory
+
 from eth_utils import to_bytes
 
 from eth.chains.ropsten import ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
 from eth.db.atomic import AtomicDB
 from eth.db.chain import ChainDB
-
-from p2p.tools.factories.discovery import ENRFactory
 
 from trinity.components.builtin.peer_discovery.component import generate_eth_cap_enr_field
 from trinity.db.eth1.header import AsyncHeaderDB

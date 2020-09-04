@@ -23,7 +23,6 @@ def validate_transaction_gas_estimation_dict(transaction_dict: Dict[str, Any],
     """Validate a transaction dictionary supplied for an RPC method call"""
     transaction_class = vm.get_transaction_class()
 
-    # TODO make meta values, (field names specifically) publicly accessible on RLP objects
     all_keys: Set[str] = set(transaction_class._meta.field_names)  # type: ignore
     allowed_keys = all_keys.difference(FORBIDDEN_KEYS).union(DERIVED_KEYS)
     spec_keys = set(RENAMED_KEYS.get(field_name, field_name) for field_name in allowed_keys)

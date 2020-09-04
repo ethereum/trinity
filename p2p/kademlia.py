@@ -28,14 +28,19 @@ from eth_keys import (
     keys,
 )
 
+from eth_enr import ENR, ENRAPI, V4CompatIdentityScheme
+from eth_enr.constants import (
+    IP_V4_ADDRESS_ENR_KEY,
+    UDP_PORT_ENR_KEY,
+    TCP_PORT_ENR_KEY,
+    IDENTITY_SCHEME_ENR_KEY,
+)
+
 from eth_hash.auto import keccak
+from eth_typing import NodeID
 
 from p2p.abc import AddressAPI, NodeAPI
-from p2p.enr import ENR, IDENTITY_SCHEME_ENR_KEY
-from p2p.constants import (
-    IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY, NUM_ROUTING_TABLE_BUCKETS)
-from p2p.identity_schemes import V4CompatIdentityScheme
-from p2p.typing import NodeID
+from p2p.constants import NUM_ROUTING_TABLE_BUCKETS
 from p2p._utils import get_logger
 from p2p.validation import validate_enode_uri
 
@@ -107,10 +112,10 @@ TNode = TypeVar('TNode', bound=NodeAPI)
 @functools.total_ordering
 class Node(NodeAPI):
 
-    def __init__(self, enr: ENR) -> None:
+    def __init__(self, enr: ENRAPI) -> None:
         self._init(enr)
 
-    def _init(self, enr: ENR) -> None:
+    def _init(self, enr: ENRAPI) -> None:
         try:
             ip = enr[IP_V4_ADDRESS_ENR_KEY]
             udp_port = enr[UDP_PORT_ENR_KEY]
@@ -163,7 +168,7 @@ class Node(NodeAPI):
         return cls.from_pubkey_and_addr(pubkey, Address(parsed.hostname, parsed.port, parsed.port))
 
     @property
-    def enr(self) -> ENR:
+    def enr(self) -> ENRAPI:
         return self._enr
 
     def uri(self) -> str:
@@ -245,7 +250,7 @@ def sort_by_distance(nodes: Iterable[NodeAPI], target_id: NodeID) -> List[NodeAP
     return sorted(nodes, key=operator.methodcaller('distance_to', target_id_int))
 
 
-def create_stub_enr(pubkey: datatypes.PublicKey, address: AddressAPI) -> ENR:
+def create_stub_enr(pubkey: datatypes.PublicKey, address: AddressAPI) -> ENRAPI:
     return ENR(
         0,
         {

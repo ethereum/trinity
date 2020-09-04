@@ -17,6 +17,7 @@ import async_service
 
 from lahja import EndpointAPI
 
+from eth_enr import ENRDB
 from eth_typing import BlockNumber
 
 from eth.abc import VirtualMachineAPI
@@ -30,8 +31,6 @@ from p2p.discovery import (
     PreferredNodeDiscoveryService,
     StaticDiscoveryService,
 )
-from p2p.node_db import NodeDB
-from p2p.identity_schemes import default_identity_scheme_registry
 
 from trinity.config import Eth1AppConfig
 from trinity.db.eth1.header import BaseAsyncHeaderDB
@@ -80,8 +79,8 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
             eth_cap_provider = functools.partial(generate_eth_cap_enr_field, vm_config, headerdb)
             socket = trio.socket.socket(family=trio.socket.AF_INET, type=trio.socket.SOCK_DGRAM)
             await socket.bind(("0.0.0.0", config.port))
-            base_db = LevelDB(config.node_db_dir)
-            node_db = NodeDB(default_identity_scheme_registry, base_db)
+            base_db = LevelDB(config.enr_db_dir)
+            enr_db = ENRDB(base_db)
             discovery_service = PreferredNodeDiscoveryService(
                 config.nodekey,
                 config.port,
@@ -90,7 +89,7 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
                 config.preferred_nodes,
                 event_bus,
                 socket,
-                node_db,
+                enr_db,
                 (eth_cap_provider,),
             )
 

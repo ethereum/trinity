@@ -2,6 +2,7 @@ import functools
 import pickle
 import socket
 
+from eth_typing import NodeID
 import pytest
 
 from rlp import sedes
@@ -9,10 +10,10 @@ from rlp import sedes
 from eth.chains.mainnet import MAINNET_GENESIS_HEADER, MAINNET_VM_CONFIGURATION
 from eth.chains.ropsten import ROPSTEN_GENESIS_HEADER, ROPSTEN_VM_CONFIGURATION
 
-from p2p.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY
-from p2p.typing import NodeID
+from eth_enr.constants import IP_V4_ADDRESS_ENR_KEY, UDP_PORT_ENR_KEY, TCP_PORT_ENR_KEY
+from eth_enr.tools.factories import ENRFactory
+
 from p2p.kademlia import Node
-from p2p.tools.factories.discovery import ENRFactory
 from p2p.tools.factories.kademlia import IPAddressFactory, NodeFactory
 
 from trinity.exceptions import BaseForkIDValidationError, ENRMissingForkID

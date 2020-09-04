@@ -6,6 +6,8 @@ from typing import Iterator, Tuple, Type
 
 import rlp
 
+from eth_enr import ENRAPI
+
 from eth.abc import VirtualMachineAPI
 from eth.vm.forks.homestead import HomesteadVM
 
@@ -14,7 +16,6 @@ from eth_typing import BlockNumber, Hash32
 from eth_utils import encode_hex, to_tuple
 
 from p2p.abc import HandshakeCheckAPI
-from p2p.enr import ENR
 from p2p.exceptions import MalformedMessage
 
 from trinity.exceptions import ENRMissingForkID, RemoteChainIsStale, LocalChainIncompatibleOrStale
@@ -127,7 +128,7 @@ def validate_forkid(
     logging.getLogger('p2p').error("Impossible forkid validation for %s", forkid)
 
 
-def extract_forkid(enr: ENR) -> ForkID:
+def extract_forkid(enr: ENRAPI) -> ForkID:
     try:
         eth_cap = enr[b'eth']
     except KeyError:
