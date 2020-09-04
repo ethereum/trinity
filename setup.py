@@ -15,7 +15,7 @@ deps = {
         "cached-property>=1.5.1,<2",
         "coincurve>=10.0.0,<11.0.0",
         # cryptography does not use semver and allows breaking changes within `0.3` version bumps.
-        "cryptography>=2.5,<2.9",
+        "cryptography>=3.0,<3.2",
         "eth-enr>=0.3.0,<0.4",
         "eth-hash>=0.1.4,<1",
         "eth-keys>=0.3.3,<0.4.0",
