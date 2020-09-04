@@ -27,13 +27,21 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
             await asyncio.sleep(self.loop_monitoring_wakeup_interval)
             delay = timer.elapsed - self.loop_monitoring_wakeup_interval
             self.logger.debug2("Loop monitoring task called; delay=%.3fs", delay)
-            if delay > self.loop_monitoring_max_delay:
-                pending_tasks = len([task for task in asyncio.all_tasks() if not task.done()])
-                self.logger.warning(
-                    "Event loop blocked or overloaded: delay=%.3fs, tasks=%d",
-                    delay,
-                    pending_tasks,
-                )
+
+            if delay < self.loop_monitoring_max_delay_debug:
+                continue
+
+            if delay >= self.loop_monitoring_max_delay_warning:
+                log_fn = self.logger.warning
+            else:
+                log_fn = self.logger.debug
+
+            pending_tasks = len([task for task in asyncio.all_tasks() if not task.done()])
+            log_fn(
+                "Event loop blocked or overloaded: delay=%.3fs, tasks=%d",
+                delay,
+                pending_tasks,
+            )
 
     async def _do_run(self) -> None:
         with child_process_logging(self._boot_info):
