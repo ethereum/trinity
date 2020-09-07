@@ -22,7 +22,6 @@ from typing import (
 import uuid
 
 from async_service.abc import ServiceAPI
-from cancel_token import CancelToken
 
 from eth_typing import NodeID
 from eth_utils import ExtendedDebugLogger
@@ -453,75 +452,6 @@ class ServiceEventsAPI(ABC):
 
 
 TReturn = TypeVar('TReturn')
-
-
-class AsyncioServiceAPI(ABC):
-    events: ServiceEventsAPI
-    cancel_token: CancelToken
-
-    @abstractmethod
-    def as_new_service(self) -> ServiceAPI:
-        ...
-
-    @property
-    @abstractmethod
-    def logger(self) -> ExtendedDebugLogger:
-        ...
-
-    @abstractmethod
-    def cancel_nowait(self) -> None:
-        ...
-
-    @property
-    @abstractmethod
-    def is_cancelled(self) -> bool:
-        ...
-
-    @property
-    @abstractmethod
-    def is_running(self) -> bool:
-        ...
-
-    @property
-    @abstractmethod
-    def is_operational(self) -> bool:
-        ...
-
-    @abstractmethod
-    async def run(
-            self,
-            finished_callback: Optional[Callable[['AsyncioServiceAPI'], None]] = None) -> None:
-        ...
-
-    @abstractmethod
-    async def cancel(self) -> None:
-        ...
-
-    @abstractmethod
-    async def cancellation(self) -> None:
-        ...
-
-    @abstractmethod
-    def run_daemon(self, service: 'AsyncioServiceAPI') -> None:
-        ...
-
-    @abstractmethod
-    def call_later(self, delay: float, callback: 'Callable[..., None]', *args: Any) -> None:
-        ...
-
-    @abstractmethod
-    async def wait(self,
-                   awaitable: Awaitable[TReturn],
-                   token: CancelToken = None,
-                   timeout: float = None) -> TReturn:
-        ...
-
-    @abstractmethod
-    async def wait_first(self,
-                         *awaitables: Awaitable[TReturn],
-                         token: CancelToken = None,
-                         timeout: float = None) -> TReturn:
-        ...
 
 
 class HandshakeCheckAPI(ABC):

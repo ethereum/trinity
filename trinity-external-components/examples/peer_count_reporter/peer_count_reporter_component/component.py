@@ -4,27 +4,28 @@
 from argparse import ArgumentParser, _SubParsersAction
 import asyncio
 
-from lahja import EndpointAPI
+from async_service import Service, background_asyncio_service
 
-from p2p.service import BaseService, run_service
+from lahja import EndpointAPI
 
 from trinity.boot_info import BootInfo
 from trinity.extensibility import AsyncioIsolatedComponent
 from trinity.protocol.common.events import PeerCountRequest
+from trinity._utils.logging import get_logger
 
 
-class PeerCountReporter(BaseService):
+class PeerCountReporter(Service):
 
     def __init__(self, event_bus: EndpointAPI) -> None:
-        super().__init__()
         self.event_bus = event_bus
+        self.logger = get_logger('PeerCountReporter')
 
-    async def _run(self) -> None:
-        self.run_daemon_task(self._periodically_report_stats())
-        await self.cancel_token.wait()
+    async def run(self) -> None:
+        self.manager.run_daemon_task(self._periodically_report_stats())
+        await self.manager.wait_finished()
 
     async def _periodically_report_stats(self) -> None:
-        while self.is_operational:
+        while self.manager.is_running:
             try:
                 response = await asyncio.wait_for(
                     self.event_bus.request(PeerCountRequest()),
@@ -56,5 +57,5 @@ class PeerCountReporterComponent(AsyncioIsolatedComponent):
     @classmethod
     async def do_run(cls, boot_info: BootInfo, event_bus: EndpointAPI) -> None:
         service = PeerCountReporter(event_bus)
-        async with run_service(service):
-            await service.cancellation()
+        async with background_asyncio_service(service) as manager:
+            await manager.wait_finished()
