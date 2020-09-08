@@ -131,10 +131,17 @@ class Connection(ConnectionAPI, Service):
                     for behavior in behaviors:
                         behavior.post_apply()
                     await wait_first(futures, max_wait_after_cancellation=2)
+                except asyncio.TimeoutError:
+                    self.logger.warning(
+                        "Timed out waiting for tasks to terminate after cancellation: %s",
+                        futures
+                    )
                 except PeerConnectionLost:
                     # Any of our behaviors may propagate a PeerConnectionLost, which is to be
                     # expected as many Connection APIs used by them can raise that. To avoid a
                     # DaemonTaskExit since we're returning silently, ensure we're cancelled.
+                    pass
+                finally:
                     self.manager.cancel()
 
     async def run_peer(self, peer: 'BasePeer') -> None:
