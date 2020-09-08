@@ -56,22 +56,38 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
                     f'AsyncioIsolatedComponent/{self.name}/eventbus/wait_finished')
                 try:
                     max_wait_after_cancellation = 2
+                    tasks = [do_run_task, eventbus_task, loop_monitoring_task]
                     if self._boot_info.profile:
                         with profiler(f'profile_{self.get_endpoint_name()}'):
-                            await wait_first(
-                                [do_run_task, eventbus_task, loop_monitoring_task],
-                                max_wait_after_cancellation,
-                            )
+                            try:
+                                await wait_first(
+                                    tasks,
+                                    max_wait_after_cancellation,
+                                )
+                            except asyncio.TimeoutError:
+                                self.logger.warning(
+                                    "Timed out waiting for tasks to "
+                                    "terminate after cancellation: %s",
+                                    tasks
+                                )
+
                     else:
                         # XXX: When open_in_process() injects a KeyboardInterrupt into us (via
                         # coro.throw()), we hang forever here, until open_in_process() times
                         # out and sends us a SIGTERM, at which point we exit without executing
                         # either the except or the finally blocks below.
                         # See https://github.com/ethereum/trinity/issues/1711 for more.
-                        await wait_first(
-                            [do_run_task, eventbus_task, loop_monitoring_task],
-                            max_wait_after_cancellation,
-                        )
+                        try:
+                            await wait_first(
+                                tasks,
+                                max_wait_after_cancellation,
+                            )
+                        except asyncio.TimeoutError:
+                            self.logger.warning(
+                                "Timed out waiting for tasks to terminate after cancellation: %s",
+                                tasks
+                            )
+
                 except KeyboardInterrupt:
                     self.logger.debug("%s: KeyboardInterrupt", self)
                     # Currently we never reach this code path, but when we fix the issue above

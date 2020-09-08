@@ -375,7 +375,14 @@ class SyncerComponent(AsyncioIsolatedComponent):
             # returns.
             node_manager_task = create_task(
                 node_manager.wait_finished(), f'{NodeClass.__name__} wait_finished() task')
-            await wait_first([sync_task, node_manager_task], max_wait_after_cancellation=2)
+            tasks = [sync_task, node_manager_task]
+            try:
+                await wait_first(tasks, max_wait_after_cancellation=2)
+            except asyncio.TimeoutError:
+                self.logger.warning(
+                    "Timed out waiting for tasks to terminate after cancellation: %s",
+                    tasks
+                )
 
     async def launch_sync(self,
                           node: Node[BasePeer],
