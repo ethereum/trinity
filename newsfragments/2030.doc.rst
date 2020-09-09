@@ -1,0 +1,2 @@
+Create ``make create-dev-dappnode-image`` command to make the creation of temporary
+dappnode packages easier and reduce the chances of human error.
