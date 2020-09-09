@@ -88,6 +88,17 @@ create-dappnode-image: clean
 	cd ./dappnode && dappnodesdk increase $(dappnode_bump)
 	cd ./dappnode && dappnodesdk build
 
+create-dev-dappnode-image: clean
+	# There's currently no way for us to cut dev releases from local files other than pushing these
+	# to GitHub first and then fetching from there. This takes the commit from the current HEAD and
+	# pushes it into a `dappnode_<shortref>` branch in the provided repository (e.g cburgdorf/trinity).
+	git push https://github.com/$(repository).git $(shell git rev-parse HEAD):refs/heads/dappnode_$(shell git rev-parse --short HEAD)
+	sed -i -e 's@ARG GIT_REPOSITORY=.*@ARG GIT_REPOSITORY=$(repository)@g' ./dappnode/build/Dockerfile
+	sed -i -e 's/ARG GITREF=.*/ARG GITREF=dappnode_$(shell git rev-parse --short HEAD)/g' ./dappnode/build/Dockerfile
+	cd ./dappnode && dappnodesdk increase patch
+	cd ./dappnode && dappnodesdk build
+
+
 sdist: clean
 	python setup.py sdist bdist_wheel
 	ls -l dist

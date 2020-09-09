@@ -197,13 +197,13 @@ Prerequisites:
 
     make create-dappnode-image trinity_version=<version> dappnode_bump=<major|minor|patch>
 
-Please note that the dappnode image follows it's own versioning and that the `trinity_version`
-must refer to either a `tag` or a `commit` from this repository. The `dappnode_bump` must be
-either `major`, `minor` or `patch` and should be chosen as follows:
+Please note that the dappnode image follows its own versioning and that the ``trinity_version``
+must refer to either a ``tag`` or a ``commit`` from this repository. The ``dappnode_bump`` must be
+either ``major``, ``minor`` or ``patch`` and should be chosen as follows:
 
 - If the only change in the image is the pinned Trinity version, it should bump the same part
   as the Trinity version bump. E.g. if the image carries a new Trinity patch version, then the
-  dappnode image should also be created with `dappnode_bump=patch`.
+  dappnode image should also be created with ``dappnode_bump=patch``.
 
 - If the image contains other changes (e.g. a fix in the dappnode image itself), then the
   traditional semver rules apply.
@@ -216,8 +216,27 @@ Use the reported `Install link` to install the image on a DappNode.
 
 If the image works as intended, publish it to the APM registry using the Dappnode UI.
 
-- Dappnode Package Name: `trinity.public.dappnode.eth`
-- Next version: `<version-of-dappnode-image>`
-- Manifest hash: `<manifest-hash-as-reported-on-the-console>`
+- Dappnode Package Name: ``trinity.public.dappnode.eth``
+- Next version: ``<version-of-dappnode-image>``
+- Manifest hash: ``<manifest-hash-as-reported-on-the-console>``
 
 Use MetaMask to publish the transaction and wait for it to get included in the chain.
+
+
+How to release *development* dappnode images
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There's currently no way to create a dappnode package directly from the local source code without it touching
+GitHub first. The following command pushes the current ``HEAD`` commit into the specified GitHub repository
+under the branch name ``dappnode_<short-ref-of-head>``. It then builds a DappNode package that fetches the code
+from that branch.
+
+1. Create the package by invoking the command with a specified repository (e. g ``repository=cburgdorf/trinity``)
+
+.. code:: sh
+
+    make create-dev-dappnode-image repository=<github-account>/<github-repo>
+
+2. Ensure the image can be installed and works
+
+Use the reported `Install link` to install the image on a DappNode.
