@@ -84,6 +84,7 @@ create-docker-image: clean
 	docker build -t ethereum/trinity:latest -t ethereum/trinity:$(version) -f ./docker/Dockerfile .
 
 create-dappnode-image: clean
+	sed -i -e 's/ARG CACHE_BUSTER=.*/ARG CACHE_BUSTER=$(shell date +%s)/g' ./dappnode/build/Dockerfile
 	sed -i -e 's/ARG GITREF=.*/ARG GITREF=$(trinity_version)/g' ./dappnode/build/Dockerfile
 	cd ./dappnode && dappnodesdk increase $(dappnode_bump)
 	cd ./dappnode && dappnodesdk build
