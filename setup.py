@@ -9,7 +9,7 @@ PYEVM_DEPENDENCY = "py-evm==0.3.0a19"
 
 deps = {
     'p2p': [
-        "async-service==0.1.0a8",
+        "async-service==0.1.0a9",
         "asyncio-cancel-token>=0.2,<0.3",
         "async_lru>=0.1.0,<1.0.0",
         "cached-property>=1.5.1,<2",
@@ -25,13 +25,13 @@ deps = {
         "pysha3>=1.0.0,<2.0.0",
         "python-snappy>=0.5.3",
         "SQLAlchemy>=1.3.3,<2",
-        'trio>=0.13.0,<0.14',
-        'trio-typing>=0.3.0,<0.4',
+        'trio>=0.16.0,<0.17',
+        'trio-typing>=0.5.0,<0.6',
         "upnpclient>=0.0.8,<1",
     ],
     'trinity': [
         "aiohttp==3.6.0",
-        "asyncio-run-in-process==0.1.0a8",
+        "asyncio-run-in-process==0.1.0a9",
         "bloom-filter==1.3",
         "cachetools>=3.1.0,<4.0.0",
         "coincurve>=10.0.0,<11.0.0",
@@ -42,7 +42,7 @@ deps = {
         "plyvel==1.2.0",
         PYEVM_DEPENDENCY,
         "web3>=5.12.1,<6",
-        "lahja>=0.16.0,<0.17",
+        "lahja>=0.17.0,<0.18",
         "termcolor>=1.1.0,<2.0.0",
         "uvloop==0.14.0;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
         "websockets>=8.1.0",
@@ -55,9 +55,6 @@ deps = {
         "pyformance==0.4",
         "pymultihash>=0.8.2",
         "psutil>=5.7.0, <6",
-        "libp2p==0.1.5",
-        # The direct dependency resolves a version conflict between multiaddr and libp2p
-        "base58>=1.0.3,<2.0.0",
     ],
     'test': [
         "async-timeout>=3.0.1,<4",
@@ -85,7 +82,7 @@ deps = {
         "pytest-aiohttp>=0.3.0,<0.4",
     ],
     'test-trio': [
-        "pytest-trio>=0.5.2,<0.6",
+        "pytest-trio==0.6.0",
     ],
     'lint': [
         "flake8==3.7.9",
@@ -126,7 +123,6 @@ def filter_dependencies(package_list, *package_name):
 # RTD system so we have to exclude these dependencies when we are in an RTD environment.
 if os.environ.get('READTHEDOCS', False):
     deps['p2p'] = filter_dependencies(deps['p2p'], 'python-snappy')
-    deps['trinity'] = filter_dependencies(deps['trinity'], 'libp2p')
 
 deps['dev'] = (
     deps['dev'] +

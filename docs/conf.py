@@ -51,7 +51,7 @@ autodoc_default_options = {
 }
 
 autodoc_member_order = 'groupwise'
-autodoc_mock_imports = ["snappy", "libp2p"]
+autodoc_mock_imports = ["snappy"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
