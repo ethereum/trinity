@@ -16,7 +16,9 @@
     ],
     "volumes": [
       "trinity:/trinity",
-      "trinity_src:/usr/src/app"
+      "trinity_src:/usr/src/app",
+      "/etc/timezone:/etc/timezone:ro",
+      "/etc/localtime:/etc/localtime:ro"
     ],
     "environment": [
       "EXTRA_OPTS=--trinity-root-dir /trinity --enable-http-apis=net,eth --http-listen-address 0.0.0.0"
