@@ -1,0 +1,5 @@
+Trinity on DappNode:
+
+- Ensure the package uses the timezone of the host machine.
+  This is to ensure the reported logs use the correct time and match the reported metrics.
+
