@@ -520,7 +520,7 @@ class TrinityConfig:
         """
         Initialize :class:`~trinity.config.BaseAppConfig` instances for the passed
         ``app_config_types`` based on the ``parser_args`` and the existing
-        :class:`~trinity.config.TrintiyConfig` instance.
+        :class:`~trinity.config.TrinityConfig` instance.
         """
         for app_config_type in app_config_types:
             self.add_app_config(app_config_type.from_parser_args(parser_args, self))
