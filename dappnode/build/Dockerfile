@@ -2,8 +2,6 @@ FROM python:3.7
 
 WORKDIR /usr/src/app
 
-COPY . /usr/src/app
-
 # Install deps
 RUN apt-get update
 RUN apt-get -y install libsnappy-dev gcc g++ cmake
