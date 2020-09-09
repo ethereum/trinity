@@ -72,6 +72,6 @@ async def test_propagates_behavior_crashes(monkeypatch):
     monkeypatch.setattr(ParagonAPI, '__init__', init)
     with pytest.raises(BehaviorCrash):
         async with ParagonPeerPairFactory() as (alice, _):
-            await asyncio.wait_for(alice.manager.wait_finished(), timeout=0.5)
+            await asyncio.wait_for(alice.manager.wait_finished(), timeout=1)
 
     assert alice.manager.is_cancelled
