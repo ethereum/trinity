@@ -16,5 +16,9 @@ async def wait_first(callables: Sequence[Callable[[], Awaitable[Any]]]) -> None:
         for task in callables:
             async def _run_then_cancel() -> None:
                 await task()
-                nursery.cancel_scope.cancel()
+                try:
+                    nursery.cancel_scope.cancel()
+                except trio.Cancelled:
+                    # Suppress exception in case the scope was already cancelled
+                    pass
             nursery.start_soon(_run_then_cancel)
