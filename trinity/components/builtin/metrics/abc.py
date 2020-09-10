@@ -22,3 +22,7 @@ class MetricsServiceAPI(ServiceAPI):
     @abstractmethod
     def registry(self) -> MetricsRegistry:
         ...
+
+    @abstractmethod
+    async def send_annotation(self, annotation_data: str) -> None:
+        ...

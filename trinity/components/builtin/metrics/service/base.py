@@ -1,13 +1,40 @@
 import time
+import aiohttp
+from typing import Dict
+import base64
 from abc import abstractmethod
+from urllib import parse
 from http.client import HTTPException
 
 from async_service import Service
-from pyformance.reporters import InfluxReporter
+from pyformance.reporters.influx import InfluxReporter
 
 from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.components.builtin.metrics.registry import HostMetricsRegistry
 from trinity._utils.logging import get_logger
+
+
+class ExtendedInfluxReporter(InfluxReporter):
+    """
+    ``InfluxReporter`` extended to enable sending annotations to InfluxDB
+    """
+    async def send_annotation(self, annotation_data: str) -> None:
+        url = parse.urlunparse((
+            self.protocol,  # scheme
+            f"{self.server}:{self.port}",  # netloc
+            "/write",  # path
+            '',
+            f"db={self.database}&precision=s",  # query
+            ''
+        ))
+        auth_header = self._generate_auth_header()
+        async with aiohttp.ClientSession() as session:
+            await session.post(url, data=annotation_data, headers=auth_header)
+
+    def _generate_auth_header(self) -> Dict[str, str]:
+        auth_string = ("%s:%s" % (self.username, self.password)).encode()
+        auth = base64.b64encode(auth_string)
+        return {"Authorization": "Basic %s" % auth.decode("utf-8")}
 
 
 class BaseMetricsService(Service, MetricsServiceAPI):
@@ -32,14 +59,14 @@ class BaseMetricsService(Service, MetricsServiceAPI):
         self._influx_server = influx_server
         self._reporting_frequency = reporting_frequency
         self._registry = HostMetricsRegistry(host)
-        self._reporter = InfluxReporter(
+        self._reporter = ExtendedInfluxReporter(
             registry=self._registry,
             database=influx_database,
             username=influx_user,
             password=influx_password,
             protocol=protocol,
             port=port,
-            server=influx_server
+            server=influx_server,
         )
 
     logger = get_logger('trinity.components.builtin.metrics.MetricsService')
@@ -51,6 +78,9 @@ class BaseMetricsService(Service, MetricsServiceAPI):
         metrics instruments can be registered and retrieved.
         """
         return self._registry
+
+    async def send_annotation(self, annotation_data: str) -> None:
+        await self._reporter.send_annotation(annotation_data)
 
     async def run(self) -> None:
         self.logger.info("Reporting metrics to %s", self._influx_server)
