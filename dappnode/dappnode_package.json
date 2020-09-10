@@ -1,7 +1,8 @@
 {
   "name": "trinity.public.dappnode.eth",
   "version": "0.1.3",
-  "description": "Ethereum Python Client (experimental)",
+  "shortDescription": "Ethereum Python Client (experimental)",
+  "description": "Written in Python with great extensibility, the Trinity client is especially interesting for developers. Its novel beam sync strategy makes it possible to have a fully functional client within minutes after launch.",
   "avatar": "/ipfs/QmRyJJwuCEYHPf7xkRcoPJqiHQgAN3ay2voSCTrAY1nMet",
   "type": "library",
   "chain": "ethereum",
@@ -33,6 +34,13 @@
   "links": {
     "homepage": "http://trinity.ethereum.org",
     "api": "http://trinity.public.dappnode:8545"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethereum/trinity.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ethereum/trinity/issues"
   },
   "license": "MIT"
 }
