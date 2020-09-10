@@ -175,33 +175,15 @@ Now that we have Trinity's ``enode`` we can call Geth's ``admin_addTrustedPeer``
 
 That's it. Trinity now has a special green card to always connect to DappNode's system node.
 
-Tips & tricks for development
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Accessing data
+~~~~~~~~~~~~~~
 
-We've created this package not only to make it easy to *run* Trinity but also to make it
-convenient to *develop* Trinity. We therefore expose two important volumes to the host:
+The data that Trinity creates when it runs is stored in a directory outside the core application
+files. It is mapped as a volume to be preserved across package updates to not lose previously
+synced blockchain data, knowledge about peers, written logs etc.
 
-- ``/trinity``: The default ``TRINITY_ROOT_DIRECTORY`` capturing all files that Trinity
-  produces at runtime (including logs)
+The volume can be found under ``/var/lib/docker/volumes/trinitypublicdappnodeeth_trinity``.
 
-- ``/usr/src/app``: The source directory. Since Trinity is written in Python, exposing the
-  source gives us a convenient way to quickly test code changes without recreating and
-  reinstalling the package.
-
-The volumes can be found under ``/var/lib/docker/volumes/`` as
-``trinitypublicdappnodeeth_trinity`` and ``trinitypublicdappnodeeth_trinity_src``
-
-Using the DappNode as a git remote
-----------------------------------
-
-As the package exposes Trinity's source code repository to the host machine, we may want to add it
-as a remote to our development environment:
-
-.. code:: sh
-
-  git remote add dappnode root@<ip-of-dappnode>:/var/lib/docker/volumes/trinitypublicdappnodeeth_trinity_src/_data/trinity
-
-With this in place, pushing code to the dappnode is as easy as running ``git push dappnode <branch>``
 
 Downloading logs from the DappNode
 ----------------------------------
