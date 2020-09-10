@@ -66,6 +66,7 @@ from trinity.sync.beam.constants import (
     CHECK_PREVIEW_STATE_TIMEOUT,
     ESTIMATED_BEAMABLE_SECONDS,
     MAX_ACCEPTABLE_WAIT_FOR_URGENT_NODE,
+    NON_IDEAL_RESPONSE_PENALTY,
     REQUEST_BUFFER_MULTIPLIER,
     TOO_LONG_PREDICTIVE_PEER_DELAY,
 )
@@ -574,6 +575,19 @@ class BeamDownloader(Service, PeerSubscriber):
                     )
                     self._min_predictive_peers = new_predictive_peers
 
+                cancel_attempt = True
+            else:
+                if peer.eth_api.get_node_data.is_requesting:
+                    self.logger.debug(
+                        "Want predictive nodes from %s, but it has an active request, skipping...",
+                        peer,
+                    )
+                    self._queen_tracker.insert_peer(peer, NON_IDEAL_RESPONSE_PENALTY)
+                    cancel_attempt = True
+                else:
+                    cancel_attempt = False
+
+            if cancel_attempt:
                 # Prepare to restart
                 await self._maybe_useful_nodes.complete(batch_id, ())
                 continue
