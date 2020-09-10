@@ -7,3 +7,6 @@ Trinity on DappNode:
   show syncing progress and users can perform requests against the node. Note that the
   DappNode itself is shielded from the external world and only allows access via VPN or
   its own local W-LAN.
+
+- Don't map Trinity's source directory as volume because it is preventing us from having clean
+  updates.
