@@ -332,8 +332,7 @@ class BasePeer(Service):
 
     async def disconnect(self, reason: DisconnectReason) -> None:
         """
-        On completion of this method, the peer will be disconnected
-        and not in the peer pool anymore.
+        Send a Disconnect msg to the remote peer and stop ourselves.
         """
         self.disconnect_nowait(reason)
 
