@@ -1183,6 +1183,16 @@ class PreferredNodeDiscoveryService(DiscoveryService):
 
         yield from super().iter_nodes()
 
+    def get_peer_candidates(
+        self, should_skip_fn: Callable[[NodeAPI], bool], max_candidates: int,
+    ) -> Tuple[NodeAPI, ...]:
+        def do_not_skip_preferred(node: NodeAPI) -> bool:
+            if node in self.preferred_nodes:
+                return False
+            return should_skip_fn(node)
+
+        return super().get_peer_candidates(do_not_skip_preferred, max_candidates)
+
 
 class StaticDiscoveryService(Service):
     """A 'discovery' service that does not connect to any nodes."""
