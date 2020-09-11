@@ -92,14 +92,14 @@ async def test_wait_first_cancelled_task_exception():
 @pytest.mark.asyncio
 async def test_wait_first_rogue_task():
     sleep_after_cancellation = 0.2
-    sleep0_task = create_sleep0_task()
+    raising_task = create_raising_task()
     rogue_task = create_rogue_task(sleep_after_cancellation)
-    sleep_forever_task = create_sleep_forever_task()
 
-    # If a task doesn't return after being cancelled, we get a TimeoutError
-    with pytest.raises(asyncio.TimeoutError):
+    # If a task doesn't return after being cancelled, we still get the exception from the
+    # completed task.
+    with pytest.raises(TaskException):
         await wait_first(
-            [sleep0_task, rogue_task, sleep_forever_task],
+            [raising_task, rogue_task],
             max_wait_after_cancellation=sleep_after_cancellation / 2,
         )
 
