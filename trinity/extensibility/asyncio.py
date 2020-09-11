@@ -67,17 +67,7 @@ class AsyncioIsolatedComponent(BaseIsolatedComponent):
                     tasks = [do_run_task, eventbus_task, loop_monitoring_task]
                     if self._boot_info.profile:
                         with profiler(f'profile_{self.get_endpoint_name()}'):
-                            try:
-                                await wait_first(
-                                    tasks,
-                                    max_wait_after_cancellation,
-                                )
-                            except asyncio.TimeoutError:
-                                self.logger.warning(
-                                    "Timed out waiting for tasks to "
-                                    "terminate after cancellation: %s",
-                                    tasks
-                                )
+                            await wait_first(tasks, max_wait_after_cancellation)
 
                     else:
                         # XXX: When open_in_process() injects a KeyboardInterrupt into us (via

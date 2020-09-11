@@ -41,8 +41,8 @@ async def wait_first(
     trio.MultiError, which will include the exception from the completed task (if any) in their
     context.
 
-    If the cancelled tasks don't return in max_wait_after_cancellation seconds, a TimeoutError
-    will be raised.
+    If the cancelled tasks don't return in max_wait_after_cancellation seconds, a warning
+    is logged.
     """
     for task in tasks:
         if not isinstance(task, asyncio.Task):
@@ -74,7 +74,7 @@ async def cancel_pending_tasks(*tasks: asyncio.Task[Any], timeout: int) -> Async
     """
     Cancel and await for all of the given tasks that are still pending, in no specific order.
 
-    If all cancelled tasks have not completed after the given timeout, raise a TimeoutError.
+    If any cancelled tasks have not completed after the given timeout, log a warning.
 
     Ignores any asyncio.CancelledErrors.
     """
@@ -101,9 +101,8 @@ async def cancel_pending_tasks(*tasks: asyncio.Task[Any], timeout: int) -> Async
             if pending:
                 # These tasks might need to be pickled to pass across the process boundary
                 unfinished = [repr(task) for task in pending]
-                errors.append(
-                    asyncio.TimeoutError("Tasks never returned after being cancelled", unfinished),
-                )
+                logger.warning(
+                    "Timed out waiting for tasks to return after cancellation: %s", unfinished)
             # We use future as the variable name here because that's what asyncio.wait returns
             # above.
             for future in done:
