@@ -6,7 +6,7 @@ from async_service import Service
 from ddht.boot_info import BootInfo
 from ddht.v5.app import Application
 from eth_typing import NodeID
-from eth_utils import get_logger
+from eth_utils import get_logger, ExtendedDebugLogger
 from eth_utils.toolz import take
 from lahja import EndpointAPI
 
@@ -18,6 +18,8 @@ from trinity.config import TrinityConfig
 
 
 class DiscoveryV5Service(Service):
+    logger: ExtendedDebugLogger
+
     def __init__(self,
                  event_bus: EndpointAPI,
                  trinity_config: TrinityConfig,

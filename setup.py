@@ -35,6 +35,7 @@ deps = {
         "bloom-filter==1.3",
         "cachetools>=3.1.0,<4.0.0",
         "coincurve>=10.0.0,<11.0.0",
+        "ddht==0.1.0a2",
         "eth-utils>=1.9.3,<2",
         # requests 2.21 is required to support idna 2.8 which is required elsewhere
         "requests>=2.21,<3",
