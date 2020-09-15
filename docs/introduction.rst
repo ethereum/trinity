@@ -45,6 +45,6 @@ Further reading
 Here are a couple more useful links to check out.
 
 * :doc:`Quickstart </guides/quickstart>`
-* `Source Code on GitHub <https://github.com/ethereum/py-evm>`_
-* `Public Gitter Chat <https://gitter.im/ethereum/py-evm>`_
+* `Source Code on GitHub <https://github.com/ethereum/trinity>`_
+* `Public Gitter Chat <https://gitter.im/ethereum/trinity>`_
 * :doc:`Get involved </contributing>`
