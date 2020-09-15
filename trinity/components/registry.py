@@ -40,6 +40,9 @@ from trinity.components.builtin.network_db.component import (
 from trinity.components.builtin.peer_discovery.component import (
     PeerDiscoveryComponent,
 )
+from trinity.components.builtin.preferred_node.component import (
+    PreferredNodeComponent,
+)
 from trinity.components.builtin.request_server.component import (
     RequestServerComponent,
 )
@@ -61,6 +64,7 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     JsonRpcServerComponent,
     NetworkDBComponent,
     PeerDiscoveryComponent,
+    PreferredNodeComponent,
     UpnpComponent,
 )
 
