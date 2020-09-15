@@ -188,6 +188,17 @@ class BeamStateBackfill(Service, QueenTrackerAPI):
 
             peer = await self._queening_queue.pop_fastest_peasant()
 
+            # skip over peer if it has an active data request
+            while peer.eth_api.get_node_data.is_requesting:
+                self.logger.debug(
+                    "Want backfill nodes from %s, but it has an active request, skipping...",
+                    peer,
+                )
+                # Put this peer back
+                self._queening_queue.insert_peer(peer, NON_IDEAL_RESPONSE_PENALTY)
+                # Ask for the next peer
+                peer = await self._queening_queue.pop_fastest_peasant()
+
             self.manager.run_task(self._make_request, peer, required_data)
 
     def _check_complete(self) -> bool:
