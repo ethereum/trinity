@@ -255,13 +255,14 @@ class Connection(ConnectionAPI, Service):
         # Disconnect+EOF from a remote, but before we've had a chance to process the disconnect,
         # which would cause a DaemonTaskExit error
         # (https://github.com/ethereum/trinity/issues/1733).
-        if self._multiplexer.is_closing:
+        if self._multiplexer.is_closing and not self.manager.is_cancelled:
             try:
                 await asyncio.wait_for(self.manager.wait_finished(), timeout=2)
             except asyncio.TimeoutError:
-                self.logger.error(
-                    "stream_protocol_messages() terminated but Connection was never cancelled, "
-                    "this will cause the Connection to crash with a DaemonTaskExit")
+                if not self.manager.is_cancelled:
+                    self.logger.error(
+                        "stream_protocol_messages() terminated but %s was never cancelled, "
+                        "this will cause the Connection to crash with a DaemonTaskExit", self)
 
     def add_protocol_handler(self,
                              protocol_class: Type[ProtocolAPI],

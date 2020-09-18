@@ -39,7 +39,6 @@ from tests.p2p.auth_constants import (
 
 @pytest.mark.asyncio
 async def test_handshake():
-    # TODO: this test should be re-written to not depend on functionality in the `ETHPeer` class.
     use_eip8 = False
     initiator_remote = kademlia.Node.from_pubkey_and_addr(
         keys.PrivateKey(test_values['receiver_private_key']).public_key,

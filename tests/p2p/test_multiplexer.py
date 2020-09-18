@@ -306,6 +306,33 @@ async def test_last_msg_time(monkeypatch, request, event_loop):
     assert alice_multiplexer.last_msg_time == now
 
 
+@pytest.mark.asyncio
+async def test_stream_protocol_messages(request, event_loop, monkeypatch):
+    alice_multiplexer, bob_multiplexer = MultiplexerPairFactory()
+    await run_multiplexers([alice_multiplexer, bob_multiplexer], request, event_loop)
+
+    alice_p2p_protocol = alice_multiplexer.get_protocol_by_type(P2PProtocolV5)
+    alice_p2p_protocol.send(Ping(None))
+    alice_p2p_protocol.send(Pong(None))
+
+    monkeypatch.setattr(bob_multiplexer, '_stream_idle_timeout', 0.1)
+    stream = bob_multiplexer.stream_protocol_messages(P2PProtocolV5)
+    cmd = await asyncio.wait_for(stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Ping)
+    cmd = await asyncio.wait_for(stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    assert isinstance(cmd, Pong)
+
+    # Stopping streaming on bob's multiplexer should cause stream_protocol_messages() to
+    # terminate.
+    stop_streaming_task = asyncio.create_task(bob_multiplexer.stop_streaming())
+    try:
+        cmd = await asyncio.wait_for(stream.asend(None), timeout=DEFAULT_TIMEOUT)
+    except StopAsyncIteration:
+        pass
+
+    assert stop_streaming_task.done()
+
+
 async def run_multiplexers(multiplexers, request, event_loop):
     for multiplexer in multiplexers:
         await multiplexer.stream_in_background()

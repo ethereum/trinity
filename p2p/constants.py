@@ -35,7 +35,7 @@ MAC_LEN = 16
 # The amount of seconds a connection can be idle.
 CONN_IDLE_TIMEOUT = 30
 
-# The amount of seconds a connection can be idle.
+# The amount of seconds a p2p handshake can take.
 HANDSHAKE_TIMEOUT = 10
 
 # Timeout used when waiting for a reply from a remote node.
