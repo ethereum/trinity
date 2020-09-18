@@ -51,6 +51,8 @@ async def stream_transport_messages(transport: TransportAPI,
                                     ) -> AsyncIterator[Tuple[ProtocolAPI, CommandAPI[Any]]]:
     """
     Streams 2-tuples of (Protocol, Command) over the provided `Transport`
+
+    Raises a TimeoutError if nothing is received in constants.CONN_IDLE_TIMEOUT seconds.
     """
     # A cache for looking up the proper protocol instance for a given command
     # id.
@@ -61,6 +63,8 @@ async def stream_transport_messages(transport: TransportAPI,
         try:
             msg = await transport.recv()
         except PeerConnectionLost:
+            transport.logger.debug(
+                "Lost connection to %s, leaving stream_transport_messages()", transport.remote)
             return
 
         command_id = msg.command_id
@@ -116,6 +120,7 @@ class Multiplexer(MultiplexerAPI):
     _transport: TransportAPI
     _msg_counts: DefaultDict[Type[CommandAPI[Any]], int]
     _last_msg_time: float
+    _stream_idle_timeout: int = 5
 
     _protocol_locks: Dict[Type[ProtocolAPI], asyncio.Lock]
     _protocol_queues: Dict[Type[ProtocolAPI], 'asyncio.Queue[CommandAPI[Any]]']
@@ -161,7 +166,8 @@ class Multiplexer(MultiplexerAPI):
             for proto
             in self.get_protocols()
         ))
-        return f"Multiplexer[{protocol_infos}]"
+        return (
+            f"Multiplexer[{self.remote.address.ip}/{protocol_infos}/streaming={self.is_streaming}]")
 
     def __repr__(self) -> str:
         return f"<{self}>"
@@ -260,9 +266,9 @@ class Multiplexer(MultiplexerAPI):
     #
     # Streaming API
     #
-    def stream_protocol_messages(self,
-                                 protocol_identifier: Union[ProtocolAPI, Type[ProtocolAPI]],
-                                 ) -> AsyncIterator[CommandAPI[Any]]:
+    async def stream_protocol_messages(self,
+                                       protocol_identifier: Union[ProtocolAPI, Type[ProtocolAPI]],
+                                       ) -> AsyncIterator[CommandAPI[Any]]:
         """
         Stream the messages for the specified protocol.
         """
@@ -271,7 +277,7 @@ class Multiplexer(MultiplexerAPI):
         elif isinstance(protocol_identifier, type) and issubclass(protocol_identifier, ProtocolAPI):
             protocol_class = protocol_identifier
         else:
-            raise TypeError("Unknown protocol identifier: {protocol}")
+            raise TypeError(f"Unknown protocol identifier: {protocol_identifier}")
 
         if not self.has_protocol(protocol_class):
             raise UnknownProtocol(f"Unknown protocol '{protocol_class}'")
@@ -279,29 +285,28 @@ class Multiplexer(MultiplexerAPI):
         if self._protocol_locks[protocol_class].locked():
             raise Exception(f"Streaming lock for {protocol_class} is not free.")
 
-        return self._stream_protocol_messages(protocol_class)
-
-    async def _stream_protocol_messages(self,
-                                        protocol_class: Type[ProtocolAPI],
-                                        ) -> AsyncIterator[CommandAPI[Any]]:
-        """
-        Stream the messages for the specified protocol.
-        """
         async with self._protocol_locks[protocol_class]:
             self.raise_if_streaming_error()
             msg_queue = self._protocol_queues[protocol_class]
             while self.is_streaming:
-                try:
+                if not msg_queue.empty():
                     # We use an optimistic strategy here of using
                     # `get_nowait()` to reduce the number of times we yield to
                     # the event loop.
                     yield msg_queue.get_nowait()
 
-                    # Manually release the event loop if it won't happen during
-                    #   the queue get().
+                    # Manually release the event loop to prevent blocking it for too long in case
+                    # the queue has lots of items.
                     await asyncio.sleep(0)
-                except asyncio.QueueEmpty:
-                    yield await msg_queue.get()
+                else:
+                    # Must run this with a timeout so that we return in case the multiplexer
+                    # stops streaming, althouth there's no real need to have this wake up so
+                    # frequently in case there are no messages, so use a long one.
+                    try:
+                        yield await asyncio.wait_for(
+                            msg_queue.get(), timeout=self._stream_idle_timeout)
+                    except asyncio.TimeoutError:
+                        pass
 
     #
     # Message reading and streaming API
@@ -316,7 +321,7 @@ class Multiplexer(MultiplexerAPI):
 
     async def wait_streaming_finished(self) -> None:
         """
-        Wait for our streaming task to finish.
+        Wait for our streaming task to finish, propagating any errors from it.
 
         The streaming must have been started via stream_in_background().
 
@@ -356,8 +361,7 @@ class Multiplexer(MultiplexerAPI):
         try:
             await self._handle_commands(msg_stream)
         except asyncio.TimeoutError as exc:
-            self.logger.warning(
-                "Timed out waiting for command from %s, exiting...", self,)
+            self.logger.warning("Timed out waiting for command from %s, exiting...", self.remote)
             self.logger.debug("Timeout %r: %s", self, exc, exc_info=True)
         finally:
             await self.close()

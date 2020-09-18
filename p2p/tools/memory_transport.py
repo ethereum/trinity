@@ -6,7 +6,7 @@ from cached_property import cached_property
 from eth_keys import datatypes
 
 from p2p.abc import MessageAPI, NodeAPI, TransportAPI
-from p2p.constants import CONN_IDLE_TIMEOUT
+from p2p import constants
 from p2p.exceptions import PeerConnectionLost
 from p2p.message import Message
 from p2p.session import Session
@@ -62,7 +62,8 @@ class MemoryTransport(TransportAPI):
     async def read(self, n: int) -> bytes:
         self.logger.debug2("Waiting for %s bytes from %s", n, self.remote)
         try:
-            return await asyncio.wait_for(self._reader.readexactly(n), timeout=CONN_IDLE_TIMEOUT)
+            return await asyncio.wait_for(
+                self._reader.readexactly(n), timeout=constants.CONN_IDLE_TIMEOUT)
         except CONNECTION_LOST_ERRORS as err:
             raise PeerConnectionLost from err
 
@@ -91,9 +92,8 @@ class MemoryTransport(TransportAPI):
         self.write(encoded_sizes + message.header + message.body)
 
     async def close(self) -> None:
-        """Close this peer's writer stream.
-
-        This will cause the peer to stop in case it is running.
+        """
+        Close this transport's writer stream.
         """
         await self._writer.drain()
         self._writer.close()

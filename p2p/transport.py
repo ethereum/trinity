@@ -281,9 +281,8 @@ class Transport(TransportAPI):
         self.write(self._encrypt(header, body))
 
     async def close(self) -> None:
-        """Close this peer's writer stream.
-
-        This will cause the peer to stop in case it is running.
+        """
+        Close this transport's writer stream.
         """
         try:
             await self._writer.drain()

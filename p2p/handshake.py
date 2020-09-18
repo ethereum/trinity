@@ -367,22 +367,14 @@ async def receive_dial_in(reader: asyncio.StreamReader,
         writer=writer,
         private_key=private_key,
     )
-    try:
-        multiplexer, devp2p_receipt, protocol_receipts = await negotiate_protocol_handshakes(
-            transport=transport,
-            p2p_handshake_params=p2p_handshake_params,
-            protocol_handshakers=protocol_handshakers,
-        )
-    except BaseException:
-        # Note: This is one of two places where we manually handle closing the
-        # reader/writer connection pair in the event of an error during the
-        # peer connection and handshake process.
-        # See `p2p.auth.handshake` for the other.
-        try:
-            await transport.close()
-        except ConnectionResetError:
-            transport.logger.debug("Could not wait for transport to close")
-        raise
+
+    # In case of any errors, negotiate_protocol_handshakes() will close the multiplexer,
+    # which in turn closes the transport, so we don't need to worry about that here.
+    multiplexer, devp2p_receipt, protocol_receipts = await negotiate_protocol_handshakes(
+        transport=transport,
+        p2p_handshake_params=p2p_handshake_params,
+        protocol_handshakers=protocol_handshakers,
+    )
 
     connection = Connection(
         multiplexer=multiplexer,
