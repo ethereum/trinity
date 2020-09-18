@@ -555,6 +555,21 @@ class BeamDownloader(Service, PeerSubscriber):
                 # Re-attempt
                 continue
 
+            # Find any hashes that were discovered through other means, like urgent requests:
+            existing_hashes = await asyncio.get_event_loop().run_in_executor(
+                None,
+                self._get_unique_present_hashes,
+                hashes,
+            )
+            # If any hashes are already found, clear them out and retry
+            if existing_hashes:
+                # Wake up any paused preview threads
+                await self._wakeup_preview_waiters(existing_hashes)
+                # Clear out any tasks that are no longer necessary
+                await self._maybe_useful_nodes.complete(batch_id, tuple(existing_hashes))
+                # Restart from the top
+                continue
+
             try:
                 peer = await asyncio.wait_for(
                     self._queen_tracker.pop_fastest_peasant(),
@@ -645,21 +660,25 @@ class BeamDownloader(Service, PeerSubscriber):
                 #   flaky test_beam_syncer_backfills_all_state[42].
                 self._new_data_event.set()
         elif new_nodes:
-            # Wake up any coroutines waiting for the particular data that was returned.
-            #   (If no data returned, then no coros should wake up, and we can skip the block)
-            preview_waiters = await asyncio.get_event_loop().run_in_executor(
-                None,
-                self._get_preview_waiters,
-                new_nodes,
-            )
-            for waiter in preview_waiters:
-                waiter.set()
-                await asyncio.sleep(0)
+            new_hashes = set(node_hash for node_hash, _ in new_nodes)
+            await self._wakeup_preview_waiters(new_hashes)
 
         return nodes, new_nodes, peer
 
-    def _get_preview_waiters(self, new_nodes: NodeDataBundles) -> Tuple[asyncio.Event, ...]:
-        new_hashes = set(node_hash for node_hash, _ in new_nodes)
+    async def _wakeup_preview_waiters(self, node_hashes: Iterable[Hash32]) -> None:
+        # Wake up any coroutines waiting for the particular data that was returned.
+        #   (If no data returned, then no coros should wake up, and we can skip the block)
+        preview_waiters = await asyncio.get_event_loop().run_in_executor(
+            None,
+            self._get_preview_waiters,
+            node_hashes,
+        )
+        for waiter in preview_waiters:
+            waiter.set()
+
+    def _get_preview_waiters(self, node_hashes: Iterable[Hash32]) -> Tuple[asyncio.Event, ...]:
+        # Convert to set for a faster presence-test in the returned tuple comprehension
+        new_hashes = set(node_hashes)
 
         # defensive copy _preview_events, since this method runs in a thread
         waiters = tuple(self._preview_events.items())
