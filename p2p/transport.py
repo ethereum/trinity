@@ -51,7 +51,9 @@ from p2p.message import Message
 from p2p.session import Session
 
 
-HEADER_DATA_SEDES = rlp.sedes.List((rlp.sedes.big_endian_int, rlp.sedes.big_endian_int))
+# We use a CountableList here because in a previous version of the spec, the header-data could
+# be a single-element list.
+HEADER_DATA_SEDES = rlp.sedes.CountableList(rlp.sedes.big_endian_int, max_length=2)
 
 
 @functools.lru_cache(256)
