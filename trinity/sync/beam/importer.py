@@ -53,6 +53,7 @@ from lahja.common import BroadcastConfig
 
 from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
+from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity.exceptions import StateUnretrievable
 from trinity.sync.beam.constants import (
     BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
@@ -69,6 +70,7 @@ from trinity.sync.common.events import (
     MissingAccountResult,
     MissingBytecodeResult,
     MissingStorageResult,
+    NewBlockImported,
     StatelessBlockImportDone,
 )
 from trinity._utils.logging import get_logger
@@ -493,6 +495,13 @@ def _broadcast_import_complete(
         ),
         broadcast_config,
     )
+    if completed:
+        event_bus.broadcast_nowait(
+            NewBlockImported(
+                block,
+            ),
+            FIRE_AND_FORGET_BROADCASTING,
+        )
 
 
 def partial_import_block(beam_chain: BeamChain,

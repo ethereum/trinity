@@ -1,0 +1,2 @@
+Introduce NewBlockComponent to be a better p2p participant. By rebroadcasting
+blocks as they are received from peers, and after they have been imported.
