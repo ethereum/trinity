@@ -67,7 +67,9 @@ class CommandHandler(BaseLogic, Generic[TCommand]):
 
         with connection.add_command_handler(self.command_type, cast(HandlerFn, self.handle)):
             yield create_task(
-                _never_ending_coro(), f'CommandHandler/{self.__class__.__name__}/apply')
+                _never_ending_coro(),
+                f'{connection.remote}/CommandHandler/{self.__class__.__name__}/apply'
+            )
 
     @abstractmethod
     async def handle(self, connection: ConnectionAPI, command: TCommand) -> None:
@@ -111,11 +113,12 @@ class Application(BaseLogic):
             # can wait on it like when behaviors are applied.
             if not futures:
                 futures.append(
-                    create_task(_never_ending_coro(), f'Application/{self.name}/no-behaviors-fut'))
+                    create_task(_never_ending_coro(),
+                                f'{connection.remote}/Application/{self.name}/no-behaviors-fut'))
 
             # Now register ourselves with the connection.
             with connection.add_logic(self.name, self):
-                name = f'Application/{self.name}/apply/{connection.remote}'
+                name = f'{connection.remote}/Application/{self.name}/apply'
                 yield create_task(
                     wait_first(futures, max_wait_after_cancellation=2),
                     name=name,

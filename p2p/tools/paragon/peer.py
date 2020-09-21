@@ -65,6 +65,7 @@ class ParagonPeerFactory(BasePeerFactory):
 
 
 class ParagonPeerPool(BasePeerPool):
+    _suppress_allowed_connection_exceptions = False
     peer_factory_class = ParagonPeerFactory
     context: ParagonContext
 

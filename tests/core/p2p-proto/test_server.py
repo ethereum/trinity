@@ -89,6 +89,7 @@ def receiver_remote():
 async def server(event_bus, receiver_remote):
     server = get_server(RECEIVER_PRIVKEY, receiver_remote.address, event_bus)
     async with background_asyncio_service(server):
+        await asyncio.wait_for(server.ready.wait(), timeout=2)
         yield server
 
 
@@ -201,7 +202,7 @@ async def test_peer_pool_connect(monkeypatch, server, receiver_remote):
         await manager.wait_started()
         await initiator_peer_pool.connect_to_nodes(nodes)
 
-        await asyncio.wait_for(peer_started.wait(), timeout=10)
+        await asyncio.wait_for(peer_started.wait(), timeout=2)
 
         assert len(initiator_peer_pool.connected_nodes) == 1
 
