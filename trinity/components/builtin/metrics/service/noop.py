@@ -39,5 +39,8 @@ class NoopMetricsService(Service, MetricsServiceAPI):
     async def continuously_report(self) -> None:
         pass
 
+    async def send_annotation(self, annotation_data: str) -> None:
+        pass
+
 
 NOOP_METRICS_SERVICE = NoopMetricsService()

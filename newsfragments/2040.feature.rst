@@ -1,0 +1,1 @@
+Report beam sync pivot rate to metrics for visualization on grafana dashboard.

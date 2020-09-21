@@ -34,8 +34,10 @@ from trinity.boot_info import BootInfo
 from trinity.config import (
     Eth1AppConfig,
 )
+from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.components.builtin.metrics.component import metrics_service_from_args
 from trinity.components.builtin.metrics.service.asyncio import AsyncioMetricsService
+from trinity.components.builtin.metrics.sync_metrics_registry import SyncMetricsRegistry
 from trinity.components.builtin.metrics.service.noop import NOOP_METRICS_SERVICE
 from trinity.constants import (
     NETWORKING_EVENTBUS_ENDPOINT,
@@ -136,7 +138,8 @@ class BaseSyncStrategy(ABC):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI) -> None:
+                   event_bus: EndpointAPI,
+                   metrics_service: MetricsServiceAPI = None) -> None:
         ...
 
 
@@ -152,7 +155,8 @@ class NoopSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI) -> None:
+                   event_bus: EndpointAPI,
+                   metrics_service: MetricsServiceAPI = None) -> None:
 
         logger.info("Node running without sync (--sync-mode=%s)", self.get_sync_mode())
         await asyncio.Future()
@@ -170,7 +174,8 @@ class FullSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI) -> None:
+                   event_bus: EndpointAPI,
+                   metrics_service: MetricsServiceAPI = None) -> None:
 
         syncer = FullChainSyncer(
             chain,
@@ -205,7 +210,11 @@ class BeamSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI) -> None:
+                   event_bus: EndpointAPI,
+                   metrics_service: MetricsServiceAPI = None) -> None:
+
+        # create registry for tracking pivot metrics
+        sync_metrics_registry = SyncMetricsRegistry(metrics_service)
 
         syncer = BeamSyncService(
             chain,
@@ -215,7 +224,8 @@ class BeamSyncStrategy(BaseSyncStrategy):
             event_bus,
             args.sync_from_checkpoint,
             args.force_beam_block_number,
-            not args.disable_backfill
+            not args.disable_backfill,
+            sync_metrics_registry,
         )
 
         async with background_asyncio_service(syncer) as manager:
@@ -239,7 +249,8 @@ class HeaderSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI) -> None:
+                   event_bus: EndpointAPI,
+                   metrics_service: MetricsServiceAPI = None) -> None:
 
         syncer = HeaderChainSyncer(
             chain,
@@ -265,7 +276,8 @@ class LightSyncStrategy(BaseSyncStrategy):
                    chain: AsyncChainAPI,
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
-                   event_bus: EndpointAPI) -> None:
+                   event_bus: EndpointAPI,
+                   metrics_service: MetricsServiceAPI = None) -> None:
 
         syncer = LightChainSyncer(
             chain,
@@ -391,6 +403,7 @@ class SyncerComponent(AsyncioIsolatedComponent):
             node.base_db,
             node.get_peer_pool(),
             event_bus,
+            node.metrics_service,
         )
 
 

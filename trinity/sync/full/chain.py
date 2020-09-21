@@ -160,10 +160,10 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
         # Keep track of some statistics, which is useful for deciding if syncing has stalled
 
         # What is the largest block number reported by a header? (before importing the block)
-        self._highest_header_number = 0
+        self._highest_header_number = BlockNumber(0)
 
         # What is the most recently imported block number? (after importing the block)
-        self._latest_block_number = 0
+        self._latest_block_number = BlockNumber(0)
 
     async def run(self) -> None:
         with self.subscribe(self._peer_pool):
