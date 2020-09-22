@@ -139,7 +139,7 @@ class BaseSyncStrategy(ABC):
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
                    event_bus: EndpointAPI,
-                   metrics_service: MetricsServiceAPI = None) -> None:
+                   metrics_service: MetricsServiceAPI) -> None:
         ...
 
 
@@ -156,7 +156,7 @@ class NoopSyncStrategy(BaseSyncStrategy):
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
                    event_bus: EndpointAPI,
-                   metrics_service: MetricsServiceAPI = None) -> None:
+                   metrics_service: MetricsServiceAPI) -> None:
 
         logger.info("Node running without sync (--sync-mode=%s)", self.get_sync_mode())
         await asyncio.Future()
@@ -175,7 +175,7 @@ class FullSyncStrategy(BaseSyncStrategy):
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
                    event_bus: EndpointAPI,
-                   metrics_service: MetricsServiceAPI = None) -> None:
+                   metrics_service: MetricsServiceAPI) -> None:
 
         syncer = FullChainSyncer(
             chain,
@@ -211,10 +211,13 @@ class BeamSyncStrategy(BaseSyncStrategy):
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
                    event_bus: EndpointAPI,
-                   metrics_service: MetricsServiceAPI = None) -> None:
+                   metrics_service: MetricsServiceAPI) -> None:
 
-        # create registry for tracking pivot metrics
-        sync_metrics_registry = SyncMetricsRegistry(metrics_service)
+        # create registry for tracking beam sync pivot metrics if enabled
+        if metrics_service == NOOP_METRICS_SERVICE:
+            sync_metrics_registry = None
+        else:
+            sync_metrics_registry = SyncMetricsRegistry(metrics_service)
 
         syncer = BeamSyncService(
             chain,
@@ -250,7 +253,7 @@ class HeaderSyncStrategy(BaseSyncStrategy):
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
                    event_bus: EndpointAPI,
-                   metrics_service: MetricsServiceAPI = None) -> None:
+                   metrics_service: MetricsServiceAPI) -> None:
 
         syncer = HeaderChainSyncer(
             chain,
@@ -277,7 +280,7 @@ class LightSyncStrategy(BaseSyncStrategy):
                    base_db: AtomicDatabaseAPI,
                    peer_pool: BasePeerPool,
                    event_bus: EndpointAPI,
-                   metrics_service: MetricsServiceAPI = None) -> None:
+                   metrics_service: MetricsServiceAPI) -> None:
 
         syncer = LightChainSyncer(
             chain,
