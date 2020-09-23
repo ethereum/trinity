@@ -222,20 +222,11 @@ class BaseChainPeerPool(BasePeerPool):
                     "only peers that are blacklisted or already connected to")
                 should_skip = skip_candidate_if_on_list  # type: ignore
 
-            try:
-                candidate_counts = await asyncio.gather(*(
-                    self._add_peers_from_backend(backend, should_skip)
-                    for backend in self.peer_backends
-                ))
-                last_candidates_count = sum(candidate_counts)
-            except asyncio.CancelledError:
-                # no need to log this exception, this is expected
-                raise
-            except Exception:
-                self.logger.exception("unexpected error during peer connection")
-                # Continue trying to connect to peers, even if there was a
-                # surprising failure during one of the attempts.
-                continue
+            candidate_counts = await asyncio.gather(*(
+                self._add_peers_from_backend(backend, should_skip)
+                for backend in self.peer_backends
+            ))
+            last_candidates_count = sum(candidate_counts)
 
     @property
     def vm_configuration(self) -> Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...]:

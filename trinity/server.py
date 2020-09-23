@@ -92,6 +92,7 @@ class BaseServer(Service, Generic[TPeerPool]):
         self.network_id = network_id
         self.max_peers = max_peers
 
+        self.ready = asyncio.Event()
         # child services
         self.peer_pool = self._make_peer_pool()
 
@@ -119,6 +120,7 @@ class BaseServer(Service, Generic[TPeerPool]):
         try:
             async with tcp_listener:
                 self.manager.run_daemon_child_service(self.peer_pool)
+                self.ready.set()
                 await tcp_listener.serve_forever()
         finally:
             self.logger.info("TCP Listener finished, cancelling Server")
