@@ -110,10 +110,10 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
     _report_metrics_interval = 15  # for influxdb/grafana reporting
     _peer_boot_timeout = DEFAULT_PEER_BOOT_TIMEOUT
     _event_bus: EndpointAPI = None
-    # If set to True, any exceptions in ALLOWED_PEER_CONNECTION_EXCEPTIONS will be logged and
-    # suppressed. Should only be set to False in tests we we want to ensure a connection is
-    # successful.
-    _suppress_allowed_connection_exceptions: bool = True
+    # If set to True, exceptions raised when connecting to a remote peer will be logged (DEBUG if
+    # it's in ALLOWED_PEER_CONNECTION_EXCEPTIONS or ERROR if not) and suppressed. Should only be
+    # set to False in tests if we want to ensure a connection is successful.
+    _suppress_connection_exceptions: bool = True
 
     _handshake_locks: ResourceLock[NodeAPI]
     peer_reporter_registry_class: Type[PeerReporterRegistry[Any]] = PeerReporterRegistry[BasePeer]
@@ -506,13 +506,17 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
                 async with self._connection_attempt_lock:
                     peer = await self.connect(node)
             except ALLOWED_PEER_CONNECTION_EXCEPTIONS:
-                if self._suppress_allowed_connection_exceptions:
+                if self._suppress_connection_exceptions:
                     # These are all logged in self.connect(), so we simply return.
                     return
-                raise
+                else:
+                    raise
             except Exception:
                 self.logger.exception("Unexpected error connecting to %s", node)
-                raise
+                if self._suppress_connection_exceptions:
+                    return
+                else:
+                    raise
 
             await self.add_outbound_peer(peer)
 
