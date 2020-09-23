@@ -276,7 +276,7 @@ async def test_web3_commands_via_attached_console(command,
         ('trinity', '--sync-mode=light', '--ropsten',),
         # with metrics enabled. We do not have a proper integration test yet and deliberately
         # test against an invalid host for now. We only care about Trinity not crashing.
-        ('trinity', '--enable-metrics', '--metrics-host=ci', '--metrics-influx-server=_.com'),
+        ('trinity', '--enable-metrics', '--metrics-host=ci', '--metrics-influx-server=www.foo.com'),
     )
 )
 @pytest.mark.asyncio

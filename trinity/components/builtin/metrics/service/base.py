@@ -1,11 +1,16 @@
-import time
-import aiohttp
-from typing import Dict
-import base64
 from abc import abstractmethod
-from urllib import parse
+import base64
+import functools
 from http.client import HTTPException
+import time
+from typing import (
+    Callable,
+    Dict,
+    TypeVar,
+)
+from urllib import parse
 
+from asks import Session
 from async_service import Service
 from pyformance.reporters.influx import InfluxReporter
 
@@ -13,28 +18,70 @@ from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.components.builtin.metrics.registry import HostMetricsRegistry
 from trinity._utils.logging import get_logger
 
+T = TypeVar('T')
+
+
+# temporary workaround to support decorator typing until we can use
+# @functools.cached_property with python version >= 3.8
+# https://github.com/python/mypy/issues/5858
+def cache(func: Callable[..., T]) -> T:
+    return functools.lru_cache()(func)  # type: ignore
+
 
 class ExtendedInfluxReporter(InfluxReporter):
     """
     ``InfluxReporter`` extended to enable sending annotations to InfluxDB
     """
-    async def send_annotation(self, annotation_data: str) -> None:
-        url = parse.urlunparse((
-            self.protocol,  # scheme
-            f"{self.server}:{self.port}",  # netloc
-            "/write",  # path
-            '',
-            f"db={self.database}&precision=s",  # query
-            ''
-        ))
+    @property  # type: ignore
+    @cache
+    def session(self) -> Session:
+        url = self._get_post_url()
         auth_header = self._generate_auth_header()
-        async with aiohttp.ClientSession() as session:
-            await session.post(url, data=annotation_data, headers=auth_header)
+        return Session(url, headers=auth_header)
+
+    async def send_annotation(self, annotation_data: str) -> None:
+        await self.session.post(annotation_data)
 
     def _generate_auth_header(self) -> Dict[str, str]:
         auth_string = ("%s:%s" % (self.username, self.password)).encode()
         auth = base64.b64encode(auth_string)
-        return {"Authorization": "Basic %s" % auth.decode("utf-8")}
+        return {"Authorization": f"Basic {auth.decode('utf-8')}"}
+
+    async def _post(self, data: str) -> None:
+        await self.session.post(data=data)
+
+    def _get_post_url(self) -> str:
+        parsed_url = parse.ParseResult(
+            scheme=self.protocol,
+            netloc=f"{self.server}:{self.port}",
+            params="",
+            path="/write",
+            query=f"db={self.database}&precision=s",
+            fragment="",
+        )
+        return parse.urlunparse(parsed_url)
+
+    async def report_async(self,
+                           registry: HostMetricsRegistry = None,
+                           timestamp: int = None) -> None:
+        # async implementation of InfluxReporter.report_now
+        timestamp = timestamp if timestamp is not None else int(round(self.clock.time()))
+        metrics = (registry or self.registry).dump_metrics()
+        post_data = []
+        for key, metric_values in metrics.items():
+            if not self.prefix:
+                table = key
+            else:
+                table = f"{self.prefix}.{key}"
+            values = ",".join(["%s=%s" % (
+                k, v if type(v) is not str
+                else f'"{v}"')
+                for (k, v) in metric_values.items()]
+            )
+            line = f"{table} {values} {timestamp}"
+            post_data.append(line)
+        data = "\n".join(post_data)
+        await self._post(data)
 
 
 class BaseMetricsService(Service, MetricsServiceAPI):
@@ -87,9 +134,9 @@ class BaseMetricsService(Service, MetricsServiceAPI):
         self.manager.run_daemon_task(self.continuously_report)
         await self.manager.wait_finished()
 
-    def report_now(self) -> None:
+    async def report_now(self) -> None:
         try:
-            self._reporter.report_now()
+            await self._reporter.report_async()
         except (HTTPException, ConnectionError) as exc:
 
             # This method is usually called every few seconds. If there's an issue with the
