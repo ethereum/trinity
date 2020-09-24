@@ -176,19 +176,7 @@ class TaskQueue(Generic[TTask]):
             queueing, remaining = remaining[:open_slots], remaining[open_slots:]
 
             for task in queueing:
-                # There will always be room in _open_queue until _maxsize is reached
-                try:
-                    self._open_queue.put_nowait(task)
-                except asyncio.QueueFull as exc:
-                    task_idx = queueing.index(task)
-                    qsize = self._open_queue.qsize()
-                    raise asyncio.QueueFull(
-                        f'TaskQueue unsuccessful in adding task {task.original!r} ',
-                        f'because qsize={qsize}, '
-                        f'num_tasks={num_tasks}, maxsize={self._maxsize}, open_slots={open_slots}, '
-                        f'num queueing={len(queueing)}, len(_tasks)={len(self._tasks)}, task_idx='
-                        f'{task_idx}, queuing={queueing}, original msg: {exc}',
-                    )
+                await self._open_queue.put(task)
 
             original_queued = tuple(task.original for task in queueing)
             self._tasks.update(original_queued)
