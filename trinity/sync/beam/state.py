@@ -538,7 +538,9 @@ class BeamDownloader(Service, PeerSubscriber):
         for them. Without waiting for a response from the peer, continue and check if more
         predictive trie nodes are requested. Repeat indefinitely.
         """
-        while self.manager.is_running:
+        # If self._queen_tracker terminates we need to exit as well, so check that on every
+        # iteration.
+        while self.manager.is_running and self._queen_tracker.get_manager().is_running:
             try:
                 batch_id, hashes = await asyncio.wait_for(
                     self._maybe_useful_nodes.get(eth_constants.MAX_STATE_FETCH),

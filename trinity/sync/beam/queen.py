@@ -185,7 +185,11 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
         """
         Get the fastest peer that is not the queen.
         """
-        while self.manager.is_running:
+        # NOTE: We don't use the common `while self.is_running` idiom here because this method
+        # runs in a task belonging to the service that runs this service as a child, so that task
+        # has to monitor the child service (us) and stop calling this method when we're no longer
+        # running.
+        while True:
             peer = await self._peasants.get_fastest()
             if not peer.is_alive:
                 # drop any peers that aren't alive anymore
@@ -210,11 +214,6 @@ class QueeningQueue(Service, PeerSubscriber, QueenTrackerAPI):
                 continue
 
             return peer
-        # This should never happen as we run as a daemon and if we return before our caller it'd
-        # raise a DaemonTaskExit, but just in case we raise a CancelledError() to ensure our
-        # caller realizes we've stopped.
-        self.logger.error("Service ended before a queen peer could be elected")
-        raise asyncio.CancelledError()
 
     def insert_peer(self, peer: ETHPeer, delay: float = 0) -> None:
         if not peer.is_alive:
