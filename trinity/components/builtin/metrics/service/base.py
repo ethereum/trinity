@@ -1,16 +1,14 @@
 from abc import abstractmethod
 import base64
-import functools
 from http.client import HTTPException
 import time
 from typing import (
+    Awaitable,
     Callable,
     Dict,
-    TypeVar,
 )
 from urllib import parse
 
-from asks import Session
 from async_service import Service
 from pyformance.reporters.influx import InfluxReporter
 
@@ -18,37 +16,40 @@ from trinity.components.builtin.metrics.abc import MetricsServiceAPI
 from trinity.components.builtin.metrics.registry import HostMetricsRegistry
 from trinity._utils.logging import get_logger
 
-T = TypeVar('T')
-
-
-# temporary workaround to support decorator typing until we can use
-# @functools.cached_property with python version >= 3.8
-# https://github.com/python/mypy/issues/5858
-def cache(func: Callable[..., T]) -> T:
-    return functools.lru_cache()(func)  # type: ignore
-
 
 class ExtendedInfluxReporter(InfluxReporter):
     """
-    ``InfluxReporter`` extended to enable sending annotations to InfluxDB
+    ``InfluxReporter`` extended to send annotations and metrics
+    to InfluxDB asynchronously.
     """
-    @property  # type: ignore
-    @cache
-    def session(self) -> Session:
-        url = self._get_post_url()
-        auth_header = self._generate_auth_header()
-        return Session(url, headers=auth_header)
+
+    def __init__(self,
+                 database: str,
+                 username: str,
+                 password: str,
+                 protocol: str,
+                 port: int,
+                 server: str,
+                 registry: HostMetricsRegistry,
+                 async_post: Callable[[str], Awaitable[None]]) -> None:
+        super().__init__(
+            database=database,
+            username=username,
+            password=password,
+            protocol=protocol,
+            port=port,
+            server=server,
+            registry=registry,
+        )
+        self.async_post = async_post
 
     async def send_annotation(self, annotation_data: str) -> None:
-        await self.session.post(annotation_data)
+        await self.async_post(annotation_data)
 
     def _generate_auth_header(self) -> Dict[str, str]:
         auth_string = ("%s:%s" % (self.username, self.password)).encode()
         auth = base64.b64encode(auth_string)
         return {"Authorization": f"Basic {auth.decode('utf-8')}"}
-
-    async def _post(self, data: str) -> None:
-        await self.session.post(data=data)
 
     def _get_post_url(self) -> str:
         parsed_url = parse.ParseResult(
@@ -61,9 +62,9 @@ class ExtendedInfluxReporter(InfluxReporter):
         )
         return parse.urlunparse(parsed_url)
 
-    async def report_async(self,
-                           registry: HostMetricsRegistry = None,
-                           timestamp: int = None) -> None:
+    async def report_metrics(self,
+                             registry: HostMetricsRegistry = None,
+                             timestamp: int = None) -> None:
         # async implementation of InfluxReporter.report_now
         timestamp = timestamp if timestamp is not None else int(round(self.clock.time()))
         metrics = (registry or self.registry).dump_metrics()
@@ -81,7 +82,7 @@ class ExtendedInfluxReporter(InfluxReporter):
             line = f"{table} {values} {timestamp}"
             post_data.append(line)
         data = "\n".join(post_data)
-        await self._post(data)
+        await self.async_post(data)
 
 
 class BaseMetricsService(Service, MetricsServiceAPI):
@@ -100,20 +101,21 @@ class BaseMetricsService(Service, MetricsServiceAPI):
                  host: str,
                  port: int,
                  protocol: str,
-                 reporting_frequency: int):
+                 reporting_frequency: int) -> None:
         self._unreported_error: Exception = None
         self._last_time_reported: float = 0.0
         self._influx_server = influx_server
         self._reporting_frequency = reporting_frequency
         self._registry = HostMetricsRegistry(host)
-        self._reporter = ExtendedInfluxReporter(
-            registry=self._registry,
+        self.reporter = ExtendedInfluxReporter(
             database=influx_database,
             username=influx_user,
             password=influx_password,
             protocol=protocol,
             port=port,
-            server=influx_server,
+            server=self._influx_server,
+            registry=self._registry,
+            async_post=self.async_post,
         )
 
     logger = get_logger('trinity.components.builtin.metrics.MetricsService')
@@ -127,7 +129,10 @@ class BaseMetricsService(Service, MetricsServiceAPI):
         return self._registry
 
     async def send_annotation(self, annotation_data: str) -> None:
-        await self._reporter.send_annotation(annotation_data)
+        try:
+            await self.reporter.send_annotation(annotation_data)
+        except (HTTPException, ConnectionError) as exc:
+            self.logger.warning("Unable to report annotations: %s", exc)
 
     async def run(self) -> None:
         self.logger.info("Reporting metrics to %s", self._influx_server)
@@ -136,7 +141,7 @@ class BaseMetricsService(Service, MetricsServiceAPI):
 
     async def report_now(self) -> None:
         try:
-            await self._reporter.report_async()
+            await self.reporter.report_metrics()
         except (HTTPException, ConnectionError) as exc:
 
             # This method is usually called every few seconds. If there's an issue with the
@@ -168,4 +173,8 @@ class BaseMetricsService(Service, MetricsServiceAPI):
 
     @abstractmethod
     async def continuously_report(self) -> None:
+        ...
+
+    @abstractmethod
+    async def async_post(self, data: str) -> None:
         ...
