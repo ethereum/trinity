@@ -29,7 +29,7 @@ from p2p.constants import (
 )
 from p2p.discovery import (
     PreferredNodeDiscoveryService,
-    StaticDiscoveryService,
+    NoopDiscoveryService,
 )
 
 from trinity.config import Eth1AppConfig
@@ -69,9 +69,8 @@ class PeerDiscoveryComponent(TrioIsolatedComponent):
         db = DBClient.connect(config.database_ipc_path)
 
         if boot_info.args.disable_discovery:
-            discovery_service: async_service.Service = StaticDiscoveryService(
+            discovery_service: async_service.Service = NoopDiscoveryService(
                 event_bus,
-                config.preferred_nodes,
             )
         else:
             vm_config = config.get_app_config(Eth1AppConfig).get_chain_config().vm_configuration

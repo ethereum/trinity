@@ -77,8 +77,6 @@ from p2p.abc import AddressAPI, ENR_FieldProvider, NodeAPI
 from p2p.events import (
     PeerCandidatesRequest,
     RandomBootnodeRequest,
-    BaseRequestResponseEvent,
-    PeerCandidatesResponse,
 )
 from p2p.exceptions import (
     AlreadyWaitingDiscoveryResponse,
@@ -1192,54 +1190,6 @@ class PreferredNodeDiscoveryService(DiscoveryService):
             return should_skip_fn(node)
 
         return super().get_peer_candidates(do_not_skip_preferred, max_candidates)
-
-
-class StaticDiscoveryService(Service):
-    """A 'discovery' service that does not connect to any nodes."""
-    _static_peers: Tuple[NodeAPI, ...]
-    _event_bus: EndpointAPI
-
-    def __init__(
-            self,
-            event_bus: EndpointAPI,
-            static_peers: Sequence[NodeAPI]) -> None:
-        self.logger = get_logger('p2p.discovery.StaticDiscoveryService')
-        self._event_bus = event_bus
-        self._static_peers = tuple(static_peers)
-
-    async def handle_get_peer_candidates_requests(self) -> None:
-        async for event in self._event_bus.stream(PeerCandidatesRequest):
-            candidates = self._select_nodes(event.max_candidates)
-            await self._broadcast_nodes(event, candidates)
-
-    async def handle_get_random_bootnode_requests(self) -> None:
-        async for event in self._event_bus.stream(RandomBootnodeRequest):
-            candidates = self._select_nodes(1)
-            await self._broadcast_nodes(event, candidates)
-
-    def _select_nodes(self, max_nodes: int) -> Tuple[NodeAPI, ...]:
-        if max_nodes >= len(self._static_peers):
-            candidates = self._static_peers
-            self.logger.debug2("Replying with all static nodes: %r", candidates)
-        else:
-            candidates = tuple(random.sample(self._static_peers, max_nodes))
-            self.logger.debug2("Replying with subset of static nodes: %r", candidates)
-        return candidates
-
-    async def _broadcast_nodes(
-            self,
-            event: BaseRequestResponseEvent[PeerCandidatesResponse],
-            nodes: Sequence[NodeAPI]) -> None:
-        await self._event_bus.broadcast(
-            event.expected_response_type()(tuple(nodes)),
-            event.broadcast_config()
-        )
-
-    async def run(self) -> None:
-        self.manager.run_daemon_task(self.handle_get_peer_candidates_requests)
-        self.manager.run_daemon_task(self.handle_get_random_bootnode_requests)
-
-        await self.manager.wait_finished()
 
 
 class NoopDiscoveryService(Service):
