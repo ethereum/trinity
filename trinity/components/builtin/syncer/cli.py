@@ -47,9 +47,9 @@ def get_latest_clique_checkpoint_block_number(network_id: int, latest_block_numb
 
     if epoch_length > 0:
         for block_number in range(latest_block_number, 0, -1):
-                if block_number % epoch_length == 0:
-                    latest_clique_checkpoint_block_number = block_number
-                    break
+            if block_number % epoch_length == 0:
+                latest_clique_checkpoint_block_number = block_number
+                break
 
     return latest_clique_checkpoint_block_number
 
