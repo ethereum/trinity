@@ -58,6 +58,7 @@ class ConsensusAlgoDict(TypedDict):
     name: str
     epoch_length: Optional[int]
 
+
 NETWORK_CONSENSUS_ALGO: Dict[int, ConsensusAlgoDict] = {
     MAINNET_NETWORK_ID: {
         'name': ETHASH_ALGO,
