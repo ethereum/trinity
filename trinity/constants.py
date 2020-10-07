@@ -1,5 +1,9 @@
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
+
+from mypy_extensions import (
+    TypedDict,
+)
 
 from lahja import (
     BroadcastConfig,
@@ -45,6 +49,30 @@ FIRE_AND_FORGET_BROADCASTING = BroadcastConfig(require_subscriber=False)
 MAINNET_NETWORK_ID = 1
 ROPSTEN_NETWORK_ID = 3
 GOERLI_NETWORK_ID = 5
+
+# Network Consensus Algorithms
+ETHASH_ALGO = 'ethash'
+CLIQUE_ALGO = 'clique'
+
+class ConsensusAlgoDict(TypedDict):
+    name: str
+    epoch_length: Optional[int]
+
+NETWORK_CONSENSUS_ALGO: Dict[int, ConsensusAlgoDict] = {
+    MAINNET_NETWORK_ID: {
+        'name': ETHASH_ALGO,
+        'epoch_length': None,
+    },
+    ROPSTEN_NETWORK_ID: {
+        'name': ETHASH_ALGO,
+        'epoch_length': None,
+    },
+    GOERLI_NETWORK_ID: {
+        'name': CLIQUE_ALGO,
+        'epoch_length': 30000,   # https://eips.ethereum.org/EIPS/eip-225
+    },
+}
+
 
 # Default preferred enodes
 DEFAULT_PREFERRED_NODES: Dict[int, Tuple[Node, ...]] = {
