@@ -54,6 +54,7 @@ GOERLI_NETWORK_ID = 5
 ETHASH_ALGO = 'ethash'
 CLIQUE_ALGO = 'clique'
 
+
 class ConsensusAlgoDict(TypedDict):
     name: str
     epoch_length: Optional[int]
