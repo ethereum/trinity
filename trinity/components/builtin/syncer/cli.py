@@ -95,7 +95,10 @@ def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> 
     latest_block_number = etherscan_api.get_latest_block(network)
 
     if NETWORK_CONSENSUS_ALGO[network_id].get('name') == CLIQUE_ALGO:
-        checkpoint_block_number = get_latest_clique_checkpoint_block_number(network_id, latest_block_number - BLOCKS_FROM_TIP)
+        checkpoint_block_number = get_latest_clique_checkpoint_block_number(
+            network_id,
+            latest_block_number - BLOCKS_FROM_TIP
+        )
     else:
         checkpoint_block_number = latest_block_number - BLOCKS_FROM_TIP
 
