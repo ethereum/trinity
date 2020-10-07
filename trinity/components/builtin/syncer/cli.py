@@ -27,6 +27,11 @@ from .etherscan_api import (
     Network,
 )
 
+from trinity.constants import (
+    NETWORK_CONSENSUS_ALGO,
+    CLIQUE_ALGO,
+)
+
 
 def is_block_hash(value: str) -> bool:
     return is_hex(value) and len(remove_0x_prefix(HexStr(value))) == 64
@@ -34,6 +39,19 @@ def is_block_hash(value: str) -> bool:
 
 def remove_non_digits(value: str) -> str:
     return re.sub(r"\D", "", value)
+
+
+def get_latest_clique_checkpoint_block_number(network_id: int, latest_block_number: int) -> int:
+    epoch_length = NETWORK_CONSENSUS_ALGO[network_id].get('epoch_length')
+    latest_clique_checkpoint_block_number = latest_block_number
+
+    if epoch_length > 0:
+        for block_number in range(latest_block_number, 0, -1):
+                if block_number % epoch_length == 0:
+                    latest_clique_checkpoint_block_number = block_number
+                    break
+
+    return latest_clique_checkpoint_block_number
 
 
 def parse_checkpoint_uri(uri: str, network_id: int) -> Checkpoint:
@@ -75,7 +93,12 @@ def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> 
     etherscan_api = Etherscan(etherscan_api_key)
 
     latest_block_number = etherscan_api.get_latest_block(network)
-    checkpoint_block_number = latest_block_number - BLOCKS_FROM_TIP
+
+    if NETWORK_CONSENSUS_ALGO[network_id].get('name') == CLIQUE_ALGO:
+        checkpoint_block_number = get_latest_clique_checkpoint_block_number(network_id, latest_block_number - BLOCKS_FROM_TIP)
+    else:
+        checkpoint_block_number = latest_block_number - BLOCKS_FROM_TIP
+
     checkpoint_block_response = etherscan_api.get_block_by_number(checkpoint_block_number, network)
     checkpoint_score = to_int(hexstr=checkpoint_block_response['totalDifficulty'])
     checkpoint_hash = checkpoint_block_response['hash']
