@@ -45,16 +45,13 @@ def remove_non_digits(value: str) -> str:
     return re.sub(r"\D", "", value)
 
 
-def get_latest_clique_checkpoint_block_number(network_id: int, latest_block_number: int) -> int:
-    latest_clique_checkpoint_block_number = latest_block_number
-
+def get_latest_clique_checkpoint_block_number(latest_block_number: int) -> int:
     if EPOCH_LENGTH > 0:
         for block_number in range(latest_block_number, 0, -1):
             if block_number % EPOCH_LENGTH == 0:
-                latest_clique_checkpoint_block_number = block_number
-                break
+                return block_number
 
-    return latest_clique_checkpoint_block_number
+    return latest_block_number
 
 
 def parse_checkpoint_uri(uri: str, network_id: int) -> Checkpoint:
@@ -99,8 +96,7 @@ def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> 
 
     if PRECONFIGURED_NETWORKS[network_id].mining_method == MiningMethod.Clique:
         checkpoint_block_number = get_latest_clique_checkpoint_block_number(
-            network_id,
-            latest_block_number - BLOCKS_FROM_TIP
+            latest_block_number - BLOCKS_FROM_TIP,
         )
     else:
         checkpoint_block_number = latest_block_number - BLOCKS_FROM_TIP
