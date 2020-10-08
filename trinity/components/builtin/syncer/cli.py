@@ -7,6 +7,10 @@ from typing import (
     Any,
 )
 
+from eth.consensus.clique.constants import (
+    EPOCH_LENGTH
+)
+
 from eth_typing import (
     Hash32,
     HexStr,
@@ -20,16 +24,16 @@ from eth_utils import (
     ValidationError,
 )
 
+from trinity.network_configurations import (
+    MiningMethod,
+    PRECONFIGURED_NETWORKS,
+)
+
 from trinity.sync.common.checkpoint import Checkpoint
 
 from .etherscan_api import (
     Etherscan,
     Network,
-)
-
-from trinity.constants import (
-    NETWORK_CONSENSUS_ALGO,
-    CLIQUE_ALGO,
 )
 
 
@@ -42,12 +46,11 @@ def remove_non_digits(value: str) -> str:
 
 
 def get_latest_clique_checkpoint_block_number(network_id: int, latest_block_number: int) -> int:
-    epoch_length = NETWORK_CONSENSUS_ALGO[network_id].get('epoch_length')
     latest_clique_checkpoint_block_number = latest_block_number
 
-    if epoch_length > 0:
+    if EPOCH_LENGTH > 0:
         for block_number in range(latest_block_number, 0, -1):
-            if block_number % epoch_length == 0:
+            if block_number % EPOCH_LENGTH == 0:
                 latest_clique_checkpoint_block_number = block_number
                 break
 
@@ -94,7 +97,7 @@ def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> 
 
     latest_block_number = etherscan_api.get_latest_block(network)
 
-    if NETWORK_CONSENSUS_ALGO[network_id].get('name') == CLIQUE_ALGO:
+    if PRECONFIGURED_NETWORKS[network_id].mining_method == MiningMethod.Clique:
         checkpoint_block_number = get_latest_clique_checkpoint_block_number(
             network_id,
             latest_block_number - BLOCKS_FROM_TIP
