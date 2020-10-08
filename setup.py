@@ -48,6 +48,8 @@ deps = {
         "pyformance==0.4",
         # requests 2.21 is required to support idna 2.8 which is required elsewhere
         "requests>=2.21,<3",
+        # rlp supports an *optional* Rust backend which is why we install it explicitly here
+        "rlp[rust-backend]>=2,<3",
         "termcolor>=1.1.0,<2.0.0",
         "upnp-port-forward>=0.1.1,<0.2",
         "uvloop==0.14.0;platform_system=='Linux' or platform_system=='Darwin' or platform_system=='FreeBSD'",  # noqa: E501
