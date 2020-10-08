@@ -1,3 +1,4 @@
+import datetime
 import pathlib
 import requests
 import signal
@@ -5,6 +6,7 @@ import sys
 import tempfile
 import time
 import os
+import urllib
 import zipfile
 
 import pexpect
@@ -290,6 +292,7 @@ async def test_does_not_throw_errors_on_short_run(command, unused_tcp_port):
 
 @pytest.mark.asyncio
 async def test_does_not_throw_errors_with_metrics_reporting_enabled(unused_tcp_port):
+    init_time = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
     enabled_metrics_command = (
         'trinity',
         '--enable-metrics',
@@ -304,13 +307,15 @@ async def test_does_not_throw_errors_with_metrics_reporting_enabled(unused_tcp_p
             'MetricsService',
             'Reporting metrics to localhost',
         })
-        t1 = time.time()
-        while (time.time() - t1) < 30:
-            r = requests.get(
-                'http://localhost:8086/query?db=trinity&epoch=ns&q=select+%2A'
-                '+from+%22trinity.p2p%2Fpeers.counter%22'
+        encoded_init_time = urllib.parse.quote(f"'{init_time}'")
+        start_time = time.monotonic()
+        while (time.monotonic() - start_time) < 30:
+            response = requests.get(
+                'http://localhost:8086/query?db=trinity&epoch=ns&q=select+%2a'
+                '+from+%22trinity.p2p%2fpeers.counter%22'
+                f'+WHERE+time+%3E%3D+{encoded_init_time}'
             )
-            json_response = r.json()
+            json_response = response.json()
             if 'series' in json_response['results'][0]:
                 break
         else:
