@@ -1,6 +1,3 @@
-from enum import (
-    Enum,
-)
 import json
 from pathlib import Path
 from typing import (
@@ -60,6 +57,10 @@ from eth.vm.forks import (
     MuirGlacierVM,
 )
 
+from trinity.network_configurations import (
+    MiningMethod
+)
+
 
 RawEIP1085Dict = Dict[str, Any]
 
@@ -97,13 +98,6 @@ class GenesisParams(NamedTuple):
             'extra_data': self.extra_data,
             'gas_limit': self.gas_limit,
         }
-
-
-class MiningMethod(Enum):
-
-    NoProof = "noproof"
-    Ethash = "ethash"
-    Clique = "clique"
 
 
 class GenesisData(NamedTuple):

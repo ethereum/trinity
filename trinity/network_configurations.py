@@ -1,3 +1,7 @@
+from enum import (
+    Enum,
+)
+
 from typing import (
     NamedTuple,
     Tuple,
@@ -35,6 +39,13 @@ from trinity.constants import (
 )
 
 
+class MiningMethod(Enum):
+
+    NoProof = "noproof"
+    Ethash = "ethash"
+    Clique = "clique"
+
+
 class Eth1NetworkConfiguration(NamedTuple):
 
     network_id: int
@@ -44,6 +55,7 @@ class Eth1NetworkConfiguration(NamedTuple):
     bootnodes: Tuple[str, ...]
     genesis_header: BlockHeader
     vm_configuration: Tuple[Tuple[BlockNumber, Type[VirtualMachineAPI]], ...]
+    mining_method: MiningMethod
 
 
 PRECONFIGURED_NETWORKS = {
@@ -55,6 +67,7 @@ PRECONFIGURED_NETWORKS = {
         GOERLI_BOOTNODES,
         GOERLI_GENESIS_HEADER,
         GOERLI_VM_CONFIGURATION,
+        MiningMethod.Clique,
     ),
     MAINNET_NETWORK_ID: Eth1NetworkConfiguration(
         MAINNET_NETWORK_ID,
@@ -64,6 +77,7 @@ PRECONFIGURED_NETWORKS = {
         MAINNET_BOOTNODES,
         MAINNET_GENESIS_HEADER,
         MAINNET_VM_CONFIGURATION,
+        MiningMethod.Ethash,
     ),
     ROPSTEN_NETWORK_ID: Eth1NetworkConfiguration(
         ROPSTEN_NETWORK_ID,
@@ -73,5 +87,6 @@ PRECONFIGURED_NETWORKS = {
         ROPSTEN_BOOTNODES,
         ROPSTEN_GENESIS_HEADER,
         ROPSTEN_VM_CONFIGURATION,
+        MiningMethod.Ethash,
     ),
 }

@@ -68,7 +68,6 @@ from trinity._utils.eip1085 import (
     Account,
     GenesisData,
     GenesisParams,
-    MiningMethod,
     extract_genesis_data,
 )
 from trinity._utils.filesystem import (
@@ -88,7 +87,8 @@ from trinity.constants import (
     SYNC_LIGHT,
 )
 from trinity.network_configurations import (
-    PRECONFIGURED_NETWORKS
+    MiningMethod,
+    PRECONFIGURED_NETWORKS,
 )
 
 
