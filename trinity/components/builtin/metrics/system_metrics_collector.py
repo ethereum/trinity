@@ -92,6 +92,8 @@ def get_all_python_processes() -> Iterator[psutil.Process]:
     for process in psutil.process_iter():
         try:
             commands = process.cmdline()
+        except psutil.NoSuchProcess:
+            continue
         except psutil.AccessDenied:
             continue
         except psutil.ZombieProcess:
