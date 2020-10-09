@@ -37,6 +37,9 @@ from trinity.components.builtin.json_rpc.component import (
 from trinity.components.builtin.network_db.component import (
     NetworkDBComponent,
 )
+from trinity.components.builtin.new_block.component import (
+    NewBlockComponent,
+)
 from trinity.components.builtin.peer_discovery.component import (
     PeerDiscoveryComponent,
 )
@@ -78,6 +81,7 @@ ETH1_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     ExportBlockComponent,
     ImportBlockComponent,
     MetricsComponent,
+    NewBlockComponent,
     RequestServerComponent,
     SyncerComponent,
     TxComponent,

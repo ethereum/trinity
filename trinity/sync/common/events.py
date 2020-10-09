@@ -141,6 +141,15 @@ class StatelessBlockImportDone(BaseEvent):
 
 
 @dataclass
+class NewBlockImported(BaseEvent):
+    """
+    Event that is only emitted after a new block has been successfully imported.
+    """
+
+    block: BlockAPI
+
+
+@dataclass
 class DoStatelessBlockImport(BaseRequestResponseEvent[StatelessBlockImportDone]):
     """
     The syncer emits this event when it would like the Beam Sync process to
