@@ -5,6 +5,7 @@ import re
 import urllib
 from typing import (
     Any,
+    Dict,
 )
 
 from eth.consensus.clique.constants import (
@@ -72,8 +73,7 @@ def parse_checkpoint_uri(uri: str, network_id: int) -> Checkpoint:
 BLOCKS_FROM_TIP = 5000
 
 
-def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> Checkpoint:
-
+def get_checkpoint_block_byetherscan(network_id: int) -> Dict[str, Any]:
     try:
         network = Network(network_id)
     except ValueError:
@@ -101,7 +101,12 @@ def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> 
     else:
         checkpoint_block_number = latest_block_number - BLOCKS_FROM_TIP
 
-    checkpoint_block_response = etherscan_api.get_block_by_number(checkpoint_block_number, network)
+    return etherscan_api.get_block_by_number(checkpoint_block_number, network)
+
+
+def parse_byetherscan_uri(parsed: urllib.parse.ParseResult, network_id: int) -> Checkpoint:
+    checkpoint_block_response = get_checkpoint_block_byetherscan(network_id)
+
     checkpoint_score = to_int(hexstr=checkpoint_block_response['totalDifficulty'])
     checkpoint_hash = checkpoint_block_response['hash']
 

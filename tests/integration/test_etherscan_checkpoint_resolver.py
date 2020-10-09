@@ -1,9 +1,13 @@
 import pytest
 
-from eth_utils import encode_hex
+from eth_utils import (
+    encode_hex,
+    to_int,
+)
 from trinity.components.builtin.syncer.cli import (
     parse_checkpoint_uri,
     is_block_hash,
+    get_checkpoint_block_byetherscan,
 )
 from trinity.constants import (
     MAINNET_NETWORK_ID,
@@ -30,3 +34,14 @@ def test_parse_checkpoint(uri, network_id, min_expected_score):
     checkpoint = parse_checkpoint_uri(uri, network_id)
     assert checkpoint.score >= min_expected_score
     assert is_block_hash(encode_hex(checkpoint.block_hash))
+
+
+@pytest.mark.parametrize(
+    'network_id, epoch_length',
+    (
+        (GOERLI_NETWORK_ID, 30000),
+    )
+)
+def test_get_clique_checkpoint_block_number(network_id, epoch_length):
+    block = get_checkpoint_block_byetherscan(network_id)
+    assert to_int(hexstr=block.get('number')) % epoch_length == 0
