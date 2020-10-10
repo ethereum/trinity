@@ -39,7 +39,7 @@ def test_parse_checkpoint(uri, network_id, min_expected_score):
 @pytest.mark.parametrize(
     'network_id, epoch_length',
     (
-        (GOERLI_NETWORK_ID, 30000),
+        (GOERLI_NETWORK_ID, 30000), # https://eips.ethereum.org/EIPS/eip-225#specification
     )
 )
 def test_get_clique_checkpoint_block_number(network_id, epoch_length):
