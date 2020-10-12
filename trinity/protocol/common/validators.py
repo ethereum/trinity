@@ -1,6 +1,7 @@
 from abc import abstractmethod
 import collections
 from typing import (
+    Any,
     Sequence,
     Tuple,
     cast,
@@ -155,3 +156,8 @@ class BaseBlockHeadersValidator(ValidatorAPI[Tuple[BlockHeaderAPI, ...]]):
                 'Duplicate headers returned.\n'
                 f'- duplicates: {humanize_integer_sequence(sorted(duplicates))}\n'
             )
+
+
+def match_payload_request_id(request: Any, response: Any) -> None:
+    if request.request_id != response.payload.request_id:
+        raise ValidationError("Request `id` does not match")

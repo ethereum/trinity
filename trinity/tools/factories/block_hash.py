@@ -9,7 +9,7 @@ from typing import Any, Type
 from eth_typing import Hash32
 
 
-class BlockHashFactory(factory.Factory):
+class Hash32Factory(factory.Factory):
     class Meta:
         model = bytes
 
@@ -19,3 +19,6 @@ class BlockHashFactory(factory.Factory):
                 *args: Any,
                 **kwargs: Any) -> Hash32:
         return Hash32(model_class(secrets.token_bytes(32)))
+
+
+BlockHashFactory = Hash32Factory

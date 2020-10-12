@@ -7,7 +7,10 @@ from typing import (
 
 from lahja import EndpointAPI
 
-from eth_typing import BlockNumber
+from eth_typing import (
+    BlockNumber,
+    Hash32,
+)
 
 from eth.abc import BlockHeaderAPI
 from eth.constants import GENESIS_BLOCK_NUMBER
@@ -23,6 +26,7 @@ from trinity.protocol.common.peer import (
     BaseChainPeerPool,
 )
 from trinity.protocol.common.peer_pool_event_bus import (
+    async_fire_and_forget,
     BaseProxyPeer,
     BaseProxyPeerPool,
     PeerPoolEventServer,
@@ -33,6 +37,21 @@ from trinity.protocol.common.typing import (
     ReceiptsBundles,
     NodeDataBundles,
 )
+from trinity.protocol.wit.api import WitnessAPI
+from trinity.protocol.wit.commands import (
+    BlockWitnessHashes,
+    GetBlockWitnessHashes,
+)
+from trinity.protocol.wit.events import (
+    BlockWitnessHashesEvent,
+    GetBlockWitnessHashesEvent,
+    GetBlockWitnessHashesRequest,
+    SendBlockWitnessHashesEvent,
+)
+from trinity.protocol.wit.handshaker import WitnessHandshaker
+from trinity.protocol.wit.proto import WitnessProtocol
+from trinity.protocol.wit.proxy import ProxyWitAPI
+
 from . import forkid
 
 from .api import AnyETHAPI, ETHV63API, ETHV65API, ETHV64API
@@ -84,20 +103,26 @@ class ETHPeer(BaseChainPeer):
     supported_sub_protocols: Tuple[Type[BaseETHProtocol], ...] = (
         ETHProtocolV63,
         ETHProtocolV64,
-        ETHProtocolV65
+        ETHProtocolV65,
     )
     sub_proto: BaseETHProtocol = None
     eth_api: AnyETHAPI
+    # Will raise AttributeError if the peer does not support the Witness protocol.
+    wit_api: WitnessAPI
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
         return super().get_behaviors() + (
             ETHV63API().as_behavior(),
             ETHV64API().as_behavior(),
-            ETHV65API().as_behavior()
+            ETHV65API().as_behavior(),
+            WitnessAPI().as_behavior(),
         )
 
     def _pre_run(self) -> None:
         super()._pre_run()
+
+        if self.connection.has_protocol(WitnessProtocol):
+            self.wit_api = self.connection.get_logic(WitnessAPI.name, WitnessAPI)
 
         if self.connection.has_protocol(ETHProtocolV63):
             self.eth_api = self.connection.get_logic(ETHV63API.name, ETHV63API)
@@ -116,7 +141,13 @@ class ETHPeer(BaseChainPeer):
         """
         basic_stats = super().get_extra_stats()
         eth_stats = self.eth_api.get_extra_stats()
-        return basic_stats + eth_stats
+
+        if self.connection.has_logic(WitnessProtocol.name):
+            wit_stats = self.wit_api.get_extra_stats()
+        else:
+            wit_stats = ()
+
+        return basic_stats + eth_stats + wit_stats
 
 
 class ETHProxyPeer(BaseProxyPeer):
@@ -129,10 +160,13 @@ class ETHProxyPeer(BaseProxyPeer):
     def __init__(self,
                  session: SessionAPI,
                  event_bus: EndpointAPI,
-                 eth_api: ProxyETHAPI) -> None:
+                 eth_api: ProxyETHAPI,
+                 wit_api: ProxyWitAPI,
+                 ) -> None:
         super().__init__(session, event_bus)
 
         self.eth_api = eth_api
+        self.wit_api = wit_api
 
     @classmethod
     def from_session(cls,
@@ -142,7 +176,12 @@ class ETHProxyPeer(BaseProxyPeer):
         return cls(
             session,
             event_bus,
-            ProxyETHAPI(session, event_bus, broadcast_config)
+            ProxyETHAPI(session, event_bus, broadcast_config),
+            # XXX: For now all peers will have a ProxyWitAPI as here we can't find out whether or
+            # not they support the wit API, but that shouldn't be a problem as this is currently
+            # used only by the RequestServer component, and we shouldn't get any witness requests
+            # from a peer that does not support the wit protocol.
+            ProxyWitAPI(session, event_bus, broadcast_config),
         )
 
 
@@ -152,7 +191,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
     async def get_handshakers(self) -> Tuple[HandshakerAPI[Any], ...]:
         headerdb = self.context.headerdb
         head = await headerdb.coro_get_canonical_head()
-        total_difficulty = await headerdb.coro_get_score(head.hash)
+        total_difficulty = await self.context.headerdb.coro_get_score(head.hash)
         genesis_hash = await headerdb.coro_get_canonical_block_hash(
             BlockNumber(GENESIS_BLOCK_NUMBER))
 
@@ -185,10 +224,15 @@ class ETHPeerFactory(BaseChainPeerFactory):
         # support. The `highest_eth_protocol` is what the handshake will report to the other peer
         # as our highest supported version. We need to pass this as a parameter to ensure the
         # handshake reports the version that is configured on the ETHPeer class.
-        return (
+        eth_handshakers = (
             ETHV63Handshaker(handshake_v63_params),
             ETHHandshaker(handshake_params, head.block_number, fork_blocks, highest_eth_protocol)
         )
+
+        return eth_handshakers + self._get_wit_handshakers()
+
+    def _get_wit_handshakers(self) -> Tuple[HandshakerAPI[Any], ...]:
+        return (WitnessHandshaker(),)
 
 
 class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
@@ -206,6 +250,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         NewBlock,
         NewPooledTransactionHashes,
         GetPooledTransactionsV65,
+        GetBlockWitnessHashes,
+        BlockWitnessHashes,
     })
 
     # SendX events that need to be forwarded to peer.sub_proto.send(event.command)
@@ -225,6 +271,9 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         for event_type in self.send_event_types:
             self.run_daemon_event(event_type, self.handle_send_command)
 
+        self.run_daemon_event(
+            SendBlockWitnessHashesEvent, self.handle_send_block_witness_hashes_command)
+
         self.run_daemon_request(GetBlockHeadersRequest, self.handle_get_block_headers_request)
         self.run_daemon_request(GetReceiptsRequest, self.handle_get_receipts_request)
         self.run_daemon_request(GetBlockBodiesRequest, self.handle_get_block_bodies_request)
@@ -233,8 +282,30 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
             GetPooledTransactionsRequest,
             self.handle_get_pooled_transactions_request
         )
+        self.run_daemon_request(
+            GetBlockWitnessHashesRequest, self.handle_get_block_witness_hashes_request)
 
         await super().run()
+
+    @async_fire_and_forget
+    async def handle_send_block_witness_hashes_command(
+            self, event: SendBlockWitnessHashesEvent) -> None:
+        peer = self.get_peer(event.session)
+        if not hasattr(peer, 'wit_api'):
+            self.logger.error(
+                "Cannot send witness hashes; %s does not support the Witness protocol", peer)
+            return
+        peer.wit_api.protocol.send(event.command)
+
+    async def handle_get_block_witness_hashes_request(
+            self,
+            event: GetBlockWitnessHashesRequest) -> Tuple[Hash32, ...]:
+        peer = self.get_peer(event.session)
+        if not hasattr(peer, 'wit_api'):
+            self.logger.error(
+                "Cannot get witness hashes from %s, it does not support the Witness protocol", peer)
+            return tuple()
+        return await peer.wit_api.get_block_witness_hashes(event.block_hash, event.timeout)
 
     async def handle_get_block_headers_request(
             self,
@@ -332,6 +403,16 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
         elif isinstance(cmd, GetPooledTransactionsV65):
             await self.event_bus.broadcast(
                 GetPooledTransactionsEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING
+            )
+        elif isinstance(cmd, GetBlockWitnessHashes):
+            await self.event_bus.broadcast(
+                GetBlockWitnessHashesEvent(session, cmd),
+                FIRE_AND_FORGET_BROADCASTING
+            )
+        elif isinstance(cmd, BlockWitnessHashes):
+            await self.event_bus.broadcast(
+                BlockWitnessHashesEvent(session, cmd),
                 FIRE_AND_FORGET_BROADCASTING
             )
         else:
