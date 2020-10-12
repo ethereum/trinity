@@ -5,9 +5,14 @@ from typing import (
     Type,
 )
 
+from cached_property import cached_property
+
 from lahja import EndpointAPI
 
-from eth_typing import BlockNumber
+from eth_typing import (
+    BlockNumber,
+    Hash32,
+)
 
 from eth.abc import BlockHeaderAPI
 from eth.constants import GENESIS_BLOCK_NUMBER
@@ -16,6 +21,7 @@ from lahja import (
 )
 
 from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI
+from p2p.handshake import Handshaker
 
 from trinity.protocol.common.peer import (
     BaseChainPeer,
@@ -33,6 +39,11 @@ from trinity.protocol.common.typing import (
     ReceiptsBundles,
     NodeDataBundles,
 )
+from trinity.protocol.fh.api import FirehoseAPI
+from trinity.protocol.fh.commands import StatusPayload as FirehoseStatusPayload
+from trinity.protocol.fh.handshaker import FirehoseHandshaker
+from trinity.protocol.fh.proto import FirehoseProtocol
+
 from . import forkid
 
 from .api import AnyETHAPI, ETHV63API, ETHV65API, ETHV64API
@@ -82,7 +93,8 @@ class ETHPeer(BaseChainPeer):
     supported_sub_protocols: Tuple[Type[BaseETHProtocol], ...] = (
         ETHProtocolV63,
         ETHProtocolV64,
-        ETHProtocolV65
+        ETHProtocolV65,
+        FirehoseProtocol,
     )
     sub_proto: BaseETHProtocol = None
     eth_api: AnyETHAPI
@@ -91,7 +103,8 @@ class ETHPeer(BaseChainPeer):
         return super().get_behaviors() + (
             ETHV63API().as_behavior(),
             ETHV64API().as_behavior(),
-            ETHV65API().as_behavior()
+            ETHV65API().as_behavior(),
+            FirehoseAPI().as_behavior(),
         )
 
     def _pre_run(self) -> None:
@@ -106,6 +119,10 @@ class ETHPeer(BaseChainPeer):
         else:
             raise Exception("Unreachable code")
 
+    @cached_property
+    def fh_api(self) -> FirehoseAPI:
+        return self.connection.get_logic(FirehoseAPI.name, FirehoseAPI)
+
     def get_extra_stats(self) -> Tuple[str, ...]:
         """
         Return extra stats for this peer.
@@ -114,7 +131,13 @@ class ETHPeer(BaseChainPeer):
         """
         basic_stats = super().get_extra_stats()
         eth_stats = self.eth_api.get_extra_stats()
-        return basic_stats + eth_stats
+
+        if self.connection.has_logic(FirehoseAPI.name):
+            fh_stats = self.fh_api.get_extra_stats()
+        else:
+            fh_stats = ()
+
+        return basic_stats + eth_stats + fh_stats
 
 
 class ETHProxyPeer(BaseProxyPeer):
@@ -149,10 +172,19 @@ class ETHPeerFactory(BaseChainPeerFactory):
 
     async def get_handshakers(self) -> Tuple[HandshakerAPI[Any], ...]:
         headerdb = self.context.headerdb
-        head = await headerdb.coro_get_canonical_head()
-        total_difficulty = await headerdb.coro_get_score(head.hash)
         genesis_hash = await headerdb.coro_get_canonical_block_hash(
             BlockNumber(GENESIS_BLOCK_NUMBER))
+
+        eth_handshakers = await self._get_eth_handshakers(genesis_hash)
+        firehose_handshakers = await self._get_firehose_handshakers(genesis_hash)
+
+        return eth_handshakers + firehose_handshakers
+
+    async def _get_eth_handshakers(self, genesis_hash: Hash32) -> Tuple[Handshaker, ...]:
+        headerdb = self.context.headerdb
+
+        head = await headerdb.coro_get_canonical_head()
+        total_difficulty = await headerdb.coro_get_score(head.hash)
 
         handshake_v63_params = StatusV63Payload(
             head_hash=head.hash,
@@ -187,6 +219,15 @@ class ETHPeerFactory(BaseChainPeerFactory):
             ETHV63Handshaker(handshake_v63_params),
             ETHHandshaker(handshake_params, head.block_number, fork_blocks, highest_eth_protocol)
         )
+
+    async def _get_firehose_handshakers(
+            self, genesis_hash: Hash32) -> Tuple[FirehoseHandshaker, ...]:
+        handshake_params = FirehoseStatusPayload(
+            version=FirehoseProtocol.version,
+            network_id=self.context.network_id,
+            genesis_hash=genesis_hash,
+        )
+        return (FirehoseHandshaker(handshake_params), )
 
 
 class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
