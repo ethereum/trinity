@@ -7,6 +7,7 @@ from eth_utils import encode_hex, to_dict
 
 from lahja import EndpointAPI
 
+from p2p.disconnect import DisconnectReason
 from p2p.kademlia import Node
 from p2p.typing import Capabilities
 from p2p.validation import validate_enode_uri
@@ -16,6 +17,7 @@ from trinity.config import TrinityConfig, Eth1AppConfig, Eth1ChainConfig
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.protocol.common.events import (
     ConnectToNodeCommand,
+    DisconnectFromPeerCommand,
     GetConnectedPeersRequest,
     GetProtocolCapabilitiesRequest,
     PeerInfo,
@@ -55,6 +57,22 @@ class Admin(Eth1ChainRPCModule):
             ConnectToNodeCommand(Node.from_uri(uri)),
             TO_NETWORKING_BROADCAST_CONFIG
         )
+
+    async def removePeer(self, uri: str) -> bool:
+        validate_enode_uri(uri, require_ip=True)
+        peer_to_remove = Node.from_uri(uri)
+
+        response = await self.event_bus.request(GetConnectedPeersRequest())
+        for connected_peer_info in response.peers:
+            if peer_to_remove == connected_peer_info.session.remote:
+                await self.event_bus.broadcast(
+                    DisconnectFromPeerCommand(
+                        connected_peer_info,
+                        DisconnectReason.DISCONNECT_REQUESTED,
+                    ),
+                )
+                return True
+        return False
 
     async def nodeInfo(self) -> RpcNodeInfoResponse:
         response = await self.event_bus.request(

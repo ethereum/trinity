@@ -20,12 +20,28 @@ from p2p.peer import BasePeer
 from p2p.typing import Capabilities
 
 
+class PeerInfo(NamedTuple):
+    session: SessionAPI
+    capabilities: Capabilities
+    client_version_string: str
+    inbound: bool
+
+
 @dataclass
 class ConnectToNodeCommand(BaseEvent):
     """
     Event that wraps a node URI that the pool should connect to.
     """
     remote: NodeAPI
+
+
+@dataclass
+class DisconnectFromPeerCommand(BaseEvent):
+    """
+    Command to wrap a node session that the pool should disconnect from.
+    """
+    peer_info: PeerInfo
+    reason: DisconnectReason
 
 
 @dataclass
@@ -70,13 +86,6 @@ class PeerLeftEvent(BaseEvent):
     Event broadcasted when a peer left the pool.
     """
     session: SessionAPI
-
-
-class PeerInfo(NamedTuple):
-    session: SessionAPI
-    capabilities: Capabilities
-    client_version_string: str
-    inbound: bool
 
 
 @dataclass
