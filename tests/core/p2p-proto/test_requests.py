@@ -15,11 +15,14 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
     ETHPeerPoolEventServer,
 )
+from trinity.protocol.wit.db import AsyncWitnessDB
+from trinity.protocol.wit.servers import WitRequestServer
 from trinity.protocol.eth.proto import ETHProtocolV65
 from trinity.protocol.eth.servers import ETHRequestServer
 
 from trinity.tools.factories import (
     ChainContextFactory,
+    Hash32Factory,
     LatestETHPeerPairFactory,
     ALL_PEER_PAIR_FACTORIES,
 )
@@ -74,10 +77,16 @@ async def test_proxy_peer_requests(request,
             server_event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ))
 
+        base_db = chaindb_20.db
         await stack.enter_async_context(background_asyncio_service(ETHRequestServer(
             server_event_bus,
             TO_NETWORKING_BROADCAST_CONFIG,
-            AsyncChainDB(chaindb_20.db)
+            AsyncChainDB(base_db),
+        )))
+        await stack.enter_async_context(background_asyncio_service(WitRequestServer(
+            server_event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            base_db,
         )))
 
         client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
@@ -106,6 +115,14 @@ async def test_proxy_peer_requests(request,
 
         node_data = await proxy_peer.eth_api.get_node_data((block_header.state_root,))
         assert node_data[0][0] == block_header.state_root
+
+        block_hash = block_header.hash
+        node_hashes = tuple(Hash32Factory.create_batch(5))
+        # Populate the server's witness DB so that it can reply to our request.
+        wit_db = AsyncWitnessDB(base_db)
+        wit_db.persist_witness_hashes(block_hash, node_hashes)
+        response = await proxy_peer.wit_api.get_block_witness_hashes(block_hash)
+        assert set(response) == set(node_hashes)
 
 
 @pytest.mark.asyncio

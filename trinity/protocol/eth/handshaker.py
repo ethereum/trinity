@@ -105,7 +105,7 @@ class ETHV63Handshaker(Handshaker[ETHProtocolV63]):
 
         Raise HandshakeFailure if the handshake is not successful.
         """
-
+        self.logger.debug("Performing %s handshake with %s", protocol, multiplexer.remote)
         protocol.send(StatusV63(self.handshake_params))
 
         async for cmd in multiplexer.stream_protocol_messages(protocol):
@@ -144,6 +144,7 @@ class ETHHandshaker(Handshaker[BaseETHProtocol]):
         Raise HandshakeFailure if the handshake is not successful.
         """
 
+        self.logger.debug("Performing %s handshake with %s", protocol, multiplexer.remote)
         protocol.send(Status(self.handshake_params))
 
         async for cmd in multiplexer.stream_protocol_messages(protocol):

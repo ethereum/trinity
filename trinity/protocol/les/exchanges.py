@@ -14,6 +14,9 @@ from trinity._utils.les import (
     gen_request_id,
 )
 
+from trinity.protocol.common.validators import (
+    match_payload_request_id,
+)
 from .commands import (
     BlockHeaders,
     GetBlockHeaders,
@@ -28,7 +31,6 @@ from .trackers import (
 )
 from .validators import (
     GetBlockHeadersValidator,
-    match_payload_request_id,
 )
 
 TResult = TypeVar('TResult')
