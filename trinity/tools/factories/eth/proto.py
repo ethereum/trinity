@@ -1,5 +1,6 @@
 from p2p.abc import HandshakerAPI
 from trinity.protocol.eth.proto import ETHProtocolV63, ETHProtocolV64, ETHProtocolV65
+from trinity.protocol.wit.proto import WitnessProtocol
 
 try:
     import factory
@@ -52,7 +53,8 @@ class ETHV63PeerFactory(ETHPeerFactory):
         return tuple(
             shaker for shaker in await super().get_handshakers()
             # mypy doesn't know these have a `handshake_params` property
-            if shaker.handshake_params.version == ETHProtocolV63.version  # type: ignore
+            if (shaker.protocol_class == WitnessProtocol or
+                shaker.handshake_params.version == ETHProtocolV63.version)  # type: ignore
         )
 
 

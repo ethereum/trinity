@@ -3,7 +3,7 @@ from argparse import (
     _SubParsersAction,
 )
 
-from async_service import Service, background_asyncio_service
+from async_service import Service
 from lahja import EndpointAPI
 
 from eth.db.backends.base import BaseAtomicDB
@@ -23,6 +23,8 @@ from trinity.extensibility import (
 )
 from trinity.protocol.eth.servers import ETHRequestServer
 from trinity.protocol.les.servers import LightRequestServer
+from trinity.protocol.wit.servers import WitRequestServer
+from trinity._utils.services import run_background_asyncio_services
 
 
 class RequestServerComponent(AsyncioIsolatedComponent):
@@ -46,7 +48,7 @@ class RequestServerComponent(AsyncioIsolatedComponent):
         base_db = DBClient.connect(trinity_config.database_ipc_path)
         with base_db:
             if trinity_config.has_app_config(Eth1AppConfig):
-                server = self.make_eth1_request_server(
+                eth_server = self.make_eth1_request_server(
                     trinity_config.get_app_config(Eth1AppConfig),
                     base_db,
                     event_bus,
@@ -54,8 +56,10 @@ class RequestServerComponent(AsyncioIsolatedComponent):
             else:
                 raise Exception("Trinity config must have eth1 config")
 
-            async with background_asyncio_service(server) as manager:
-                await manager.wait_finished()
+            wit_server = self.make_wit_request_server(
+                trinity_config.get_app_config(Eth1AppConfig), base_db, event_bus)
+
+            await run_background_asyncio_services([eth_server, wit_server])
 
     @classmethod
     def make_eth1_request_server(cls,
@@ -83,3 +87,10 @@ class RequestServerComponent(AsyncioIsolatedComponent):
             raise Exception(f"Unsupported Database Mode: {app_config.database_mode}")
 
         return server
+
+    @classmethod
+    def make_wit_request_server(cls,
+                                app_config: Eth1AppConfig,
+                                base_db: BaseAtomicDB,
+                                event_bus: EndpointAPI) -> Service:
+        return WitRequestServer(event_bus, TO_NETWORKING_BROADCAST_CONFIG, base_db)
