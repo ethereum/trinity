@@ -1,0 +1,1 @@
+Add support for the ``eth_chainId`` RPC endpoint.
