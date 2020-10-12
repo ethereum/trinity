@@ -1,11 +1,9 @@
-from typing import cast
-
 from cached_property import cached_property
 
 from eth_typing import Hash32
 from eth_utils import encode_hex
 
-from p2p.abc import MultiplexerAPI, ProtocolAPI
+from p2p.abc import MultiplexerAPI
 from p2p.exceptions import (
     HandshakeFailure,
 )
@@ -39,7 +37,7 @@ class FirehoseHandshakeReceipt(HandshakeReceipt):
         return self.handshake_params.version
 
 
-class FirehoseHandshaker(Handshaker):
+class FirehoseHandshaker(Handshaker[FirehoseProtocol]):
     protocol_class = FirehoseProtocol
 
     def __init__(self, handshake_params: StatusPayload) -> None:
@@ -47,12 +45,11 @@ class FirehoseHandshaker(Handshaker):
 
     async def do_handshake(self,
                            multiplexer: MultiplexerAPI,
-                           protocol: ProtocolAPI) -> FirehoseHandshakeReceipt:
+                           protocol: FirehoseProtocol) -> FirehoseHandshakeReceipt:
         """Perform the handshake for the sub-protocol agreed with the remote peer.
 
         Raises HandshakeFailure if the handshake is not successful.
         """
-        protocol = cast(FirehoseProtocol, protocol)
         protocol.send(Status(self.handshake_params))
 
         async for cmd in multiplexer.stream_protocol_messages(protocol):

@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Awaitable, Callable, List, Tuple
+from typing import Awaitable, Callable, List, Tuple
 from trinity._utils.logging import get_logger
 
 from cached_property import cached_property
@@ -11,7 +11,6 @@ from eth_utils import (
 from lru import LRU
 
 from p2p.abc import ConnectionAPI
-from p2p.exchange import ExchangeAPI
 from p2p.logic import Application, CommandHandler
 from p2p.qualifiers import HasProtocol
 
@@ -66,10 +65,8 @@ class RecentWitnesses(CommandHandler[NewBlockWitnessHashes]):
 
 
 class FirehoseAPI(Application):
-    name = 'fh'  # TODO: Is this always the same value as in fh/proto?
+    name = 'fh'
     qualifier = HasProtocol(FirehoseProtocol)
-
-    witnesses: RecentWitnesses
 
     def __init__(self) -> None:
         self.logger = get_logger('trinity.protocol.fh.api.FirehoseAPI')
@@ -77,14 +74,12 @@ class FirehoseAPI(Application):
         self.add_child_behavior(self.witnesses.as_behavior())
 
     @cached_property
-    def exchanges(self) -> Tuple[ExchangeAPI[Any, Any, Any], ...]:
-        return ()
-
-    @cached_property
     def protocol(self) -> FirehoseProtocol:
         return self.connection.get_protocol_by_type(FirehoseProtocol)
 
     def get_extra_stats(self) -> Tuple[str, ...]:
+        # TODO: Can't use BasePerformanceTracker in RecentWitnesses for performance stats as
+        # that's not an exchange. Need another tracker here.
         return tuple()
 
     def send_new_block_witness_hashes(
@@ -108,6 +103,7 @@ class FirehoseAPI(Application):
                     len(set(node_hashes)),
                 )
         else:
-            # Trying the new API that might not exist yet
+            self.logger.info(
+                "Sending %d hashes of witness to: %s", len(node_hashes), self.connection)
             payload = NewBlockWitnessHashesPayload(header_hash, node_hashes)
             self.protocol.send(NewBlockWitnessHashes(payload))

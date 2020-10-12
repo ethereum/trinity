@@ -5,8 +5,6 @@ from typing import (
     Type,
 )
 
-from cached_property import cached_property
-
 from lahja import EndpointAPI
 
 from eth_typing import (
@@ -21,7 +19,6 @@ from lahja import (
 )
 
 from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI
-from p2p.handshake import Handshaker
 
 from trinity.protocol.common.peer import (
     BaseChainPeer,
@@ -94,10 +91,10 @@ class ETHPeer(BaseChainPeer):
         ETHProtocolV63,
         ETHProtocolV64,
         ETHProtocolV65,
-        FirehoseProtocol,
     )
     sub_proto: BaseETHProtocol = None
     eth_api: AnyETHAPI
+    fh_api: FirehoseAPI
 
     def get_behaviors(self) -> Tuple[BehaviorAPI, ...]:
         return super().get_behaviors() + (
@@ -110,6 +107,9 @@ class ETHPeer(BaseChainPeer):
     def _pre_run(self) -> None:
         super()._pre_run()
 
+        if self.connection.has_protocol(FirehoseProtocol):
+            self.fh_api = self.connection.get_logic(FirehoseAPI.name, FirehoseAPI)
+
         if self.connection.has_protocol(ETHProtocolV63):
             self.eth_api = self.connection.get_logic(ETHV63API.name, ETHV63API)
         elif self.connection.has_protocol(ETHProtocolV64):
@@ -118,10 +118,6 @@ class ETHPeer(BaseChainPeer):
             self.eth_api = self.connection.get_logic(ETHV65API.name, ETHV65API)
         else:
             raise Exception("Unreachable code")
-
-    @cached_property
-    def fh_api(self) -> FirehoseAPI:
-        return self.connection.get_logic(FirehoseAPI.name, FirehoseAPI)
 
     def get_extra_stats(self) -> Tuple[str, ...]:
         """
@@ -176,11 +172,11 @@ class ETHPeerFactory(BaseChainPeerFactory):
             BlockNumber(GENESIS_BLOCK_NUMBER))
 
         eth_handshakers = await self._get_eth_handshakers(genesis_hash)
-        firehose_handshakers = await self._get_firehose_handshakers(genesis_hash)
+        firehose_handshakers = self._get_firehose_handshakers(genesis_hash)
 
         return eth_handshakers + firehose_handshakers
 
-    async def _get_eth_handshakers(self, genesis_hash: Hash32) -> Tuple[Handshaker, ...]:
+    async def _get_eth_handshakers(self, genesis_hash: Hash32) -> Tuple[HandshakerAPI[Any], ...]:
         headerdb = self.context.headerdb
 
         head = await headerdb.coro_get_canonical_head()
@@ -220,7 +216,7 @@ class ETHPeerFactory(BaseChainPeerFactory):
             ETHHandshaker(handshake_params, head.block_number, fork_blocks, highest_eth_protocol)
         )
 
-    async def _get_firehose_handshakers(
+    def _get_firehose_handshakers(
             self, genesis_hash: Hash32) -> Tuple[FirehoseHandshaker, ...]:
         handshake_params = FirehoseStatusPayload(
             version=FirehoseProtocol.version,
