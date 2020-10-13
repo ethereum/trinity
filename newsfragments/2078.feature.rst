@@ -1,0 +1,1 @@
+Ensure the cached_property decorator does not result anymore in return values having Any as type.
