@@ -172,7 +172,8 @@ def resolve_common_log_level_or_error(args: argparse.Namespace) -> str:
             """
         )
     else:
-        return common_log_level
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return common_log_level  # type: ignore
 
 
 LoggingResult = Tuple[Tuple[logging.Handler, ...], int, Dict[str, int]]
