@@ -97,7 +97,6 @@ from trinity._utils.headers import body_for_header_exists
 
 from .backfill import BeamStateBackfill
 from .witness import (
-    BeamStateWitnessCollector,
     WitnessBroadcaster,
 )
 
@@ -161,7 +160,6 @@ class BeamSyncer(Service):
         )
 
         self._backfiller = BeamStateBackfill(db, peer_pool)
-        self._witness_collector = BeamStateWitnessCollector(db, peer_pool)
         self._witness_broadcaster = WitnessBroadcaster(peer_pool, event_bus)
 
         if enable_state_backfill:
@@ -185,7 +183,6 @@ class BeamSyncer(Service):
             db,
             self._state_downloader,
             self._backfiller,
-            self._witness_collector,
             event_bus,
         )
         self._launchpoint_header_syncer = HeaderLaunchpointSyncer(self._header_syncer)
@@ -277,7 +274,6 @@ class BeamSyncer(Service):
         # Start state downloader service
         self.manager.run_daemon_child_service(self._state_downloader)
 
-        self.manager.run_daemon_child_service(self._witness_collector)
         self.manager.run_daemon_child_service(self._witness_broadcaster)
 
         # run sync until cancelled
@@ -737,14 +733,12 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             db: DatabaseAPI,
             state_getter: BeamDownloader,
             backfiller: BeamStateBackfill,
-            witness_collector: BeamStateWitnessCollector,
             event_bus: EndpointAPI) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamBlockImporter')
         self._chain = chain
         self._db = db
         self._state_downloader = state_getter
         self._backfiller = backfiller
-        self._witness_collector = witness_collector
 
         self._blocks_imported = 0
         self._preloaded_account_state = 0
@@ -755,9 +749,6 @@ class BeamBlockImporter(BaseBlockImporter, Service):
 
         self._event_bus = event_bus
 
-    async def _load_witness_hashes(self, header: BlockHeaderAPI, urgent: bool) -> None:
-        await self._witness_collector.trigger_download(header.hash, header.block_number, urgent)
-
     async def import_block(self, block: BlockAPI) -> BlockImportResult:
         self.logger.debug(
             "Beam importing %s (%d txns, %s gas) ...",
@@ -765,7 +756,6 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             len(block.transactions),
             f'{block.header.gas_used:,d}',
         )
-        self.manager.run_task(self._load_witness_hashes, block.header, True)
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)
         new_account_nodes, collection_time = await self._load_address_state(
@@ -813,10 +803,7 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             FIRE_AND_FORGET_BROADCASTING
         )
 
-        # XXX: Figure out if this change is intentional or was a temporary hack by carver while
-        # testing.
-        # self._backfiller.set_root_hash(header, parent_state_root)
-        self.manager.run_task(self._load_witness_hashes, header, False)
+        self._backfiller.set_root_hash(header, parent_state_root)
 
     async def _preview_address_load(
             self,
