@@ -107,6 +107,8 @@ class ETHPeer(BaseChainPeer):
     def _pre_run(self) -> None:
         super()._pre_run()
 
+        # XXX: Not sure if it's better to have self.fh_api raise AttributeError or be None when
+        # there's no firehose support
         if self.connection.has_protocol(FirehoseProtocol):
             self.fh_api = self.connection.get_logic(FirehoseAPI.name, FirehoseAPI)
 

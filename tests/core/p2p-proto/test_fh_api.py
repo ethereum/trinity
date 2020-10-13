@@ -2,9 +2,13 @@ import asyncio
 
 import pytest
 
+from p2p.tools.factories.peer import PeerPairFactory
+
+from trinity.protocol.eth.peer import ETHPeerFactory
 from trinity.protocol.fh.api import FirehoseAPI
 from trinity.tools.factories import (
     BlockHashFactory,
+    ChainContextFactory,
     LatestETHPeerPairFactory,
 )
 
@@ -16,6 +20,24 @@ async def test_fh_api_property():
         fh_api = alice.connection.get_logic(FirehoseAPI.name, FirehoseAPI)
 
         assert fh_api is alice.fh_api
+
+
+@pytest.mark.asyncio
+async def test_no_fh_api_property_when_firehose_not_supported():
+    class ETHPeerFactoryWithoutFirehose(ETHPeerFactory):
+        def _get_firehose_handshakers(self, genesis_hash, head, our_forkid, fork_blocks):
+            return tuple()
+
+    peer_context = ChainContextFactory()
+    peer_pair_factory = PeerPairFactory(
+        alice_peer_context=peer_context,
+        alice_peer_factory_class=ETHPeerFactory,
+        bob_peer_context=peer_context,
+        bob_peer_factory_class=ETHPeerFactoryWithoutFirehose,
+    )
+    async with peer_pair_factory as (alice, bob):
+        assert not hasattr(bob, 'fh_api')
+        assert not hasattr(alice, 'fh_api')
 
 
 @pytest.mark.asyncio
