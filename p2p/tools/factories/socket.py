@@ -7,4 +7,5 @@ def get_open_port() -> int:
     s.listen(1)
     port = s.getsockname()[1]
     s.close()
-    return port
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return port  # type: ignore

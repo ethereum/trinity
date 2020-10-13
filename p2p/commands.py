@@ -56,7 +56,11 @@ class RLPCodec(SerializationCodecAPI[TCommandPayload]):
         self._process_inbound_payload_fn = process_inbound_payload_fn or identity
 
     def encode(self, payload: TCommandPayload) -> bytes:
-        return rlp.encode(self._process_outbound_payload_fn(payload), sedes=self.sedes)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return rlp.encode(  # type: ignore
+            self._process_outbound_payload_fn(payload),
+            sedes=self.sedes,
+        )
 
     def decode(self, data: bytes) -> TCommandPayload:
         try:
@@ -72,10 +76,12 @@ class RLPCodec(SerializationCodecAPI[TCommandPayload]):
 #
 class SnappyCodec(CompressionCodecAPI):
     def compress(self, data: bytes) -> bytes:
-        return snappy.compress(data)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return snappy.compress(data)  # type: ignore
 
     def decompress(self, data: bytes) -> bytes:
-        return snappy.decompress(data)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return snappy.decompress(data)  # type: ignore
 
 
 class NoCompressionCodec(CompressionCodecAPI):

@@ -194,7 +194,8 @@ class HandshakeInitiator(HandshakeBase):
             return _pad_eip8_data(data)
         else:
             # S || H(ephemeral-pubk) || pubk || nonce || 0x0
-            return (
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return (  # type: ignore
                 S +
                 keccak(self.ephemeral_pubkey.to_bytes()) +
                 self.pubkey.to_bytes() +

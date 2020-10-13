@@ -15,7 +15,8 @@ class Message(MessageAPI):
     def __eq__(self, other: Any) -> bool:
         if type(other) is not type(self):
             return False
-        return self.header == other.header and self.body == other.body
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self.header == other.header and self.body == other.body  # type: ignore
 
     def __str__(self) -> str:
         return f"Message(header={self.header.hex()}, body={self.body.hex()})"

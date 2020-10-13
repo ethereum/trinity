@@ -220,7 +220,8 @@ class DiscoveryService(Service):
             pong_time = self._last_pong_at[node_id]
         except KeyError:
             return False
-        return pong_time > (time.monotonic() - constants.KADEMLIA_BOND_EXPIRATION)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return pong_time > (time.monotonic() - constants.KADEMLIA_BOND_EXPIRATION)  # type: ignore
 
     async def consume_datagrams(self) -> None:
         while self.manager.is_running:
@@ -1273,7 +1274,8 @@ def _pack_v4(cmd_id: int, payload: Sequence[Any], privkey: datatypes.PrivateKey)
     encoded_data = cmd_id_bytes + rlp.encode(payload)
     signature = privkey.sign_msg(encoded_data)
     message_hash = keccak(signature.to_bytes() + encoded_data)
-    return message_hash + signature.to_bytes() + encoded_data
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return message_hash + signature.to_bytes() + encoded_data  # type: ignore
 
 
 def _unpack_v4(message: bytes) -> Tuple[datatypes.PublicKey, int, Tuple[Any, ...], Hash32]:
@@ -1293,7 +1295,8 @@ def _unpack_v4(message: bytes) -> Tuple[datatypes.PublicKey, int, Tuple[Any, ...
 
 
 def _get_msg_expiration() -> bytes:
-    return rlp.sedes.big_endian_int.serialize(int(time.time() + EXPIRATION))
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return rlp.sedes.big_endian_int.serialize(int(time.time() + EXPIRATION))  # type: ignore
 
 
 TMsg = TypeVar("TMsg")
@@ -1365,7 +1368,8 @@ class ExpectedResponseChannels(Generic[TMsg]):
 
 
 def node_id_from_pubkey(pubkey: eth_keys.keys.PublicKey) -> NodeID:
-    return keccak(pubkey.to_bytes())
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return keccak(pubkey.to_bytes())  # type: ignore
 
 
 def get_external_ipaddress(logger: ExtendedDebugLogger) -> ipaddress.IPv4Address:
@@ -1376,6 +1380,8 @@ def get_external_ipaddress(logger: ExtendedDebugLogger) -> ipaddress.IPv4Address
             for item in addresses:
                 iface_addr = ipaddress.ip_address(item['addr'])
                 if iface_addr.is_global:
-                    return iface_addr
+                    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+                    return iface_addr  # type: ignore
     logger.info("No internet-facing address found on any interface, using fallback one")
-    return ipaddress.ip_address('127.0.0.1')
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return ipaddress.ip_address('127.0.0.1')  # type: ignore

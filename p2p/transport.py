@@ -59,7 +59,8 @@ HEADER_DATA_SEDES = rlp.sedes.CountableList(rlp.sedes.big_endian_int, max_length
 @functools.lru_cache(256)
 def _decode_header_data(data: ByteString) -> Tuple[int, int]:
     header_data = rlp.decode(data, sedes=HEADER_DATA_SEDES, strict=False)
-    return header_data
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return header_data  # type: ignore
 
 
 class Transport(TransportAPI):
@@ -312,8 +313,8 @@ class Transport(TransportAPI):
         mac_secret = self._egress_mac.digest()[:HEADER_LEN]
         self._egress_mac.update(sxor(self._mac_enc(mac_secret), fmac_seed))
         frame_mac = self._egress_mac.digest()[:HEADER_LEN]
-
-        return header_ciphertext + header_mac + frame_ciphertext + frame_mac
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return header_ciphertext + header_mac + frame_ciphertext + frame_mac  # type: ignore
 
     def _decrypt_header(self, data: bytes) -> bytes:
         if len(data) != HEADER_LEN + MAC_LEN:
@@ -358,4 +359,5 @@ class Transport(TransportAPI):
         # to prefix it with an extra byte.
         encoded_size = b'\x00' + header[:3]
         (size,) = struct.unpack(b'>I', encoded_size)
-        return size
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return size  # type: ignore

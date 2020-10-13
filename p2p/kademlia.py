@@ -66,19 +66,23 @@ class Address(AddressAPI):
 
     @property
     def is_loopback(self) -> bool:
-        return self._ip.is_loopback
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._ip.is_loopback  # type: ignore
 
     @property
     def is_unspecified(self) -> bool:
-        return self._ip.is_unspecified
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._ip.is_unspecified  # type: ignore
 
     @property
     def is_reserved(self) -> bool:
-        return self._ip.is_reserved
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._ip.is_reserved  # type: ignore
 
     @property
     def is_private(self) -> bool:
-        return self._ip.is_private
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._ip.is_private  # type: ignore
 
     @property
     def ip(self) -> str:
@@ -87,7 +91,8 @@ class Address(AddressAPI):
     @cached_property
     def ip_packed(self) -> str:
         """The binary representation of this IP address."""
-        return self._ip.packed
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._ip.packed  # type: ignore
 
     def __eq__(self, other: Any) -> bool:
         return (self.ip, self.udp_port) == (other.ip, other.udp_port)
@@ -213,7 +218,8 @@ class Node(NodeAPI):
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, self.__class__):
             return super().__eq__(other)
-        return self.pubkey == other.pubkey
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self.pubkey == other.pubkey  # type: ignore
 
     def __ne__(self, other: Any) -> bool:
         return not self == other

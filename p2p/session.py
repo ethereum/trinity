@@ -23,4 +23,5 @@ class Session(SessionAPI):
     def __eq__(self, other: Any) -> bool:
         if not type(self) is type(other):
             return False
-        return self.id == other.id
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self.id == other.id  # type: ignore

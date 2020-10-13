@@ -29,7 +29,8 @@ class BaseQualifier(ABC):
 
 
 def qualifier(fn: QualifierFn) -> QualifierFn:
-    return type(
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return type(  # type: ignore
         f'Qualifier[{fn.__name__}]',
         (BaseQualifier,),
         {'__call__': staticmethod(fn)},

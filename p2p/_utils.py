@@ -55,7 +55,8 @@ def get_devp2p_cmd_id(msg: bytes) -> int:
     The cmd_id, also known as the payload type, is always the first entry of the RLP, interpreted
     as an integer.
     """
-    return rlp.decode(msg[:1], sedes=rlp.sedes.big_endian_int)
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return rlp.decode(msg[:1], sedes=rlp.sedes.big_endian_int)  # type: ignore
 
 
 def trim_middle(arbitrary_string: str, max_length: int) -> str:

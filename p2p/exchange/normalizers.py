@@ -9,7 +9,8 @@ class BaseNormalizer(NormalizerAPI[TResponseCommand, TResult]):
 
 
 def _pick_payload(cmd: TResponseCommand) -> TResult:
-    return cmd.payload
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return cmd.payload  # type: ignore
 
 
 class DefaultNormalizer(NormalizerAPI[TResponseCommand, TResult]):

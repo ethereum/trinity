@@ -21,7 +21,8 @@ class PrivateKeyFactory(factory.Factory):
 
 
 def _mk_public_key_bytes() -> bytes:
-    return PrivateKeyFactory().public_key.to_bytes()
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return PrivateKeyFactory().public_key.to_bytes()  # type: ignore
 
 
 class PublicKeyFactory(factory.Factory):

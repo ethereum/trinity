@@ -99,7 +99,8 @@ def encrypt(data: bytes, pubkey: datatypes.PublicKey, shared_mac_data: bytes = b
 
     # the MAC of a message (called the tag) as per SEC 1, 3.5.
     tag = hmac_sha256(key_mac, msg[1 + PUBKEY_LEN:] + shared_mac_data)
-    return msg + tag
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return msg + tag  # type: ignore
 
 
 def decrypt(data: bytes, privkey: datatypes.PrivateKey, shared_mac_data: bytes = b'') -> bytes:
