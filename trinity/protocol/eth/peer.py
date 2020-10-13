@@ -170,17 +170,25 @@ class ETHPeerFactory(BaseChainPeerFactory):
         headerdb = self.context.headerdb
         genesis_hash = await headerdb.coro_get_canonical_block_hash(
             BlockNumber(GENESIS_BLOCK_NUMBER))
+        head = await headerdb.coro_get_canonical_head()
 
-        eth_handshakers = await self._get_eth_handshakers(genesis_hash)
-        firehose_handshakers = self._get_firehose_handshakers(genesis_hash)
+        fork_blocks = forkid.extract_fork_blocks(self.context.vm_configuration)
+        our_forkid = forkid.make_forkid(genesis_hash, head.block_number, fork_blocks)
+
+        eth_handshakers = await self._get_eth_handshakers(
+            genesis_hash, head, our_forkid, fork_blocks)
+        firehose_handshakers = self._get_firehose_handshakers(
+            genesis_hash, head, our_forkid, fork_blocks)
 
         return eth_handshakers + firehose_handshakers
 
-    async def _get_eth_handshakers(self, genesis_hash: Hash32) -> Tuple[HandshakerAPI[Any], ...]:
-        headerdb = self.context.headerdb
-
-        head = await headerdb.coro_get_canonical_head()
-        total_difficulty = await headerdb.coro_get_score(head.hash)
+    async def _get_eth_handshakers(
+            self,
+            genesis_hash: Hash32,
+            head: BlockHeaderAPI,
+            our_forkid: forkid.ForkID,
+            fork_blocks: Tuple[BlockNumber, ...]) -> Tuple[HandshakerAPI[Any], ...]:
+        total_difficulty = await self.context.headerdb.coro_get_score(head.hash)
 
         handshake_v63_params = StatusV63Payload(
             head_hash=head.hash,
@@ -189,9 +197,6 @@ class ETHPeerFactory(BaseChainPeerFactory):
             network_id=self.context.network_id,
             version=ETHProtocolV63.version,
         )
-
-        fork_blocks = forkid.extract_fork_blocks(self.context.vm_configuration)
-        our_forkid = forkid.make_forkid(genesis_hash, head.block_number, fork_blocks)
 
         handshake_params = StatusPayload(
             head_hash=head.hash,
@@ -217,13 +222,17 @@ class ETHPeerFactory(BaseChainPeerFactory):
         )
 
     def _get_firehose_handshakers(
-            self, genesis_hash: Hash32) -> Tuple[FirehoseHandshaker, ...]:
+            self,
+            genesis_hash: Hash32,
+            head: BlockHeaderAPI,
+            our_forkid: forkid.ForkID,
+            fork_blocks: Tuple[BlockNumber, ...]) -> Tuple[FirehoseHandshaker, ...]:
         handshake_params = FirehoseStatusPayload(
             version=FirehoseProtocol.version,
             network_id=self.context.network_id,
-            genesis_hash=genesis_hash,
+            fork_id=our_forkid,
         )
-        return (FirehoseHandshaker(handshake_params), )
+        return (FirehoseHandshaker(handshake_params, genesis_hash, head.block_number, fork_blocks),)
 
 
 class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):

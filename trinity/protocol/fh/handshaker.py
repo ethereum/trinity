@@ -1,7 +1,8 @@
+from typing import Tuple
+
 from cached_property import cached_property
 
-from eth_typing import Hash32
-from eth_utils import encode_hex
+from eth_typing import BlockNumber, Hash32
 
 from p2p.abc import MultiplexerAPI
 from p2p.exceptions import (
@@ -10,7 +11,12 @@ from p2p.exceptions import (
 from p2p.handshake import Handshaker
 from p2p.receipt import HandshakeReceipt
 
-from trinity.exceptions import WrongGenesisFailure, WrongNetworkFailure
+from trinity.protocol.eth.forkid import ForkID, validate_forkid
+from trinity.exceptions import (
+    WrongForkIDFailure,
+    WrongNetworkFailure,
+    BaseForkIDValidationError,
+)
 
 from .commands import Status, StatusPayload
 from .proto import FirehoseProtocol
@@ -25,12 +31,12 @@ class FirehoseHandshakeReceipt(HandshakeReceipt):
         self.handshake_params = handshake_params
 
     @cached_property
-    def genesis_hash(self) -> Hash32:
-        return self.handshake_params.genesis_hash
-
-    @cached_property
     def network_id(self) -> int:
         return self.handshake_params.network_id
+
+    @cached_property
+    def fork_id(self) -> ForkID:
+        return self.handshake_params.fork_id
 
     @cached_property
     def version(self) -> int:
@@ -40,8 +46,15 @@ class FirehoseHandshakeReceipt(HandshakeReceipt):
 class FirehoseHandshaker(Handshaker[FirehoseProtocol]):
     protocol_class = FirehoseProtocol
 
-    def __init__(self, handshake_params: StatusPayload) -> None:
+    def __init__(self,
+                 handshake_params: StatusPayload,
+                 genesis_hash: Hash32,
+                 head_number: BlockNumber,
+                 fork_blocks: Tuple[BlockNumber, ...]) -> None:
         self.handshake_params = handshake_params
+        self.genesis_hash = genesis_hash
+        self.head_number = head_number
+        self.fork_blocks = fork_blocks
 
     async def do_handshake(self,
                            multiplexer: MultiplexerAPI,
@@ -59,7 +72,7 @@ class FirehoseHandshaker(Handshaker[FirehoseProtocol]):
             remote_params = StatusPayload(
                 version=cmd.payload.version,
                 network_id=cmd.payload.network_id,
-                genesis_hash=cmd.payload.genesis_hash,
+                fork_id=cmd.payload.fork_id,
             )
             receipt = FirehoseHandshakeReceipt(protocol, remote_params)
 
@@ -70,12 +83,18 @@ class FirehoseHandshaker(Handshaker[FirehoseProtocol]):
                     f"({self.handshake_params.network_id}), disconnecting"
                 )
 
-            if receipt.handshake_params.genesis_hash != self.handshake_params.genesis_hash:
-                raise WrongGenesisFailure(
-                    f"{multiplexer.remote} genesis "
-                    f"({encode_hex(receipt.handshake_params.genesis_hash)}) does "
-                    f"not match ours ({encode_hex(self.handshake_params.genesis_hash)}), "
-                    f"disconnecting"
+            try:
+                validate_forkid(
+                    receipt.fork_id,
+                    self.genesis_hash,
+                    self.head_number,
+                    self.fork_blocks,
+                )
+            except BaseForkIDValidationError as exc:
+                raise WrongForkIDFailure(
+                    f"{multiplexer.remote} forkid "
+                    f"({receipt.handshake_params.fork_id}) is incompatible to ours ({exc})"
+                    f"({self.handshake_params.fork_id}), disconnecting"
                 )
 
             break

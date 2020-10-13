@@ -1,28 +1,28 @@
-from rlp import sedes
 from typing import (
     NamedTuple,
     Tuple,
 )
 
-
 from eth_typing import Hash32
+
+from rlp import sedes
 
 from p2p.commands import BaseCommand, RLPCodec
 
+from trinity.protocol.eth.forkid import ForkID
 from trinity.rlp.sedes import hash_sedes
 
 STATUS_STRUCTURE = sedes.List((
     sedes.big_endian_int,
     sedes.big_endian_int,
-    hash_sedes,
+    ForkID,
 ))
 
 
 class StatusPayload(NamedTuple):
     version: int
     network_id: int
-    # TODO: replace genesis_hash with the fork_id defined in eth/64
-    genesis_hash: Hash32
+    fork_id: ForkID
 
 
 class Status(BaseCommand[StatusPayload]):
