@@ -59,6 +59,13 @@ WARN_AFTER_QUEEN_STARVED = 0.1
 # backfill requests? This is called "tests" because we are importantly
 # checking how fast a peer is.
 GAP_BETWEEN_TESTS = 0.25
+
+# How many seconds should we leave the witness-downloading peer idle,
+# in between requests? The more time spent here, the quicker that a
+# newly discovered peer can be picked up as a queen. The less time
+# spent here, the faster that witnesses will download.
+GAP_BETWEEN_WITNESS_DOWNLOADS = 0
+
 # One reason to leave this as non-zero is: if we are regularly switching
 # the "queen peer" then we want to improve the chances that the new queen
 # (formerly backfill) is idle and ready to serve urgent nodes.
@@ -112,3 +119,14 @@ BLOCK_BACKFILL_IDLE_TIME = PREDICTED_BLOCK_TIME * 500
 # Preview blocks might be paused, waiting on data that comes in through another avenue, like
 #   urgent data requests, or backfill. Use the following period to check for new data.
 CHECK_PREVIEW_STATE_TIMEOUT = 20.0
+
+# How many pending witness node hash tasks can we have?
+# For reference: on mainnet, 10k hashes for a proof is on the high end
+# for typical block. So 200 * 10k would allow for queuing up to 200 blocks.
+# If we're queuing much more than that, we've almost certainly fallen behind,
+# and need to pivot anyway.
+WITNESS_QUEUE_SIZE = 10000 * 200
+
+# What is the expected history of how long a peer can serve state data?
+# denominated in number of blocks
+NUM_BLOCKS_WITH_DOWNLOADABLE_STATE = 60

@@ -1,11 +1,14 @@
 from abc import abstractmethod
 import asyncio
 from concurrent import futures
+import functools
 from operator import attrgetter
 import time
 from typing import (
     Any,
     Callable,
+    Dict,
+    Iterable,
     Optional,
     Sequence,
     Tuple,
@@ -20,7 +23,6 @@ from eth.abc import (
     AtomicDatabaseAPI,
     BlockAPI,
     BlockHeaderAPI,
-    BlockImportResult,
     ComputationAPI,
     ConsensusContextAPI,
     ReceiptAPI,
@@ -42,6 +44,7 @@ from eth_typing import (
 from eth_utils import (
     ExtendedDebugLogger,
     ValidationError,
+    humanize_hash,
     humanize_seconds,
 )
 from eth_utils.toolz import (
@@ -72,6 +75,9 @@ from trinity.sync.common.events import (
     MissingStorageResult,
     NewBlockImported,
     StatelessBlockImportDone,
+)
+from trinity.sync.common.types import (
+    TChainReorg,
 )
 from trinity._utils.logging import get_logger
 
@@ -484,14 +490,21 @@ def _broadcast_import_complete(
         event_bus: EndpointAPI,
         block: BlockAPI,
         broadcast_config: BroadcastConfig,
-        future: 'asyncio.Future[BlockImportResult]') -> None:
+        future: 'asyncio.Future[Tuple[TChainReorg, Tuple[Hash32, ...]]]') -> None:
+    if future.cancelled():
+        reorg, witness_hashes, exception = None, None, None
+    else:
+        reorg, witness_hashes = future.result()
+        exception = future.exception()
+
     completed = not future.cancelled()
     event_bus.broadcast_nowait(
         StatelessBlockImportDone(
             block,
             completed,
-            future.result() if completed else None,
-            future.exception() if completed else None,
+            reorg,
+            witness_hashes,
+            exception,
         ),
         broadcast_config,
     )
@@ -504,17 +517,31 @@ def _broadcast_import_complete(
         )
 
 
+def slice_hashes(hash_list: bytes) -> Iterable[Hash32]:
+    """Split a concatenaded stream of hashes into an iterable list of hashes"""
+    for index in range(0, len(hash_list), 32):
+        next_hash = hash_list[index:index + 32]
+        if len(next_hash) != 32:
+            raise TypeError(
+                f"Value is not a hash, because it's only {len(next_hash)} long: {next_hash!r}"
+            )
+        else:
+            yield cast(Hash32, next_hash)
+
+
 def partial_import_block(beam_chain: BeamChain,
                          block: BlockAPI,
-                         ) -> Callable[[], BlockImportResult]:  # noqa: E501
+                         ) -> Callable[[], Tuple[TChainReorg, Tuple[Hash32, ...]]]:
     """
     Get an argument-free function that will import the given block.
     """
-    def _import_block() -> BlockImportResult:
+    def _import_block() -> Tuple[TChainReorg, Tuple[Hash32, ...]]:
         t = Timer()
         beam_chain.clear_first_vm()
         try:
+            # TODO: merge py-evm changes that save witness hashes
             reorg_info = beam_chain.import_block(block, perform_validation=True)
+            # TODO maybe modify py-evm to return the witness metadata, to avoid saving it to DB
         except StateUnretrievable as exc:
             import_time = t.elapsed
 
@@ -531,19 +558,34 @@ def partial_import_block(beam_chain: BeamChain,
             )
             raise
         else:
+            # Collect witness trie node hashes needed to import block
+            witness_key = b'witnesshashes:' + block.hash
+            db = beam_chain.chaindb.db
+            witness_hashes: Tuple[Hash32, ...]
+            if witness_key not in db:
+                beam_chain.logger.warning(
+                    "Witness data for block %s not found",
+                    humanize_hash(block.hash),
+                )
+                witness_hashes = ()
+            else:
+                witness_hashes_concat = db[witness_key]
+                witness_hashes = tuple(slice_hashes(witness_hashes_concat))
+
             import_time = t.elapsed
 
             vm = beam_chain.get_first_vm()
             beam_stats = vm.get_beam_stats()
             beam_chain.logger.debug(
-                "BeamImport %s (%d txns) total time: %.1f s, %%exec %.0f, stats: %s",
+                "BeamImport %s (%d txns) total time: %.1f s, %%exec %.0f, %%jit %.1f, stats: %s",
                 block.header,
                 len(block.transactions),
                 import_time,
                 100 * (import_time - beam_stats.data_pause_time) / import_time,
+                100 * (beam_stats.num_nodes) / len(witness_hashes) if witness_hashes else 100,
                 beam_stats,
             )
-            return reorg_info
+            return reorg_info, witness_hashes
 
     return _import_block
 
@@ -586,13 +628,17 @@ class BlockImportServer(Service):
             #   that the in-progress block is complete. Then below, we do not send back
             #   the import completion (so the import server won't get triggered again).
             try:
-                await asyncio.shield(import_completion)
+                _reorg, witness_hashes = await asyncio.shield(import_completion)
             except StateUnretrievable as exc:
                 self.logger.debug(
                     "Not broadcasting about %s Beam import. Listening for next request, because %r",
                     event.block,
                     exc
                 )
+            except ValidationError:
+                # TODO emit some new InvalidBlockError event?
+                import rlp
+                beam_chain.chaindb.db[b'bad-block:' + event.block.hash] = rlp.encode(event.block)
             else:
                 if self.manager.is_running:
                     _broadcast_import_complete(
@@ -614,6 +660,7 @@ def partial_trigger_missing_state_downloads(
     Get an argument-free function that will trigger missing state downloads,
     by executing all the transactions, in the context of the given header.
     """
+    @exit_quietly_on(BrokenPipeError)
     def _trigger_missing_state_downloads() -> None:
         vm = beam_chain.get_vm(header)
         unused_header = header.copy(gas_used=0)
@@ -665,6 +712,21 @@ def partial_trigger_missing_state_downloads(
             )
 
     return _trigger_missing_state_downloads
+
+
+# TODO: Write tests for this...
+def exit_quietly_on(*exceptions: Type[BaseException]) -> Callable[..., Any]:
+    def _decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(fn)
+        def _wrapped_fn(*args: Iterable[Any], **kwargs: Dict[str, Any]) -> Any:
+            try:
+                return fn(*args, **kwargs)
+            except exceptions:
+                pass
+
+        return _wrapped_fn
+
+    return _decorator
 
 
 def partial_speculative_execute(

@@ -9,7 +9,6 @@ from typing import (
 
 from eth.abc import (
     BlockAPI,
-    BlockImportResult,
     BlockHeaderAPI,
     SignedTransactionAPI,
 )
@@ -25,7 +24,8 @@ from lahja import (
 )
 
 from trinity.sync.common.types import (
-    SyncProgress
+    SyncProgress,
+    TChainReorg,
 )
 
 
@@ -136,7 +136,8 @@ class StatelessBlockImportDone(BaseEvent):
 
     block: BlockAPI
     completed: bool
-    result: BlockImportResult
+    reorg: TChainReorg
+    witness_hashes: Tuple[Hash32, ...]
     exception: BaseException
 
 

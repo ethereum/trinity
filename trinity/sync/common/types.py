@@ -1,10 +1,17 @@
 from typing import (
     NamedTuple,
+    Tuple,
 )
 
 from eth_typing import (
     BlockNumber,
 )
+
+from eth.abc import (
+    BlockAPI,
+)
+
+TChainReorg = Tuple[BlockAPI, Tuple[BlockAPI, ...], Tuple[BlockAPI, ...]]
 
 
 class SyncProgress(NamedTuple):
