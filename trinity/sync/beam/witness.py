@@ -1,5 +1,3 @@
-import asyncio
-from concurrent.futures import CancelledError
 from typing import (
     Any,
     FrozenSet,
@@ -19,7 +17,6 @@ from eth.abc import (
 from eth_typing import Hash32
 
 from p2p.abc import CommandAPI
-from p2p.disconnect import DisconnectReason
 from p2p.exceptions import PeerConnectionLost
 from p2p.peer import BasePeer, PeerSubscriber
 from trinity._utils.logging import get_logger
@@ -67,13 +64,6 @@ class WitnessBroadcaster(Service, PeerSubscriber):
             self.logger.warning("Removing Firehose peer: %s", peer)
             self._firehose_peers.remove(cast(ETHPeer, peer))
 
-    async def _broadcast_new_witnesses(self) -> None:
-        async for event in self._event_bus.stream(StatelessBlockImportDone):
-            if not event.witness_hashes:
-                self.logger.warning("Witness metadata for %s is empty", event.block)
-            else:
-                await self._broadcast_witness_metadata(event.block, event.witness_hashes)
-
     async def _broadcast_witness_metadata(
             self, block: BlockAPI, witness_hashes: Tuple[Hash32, ...]) -> None:
 
@@ -87,32 +77,24 @@ class WitnessBroadcaster(Service, PeerSubscriber):
             )
 
         for peer in eligible_peers:
-            self.logger.info("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
+            self.logger.debug("Sending %d hashes of witness to: %s", len(witness_hashes), peer)
             try:
                 peer.fh_api.send_new_block_witness_hashes(block.hash, witness_hashes)
-            except asyncio.TimeoutError:
-                self.logger.debug("Timed out broadcasting witness to %s", peer)
-                continue
-            except CancelledError:
-                self.logger.debug("Peer %s witness broadcast cancelled", peer)
-                raise
             except PeerConnectionLost:
-                self.logger.warning(
+                self.logger.debug(
                     "Peer %s went away, dropping the witness broadcast and peer",
                     peer,
                     exc_info=True,
                 )
-                await peer.disconnect(DisconnectReason.TIMEOUT)
-                self.logger.warning("Peer %s successfully disconnected", peer)
                 continue
             except Exception:
-                self.logger.exception("Unknown error when broadcasting witness")
-                raise
+                self.logger.exception("Unknown error when broadcasting witness to %s", peer)
+                continue
 
     async def run(self) -> None:
-        """
-        Request all nodes in the queue, running indefinitely
-        """
-        self.logger.info("Starting witness metadata broadcaster")
         with self.subscribe(self._peer_pool):
-            await self._broadcast_new_witnesses()
+            async for event in self._event_bus.stream(StatelessBlockImportDone):
+                if not event.witness_hashes:
+                    self.logger.warning("Witness metadata for %s is empty", event.block)
+                else:
+                    await self._broadcast_witness_metadata(event.block, event.witness_hashes)
