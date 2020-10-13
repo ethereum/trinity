@@ -161,7 +161,8 @@ class RPCServer:
         Delegate to :meth:`~trinity.rpc.main.RPCServer.execute_with_access_control` with
         unrestricted access.
         """
-        return await self.execute_with_access_control((), request)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self.execute_with_access_control((), request)  # type: ignore
 
     @curry
     async def execute_with_access_control(

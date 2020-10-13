@@ -246,8 +246,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     async def handle_get_receipts_request(self,
                                           event: GetReceiptsRequest) -> ReceiptsBundles:
-
-        return await self.with_node_and_timeout(
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
             lambda peer: peer.eth_api.get_receipts(event.headers)
@@ -255,7 +255,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     async def handle_get_block_bodies_request(self,
                                               event: GetBlockBodiesRequest) -> BlockBodyBundles:
-        return await self.with_node_and_timeout(
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
             lambda peer: peer.eth_api.get_block_bodies(event.headers)
@@ -263,7 +264,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     async def handle_get_node_data_request(self,
                                            event: GetNodeDataRequest) -> NodeDataBundles:
-        return await self.with_node_and_timeout(
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
             lambda peer: peer.eth_api.get_node_data(event.node_hashes)
@@ -272,8 +274,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
     async def handle_get_pooled_transactions_request(
             self,
             event: GetPooledTransactionsRequest) -> NodeDataBundles:
-
-        return await self.with_node_and_timeout(
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
             lambda peer: peer.eth_api.get_pooled_transactions(event.transaction_hashes)

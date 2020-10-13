@@ -121,7 +121,8 @@ def get_eip1085_schema() -> Dict[str, Any]:
     eip1085_schema_path = base_trinity_dir / 'assets' / 'eip1085.schema.json'
     with open(eip1085_schema_path) as schema_file:
         eip1085_schema = json.load(schema_file)
-    return eip1085_schema
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return eip1085_schema  # type: ignore
 
 
 def validate_raw_eip1085_genesis_config(genesis_config: RawEIP1085Dict) -> None:

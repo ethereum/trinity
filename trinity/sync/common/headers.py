@@ -277,7 +277,8 @@ class SkeletonSyncer(Service, Generic[TChainPeer]):
             for parent, child in sliding_window(2, skeleton_launch_headers):
                 is_present = await self._is_header_imported(child)
                 if not is_present:
-                    return parent
+                    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+                    return parent  # type: ignore
             else:
                 # All headers are present, probably the canonical head updated recently
                 # Return the newest one

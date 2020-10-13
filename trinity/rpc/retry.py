@@ -64,7 +64,8 @@ def retryable(which_block_arg_name: str) -> Func:
 
 
 def is_retryable(func: Func) -> bool:
-    return getattr(func, RETRYABLE_ATTRIBUTE_NAME, False)
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return getattr(func, RETRYABLE_ATTRIBUTE_NAME, False)  # type: ignore
 
 
 async def check_requested_block_age(chain: AsyncChainAPI,
@@ -101,7 +102,8 @@ async def execute_with_retries(event_bus: EndpointAPI, func: Func, params: Any,
 
     for iteration in itertools.count():
         try:
-            return await func(*params)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return await func(*params)  # type: ignore
         except MissingAccountTrieNode as exc:
             if not retryable:
                 raise

@@ -27,8 +27,8 @@ class HostMetricsRegistry(MetricsRegistry):
         for key in metrics:
             # We want every metric to include a 'host' identifier to be able to filter accordingly
             metrics[key]['host'] = self.host
-
-        return metrics
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return metrics  # type: ignore
 
 
 NOOP_COUNTER = Counter()

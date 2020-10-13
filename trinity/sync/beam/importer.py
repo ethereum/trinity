@@ -361,52 +361,104 @@ def pausing_vm_decorator(
                     self.stats_counter.num_storage_nodes += storage_event.num_nodes_collected
 
         def get_balance(self, account: bytes) -> int:
-            return self._pause_on_missing_data(super().get_balance, account)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(super().get_balance, account)  # type: ignore
 
         def get_code(self, account: bytes) -> bytes:
-            return self._pause_on_missing_data(super().get_code, account)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(super().get_code, account)  # type: ignore
 
         def get_storage(self, *args: Any, **kwargs: Any) -> int:
-            return self._pause_on_missing_data(super().get_storage, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(super().get_storage, *args, **kwargs)  # type: ignore
 
         def delete_storage(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().delete_storage, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().delete_storage,
+                *args,
+                **kwargs,
+            )
 
         def delete_account(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().delete_account, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().delete_account,
+                *args,
+                **kwargs,
+            )
 
         def set_balance(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().set_balance, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(super().set_balance, *args, **kwargs)  # type: ignore
 
         def get_nonce(self, *args: Any, **kwargs: Any) -> int:
-            return self._pause_on_missing_data(super().get_nonce, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(super().get_nonce, *args, **kwargs)  # type: ignore
 
         def set_nonce(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().set_nonce, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(super().set_nonce, *args, **kwargs)  # type: ignore
 
         def increment_nonce(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().increment_nonce, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().increment_nonce,
+                *args,
+                **kwargs,
+            )
 
         def set_code(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().set_code, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(super().set_code, *args, **kwargs)  # type: ignore
 
         def get_code_hash(self, *args: Any, **kwargs: Any) -> Hash32:
-            return self._pause_on_missing_data(super().get_code_hash, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().get_code_hash,
+                *args,
+                **kwargs,
+            )
 
         def delete_code(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().delete_code, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().delete_code,
+                *args,
+                **kwargs,
+            )
 
         def has_code_or_nonce(self, *args: Any, **kwargs: Any) -> bool:
-            return self._pause_on_missing_data(super().has_code_or_nonce, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().has_code_or_nonce,
+                *args,
+                **kwargs,
+            )
 
         def account_exists(self, *args: Any, **kwargs: Any) -> bool:
-            return self._pause_on_missing_data(super().account_exists, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().account_exists,
+                *args,
+                **kwargs,
+            )
 
         def touch_account(self, *args: Any, **kwargs: Any) -> None:
-            return self._pause_on_missing_data(super().touch_account, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().touch_account,
+                *args,
+                **kwargs,
+            )
 
         def account_is_empty(self, *args: Any, **kwargs: Any) -> bool:
-            return self._pause_on_missing_data(super().account_is_empty, *args, **kwargs)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._pause_on_missing_data(  # type: ignore
+                super().account_is_empty,
+                *args,
+                **kwargs,
+            )
 
         def persist(self) -> Optional[Any]:
             return self._pause_on_missing_data(super().persist)
@@ -424,7 +476,8 @@ def pausing_vm_decorator(
             return PausingVMState
 
         def get_beam_stats(self) -> BeamStats:
-            return self.state.stats_counter
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self.state.stats_counter  # type: ignore
 
         def transaction_applied_hook(
                 self,

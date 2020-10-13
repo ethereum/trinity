@@ -115,7 +115,8 @@ def _load_preconfigured_genesis_config(network_id: int) -> Dict[str, Any]:
     else:
         try:
             with _get_assets_path(network_id).open('r') as genesis_file:
-                return json.load(genesis_file)
+                # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+                return json.load(genesis_file)  # type: ignore
         except FileNotFoundError:
             return {}
 

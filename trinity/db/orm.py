@@ -52,7 +52,8 @@ def _get_session(path: Path) -> BaseSession:
     engine = create_engine(database_uri)
     Session = sessionmaker(bind=engine)
     session = Session()
-    return session
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return session  # type: ignore
 
 
 def _setup_schema(session: BaseSession) -> None:
@@ -85,7 +86,8 @@ def _check_schema_version(session: BaseSession) -> bool:
         # table is present but schema doesn't match query
         return False
     else:
-        return schema_version.version == SCHEMA_VERSION
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return schema_version.version == SCHEMA_VERSION  # type: ignore
 
 
 def _check_tables_exist(session: BaseSession) -> bool:

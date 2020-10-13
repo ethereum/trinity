@@ -164,7 +164,8 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
         :raise NoEligiblePeers: if no peers are available to fulfill the request
         :raise asyncio.TimeoutError: if an individual request or the overall process times out
         """
-        return await self._retry_on_bad_response(
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self._retry_on_bad_response(  # type: ignore
             partial(self._get_block_header_by_hash, block_hash)
         )
 
@@ -177,7 +178,8 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
         block_bodies = await self._wait_for_reply(request_id)
         if not block_bodies.payload.bodies:
             raise BlockNotFound(f"Peer {peer} has no block with hash {block_hash.hex()}")
-        return block_bodies.payload.bodies[0]
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return block_bodies.payload.bodies[0]  # type: ignore
 
     # TODO add a get_receipts() method to BaseChain API, and dispatch to this, as needed
 
@@ -190,7 +192,8 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
         receipts = await self._wait_for_reply(request_id)
         if not receipts.payload.receipts:
             raise BlockNotFound(f"No block with hash {block_hash.hex()} found")
-        return receipts.payload.receipts[0]
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return receipts.payload.receipts[0]  # type: ignore
 
     # TODO implement AccountDB exceptions that provide the info needed to
     # request accounts and code (and storage?)
@@ -198,7 +201,8 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
     @alru_cache(maxsize=1024, cache_exceptions=False)
     @service_timeout(COMPLETION_TIMEOUT)
     async def coro_get_account(self, block_hash: Hash32, address: ETHAddress) -> Account:
-        return await self._retry_on_bad_response(
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self._retry_on_bad_response(  # type: ignore
             partial(self._get_account_from_peer, block_hash, address)
         )
 
@@ -217,7 +221,8 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
                 f"Peer {peer} returned an invalid proof for account {encode_hex(address)} "
                 f"at block {encode_hex(block_hash)}"
             ) from exc
-        return rlp.decode(rlp_account, sedes=Account)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return rlp.decode(rlp_account, sedes=Account)  # type: ignore
 
     @alru_cache(maxsize=1024, cache_exceptions=False)
     @service_timeout(COMPLETION_TIMEOUT)
@@ -242,7 +247,8 @@ class LightPeerChain(PeerSubscriber, Service, BaseLightPeerChain):
 
         code_hash = account.code_hash
 
-        return await self._retry_on_bad_response(
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return await self._retry_on_bad_response(  # type: ignore
             partial(self._get_contract_code_from_peer, block_hash, address, code_hash)
         )
 

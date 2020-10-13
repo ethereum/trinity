@@ -156,7 +156,8 @@ SAFE_TRANSACTION_DEFAULTS = {
 
 def normalize_transaction_dict(transaction_dict: Dict[str, str]) -> Dict[str, Any]:
     normalized_dict = apply_formatters_to_dict(TRANSACTION_NORMALIZER, transaction_dict)
-    return merge(SAFE_TRANSACTION_DEFAULTS, normalized_dict)
+    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+    return merge(SAFE_TRANSACTION_DEFAULTS, normalized_dict)  # type: ignore
 
 
 def header_to_dict(header: BlockHeaderAPI) -> RpcHeaderResponse:
@@ -210,7 +211,8 @@ def format_params(*formatters: Any) -> Callable[..., Any]:
             if len(formatters) != len(args):
                 raise TypeError("could not apply %d formatters to %r" % (len(formatters), args))
             formatted = (formatter(arg) for formatter, arg in zip(formatters, args))
-            return await func(self, *formatted)
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return await func(self, *formatted)  # type: ignore
         return formatted_func
     return decorator
 

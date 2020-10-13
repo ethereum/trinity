@@ -136,7 +136,8 @@ def extract_forkid(enr: ENRAPI) -> ForkID:
 
     try:
         [forkid] = rlp.sedes.List([ForkID]).deserialize(eth_cap)
-        return forkid
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return forkid  # type: ignore
     except rlp.exceptions.ListDeserializationError:
         raise MalformedMessage("Unable to extract ForkID from {eth_cap}")
 

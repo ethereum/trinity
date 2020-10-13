@@ -33,7 +33,8 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
 
     @property
     def is_enabled(self) -> bool:
-        return self._boot_info.args.sync_mode.upper() == SYNC_BEAM.upper()
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._boot_info.args.sync_mode.upper() == SYNC_BEAM.upper()  # type: ignore
 
     async def do_run(self, event_bus: EndpointAPI) -> None:
         trinity_config = self._boot_info.trinity_config

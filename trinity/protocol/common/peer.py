@@ -252,7 +252,8 @@ class BaseChainPeerPool(BasePeerPool):
         )
         peers_by_td = groupby(td_getter, peers)
         max_td = max(peers_by_td.keys())
-        return random.choice(peers_by_td[max_td])
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return random.choice(peers_by_td[max_td])  # type: ignore
 
     def setup_connection_tracker(self) -> BaseConnectionTracker:
         if self.has_event_bus:

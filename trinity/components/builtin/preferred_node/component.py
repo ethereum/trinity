@@ -32,12 +32,14 @@ class PreferredNodeComponent(TrioIsolatedComponent):
     @property
     def max_peers(self) -> int:
         if self._boot_info.args.max_peers is not None:
-            return self._boot_info.args.max_peers
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._boot_info.args.max_peers  # type: ignore
         return DEFAULT_MAX_PEERS
 
     @property
     def preferred_nodes(self) -> List[NodeAPI]:
-        return self._boot_info.args.preferred_nodes
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._boot_info.args.preferred_nodes  # type: ignore
 
     async def do_run(self, event_bus: EndpointAPI) -> None:
         service = PreferredNodeService(event_bus, self.preferred_nodes, self.max_peers)

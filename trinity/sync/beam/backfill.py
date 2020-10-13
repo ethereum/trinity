@@ -854,7 +854,8 @@ class TrieNodeRequestTracker:
         return len(self._active_prefixes) > 0
 
     def get_cached_parent(self, prefix: Nibbles) -> Tuple[HexaryTrieNode, Nibbles]:
-        return self._node_frontier_cache.get(prefix)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._node_frontier_cache.get(prefix)  # type: ignore
 
     def add_cache(
             self,
@@ -868,7 +869,8 @@ class TrieNodeRequestTracker:
 
     @property
     def is_complete(self) -> bool:
-        return self._trie_fog.is_complete
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self._trie_fog.is_complete  # type: ignore
 
     def __repr__(self) -> str:
         return (

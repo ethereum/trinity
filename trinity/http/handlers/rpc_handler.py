@@ -41,7 +41,8 @@ async def execute_json_rpc(
         msg = f"Unrecognized exception while executing RPC: {e}"
         raise JsonRpcCallException(msg)
     else:
-        return result
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return result  # type: ignore
 
 
 class RPCHandler(BaseHTTPHandler):

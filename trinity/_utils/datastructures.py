@@ -87,13 +87,15 @@ class SortableTask(Generic[TTask]):
         if not isinstance(other, SortableTask):
             return False
         else:
-            return self._comparable_val == other._comparable_val
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._comparable_val == other._comparable_val  # type: ignore
 
     def __lt__(self, other: Any) -> bool:
         if not isinstance(other, SortableTask):
             return False
         else:
-            return self._comparable_val < other._comparable_val
+            # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+            return self._comparable_val < other._comparable_val  # type: ignore
 
 
 class TaskQueue(Generic[TTask]):

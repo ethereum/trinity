@@ -26,8 +26,10 @@ def setup_cprofiler(filename: str) -> Callable[..., Any]:
             should_profile = kwargs.pop('profile', False)
             if should_profile:
                 with profiler(filename):
-                    return fn(*args, **kwargs)
+                    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+                    return fn(*args, **kwargs)  # type: ignore
             else:
-                return fn(*args, **kwargs)
+                # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+                return fn(*args, **kwargs)  # type: ignore
         return inner
     return outer

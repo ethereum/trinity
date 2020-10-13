@@ -82,4 +82,5 @@ class Etherscan:
 
     def get_block_by_number(self, block_number: int, network: Network) -> Dict[str, Any]:
         num = to_hex(primitive=block_number)
-        return self.post(f"eth_getBlockByNumber&tag={num}&boolean=false", network)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return self.post(f"eth_getBlockByNumber&tag={num}&boolean=false", network)  # type: ignore

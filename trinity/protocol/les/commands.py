@@ -92,7 +92,8 @@ class StatusSerializationCodec(SerializationCodecAPI[StatusPayload]):
 
     def encode(self, payload: StatusPayload) -> bytes:
         items = self._encode_items(*payload.to_pairs())
-        return rlp.encode(items, sedes=STATUS_STRUCTURE)
+        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        return rlp.encode(items, sedes=STATUS_STRUCTURE)  # type: ignore
 
     @to_tuple
     def _decode_items(self, *items: Tuple[str, bytes]) -> Iterable[Tuple[str, Any]]:
