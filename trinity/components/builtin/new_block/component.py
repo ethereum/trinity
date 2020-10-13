@@ -123,6 +123,7 @@ class NewBlockService(Service):
             self._peer_block_tracker[block.hash].append(str(target_peer))
             # add checkpoint here to guarantee the event loop is released per iteration
             await trio.sleep(0)
+        return
 
     async def _broadcast_newly_seen_block(self, header: BlockHeaderAPI) -> None:
         """
