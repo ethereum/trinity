@@ -1,5 +1,6 @@
 from typing import (
     Iterator,
+    List,
     NamedTuple,
 )
 
@@ -114,12 +115,21 @@ def read_process_stats() -> ProcessStats:
     main_trinity_process = get_main_trinity_process()
     child_processes = main_trinity_process.children(recursive=True)
     num_processes = len(child_processes) + 1
-    num_child_threads = sum([process.num_threads() for process in child_processes])
+    num_child_threads = sum(collect_thread_counts_for_processes(child_processes))
     num_threads = num_child_threads + main_trinity_process.num_threads()
     return ProcessStats(
         process_count=num_processes,
         thread_count=num_threads,
     )
+
+
+@to_tuple
+def collect_thread_counts_for_processes(all_processes: List[psutil.Process]) -> Iterator[int]:
+    for process in all_processes:
+        try:
+            yield process.num_threads()
+        except psutil.NoSuchProcess:
+            continue
 
 
 @as_service
