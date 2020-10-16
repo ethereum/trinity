@@ -76,12 +76,10 @@ class RLPCodec(SerializationCodecAPI[TCommandPayload]):
 #
 class SnappyCodec(CompressionCodecAPI):
     def compress(self, data: bytes) -> bytes:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-        return snappy.compress(data)  # type: ignore
+        return snappy.compress(data)
 
     def decompress(self, data: bytes) -> bytes:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-        return snappy.decompress(data)  # type: ignore
+        return snappy.decompress(data)
 
 
 class NoCompressionCodec(CompressionCodecAPI):
