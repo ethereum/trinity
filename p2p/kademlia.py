@@ -7,12 +7,17 @@ import random
 import struct
 from typing import (
     Any,
+    cast,
+    Deque,
     Dict,
     Iterable,
+    Iterator,
     List,
+    Tuple,
     Type,
     TypeVar,
-    Tuple, Deque, Iterator)
+    Union,
+)
 from urllib import parse as urlparse
 
 from cached_property import cached_property
@@ -62,27 +67,23 @@ class Address(AddressAPI):
     def __init__(self, ip: str, udp_port: int, tcp_port: int) -> None:
         self.udp_port = udp_port
         self.tcp_port = tcp_port
-        self._ip = ipaddress.ip_address(ip)
+        self._ip: Union[ipaddress.IPv4Address, ipaddress.IPv6Address] = ipaddress.ip_address(ip)
 
     @property
     def is_loopback(self) -> bool:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-        return self._ip.is_loopback  # type: ignore
+        return self._ip.is_loopback
 
     @property
     def is_unspecified(self) -> bool:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-        return self._ip.is_unspecified  # type: ignore
+        return self._ip.is_unspecified
 
     @property
     def is_reserved(self) -> bool:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-        return self._ip.is_reserved  # type: ignore
+        return self._ip.is_reserved
 
     @property
     def is_private(self) -> bool:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-        return self._ip.is_private  # type: ignore
+        return self._ip.is_private
 
     @property
     def ip(self) -> str:
@@ -91,8 +92,7 @@ class Address(AddressAPI):
     @cached_property
     def ip_packed(self) -> str:
         """The binary representation of this IP address."""
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-        return self._ip.packed  # type: ignore
+        return cast(str, self._ip.packed)
 
     def __eq__(self, other: Any) -> bool:
         return (self.ip, self.udp_port) == (other.ip, other.udp_port)
