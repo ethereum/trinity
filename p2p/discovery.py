@@ -1368,8 +1368,7 @@ class ExpectedResponseChannels(Generic[TMsg]):
 
 
 def node_id_from_pubkey(pubkey: eth_keys.keys.PublicKey) -> NodeID:
-    # type ignored to fix https://github.com/ethereum/trinity/issues/1520
-    return keccak(pubkey.to_bytes())  # type: ignore
+    return NodeID(keccak(pubkey.to_bytes()))
 
 
 def get_external_ipaddress(logger: ExtendedDebugLogger) -> ipaddress.IPv4Address:
