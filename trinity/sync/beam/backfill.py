@@ -869,7 +869,8 @@ class TrieNodeRequestTracker:
 
     @property
     def is_complete(self) -> bool:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        # type ignored because self._trie_fog type is infered as Any,
+        # probably because the py-trie lib does not expose type hints.
         return self._trie_fog.is_complete  # type: ignore
 
     def __repr__(self) -> str:
