@@ -246,7 +246,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     async def handle_get_receipts_request(self,
                                           event: GetReceiptsRequest) -> ReceiptsBundles:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        # type ignored because with_node_and_timeout() method returns type Any
+        # which is different from expected return type ReceiptsBundles
         return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
@@ -255,7 +256,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     async def handle_get_block_bodies_request(self,
                                               event: GetBlockBodiesRequest) -> BlockBodyBundles:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        # type ignored because with_node_and_timeout() method returns type Any
+        # which is different from expected return type BlockBodyBundles
         return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
@@ -264,7 +266,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
     async def handle_get_node_data_request(self,
                                            event: GetNodeDataRequest) -> NodeDataBundles:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        # type ignored because with_node_and_timeout() method returns type Any
+        # which is different from expected return type NodeDataBundles
         return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
@@ -274,7 +277,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
     async def handle_get_pooled_transactions_request(
             self,
             event: GetPooledTransactionsRequest) -> NodeDataBundles:
-        # type ignored to fix https://github.com/ethereum/trinity/issues/1520
+        # type ignored because with_node_and_timeout() method returns type Any
+        # which is different from expected return type NodeDataBundles
         return await self.with_node_and_timeout(  # type: ignore
             event.session,
             event.timeout,
