@@ -11,8 +11,10 @@ from async_service import (
     Service,
     background_trio_service,
 )
-from eth.abc import BlockHeaderAPI, BlockAPI
-from eth.consensus.pow import check_pow
+from eth.abc import (
+    BlockAPI,
+    BlockHeaderAPI,
+)
 from eth_utils import (
     ValidationError,
     to_tuple,
@@ -21,6 +23,7 @@ from lahja import EndpointAPI
 import trio
 
 from p2p.abc import SessionAPI
+from trinity.boot_info import BootInfo
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.extensibility import TrioIsolatedComponent
 from trinity.protocol.eth.events import NewBlockEvent
@@ -33,6 +36,7 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeer,
 )
 from trinity.sync.common.events import NewBlockImported
+from trinity._utils.connect import get_eth1_chain_with_remote_db
 from trinity._utils.logging import get_logger
 
 
@@ -50,7 +54,7 @@ class NewBlockComponent(TrioIsolatedComponent):
     async def do_run(self, event_bus: EndpointAPI) -> None:
         proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
         async with background_trio_service(proxy_peer_pool):
-            service = NewBlockService(event_bus, proxy_peer_pool)
+            service = NewBlockService(event_bus, proxy_peer_pool, self._boot_info)
             async with background_trio_service(service) as manager:
                 await manager.wait_finished()
 
@@ -59,12 +63,16 @@ class NewBlockService(Service):
 
     logger = get_logger('trinity.components.new_block.NewBlockService')
 
-    def __init__(self, event_bus: EndpointAPI, peer_pool: ETHProxyPeerPool) -> None:
+    def __init__(self,
+                 event_bus: EndpointAPI,
+                 peer_pool: ETHProxyPeerPool,
+                 boot_info: BootInfo) -> None:
         self._event_bus = event_bus
         self._peer_pool = peer_pool
         # tracks which peers have seen a block
         # todo: old blocks need to be pruned to avoid unbounded growth of tracker
         self._peer_block_tracker: Dict[bytes, List[str]] = {}
+        self._boot_info = boot_info
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._handle_imported_blocks)
@@ -90,19 +98,17 @@ class NewBlockService(Service):
                 self._peer_block_tracker[header.hash].append(sender_peer_str)
         else:
             # Verify the validity of block, add to tracker and broadcast to eligible peers
-            try:
-                check_pow(
-                    header.block_number,
-                    header.mining_hash,
-                    header.mix_hash,
-                    header.nonce,
-                    header.difficulty
-                )
-            except ValidationError:
-                self.logger.info("Received invalid block from peer: %s", sender_peer_str)
-            else:
-                self._peer_block_tracker[header.hash] = [sender_peer_str]
-                await self._broadcast_newly_seen_block(header)
+            with get_eth1_chain_with_remote_db(self._boot_info, self._event_bus) as chain:
+                try:
+                    chain.validate_seal(header)
+                except ValidationError as exc:
+                    self.logger.info(
+                        "Received invalid block from peer: %s. %s",
+                        sender_peer_str, exc,
+                    )
+                else:
+                    self._peer_block_tracker[header.hash] = [sender_peer_str]
+                    await self._broadcast_newly_seen_block(header)
 
     async def _broadcast_imported_block(self, block: BlockAPI) -> None:
         """
