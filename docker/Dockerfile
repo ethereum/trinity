@@ -9,8 +9,8 @@ COPY . /usr/src/app
 RUN apt-get update
 RUN apt-get -y install libsnappy-dev
 
-RUN pip install -e .[dev]  --no-cache-dir --use-feature=2020-resolver
-RUN pip install -U trinity --no-cache-dir --use-feature=2020-resolver
+RUN pip install -e .[dev]  --no-cache-dir
+RUN pip install -U trinity --no-cache-dir
 
 RUN echo "Type \`trinity\` to boot or \`trinity --help\` for an overview of commands"
 
