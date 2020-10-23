@@ -157,3 +157,10 @@ class MetricsReportingError(BaseTrinityError):
     Raised when there is an error while reporting metrics.
     """
     pass
+
+
+class WitnessHashesUnavailable(BaseTrinityError):
+    """
+    Raised when we have no witness hashes for a certain block in our DB.
+    """
+    pass
