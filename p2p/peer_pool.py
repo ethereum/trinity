@@ -284,6 +284,16 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             peer.connection.get_manager().wait_started(), timeout=PEER_READY_TIMEOUT)
         await peer.connection.run_peer(peer)
 
+    async def disconnect_from_peer(
+        self, peer_session: SessionAPI, reason: DisconnectReason
+    ) -> None:
+        if peer_session in self.connected_nodes:
+            peer = self.connected_nodes[peer_session]
+            self.logger.info("Disconnecting from %s.", peer)
+            await peer.disconnect(reason)
+        else:
+            self.logger.info("Unable to disconnect from %s, since peer is not connected to.", peer)
+
     async def add_inbound_peer(self, peer: BasePeer) -> None:
         try:
             await self._start_peer(peer)

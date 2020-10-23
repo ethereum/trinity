@@ -38,6 +38,7 @@ from trinity._utils.decorators import async_suppress_exceptions
 
 from .events import (
     ConnectToNodeCommand,
+    DisconnectFromPeerCommand,
     DisconnectPeerEvent,
     GetConnectedPeersRequest,
     GetConnectedPeersResponse,
@@ -93,6 +94,7 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
 
         self.manager.run_daemon_task(self.handle_peer_count_requests)
         self.manager.run_daemon_task(self.handle_connect_to_node_requests)
+        self.manager.run_daemon_task(self.handle_disconnect_from_peer_requests)
         self.manager.run_daemon_task(self.handle_native_peer_messages)
         self.manager.run_daemon_task(self.handle_get_connected_peers_requests)
         self.manager.run_daemon_task(self.handle_protocol_capabilities_requests)
@@ -162,6 +164,14 @@ class PeerPoolEventServer(Service, PeerSubscriber, Generic[TPeer]):
         async for command in self.event_bus.stream(ConnectToNodeCommand):
             self.logger.debug('Received request to connect to %s', command.remote)
             self.manager.run_task(self.peer_pool.connect_to_node, command.remote)
+
+    async def handle_disconnect_from_peer_requests(self) -> None:
+        async for command in self.event_bus.stream(DisconnectFromPeerCommand):
+            self.logger.info(
+                'Received request to disconnect from %s. Reason: %s',
+                command.peer_info, command.reason
+            )
+            await self.peer_pool.disconnect_from_peer(command.peer_info.session, command.reason)
 
     async def handle_peer_count_requests(self) -> None:
         async for req in self.event_bus.stream(PeerCountRequest):

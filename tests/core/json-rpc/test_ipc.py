@@ -25,6 +25,7 @@ from trinity.nodes.events import (
 )
 from trinity.protocol.common.events import (
     ConnectToNodeCommand,
+    DisconnectFromPeerCommand,
     PeerCountRequest,
     PeerCountResponse,
 )
@@ -91,9 +92,6 @@ async def get_ipc_response(
         request_msg,
         event_loop,
         event_bus):
-
-    # Give event subsriptions a moment to propagate.
-    await asyncio.sleep(0.01)
 
     assert wait_for(jsonrpc_ipc_pipe_path), "IPC server did not successfully start with IPC file"
 
@@ -654,6 +652,14 @@ GOOD_KEY = (
             },
         ),
         (
+            build_request('admin_removePeer', ['enode://none@[::]:30303']),
+            {
+                'jsonrpc': '2.0',
+                'id': 3, 'error':
+                'public key must be a 128-character hex string'
+            },
+        ),
+        (
             build_request('admin_addPeer', [f'enode://{GOOD_KEY}@[::]:30303']),
             {
                 'jsonrpc': '2.0',
@@ -661,10 +667,23 @@ GOOD_KEY = (
                 'A concrete IP address must be specified'
             },
         ),
+        (
+            build_request('admin_removePeer', [f'enode://{GOOD_KEY}@[::]:30303']),
+            {
+                'jsonrpc': '2.0',
+                'id': 3, 'error':
+                'A concrete IP address must be specified'
+            },
+        ),
     ),
-    ids=["Validation occurs", "Validation checks for ip address"],
+    ids=[
+        "Validation occurs",
+        "Validation occurs",
+        "Validation checks for ip address",
+        "Validation checks for ip address"
+    ],
 )
-async def test_admin_addPeer_error_messages(
+async def test_admin_addPeer_and_removePeer_error_messages(
         jsonrpc_ipc_pipe_path,
         request_msg,
         event_loop,
@@ -691,6 +710,7 @@ async def test_admin_addPeer_fires_message(
     future = asyncio.ensure_future(
         event_bus.wait_for(ConnectToNodeCommand), loop=event_loop
     )
+    await event_bus.wait_until_any_endpoint_subscribed_to(ConnectToNodeCommand)
 
     enode = f'enode://{GOOD_KEY}@10.0.0.1:30303'
     request = build_request('admin_addPeer', [enode])
@@ -705,6 +725,59 @@ async def test_admin_addPeer_fires_message(
 
     event = await asyncio.wait_for(future, timeout=0.1, loop=event_loop)
     assert event.remote.uri() == enode
+
+
+@pytest.mark.asyncio
+async def test_admin_removePeer_fires_message(
+        jsonrpc_ipc_pipe_path,
+        event_loop,
+        event_bus,
+        ipc_server):
+
+    async with LatestETHPeerPairFactory() as (alice, bob):
+        peer_pool = MockPeerPoolWithConnectedPeers([alice, bob], event_bus=event_bus)
+
+        async with run_peer_pool_event_server(event_bus, peer_pool):
+            future = asyncio.ensure_future(
+                event_bus.wait_for(DisconnectFromPeerCommand), loop=event_loop
+            )
+            await event_bus.wait_until_any_endpoint_subscribed_to(DisconnectFromPeerCommand)
+
+            request = build_request('admin_removePeer', [bob.session.remote.uri()])
+
+            result = await get_ipc_response(
+                jsonrpc_ipc_pipe_path,
+                request,
+                event_loop,
+                event_bus
+            )
+            assert result == {'id': 3, 'jsonrpc': '2.0', 'result': True}
+
+            event = await asyncio.wait_for(future, timeout=5, loop=event_loop)
+            assert event.peer_info.session.remote.uri() == bob.session.remote.uri()
+
+
+@pytest.mark.asyncio
+async def test_admin_removePeer_for_not_connected_peers(
+        jsonrpc_ipc_pipe_path,
+        event_loop,
+        event_bus,
+        ipc_server):
+
+    async with LatestETHPeerPairFactory() as (alice, bob):
+        peer_pool = MockPeerPoolWithConnectedPeers([alice, bob], event_bus=event_bus)
+
+        async with run_peer_pool_event_server(event_bus, peer_pool):
+            enode = f'enode://{GOOD_KEY}@10.0.0.1:30303'
+            request = build_request('admin_removePeer', [enode])
+
+            result = await get_ipc_response(
+                jsonrpc_ipc_pipe_path,
+                request,
+                event_loop,
+                event_bus
+            )
+            assert result == {'id': 3, 'jsonrpc': '2.0', 'result': False}
 
 
 @pytest.mark.asyncio
