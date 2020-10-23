@@ -180,3 +180,65 @@ def test_ropsten_eip1085_matches_ropsten_chain(ropsten_genesis_config):
     assert genesis_header == ROPSTEN_GENESIS_HEADER
     assert chain.chain_id == RopstenChain.chain_id
     assert chain.vm_configuration == RopstenChain.vm_configuration
+
+
+CUSTOM_EIP1085 = {
+    "genesis": {
+        "author": "0x0000000000000000000000000000000000000000",
+        "difficulty": "0x1",
+        "extraData": "0xdeadbeef",
+        "gasLimit": "0x900000",
+        "nonce": "0x00000000deadbeef",
+        "timestamp": "0x0"
+    },
+    "params": {
+        "petersburgForkBlock": "0x0",
+        "chainId": "0xdeadbeef",
+        "miningMethod": "ethash"
+    },
+    "version": "1",
+}
+
+
+def test_custom_eip1085_validity():
+    assert validate_raw_eip1085_genesis_config(CUSTOM_EIP1085) is None
+
+
+@pytest.mark.parametrize(
+    "config,reason",
+    (
+        (
+            {i: CUSTOM_EIP1085[i] for i in CUSTOM_EIP1085 if i != "version"},
+            "'version' is a required property",
+        ),
+        (
+            {i: CUSTOM_EIP1085[i] for i in CUSTOM_EIP1085 if i != "params"},
+            "'params' is a required property",
+        ),
+        (
+            {i: CUSTOM_EIP1085[i] for i in CUSTOM_EIP1085 if i != "genesis"},
+            "'genesis' is a required property",
+        ),
+        (
+            dict(CUSTOM_EIP1085, params={"miningMethod": "ethash"}),
+            "'chainId' is a required property",
+        ),
+        (
+            dict(
+                CUSTOM_EIP1085,
+                accounts={"00000000000000000000000000000000deadbeef": {"balance": "0x0ad7"}},
+            ),
+            "deadbeef' does not match",
+        ),
+        (
+            dict(
+                CUSTOM_EIP1085,
+                accounts={"0x00000000000000000000000000000000deadbeef": {"balance": "1000"}},
+            ),
+            "'1000' does not match",
+        ),
+    )
+)
+def test_custom_eip1085_invalidity(config, reason):
+    with pytest.raises(ValidationError, match=reason):
+        validate_raw_eip1085_genesis_config(config)

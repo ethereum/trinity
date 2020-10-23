@@ -136,6 +136,9 @@
     "Accounts": {
       "title": "Genesis account states",
       "type": "object",
+      "propertyNames": {
+        "pattern": "^0x([0-9a-fA-F]{2}){20}$"
+      },
       "patternProperties": {
         "^0x([0-9a-fA-F]{2}){20}$": {
           "$ref": "#/definitions/Account"
