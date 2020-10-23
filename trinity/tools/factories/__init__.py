@@ -1,5 +1,5 @@
 from .block_body import BlockBodyFactory  # noqa: F401
-from .block_hash import BlockHashFactory  # noqa: F401
+from .block_hash import BlockHashFactory, Hash32Factory  # noqa: F401
 from .chain_context import ChainContextFactory  # noqa: F401
 from .db import (  # noqa: F401
     MemoryDBFactory,
