@@ -193,6 +193,10 @@ def uint256_to_bytes(uint):
             {'result': [], 'id': 3, 'jsonrpc': '2.0'},
         ),
         (
+            build_request('eth_chainId'),
+            {'result': '0x539', 'id': 3, 'jsonrpc': '2.0'},
+        ),
+        (
             build_request('eth_mining'),
             {'result': False, 'id': 3, 'jsonrpc': '2.0'},
         ),

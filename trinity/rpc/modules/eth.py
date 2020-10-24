@@ -30,6 +30,7 @@ from eth_utils import (
     encode_hex,
     int_to_big_endian,
     is_integer,
+    to_hex,
     to_wei,
     ValidationError,
 )
@@ -172,6 +173,10 @@ class Eth(Eth1ChainRPCModule):
     async def blockNumber(self) -> str:
         num = self.chain.get_canonical_head().block_number
         return hex(num)
+
+    async def chainId(self) -> str:
+        chain_id = self.chain.chain_id
+        return to_hex(chain_id)
 
     @format_params(identity, to_int_if_hex)
     @retryable(which_block_arg_name='at_block')
