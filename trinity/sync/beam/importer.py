@@ -772,7 +772,8 @@ class BlockPreviewServer(Service):
                 )
                 # Parallel Execution:
                 # Run a complete block end-to-end
-                asyncio.get_event_loop().run_in_executor(
+                self.manager.run_task(
+                    asyncio.get_event_loop().run_in_executor,
                     # Maybe build the pausing chain inside the new process,
                     # so we can use process pool?
                     None,
@@ -793,7 +794,8 @@ class BlockPreviewServer(Service):
                 # between keeping up and falling behind, on the network.
                 transaction_groups = groupby(attrgetter('sender'), event.transactions)
                 for sender_transactions in transaction_groups.values():
-                    asyncio.get_event_loop().run_in_executor(
+                    self.manager.run_task(
+                        asyncio.get_event_loop().run_in_executor,
                         speculative_thread_executor,
                         partial_speculative_execute(
                             beam_chain,
