@@ -2,6 +2,7 @@ import asyncio
 import time
 from typing import (
     AsyncIterator,
+    cast,
     Iterable,
     Sequence,
     Set,
@@ -248,6 +249,17 @@ class BeamSyncer(Service):
         # not wait for the next one to be broadcast
         final_headers = self._header_persister.get_final_headers()
 
+        # We retrieve MAX_BACKFILL_BLOCK_BODIES_AT_ONCE blocks starting from the tip,
+        # so we need to be sure the corresponding headers are in db when we start from a checkpoint
+        # ie: when the launch_strategy is FromCheckpointLaunchStrategy
+        if self._is_checkpoint_too_close_from_tip(final_headers[0].block_number):
+            self.logger.error(
+                f"Checkpoint must be strictly more than {MAX_BACKFILL_BLOCK_BODIES_AT_ONCE} "
+                "blocks away from chain tip."
+            )
+            self.manager.cancel()
+            return
+
         # First, download block bodies for previous 6 blocks, for validation
         await self._download_blocks(final_headers[0])
 
@@ -282,6 +294,18 @@ class BeamSyncer(Service):
 
         # run sync until cancelled
         await self.manager.wait_finished()
+
+    def _is_checkpoint_too_close_from_tip(self, tip_block_number: BlockNumber) -> bool:
+        if type(self._launch_strategy) is FromCheckpointLaunchStrategy:
+            launch_strategy = cast(FromCheckpointLaunchStrategy, self._launch_strategy)
+            if launch_strategy.min_block_number > (
+                tip_block_number - MAX_BACKFILL_BLOCK_BODIES_AT_ONCE - 1
+            ):
+                return True
+            else:
+                return False
+        else:
+            return False
 
     def get_block_count_lag(self) -> int:
         """
