@@ -19,7 +19,6 @@ from p2p.qualifiers import HasProtocol
 from trinity._utils.les import (
     gen_request_id,
 )
-
 from trinity.protocol.common.validators import (
     match_payload_request_id,
 )

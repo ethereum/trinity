@@ -65,11 +65,13 @@ from trinity.sync.common.events import (
     CollectMissingAccount,
     CollectMissingBytecode,
     CollectMissingStorage,
+    CollectMissingTrieNodes,
     DoStatelessBlockImport,
     DoStatelessBlockPreview,
     MissingAccountResult,
     MissingBytecodeResult,
     MissingStorageResult,
+    MissingTrieNodesResult,
 )
 from trinity.sync.common.headers import (
     DatabaseBlockRangeHeaderSyncer,
@@ -945,6 +947,19 @@ class MissingDataEventHandler(Service):
         self.manager.run_daemon_task(self._provide_missing_account_tries)
         self.manager.run_daemon_task(self._provide_missing_bytecode)
         self.manager.run_daemon_task(self._provide_missing_storage)
+        self.manager.run_daemon_task(self._fetch_missing_trie_nodes)
+
+    async def _fetch_missing_trie_nodes(self) -> None:
+        async for event in self._event_bus.stream(CollectMissingTrieNodes):
+            # Right now this is triggered only when we get a NewBlock msg, but if that changes we
+            # should consider skipping the request if the block is too old, like we do in
+            # _provide_missing_account_tries().
+            num_nodes_collected = await self._state_downloader.ensure_nodes_present(
+                event.node_hashes, event.block_number, event.urgent)
+            await self._event_bus.broadcast(
+                MissingTrieNodesResult(num_nodes_collected),
+                event.broadcast_config(),
+            )
 
     async def _provide_missing_account_tries(self) -> None:
         async for event in self._event_bus.stream(CollectMissingAccount):

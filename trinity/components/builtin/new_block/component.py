@@ -1,5 +1,7 @@
+import asyncio
 import collections
 import math
+import pathlib
 import random
 from typing import (
     DefaultDict,
@@ -14,8 +16,11 @@ from async_service import (
 )
 from eth.abc import (
     BlockAPI,
+    BlockHeaderAPI,
 )
+from eth_typing import Hash32
 from eth_utils import (
+    ExtendedDebugLogger,
     ValidationError,
     to_tuple,
 )
@@ -25,6 +30,7 @@ import trio
 from p2p.abc import SessionAPI
 from trinity.boot_info import BootInfo
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
+from trinity.db.manager import DBClient
 from trinity.extensibility import TrioIsolatedComponent
 from trinity.protocol.eth.events import NewBlockEvent
 from trinity.protocol.eth.payloads import (
@@ -36,7 +42,8 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeerPool,
     ETHProxyPeer,
 )
-from trinity.sync.common.events import NewBlockImported
+from trinity.protocol.wit.db import AsyncWitnessDB
+from trinity.sync.common.events import CollectMissingTrieNodes, NewBlockImported
 from trinity._utils.connect import get_eth1_chain_with_remote_db
 from trinity._utils.logging import get_logger
 
@@ -88,11 +95,12 @@ class NewBlockService(Service):
 
     async def _handle_new_block(self, sender: SessionAPI, payload: NewBlockPayload) -> None:
         header = payload.block.header
-        sender_peer_str = str(ETHProxyPeer.from_session(
+        sender_peer = ETHProxyPeer.from_session(
             sender,
             self._event_bus,
             TO_NETWORKING_BROADCAST_CONFIG
-        ))
+        )
+        sender_peer_str = str(sender_peer)
 
         # Add peer to tracker if we've seen this block before
         if header.hash in self._peer_block_tracker:
@@ -109,6 +117,7 @@ class NewBlockService(Service):
                         sender_peer_str, exc,
                     )
                 else:
+                    self.manager.run_task(self._fetch_witnesses, sender_peer, header)
                     self._peer_block_tracker[header.hash] = [sender_peer_str]
                     # Here we only broadcast a NewBlock msg to a subset of our peers, and once the
                     # block is imported into our chain a NewBlockImported event will be generated
@@ -156,3 +165,51 @@ class NewBlockService(Service):
         for peer in all_peers:
             if str(peer) not in self._peer_block_tracker[block_hash]:
                 yield peer
+
+    async def _fetch_witnesses(self, peer: ETHProxyPeer, header: BlockHeaderAPI) -> None:
+        await fetch_witnesses(
+            peer, header, self._event_bus, self._boot_info.trinity_config.database_ipc_path,
+            self.logger)
+
+
+async def fetch_witnesses(
+        peer: ETHProxyPeer,
+        header: BlockHeaderAPI,
+        event_bus: EndpointAPI,
+        database_ipc_path: pathlib.Path,
+        logger: ExtendedDebugLogger,
+) -> Tuple[Hash32, ...]:
+    """
+    Fetch witness hashes for the given block from the given peer and emit a
+    CollectMissingTrieNodes event to trigger the download of the trie nodes referred by them.
+    """
+    try:
+        logger.debug(
+            "Attempting to fetch witness hashes for block %s from %s", header.hash, peer)
+        witness_hashes = await peer.wit_api.get_block_witness_hashes(header.hash)
+    except asyncio.TimeoutError:
+        logger.debug(
+            "Timed out trying to fetch witnesses for block %s from %s", header.hash, peer)
+        return tuple()
+    except Exception as err:
+        logger.warning(
+            "Error fetching witnesses for block %s from %s: %s", header.hash, peer, err)
+        return tuple()
+    else:
+        if witness_hashes:
+            logger.debug(
+                "Got witness hashes for block %s, asking BeamSyncer to fetch them", header.hash)
+            # XXX: Consider using urgent=False if the new block is more than a couple blocks ahead
+            # of our tip, as otherwise when beam sync start to falls behind it may be more
+            # difficult to catch up.
+            urgent = True
+            await event_bus.broadcast(
+                CollectMissingTrieNodes(witness_hashes, urgent, header.block_number))
+            base_db = DBClient.connect(database_ipc_path)
+            with base_db:
+                wit_db = AsyncWitnessDB(base_db)
+                wit_db.persist_witness_hashes(header.hash, witness_hashes)
+        else:
+            logger.debug(
+                "%s announced block %s but doesn't have witness hashes for it", peer, header.hash)
+        return witness_hashes

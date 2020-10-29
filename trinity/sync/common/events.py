@@ -127,6 +127,28 @@ class CollectMissingStorage(BaseRequestResponseEvent[MissingStorageResult]):
 
 
 @dataclass
+class MissingTrieNodesResult(BaseEvent):
+    num_nodes_collected: int = 0
+
+
+@dataclass
+class CollectMissingTrieNodes(BaseRequestResponseEvent[MissingTrieNodesResult]):
+    """
+    A request for the syncer to download the trie nodes with the given hashes.
+
+    Generally the type-specific events like CollectMissingStorage should be used but in some cases
+    (i.e. when downloading block witnesses) we don't know their type so need to use this.
+    """
+    node_hashes: Tuple[Hash32, ...]
+    urgent: bool
+    block_number: BlockNumber
+
+    @staticmethod
+    def expected_response_type() -> Type[MissingTrieNodesResult]:
+        return MissingTrieNodesResult
+
+
+@dataclass
 class StatelessBlockImportDone(BaseEvent):
     """
     Response to :cls:`DoStatelessBlockImport`, emitted only after the block has
