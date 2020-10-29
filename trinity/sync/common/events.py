@@ -127,6 +127,22 @@ class CollectMissingStorage(BaseRequestResponseEvent[MissingStorageResult]):
 
 
 @dataclass
+class MissingTrieNodesResult(BaseEvent):
+    num_nodes_collected: int = 0
+
+
+@dataclass
+class CollectMissingTrieNodes(BaseRequestResponseEvent[MissingTrieNodesResult]):
+    node_hashes: Tuple[Hash32, ...]
+    urgent: bool
+    block_number: BlockNumber
+
+    @staticmethod
+    def expected_response_type() -> Type[MissingTrieNodesResult]:
+        return MissingTrieNodesResult
+
+
+@dataclass
 class StatelessBlockImportDone(BaseEvent):
     """
     Response to :cls:`DoStatelessBlockImport`, emitted only after the block has

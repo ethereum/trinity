@@ -160,13 +160,16 @@ class BeamDownloader(Service, PeerSubscriber):
         Wait until the nodes that are the preimages of `node_hashes` are available in the database.
         If one is not available in the first check, request it from peers.
 
+        If any nodes cannot be downloaded in BLOCK_IMPORT_MISSING_STATE_TIMEOUT seconds, return
+        anyway.
+
         :param urgent: Should this node be downloaded urgently? If False, download as backfill
 
         Note that if your ultimate goal is an account or storage data, it's probably better to use
         download_account or download_storage. This method is useful for other
         scenarios, like bytecode lookups or intermediate node lookups.
 
-        :return: how many nodes had to be downloaded
+        :return: how many nodes were downloaded
         """
         if urgent:
             num_nodes_found = await self._wait_for_nodes(

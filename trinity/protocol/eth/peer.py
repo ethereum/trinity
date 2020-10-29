@@ -302,7 +302,9 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
             event: GetBlockWitnessHashesRequest) -> Tuple[Hash32, ...]:
         peer = self.get_peer(event.session)
         if not hasattr(peer, 'wit_api'):
-            self.logger.error(
+            # Currently this is expected to happen as NewBlockComponent doesn't know which peers
+            # support the witness protocol so it always tries to fetch witnesses.
+            self.logger.debug(
                 "Cannot get witness hashes from %s, it does not support the Witness protocol", peer)
             return tuple()
         return await peer.wit_api.get_block_witness_hashes(event.block_hash, event.timeout)
