@@ -86,7 +86,7 @@ class ETHProtocolV65(BaseETHProtocol):
         GetNodeDataV65, NodeDataV65,
         GetReceiptsV65, ReceiptsV65,
     )
-    command_length = 20
+    command_length = 17
 
     logger = get_extended_debug_logger('trinity.protocol.eth.proto.ETHProtocolV65')
 
