@@ -108,6 +108,8 @@ async def stream_transport_messages(transport: TransportAPI,
         except (rlp.exceptions.DeserializationError, snappy_CompressedLengthError) as err:
             raise MalformedMessage(f"Failed to decode {msg} for {command_type}") from err
 
+        transport.logger.debug2(
+            "Received %s msg from %s", cmd.__class__.__name__, transport.remote)
         yield msg_proto, cmd
 
         # yield to the event loop for a moment to allow `transport.is_closing`
