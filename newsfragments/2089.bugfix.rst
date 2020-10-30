@@ -1,0 +1,1 @@
+Update header validation strategy in NewBlock component to support multiple consensus types.
