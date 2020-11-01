@@ -2,7 +2,6 @@ import asyncio
 import time
 from typing import (
     AsyncIterator,
-    cast,
     Iterable,
     Sequence,
     Set,
@@ -23,7 +22,10 @@ from eth.abc import (
     SignedTransactionAPI,
 )
 from eth.constants import GENESIS_PARENT_HASH
-from eth.typing import BlockRange
+from eth.typing import (
+    BlockRange,
+    ChainGaps,
+)
 from eth_typing import (
     Address,
     BlockNumber,
@@ -210,9 +212,11 @@ class BeamSyncer(Service):
         )
 
         self._header_backfill = SequentialHeaderChainGapSyncer(chain, chain_db, peer_pool)
-        self._block_backfill = BodyChainGapSyncer(chain, chain_db, peer_pool)
 
         self._chain = chain
+        self._chain_db = chain_db
+        self._peer_pool = peer_pool
+        self._checkpoint = checkpoint
         self._enable_backfill = enable_backfill
         self._enable_state_backfill = enable_state_backfill
 
@@ -249,17 +253,6 @@ class BeamSyncer(Service):
         # not wait for the next one to be broadcast
         final_headers = self._header_persister.get_final_headers()
 
-        # We retrieve MAX_BACKFILL_BLOCK_BODIES_AT_ONCE blocks starting from the tip,
-        # so we need to be sure the corresponding headers are in db when we start from a checkpoint
-        # ie: when the launch_strategy is FromCheckpointLaunchStrategy
-        if self._is_checkpoint_too_close_from_tip(final_headers[0].block_number):
-            self.logger.error(
-                f"Checkpoint must be strictly more than {MAX_BACKFILL_BLOCK_BODIES_AT_ONCE} "
-                "blocks away from chain tip."
-            )
-            self.manager.cancel()
-            return
-
         # First, download block bodies for previous 6 blocks, for validation
         await self._download_blocks(final_headers[0])
 
@@ -280,6 +273,19 @@ class BeamSyncer(Service):
             self.manager.run_child_service(self._header_backfill)
 
             # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
+            if self._checkpoint is None:
+                self._block_backfill = BodyChainGapSyncer(
+                    self._chain,
+                    self._chain_db,
+                    self._peer_pool
+                )
+            else:
+                self._block_backfill = FromCheckpointBodyChainGapSyncer(
+                    self._chain,
+                    self._chain_db,
+                    self._peer_pool,
+                    await self._launch_strategy.get_starting_block_number()
+                )
             self.manager.run_daemon_child_service(self._block_backfill)
 
             # Now we can check the lag (presumably ~0) and start backfill
@@ -294,18 +300,6 @@ class BeamSyncer(Service):
 
         # run sync until cancelled
         await self.manager.wait_finished()
-
-    def _is_checkpoint_too_close_from_tip(self, tip_block_number: BlockNumber) -> bool:
-        if type(self._launch_strategy) is FromCheckpointLaunchStrategy:
-            launch_strategy = cast(FromCheckpointLaunchStrategy, self._launch_strategy)
-            if launch_strategy.min_block_number > (
-                tip_block_number - MAX_BACKFILL_BLOCK_BODIES_AT_ONCE - 1
-            ):
-                return True
-            else:
-                return False
-        else:
-            return False
 
     def get_block_count_lag(self) -> int:
         """
@@ -506,8 +500,8 @@ class BodyChainGapSyncer(Service):
         )
         self._body_syncer.logger = self.logger
 
-    def _get_next_gap(self) -> BlockRange:
-        gaps, future_tip_block = self._db.get_chain_gaps()
+    def _refine_gaps(self, chain_gaps: ChainGaps) -> BlockRange:
+        gaps, future_tip_block = chain_gaps
         if len(gaps) == 0:
             # We do not have gaps in the chain of blocks but we may still have a gap from the last
             # block up until the highest consecutive written header.
@@ -529,6 +523,10 @@ class BodyChainGapSyncer(Service):
                 raise ValidationError("No gaps in the chain of blocks")
         else:
             return gaps[-1]
+
+    def _get_next_gap(self) -> BlockRange:
+        gaps, future_tip_block = self._db.get_chain_gaps()
+        return self._refine_gaps((gaps, future_tip_block))
 
     @property
     def is_paused(self) -> bool:
@@ -572,6 +570,40 @@ class BodyChainGapSyncer(Service):
                 await asyncio.sleep(self._idle_time)
             else:
                 await self.manager.run_service(self._body_syncer)
+
+
+class FromCheckpointBodyChainGapSyncer(BodyChainGapSyncer):
+    def __init__(self,
+                 chain: AsyncChainAPI,
+                 db: BaseAsyncChainDB,
+                 peer_pool: ETHPeerPool,
+                 checkpoint_number: BlockNumber) -> None:
+        super().__init__(chain, db, peer_pool)
+        self.checkpoint_number = checkpoint_number
+
+    def _remove_gaps_before_checkpoint(
+            self,
+            gaps: Tuple[BlockRange, ...]) -> Tuple[BlockRange, ...]:
+        gaps_after_checkpoint = []
+        for gap in gaps:
+            start, end = gap
+            if end <= self.checkpoint_number:
+                continue
+            elif start > self.checkpoint_number:
+                gaps_after_checkpoint.append(gap)
+            else:
+                gaps_after_checkpoint.append(
+                    (
+                        BlockNumber(self.checkpoint_number + 1),
+                        BlockNumber(end)
+                    )
+                )
+        return tuple(gaps_after_checkpoint)
+
+    def _get_next_gap(self) -> BlockRange:
+        gaps, future_tip_block = self._db.get_chain_gaps()
+        gaps_after_checkpoint = self._remove_gaps_before_checkpoint(gaps)
+        return self._refine_gaps((gaps_after_checkpoint, future_tip_block))
 
 
 class HeaderLaunchpointSyncer(HeaderSyncerAPI):
