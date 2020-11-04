@@ -156,6 +156,26 @@ class SendBlockBodiesEvent(PeerPoolMessageEvent):
 
 
 @dataclass
+class SendNewBlockHashesEvent(PeerPoolMessageEvent):
+    """
+    Event to proxy a ``ETHPeer.sub_proto.send_new_block_hashes`` call from a proxy peer to the
+    actual peer that sits in the peer pool.
+    """
+    session: SessionAPI
+    command: NewBlockHashes
+
+
+@dataclass
+class SendNewBlockEvent(PeerPoolMessageEvent):
+    """
+    Event to proxy a ``ETHProxyPeer.send_new_block`` call to the actual peer that sits in the peer
+    pool.
+    """
+    session: SessionAPI
+    command: NewBlock
+
+
+@dataclass
 class SendNodeDataEvent(PeerPoolMessageEvent):
     """
     Event to proxy a ``ETHPeer.sub_proto.send_node_data`` call from a proxy peer to the actual

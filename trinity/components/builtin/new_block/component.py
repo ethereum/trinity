@@ -1,7 +1,8 @@
+import collections
 import math
 import random
 from typing import (
-    Dict,
+    DefaultDict,
     Iterable,
     List,
     Tuple,
@@ -13,7 +14,6 @@ from async_service import (
 )
 from eth.abc import (
     BlockAPI,
-    BlockHeaderAPI,
 )
 from eth_utils import (
     ValidationError,
@@ -28,6 +28,7 @@ from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.extensibility import TrioIsolatedComponent
 from trinity.protocol.eth.events import NewBlockEvent
 from trinity.protocol.eth.payloads import (
+    BlockFields,
     NewBlockHash,
     NewBlockPayload,
 )
@@ -69,9 +70,8 @@ class NewBlockService(Service):
                  boot_info: BootInfo) -> None:
         self._event_bus = event_bus
         self._peer_pool = peer_pool
-        # tracks which peers have seen a block
-        # todo: old blocks need to be pruned to avoid unbounded growth of tracker
-        self._peer_block_tracker: Dict[bytes, List[str]] = {}
+        # TODO: old blocks need to be pruned to avoid unbounded growth of tracker
+        self._peer_block_tracker: DefaultDict[bytes, List[str]] = collections.defaultdict(list)
         self._boot_info = boot_info
 
     async def run(self) -> None:
@@ -82,10 +82,12 @@ class NewBlockService(Service):
 
     async def _handle_imported_blocks(self) -> None:
         async for event in self._event_bus.stream(NewBlockImported):
-            await self._broadcast_imported_block(event.block)
+            block = event.block
+            self.logger.debug("NewBlockImported: %s", block)
+            await self._broadcast_new_block_hashes(block)
 
-    async def _handle_new_block(self, sender: SessionAPI, block: NewBlockPayload) -> None:
-        header = block.block.header
+    async def _handle_new_block(self, sender: SessionAPI, payload: NewBlockPayload) -> None:
+        header = payload.block.header
         sender_peer_str = str(ETHProxyPeer.from_session(
             sender,
             self._event_bus,
@@ -108,43 +110,41 @@ class NewBlockService(Service):
                     )
                 else:
                     self._peer_block_tracker[header.hash] = [sender_peer_str]
-                    await self._broadcast_newly_seen_block(header)
+                    # Here we only broadcast a NewBlock msg to a subset of our peers, and once the
+                    # block is imported into our chain a NewBlockImported event will be generated
+                    # and we'll announce it to the remaining ones, as per the spec.
+                    await self._broadcast_new_block(payload.block, payload.total_difficulty)
 
-    async def _broadcast_imported_block(self, block: BlockAPI) -> None:
+    async def _broadcast_new_block_hashes(self, block: BlockAPI) -> None:
         """
-        Broadcast `NewBlockHashes` for newly imported block to eligible peers,
-        aka those that haven't seen the block.
+        Send `NewBlockHashes` msgs to all peers that haven't heard about the given block yet.
         """
         all_peers = await self._peer_pool.get_peers()
-        if block.hash in self._peer_block_tracker:
-            eligible_peers = self._filter_eligible_peers(all_peers, block.hash)
-        else:
-            self._peer_block_tracker[block.hash] = []
-            eligible_peers = all_peers
-
+        eligible_peers = self._filter_eligible_peers(all_peers, block.hash)
         new_block_hash = NewBlockHash(hash=block.hash, number=block.number)
         for peer in eligible_peers:
+            self.logger.debug("Sending NewBlockHashes(%s) to %s", block.header, peer)
             target_peer = await self._peer_pool.ensure_proxy_peer(peer.session)
             target_peer.eth_api.send_new_block_hashes((new_block_hash,))
             self._peer_block_tracker[block.hash].append(str(target_peer))
             # add checkpoint here to guarantee the event loop is released per iteration
             await trio.sleep(0)
 
-    async def _broadcast_newly_seen_block(self, header: BlockHeaderAPI) -> None:
+    async def _broadcast_new_block(self, block_fields: BlockFields, total_difficulty: int) -> None:
         """
-        Broadcast `NewBlock` for newly received block to square root of
-        total # of connected peers, aka those that haven't seen the block.
+        Send `NewBlock` msgs to a subset of our peers.
         """
         all_peers = await self._peer_pool.get_peers()
-        eligible_peers = self._filter_eligible_peers(all_peers, header.hash)
+        eligible_peers = self._filter_eligible_peers(all_peers, block_fields.header.hash)
         number_of_broadcasts = int(math.sqrt(len(all_peers)))
         sample_size = min(len(eligible_peers), number_of_broadcasts)
         broadcast_peers = random.sample(eligible_peers, sample_size)
 
         for peer in broadcast_peers:
             target_peer = await self._peer_pool.ensure_proxy_peer(peer.session)
-            target_peer.eth_api.send_block_headers((header,))
-            self._peer_block_tracker[header.hash].append(str(target_peer))
+            self.logger.debug("Sending NewBlock(%s) to %s", block_fields.header, target_peer)
+            target_peer.eth_api.send_new_block(block_fields, total_difficulty)
+            self._peer_block_tracker[block_fields.header.hash].append(str(target_peer))
 
     @to_tuple
     def _filter_eligible_peers(self,

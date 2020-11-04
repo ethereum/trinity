@@ -51,6 +51,8 @@ from .constants import MAX_HEADERS_FETCH
 from .events import (
     SendBlockHeadersEvent,
     SendBlockBodiesEvent,
+    SendNewBlockEvent,
+    SendNewBlockHashesEvent,
     SendNodeDataEvent,
     SendReceiptsEvent,
     GetBlockHeadersRequest,
@@ -210,6 +212,8 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
     send_event_types = frozenset({
         SendBlockHeadersEvent,
         SendBlockBodiesEvent,
+        SendNewBlockEvent,
+        SendNewBlockHashesEvent,
         SendNodeDataEvent,
         SendReceiptsEvent,
         SendPooledTransactionsEvent,
