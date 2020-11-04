@@ -161,6 +161,7 @@ def get_eth1_shell_context(database_dir: Path,
         mining_chain_class = MiningChain.configure(
             __name__=chain_config.full_chain_class.__name__,
             vm_configuration=chain.vm_configuration,
+            consensus_context_class=chain.consensus_context_class,
             chain_id=chain.chain_id,
         )
         mining_chain = mining_chain_class(db)
