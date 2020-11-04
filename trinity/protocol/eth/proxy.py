@@ -32,6 +32,7 @@ from trinity.rlp.block_body import BlockBody
 from .commands import (
     BlockBodiesV65,
     BlockHeadersV65,
+    NewBlock,
     NewBlockHashes,
     NodeDataV65,
     ReceiptsV65,
@@ -43,16 +44,17 @@ from .events import (
     GetBlockHeadersRequest,
     GetNodeDataRequest,
     GetReceiptsRequest,
-    NewBlockHashesEvent,
     SendBlockBodiesEvent,
     SendBlockHeadersEvent,
+    SendNewBlockEvent,
+    SendNewBlockHashesEvent,
     SendNodeDataEvent,
     SendReceiptsEvent,
     SendTransactionsEvent,
     GetPooledTransactionsRequest,
     SendPooledTransactionsEvent,
 )
-from .payloads import NewBlockHash
+from .payloads import BlockFields, NewBlockHash, NewBlockPayload
 
 
 class ProxyETHAPI:
@@ -224,7 +226,14 @@ class ProxyETHAPI:
     def send_new_block_hashes(self, new_block_hashes: Sequence[NewBlockHash]) -> None:
         command = NewBlockHashes(tuple(new_block_hashes))
         self._event_bus.broadcast_nowait(
-            NewBlockHashesEvent(self.session, command),
+            SendNewBlockHashesEvent(self.session, command),
+            self._broadcast_config,
+        )
+
+    def send_new_block(self, block_fields: BlockFields, total_difficulty: int) -> None:
+        command = NewBlock(NewBlockPayload(block_fields, total_difficulty))
+        self._event_bus.broadcast_nowait(
+            SendNewBlockEvent(self.session, command),
             self._broadcast_config,
         )
 
