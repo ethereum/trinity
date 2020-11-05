@@ -43,7 +43,7 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeer,
 )
 from trinity.protocol.wit.db import AsyncWitnessDB
-from trinity.sync.common.events import CollectMissingTrieNodes, NewBlockImported
+from trinity.sync.common.events import CollectMissingTrieNodes, NewBlockImported, NewBlockMined
 from trinity._utils.connect import get_eth1_chain_with_remote_db
 from trinity._utils.logging import get_logger
 
@@ -83,9 +83,17 @@ class NewBlockService(Service):
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._handle_imported_blocks)
+        self.manager.run_daemon_task(self._handle_mined_blocks)
 
         async for event in self._event_bus.stream(NewBlockEvent):
             self.manager.run_task(self._handle_new_block, event.session, event.command.payload)
+
+    async def _handle_mined_blocks(self) -> None:
+        async for event in self._event_bus.stream(NewBlockMined):
+            block = event.block
+            self.logger.debug("NewBlockMined: %s", block)
+            block_fields = BlockFields(block.header, block.transactions, block.uncles)
+            await self._broadcast_new_block(block_fields, event.total_difficulty)
 
     async def _handle_imported_blocks(self) -> None:
         async for event in self._event_bus.stream(NewBlockImported):

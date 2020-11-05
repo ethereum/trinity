@@ -166,6 +166,16 @@ class NewBlockImported(BaseEvent):
 
 
 @dataclass
+class NewBlockMined(BaseEvent):
+    """
+    Event that is only emitted when a block has been mined and imported into our chain
+    """
+
+    block: BlockAPI
+    total_difficulty: int
+
+
+@dataclass
 class DoStatelessBlockImport(BaseRequestResponseEvent[StatelessBlockImportDone]):
     """
     The syncer emits this event when it would like the Beam Sync process to
