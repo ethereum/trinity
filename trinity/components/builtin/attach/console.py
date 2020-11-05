@@ -130,6 +130,7 @@ def db_shell(use_ipython: bool, config: Dict[str, str]) -> None:
 
     if has_mining_chain:
         namespace['mining_chain'] = config.get('mining_chain')
+        namespace['mining_chain2'] = config.get('mining_chain2')
 
     shell(use_ipython, namespace, DB_SHELL_BANNER + greeter)
 
@@ -165,6 +166,7 @@ def get_eth1_shell_context(database_dir: Path,
             chain_id=chain.chain_id,
         )
         mining_chain = mining_chain_class(db)
+        mining_chain2 = mining_chain_class(db)
         yield {
             'db': db,
             'chaindb': chaindb,
@@ -172,6 +174,7 @@ def get_eth1_shell_context(database_dir: Path,
             'chain_config': chain_config,
             'chain': chain,
             'mining_chain': mining_chain,
+            'mining_chain2': mining_chain2,
             'block_number': head.block_number,
             'hex_hash': head.hex_hash,
             'state_root_hex': encode_hex(head.state_root),
