@@ -23,6 +23,7 @@ deps = {
         "lru-dict>=1.1.6,<2",
         "pysha3>=1.0.0,<2.0.0",
         "python-snappy>=0.5.3",
+        "rlp[rust-backend]>=2,<3",
         "SQLAlchemy>=1.3.3,<2",
         'trio>=0.16.0,<0.17',
         'trio-typing>=0.5.0,<0.6',
