@@ -619,6 +619,11 @@ class BeamDownloader(Service, PeerSubscriber):
                 batch_id,
             )
 
+        if self.manager.is_running and not self._queen_tracker.get_manager().is_running:
+            self.logger.info(
+                "Backfill is complete, halting predictive downloads..."
+            )
+
     async def _get_predictive_nodes_from_peer(
             self,
             peer: ETHPeer,
@@ -876,7 +881,9 @@ class BeamDownloader(Service, PeerSubscriber):
         self.manager.run_daemon_task(self._periodically_report_progress)
         self.manager.run_daemon_task(self._reduce_spread_factor)
         with self.subscribe(self._peer_pool):
-            self.manager.run_daemon_task(self._match_predictive_node_requests_to_peers)
+            # The next task is not a daemon task, as a quick fix for
+            # https://github.com/ethereum/trinity/issues/2095
+            self.manager.run_task(self._match_predictive_node_requests_to_peers)
             await self._match_urgent_node_requests_to_peers()
 
     async def _reduce_spread_factor(self) -> None:
