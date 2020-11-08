@@ -470,12 +470,13 @@ class BodyChainGapSyncer(Service):
         self._peer_pool = peer_pool
         self._pauser = Pauser()
         self._body_syncer: FastChainBodySyncer = None
+        self._max_backfill_block_bodies_at_once = MAX_BACKFILL_BLOCK_BODIES_AT_ONCE
 
     async def _setup_for_next_gap(self) -> None:
         gap_start, gap_end = self._get_next_gap()
         fill_start = BlockNumber(max(
             gap_start,
-            gap_end - MAX_BACKFILL_BLOCK_BODIES_AT_ONCE,
+            gap_end - self._max_backfill_block_bodies_at_once,
         ))
         start_num = BlockNumber(fill_start - 1)
         _starting_tip = await self._db.coro_get_canonical_block_header_by_number(start_num)
