@@ -16,19 +16,22 @@ from async_service import (
 )
 from eth.abc import (
     BlockAPI,
-    BlockHeaderAPI,
 )
-from eth_typing import Hash32
+from eth_typing import BlockNumber, Hash32
 from eth_utils import (
     ExtendedDebugLogger,
     ValidationError,
+    humanize_hash,
     to_tuple,
 )
 from lahja import EndpointAPI
+from pyformance import MetricsRegistry
 import trio
 
 from p2p.abc import SessionAPI
 from trinity.boot_info import BootInfo
+from trinity.components.builtin.metrics.component import metrics_service_from_args
+from trinity.components.builtin.metrics.service.noop import NOOP_METRICS_SERVICE
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.manager import DBClient
 from trinity.extensibility import TrioIsolatedComponent
@@ -60,11 +63,17 @@ class NewBlockComponent(TrioIsolatedComponent):
         return True
 
     async def do_run(self, event_bus: EndpointAPI) -> None:
+        if self._boot_info.args.enable_metrics:
+            metrics_service = metrics_service_from_args(self._boot_info.args)
+        else:
+            metrics_service = NOOP_METRICS_SERVICE
         proxy_peer_pool = ETHProxyPeerPool(event_bus, TO_NETWORKING_BROADCAST_CONFIG)
         async with background_trio_service(proxy_peer_pool):
-            service = NewBlockService(event_bus, proxy_peer_pool, self._boot_info)
-            async with background_trio_service(service) as manager:
-                await manager.wait_finished()
+            async with background_trio_service(metrics_service):
+                service = NewBlockService(
+                    event_bus, proxy_peer_pool, metrics_service.registry, self._boot_info)
+                async with background_trio_service(service) as manager:
+                    await manager.wait_finished()
 
 
 class NewBlockService(Service):
@@ -74,9 +83,11 @@ class NewBlockService(Service):
     def __init__(self,
                  event_bus: EndpointAPI,
                  peer_pool: ETHProxyPeerPool,
+                 metrics_registry: MetricsRegistry,
                  boot_info: BootInfo) -> None:
         self._event_bus = event_bus
         self._peer_pool = peer_pool
+        self._metrics_registry = metrics_registry
         # TODO: old blocks need to be pruned to avoid unbounded growth of tracker
         self._peer_block_tracker: DefaultDict[bytes, List[str]] = collections.defaultdict(list)
         self._boot_info = boot_info
@@ -117,7 +128,8 @@ class NewBlockService(Service):
                         sender_peer_str, exc,
                     )
                 else:
-                    self.manager.run_task(self._fetch_witnesses, sender_peer, header)
+                    self.manager.run_task(
+                        self._fetch_witnesses, sender_peer, header.hash, header.block_number)
                     self._peer_block_tracker[header.hash] = [sender_peer_str]
                     # Here we only broadcast a NewBlock msg to a subset of our peers, and once the
                     # block is imported into our chain a NewBlockImported event will be generated
@@ -166,50 +178,71 @@ class NewBlockService(Service):
             if str(peer) not in self._peer_block_tracker[block_hash]:
                 yield peer
 
-    async def _fetch_witnesses(self, peer: ETHProxyPeer, header: BlockHeaderAPI) -> None:
+    async def _fetch_witnesses(
+            self, peer: ETHProxyPeer, block_hash: Hash32, block_number: BlockNumber) -> None:
+        # FIXME: Return immediately if we already have witness hashes for the given block hash in
+        # our wit db.
         await fetch_witnesses(
-            peer, header, self._event_bus, self._boot_info.trinity_config.database_ipc_path,
-            self.logger)
+            peer, block_hash, block_number, self._event_bus,
+            self._boot_info.trinity_config.database_ipc_path,
+            self._metrics_registry, self.logger)
 
 
 async def fetch_witnesses(
         peer: ETHProxyPeer,
-        header: BlockHeaderAPI,
+        block_hash: Hash32,
+        block_number: BlockNumber,
         event_bus: EndpointAPI,
         database_ipc_path: pathlib.Path,
+        metrics_registry: MetricsRegistry,
         logger: ExtendedDebugLogger,
 ) -> Tuple[Hash32, ...]:
     """
     Fetch witness hashes for the given block from the given peer and emit a
     CollectMissingTrieNodes event to trigger the download of the trie nodes referred by them.
     """
+    block_str = f"Block #{block_number}-0x{humanize_hash(block_hash)}"
     try:
         logger.debug(
-            "Attempting to fetch witness hashes for block %s from %s", header.hash, peer)
-        witness_hashes = await peer.wit_api.get_block_witness_hashes(header.hash)
+            "Attempting to fetch witness hashes for %s from %s", block_str, peer)
+        witness_hashes = await peer.wit_api.get_block_witness_hashes(block_hash)
     except asyncio.TimeoutError:
         logger.debug(
-            "Timed out trying to fetch witnesses for block %s from %s", header.hash, peer)
+            "Timed out trying to fetch witnesses for %s from %s", block_str, peer)
         return tuple()
     except Exception as err:
         logger.warning(
-            "Error fetching witnesses for block %s from %s: %s", header.hash, peer, err)
+            "Error fetching witnesses for %s from %s: %s", block_str, peer, err)
         return tuple()
     else:
         if witness_hashes:
+            metrics_registry.counter('trinity.sync/block_witness_hashes.hit').inc()
             logger.debug(
-                "Got witness hashes for block %s, asking BeamSyncer to fetch them", header.hash)
+                "Got witness hashes for %s, asking BeamSyncer to fetch them", block_str)
             # XXX: Consider using urgent=False if the new block is more than a couple blocks ahead
             # of our tip, as otherwise when beam sync start to falls behind it may be more
             # difficult to catch up.
             urgent = True
-            await event_bus.broadcast(
-                CollectMissingTrieNodes(witness_hashes, urgent, header.block_number))
+            try:
+                with trio.fail_after(1):
+                    # Sometimes we get a NewBlock/NewBlockHashes msg before the BeamSyncer service
+                    # has started, and there will be no subscribers to CollectMissingTrieNodes in
+                    # that case. This ensures we wait for it to start before attempting to fire
+                    # CollectMissingTrieNodes events.
+                    await event_bus.wait_until_any_endpoint_subscribed_to(CollectMissingTrieNodes)
+            except trio.TooSlowError:
+                logger.warning(
+                    "No subscribers for CollectMissingTrieNodes, cannot fetch witnesses for %s",
+                    block_str,
+                )
+                return witness_hashes
+            await event_bus.broadcast(CollectMissingTrieNodes(witness_hashes, urgent, block_number))
             base_db = DBClient.connect(database_ipc_path)
             with base_db:
                 wit_db = AsyncWitnessDB(base_db)
-                wit_db.persist_witness_hashes(header.hash, witness_hashes)
+                wit_db.persist_witness_hashes(block_hash, witness_hashes)
         else:
+            metrics_registry.counter('trinity.sync/block_witness_hashes.miss').inc()
             logger.debug(
-                "%s announced block %s but doesn't have witness hashes for it", peer, header.hash)
+                "%s announced %s but doesn't have witness hashes for it", peer, block_str)
         return witness_hashes

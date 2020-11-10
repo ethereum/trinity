@@ -8,6 +8,7 @@ from eth_typing import BlockNumber
 from eth.abc import AtomicDatabaseAPI
 
 from trinity.chains.base import AsyncChainAPI
+from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
 from trinity.components.builtin.metrics.sync_metrics_registry import SyncMetricsRegistry
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.protocol.eth.peer import ETHPeerPool
@@ -60,6 +61,10 @@ class BeamSyncService(Service):
         await self._pivot_loop()
 
     async def _pivot_loop(self) -> None:
+        if self.sync_metrics_registry:
+            metrics_registry = self.sync_metrics_registry.metrics_service.registry
+        else:
+            metrics_registry = NoopMetricsRegistry()
         while self.manager.is_running:
             beam_syncer = BeamSyncer(
                 self.chain,
@@ -67,6 +72,7 @@ class BeamSyncService(Service):
                 self.chaindb,
                 self.peer_pool,
                 self.event_bus,
+                metrics_registry,
                 self.checkpoint,
                 self.force_beam_block_number,
                 self.enable_header_backfill,

@@ -6,7 +6,7 @@ from eth_typing import Hash32
 
 from eth_utils import encode_hex
 
-from eth.abc import AtomicDatabaseAPI
+from eth.abc import DatabaseAPI
 
 import rlp
 
@@ -32,7 +32,7 @@ class AsyncWitnessDB(AsyncWitnessDataBaseAPI):
     _recent_blocks_with_witnesses_lookup_key = b'recent-blocks-with-witness-hashes'
     _max_witness_history = 256
 
-    def __init__(self, db: AtomicDatabaseAPI) -> None:
+    def __init__(self, db: DatabaseAPI) -> None:
         self.db = db
 
     def _make_block_witness_hashes_lookup_key(self, block_hash: Hash32) -> bytes:
