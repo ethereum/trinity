@@ -44,3 +44,4 @@ class NoopMetricsService(Service, MetricsServiceAPI):
 
 
 NOOP_METRICS_SERVICE = NoopMetricsService()
+NOOP_METRICS_REGISTRY = NoopMetricsRegistry()

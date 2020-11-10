@@ -6,6 +6,7 @@ from lahja import EndpointAPI
 from trinity.config import (
     Eth1AppConfig,
 )
+from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
 from trinity.constants import (
     SYNC_BEAM,
 )
@@ -51,6 +52,9 @@ class BeamChainPreviewComponent(AsyncioIsolatedComponent):
                 chain_config.consensus_context_class,
                 base_db,
                 event_bus,
+                # We only want to collect metrics about blocks being imported, so here we use the
+                # NoopMetricsRegistry.
+                NoopMetricsRegistry(),
                 # these preview executions are lower priority than the primary block import
                 loop=loop,
                 urgent=False,

@@ -35,6 +35,7 @@ from trie.iter import (
     NodeIterator,
 )
 
+from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.eth1.chain import AsyncChainDB
 from trinity.protocol.eth.payloads import NewBlockHash
@@ -287,6 +288,7 @@ async def _beam_syncing(
                 consensus_context_class=ConsensusContext,
                 db=chaindb_fresh.db,
                 event_bus=pausing_endpoint,
+                metrics_registry=NoopMetricsRegistry(),
                 loop=event_loop,
             )
 
@@ -296,6 +298,7 @@ async def _beam_syncing(
                 AsyncChainDB(chaindb_fresh.db),
                 client_peer_pool,
                 gatherer_endpoint,
+                NoopMetricsRegistry(),
                 force_beam_block_number=beam_to_block,
                 checkpoint=checkpoint,
                 enable_state_backfill=enable_state_backfill,

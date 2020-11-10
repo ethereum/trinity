@@ -18,6 +18,7 @@ from async_service import Service
 
 from eth.abc import (
     AtomicDatabaseAPI,
+    BlockAndMetaWitness,
     BlockAPI,
     BlockHeaderAPI,
     BlockImportResult,
@@ -50,6 +51,8 @@ from eth_utils.toolz import (
 
 from lahja import EndpointAPI
 from lahja.common import BroadcastConfig
+
+from pyformance import MetricsRegistry
 
 from trinity._utils.timer import Timer
 from trinity.chains.full import FullChain
@@ -161,6 +164,7 @@ def make_pausing_beam_chain(
         consensus_context_class: Type[ConsensusContextAPI],
         db: AtomicDatabaseAPI,
         event_bus: EndpointAPI,
+        metrics_registry: MetricsRegistry,
         loop: asyncio.AbstractEventLoop,
         urgent: bool = True) -> BeamChain:
     """
@@ -168,7 +172,8 @@ def make_pausing_beam_chain(
     is missing, and emits an event which requests the missing data.
     """
     pausing_vm_config = tuple(
-        (starting_block, pausing_vm_decorator(vm, event_bus, loop, urgent=urgent))
+        (starting_block,
+            pausing_vm_decorator(vm, event_bus, metrics_registry, loop, urgent=urgent))
         for starting_block, vm in vm_config
     )
     PausingBeamChain = BeamChain.configure(
@@ -185,17 +190,23 @@ TVMFuncReturn = TypeVar('TVMFuncReturn')
 def pausing_vm_decorator(
         original_vm_class: Type[VirtualMachineAPI],
         event_bus: EndpointAPI,
+        metrics_registry: MetricsRegistry,
         loop: asyncio.AbstractEventLoop,
         urgent: bool = True) -> Type[VirtualMachineAPI]:
     """
     Decorate a py-evm VM so that it will pause when data is missing
     """
+    missing_storage_metrics_counter = metrics_registry.counter('trinity.sync/missing_storage')
+    missing_account_metrics_counter = metrics_registry.counter('trinity.sync/missing_account')
+    missing_bytecode_metrics_counter = metrics_registry.counter('trinity.sync/missing_bytecode')
+
     async def request_missing_storage(
             missing_node_hash: Hash32,
             storage_key: Hash32,
             storage_root_hash: Hash32,
             account_address: Address,
             block_number: BlockNumber) -> MissingStorageResult:
+        missing_storage_metrics_counter.inc()
         if event_bus.is_any_endpoint_subscribed_to(CollectMissingStorage):
             return await event_bus.request(CollectMissingStorage(
                 missing_node_hash,
@@ -213,6 +224,7 @@ def pausing_vm_decorator(
             address_hash: Hash32,
             state_root_hash: Hash32,
             block_number: BlockNumber) -> MissingAccountResult:
+        missing_account_metrics_counter.inc()
         if event_bus.is_any_endpoint_subscribed_to(CollectMissingAccount):
             return await event_bus.request(CollectMissingAccount(
                 missing_node_hash,
@@ -227,6 +239,7 @@ def pausing_vm_decorator(
     async def request_missing_bytecode(
             bytecode_hash: Hash32,
             block_number: BlockNumber) -> MissingBytecodeResult:
+        missing_bytecode_metrics_counter.inc()
         if event_bus.is_any_endpoint_subscribed_to(CollectMissingBytecode):
             return await event_bus.request(CollectMissingBytecode(
                 bytecode_hash,
@@ -418,6 +431,12 @@ def pausing_vm_decorator(
         logger = get_logger(f'eth.vm.base.VM.{original_vm_class.__name__}')
 
         last_log_time = 0.0
+
+        def import_block(self, block: BlockAPI) -> BlockAndMetaWitness:
+            missing_account_metrics_counter.clear()
+            missing_bytecode_metrics_counter.clear()
+            missing_storage_metrics_counter.clear()
+            return super().import_block(block)
 
         @classmethod
         def get_state_class(cls) -> Type[StateAPI]:

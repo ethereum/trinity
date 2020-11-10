@@ -11,6 +11,7 @@ from typing import (
 from async_service import Service, background_asyncio_service
 
 from lahja import EndpointAPI
+from pyformance import MetricsRegistry
 
 from eth.abc import (
     AtomicDatabaseAPI,
@@ -33,11 +34,14 @@ from eth_utils import (
 import rlp
 
 from trinity.chains.base import AsyncChainAPI
+from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
 from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
+from trinity.exceptions import WitnessHashesUnavailable
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
+from trinity.protocol.wit.db import AsyncWitnessDB
 from trinity.sync.beam.constants import (
     BEAM_PIVOT_BUFFER_FRACTION,
     BLOCK_BACKFILL_IDLE_TIME,
@@ -127,12 +131,14 @@ class BeamSyncer(Service):
             chain_db: BaseAsyncChainDB,
             peer_pool: ETHPeerPool,
             event_bus: EndpointAPI,
+            metrics_registry: MetricsRegistry,
             checkpoint: Checkpoint = None,
             force_beam_block_number: BlockNumber = None,
             enable_backfill: bool = True,
             enable_state_backfill: bool = True) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamSyncer')
 
+        self.metrics_registry = metrics_registry
         self._body_for_header_exists = body_for_header_exists(chain_db, chain)
 
         if checkpoint is None:
@@ -174,6 +180,7 @@ class BeamSyncer(Service):
         self._data_hunter = MissingDataEventHandler(
             self._state_downloader,
             event_bus,
+            self.metrics_registry,
         )
 
         self._block_importer = BeamBlockImporter(
@@ -182,6 +189,7 @@ class BeamSyncer(Service):
             self._state_downloader,
             self._backfiller,
             event_bus,
+            self.metrics_registry,
         )
         self._launchpoint_header_syncer = HeaderLaunchpointSyncer(self._header_syncer)
         self._body_syncer = RegularChainBodySyncer(
@@ -729,12 +737,14 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             db: DatabaseAPI,
             state_getter: BeamDownloader,
             backfiller: BeamStateBackfill,
-            event_bus: EndpointAPI) -> None:
+            event_bus: EndpointAPI,
+            metrics_registry: MetricsRegistry) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamBlockImporter')
         self._chain = chain
         self._db = db
         self._state_downloader = state_getter
         self._backfiller = backfiller
+        self.metrics_registry = metrics_registry
 
         self._blocks_imported = 0
         self._preloaded_account_state = 0
@@ -754,6 +764,23 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             len(block.transactions),
             f'{block.header.gas_used:,d}',
         )
+
+        if not isinstance(self.metrics_registry, NoopMetricsRegistry):
+            wit_db = AsyncWitnessDB(self._db)
+            try:
+                wit_hashes = wit_db.get_witness_hashes(block.hash)
+            except WitnessHashesUnavailable:
+                self.logger.debug("No witness hashes for block %s. Import will be slow", block)
+            else:
+                block_witness_uncollected = self._state_downloader._get_unique_missing_hashes(
+                    wit_hashes)
+                self.logger.debug(
+                    "Missing %d nodes out of %d from witness of block %s",
+                    len(block_witness_uncollected), len(wit_hashes), block)
+                if block_witness_uncollected:
+                    self.metrics_registry.counter('trinity.sync/block_witness_incomplete').inc()
+                else:
+                    self.metrics_registry.counter('trinity.sync/block_witness_complete').inc()
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)
         new_account_nodes, collection_time = await self._load_address_state(
@@ -915,10 +942,15 @@ class MissingDataEventHandler(Service):
     Request the data on demand, and reply when it is available.
     """
 
-    def __init__(self, state_downloader: BeamDownloader, event_bus: EndpointAPI) -> None:
+    def __init__(
+            self,
+            state_downloader: BeamDownloader,
+            event_bus: EndpointAPI,
+            metrics_registry: MetricsRegistry) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.MissingDataEventHandler')
         self._state_downloader = state_downloader
         self._event_bus = event_bus
+        self.metrics_registry = metrics_registry
         self._minimum_beam_block_number = 0
 
     @property
@@ -954,8 +986,17 @@ class MissingDataEventHandler(Service):
             # Right now this is triggered only when we get a NewBlock msg, but if that changes we
             # should consider skipping the request if the block is too old, like we do in
             # _provide_missing_account_tries().
-            num_nodes_collected = await self._state_downloader.ensure_nodes_present(
+            downloader = self._state_downloader
+            num_nodes_collected = await downloader.ensure_nodes_present(
                 event.node_hashes, event.block_number, event.urgent)
+            missing = downloader._get_unique_missing_hashes(event.node_hashes)
+            if missing:
+                self.logger.debug(
+                    "Failed to download %d trie nodes out of %d requested for block %d",
+                    len(missing),
+                    len(event.node_hashes),
+                    event.block_number,
+                )
             await self._event_bus.broadcast(
                 MissingTrieNodesResult(num_nodes_collected),
                 event.broadcast_config(),
