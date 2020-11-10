@@ -196,6 +196,7 @@ def pausing_vm_decorator(
             storage_root_hash: Hash32,
             account_address: Address,
             block_number: BlockNumber) -> MissingStorageResult:
+        get_logger("trinity").warning("CollectMissingStorage")
         if event_bus.is_any_endpoint_subscribed_to(CollectMissingStorage):
             return await event_bus.request(CollectMissingStorage(
                 missing_node_hash,
@@ -213,6 +214,7 @@ def pausing_vm_decorator(
             address_hash: Hash32,
             state_root_hash: Hash32,
             block_number: BlockNumber) -> MissingAccountResult:
+        get_logger("trinity").warning("CollectMissingAccount")
         if event_bus.is_any_endpoint_subscribed_to(CollectMissingAccount):
             return await event_bus.request(CollectMissingAccount(
                 missing_node_hash,
@@ -227,6 +229,7 @@ def pausing_vm_decorator(
     async def request_missing_bytecode(
             bytecode_hash: Hash32,
             block_number: BlockNumber) -> MissingBytecodeResult:
+        get_logger("trinity").warning("CollectMissingBytecode")
         if event_bus.is_any_endpoint_subscribed_to(CollectMissingBytecode):
             return await event_bus.request(CollectMissingBytecode(
                 bytecode_hash,
