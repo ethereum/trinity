@@ -34,6 +34,7 @@ from trinity.components.builtin.metrics.component import metrics_service_from_ar
 from trinity.components.builtin.metrics.service.noop import NOOP_METRICS_SERVICE
 from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.manager import DBClient
+from trinity.exceptions import WitnessHashesUnavailable
 from trinity.extensibility import TrioIsolatedComponent
 from trinity.protocol.eth.events import NewBlockEvent
 from trinity.protocol.eth.payloads import (
@@ -180,8 +181,18 @@ class NewBlockService(Service):
 
     async def _fetch_witnesses(
             self, peer: ETHProxyPeer, block_hash: Hash32, block_number: BlockNumber) -> None:
-        # FIXME: Return immediately if we already have witness hashes for the given block hash in
-        # our wit db.
+        base_db = DBClient.connect(self._boot_info.trinity_config.database_ipc_path)
+        with base_db:
+            try:
+                AsyncWitnessDB(base_db).get_witness_hashes(block_hash)
+            except WitnessHashesUnavailable:
+                pass
+            else:
+                block_str = f"Block #{block_number}-0x{humanize_hash(block_hash)}"
+                self.logger.debug(
+                    "Already have witness hashes for %s, not fetching again", block_str)
+                return
+
         await fetch_witnesses(
             peer, block_hash, block_number, self._event_bus,
             self._boot_info.trinity_config.database_ipc_path,
