@@ -366,7 +366,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
 
         if len(block_body_bundles) == 0:
             self.logger.debug(
-                "Got block bodies for 0/%d headers from %s, from %r..%r",
+                "Got block bodies for 0/%d headers from %s, from %s..%s",
                 len(headers),
                 peer,
                 headers[0],
@@ -394,7 +394,7 @@ class BaseBodyChainSyncer(Service, PeerSubscriber):
         self._pending_bodies = merge(self._pending_bodies, pending_bodies)
 
         self.logger.debug(
-            "Got block bodies for %d/%d headers from %s, from %r..%r",
+            "Got block bodies for %d/%d headers from %s, from %s..%s",
             len(completed_header_roots),
             len(headers),
             peer,
