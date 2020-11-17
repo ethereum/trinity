@@ -36,7 +36,7 @@ from trinity.constants import TO_NETWORKING_BROADCAST_CONFIG
 from trinity.db.manager import DBClient
 from trinity.exceptions import WitnessHashesUnavailable
 from trinity.extensibility import TrioIsolatedComponent
-from trinity.protocol.eth.events import NewBlockEvent
+from trinity.protocol.eth.events import NewBlockEvent, NewBlockHashesEvent
 from trinity.protocol.eth.payloads import (
     BlockFields,
     NewBlockHash,
@@ -95,9 +95,21 @@ class NewBlockService(Service):
 
     async def run(self) -> None:
         self.manager.run_daemon_task(self._handle_imported_blocks)
+        self.manager.run_daemon_task(self._handle_new_block_hashes)
 
         async for event in self._event_bus.stream(NewBlockEvent):
             self.manager.run_task(self._handle_new_block, event.session, event.command.payload)
+
+    async def _handle_new_block_hashes(self) -> None:
+        async for event in self._event_bus.stream(NewBlockHashesEvent):
+            sender_peer = ETHProxyPeer.from_session(
+                event.session,
+                self._event_bus,
+                TO_NETWORKING_BROADCAST_CONFIG
+            )
+            for new_block_hash in event.command.payload:
+                self.manager.run_task(
+                    self._fetch_witnesses, sender_peer, new_block_hash.hash, new_block_hash.number)
 
     async def _handle_imported_blocks(self) -> None:
         async for event in self._event_bus.stream(NewBlockImported):
