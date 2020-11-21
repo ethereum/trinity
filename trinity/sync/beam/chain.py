@@ -808,7 +808,8 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             try:
                 wit_hashes = wit_db.get_witness_hashes(block.hash)
             except WitnessHashesUnavailable:
-                self.logger.debug("No witness hashes for block %s. Import will be slow", block)
+                self.logger.info("No witness hashes for block %s. Import will be slow", block)
+                self.metrics_registry.counter('trinity.sync/block_witness_hashes_missing').inc()
             else:
                 block_witness_uncollected = self._state_downloader._get_unique_missing_hashes(
                     wit_hashes)

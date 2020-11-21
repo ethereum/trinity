@@ -140,6 +140,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             # Initialize with a MetricsRegistry from pyformance as p2p can not depend on Trinity
             # This is so that we don't need to pass a MetricsRegistry in tests and mocked pools.
             metrics_registry = MetricsRegistry()
+        self.metrics_registry = metrics_registry
         self._active_peer_counter = metrics_registry.counter('trinity.p2p/peers.counter')
         self._peer_reporter_registry = self.get_peer_reporter_registry(metrics_registry)
 
@@ -371,6 +372,9 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             await peer.disconnect(DisconnectReason.TIMEOUT)
             return
 
+    def record_metrics_for_added_peer(self, peer: BasePeer) -> None:
+        self._active_peer_counter.inc()
+
     def _add_peer(self, peer: BasePeer) -> None:
         """Add the given peer to the pool.
 
@@ -383,7 +387,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
             logger = self.logger.debug
         logger("Adding %s to pool", peer)
         self.connected_nodes[peer.session] = peer
-        self._active_peer_counter.inc()
+        self.record_metrics_for_added_peer(peer)
         self._peer_reporter_registry.assign_peer_reporter(peer)
         peer.add_finished_callback(self._peer_finished)
         for subscriber in self._subscribers:
@@ -530,6 +534,9 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
 
             await self.add_outbound_peer(peer)
 
+    def record_metrics_for_removed_peer(self, peer: BasePeer) -> None:
+        self._active_peer_counter.dec()
+
     def _peer_finished(self, peer: BasePeer) -> None:
         """
         Remove the given peer from our list of connected nodes.
@@ -553,7 +560,7 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         for subscriber in self._subscribers:
             subscriber.deregister_peer(peer)
 
-        self._active_peer_counter.dec()
+        self.record_metrics_for_removed_peer(peer)
         self._peer_reporter_registry.unassign_peer_reporter(peer)
 
     async def __aiter__(self) -> AsyncIterator[BasePeer]:
@@ -568,6 +575,9 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
         while self.manager.is_running:
             self._peer_reporter_registry.trigger_peer_reports()
             await asyncio.sleep(self._report_metrics_interval)
+
+    def log_extra_stats(self) -> None:
+        pass
 
     async def _periodically_report_stats(self) -> None:
         while self.manager.is_running:
@@ -607,5 +617,6 @@ class BasePeerPool(Service, AsyncIterable[BasePeer]):
                 except (UnknownAPI, PeerConnectionLost) as exc:
                     self.logger.debug("    Failure during stats lookup: %r", exc)
 
+            self.log_extra_stats()
             self.logger.debug("== End peer details == ")
             await asyncio.sleep(self._report_stats_interval)

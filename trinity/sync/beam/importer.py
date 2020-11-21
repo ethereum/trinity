@@ -436,7 +436,8 @@ def pausing_vm_decorator(
             missing_account_metrics_counter.clear()
             missing_bytecode_metrics_counter.clear()
             missing_storage_metrics_counter.clear()
-            return super().import_block(block)
+            with metrics_registry.timer('trinity.sync/block_import_time').time():
+                return super().import_block(block)
 
         @classmethod
         def get_state_class(cls) -> Type[StateAPI]:

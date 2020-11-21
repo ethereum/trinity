@@ -99,6 +99,8 @@ class BeamSyncService(Service):
                 return False
             else:
                 lag = beam_syncer.get_block_count_lag()
+                if self.sync_metrics_registry:
+                    self.sync_metrics_registry.record_lag(lag)
                 if lag > MAX_BEAM_SYNC_LAG:
                     self.logger.warning(
                         "Beam Sync is lagging by %d blocks. Pivoting...",
