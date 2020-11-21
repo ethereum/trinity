@@ -224,7 +224,7 @@ async def fetch_witnesses(
     Fetch witness hashes for the given block from the given peer and emit a
     CollectMissingTrieNodes event to trigger the download of the trie nodes referred by them.
     """
-    block_str = f"Block #{block_number}-0x{humanize_hash(block_hash)}"
+    block_str = f"<Block #{block_number}-0x{humanize_hash(block_hash)}>"
     try:
         logger.debug(
             "Attempting to fetch witness hashes for %s from %s", block_str, peer)
@@ -239,7 +239,6 @@ async def fetch_witnesses(
         return tuple()
     else:
         if witness_hashes:
-            metrics_registry.counter('trinity.sync/block_witness_hashes.hit').inc()
             logger.debug(
                 "Got witness hashes for %s, asking BeamSyncer to fetch them", block_str)
             # XXX: Consider using urgent=False if the new block is more than a couple blocks ahead
@@ -265,7 +264,10 @@ async def fetch_witnesses(
                 wit_db = AsyncWitnessDB(base_db)
                 wit_db.persist_witness_hashes(block_hash, witness_hashes)
         else:
-            metrics_registry.counter('trinity.sync/block_witness_hashes.miss').inc()
             logger.debug(
-                "%s announced %s but doesn't have witness hashes for it", peer, block_str)
+                "%s announced %s but doesn't have witness hashes for it. "
+                "This could be a peer that does not support the wit protocol, though",
+                peer,
+                block_str,
+            )
         return witness_hashes

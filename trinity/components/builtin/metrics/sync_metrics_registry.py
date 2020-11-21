@@ -13,6 +13,9 @@ class SyncMetricsRegistry:
         self.metrics_service = metrics_service
         self.pivot_meter = metrics_service.registry.meter('trinity.p2p/sync/pivot_rate.meter')
 
+    def record_lag(self, lag: int) -> None:
+        self.metrics_service.registry.gauge('trinity.sync/chain_head_lag').set_value(lag)
+
     async def record_pivot(self, block_number: BlockNumber) -> None:
         # record pivot and send event annotation to influxdb
         self.pivot_meter.mark()

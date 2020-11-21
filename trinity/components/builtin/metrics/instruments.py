@@ -73,6 +73,15 @@ class NoopMeter(Meter):
         return 0
 
 
+class NoopTimerContext:
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(self, t, v, tb):  # type: ignore
+        pass
+
+
 class NoopTimer(Timer):
 
     def __init__(self) -> None:
@@ -114,8 +123,8 @@ class NoopTimer(Timer):
     def get_fifteen_minute_rate(self) -> int:
         return 0
 
-    def time(self, *args: Any, **kwargs: Any) -> None:
-        raise NotImplementedError("time() isn't implemented on NoopTimer")
+    def time(self, *args: Any, **kwargs: Any) -> NoopTimerContext:
+        return NoopTimerContext()
 
     def clear(self) -> None:
         pass

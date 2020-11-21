@@ -19,6 +19,7 @@ from lahja import (
 )
 
 from p2p.abc import BehaviorAPI, CommandAPI, HandshakerAPI, SessionAPI
+from p2p.peer import BasePeer
 
 from trinity.protocol.common.peer import (
     BaseChainPeer,
@@ -425,6 +426,28 @@ class ETHPeerPoolEventServer(PeerPoolEventServer[ETHPeer]):
 
 class ETHPeerPool(BaseChainPeerPool):
     peer_factory_class = ETHPeerFactory
+    wit_enabled_metrics_name = 'trinity.p2p/wit_peers.counter'
+    non_wit_enabled_metrics_name = 'trinity.p2p/non_wit_peers.counter'
+
+    def record_metrics_for_added_peer(self, peer: BasePeer) -> None:
+        if hasattr(peer, 'wit_api'):
+            self.metrics_registry.counter(self.wit_enabled_metrics_name).inc()
+        else:
+            self.metrics_registry.counter(self.non_wit_enabled_metrics_name).inc()
+
+    def record_metrics_for_removed_peer(self, peer: BasePeer) -> None:
+        if hasattr(peer, 'wit_api'):
+            self.metrics_registry.counter(self.wit_enabled_metrics_name).dec()
+        else:
+            self.metrics_registry.counter(self.non_wit_enabled_metrics_name).dec()
+
+    def log_extra_stats(self) -> None:
+        for peer in self.connected_nodes.values():
+            if hasattr(peer, 'wit_api'):
+                return
+        self.logger.warning(
+            "No connected peers support the witness protocol. Block import times are likely "
+            "to be high")
 
 
 class ETHProxyPeerPool(BaseProxyPeerPool[ETHProxyPeer]):
