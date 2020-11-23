@@ -184,7 +184,7 @@ class BaseChainPeerFactory(BasePeerFactory):
 
 class BaseChainPeerPool(BasePeerPool):
     context: ChainContext
-    connected_nodes: Dict[NodeAPI, BaseChainPeer]  # type: ignore
+    connected_nodes: Dict[SessionAPI, BaseChainPeer]  # type: ignore
     peer_factory_class: Type[BaseChainPeerFactory]
     peer_tracker: BaseEth1PeerTracker
     peer_reporter_registry_class = BaseChainPeerReporterRegistry
