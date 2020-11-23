@@ -24,6 +24,7 @@ from lahja import (
     BaseRequestResponseEvent,
 )
 
+from p2p.abc import SessionAPI
 from trinity.sync.common.types import (
     SyncProgress
 )
@@ -146,6 +147,22 @@ class CollectMissingTrieNodes(BaseRequestResponseEvent[MissingTrieNodesResult]):
     @staticmethod
     def expected_response_type() -> Type[MissingTrieNodesResult]:
         return MissingTrieNodesResult
+
+
+@dataclass
+class BlockWitnessResult(BaseEvent):
+    witness_hashes: Tuple[Hash32, ...] = tuple()
+
+
+@dataclass
+class FetchBlockWitness(BaseRequestResponseEvent[BlockWitnessResult]):
+    preferred_peer: SessionAPI
+    hash: Hash32
+    number: BlockNumber
+
+    @staticmethod
+    def expected_response_type() -> Type[BlockWitnessResult]:
+        return BlockWitnessResult
 
 
 @dataclass

@@ -50,6 +50,10 @@ from trinity.sync.common.checkpoint import Checkpoint
 from trinity.sync.common.chain import (
     SimpleBlockImporter,
 )
+from trinity.sync.common.events import (
+    BlockWitnessResult,
+    FetchBlockWitness,
+)
 from trinity.sync.full.chain import FastChainSyncer, RegularChainSyncer, RegularChainBodySyncer
 
 from trinity.protocol.eth.servers import ETHRequestServer
@@ -331,12 +335,21 @@ async def _beam_syncing(
             backfill_peer.logger.info("%s is serving backfill state", backfill_peer)
             server_peer.logger.info("%s is syncing up churner blocks", server_peer)
 
+            async def mock_witness_fetcher():
+                async for event in gatherer_endpoint.stream(FetchBlockWitness):
+                    await gatherer_endpoint.broadcast(
+                        BlockWitnessResult(tuple()), event.broadcast_config())
+
             import_server = BlockImportServer(
                 pausing_endpoint,
                 client_chain,
             )
-            async with background_asyncio_service(import_server):
+            async with background_asyncio_service(import_server) as manager:
+                # Witness fetching is the responsibility of BeamSyncService, but in this test
+                # we don't run that, so need to mock it.
+                manager.run_daemon_task(mock_witness_fetcher)
                 await pausing_endpoint.connect_to_endpoints(gatherer_config)
+                await pausing_endpoint.wait_until_any_endpoint_subscribed_to(FetchBlockWitness)
                 async with background_asyncio_service(client):
                     yield client
 
