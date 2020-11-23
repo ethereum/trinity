@@ -49,8 +49,8 @@ from trinity.sync.beam.constants import (
     BEAM_PIVOT_BUFFER_FRACTION,
     BLOCK_BACKFILL_IDLE_TIME,
     BLOCK_IMPORT_MISSING_STATE_TIMEOUT,
-    ESTIMATED_BEAMABLE_SECONDS,
     FULL_BLOCKS_NEEDED_TO_START_BEAM,
+    MAX_BEAM_SYNC_LAG,
     PAUSE_BACKFILL_AT_LAG,
     RESUME_BACKFILL_AT_LAG,
     PREDICTED_BLOCK_TIME,
@@ -655,7 +655,8 @@ class HeaderOnlyPersist(Service):
 
     def _is_header_eligible_to_beam_sync(self, header: BlockHeaderAPI) -> bool:
         time_gap = time.time() - header.timestamp
-        return time_gap < (ESTIMATED_BEAMABLE_SECONDS * (1 - BEAM_PIVOT_BUFFER_FRACTION))
+        estimated_max_lag_seconds = MAX_BEAM_SYNC_LAG * PREDICTED_BLOCK_TIME
+        return time_gap < (estimated_max_lag_seconds * (1 - BEAM_PIVOT_BUFFER_FRACTION))
 
     async def _persist_headers_if_tip_too_old(self) -> None:
         tip = await self._db.coro_get_canonical_head()
