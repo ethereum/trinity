@@ -76,6 +76,11 @@ ESTIMATED_BEAMABLE_BLOCKS = 120
 # It's also useful to estimate the amount of time covered by those beamable blocks.
 ESTIMATED_BEAMABLE_SECONDS = ESTIMATED_BEAMABLE_BLOCKS * PREDICTED_BLOCK_TIME
 
+# Maximum number of blocks we can lag behind the current chain head before we pivot.
+# This is a relatively low value because on mainnet, as soon as we are lagging behind 20-30
+# blocks, we're very unlikely to catch up given our block import times are high.
+MAX_BEAM_SYNC_LAG = 30
+
 # To make up for clients that are configured with unusually low block times,
 # and other surprises, we pivot earlier than we think we need to.
 # For example, if the BEAM_PIVOT_BUFFER_FRACTION is ~1/4, then pivot about 25%

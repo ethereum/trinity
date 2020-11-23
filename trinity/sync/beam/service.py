@@ -13,7 +13,7 @@ from trinity.components.builtin.metrics.sync_metrics_registry import SyncMetrics
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.sync.beam.constants import (
-    ESTIMATED_BEAMABLE_BLOCKS,
+    MAX_BEAM_SYNC_LAG,
     PREDICTED_BLOCK_TIME,
 )
 from trinity.sync.common.checkpoint import Checkpoint
@@ -99,7 +99,7 @@ class BeamSyncService(Service):
                 return False
             else:
                 lag = beam_syncer.get_block_count_lag()
-                if lag > ESTIMATED_BEAMABLE_BLOCKS:
+                if lag > MAX_BEAM_SYNC_LAG:
                     self.logger.warning(
                         "Beam Sync is lagging by %d blocks. Pivoting...",
                         lag,
@@ -107,7 +107,7 @@ class BeamSyncService(Service):
                     beam_syncer.get_manager().cancel()
                     return True
                 else:
-                    if lag >= ESTIMATED_BEAMABLE_BLOCKS * 0.8:
+                    if lag >= MAX_BEAM_SYNC_LAG * 0.8:
                         # Start showing the lag in info, if lagging behind a lot
                         logger = self.logger.info
                     else:
@@ -118,7 +118,7 @@ class BeamSyncService(Service):
                             " will pivot above %d"
                         ),
                         lag,
-                        ESTIMATED_BEAMABLE_BLOCKS,
+                        MAX_BEAM_SYNC_LAG,
                     )
 
                     # Keep monitoring
