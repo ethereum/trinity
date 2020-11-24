@@ -22,10 +22,7 @@ from eth.abc import (
     SignedTransactionAPI,
 )
 from eth.constants import GENESIS_PARENT_HASH
-from eth.typing import (
-    BlockRange,
-    ChainGaps,
-)
+from eth.typing import BlockRange
 from eth_typing import (
     Address,
     BlockNumber,
@@ -212,11 +209,9 @@ class BeamSyncer(Service):
         )
 
         self._header_backfill = SequentialHeaderChainGapSyncer(chain, chain_db, peer_pool)
+        self._block_backfill = BodyChainGapSyncer(chain, chain_db, peer_pool)
 
         self._chain = chain
-        self._chain_db = chain_db
-        self._peer_pool = peer_pool
-        self._checkpoint = checkpoint
         self._enable_backfill = enable_backfill
         self._enable_state_backfill = enable_state_backfill
 
@@ -273,19 +268,6 @@ class BeamSyncer(Service):
             self.manager.run_child_service(self._header_backfill)
 
             # In contrast, block gap fill needs to run indefinitely because of beam sync pivoting.
-            if self._checkpoint is None:
-                self._block_backfill = BodyChainGapSyncer(
-                    self._chain,
-                    self._chain_db,
-                    self._peer_pool
-                )
-            else:
-                self._block_backfill = FromCheckpointBodyChainGapSyncer(
-                    self._chain,
-                    self._chain_db,
-                    self._peer_pool,
-                    await self._launch_strategy.get_starting_block_number()
-                )
             self.manager.run_daemon_child_service(self._block_backfill)
 
             # Now we can check the lag (presumably ~0) and start backfill
@@ -501,12 +483,15 @@ class BodyChainGapSyncer(Service):
         )
         self._body_syncer.logger = self.logger
 
-    def _refine_gaps(self, chain_gaps: ChainGaps) -> BlockRange:
-        gaps, future_tip_block = chain_gaps
-        if len(gaps) == 0:
+    def _get_next_gap(self) -> BlockRange:
+        gaps, future_tip_block = self._db.get_chain_gaps()
+        header_gaps, future_tip_header = self._db.get_header_chain_gaps()
+        try:
+            actionable_gap = self.get_topmost_actionable_gap(gaps, header_gaps)
+
+        except NoActionableGap:
             # We do not have gaps in the chain of blocks but we may still have a gap from the last
             # block up until the highest consecutive written header.
-            header_gaps, future_tip_header = self._db.get_header_chain_gaps()
             if len(header_gaps) > 0:
                 # The header chain has gaps, find out the lowest missing header
                 lowest_missing_header, _ = header_gaps[0]
@@ -523,11 +508,28 @@ class BodyChainGapSyncer(Service):
             else:
                 raise ValidationError("No gaps in the chain of blocks")
         else:
-            return gaps[-1]
+            return actionable_gap
 
-    def _get_next_gap(self) -> BlockRange:
-        gaps, future_tip_block = self._db.get_chain_gaps()
-        return self._refine_gaps((gaps, future_tip_block))
+    def get_topmost_actionable_gap(self,
+                                   gaps: Tuple[BlockRange, ...],
+                                   header_gaps: Tuple[BlockRange, ...]) -> BlockRange:
+        '''
+        Returns the most recent gap of blocks of max size = _max_backfill_block_bodies_at_once
+        for which the headers exist in DB.
+        '''
+        for gap in gaps[::-1]:
+            if gap[1] - gap[0] > self._max_backfill_block_bodies_at_once:
+                gap = (BlockNumber(gap[1] - self._max_backfill_block_bodies_at_once), gap[1])
+            for header_gap in header_gaps[::-1]:
+                if not self._have_empty_intersection(gap, header_gap):
+                    break
+            else:
+                return gap
+        else:
+            raise NoActionableGap
+
+    def _have_empty_intersection(self, block_gap: BlockRange, header_gap: BlockRange) -> bool:
+        return block_gap[0] > header_gap[1] or block_gap[1] < header_gap[0]
 
     @property
     def is_paused(self) -> bool:
@@ -573,39 +575,11 @@ class BodyChainGapSyncer(Service):
                 await self.manager.run_service(self._body_syncer)
 
 
-class FromCheckpointBodyChainGapSyncer(BodyChainGapSyncer):
-    def __init__(self,
-                 chain: AsyncChainAPI,
-                 db: BaseAsyncChainDB,
-                 peer_pool: ETHPeerPool,
-                 checkpoint_number: BlockNumber) -> None:
-        super().__init__(chain, db, peer_pool)
-        self.checkpoint_number = checkpoint_number
-
-    def _remove_gaps_before_checkpoint(
-            self,
-            gaps: Tuple[BlockRange, ...]) -> Tuple[BlockRange, ...]:
-        gaps_after_checkpoint = []
-        for gap in gaps:
-            start, end = gap
-            if end <= self.checkpoint_number:
-                continue
-            elif start > self.checkpoint_number:
-                gaps_after_checkpoint.append(gap)
-            else:
-                gaps_after_checkpoint.append(
-                    (
-                        BlockNumber(self.checkpoint_number + 1),
-                        BlockNumber(end)
-                    )
-                )
-        return tuple(gaps_after_checkpoint)
-
-    def _get_next_gap(self) -> BlockRange:
-        gaps, future_tip_block = self._db.get_chain_gaps()
-        gaps_after_checkpoint = self._remove_gaps_before_checkpoint(gaps)
-        return self._refine_gaps((gaps_after_checkpoint, future_tip_block))
-
+class NoActionableGap(Exception):
+    """
+    Raised when no actionable gap of blocks is found.
+    """
+    pass
 
 class HeaderLaunchpointSyncer(HeaderSyncerAPI):
     """

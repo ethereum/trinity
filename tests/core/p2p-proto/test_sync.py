@@ -747,9 +747,7 @@ async def test_block_gapfill_syncer(request,
 
 
 @pytest.mark.asyncio
-async def test_block_gapfill_from_checkpoint_syncer(request,
-                                                    event_loop,
-                                                    event_bus,
+async def test_block_gapfill_from_checkpoint_syncer(event_bus,
                                                     chaindb_with_headers_from_checkpoint,
                                                     chaindb_1000):
     client_context = ChainContextFactory(headerdb__db=chaindb_with_headers_from_checkpoint.db)
@@ -779,7 +777,7 @@ async def test_block_gapfill_from_checkpoint_syncer(request,
         header_gaps, _ = chain_with_gaps.chaindb.get_header_chain_gaps()
         with pytest.raises(NoActionableGap):
             # no actionable block gap at the moment
-            actionable_gaps = syncer.get_topmost_actionable_gap(gaps, header_gaps)
+            syncer.get_topmost_actionable_gap(gaps, header_gaps)
 
         # Add enough headers to have an actionable gap:
         fat_chain = LatestTestChain(chaindb_1000.db)
