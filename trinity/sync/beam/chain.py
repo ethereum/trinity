@@ -515,13 +515,15 @@ class BodyChainGapSyncer(Service):
                                    header_gaps: Tuple[BlockRange, ...]) -> BlockRange:
         '''
         Returns the most recent gap of blocks of max size = _max_backfill_block_bodies_at_once
-        for which the headers exist in DB.
+        for which the headers exist in DB, along with the header preceding the gap.
         '''
         for gap in gaps[::-1]:
             if gap[1] - gap[0] > self._max_backfill_block_bodies_at_once:
                 gap = (BlockNumber(gap[1] - self._max_backfill_block_bodies_at_once), gap[1])
+            #We want to be sure the header preceding the block gap is in DB
+            gap_with_prev_block = (BlockNumber(gap[0] - 1), gap[1])
             for header_gap in header_gaps[::-1]:
-                if not self._have_empty_intersection(gap, header_gap):
+                if not self._have_empty_intersection(gap_with_prev_block, header_gap):
                     break
             else:
                 return gap
@@ -580,6 +582,7 @@ class NoActionableGap(Exception):
     Raised when no actionable gap of blocks is found.
     """
     pass
+
 
 class HeaderLaunchpointSyncer(HeaderSyncerAPI):
     """
