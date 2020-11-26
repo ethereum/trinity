@@ -1,0 +1,1 @@
+Fix crash when Trinity was launched with a checkpoint too close from tip in Beam Sync mode

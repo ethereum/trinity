@@ -38,7 +38,10 @@ from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
 from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.exceptions import WitnessHashesUnavailable
+from trinity.exceptions import (
+    WitnessHashesUnavailable,
+    BaseTrinityError,
+)
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.protocol.wit.db import AsyncWitnessDB
@@ -577,7 +580,7 @@ class BodyChainGapSyncer(Service):
                 await self.manager.run_service(self._body_syncer)
 
 
-class NoActionableGap(Exception):
+class NoActionableGap(BaseTrinityError):
     """
     Raised when no actionable gap of blocks is found.
     """
