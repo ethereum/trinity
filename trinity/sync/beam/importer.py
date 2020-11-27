@@ -103,13 +103,13 @@ class BeamStats:
     def __str__(self) -> str:
         avg_rtt = self.avg_rtt
 
-        wait_time = humanize_seconds(self.data_pause_time)
+        wait_time = self.data_pause_time
 
         return (
             f"BeamStat: accts={self.num_accounts}, "
             f"a_nodes={self.num_account_nodes}, codes={self.num_bytecodes}, "
             f"strg={self.num_storages}, s_nodes={self.num_storage_nodes}, "
-            f"nodes={self.num_nodes}, rtt={avg_rtt:.3f}s, wait={wait_time}"
+            f"nodes={self.num_nodes}, rtt={avg_rtt:.3f}s, wait={wait_time:.1f}s"
         )
 
     def __repr__(self) -> str:

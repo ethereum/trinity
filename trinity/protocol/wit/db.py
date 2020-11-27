@@ -55,14 +55,31 @@ class AsyncWitnessDB(AsyncWitnessDataBaseAPI):
         except KeyError:
             recent_blocks_with_witnesses = []
 
-        while len(recent_blocks_with_witnesses) >= self._max_witness_history:
+        # Add in the new block, if it's not already present
+        if block_hash not in recent_blocks_with_witnesses:
+            recent_blocks_with_witnesses.append(block_hash)
+
+        # Flush out old witnesses
+        while len(recent_blocks_with_witnesses) > self._max_witness_history:
             oldest_block_witness = recent_blocks_with_witnesses.pop(0)
             del self.db[self._make_block_witness_hashes_lookup_key(oldest_block_witness)]
 
-        recent_blocks_with_witnesses.append(block_hash)
+        # Store new reference to existing witness
         self.db[self._recent_blocks_with_witnesses_lookup_key] = rlp.encode(
             recent_blocks_with_witnesses)
-        self.db[self._make_block_witness_hashes_lookup_key(block_hash)] = rlp.encode(witness_hashes)
+
+        try:
+            # Note: if this call is converted to async, watch out for the race
+            #   condition of two persists that interleave. It would be
+            #   possible for one to overwrite the other. For now, the synchronous
+            #   approach means that that isn't a concern.
+            existing_hashes = self.get_witness_hashes(block_hash)
+        except WitnessHashesUnavailable:
+            existing_hashes = ()
+
+        block_hashes_key = self._make_block_witness_hashes_lookup_key(block_hash)
+        combined_hashes = tuple(set(existing_hashes).union(witness_hashes))
+        self.db[block_hashes_key] = rlp.encode(combined_hashes)
 
     coro_get_witness_hashes = async_method(get_witness_hashes)
     coro_persist_witness_hashes = async_method(persist_witness_hashes)
