@@ -1,6 +1,6 @@
 import pytest
 
-from eth.db.atomic import AtomicDB
+from eth.db.backends.memory import MemoryDB
 
 from trinity.exceptions import WitnessHashesUnavailable
 from trinity.protocol.wit.db import AsyncWitnessDB
@@ -9,7 +9,7 @@ from trinity.tools.factories import Hash32Factory
 
 @pytest.mark.asyncio
 async def test_persisting_and_looking_up():
-    wit_db = AsyncWitnessDB(AtomicDB())
+    wit_db = AsyncWitnessDB(MemoryDB())
 
     hash1 = Hash32Factory()
     with pytest.raises(WitnessHashesUnavailable):
@@ -22,7 +22,7 @@ async def test_persisting_and_looking_up():
 
 @pytest.mark.asyncio
 async def test_witness_for_recent_blocks():
-    wit_db = AsyncWitnessDB(AtomicDB())
+    wit_db = AsyncWitnessDB(MemoryDB())
     hash1 = Hash32Factory()
     hash1_witnesses = tuple(Hash32Factory.create_batch(5))
     await wit_db.coro_persist_witness_hashes(hash1, hash1_witnesses)
