@@ -32,7 +32,7 @@ deps = {
     'trinity': [
         "aiohttp==3.6.0",
         "asks>=2.4.8,<3",
-        "argcomplete>=1.10.0,<2",
+        "argcomplete>=1.12.2,<2",
         "asyncio-run-in-process==0.1.0a10",
         "bloom-filter==1.3",
         "cachetools>=3.1.0,<4.0.0",
