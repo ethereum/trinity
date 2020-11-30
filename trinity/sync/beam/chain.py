@@ -34,7 +34,6 @@ from eth_utils import (
 import rlp
 
 from trinity.chains.base import AsyncChainAPI
-from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
 from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
@@ -75,6 +74,7 @@ from trinity.sync.common.events import (
     CollectMissingTrieNodes,
     DoStatelessBlockImport,
     DoStatelessBlockPreview,
+    FetchBlockWitness,
     MissingAccountResult,
     MissingBytecodeResult,
     MissingStorageResult,
@@ -803,23 +803,27 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             f'{block.header.gas_used:,d}',
         )
 
-        if not isinstance(self.metrics_registry, NoopMetricsRegistry):
-            wit_db = AsyncWitnessDB(self._db)
-            try:
-                wit_hashes = wit_db.get_witness_hashes(block.hash)
-            except WitnessHashesUnavailable:
-                self.logger.info("No witness hashes for block %s. Import will be slow", block)
-                self.metrics_registry.counter('trinity.sync/block_witness_hashes_missing').inc()
+        wit_db = AsyncWitnessDB(self._db)
+        try:
+            wit_hashes = wit_db.get_witness_hashes(block.hash)
+        except WitnessHashesUnavailable:
+            self.metrics_registry.counter('trinity.sync/block_witness_hashes_missing').inc()
+            self.logger.info("Missing witness for %s. Attempting to fetch during import", block)
+            preferred_peer = None
+            self.manager.run_task(
+                self._event_bus.request,
+                FetchBlockWitness(preferred_peer, block.hash, block.number),
+            )
+        else:
+            block_witness_uncollected = self._state_downloader._get_unique_missing_hashes(
+                wit_hashes)
+            self.logger.debug(
+                "Missing %d nodes out of %d from witness of block %s",
+                len(block_witness_uncollected), len(wit_hashes), block)
+            if block_witness_uncollected:
+                self.metrics_registry.counter('trinity.sync/block_witness_incomplete').inc()
             else:
-                block_witness_uncollected = self._state_downloader._get_unique_missing_hashes(
-                    wit_hashes)
-                self.logger.debug(
-                    "Missing %d nodes out of %d from witness of block %s",
-                    len(block_witness_uncollected), len(wit_hashes), block)
-                if block_witness_uncollected:
-                    self.metrics_registry.counter('trinity.sync/block_witness_incomplete').inc()
-                else:
-                    self.metrics_registry.counter('trinity.sync/block_witness_complete').inc()
+                self.metrics_registry.counter('trinity.sync/block_witness_complete').inc()
 
         parent_header = await self._chain.coro_get_block_header_by_hash(block.header.parent_hash)
         new_account_nodes, collection_time = await self._load_address_state(
