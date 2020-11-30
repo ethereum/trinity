@@ -9,6 +9,7 @@ from lahja import (
 
 from p2p.abc import CommandAPI, SessionAPI
 
+from trinity.exceptions import WitnessHashesUnavailable
 from trinity.protocol.common.servers import (
     BaseIsolatedRequestServer,
 )
@@ -40,7 +41,7 @@ class WitRequestServer(BaseIsolatedRequestServer):
             "Peer %s requested block witnesses for block %s", peer, cmd.payload.block_hash)
         try:
             witness_hashes = await self.db.coro_get_witness_hashes(cmd.payload.block_hash)
-        except KeyError:
+        except WitnessHashesUnavailable:
             witness_hashes = tuple()
         self.logger.debug2("Replying to %s with %d witnesses", peer, len(witness_hashes))
         peer.wit_api.send_block_witness_hashes(
