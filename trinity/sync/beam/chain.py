@@ -38,7 +38,10 @@ from trinity.components.builtin.metrics.registry import NoopMetricsRegistry
 from trinity.constants import FIRE_AND_FORGET_BROADCASTING
 from trinity.db.eth1.chain import BaseAsyncChainDB
 from trinity.db.eth1.header import BaseAsyncHeaderDB
-from trinity.exceptions import WitnessHashesUnavailable
+from trinity.exceptions import (
+    WitnessHashesUnavailable,
+    BaseTrinityError,
+)
 from trinity.protocol.eth.peer import ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.protocol.wit.db import AsyncWitnessDB
@@ -452,12 +455,13 @@ class BodyChainGapSyncer(Service):
         self._peer_pool = peer_pool
         self._pauser = Pauser()
         self._body_syncer: FastChainBodySyncer = None
+        self._max_backfill_block_bodies_at_once = MAX_BACKFILL_BLOCK_BODIES_AT_ONCE
 
     async def _setup_for_next_gap(self) -> None:
         gap_start, gap_end = self._get_next_gap()
         fill_start = BlockNumber(max(
             gap_start,
-            gap_end - MAX_BACKFILL_BLOCK_BODIES_AT_ONCE,
+            gap_end - self._max_backfill_block_bodies_at_once,
         ))
         start_num = BlockNumber(fill_start - 1)
         _starting_tip = await self._db.coro_get_canonical_block_header_by_number(start_num)
@@ -484,10 +488,13 @@ class BodyChainGapSyncer(Service):
 
     def _get_next_gap(self) -> BlockRange:
         gaps, future_tip_block = self._db.get_chain_gaps()
-        if len(gaps) == 0:
+        header_gaps, future_tip_header = self._db.get_header_chain_gaps()
+        try:
+            actionable_gap = self.get_topmost_actionable_gap(gaps, header_gaps)
+
+        except NoActionableGap:
             # We do not have gaps in the chain of blocks but we may still have a gap from the last
             # block up until the highest consecutive written header.
-            header_gaps, future_tip_header = self._db.get_header_chain_gaps()
             if len(header_gaps) > 0:
                 # The header chain has gaps, find out the lowest missing header
                 lowest_missing_header, _ = header_gaps[0]
@@ -504,7 +511,30 @@ class BodyChainGapSyncer(Service):
             else:
                 raise ValidationError("No gaps in the chain of blocks")
         else:
-            return gaps[-1]
+            return actionable_gap
+
+    def get_topmost_actionable_gap(self,
+                                   gaps: Tuple[BlockRange, ...],
+                                   header_gaps: Tuple[BlockRange, ...]) -> BlockRange:
+        '''
+        Returns the most recent gap of blocks of max size = _max_backfill_block_bodies_at_once
+        for which the headers exist in DB, along with the header preceding the gap.
+        '''
+        for gap in gaps[::-1]:
+            if gap[1] - gap[0] > self._max_backfill_block_bodies_at_once:
+                gap = (BlockNumber(gap[1] - self._max_backfill_block_bodies_at_once), gap[1])
+            # We want to be sure the header preceding the block gap is in DB
+            gap_with_prev_block = (BlockNumber(gap[0] - 1), gap[1])
+            for header_gap in header_gaps[::-1]:
+                if not self._have_empty_intersection(gap_with_prev_block, header_gap):
+                    break
+            else:
+                return gap
+        else:
+            raise NoActionableGap
+
+    def _have_empty_intersection(self, block_gap: BlockRange, header_gap: BlockRange) -> bool:
+        return block_gap[0] > header_gap[1] or block_gap[1] < header_gap[0]
 
     @property
     def is_paused(self) -> bool:
@@ -548,6 +578,13 @@ class BodyChainGapSyncer(Service):
                 await asyncio.sleep(self._idle_time)
             else:
                 await self.manager.run_service(self._body_syncer)
+
+
+class NoActionableGap(BaseTrinityError):
+    """
+    Raised when no actionable gap of blocks is found.
+    """
+    pass
 
 
 class HeaderLaunchpointSyncer(HeaderSyncerAPI):

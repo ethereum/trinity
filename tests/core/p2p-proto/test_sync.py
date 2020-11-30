@@ -60,6 +60,7 @@ from trinity.protocol.les.peer import (
 from trinity.sync.beam.chain import (
     BeamSyncer,
     BodyChainGapSyncer,
+    NoActionableGap,
 )
 from trinity.sync.beam.queen import QueeningQueue
 from trinity.sync.header.chain import (
@@ -131,6 +132,27 @@ def chaindb_with_block_gaps(chaindb_fresh, chaindb_1000):
         chaindb_fresh.persist_unexecuted_block(block, receipts)
 
     assert chaindb_fresh.get_chain_gaps() == (((1, 249), (251, 499)), 501)
+    yield chaindb_fresh
+
+
+@pytest.fixture
+def chaindb_with_headers_from_checkpoint(chaindb_fresh, chaindb_1000):
+    # Make a chain with a header gap from genesis to checkpoint and a block gap from genesis
+    # to tip block.
+    for block_number in range(970, 1001):
+        header_at = chaindb_1000.get_canonical_block_header_by_number(block_number)
+        score_at = chaindb_1000.get_score(header_at.hash)
+        chaindb_fresh.persist_checkpoint_header(header_at, score_at)
+
+    fat_chain = LatestTestChain(chaindb_1000.db)
+    block_number = 1000
+    block = fat_chain.get_canonical_block_by_number(block_number)
+    receipts = block.get_receipts(chaindb_1000)
+    chaindb_fresh.persist_unexecuted_block(block, receipts)
+
+    assert chaindb_fresh.get_header_chain_gaps() == (((1, 969),), 1001)
+    assert chaindb_fresh.get_chain_gaps() == (((1, 999),), 1001)
+
     yield chaindb_fresh
 
 
@@ -722,6 +744,69 @@ async def test_block_gapfill_syncer(request,
                 # chain gaps.
                 await asyncio.sleep(0.25)
                 assert chain_with_gaps.chaindb.get_chain_gaps() == ((), 1001)
+
+
+@pytest.mark.asyncio
+async def test_block_gapfill_from_checkpoint_syncer(event_bus,
+                                                    chaindb_with_headers_from_checkpoint,
+                                                    chaindb_1000):
+    client_context = ChainContextFactory(headerdb__db=chaindb_with_headers_from_checkpoint.db)
+    server_context = ChainContextFactory(headerdb__db=chaindb_1000.db)
+    peer_pair = LatestETHPeerPairFactory(
+        alice_peer_context=client_context,
+        bob_peer_context=server_context,
+        event_bus=event_bus,
+    )
+    async with peer_pair as (client_peer, server_peer):
+        chain_with_gaps = LatestTestChain(chaindb_with_headers_from_checkpoint.db)
+
+        syncer = BodyChainGapSyncer(
+            chain_with_gaps,
+            chaindb_with_headers_from_checkpoint,
+            MockPeerPoolWithConnectedPeers([client_peer], event_bus=event_bus),
+        )
+
+        # In production, this would be the block time but we want our test to pause/resume swiftly
+        syncer._idle_time = 0.01
+        server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
+        syncer._max_backfill_block_bodies_at_once = 100
+
+        # The most recent actionable block gap is the most recent block gap of maximum
+        # _max_backfill_block_bodies_at_once blocks and for which we already have the headers
+        gaps, _ = chain_with_gaps.chaindb.get_chain_gaps()
+        header_gaps, _ = chain_with_gaps.chaindb.get_header_chain_gaps()
+        with pytest.raises(NoActionableGap):
+            # no actionable block gap at the moment
+            syncer.get_topmost_actionable_gap(gaps, header_gaps)
+
+        # Add enough headers to have an actionable gap:
+        fat_chain = LatestTestChain(chaindb_1000.db)
+        for block_number in range(898, 970):
+            header = fat_chain.get_canonical_block_header_by_number(block_number)
+            score = fat_chain.get_score(header.hash)
+            chain_with_gaps.chaindb.persist_checkpoint_header(header, score)
+
+        header_gaps, _ = chain_with_gaps.chaindb.get_header_chain_gaps()
+        assert gaps == ((1, 999),)
+        assert header_gaps == ((1, 897),)
+        assert syncer.get_topmost_actionable_gap(gaps, header_gaps) == (899, 999)
+
+        async with run_peer_pool_event_server(
+            event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
+        ), background_asyncio_service(ETHRequestServer(
+            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
+        )):
+
+            server_peer.logger.info("%s is serving 1000 blocks", server_peer)
+            client_peer.logger.info("%s is syncing up 1000", client_peer)
+
+            async with background_asyncio_service(syncer):
+                # Wait for blocks backfilling
+                await wait_for_block(
+                    chain_with_gaps, fat_chain.get_canonical_block_by_number(999), sync_timeout=20)
+
+                await asyncio.sleep(0.25)
+                assert chain_with_gaps.chaindb.get_chain_gaps() == (((1, 898),), 1001)
 
 
 @pytest.mark.asyncio
