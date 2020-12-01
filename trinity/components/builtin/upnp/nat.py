@@ -22,13 +22,14 @@ logger = get_logger('trinity.components.upnp')
 class UPnPService(Service):
     logger = get_logger('trinity.components.upnp.UPnPService')
 
-    def __init__(self, port: int, event_bus: EndpointAPI) -> None:
+    def __init__(self, port: int, event_bus: EndpointAPI, upnp_service_name: str = None) -> None:
         """
         :param port: The port that a server wants to bind to on this machine, and
         make publicly accessible.
         """
         self.port = port
         self.event_bus = event_bus
+        self.upnp_service_name = upnp_service_name
 
     async def run(self) -> None:
         """Run an infinite loop refreshing our NAT port mapping.
@@ -44,6 +45,7 @@ class UPnPService(Service):
                             setup_port_map,
                             self.port,
                             UPNP_PORTMAP_DURATION,
+                            self.upnp_service_name,
                         )
                         event = UPnPMapping(str(external_ip))
                         self.logger.debug(

@@ -35,9 +35,16 @@ class UpnpComponent(TrioIsolatedComponent):
             help="Disable upnp mapping",
         )
 
+        arg_parser.add_argument(
+            "--upnp-service-name",
+            action="store",
+            help="upnp service name for port mapping",
+        )
+
     async def do_run(self, event_bus: EndpointAPI) -> None:
         port = self._boot_info.trinity_config.port
-        upnp_service = UPnPService(port, event_bus)
+        upnp_service_name = self._boot_info.args.upnp_service_name
+        upnp_service = UPnPService(port, event_bus, upnp_service_name)
 
         async with background_trio_service(upnp_service) as manager:
             await manager.wait_finished()
