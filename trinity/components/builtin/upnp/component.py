@@ -1,16 +1,24 @@
 from argparse import (
     ArgumentParser,
+    Namespace,
     _SubParsersAction,
 )
+import logging
 
 from async_service import background_trio_service
 from lahja import EndpointAPI
+from upnp_port_forward import (
+    fetch_add_portmapping_services,
+    NoPortMapServiceFound,
+)
 
+from trinity.config import TrinityConfig
 from trinity.extensibility import (
     TrioIsolatedComponent,
 )
 from trinity.components.builtin.upnp.nat import UPnPService
 from trinity.constants import UPNP_EVENTBUS_ENDPOINT
+from trinity.extensibility.component import Application
 
 
 class UpnpComponent(TrioIsolatedComponent):
@@ -48,6 +56,48 @@ class UpnpComponent(TrioIsolatedComponent):
 
         async with background_trio_service(upnp_service) as manager:
             await manager.wait_finished()
+
+
+class UpnpServiceNamesComponent(Application):
+    '''
+    Fetch available upnp services that can map ports and dump them on the terminal.
+    '''
+    logger = logging.getLogger('trinity.components.UpnpServiceNames')
+
+    @classmethod
+    def configure_parser(cls,
+                         arg_parser: ArgumentParser,
+                         subparser: _SubParsersAction) -> None:
+        upnp_service_names_parser = subparser.add_parser(
+            'export-upnp-info',
+            help='Fetch available upnp services that can map ports and dump them on the terminal',
+        )
+
+        upnp_service_names_parser.set_defaults(func=cls.run_fetch_upnp_service_names)
+
+    @classmethod
+    def run_fetch_upnp_service_names(cls, args: Namespace, trinity_config: TrinityConfig) -> None:
+        try:
+            upnp_service_names_by_device = fetch_add_portmapping_services()
+            service_names_output = "\n"
+            for service in upnp_service_names_by_device:
+                service_names_output = service_names_output.join([
+                    f"\n{'-' * 40}",
+                    f"Device Name: {service.device_friendly_name}",
+                    f"Device Location: {service.device_location}",
+                    "Available UPnP services found on this device:",
+                    "\n".join(f"    {service_name}" for service_name in service.service_names)
+                ])
+            service_names_output = "\n".join([
+                service_names_output,
+                "You can now try to launch Trinity with: --upnp-service-name <service name>",
+                "To help Trinity supports more routers, you can submit new service names here:",
+                "https://github.com/ethereum/trinity/issues - Thanks !!"
+            ])
+            cls.logger.info(service_names_output)
+        except NoPortMapServiceFound:
+            cls.logger.error("No port mapping services found")
+        return
 
 
 if __name__ == "__main__":

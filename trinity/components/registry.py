@@ -53,7 +53,7 @@ from trinity.components.builtin.syncer.component import (
     SyncerComponent,
 )
 from trinity.components.builtin.upnp.component import (
-    UpnpComponent,
+    UpnpComponent, UpnpServiceNamesComponent,
 )
 from trinity.components.builtin.tx_pool.component import (
     TxComponent,
@@ -69,6 +69,7 @@ BASE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
     PeerDiscoveryComponent,
     PreferredNodeComponent,
     UpnpComponent,
+    UpnpServiceNamesComponent,
 )
 
 ETH1_NODE_COMPONENTS: Tuple[Type[BaseComponentAPI], ...] = (
