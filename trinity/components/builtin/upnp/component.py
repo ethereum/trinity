@@ -7,10 +7,8 @@ import logging
 
 from async_service import background_trio_service
 from lahja import EndpointAPI
-from upnp_port_forward import (
-    fetch_add_portmapping_services,
-    NoPortMapServiceFound,
-)
+from upnp_port_forward import NoPortMapServiceFound
+from upnp_port_forward.tools.export import fetch_add_portmapping_services
 
 from trinity.config import TrinityConfig
 from trinity.extensibility import (
@@ -45,13 +43,16 @@ class UpnpComponent(TrioIsolatedComponent):
 
         arg_parser.add_argument(
             "--upnp-service-name",
-            action="store",
+            action="append",
             help="upnp service name for port mapping",
         )
 
     async def do_run(self, event_bus: EndpointAPI) -> None:
         port = self._boot_info.trinity_config.port
-        upnp_service_name = self._boot_info.args.upnp_service_name
+        if self._boot_info.args.upnp_service_name:
+            upnp_service_name = tuple(self._boot_info.args.upnp_service_name)
+        else:
+            upnp_service_name = None
         upnp_service = UPnPService(port, event_bus, upnp_service_name)
 
         async with background_trio_service(upnp_service) as manager:
