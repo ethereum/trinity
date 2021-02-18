@@ -34,6 +34,7 @@ from trinity.protocol.eth.commands import (
     Transactions,
     Status,
     GetPooledTransactionsV65,
+    PooledTransactionsV65,
 )
 from trinity.rlp.block_body import BlockBody
 
@@ -271,6 +272,9 @@ class ETHV65API(ETHV64API):
 
     def send_get_pooled_transactions(self, transaction_hashes: Sequence[Hash32]) -> None:
         self.protocol.send(GetPooledTransactionsV65(tuple(transaction_hashes)))
+
+    def send_pooled_transactions(self, transactions: Sequence[SignedTransactionAPI]) -> None:
+        self.protocol.send(PooledTransactionsV65(tuple(transactions)))
 
 
 AnyETHAPI = Union[ETHV63API, ETHV64API, ETHV65API]
