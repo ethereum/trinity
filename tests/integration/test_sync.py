@@ -82,7 +82,7 @@ def geth_binary():
 def geth_command_arguments(geth_binary, geth_ipc_path, geth_datadir, geth_port):
     return (
         geth_binary,
-        '--testnet',
+        '--ropsten',
         '--datadir', str(geth_datadir),
         '--ipcpath', geth_ipc_path,
         '--nodiscover',
@@ -140,7 +140,7 @@ async def test_sync_integration(request, caplog, geth_ipc_path, enode, geth_proc
 
     The fixture for this test was generated with:
 
-        geth --testnet --syncmode full
+        geth --ropsten --syncmode full
 
     It only needs the first 11 blocks for this test to succeed.
     """
