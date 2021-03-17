@@ -60,13 +60,12 @@ deps = {
         "pexpect>=4.6, <5",
         "factory-boy==2.12.0",
         "pytest>=5.3.0,<5.4",
-        "pytest-cov>=2.8.1,<2.9",
+        "pytest-cov>=2.11.1,<3",
         "pytest-mock>=1.12.1,<1.13",
-        "pytest-randomly>=3.1.0,<3.2",
+        "pytest-randomly>=3.3.0,<4",
         "pytest-timeout>=1.4.2,<2",
         "pytest-watch>=4.2.0,<4.3",
-        # xdist pinned at <1.29 due to: https://github.com/pytest-dev/pytest-xdist/issues/472
-        "pytest-xdist>=1.29.0,<1.30",
+        "pytest-xdist>=1.34.0,<2",
         "eth-tester==0.5.0b3",
     ],
     # We have to keep some separation between trio and asyncio based tests
