@@ -13,7 +13,7 @@ deps = {
         "asyncio-cancel-token>=0.2,<0.3",
         "async_lru>=0.1.0,<1.0.0",
         "cached-property>=1.5.1,<2",
-        "coincurve>=10.0.0,<11.0.0",
+        "coincurve>=15.0.0,<16.0.0",
         # cryptography does not use semver and allows breaking changes within `0.3` version bumps.
         "cryptography>=3.0,<3.2",
         "eth-enr>=0.3.0,<0.4",
@@ -36,7 +36,6 @@ deps = {
         "asyncio-run-in-process==0.1.0a10",
         "bloom-filter==1.3",
         "cachetools>=3.1.0,<4.0.0",
-        "coincurve>=10.0.0,<11.0.0",
         "eth-utils>=1.9.3,<2",
         "ipython>=7.8.0,<7.10.0",  # attach fails with v7.10.{0,1}
         "jsonschema>=3.2,<4",
