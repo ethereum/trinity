@@ -1,0 +1,2 @@
+Add support for Berlin, using latest py-evm:
+https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-4-0-alpha-2-2021-03-22
