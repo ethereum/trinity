@@ -810,10 +810,11 @@ class BeamBlockImporter(BaseBlockImporter, Service):
             self.metrics_registry.counter('trinity.sync/block_witness_hashes_missing').inc()
             self.logger.info("Missing witness for %s. Attempting to fetch during import", block)
             preferred_peer = None
-            self.manager.run_task(
-                self._event_bus.request,
-                FetchBlockWitness(preferred_peer, block.hash, block.number),
-            )
+            if self.manager.is_running:
+                self.manager.run_task(
+                    self._event_bus.request,
+                    FetchBlockWitness(preferred_peer, block.hash, block.number),
+                )
         else:
             block_witness_uncollected = self._state_downloader._get_unique_missing_hashes(
                 wit_hashes)
