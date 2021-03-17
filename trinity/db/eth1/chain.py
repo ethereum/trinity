@@ -13,7 +13,9 @@ from eth.abc import (
     BlockAPI,
     BlockHeaderAPI,
     ReceiptAPI,
+    ReceiptBuilderAPI,
     SignedTransactionAPI,
+    TransactionBuilderAPI,
 )
 from eth.db.chain import ChainDB
 
@@ -53,7 +55,7 @@ class BaseAsyncChainDB(BaseAsyncHeaderDB, ChainDB):
     async def coro_get_block_transactions(
             self,
             header: BlockHeaderAPI,
-            transaction_class: Type[SignedTransactionAPI]) -> Iterable[SignedTransactionAPI]:
+            transaction_class: Type[TransactionBuilderAPI]) -> Iterable[SignedTransactionAPI]:
         ...
 
     @abstractmethod
@@ -64,7 +66,7 @@ class BaseAsyncChainDB(BaseAsyncHeaderDB, ChainDB):
     async def coro_get_receipts(
         self,
         header: BlockHeaderAPI,
-        receipt_class: Type[ReceiptAPI],
+        receipt_class: Type[ReceiptBuilderAPI],
     ) -> Tuple[ReceiptAPI, ...]:
         ...
 

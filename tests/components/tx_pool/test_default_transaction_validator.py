@@ -22,9 +22,9 @@ from trinity._utils.transactions import (
 @pytest.mark.parametrize(
     (
         'initial_block_number',
-        'expected_initial_tx_class',
-        'expected_outdated_tx_class',
-        'expected_future_tx_class',
+        'expected_initial_tx_builder',
+        'expected_outdated_tx_builder',
+        'expected_future_tx_builder',
     ),
     [
         (1, FrontierTransaction, None, SpuriousDragonTransaction,),
@@ -34,10 +34,12 @@ from trinity._utils.transactions import (
         (None, SpuriousDragonTransaction, HomesteadTransaction, SpuriousDragonTransaction,),
     ],
 )
-def test_tx_class_resolution(initial_block_number,
-                             expected_initial_tx_class,
-                             expected_outdated_tx_class,
-                             expected_future_tx_class):
+def test_tx_builder_resolution(
+        initial_block_number,
+        expected_initial_tx_builder,
+        expected_outdated_tx_builder,
+        expected_future_tx_builder):
+
     chain = api.build(
         MiningChain,
         api.frontier_at(0),
@@ -47,17 +49,17 @@ def test_tx_class_resolution(initial_block_number,
         api.genesis
     )
     validator = DefaultTransactionValidator(chain, initial_block_number)
-    assert validator.get_appropriate_tx_class() == expected_initial_tx_class
+    assert validator.get_appropriate_tx_builder() == expected_initial_tx_builder
 
-    if expected_outdated_tx_class is not None:
-        assert validator.is_outdated_tx_class(expected_outdated_tx_class)
+    if expected_outdated_tx_builder is not None:
+        assert validator.is_outdated_tx_builder(expected_outdated_tx_builder)
 
-    # The `get_appropriate_tx_class` method has a cache decorator applied
+    # The `get_appropriate_tx_builder` method has a cache decorator applied
     # To test it properly, we need to clear the cache
-    validator.get_appropriate_tx_class.cache_clear()
+    validator.get_appropriate_tx_builder.cache_clear()
 
     # Check that the validator uses the correct tx class when we have reached the tip of the chain
     for _ in range(10):
         chain.mine_block()
 
-    assert validator.get_appropriate_tx_class() == expected_future_tx_class
+    assert validator.get_appropriate_tx_builder() == expected_future_tx_builder

@@ -4,6 +4,7 @@ import contextlib
 import pytest
 
 from async_service import background_asyncio_service
+from eth import MainnetChain
 from eth_utils import decode_hex
 
 from p2p.exceptions import PeerConnectionLost
@@ -81,6 +82,7 @@ async def test_proxy_peer_requests(request,
         await stack.enter_async_context(background_asyncio_service(ETHRequestServer(
             server_event_bus,
             TO_NETWORKING_BROADCAST_CONFIG,
+            MainnetChain.vm_configuration,
             AsyncChainDB(base_db),
         )))
         await stack.enter_async_context(background_asyncio_service(WitRequestServer(
@@ -200,7 +202,7 @@ async def test_proxy_peer_requests_with_timeouts(request,
         # We just want an ETHRequestServer that doesn't answer us but we still have to run
         # *something* to at least subscribe to the events. Otherwise Lahja's safety check will yell
         # at us for sending requests into the void.
-        for event_type in ETHRequestServer(None, None, None)._subscribed_events:
+        for event_type in ETHRequestServer(None, None, (), None)._subscribed_events:
             server_event_bus.subscribe(event_type, lambda _: None)
 
         client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
@@ -250,6 +252,7 @@ async def test_requests_when_peer_in_client_vanishs(request,
         await stack.enter_async_context(background_asyncio_service(ETHRequestServer(
             server_event_bus,
             TO_NETWORKING_BROADCAST_CONFIG,
+            MainnetChain.vm_configuration,
             AsyncChainDB(chaindb_20.db)
         )))
         client_proxy_peer_pool = ETHProxyPeerPool(client_event_bus, TO_NETWORKING_BROADCAST_CONFIG)
@@ -304,7 +307,10 @@ async def test_no_duplicate_node_data(request, event_loop, event_bus, chaindb_fr
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db)
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            MainnetChain.vm_configuration,
+            AsyncChainDB(chaindb_20.db),
         )):
             root_hash = chaindb_20.get_canonical_head().state_root
             state_root = chaindb_20.db[root_hash]

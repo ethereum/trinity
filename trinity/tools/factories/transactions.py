@@ -31,9 +31,13 @@ class SerializedTransactionFactory(factory.Factory):
             return rlp.encode(_BaseTransactionFieldsFactory())
 
 
+class _FakeTransaction(BaseTransactionFields):
+    chain_id: int = None
+
+
 class _BaseTransactionFieldsFactory(factory.Factory):
     class Meta:
-        model = BaseTransactionFields
+        model = _FakeTransaction
 
     nonce = factory.Sequence(lambda n: n)
     gas_price = 1
@@ -46,6 +50,7 @@ class _BaseTransactionFieldsFactory(factory.Factory):
     def _create(cls,
                 model_class: Type[BaseTransactionFields],
                 *args: Any,
+                chain_id: int = None,
                 **kwargs: Any) -> BaseTransactionFields:
         if 'vrs' in kwargs:
             v, r, s = kwargs.pop('vrs')

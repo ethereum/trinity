@@ -14,6 +14,7 @@ from eth_utils import (
 from eth.abc import (
     ChainAPI,
     SignedTransactionAPI,
+    TransactionBuilderAPI,
 )
 from eth.chains.mainnet import MUIR_GLACIER_MAINNET_BLOCK
 from eth.chains.ropsten import MUIR_GLACIER_ROPSTEN_BLOCK
@@ -48,19 +49,19 @@ class DefaultTransactionValidator():
         self.chain = chain
         self.vm_configuration = self.chain.vm_configuration
 
-        self._ordered_tx_classes = tuple(
-            vm_class.get_transaction_class()
+        self._ordered_tx_builders = tuple(
+            vm_class.get_transaction_builder()
             for _, vm_class in self.vm_configuration
         )
 
         if initial_tx_validation_block_number is not None:
-            self._initial_tx_class = self._get_tx_class_for_block_number(
+            self._initial_tx_builder = self._get_tx_builder_for_block_number(
                 initial_tx_validation_block_number
             )
         else:
-            self._initial_tx_class = self._ordered_tx_classes[-1]
+            self._initial_tx_builder = self._ordered_tx_builders[-1]
 
-        self._initial_tx_class_index = self._ordered_tx_classes.index(self._initial_tx_class)
+        self._initial_tx_builder_index = self._ordered_tx_builders.index(self._initial_tx_builder)
 
     @classmethod
     def from_network_id(cls, chain: ChainAPI, network_id: int) -> 'DefaultTransactionValidator':
@@ -83,11 +84,8 @@ class DefaultTransactionValidator():
             return True
 
     def validate(self, transaction: SerializedTransaction) -> SignedTransactionAPI:
-        transaction_class = self.get_appropriate_tx_class()
-        if isinstance(transaction, list):
-            tx = transaction_class.deserialize(transaction)
-        else:
-            raise NotImplementedError(f"Haven't implemented typed transactions yet")
+        transaction_builder = self.get_appropriate_tx_builder()
+        tx = transaction_builder.deserialize(transaction)
         tx.validate()
 
         if tx.chain_id != self.chain.chain_id:
@@ -99,22 +97,23 @@ class DefaultTransactionValidator():
             return tx
 
     @cachetools.func.ttl_cache(maxsize=1024, ttl=300)
-    def get_appropriate_tx_class(self) -> Type[SignedTransactionAPI]:
+    def get_appropriate_tx_builder(self) -> Type[TransactionBuilderAPI]:
         head = self.chain.get_canonical_head()
-        current_tx_class = self.chain.get_vm_class(head).get_transaction_class()
+        current_tx_builder = self.chain.get_vm_class(head).get_transaction_builder()
 
         # If the current head of the chain is still on a fork that is before the currently
         # active fork (syncing), ensure that we use the specified initial tx class
-        if self.is_outdated_tx_class(current_tx_class):
-            return self._initial_tx_class
+        if self.is_outdated_tx_builder(current_tx_builder):
+            return self._initial_tx_builder
 
-        return current_tx_class
+        return current_tx_builder
 
-    def is_outdated_tx_class(self, tx_class: Type[SignedTransactionAPI]) -> bool:
-        return self._ordered_tx_classes.index(tx_class) < self._initial_tx_class_index
+    def is_outdated_tx_builder(self, tx_builder: Type[TransactionBuilderAPI]) -> bool:
+        return self._ordered_tx_builders.index(tx_builder) < self._initial_tx_builder_index
 
-    def _get_tx_class_for_block_number(self,
-                                       block_number: BlockNumber,
-                                       ) -> Type[SignedTransactionAPI]:
+    def _get_tx_builder_for_block_number(
+            self,
+            block_number: BlockNumber) -> Type[TransactionBuilderAPI]:
+
         vm_class = self.chain.get_vm_class_for_block_number(block_number)
-        return vm_class.get_transaction_class()
+        return vm_class.get_transaction_builder()

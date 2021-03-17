@@ -146,11 +146,13 @@ class LightDispatchChain(AsyncChainAPI, Chain):
 
         block_body = await self._peer_chain.coro_get_block_body_by_hash(header.hash)
 
-        block_class = self.get_vm_class_for_block_number(header.block_number).get_block_class()
+        vm_class = self.get_vm_class_for_block_number(header.block_number)
+        transaction_builder = vm_class.get_transaction_builder()
         transactions = [
-            block_class.transaction_class.from_base_transaction(tx)
+            transaction_builder.deserialize(tx)
             for tx in block_body.transactions
         ]
+        block_class = vm_class.get_block_class()
         return block_class(
             header=header,
             transactions=transactions,

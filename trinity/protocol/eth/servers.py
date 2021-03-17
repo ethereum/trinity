@@ -2,8 +2,14 @@ from typing import (
     Any,
 )
 
+from eth.chains.base import (
+    BaseChain,
+)
 from eth.exceptions import (
     HeaderNotFound,
+)
+from eth.typing import (
+    VMConfiguration,
 )
 from eth_utils import (
     to_hex,
@@ -33,9 +39,6 @@ from trinity.protocol.eth.events import (
 from trinity.protocol.eth.peer import (
     ETHProxyPeer,
 )
-
-from eth.rlp.receipts import Receipt
-
 from trinity.protocol.eth.constants import (
     MAX_BODIES_FETCH,
     MAX_RECEIPTS_FETCH,
@@ -52,8 +55,15 @@ from .commands import (
 
 
 class ETHPeerRequestHandler(BasePeerRequestHandler):
-    def __init__(self, db: BaseAsyncChainDB) -> None:
+    def __init__(self, vm_config: VMConfiguration, db: BaseAsyncChainDB) -> None:
         self.db: BaseAsyncChainDB = db
+
+        # TODO backport this functionality into a VMConfiguration class, all we
+        #   really need is to get a VM class from a block number
+        class VMConfiguredChain(BaseChain):
+            vm_configuration = tuple(vm_config)
+
+        self._chain_class = VMConfiguredChain
 
     async def handle_get_block_headers(
             self,
@@ -81,10 +91,12 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
                     "%s asked for a block with a header we don't have: %s", peer, to_hex(block_hash)
                 )
                 continue
+
+            vm_class = self._chain_class.get_vm_class_for_block_number(header.block_number)
             try:
                 transactions = await self.db.coro_get_block_transactions(
                     header,
-                    None,
+                    vm_class.get_transaction_builder(),
                 )
             except MissingTrieNode as exc:
                 self.logger.debug(
@@ -120,8 +132,12 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
                     "%s asked receipts for a block we don't have: %s", peer, to_hex(block_hash)
                 )
                 continue
+            vm_class = self._chain_class.get_vm_class_for_block_number(header.block_number)
             try:
-                block_receipts = await self.db.coro_get_receipts(header, Receipt)
+                block_receipts = await self.db.coro_get_receipts(
+                    header,
+                    vm_class.get_receipt_builder(),
+                )
             except MissingTrieNode as exc:
                 self.logger.debug(
                     "%s asked for block receipts we don't have: %s, "
@@ -170,13 +186,14 @@ class ETHRequestServer(BaseIsolatedRequestServer):
             self,
             event_bus: EndpointAPI,
             broadcast_config: BroadcastConfig,
+            vm_config: VMConfiguration,
             db: BaseAsyncChainDB) -> None:
         super().__init__(
             event_bus,
             broadcast_config,
             (GetBlockHeadersEvent, GetBlockBodiesEvent, GetNodeDataEvent, GetReceiptsEvent),
         )
-        self._handler = ETHPeerRequestHandler(db)
+        self._handler = ETHPeerRequestHandler(vm_config, db)
 
     async def _handle_msg(self,
                           session: SessionAPI,

@@ -179,7 +179,10 @@ async def test_fast_syncer(request, event_loop, event_bus, chaindb_fresh, chaind
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db)
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_1000.db),
         )):
 
             client_peer.logger.info("%s is serving 1000 blocks", client_peer)
@@ -298,18 +301,22 @@ async def _beam_syncing(
         server_peer_pool = MockPeerPoolWithConnectedPeers([server_peer], event_bus=event_bus)
         backfill_peer_pool = MockPeerPoolWithConnectedPeers([client2_peer], event_bus=event_bus)
 
+        vm_config = ((0, VM_at_0), )
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), run_peer_pool_event_server(
             event_bus, backfill_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_churner.db)
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            vm_config,
+            AsyncChainDB(chaindb_churner.db),
         )), AsyncioEndpoint.serve(
             pausing_config
         ) as pausing_endpoint, AsyncioEndpoint.serve(gatherer_config) as gatherer_endpoint:
 
             client_chain = make_pausing_beam_chain(
-                ((0, VM_at_0), ),
+                vm_config,
                 chain_id=999,
                 consensus_context_class=ConsensusContext,
                 db=chaindb_fresh.db,
@@ -493,7 +500,10 @@ async def test_regular_syncer(request, event_loop, event_bus, chaindb_fresh, cha
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db)
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_20.db),
         )):
 
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
@@ -602,7 +612,10 @@ async def test_regular_syncer_fallback(request, event_loop, event_bus, chaindb_f
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db)
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_20.db),
         )):
 
             server_peer.logger.info("%s is serving 20 blocks", server_peer)
@@ -639,7 +652,10 @@ async def test_header_syncer(request,
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_1000.db),
         )):
 
             server_to_client.logger.info("%s is serving 1000 blocks", server_to_client)
@@ -714,7 +730,10 @@ async def test_block_gapfill_syncer(request,
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_1000.db),
         )):
 
             server_peer.logger.info("%s is serving 1000 blocks", server_peer)
@@ -807,7 +826,10 @@ async def test_block_gapfill_from_checkpoint_syncer(event_bus,
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_1000.db),
         )):
 
             server_peer.logger.info("%s is serving 1000 blocks", server_peer)
@@ -848,7 +870,10 @@ async def test_header_gapfill_syncer(request,
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_1000.db),
         )):
 
             server_peer.logger.info("%s is serving 1000 blocks", server_peer)
@@ -888,7 +913,10 @@ async def test_sequential_header_gapfill_syncer(request,
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_1000.db),
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            AsyncChainDB(chaindb_1000.db),
         )):
 
             server_peer.logger.info("%s is serving 1000 blocks", server_peer)
@@ -958,7 +986,10 @@ async def test_header_gap_fill_detects_invalid_attempt(caplog,
         async with run_peer_pool_event_server(
             event_bus, server_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, uncle_chaindb,
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            server_context.vm_configuration,
+            uncle_chaindb,
         )):
 
             server_peer.logger.info("%s is serving 1000 blocks", server_peer)
@@ -1056,7 +1087,10 @@ async def test_queening_queue_recovers_from_penalty_with_one_peer(
         async with run_peer_pool_event_server(
             event_bus, local_peer_pool, handler_type=ETHPeerPoolEventServer
         ), background_asyncio_service(ETHRequestServer(
-            event_bus, TO_NETWORKING_BROADCAST_CONFIG, AsyncChainDB(chaindb_20.db),
+            event_bus,
+            TO_NETWORKING_BROADCAST_CONFIG,
+            remote_context.vm_configuration,
+            AsyncChainDB(chaindb_20.db),
         )):
             queue = QueeningQueue(local_peer_pool)
 

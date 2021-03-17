@@ -33,6 +33,9 @@ from eth.abc import (
 from eth.constants import (
     CREATE_CONTRACT_ADDRESS,
 )
+from eth.rlp.transactions import (
+    BaseTransaction,
+)
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.rpc.typing import (
@@ -106,23 +109,26 @@ def to_receipt_response(receipt: ReceiptAPI,
 
 
 def transaction_to_dict(transaction: SignedTransactionAPI) -> RpcTransactionResponse:
-    return {
-        'hash': encode_hex(transaction.hash),
-        'nonce': hex(transaction.nonce),
-        'gas': hex(transaction.gas),
-        'gasPrice': hex(transaction.gas_price),
-        'from': to_checksum_address(transaction.sender),
-        'to': apply_formatter_if(
-            is_address,
-            to_checksum_address,
-            encode_hex(transaction.to)
-        ),
-        'value': hex(transaction.value),
-        'input': encode_hex(transaction.data),
-        'r': hex(transaction.r),
-        's': hex(transaction.s),
-        'v': hex(transaction.v),
-    }
+    if isinstance(transaction, BaseTransaction):
+        return {
+            'hash': encode_hex(transaction.hash),
+            'nonce': hex(transaction.nonce),
+            'gas': hex(transaction.gas),
+            'gasPrice': hex(transaction.gas_price),
+            'from': to_checksum_address(transaction.sender),
+            'to': apply_formatter_if(
+                is_address,
+                to_checksum_address,
+                encode_hex(transaction.to)
+            ),
+            'value': hex(transaction.value),
+            'input': encode_hex(transaction.data),
+            'r': hex(transaction.r),
+            's': hex(transaction.s),
+            'v': hex(transaction.v),
+        }
+    else:
+        raise NotImplementedError("Cannot format the new access-list transactions yet")
 
 
 def block_transaction_to_dict(transaction: SignedTransactionAPI,

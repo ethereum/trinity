@@ -749,8 +749,8 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
                 # transaction data was already persisted in _block_body_bundle_processing, but
                 # we need to include the transactions for them to be added to the hash->txn lookup
-                tx_class = block_class.get_transaction_class()
-                transactions = [tx_class.from_base_transaction(tx) for tx in body.transactions]
+                transaction_builder = vm_class.get_transaction_builder()
+                transactions = [transaction_builder.deserialize(tx) for tx in body.transactions]
 
                 # record progress in the tracker
                 self.tracker.record_transactions(len(transactions))
@@ -1222,9 +1222,8 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
             uncles: List[BlockHeaderAPI] = []
         else:
             body = self._pending_bodies.pop(header)
-            tx_class = block_class.get_transaction_class()
-            transactions = [tx_class.from_base_transaction(tx)
-                            for tx in body.transactions]
+            transaction_builder = vm_class.get_transaction_builder()
+            transactions = [transaction_builder.deserialize(tx) for tx in body.transactions]
             uncles = body.uncles
 
         return block_class(header, transactions, uncles)
