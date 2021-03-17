@@ -1,6 +1,5 @@
 import asyncio
 import os
-import random
 import time
 
 import pytest
@@ -8,18 +7,17 @@ import pytest
 import rlp
 
 from eth_utils import (
-    big_endian_to_int,
     keccak,
     to_tuple,
 )
 
 from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
-from eth.rlp.transactions import BaseTransactionFields
 
 from trinity.rlp.block_body import BlockBody
 
 from trinity.tools.factories import LatestETHPeerPairFactory
+from trinity.tools.factories.transactions import SerializedTransactionFactory
 
 
 def mk_uncle(block_number):
@@ -33,17 +31,7 @@ def mk_uncle(block_number):
 
 
 def mk_transaction():
-    return BaseTransactionFields(
-        nonce=0,
-        gas=21000,
-        gas_price=1,
-        to=os.urandom(20),
-        value=random.randint(0, 100),
-        data=b'',
-        v=27,
-        r=big_endian_to_int(os.urandom(32)),
-        s=big_endian_to_int(os.urandom(32)),
-    )
+    return SerializedTransactionFactory()
 
 
 def mk_header_and_body(block_number, num_transactions, num_uncles):

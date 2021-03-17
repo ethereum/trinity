@@ -23,4 +23,6 @@ from .eth.proto import (  # noqa: F401
 )
 from .headers import BlockHeaderFactory  # noqa: F401
 from .receipts import ReceiptFactory  # noqa: F401
-from .transactions import BaseTransactionFieldsFactory  # noqa: F401
+from .transactions import (  # noqa: F401
+    SerializedTransactionFactory,
+)

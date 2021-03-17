@@ -1,7 +1,6 @@
 import os
 
 import rlp
-from eth.rlp.transactions import BaseTransactionFields
 from eth_utils.toolz import (
     identity,
 )
@@ -34,7 +33,6 @@ from eth_utils import (
     to_wei,
     ValidationError,
 )
-from eth_utils.toolz import compose
 
 from eth.abc import (
     BlockAPI,
@@ -375,9 +373,14 @@ class Eth(Eth1ChainRPCModule):
         uncle = block.uncles[index]
         return header_to_dict(uncle)
 
-    @format_params(compose(BaseTransactionFields.deserialize, rlp.decode, decode_hex,))
+    @format_params(decode_hex)
     async def sendRawTransaction(self,
-                                 transaction: SignedTransactionAPI) -> HexStr:
+                                 transaction_bytes: bytes) -> HexStr:
+
+        serialized_txn = rlp.decode(transaction_bytes)
+        # TODO on pyevm upgrade, switch to:
+        # transaction_builder = self.chain.get_vm().get_transaction_builder()
+        # transaction = transaction_builder.decode(transaction_bytes)
 
         validator = DefaultTransactionValidator.from_network_id(
             self.chain,
@@ -385,7 +388,7 @@ class Eth(Eth1ChainRPCModule):
         )
 
         try:
-            validator.validate(transaction)
+            transaction = validator.validate(serialized_txn)
         except ValidationError as err:
             raise RpcError(err) from err
         else:

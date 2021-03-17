@@ -9,8 +9,8 @@ from eth.abc import (
     BlockAPI,
     BlockHeaderAPI,
     ReceiptAPI,
-    SignedTransactionAPI,
 )
+import rlp
 
 from p2p.abc import ConnectionAPI, ProtocolAPI
 from p2p.exchange import ExchangeAPI, ExchangeLogic
@@ -36,6 +36,7 @@ from trinity.protocol.eth.commands import (
     GetPooledTransactionsV65,
 )
 from trinity.rlp.block_body import BlockBody
+from trinity.rlp.sedes import SerializedTransaction
 
 from .exchanges import (
     GetBlockBodiesV65Exchange,
@@ -209,7 +210,7 @@ class BaseETHAPI(Application):
     def send_receipts(self, receipts: Sequence[Sequence[ReceiptAPI]]) -> None:
         self.protocol.send(ReceiptsV65(tuple(map(tuple, receipts))))
 
-    def send_transactions(self, transactions: Sequence[SignedTransactionAPI]) -> None:
+    def send_transactions(self, transactions: Sequence[SerializedTransaction]) -> None:
         self.protocol.send(Transactions(tuple(transactions)))
 
     def send_new_block_hashes(self, *new_block_hashes: NewBlockHash) -> None:
@@ -218,7 +219,9 @@ class BaseETHAPI(Application):
     def send_new_block(self,
                        block: BlockAPI,
                        total_difficulty: int) -> None:
-        block_fields = BlockFields(block.header, block.transactions, block.uncles)
+        # generalize transactions to hand off over network
+        transactions = rlp.decode(rlp.encode(block.transactions))
+        block_fields = BlockFields(block.header, transactions, block.uncles)
         payload = NewBlockPayload(block_fields, total_difficulty)
         self.protocol.send(NewBlock(payload))
 

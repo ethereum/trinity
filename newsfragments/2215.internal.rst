@@ -1,0 +1,3 @@
+Refactored transaction handling into an obaque blob. Previousy, code assumed a fixed transaction
+shape of a list of bytes, which is no longer accurate (as of EIP-2930). Also, don't default
+maxfail=10 locally, and squash a couple test warnings.

@@ -20,11 +20,11 @@ from trinity.protocol.eth.commands import (
 )
 
 from trinity.tools.factories import (
-    BaseTransactionFieldsFactory,
     BlockBodyFactory,
     BlockHashFactory,
     BlockHeaderFactory,
     ReceiptFactory,
+    SerializedTransactionFactory,
 )
 from trinity.tools.factories.common import (
     BlockHeadersQueryFactory,
@@ -43,7 +43,7 @@ from trinity.tools.factories.eth import (
         (StatusV63, StatusV63PayloadFactory()),
         (Status, StatusPayloadFactory()),
         (NewBlockHashes, tuple(NewBlockHashFactory.create_batch(2))),
-        (Transactions, tuple(BaseTransactionFieldsFactory.create_batch(2))),
+        (Transactions, tuple(SerializedTransactionFactory.create_batch(2))),
         (GetBlockHeadersV65, BlockHeadersQueryFactory()),
         (GetBlockHeadersV65, BlockHeadersQueryFactory(block_number_or_hash=BlockHashFactory())),
         (BlockHeadersV65, tuple(BlockHeaderFactory.create_batch(2))),

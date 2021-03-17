@@ -28,6 +28,7 @@ from trinity.protocol.common.typing import (
     ReceiptsBundles,
 )
 from trinity.rlp.block_body import BlockBody
+from trinity.rlp.sedes import SerializedTransaction
 
 from .commands import (
     BlockBodiesV65,
@@ -201,7 +202,7 @@ class ProxyETHAPI:
         return response.transactions
 
     def send_transactions(self,
-                          txns: Sequence[SignedTransactionAPI]) -> None:
+                          txns: Sequence[SerializedTransaction]) -> None:
         command = Transactions(tuple(txns))
         self._event_bus.broadcast_nowait(
             SendTransactionsEvent(self.session, command),
