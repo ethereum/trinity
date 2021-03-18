@@ -42,23 +42,25 @@ async def test_token_bucket_initial_tokens():
 
 @pytest.mark.asyncio
 async def test_token_bucket_hits_limit():
-    bucket = TokenBucket(1000, 10)
+    CAPACITY = 50
+    TOKENS_PER_SECOND = 1000
+    bucket = TokenBucket(TOKENS_PER_SECOND, CAPACITY)
 
-    bucket.take_nowait(10)
+    bucket.take_nowait(CAPACITY)
     start_at = time.perf_counter()
-    # first 10 tokens should be roughly instant
-    # next 10 tokens should each take 1/1000th second each to generate.
+    # first CAPACITY tokens should be roughly instant
+    # next CAPACITY tokens should each take 1/TOKENS_PER_SECOND second each to generate.
     while True:
-        if bucket.can_take(10):
+        if bucket.can_take(CAPACITY):
             break
         else:
             await asyncio.sleep(0)
 
     end_at = time.perf_counter()
 
-    # we use a zero-measure of 20 to account for the loop overhead.
-    zero = await measure_zero(10)
-    expected_delta = 10 / 1000 + zero
+    # we use a zero-measure of CAPACITY loops to account for the loop overhead.
+    zero = await measure_zero(CAPACITY)
+    expected_delta = CAPACITY / TOKENS_PER_SECOND + zero
     delta = end_at - start_at
 
     # allow up to 10% difference in expected time

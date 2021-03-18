@@ -52,7 +52,8 @@ def test_queued_logging(ipc_path):
         assert len(handler.logs) == 0
         proc.start()
         proc.join()
-        assert len(handler.logs) == 3
+
+    assert len(handler.logs) == 3
 
     error_log, info_log, debug_log = handler.logs
 
