@@ -28,14 +28,17 @@ class SerializedTransactionFactory(factory.Factory):
         if cls.__faker.boolean():
             return b'\x01' + cls.__faker.pyint().to_bytes(length=64, byteorder='big')
         else:
-            return rlp.encode(_BaseTransactionFieldsFactory())
+            return rlp.encode(LegacyTransactionFactory(*args, **kwargs))
 
 
 class _FakeTransaction(BaseTransactionFields):
     chain_id: int = None
 
+    def encode(self) -> bytes:
+        return rlp.encode(self)
 
-class _BaseTransactionFieldsFactory(factory.Factory):
+
+class LegacyTransactionFactory(factory.Factory):
     class Meta:
         model = _FakeTransaction
 

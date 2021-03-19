@@ -16,10 +16,10 @@ from eth_utils import (
 
 from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
-from eth.rlp.transactions import BaseTransactionFields
 
 from trinity.rlp.block_body import BlockBody
 from trinity.protocol.eth.validators import GetBlockBodiesValidator
+from trinity.tools.factories.transactions import LegacyTransactionFactory
 
 
 def mk_uncle(block_number):
@@ -33,16 +33,18 @@ def mk_uncle(block_number):
 
 
 def mk_transaction():
-    return BaseTransactionFields(
+    return LegacyTransactionFactory(
         nonce=0,
         gas=21000,
         gas_price=1,
         to=os.urandom(20),
         value=random.randint(0, 100),
         data=b'',
-        v=27,
-        r=big_endian_to_int(os.urandom(32)),
-        s=big_endian_to_int(os.urandom(32)),
+        vrs=(
+            27,
+            big_endian_to_int(os.urandom(32)),
+            big_endian_to_int(os.urandom(32)),
+        ),
     )
 
 
