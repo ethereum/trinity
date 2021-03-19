@@ -55,6 +55,7 @@ from eth.vm.forks import (
     PetersburgVM,
     IstanbulVM,
     MuirGlacierVM,
+    BerlinVM,
 )
 
 from trinity.network_configurations import (
@@ -163,6 +164,8 @@ def _extract_vm_config(vm_config: Dict[str, str]) -> Iterable[VMFork]:
         yield hex_to_block_number(vm_config['istanbulForkBlock']), IstanbulVM
     if 'muirglacierForkBlock' in vm_config.keys():
         yield hex_to_block_number(vm_config['muirglacierForkBlock']), MuirGlacierVM
+    if 'berlinForkBlock' in vm_config.keys():
+        yield hex_to_block_number(vm_config['berlinForkBlock']), BerlinVM
 
 
 @to_tuple

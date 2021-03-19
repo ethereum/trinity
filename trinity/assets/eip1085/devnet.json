@@ -16,7 +16,7 @@
      "timestamp":"0x0"
   },
   "params":{
-     "petersburgForkBlock":"0x0",
+     "berlinForkBlock":"0x0",
      "chainId":"0xdeadbeef",
      "miningMethod":"ethash"
   },

@@ -792,6 +792,7 @@
   "params":{
      "petersburgForkBlock":"0x0",
      "istanbulForkBlock": "0x17d433",
+     "berlinForkBlock": "0x441064",
      "chainId":"0x5",
      "miningMethod":"clique"
   },
