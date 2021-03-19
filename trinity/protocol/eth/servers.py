@@ -35,7 +35,6 @@ from trinity.protocol.eth.peer import (
 )
 
 from eth.rlp.receipts import Receipt
-from eth.rlp.transactions import BaseTransactionFields
 
 from trinity.protocol.eth.constants import (
     MAX_BODIES_FETCH,
@@ -85,7 +84,7 @@ class ETHPeerRequestHandler(BasePeerRequestHandler):
             try:
                 transactions = await self.db.coro_get_block_transactions(
                     header,
-                    BaseTransactionFields,
+                    None,
                 )
             except MissingTrieNode as exc:
                 self.logger.debug(

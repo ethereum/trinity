@@ -11,13 +11,12 @@ from rlp import sedes
 from eth.abc import BlockHeaderAPI, ReceiptAPI, SignedTransactionAPI
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
-from eth.rlp.transactions import BaseTransactionFields
 
 from p2p.commands import BaseCommand, RLPCodec
 
 from trinity.protocol.common.payloads import BlockHeadersQuery
 from trinity.rlp.block_body import BlockBody
-from trinity.rlp.sedes import HashOrNumber, hash_sedes
+from trinity.rlp.sedes import AnyRLP, HashOrNumber, hash_sedes, SerializedTransaction
 from .forkid import ForkID
 
 from .payloads import (
@@ -70,10 +69,10 @@ class NewBlockHashes(BaseCommand[Tuple[NewBlockHash, ...]]):
     )
 
 
-class Transactions(BaseCommand[Tuple[SignedTransactionAPI, ...]]):
+class Transactions(BaseCommand[Tuple[SerializedTransaction, ...]]):
     protocol_command_id = 2
-    serialization_codec: RLPCodec[Tuple[SignedTransactionAPI, ...]] = RLPCodec(
-        sedes=sedes.CountableList(BaseTransactionFields),
+    serialization_codec: RLPCodec[Tuple[SerializedTransaction, ...]] = RLPCodec(
+        sedes=sedes.CountableList(AnyRLP),
     )
 
 
@@ -117,7 +116,7 @@ class NewBlock(BaseCommand[NewBlockPayload]):
         sedes=sedes.List((
             sedes.List((
                 BlockHeader,
-                sedes.CountableList(BaseTransactionFields),
+                sedes.CountableList(AnyRLP),  # SerializedTransaction
                 sedes.CountableList(BlockHeader)
             )),
             sedes.big_endian_int

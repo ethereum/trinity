@@ -17,27 +17,46 @@ async def measure_zero(iterations):
     return end_at - start_at
 
 
+async def slowest_of_zero_measures(iterations, attempts=5):
+    timings = [await measure_zero(iterations) for _ in range(attempts)]
+    return max(timings)
+
+
+async def assert_close_to_zero(actual, empty_iterations):
+    EPSILON = 0.0005
+
+    if actual < EPSILON:
+        # Since this should take roughly no time, as long as it's short enough,
+        # it doesn't matter if the value is "close" to the zero measure. This
+        # helps avoid false failures and CI turning red for no reason.
+        pass
+    else:
+        # since the capacity should have been fully refilled, second loop time
+        # should take near zero time
+        expected = await slowest_of_zero_measures(empty_iterations)
+
+        # drift is allowed to be up to 1000% since we're working with very small
+        # numbers, and the performance in CI varies widely.
+        assert actual < expected * 10
+
+
 def assert_fuzzy_equal(actual, expected, allowed_drift):
     assert abs(1 - (actual / expected)) < allowed_drift
 
 
 @pytest.mark.asyncio
 async def test_token_bucket_initial_tokens():
-    bucket = TokenBucket(1000, 10)
+    CAPACITY = 10
+    bucket = TokenBucket(1000, CAPACITY)
 
     start_at = time.perf_counter()
-    for _ in range(10):
+    for _ in range(CAPACITY):
         await bucket.take()
 
     end_at = time.perf_counter()
     delta = end_at - start_at
 
-    # since the bucket starts out full the loop
-    # should take near zero time
-    expected = await measure_zero(10)
-    # drift is allowed to be up to 1000% since we're working with very small
-    # numbers.
-    assert_fuzzy_equal(delta, expected, allowed_drift=10)
+    await assert_close_to_zero(delta, CAPACITY)
 
 
 @pytest.mark.asyncio
@@ -69,29 +88,31 @@ async def test_token_bucket_hits_limit():
 
 @pytest.mark.asyncio
 async def test_token_bucket_refills_itself():
-    bucket = TokenBucket(1000, 10)
+    CAPACITY = 50
+    TOKENS_PER_SECOND = 1000
+    bucket = TokenBucket(TOKENS_PER_SECOND, CAPACITY)
 
     # consume all of the tokens
-    for _ in range(10):
+    for _ in range(CAPACITY):
         await bucket.take()
 
     # enough time for the bucket to fully refill
-    await asyncio.sleep(20 / 1000)
+    start_at = time.perf_counter()
+    time_to_refill = CAPACITY / TOKENS_PER_SECOND
+    while time.perf_counter() - start_at < time_to_refill:
+        await asyncio.sleep(time_to_refill)
 
+    # This should take roughly zero time
     start_at = time.perf_counter()
 
-    for _ in range(10):
+    for _ in range(CAPACITY):
         await bucket.take()
 
     end_at = time.perf_counter()
 
     delta = end_at - start_at
-    # since the capacity should have been fully refilled, second loop time
-    # should take near zero time
-    expected = await measure_zero(10)
-    # drift is allowed to be up to 300% since we're working with very small
-    # numbers, and the performance in CI varies widely.
-    assert_fuzzy_equal(delta, expected, allowed_drift=3)
+
+    await assert_close_to_zero(delta, CAPACITY)
 
 
 @pytest.mark.asyncio

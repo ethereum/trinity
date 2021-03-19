@@ -1,18 +1,37 @@
 try:
     import factory
+    from faker import Faker
 except ImportError:
     raise ImportError("The p2p.tools.factories module requires the `factory_boy` library.")
 
-from typing import Any, Type
+from typing import Any, List, Type, Union
 
 from eth.constants import ZERO_ADDRESS
 from eth.rlp.transactions import BaseTransactionFields
 from eth.vm.forks.frontier.transactions import FrontierUnsignedTransaction
+import rlp
 
 from p2p.tools.factories import PrivateKeyFactory
 
 
-class BaseTransactionFieldsFactory(factory.Factory):
+class SerializedTransactionFactory(factory.Factory):
+    class Meta:
+        model = list
+
+    __faker = Faker()
+    @classmethod
+    def _create(cls,
+                model_class: List[bytes],
+                *args: Any,
+                **kwargs: Any) -> Union[bytes, List[bytes]]:
+
+        if cls.__faker.boolean():
+            return b'\x01' + cls.__faker.pyint().to_bytes(length=64, byteorder='big')
+        else:
+            return rlp.encode(_BaseTransactionFieldsFactory())
+
+
+class _BaseTransactionFieldsFactory(factory.Factory):
     class Meta:
         model = BaseTransactionFields
 

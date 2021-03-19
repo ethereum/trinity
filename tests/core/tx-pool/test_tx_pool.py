@@ -7,6 +7,7 @@ from async_service import background_asyncio_service
 from eth._utils.address import (
     force_bytes_to_address
 )
+import rlp
 
 from trinity._utils.transactions import DefaultTransactionValidator
 from trinity.components.builtin.tx_pool.pool import (
@@ -129,7 +130,7 @@ async def test_tx_propagation(two_connected_tx_pools,
     await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
     assert len(bob_incoming_tx) == 1
 
-    assert bob_incoming_tx[0].as_dict() == txs_broadcasted_by_alice[0].as_dict()
+    assert bob_incoming_tx[0] == txs_broadcasted_by_alice[0]
 
     # Clear the recording, we asserted all we want and would like to have a fresh start
     bob_incoming_tx.clear()
@@ -162,7 +163,7 @@ async def test_tx_propagation(two_connected_tx_pools,
     await asyncio.wait_for(alice_got_tx.wait(), timeout=0.2)
 
     # Check that Alice receives only the one tx that it didn't know about
-    assert alice_incoming_tx[0].as_dict() == txs_broadcasted_by_bob[0].as_dict()
+    assert alice_incoming_tx[0] == txs_broadcasted_by_bob[0]
     assert len(alice_incoming_tx) == 1
 
 
@@ -191,7 +192,7 @@ async def test_does_not_propagate_invalid_tx(two_connected_tx_pools,
     # Check that Bob received only the second tx which is valid
     await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
     assert len(bob_incoming_tx) == 1
-    assert bob_incoming_tx[0].as_dict() == txs_broadcasted_by_alice[1].as_dict()
+    assert bob_incoming_tx[0] == txs_broadcasted_by_alice[1]
 
 
 @pytest.mark.asyncio
@@ -214,11 +215,11 @@ async def test_local_transaction_propagation(two_connected_tx_pools,
     await asyncio.wait_for(bob_got_tx.wait(), timeout=0.2)
     assert len(bob_incoming_tx) == 1
 
-    assert bob_incoming_tx[0].as_dict() == local_alice_tx.as_dict()
+    assert bob_incoming_tx[0] == local_alice_tx
 
 
 def create_random_tx(chain, private_key, is_valid=True):
-    return chain.create_unsigned_transaction(
+    transaction = chain.create_unsigned_transaction(
         nonce=0,
         gas_price=1,
         gas=2100000000000 if is_valid else 0,
@@ -228,3 +229,4 @@ def create_random_tx(chain, private_key, is_valid=True):
         to=force_bytes_to_address(b'\x10\x10'),
         value=1,
     ).as_signed_transaction(private_key, chain_id=chain.chain_id)
+    return rlp.decode(rlp.encode(transaction))

@@ -24,6 +24,7 @@ from trinity.constants import (
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID
 )
+from trinity.rlp.sedes import SerializedTransaction
 
 
 class DefaultTransactionValidator():
@@ -72,7 +73,7 @@ class DefaultTransactionValidator():
         else:
             raise NotImplementedError(f"Unsupported network id {network_id}")
 
-    def __call__(self, transaction: SignedTransactionAPI) -> bool:
+    def __call__(self, transaction: SerializedTransaction) -> bool:
 
         try:
             self.validate(transaction)
@@ -81,9 +82,12 @@ class DefaultTransactionValidator():
         else:
             return True
 
-    def validate(self, transaction: SignedTransactionAPI) -> None:
+    def validate(self, transaction: SerializedTransaction) -> SignedTransactionAPI:
         transaction_class = self.get_appropriate_tx_class()
-        tx = transaction_class(**transaction.as_dict())
+        if isinstance(transaction, list):
+            tx = transaction_class.deserialize(transaction)
+        else:
+            raise NotImplementedError(f"Haven't implemented typed transactions yet")
         tx.validate()
 
         if tx.chain_id != self.chain.chain_id:
@@ -91,6 +95,8 @@ class DefaultTransactionValidator():
                 f"Transaction {encode_hex(tx.hash)} is for chain with id {tx.chain_id} "
                 f"but current chain has id {self.chain.chain_id}"
             )
+        else:
+            return tx
 
     @cachetools.func.ttl_cache(maxsize=1024, ttl=300)
     def get_appropriate_tx_class(self) -> Type[SignedTransactionAPI]:

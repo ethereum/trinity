@@ -11,8 +11,9 @@ import uuid
 from async_service import Service
 from lahja import EndpointAPI
 
+from eth_hash.auto import keccak
 from eth_utils.toolz import partition_all
-from eth.abc import SignedTransactionAPI
+import rlp
 
 from p2p.abc import SessionAPI
 
@@ -26,6 +27,7 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeer,
     ETHProxyPeerPool,
 )
+from trinity.rlp.sedes import SerializedTransaction
 from trinity.sync.common.events import SendLocalTransaction
 
 
@@ -46,7 +48,7 @@ BATCH_HIGH_WATER = 200
 class TxPool(Service):
     """
     The :class:`~trinity.tx_pool.pool.TxPool` class is responsible for holding and relaying
-    of transactions, represented as :class:`~eth.abc.SignedTransactionAPI` among the
+    of transactions, represented as `SerializedTransaction` among the
     connected peers.
 
       .. note::
@@ -58,7 +60,7 @@ class TxPool(Service):
     def __init__(self,
                  event_bus: EndpointAPI,
                  peer_pool: ETHProxyPeerPool,
-                 tx_validation_fn: Callable[[SignedTransactionAPI], bool],
+                 tx_validation_fn: Callable[[SerializedTransaction], bool],
                  ) -> None:
         self.logger = get_logger('trinity.components.txpool.TxPoolService')
         self._event_bus = event_bus
@@ -69,7 +71,7 @@ class TxPool(Service):
 
         self.tx_validation_fn = tx_validation_fn
 
-        # The effectiveness of the filter is based on the number of peers int the peer pool.
+        # The effectiveness of the filter is based on the number of peers in the peer pool.
         #
         # Assuming 25 peers:
         # - each transaction will get sent to at most 24 peers resulting in 24 entries in the BF
@@ -91,7 +93,7 @@ class TxPool(Service):
         # We can expect the maximum memory footprint to be about 8.5mb for the bloom filters.
         self._bloom = RollingBloom(generation_size=100000, max_generations=144)
         self._bloom_salt = uuid.uuid4()
-        self._internal_queue: 'asyncio.Queue[Sequence[SignedTransactionAPI]]' = asyncio.Queue(2000)
+        self._internal_queue: 'asyncio.Queue[Sequence[SerializedTransaction]]' = asyncio.Queue(2000)
 
     # This is a rather arbitrary value, but when the sync is operating normally we never see
     # the msg queue grow past a few hundred items, so this should be a reasonable limit for
@@ -127,9 +129,13 @@ class TxPool(Service):
             # across reboots and gets rebroadcasted if needed. It should probably also be monitored
             # for inclusion and removed when it's either included or past the maximum age.
             # See: https://github.com/ethereum/trinity/issues/29
-            await self._internal_queue.put((event.transaction,))
 
-    async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SignedTransactionAPI]) -> None:
+            # This will return the simple bytestring for typed transaction, or the list
+            #   of values for a legacy transaction:
+            serialized_transaction = rlp.decode(rlp.encode(event.transaction))
+            await self._internal_queue.put((serialized_transaction,))
+
+    async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SerializedTransaction]) -> None:
 
         self.logger.debug2('Received %d transactions from %s', len(txs), sender)
 
@@ -138,23 +144,23 @@ class TxPool(Service):
 
     async def _process_transactions(self) -> None:
         while self.manager.is_running:
-            buffer: List[SignedTransactionAPI] = []
+            txn_buffer: List[SerializedTransaction] = []
 
             # wait for there to be items available on the queue.
             transactions = await self._internal_queue.get()
-            buffer.extend(transactions)
+            txn_buffer.extend(transactions)
 
             # continue to pull items from the queue synchronously until the
             # queue is either empty or we hit a sufficient size to justify
             # sending to our peers.
             while not self._internal_queue.empty():
-                if len(buffer) > BATCH_LOW_WATER:
+                if len(txn_buffer) > BATCH_LOW_WATER:
                     break
-                buffer.extend(self._internal_queue.get_nowait())
+                txn_buffer.extend(self._internal_queue.get_nowait())
 
             # Now that the queue is either empty or we have an adequate number
             # to send to our peers, broadcast them to the appropriate peers.
-            for batch in partition_all(BATCH_HIGH_WATER, buffer):
+            for batch in partition_all(BATCH_HIGH_WATER, txn_buffer):
                 peers = await self._peer_pool.get_peers()
                 for receiving_peer in peers:
                     filtered_tx = self._filter_tx_for_peer(receiving_peer, batch)
@@ -180,7 +186,7 @@ class TxPool(Service):
     def _filter_tx_for_peer(
             self,
             peer: ETHProxyPeer,
-            txs: Sequence[SignedTransactionAPI]) -> Tuple[SignedTransactionAPI, ...]:
+            txs: Sequence[SerializedTransaction]) -> Tuple[SerializedTransaction, ...]:
 
         return tuple(
             val for val in txs
@@ -188,16 +194,20 @@ class TxPool(Service):
             if self.tx_validation_fn(val)
         )
 
-    def _construct_bloom_entry(self, session: SessionAPI, tx: SignedTransactionAPI) -> bytes:
+    def _construct_bloom_entry(self, session: SessionAPI, tx: SerializedTransaction) -> bytes:
+        if isinstance(tx, bytes):
+            tx_bytes = tx
+        else:
+            tx_bytes = b''.join(tx)
         return b':'.join((
             session.id.bytes,
-            tx.hash,
+            keccak(tx_bytes),
             self._bloom_salt.bytes,
         ))
 
     def _add_txs_to_bloom(self,
                           session: SessionAPI,
-                          txs: Iterable[SignedTransactionAPI]) -> None:
+                          txs: Iterable[SerializedTransaction]) -> None:
         for val in txs:
             key = self._construct_bloom_entry(session, val)
             self._bloom.add(key)
