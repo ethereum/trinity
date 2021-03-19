@@ -31,7 +31,17 @@ ROPSTEN_GENESIS_HASH = to_bytes(
 
 def test_extract_fork_blocks():
     fork_blocks = extract_fork_blocks(MAINNET_VM_CONFIGURATION)
-    assert fork_blocks == (1150000, 1920000, 2463000, 2675000, 4370000, 7280000, 9069000, 9200000)
+    assert fork_blocks == (
+        1150000,
+        1920000,
+        2463000,
+        2675000,
+        4370000,
+        7280000,
+        9069000,
+        9200000,
+        12244000,
+    )
 
 
 @pytest.mark.parametrize(
@@ -56,8 +66,12 @@ def test_extract_fork_blocks():
         (9069000, ForkID(hash=to_bytes(hexstr='0x879d6e30'), next=9200000)),
         # Last Istanbul and first Muir Glacier block
         (9199999, ForkID(hash=to_bytes(hexstr='0x879d6e30'), next=9200000)),
-        (9200000, ForkID(hash=to_bytes(hexstr='0xe029e991'), next=0)),   # First Muir Glacier block
-        (10000000, ForkID(hash=to_bytes(hexstr='0xe029e991'), next=0)),  # Future Muir Glacier block
+        # First Muir Glacier block
+        (9200000, ForkID(hash=to_bytes(hexstr='0xe029e991'), next=12244000)),
+        # Last Muir Glacier block
+        (12244000 - 1, ForkID(hash=to_bytes(hexstr='0xe029e991'), next=12244000)),
+        (12244000, ForkID(hash=to_bytes(hexstr='0xeb440f6'), next=0)),  # First Berlin
+        (20000000, ForkID(hash=to_bytes(hexstr='0xeb440f6'), next=0)),  # Future Berlin
     ]
 )
 def test_mainnet_forkids(head, expected_forkid):
@@ -80,8 +94,10 @@ def test_mainnet_forkids(head, expected_forkid):
         (6485845, ForkID(hash=to_bytes(hexstr='0xd6e2149b'), next=6485846)),  # Last Petersburg
         (6485846, ForkID(hash=to_bytes(hexstr='0x4bc66396'), next=7117117)),  # First Istanbul
         (7117116, ForkID(hash=to_bytes(hexstr='0x4bc66396'), next=7117117)),  # Last Istanbul block
-        (7117117, ForkID(hash=to_bytes(hexstr='0x6727ef90'), next=0)),  # First Muir Glacier block
-        (7500000, ForkID(hash=to_bytes(hexstr='0x6727ef90'), next=0)),  # Future
+        (7117117, ForkID(hash=to_bytes(hexstr='0x6727ef90'), next=9812189)),  # First Muir Glacier
+        (9812188, ForkID(hash=to_bytes(hexstr='0x6727ef90'), next=9812189)),  # Last Muir Glacier
+        (9812189, ForkID(hash=to_bytes(hexstr='0xa157d377'), next=0)),  # First Berlin
+        (10000000, ForkID(hash=to_bytes(hexstr='0xa157d377'), next=0)),  # Future Berlin
     ]
 )
 def test_ropsten_forkids(head, expected_forkid):
@@ -170,13 +186,13 @@ def test_forkid():
          ForkID(hash=to_bytes(hexstr='0xafec6b27'), next=0),
          LocalChainIncompatibleOrStale),
 
-        # Local is mainnet Muir Glacier, far in the future. Remote announces Gopherium (non
+        # Local is mainnet Berlin, far in the future. Remote announces Gopherium (non
         # existing fork) at some future block 88888888, for itself, but past block for local.
         # Local is incompatible.
         #
         # This case detects non-upgraded nodes with majority hash power (typical Ropsten mess).
         (88888888,
-         ForkID(hash=to_bytes(hexstr='0xe029e991'), next=88888888),
+         ForkID(hash=to_bytes(hexstr='0xeb440f6'), next=88888888),
          LocalChainIncompatibleOrStale),
 
         # Local is mainnet Byzantium. Remote is also in Byzantium, but announces Gopherium (non
