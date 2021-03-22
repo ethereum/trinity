@@ -36,7 +36,10 @@ from trinity.protocol.eth.commands import (
     GetPooledTransactionsV65,
 )
 from trinity.rlp.block_body import BlockBody
-from trinity.rlp.sedes import SerializedTransaction
+from trinity.rlp.sedes import (
+    UninterpretedTransaction,
+    deinterpret_receipt_bundles,
+)
 
 from .exchanges import (
     GetBlockBodiesV65Exchange,
@@ -208,9 +211,10 @@ class BaseETHAPI(Application):
         self.protocol.send(GetReceiptsV65(tuple(block_hashes)))
 
     def send_receipts(self, receipts: Sequence[Sequence[ReceiptAPI]]) -> None:
-        self.protocol.send(ReceiptsV65(tuple(map(tuple, receipts))))
+        command = ReceiptsV65(deinterpret_receipt_bundles(receipts))
+        self.protocol.send(command)
 
-    def send_transactions(self, transactions: Sequence[SerializedTransaction]) -> None:
+    def send_transactions(self, transactions: Sequence[UninterpretedTransaction]) -> None:
         self.protocol.send(Transactions(tuple(transactions)))
 
     def send_new_block_hashes(self, *new_block_hashes: NewBlockHash) -> None:

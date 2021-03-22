@@ -28,7 +28,7 @@ from trinity.protocol.eth.proto import ETHProtocolV63, ETHProtocolV65
 from trinity.tools.factories.block_hash import BlockHashFactory
 from trinity.tools.factories.headers import BlockHeaderFactory
 from trinity.tools.factories.transactions import (
-    SerializedTransactionFactory,
+    UninterpretedTransactionFactory,
 )
 
 
@@ -93,7 +93,9 @@ class BlockFieldsFactory(factory.Factory):
         model = BlockFields
 
     header = factory.SubFactory(BlockHeaderFactory)
-    transactions = factory.LazyFunction(lambda: tuple(SerializedTransactionFactory.create_batch(2)))
+    transactions = factory.LazyFunction(lambda: tuple(
+        UninterpretedTransactionFactory.create_batch(2)
+    ))
     uncles = factory.LazyFunction(lambda: tuple(BlockHeaderFactory.create_batch(2)))
 
 

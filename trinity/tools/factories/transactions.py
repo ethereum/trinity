@@ -4,7 +4,11 @@ try:
 except ImportError:
     raise ImportError("The p2p.tools.factories module requires the `factory_boy` library.")
 
-from typing import Any, List, Type, Union
+from typing import (
+    Any,
+    List,
+    Type,
+)
 
 from eth.constants import ZERO_ADDRESS
 from eth.rlp.transactions import BaseTransactionFields
@@ -13,22 +17,27 @@ import rlp
 
 from p2p.tools.factories import PrivateKeyFactory
 
+from trinity.rlp.sedes import (
+    UninterpretedTransaction,
+    strip_interpretation,
+)
 
-class SerializedTransactionFactory(factory.Factory):
+
+class UninterpretedTransactionFactory(factory.Factory):
     class Meta:
         model = list
 
     __faker = Faker()
     @classmethod
     def _create(cls,
-                model_class: List[bytes],
+                model_class: Type[List[bytes]],
                 *args: Any,
-                **kwargs: Any) -> Union[bytes, List[bytes]]:
+                **kwargs: Any) -> UninterpretedTransaction:
 
         if cls.__faker.boolean():
-            return b'\x01' + cls.__faker.pyint().to_bytes(length=64, byteorder='big')
+            return b'\x01' + rlp.encode(LegacyTransactionFactory(*args, **kwargs))
         else:
-            return rlp.encode(LegacyTransactionFactory(*args, **kwargs))
+            return strip_interpretation(LegacyTransactionFactory(*args, **kwargs))
 
 
 class _FakeTransaction(BaseTransactionFields):

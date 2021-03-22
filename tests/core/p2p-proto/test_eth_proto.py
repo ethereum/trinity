@@ -23,8 +23,8 @@ from trinity.tools.factories import (
     BlockBodyFactory,
     BlockHashFactory,
     BlockHeaderFactory,
-    ReceiptFactory,
-    SerializedTransactionFactory,
+    UninterpretedReceiptFactory,
+    UninterpretedTransactionFactory,
 )
 from trinity.tools.factories.common import (
     BlockHeadersQueryFactory,
@@ -43,7 +43,7 @@ from trinity.tools.factories.eth import (
         (StatusV63, StatusV63PayloadFactory()),
         (Status, StatusPayloadFactory()),
         (NewBlockHashes, tuple(NewBlockHashFactory.create_batch(2))),
-        (Transactions, tuple(SerializedTransactionFactory.create_batch(2))),
+        (Transactions, tuple(UninterpretedTransactionFactory.create_batch(2))),
         (GetBlockHeadersV65, BlockHeadersQueryFactory()),
         (GetBlockHeadersV65, BlockHeadersQueryFactory(block_number_or_hash=BlockHashFactory())),
         (BlockHeadersV65, tuple(BlockHeaderFactory.create_batch(2))),
@@ -55,7 +55,10 @@ from trinity.tools.factories.eth import (
         (GetReceiptsV65, tuple(BlockHashFactory.create_batch(2))),
         (
             ReceiptsV65,
-            (tuple(ReceiptFactory.create_batch(2)), tuple(ReceiptFactory.create_batch(3)))
+            (
+                tuple(UninterpretedReceiptFactory.create_batch(2)),
+                tuple(UninterpretedReceiptFactory.create_batch(3)),
+            )
         ),
     ),
 )

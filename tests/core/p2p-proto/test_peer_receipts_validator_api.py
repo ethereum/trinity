@@ -5,11 +5,13 @@ import time
 import pytest
 
 from eth_utils import to_tuple
+from eth_utils.toolz import compose
 
 from eth.db.trie import make_trie_root_and_nodes
 from eth.rlp.headers import BlockHeader
 from eth.rlp.receipts import Receipt
 
+from trinity.rlp.sedes import strip_interpretation
 from trinity.tools.factories import LatestETHPeerPairFactory
 
 
@@ -49,13 +51,20 @@ def mk_headers(*counts):
         yield mk_header_and_receipts(idx, num_receipts)
 
 
+def bundle_receipts(receipts, trie_roots_and_data):
+    return tuple(zip(
+        tuple(map(compose(tuple, strip_interpretation), receipts)),
+        trie_roots_and_data,
+    ))
+
+
 @pytest.mark.asyncio
 async def test_eth_peer_get_receipts_round_trip_with_full_response(eth_peer_and_remote):
     peer, remote = eth_peer_and_remote
 
     headers_bundle = mk_headers(1, 3, 2, 5, 4)
     headers, receipts, trie_roots_and_data = zip(*headers_bundle)
-    receipts_bundle = tuple(zip(receipts, trie_roots_and_data))
+    receipts_bundle = bundle_receipts(receipts, trie_roots_and_data)
 
     async def send_receipts():
         remote.eth_api.send_receipts(receipts)
@@ -76,7 +85,7 @@ async def test_eth_peer_get_receipts_round_trip_with_partial_response(eth_peer_a
 
     headers_bundle = mk_headers(1, 3, 2, 5, 4)
     headers, receipts, trie_roots_and_data = zip(*headers_bundle)
-    receipts_bundle = tuple(zip(receipts, trie_roots_and_data))
+    receipts_bundle = bundle_receipts(receipts, trie_roots_and_data)
 
     async def send_receipts():
         remote.eth_api.send_receipts((receipts[2], receipts[1], receipts[4]))
@@ -97,7 +106,7 @@ async def test_eth_peer_get_receipts_round_trip_with_noise(eth_peer_and_remote):
 
     headers_bundle = mk_headers(1, 3, 2, 5, 4)
     headers, receipts, trie_roots_and_data = zip(*headers_bundle)
-    receipts_bundle = tuple(zip(receipts, trie_roots_and_data))
+    receipts_bundle = bundle_receipts(receipts, trie_roots_and_data)
 
     async def send_receipts():
         remote.eth_api.send_transactions([])
@@ -122,7 +131,7 @@ async def test_eth_peer_get_receipts_round_trip_no_match_invalid_response(eth_pe
 
     headers_bundle = mk_headers(1, 3, 2, 5, 4)
     headers, receipts, trie_roots_and_data = zip(*headers_bundle)
-    receipts_bundle = tuple(zip(receipts, trie_roots_and_data))
+    receipts_bundle = bundle_receipts(receipts, trie_roots_and_data)
 
     wrong_headers = mk_headers(4, 3, 8)
     _, wrong_receipts, _ = zip(*wrong_headers)

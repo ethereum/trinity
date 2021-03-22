@@ -25,7 +25,7 @@ from trinity.constants import (
     MAINNET_NETWORK_ID,
     ROPSTEN_NETWORK_ID
 )
-from trinity.rlp.sedes import SerializedTransaction
+from trinity.rlp.sedes import UninterpretedTransaction
 
 
 class DefaultTransactionValidator():
@@ -74,7 +74,7 @@ class DefaultTransactionValidator():
         else:
             raise NotImplementedError(f"Unsupported network id {network_id}")
 
-    def __call__(self, transaction: SerializedTransaction) -> bool:
+    def __call__(self, transaction: UninterpretedTransaction) -> bool:
 
         try:
             self.validate(transaction)
@@ -83,7 +83,7 @@ class DefaultTransactionValidator():
         else:
             return True
 
-    def validate(self, transaction: SerializedTransaction) -> SignedTransactionAPI:
+    def validate(self, transaction: UninterpretedTransaction) -> SignedTransactionAPI:
         transaction_builder = self.get_appropriate_tx_builder()
         tx = transaction_builder.deserialize(transaction)
         tx.validate()

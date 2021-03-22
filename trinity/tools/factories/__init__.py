@@ -22,7 +22,7 @@ from .eth.proto import (  # noqa: F401
     ALL_PEER_PAIR_FACTORIES,
 )
 from .headers import BlockHeaderFactory  # noqa: F401
-from .receipts import ReceiptFactory  # noqa: F401
+from .receipts import UninterpretedReceiptFactory  # noqa: F401
 from .transactions import (  # noqa: F401
-    SerializedTransactionFactory,
+    UninterpretedTransactionFactory,
 )

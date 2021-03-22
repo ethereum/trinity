@@ -22,13 +22,16 @@ import rlp
 from rlp import sedes
 
 from eth.rlp.headers import BlockHeader
-from eth.rlp.receipts import Receipt
 
 from p2p.abc import SerializationCodecAPI
 from p2p.commands import BaseCommand, RLPCodec
 
 from trinity.rlp.block_body import BlockBody
-from trinity.rlp.sedes import HashOrNumber, hash_sedes
+from trinity.rlp.sedes import (
+    HashOrNumber,
+    UninterpretedReceiptRLP,
+    hash_sedes,
+)
 
 from .payloads import (
     AnnouncePayload,
@@ -224,7 +227,7 @@ class GetReceipts(BaseCommand[GetReceiptsPayload]):
 RECEIPTS_STRUCTURE = sedes.List((
     sedes.big_endian_int,
     sedes.big_endian_int,
-    sedes.CountableList(sedes.CountableList(Receipt)),
+    sedes.CountableList(sedes.CountableList(UninterpretedReceiptRLP)),
 ))
 
 

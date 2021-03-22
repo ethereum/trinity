@@ -1,19 +1,32 @@
 from typing import (
     Any,
     List,
+    Sequence,
+    Tuple,
     Union,
 )
 
+from eth.abc import (
+    ReceiptAPI,
+)
+import rlp
 from rlp import sedes
 
+DecodedZeroOrOneLayerRLP = Union[bytes, List[bytes]]
 
-class AnyRLP:
+
+class ZeroOrOneLayerRLP:
+    """
+    An RLP object of unknown interpretation, with a maximum "depth" of 1.
+
+    It can be either a simple bytes object, or a list of bytes objects.
+    """
     @classmethod
-    def serialize(cls, obj: Any) -> Union[bytes, List[bytes]]:
+    def serialize(cls, obj: Any) -> DecodedZeroOrOneLayerRLP:
         return obj
 
     @classmethod
-    def deserialize(cls, encoded: Union[bytes, List[bytes]]) -> Any:
+    def deserialize(cls, encoded: DecodedZeroOrOneLayerRLP) -> Any:
         return encoded
 
 
@@ -32,7 +45,29 @@ class HashOrNumber:
 
 hash_sedes = sedes.Binary(min_length=32, max_length=32)
 
+
+def strip_interpretation(rlp_object: Any) -> DecodedZeroOrOneLayerRLP:
+    return rlp.decode(rlp.encode(rlp_object))
+
+
 # We often have to rlp-decode without knowing ahead of time how to interpret the values.
 #   So we just pass around uninterpreted bytes (or list of bytes, for legacy txns),
 #   until the moment that we can use the VM to decode the serialized values.
-SerializedTransaction = Union[bytes, List[bytes]]
+UninterpretedTransaction = DecodedZeroOrOneLayerRLP
+UninterpretedReceipt = DecodedZeroOrOneLayerRLP
+
+UninterpretedTransactionRLP = ZeroOrOneLayerRLP
+UninterpretedReceiptRLP = ZeroOrOneLayerRLP
+
+
+def deinterpret_receipt_bundles(
+    receipt_bundles: Sequence[Sequence[ReceiptAPI]],
+) -> Tuple[Tuple[UninterpretedReceipt, ...], ...]:
+
+    return tuple(
+        tuple(
+            strip_interpretation(receipt)
+            for receipt in receipts
+        )
+        for receipts in receipt_bundles
+    )

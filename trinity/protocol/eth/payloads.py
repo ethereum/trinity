@@ -5,7 +5,7 @@ from eth_typing import BlockNumber, Hash32
 from eth.abc import BlockHeaderAPI
 
 from trinity.protocol.eth.forkid import ForkID
-from trinity.rlp.sedes import SerializedTransaction
+from trinity.rlp.sedes import UninterpretedTransaction
 
 
 class StatusV63Payload(NamedTuple):
@@ -32,7 +32,7 @@ class NewBlockHash(NamedTuple):
 
 class BlockFields(NamedTuple):
     header: BlockHeaderAPI
-    transactions: Tuple[SerializedTransaction, ...]
+    transactions: Tuple[UninterpretedTransaction, ...]
     uncles: Tuple[BlockHeaderAPI, ...]
 
 
