@@ -190,6 +190,15 @@ def map_0x_to_0x0(value):
     return '0x0' if value == '0x' else value
 
 
+def access_list_normalizer(access_list):
+    return [
+        {
+            "address": to_checksum_address(original["address"]),
+            "storageKeys": [remove_leading_zeros(slot) for slot in original["storageKeys"]],
+        } for original in access_list
+    ]
+
+
 RPC_STATE_NORMALIZERS = {
     'balance': remove_leading_zeros,
     'code': compose(
@@ -242,6 +251,9 @@ RPC_TRANSACTION_NORMALIZERS = {
     'r': remove_leading_zeros,
     's': remove_leading_zeros,
     'v': remove_leading_zeros,
+    'type': remove_leading_zeros,
+    'chainId': remove_leading_zeros,
+    'accessList': access_list_normalizer,
 }
 
 
@@ -410,11 +422,26 @@ async def validate_transaction_count(rpc, block_fixture, at_block):
 
 def validate_rpc_transaction_vs_fixture(transaction, fixture):
     expected = fixture_transaction_in_rpc_format(fixture)
-    actual_transaction = dissoc(
+    stripped = dissoc(
         transaction,
         'hash',
         'from',
+        'yParity',
     )
+    if 'type' not in stripped:
+        actual_transaction = dissoc(
+            stripped,
+            'chainId',
+        )
+    elif stripped['type'] == "0x1":
+        actual_transaction = dict(
+            stripped,
+            v=transaction['yParity'],
+        )
+    else:
+        raise NotImplementedError(
+            f"Unrecognized transaction type: {stripped['type']} in {transaction!r}"
+        )
     assert actual_transaction == expected
 
 

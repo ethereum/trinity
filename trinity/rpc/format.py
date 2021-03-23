@@ -4,7 +4,10 @@ from typing import (
     Callable,
     cast,
     Dict,
+    Iterable,
+    List,
     Sequence,
+    Tuple,
     Union,
 )
 from eth_utils.toolz import (
@@ -21,24 +24,26 @@ from eth_utils import (
     is_address,
     to_checksum_address,
 )
+from eth_typing import (
+    Address,
+)
 
 import rlp
 
 from eth.abc import (
     BlockAPI,
     BlockHeaderAPI,
+    LegacyTransactionFieldsAPI,
     ReceiptAPI,
     SignedTransactionAPI,
 )
 from eth.constants import (
     CREATE_CONTRACT_ADDRESS,
 )
-from eth.rlp.transactions import (
-    BaseTransaction,
-)
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.rpc.typing import (
+    RpcAccessList,
     RpcBlockResponse,
     RpcBlockTransactionResponse,
     RpcHeaderResponse,
@@ -108,27 +113,51 @@ def to_receipt_response(receipt: ReceiptAPI,
     }
 
 
-def transaction_to_dict(transaction: SignedTransactionAPI) -> RpcTransactionResponse:
-    if isinstance(transaction, BaseTransaction):
-        return {
-            'hash': encode_hex(transaction.hash),
-            'nonce': hex(transaction.nonce),
-            'gas': hex(transaction.gas),
-            'gasPrice': hex(transaction.gas_price),
-            'from': to_checksum_address(transaction.sender),
-            'to': apply_formatter_if(
-                is_address,
-                to_checksum_address,
-                encode_hex(transaction.to)
-            ),
-            'value': hex(transaction.value),
-            'input': encode_hex(transaction.data),
-            'r': hex(transaction.r),
-            's': hex(transaction.s),
-            'v': hex(transaction.v),
+def access_list_to_json(
+        access_list: Iterable[Tuple[Address, Iterable[int]]]
+) -> List[RpcAccessList]:
+
+    return [
+        {
+            "address": to_checksum_address(address),
+            "storageKeys": [hex(slot) for slot in storage_slots],
         }
+        for address, storage_slots in access_list
+    ]
+
+
+def transaction_to_dict(transaction: SignedTransactionAPI) -> RpcTransactionResponse:
+    base_dict = {
+        'hash': encode_hex(transaction.hash),
+        'nonce': hex(transaction.nonce),
+        'gas': hex(transaction.gas),
+        'gasPrice': hex(transaction.gas_price),
+        'from': to_checksum_address(transaction.sender),
+        'to': apply_formatter_if(
+            is_address,
+            to_checksum_address,
+            encode_hex(transaction.to)
+        ),
+        'value': hex(transaction.value),
+        'input': encode_hex(transaction.data),
+        'yParity': hex(transaction.y_parity),
+        'r': hex(transaction.r),
+        's': hex(transaction.s),
+        'chainId': hex(transaction.chain_id) if transaction.chain_id else None,
+    }
+
+    if transaction.type_id is None:
+        legacy_txn = cast(LegacyTransactionFieldsAPI, transaction)
+        return merge(base_dict, {
+            'v': hex(legacy_txn.v),
+        })
+    elif transaction.type_id == 1:
+        return merge(base_dict, {
+            'accessList': access_list_to_json(transaction.access_list),
+            'type': hex(transaction.type_id),
+        })
     else:
-        raise NotImplementedError("Cannot format the new access-list transactions yet")
+        raise NotImplementedError(f"Cannot this type of transaction: {transaction!r}")
 
 
 def block_transaction_to_dict(transaction: SignedTransactionAPI,
