@@ -1,7 +1,8 @@
 from typing import (
+    Dict,
+    List,
     Sequence,
     Union,
-    Dict,
 )
 from eth_typing import HexStr
 from typing_extensions import TypedDict
@@ -58,6 +59,11 @@ RpcTransactionResponse = TypedDict('RpcTransactionResponse', {
     's': str,
     'v': str,
 })
+
+
+class RpcAccessList(TypedDict):
+    address: str
+    storageKeys: List[str]
 
 
 class RpcBlockTransactionResponse(RpcTransactionResponse):

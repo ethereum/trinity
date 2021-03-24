@@ -28,7 +28,10 @@ from trinity.protocol.common.typing import (
     ReceiptsBundles,
 )
 from trinity.rlp.block_body import BlockBody
-from trinity.rlp.sedes import SerializedTransaction
+from trinity.rlp.sedes import (
+    UninterpretedTransaction,
+    deinterpret_receipt_bundles,
+)
 
 from .commands import (
     BlockBodiesV65,
@@ -202,7 +205,7 @@ class ProxyETHAPI:
         return response.transactions
 
     def send_transactions(self,
-                          txns: Sequence[SerializedTransaction]) -> None:
+                          txns: Sequence[UninterpretedTransaction]) -> None:
         command = Transactions(tuple(txns))
         self._event_bus.broadcast_nowait(
             SendTransactionsEvent(self.session, command),
@@ -250,7 +253,7 @@ class ProxyETHAPI:
         )
 
     def send_receipts(self, receipts: Sequence[Sequence[ReceiptAPI]]) -> None:
-        command = ReceiptsV65(tuple(map(tuple, receipts)))
+        command = ReceiptsV65(deinterpret_receipt_bundles(receipts))
         self._event_bus.broadcast_nowait(
             SendReceiptsEvent(self.session, command),
             self._broadcast_config,

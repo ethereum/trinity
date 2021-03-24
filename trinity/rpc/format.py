@@ -4,7 +4,10 @@ from typing import (
     Callable,
     cast,
     Dict,
+    Iterable,
+    List,
     Sequence,
+    Tuple,
     Union,
 )
 from eth_utils.toolz import (
@@ -21,12 +24,16 @@ from eth_utils import (
     is_address,
     to_checksum_address,
 )
+from eth_typing import (
+    Address,
+)
 
 import rlp
 
 from eth.abc import (
     BlockAPI,
     BlockHeaderAPI,
+    LegacyTransactionFieldsAPI,
     ReceiptAPI,
     SignedTransactionAPI,
 )
@@ -36,6 +43,7 @@ from eth.constants import (
 
 from trinity.chains.base import AsyncChainAPI
 from trinity.rpc.typing import (
+    RpcAccessList,
     RpcBlockResponse,
     RpcBlockTransactionResponse,
     RpcHeaderResponse,
@@ -105,8 +113,21 @@ def to_receipt_response(receipt: ReceiptAPI,
     }
 
 
+def access_list_to_json(
+        access_list: Iterable[Tuple[Address, Iterable[int]]]
+) -> List[RpcAccessList]:
+
+    return [
+        {
+            "address": to_checksum_address(address),
+            "storageKeys": [hex(slot) for slot in storage_slots],
+        }
+        for address, storage_slots in access_list
+    ]
+
+
 def transaction_to_dict(transaction: SignedTransactionAPI) -> RpcTransactionResponse:
-    return {
+    base_dict = {
         'hash': encode_hex(transaction.hash),
         'nonce': hex(transaction.nonce),
         'gas': hex(transaction.gas),
@@ -119,10 +140,24 @@ def transaction_to_dict(transaction: SignedTransactionAPI) -> RpcTransactionResp
         ),
         'value': hex(transaction.value),
         'input': encode_hex(transaction.data),
+        'yParity': hex(transaction.y_parity),
         'r': hex(transaction.r),
         's': hex(transaction.s),
-        'v': hex(transaction.v),
+        'chainId': hex(transaction.chain_id) if transaction.chain_id else None,
     }
+
+    if transaction.type_id is None:
+        legacy_txn = cast(LegacyTransactionFieldsAPI, transaction)
+        return merge(base_dict, {
+            'v': hex(legacy_txn.v),
+        })
+    elif transaction.type_id == 1:
+        return merge(base_dict, {
+            'accessList': access_list_to_json(transaction.access_list),
+            'type': hex(transaction.type_id),
+        })
+    else:
+        raise NotImplementedError(f"Cannot this type of transaction: {transaction!r}")
 
 
 def block_transaction_to_dict(transaction: SignedTransactionAPI,

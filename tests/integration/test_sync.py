@@ -10,7 +10,6 @@ import time
 from async_service.asyncio import background_asyncio_service
 
 import pytest
-import rlp
 from eth_utils import (
     encode_hex,
     to_text,
@@ -23,8 +22,7 @@ from eth.chains.ropsten import (
     ROPSTEN_VM_CONFIGURATION,
 )
 from eth.db.atomic import AtomicDB
-from eth.rlp.receipts import Receipt
-from eth.rlp.transactions import BaseTransactionFields
+from eth.exceptions import ReceiptNotFound
 
 from p2p import ecies
 from p2p.constants import DEVP2P_V5
@@ -189,11 +187,17 @@ async def test_sync_integration(request, caplog, geth_ipc_path, enode, geth_proc
             await asyncio.wait_for(wait_for_header_sync(n), 5)
 
             # https://ropsten.etherscan.io/block/11
-            header = chaindb.get_canonical_block_header_by_number(n)
-            transactions = chaindb.get_block_transactions(header, BaseTransactionFields)
-            assert len(transactions) == 15
+            expected_num_txns = 15
+            block = chain.get_canonical_block_by_number(n)
+            assert len(block.transactions) == expected_num_txns
 
-            receipts = chaindb.get_receipts(header, Receipt)
-            assert len(receipts) == 15
-            assert encode_hex(keccak(rlp.encode(receipts[0]))) == (
+            first_receipt = chain.get_transaction_receipt_by_index(n, 0)
+            assert encode_hex(keccak(first_receipt.encode())) == (
                 '0xf709ed2c57efc18a1675e8c740f3294c9e2cb36ba7bb3b89d3ab4c8fef9d8860')
+
+            for receipt_idx in range(1, expected_num_txns):
+                # Just make sure it doesn't crash when it looks for the receipt
+                chain.get_transaction_receipt_by_index(n, receipt_idx)
+
+            with pytest.raises(ReceiptNotFound):
+                chain.get_transaction_receipt_by_index(n, expected_num_txns)

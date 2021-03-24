@@ -137,20 +137,28 @@ class RPCServer:
 
         except TypeError as exc:
             error = f"Invalid parameters. Check parameter count and types. {exc}"
+            if debug:
+                raise
             return None, error
         except NotImplementedError as exc:
             error = "Method not implemented: %r %s" % (request['method'], exc)
+            if debug:
+                raise
             return None, error
         except ValidationError as exc:
             self.logger.debug("Validation error while executing RPC method", exc_info=True)
+            if debug:
+                raise
             return None, exc
         except RpcError as exc:
             self.logger.info(exc)
+            if debug:
+                raise
             return None, exc
         except Exception as exc:
             self.logger.warning("RPC method caused exception")
             if debug:
-                raise Exception("failure during rpc call with %s" % request) from exc
+                raise
             return None, exc
         else:
             return result, None

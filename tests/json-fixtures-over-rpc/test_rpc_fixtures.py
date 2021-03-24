@@ -70,10 +70,20 @@ SLOW_TESTS = (
     'ContractCreationSpam_d0g0v0_Homestead',
     'ContractCreationSpam_d0g0v0_Frontier',
     'ContractCreationSpam_d0g0v0_Istanbul',
+    'ContractCreationSpam_d0g0v0_Berlin',
     'Create2Recursive_d0g0v0',
     'Create2Recursive_d0g1v0',
     'DelegateCallSpam',
     'ForkStressTest',
+    'loop-add-10M',
+    'loop-divadd-10M',
+    'loop-divadd-unr100-10M',
+    'loop-exp-16b-100k',
+    'loop-exp-1b-1M',
+    'loop-exp-32b-100k',
+    'loop-exp-nop-1M',
+    'loop-mul',
+    'loop-mulmod-2M',
     'randomStatetest94_Homestead',
     'randomStatetest94_Byzantium',
     'randomStatetest94_Constantinople',
@@ -134,6 +144,7 @@ INCORRECT_UPSTREAM_TESTS = {
     ('GeneralStateTests/stRevertTest/RevertInCreateInInit_d0g0v0.json', 'RevertInCreateInInit_d0g0v0_Constantinople'),  # noqa: E501
     ('GeneralStateTests/stRevertTest/RevertInCreateInInit_d0g0v0.json', 'RevertInCreateInInit_d0g0v0_ConstantinopleFix'),  # noqa: E501
     ('GeneralStateTests/stRevertTest/RevertInCreateInInit.json', 'RevertInCreateInInit_d0g0v0_Istanbul'),  # noqa: E501
+    ('GeneralStateTests/stRevertTest/RevertInCreateInInit.json', 'RevertInCreateInInit_d0g0v0_Berlin'),  # noqa: E501
 
     # The CREATE2 variant seems to have been derived from the one above - it, too,
     # has a "synthetic" state, on which py-evm flips.
@@ -141,6 +152,7 @@ INCORRECT_UPSTREAM_TESTS = {
     ('GeneralStateTests/stCreate2/RevertInCreateInInitCreate2_d0g0v0.json', 'RevertInCreateInInitCreate2_d0g0v0_Constantinople'),  # noqa: E501
     ('GeneralStateTests/stCreate2/RevertInCreateInInitCreate2_d0g0v0.json', 'RevertInCreateInInitCreate2_d0g0v0_ConstantinopleFix'),  # noqa: E501
     ('GeneralStateTests/stCreate2/RevertInCreateInInitCreate2.json', 'RevertInCreateInInitCreate2_d0g0v0_Istanbul'),  # noqa: E501
+    ('GeneralStateTests/stCreate2/RevertInCreateInInitCreate2.json', 'RevertInCreateInInitCreate2_d0g0v0_Berlin'),  # noqa: E501
 
     # Four variants have been specifically added to test a collision type
     # like the above; therefore, they fail in the same manner.
@@ -155,11 +167,15 @@ INCORRECT_UPSTREAM_TESTS = {
     ('GeneralStateTests/stSStoreTest/InitCollision_d1g0v0.json', 'InitCollision_d1g0v0_ConstantinopleFix'),  # noqa: E501
     ('GeneralStateTests/stSStoreTest/InitCollision_d3g0v0.json', 'InitCollision_d3g0v0_ConstantinopleFix'),  # noqa: E501
     ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d0g0v0_Istanbul'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d1g0v0_Istanbul'),  # noqa: E501
     # Perhaps even stranger, d2 starts failing again after fixing a long-hidden consensus bug
     # but not in Constantinople, only in Istanbul.
     ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d2g0v0_Istanbul'),  # noqa: E501
-    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d1g0v0_Istanbul'),  # noqa: E501
     ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d3g0v0_Istanbul'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d0g0v0_Berlin'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d1g0v0_Berlin'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d2g0v0_Berlin'),  # noqa: E501
+    ('GeneralStateTests/stSStoreTest/InitCollision.json', 'InitCollision_d3g0v0_Berlin'),  # noqa: E501
 }
 
 
@@ -172,6 +188,15 @@ def pad32_dict_values(some_dict):
 
 def map_0x_to_0x0(value):
     return '0x0' if value == '0x' else value
+
+
+def access_list_normalizer(access_list):
+    return [
+        {
+            "address": to_checksum_address(original["address"]),
+            "storageKeys": [remove_leading_zeros(slot) for slot in original["storageKeys"]],
+        } for original in access_list
+    ]
 
 
 RPC_STATE_NORMALIZERS = {
@@ -226,6 +251,9 @@ RPC_TRANSACTION_NORMALIZERS = {
     'r': remove_leading_zeros,
     's': remove_leading_zeros,
     'v': remove_leading_zeros,
+    'type': remove_leading_zeros,
+    'chainId': remove_leading_zeros,
+    'accessList': access_list_normalizer,
 }
 
 
@@ -394,11 +422,26 @@ async def validate_transaction_count(rpc, block_fixture, at_block):
 
 def validate_rpc_transaction_vs_fixture(transaction, fixture):
     expected = fixture_transaction_in_rpc_format(fixture)
-    actual_transaction = dissoc(
+    stripped = dissoc(
         transaction,
         'hash',
         'from',
+        'yParity',
     )
+    if 'type' not in stripped:
+        actual_transaction = dissoc(
+            stripped,
+            'chainId',
+        )
+    elif stripped['type'] == "0x1":
+        actual_transaction = dict(
+            stripped,
+            v=transaction['yParity'],
+        )
+    else:
+        raise NotImplementedError(
+            f"Unrecognized transaction type: {stripped['type']} in {transaction!r}"
+        )
     assert actual_transaction == expected
 
 
@@ -544,9 +587,9 @@ async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
     (
         (
             "0x50406b46b2face98d3b1ccb3e8f1e9b490617d1b366568b4786847867dcdc7e8",
-            ('ValidBlocks/bcValidBlockTest/ExtraData32.json', 'ExtraData32_Homestead'),
+            ('ValidBlocks/bcValidBlockTest/ExtraData32.json', 'ExtraData32_Berlin'),
             {
-                'blockHash': '0x047635136e99cd68496efc834378e678538c64445be3c4ce4f1ebec5ca5c5fcf',
+                'blockHash': '0x53df1641d95c2540e4a773163ca045b6f2cd5d0f77c3df7c861258c1a7e62dc5',
                 'blockNumber': '0x1',
                 'contractAddress': None,
                 'cumulativeGasUsed': '0x560b',
@@ -555,7 +598,7 @@ async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
                 'logs': [{
                     'address': '0x095e7baea6a6c7c4c2dfeb977efac326af552d87',
                     'data': '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
-                    'blockHash': '0x047635136e99cd68496efc834378e678538c64445be3c4ce4f1ebec5ca5c5fcf',  # noqa: E501
+                    'blockHash': '0x53df1641d95c2540e4a773163ca045b6f2cd5d0f77c3df7c861258c1a7e62dc5',  # noqa: E501
                     'blockNumber': '0x1',
                     'logIndex': '0x0',
                     'removed': False,
@@ -564,7 +607,7 @@ async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
                     'transactionIndex': '0x0'
                 }],
                 'logsBloom': '0x00000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000040000000000000000000000000000000000000000000000000000000',  # noqa: E501
-                'root': '0x24d2203a1c8ad4d1c75b526aaa429b440208f863d26b599cb016b17bae845167',
+                'root': '0x01',  # is_successful_run?
                 'to': '0x095E7BAea6a6c7c4c2DfeB977eFac326aF552d87',
                 'transactionHash': '0x50406b46b2face98d3b1ccb3e8f1e9b490617d1b366568b4786847867dcdc7e8',  # noqa: E501
                 'transactionIndex': '0x0'
@@ -572,9 +615,9 @@ async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
         ),
         (
             "0xd6cda738c9f26fdaf805c6335ceec07dd57d1d081142b9c7ec7de2afdb79a5c4",
-            ('ValidBlocks/bcBlockGasLimitTest/TransactionGasHigherThanLimit2p63m1.json', 'TransactionGasHigherThanLimit2p63m1_EIP158'),  # noqa: E501
+            ('ValidBlocks/bcBlockGasLimitTest/TransactionGasHigherThanLimit2p63m1.json', 'TransactionGasHigherThanLimit2p63m1_Berlin'),  # noqa: E501
             {
-                'blockHash': '0x66649dd76e3155944f61e5f012fd920bbb22dca1ea211d392cbc49992cc1c789',
+                'blockHash': '0x22e33cb8b835cd44793111a5ce38e896b07db34fbe3788bd693a193cb4e9e44d',
                 'blockNumber': '0x1',
                 'contractAddress': None,
                 'cumulativeGasUsed': '0xa410',
@@ -582,7 +625,7 @@ async def setup_rpc_server(event_bus, chain_fixture, fixture_path):
                 'gasUsed': '0x5208',
                 'logs': [],
                 'logsBloom': '0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',  # noqa: E501
-                'root': '0xd9778a6246f1547ac91548f6ac374d1c3691d70c46186ab2470a2dcd009a54cd',
+                'root': '0x01',  # is_successful_run?
                 'to': '0xAAAF5374Fce5eDBc8E2a8697C15331677E6Ebf0b',
                 'transactionHash': '0xd6cda738c9f26fdaf805c6335ceec07dd57d1d081142b9c7ec7de2afdb79a5c4',  # noqa: E501
                 'transactionIndex': '0x1'

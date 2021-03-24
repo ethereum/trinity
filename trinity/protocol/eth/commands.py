@@ -8,15 +8,21 @@ from eth_utils.curried import (
 from eth_utils.toolz import compose
 from rlp import sedes
 
-from eth.abc import BlockHeaderAPI, ReceiptAPI, SignedTransactionAPI
+from eth.abc import BlockHeaderAPI, SignedTransactionAPI
 from eth.rlp.headers import BlockHeader
-from eth.rlp.receipts import Receipt
 
 from p2p.commands import BaseCommand, RLPCodec
 
 from trinity.protocol.common.payloads import BlockHeadersQuery
 from trinity.rlp.block_body import BlockBody
-from trinity.rlp.sedes import AnyRLP, HashOrNumber, hash_sedes, SerializedTransaction
+from trinity.rlp.sedes import (
+    HashOrNumber,
+    hash_sedes,
+    UninterpretedTransaction,
+    UninterpretedTransactionRLP,
+    UninterpretedReceipt,
+    UninterpretedReceiptRLP,
+)
 from .forkid import ForkID
 
 from .payloads import (
@@ -69,10 +75,10 @@ class NewBlockHashes(BaseCommand[Tuple[NewBlockHash, ...]]):
     )
 
 
-class Transactions(BaseCommand[Tuple[SerializedTransaction, ...]]):
+class Transactions(BaseCommand[Tuple[UninterpretedTransaction, ...]]):
     protocol_command_id = 2
-    serialization_codec: RLPCodec[Tuple[SerializedTransaction, ...]] = RLPCodec(
-        sedes=sedes.CountableList(AnyRLP),
+    serialization_codec: RLPCodec[Tuple[UninterpretedTransaction, ...]] = RLPCodec(
+        sedes=sedes.CountableList(UninterpretedTransactionRLP),
     )
 
 
@@ -116,7 +122,7 @@ class NewBlock(BaseCommand[NewBlockPayload]):
         sedes=sedes.List((
             sedes.List((
                 BlockHeader,
-                sedes.CountableList(AnyRLP),  # SerializedTransaction
+                sedes.CountableList(UninterpretedTransactionRLP),
                 sedes.CountableList(BlockHeader)
             )),
             sedes.big_endian_int
@@ -173,8 +179,8 @@ class GetReceiptsV65(BaseCommand[Tuple[Hash32, ...]]):
     )
 
 
-class ReceiptsV65(BaseCommand[Tuple[Tuple[ReceiptAPI, ...], ...]]):
+class ReceiptsV65(BaseCommand[Tuple[Tuple[UninterpretedReceipt, ...], ...]]):
     protocol_command_id = 16
-    serialization_codec: RLPCodec[Tuple[Tuple[ReceiptAPI, ...], ...]] = RLPCodec(
-        sedes=sedes.CountableList(sedes.CountableList(Receipt)),
+    serialization_codec: RLPCodec[Tuple[Tuple[UninterpretedReceipt, ...], ...]] = RLPCodec(
+        sedes=sedes.CountableList(sedes.CountableList(UninterpretedReceiptRLP)),
     )

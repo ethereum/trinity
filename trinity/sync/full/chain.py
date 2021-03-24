@@ -41,7 +41,6 @@ from eth_utils.toolz import (
 from eth.abc import (
     BlockAPI,
     BlockHeaderAPI,
-    ReceiptAPI,
     SignedTransactionAPI,
 )
 from eth.constants import (
@@ -68,6 +67,7 @@ from trinity.protocol.eth.constants import (
 from trinity.protocol.eth.peer import ETHPeer, ETHPeerPool
 from trinity.protocol.eth.sync import ETHHeaderChainSyncer
 from trinity.rlp.block_body import BlockBody
+from trinity.rlp.sedes import UninterpretedReceipt
 from trinity.sync.common.chain import (
     BaseBlockImporter,
     SimpleBlockImporter,
@@ -98,7 +98,7 @@ from trinity._utils.logging import get_logger
 from trinity._utils.timer import Timer
 
 # (ReceiptBundle, (Receipt, (root_hash, receipt_trie_data))
-ReceiptBundle = Tuple[Tuple[ReceiptAPI, ...], Tuple[Hash32, Dict[Hash32, bytes]]]
+ReceiptBundle = Tuple[Tuple[UninterpretedReceipt, ...], Tuple[Hash32, Dict[Hash32, bytes]]]
 # (BlockBody, (txn_root, txn_trie_data), uncles_hash)
 BlockBodyBundle = Tuple[
     BlockAPI,
@@ -749,8 +749,8 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
 
                 # transaction data was already persisted in _block_body_bundle_processing, but
                 # we need to include the transactions for them to be added to the hash->txn lookup
-                tx_class = block_class.get_transaction_class()
-                transactions = [tx_class.from_base_transaction(tx) for tx in body.transactions]
+                transaction_builder = vm_class.get_transaction_builder()
+                transactions = [transaction_builder.deserialize(tx) for tx in body.transactions]
 
                 # record progress in the tracker
                 self.tracker.record_transactions(len(transactions))
@@ -921,7 +921,10 @@ class FastChainBodySyncer(BaseBodyChainSyncer):
             if receipt_root not in receipts_by_root:
                 # this receipt group was not returned by the peer, skip validation
                 continue
-            for receipt in receipts_by_root[receipt_root]:
+            vm_class = self.chain.get_vm_class_for_block_number(header.block_number)
+            receipt_builder = vm_class.get_receipt_builder()
+            for uninterpreted_receipt in receipts_by_root[receipt_root]:
+                receipt = receipt_builder.deserialize(uninterpreted_receipt)
                 await self.chain.coro_validate_receipt(receipt, header)
 
     async def _request_receipts(
@@ -1222,9 +1225,8 @@ class RegularChainBodySyncer(BaseBodyChainSyncer):
             uncles: List[BlockHeaderAPI] = []
         else:
             body = self._pending_bodies.pop(header)
-            tx_class = block_class.get_transaction_class()
-            transactions = [tx_class.from_base_transaction(tx)
-                            for tx in body.transactions]
+            transaction_builder = vm_class.get_transaction_builder()
+            transactions = [transaction_builder.deserialize(tx) for tx in body.transactions]
             uncles = body.uncles
 
         return block_class(header, transactions, uncles)

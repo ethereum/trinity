@@ -11,10 +11,11 @@ from eth_typing import BlockNumber, Hash32
 from eth_utils import to_tuple
 from mypy_extensions import TypedDict
 
-from eth.abc import BlockHeaderAPI, ReceiptAPI
+from eth.abc import BlockHeaderAPI
 
 from trinity.protocol.common.payloads import BlockHeadersQuery
 from trinity.rlp.block_body import BlockBody
+from trinity.rlp.sedes import UninterpretedReceipt
 
 
 _StatusPayloadDict = TypedDict(
@@ -150,7 +151,7 @@ class GetReceiptsPayload(NamedTuple):
 class ReceiptsPayload(NamedTuple):
     request_id: int
     buffer_value: int
-    receipts: Tuple[Tuple[ReceiptAPI, ...], ...]
+    receipts: Tuple[Tuple[UninterpretedReceipt, ...], ...]
 
 
 class ProofRequest(NamedTuple):

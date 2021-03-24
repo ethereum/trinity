@@ -27,7 +27,7 @@ from trinity.protocol.eth.peer import (
     ETHProxyPeer,
     ETHProxyPeerPool,
 )
-from trinity.rlp.sedes import SerializedTransaction
+from trinity.rlp.sedes import UninterpretedTransaction
 from trinity.sync.common.events import SendLocalTransaction
 
 
@@ -48,7 +48,7 @@ BATCH_HIGH_WATER = 200
 class TxPool(Service):
     """
     The :class:`~trinity.tx_pool.pool.TxPool` class is responsible for holding and relaying
-    of transactions, represented as `SerializedTransaction` among the
+    of transactions, represented as `UninterpretedTransaction` among the
     connected peers.
 
       .. note::
@@ -60,7 +60,7 @@ class TxPool(Service):
     def __init__(self,
                  event_bus: EndpointAPI,
                  peer_pool: ETHProxyPeerPool,
-                 tx_validation_fn: Callable[[SerializedTransaction], bool],
+                 tx_validation_fn: Callable[[UninterpretedTransaction], bool],
                  ) -> None:
         self.logger = get_logger('trinity.components.txpool.TxPoolService')
         self._event_bus = event_bus
@@ -93,7 +93,8 @@ class TxPool(Service):
         # We can expect the maximum memory footprint to be about 8.5mb for the bloom filters.
         self._bloom = RollingBloom(generation_size=100000, max_generations=144)
         self._bloom_salt = uuid.uuid4()
-        self._internal_queue: 'asyncio.Queue[Sequence[SerializedTransaction]]' = asyncio.Queue(2000)
+        self._internal_queue: 'asyncio.Queue[Sequence[UninterpretedTransaction]]'
+        self._internal_queue = asyncio.Queue(2000)
 
     # This is a rather arbitrary value, but when the sync is operating normally we never see
     # the msg queue grow past a few hundred items, so this should be a reasonable limit for
@@ -135,7 +136,7 @@ class TxPool(Service):
             serialized_transaction = rlp.decode(rlp.encode(event.transaction))
             await self._internal_queue.put((serialized_transaction,))
 
-    async def _handle_tx(self, sender: SessionAPI, txs: Sequence[SerializedTransaction]) -> None:
+    async def _handle_tx(self, sender: SessionAPI, txs: Sequence[UninterpretedTransaction]) -> None:
 
         self.logger.debug2('Received %d transactions from %s', len(txs), sender)
 
@@ -144,7 +145,7 @@ class TxPool(Service):
 
     async def _process_transactions(self) -> None:
         while self.manager.is_running:
-            txn_buffer: List[SerializedTransaction] = []
+            txn_buffer: List[UninterpretedTransaction] = []
 
             # wait for there to be items available on the queue.
             transactions = await self._internal_queue.get()
@@ -186,7 +187,7 @@ class TxPool(Service):
     def _filter_tx_for_peer(
             self,
             peer: ETHProxyPeer,
-            txs: Sequence[SerializedTransaction]) -> Tuple[SerializedTransaction, ...]:
+            txs: Sequence[UninterpretedTransaction]) -> Tuple[UninterpretedTransaction, ...]:
 
         return tuple(
             val for val in txs
@@ -194,7 +195,7 @@ class TxPool(Service):
             if self.tx_validation_fn(val)
         )
 
-    def _construct_bloom_entry(self, session: SessionAPI, tx: SerializedTransaction) -> bytes:
+    def _construct_bloom_entry(self, session: SessionAPI, tx: UninterpretedTransaction) -> bytes:
         if isinstance(tx, bytes):
             tx_bytes = tx
         else:
@@ -207,7 +208,7 @@ class TxPool(Service):
 
     def _add_txs_to_bloom(self,
                           session: SessionAPI,
-                          txs: Iterable[SerializedTransaction]) -> None:
+                          txs: Iterable[UninterpretedTransaction]) -> None:
         for val in txs:
             key = self._construct_bloom_entry(session, val)
             self._bloom.add(key)

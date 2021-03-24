@@ -11,18 +11,21 @@ from eth.rlp.headers import BlockHeader
 import rlp
 from rlp import sedes
 
-from .sedes import AnyRLP, SerializedTransaction
+from .sedes import (
+    UninterpretedTransaction,
+    UninterpretedTransactionRLP,
+)
 
 
 class BlockBody(rlp.Serializable):
     fields = [
-        ('transactions', sedes.CountableList(AnyRLP)),
+        ('transactions', sedes.CountableList(UninterpretedTransactionRLP)),
         ('uncles', sedes.CountableList(BlockHeader))
     ]
 
     def __init__(
             self,
-            transactions: Iterable[Union[SerializedTransaction, SignedTransactionAPI]],
+            transactions: Iterable[Union[UninterpretedTransaction, SignedTransactionAPI]],
             uncles: Iterable[BlockHeaderAPI]) -> None:
         if not isinstance(transactions, (list, bytes)):
             transactions = rlp.decode(rlp.encode(transactions))

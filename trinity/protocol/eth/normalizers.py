@@ -6,12 +6,12 @@ from eth_utils import (
     to_tuple,
 )
 
-from eth.db.trie import make_trie_root_and_nodes
 from eth_hash.auto import keccak
 import rlp
 
 from p2p.exchange import BaseNormalizer
 
+from trinity._utils.trie import make_trie_root_and_nodes
 from trinity.protocol.common.typing import (
     BlockBodyBundle,
     BlockBodyBundles,

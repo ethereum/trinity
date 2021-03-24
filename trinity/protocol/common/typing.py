@@ -11,6 +11,9 @@ from eth_typing import (
 
 from p2p.peer import BasePeer
 
+from trinity.rlp.sedes import (
+    UninterpretedReceipt,
+)
 
 TPeer = TypeVar('TPeer', bound=BasePeer)
 
@@ -28,7 +31,10 @@ ReceiptsByBlock = Tuple[Tuple[ReceiptAPI, ...], ...]
 #   (receipts_in_block_b, (receipts_root_hash, receipts_trie_nodes),
 #   ...
 # (
-ReceiptsBundles = Tuple[Tuple[Tuple[ReceiptAPI, ...], Tuple[Hash32, Dict[Hash32, bytes]]], ...]
+ReceiptsBundles = Tuple[
+    Tuple[Tuple[UninterpretedReceipt, ...], Tuple[Hash32, Dict[Hash32, bytes]]],
+    ...
+]
 
 # (BlockBody, (txn_root, txn_trie_data), uncles_hash)
 

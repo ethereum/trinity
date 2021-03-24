@@ -134,6 +134,12 @@ jobs:
         environment:
           TOXENV: py37-docs
 
+  py37-rpc-state-berlin:
+    <<: *common
+    docker:
+      - image: circleci/python:3.7
+        environment:
+          TOXENV: py37-rpc-state-berlin
   py37-rpc-state-byzantium:
     <<: *common
     docker:
@@ -324,6 +330,7 @@ workflows:
       - py37-rpc-state-quadratic
       - py37-rpc-state-zero_knowledge
 
+      - py37-rpc-state-berlin
       - py37-rpc-state-byzantium
       - py37-rpc-state-constantinople
       - py37-rpc-state-frontier

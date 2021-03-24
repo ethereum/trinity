@@ -77,11 +77,14 @@ class RequestServerComponent(AsyncioIsolatedComponent):
                 header_db
             )
         elif app_config.database_mode is Eth1DbMode.FULL:
+            chain_config = app_config.get_chain_config()
+
             chain_db = AsyncChainDB(base_db)
             server = ETHRequestServer(
                 event_bus,
                 TO_NETWORKING_BROADCAST_CONFIG,
-                chain_db
+                chain_config.vm_configuration,
+                chain_db,
             )
         else:
             raise Exception(f"Unsupported Database Mode: {app_config.database_mode}")

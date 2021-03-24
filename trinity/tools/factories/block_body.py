@@ -6,12 +6,12 @@ except ImportError:
 from trinity.rlp.block_body import BlockBody
 
 from .headers import BlockHeaderFactory
-from .transactions import SerializedTransactionFactory
+from .transactions import UninterpretedTransactionFactory
 
 
 class BlockBodyFactory(factory.Factory):
     class Meta:
         model = BlockBody
 
-    transactions = factory.LazyFunction(lambda: SerializedTransactionFactory.create_batch(5))
+    transactions = factory.LazyFunction(lambda: UninterpretedTransactionFactory.create_batch(5))
     uncles = factory.LazyFunction(lambda: BlockHeaderFactory.create_batch(2))

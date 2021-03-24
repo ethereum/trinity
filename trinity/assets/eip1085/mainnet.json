@@ -16,6 +16,7 @@
     "petersburgForkBlock":"0x6f1580",
     "istanbulForkBlock": "0x8a61c8",
     "muirglacierForkBlock": "0x8c6180",
+    "berlinForkBlock": "0xbad420",
     "chainId":"0x1",
     "homesteadForkBlock":"0x118c30",
     "miningMethod":"ethash"

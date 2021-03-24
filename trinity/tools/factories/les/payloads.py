@@ -41,7 +41,7 @@ from trinity.tools.factories.block_body import BlockBodyFactory
 from trinity.tools.factories.block_hash import BlockHashFactory
 from trinity.tools.factories.common import BlockHeadersQueryFactory
 from trinity.tools.factories.headers import BlockHeaderFactory
-from trinity.tools.factories.receipts import ReceiptFactory
+from trinity.tools.factories.receipts import UninterpretedReceiptFactory
 
 
 MAINNET_GENESIS_HASH = to_bytes(hexstr='0xd4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3')  # noqa: E501
@@ -134,7 +134,10 @@ class ReceiptsPayloadFactory(factory.Factory):
     request_id = factory.Sequence(lambda n: n)
     buffer_value = 0
     receipts = factory.LazyFunction(
-        lambda: (tuple(ReceiptFactory.create_batch(2)), tuple(ReceiptFactory.create_batch(3)))
+        lambda: (
+            tuple(UninterpretedReceiptFactory.create_batch(2)),
+            tuple(UninterpretedReceiptFactory.create_batch(3)),
+        )
     )
 
 
