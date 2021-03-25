@@ -1,4 +1,0 @@
-Implement backfill of historicial blocks during beam sync.
-The backfill automatically pauses if beam sync starts lagging behind and resumes
-as soon as it catches up again. It can also be disabled altogether
-via the ``--disable-backfill`` flag.

@@ -1,1 +1,0 @@
-Fix the QueueFull error raised occasionally during sync.

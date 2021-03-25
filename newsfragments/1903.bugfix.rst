@@ -1,2 +1,0 @@
-Handle error (don't crash Trinity) when metrics can't be written to the InfluxDB
-because of any connection errors.

@@ -1,2 +1,0 @@
-Fix a crash when a NEIGHBORS packet contains invalid node records.
-We also no longer process unsolicited NEIGHBORS packets.

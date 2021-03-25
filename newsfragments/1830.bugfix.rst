@@ -1,1 +1,0 @@
-Crash-fix, when Beam Sync's target block is numbered 2 through 7.

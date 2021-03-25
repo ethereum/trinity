@@ -5,6 +5,153 @@ Trinity is moving fast. Read up on all the latest improvements.
 
 .. towncrier release notes start
 
+Trinity 0.1.0-alpha.37 (2021-03-24)
+-----------------------------------
+
+Features
+~~~~~~~~
+
+- During Beam Sync, Trinity now collects account data that is not touched by
+  active blocks. We often call this "state backfill".
+  Obtaining the full state is the best way to make sure that your node cannot be
+  knocked offline with a Denial-of-Service attack that accesses a bunch of state
+  in a series of blocks. (`#854 <https://github.com/ethereum/trinity/issues/854>`__)
+- Keep up with the tip of the chain a bit better. (By also listening to ``NewBlockHashes``) (`#1791 <https://github.com/ethereum/trinity/issues/1791>`__)
+- Make the JSON-RPC API HTTP listen address configurable via ``--http-listen-address`` (`#1795 <https://github.com/ethereum/trinity/issues/1795>`__)
+- Rename ``--rpcport``  to ``--http-port`` to better align with related flags (`#1803 <https://github.com/ethereum/trinity/issues/1803>`__)
+- Only print JSON HTTP API request access logs when Trinity runs with ``DEBUG2`` logs. (`#1804 <https://github.com/ethereum/trinity/issues/1804>`__)
+- Implement backfill of historical blocks during Beam Sync.
+  The backfill automatically pauses if Beam Sync starts lagging behind and resumes
+  as soon as it catches up again. It can also be disabled altogether
+  via the ``--disable-backfill`` flag. (`#1819 <https://github.com/ethereum/trinity/issues/1819>`__)
+- Implement minimal viable ``eth_sendRawTransaction`` JSON-RPC API (`#1855 <https://github.com/ethereum/trinity/issues/1855>`__)
+- Show state backfill progress as info logs (`#1872 <https://github.com/ethereum/trinity/issues/1872>`__)
+- Make ``eth_getTransactionCount`` work during Beam Sync by requesting state on-demand from peers. (`#1873 <https://github.com/ethereum/trinity/issues/1873>`__)
+- Implement pause/resume for historical header backfill. The backfill will pause
+  if Beam Sync starts lagging too far behind and will resume as it catches up again. (`#1879 <https://github.com/ethereum/trinity/issues/1879>`__)
+- Trinity on DappNode: Ensure sync progress is displayed on the dashboard. (`#1909 <https://github.com/ethereum/trinity/issues/1909>`__)
+- Make it configurable which JSON-RPC modules are exposed via HTTP.
+  Prior to this change, every JSON-RPC module was exposed via HTTP if Trinity was
+  instructed to run with the HTTP server enabled. With this change, the HTTP
+  server is enabled via the ``--enable-http-apis`` flag which takes a string
+  value of either ``"*"`` to expose every module via HTTP or a comma seperated
+  list of module names e.g. ``"eth, net"``. (`#1911 <https://github.com/ethereum/trinity/issues/1911>`__)
+- Track block and header db health in metrics. (`#2022 <https://github.com/ethereum/trinity/issues/2022>`__)
+- Report Beam Sync pivot rate to metrics for visualization on grafana dashboard. (`#2040 <https://github.com/ethereum/trinity/issues/2040>`__)
+- Implement a preferred node component to support preferred nodes with discovery disabled. (`#2051 <https://github.com/ethereum/trinity/issues/2051>`__)
+- Introduce NewBlockComponent to be a better p2p participant. By rebroadcasting
+  blocks as they are received from peers, and after they have been imported. (`#2058 <https://github.com/ethereum/trinity/issues/2058>`__)
+- Ensure Clique checkpoints align to epoch length when resolving via etherscan. (`#2072 <https://github.com/ethereum/trinity/issues/2072>`__)
+- Add support for the ``eth_chainId`` RPC endpoint. (`#2076 <https://github.com/ethereum/trinity/issues/2076>`__)
+- Support ``admin_removePeer`` RPC endpoint. (`#2077 <https://github.com/ethereum/trinity/issues/2077>`__)
+- Add support for Berlin, from py-evm `v0.4.0-alpha.1
+  <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-4-0-alpha-1-2021-03-22>`__ through `v0.4.0-alpha.3
+  <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-4-0-alpha-3-2021-03-24>`__
+  (`#2126 <https://github.com/ethereum/trinity/issues/2126>`__)
+
+  - More changes imported from `py-evm v0.3.0-alpha.18
+    <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-18-2020-06-25>`_ (`#1818 <https://github.com/ethereum/trinity/issues/1818>`__)
+  - More changes imported from `py-evm v0.3.0-alpha.19
+    <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-19-2020-08-31>`__ (`#2004 <https://github.com/ethereum/trinity/issues/2004>`__)
+
+
+Bugfixes
+~~~~~~~~
+
+- Beam Sync hung indefinitely if your best peer gave you an empty response for
+  state data, and it was your only peer. Now, Beam Sync recovers gracefully and
+  the best peer is asked for state data again, after a brief pause. (`#1811 <https://github.com/ethereum/trinity/issues/1811>`__)
+- Syncing seemed to race ahead and halt and race ahead. Header and block body buffering was reworked
+  to run a bit smoother. (`#1820 <https://github.com/ethereum/trinity/issues/1820>`__)
+- Fix for when a connection is lost while sending ``Pong``: ``p2p.exceptions.PeerConnectionLost:
+  Attempted to send msg with cmd id 3 to ...`` (`#1821 <https://github.com/ethereum/trinity/issues/1821>`__)
+- Apply UPnP to TCP as well. (`#1829 <https://github.com/ethereum/trinity/issues/1829>`__)
+- Crash-fix, when Beam Sync's target block is numbered 2 through 7. (`#1830 <https://github.com/ethereum/trinity/issues/1830>`__)
+- Only return unique trie nodes in NodeData responses to peers. Before this fix, Trinity<->Trinity
+  connections where one sends a GetNodeData with duplicate hashes would cause the receiving end to
+  never get the response. (it failed a validation check, and couldn't be certain the response was even
+  intended for the given request) (`#1834 <https://github.com/ethereum/trinity/issues/1834>`__)
+- Catch and resolve PeerConnectionLost during stream_transport_messages() (`#1846 <https://github.com/ethereum/trinity/issues/1846>`__)
+- Ensure we do not relay transactions with mismatching chain id (`#1855 <https://github.com/ethereum/trinity/issues/1855>`__)
+- Log a user-friendly message on JSON-RPC API errors (`#1870 <https://github.com/ethereum/trinity/issues/1870>`__)
+- Catch exception and present user friendly error when a request for an receipt
+  to an unknown transaction is send to the ``eth_getTransactionReceipt`` API. (`#1871 <https://github.com/ethereum/trinity/issues/1871>`__)
+- Ensure JSON-RPC API do work with hexadecimal block identifier during Beam Sync (`#1873 <https://github.com/ethereum/trinity/issues/1873>`__)
+- Fix ``ConnectionBusy`` exception taking whole node down. The fix makes it so
+  that additional ``GetBlockHeaders`` request (for historical backfill) are allowed
+  to be queued up. (`#1879 <https://github.com/ethereum/trinity/issues/1879>`__)
+- Handle error (don't crash Trinity) when metrics can't be written to the InfluxDB
+  because of any connection errors. (`#1903 <https://github.com/ethereum/trinity/issues/1903>`__)
+- Make logs a little cleaner by not including stack traces in warnings
+  that are generated by hitting missing RPC endpoints. (`#1913 <https://github.com/ethereum/trinity/issues/1913>`__)
+- Fix a crash when a NEIGHBORS packet contains invalid node records.
+  We also no longer process unsolicited NEIGHBORS packets. (`#1995 <https://github.com/ethereum/trinity/issues/1995>`__)
+- Fix the QueueFull error raised occasionally during sync. (`#2027 <https://github.com/ethereum/trinity/issues/2027>`__)
+- No longer skip preferred peers from list of connection candidates (`#2035 <https://github.com/ethereum/trinity/issues/2035>`__)
+- Use asks library for asyncio service http requests. (`#2069 <https://github.com/ethereum/trinity/issues/2069>`__)
+- Handle error in system metrics collecting for dead processes. (`#2083 <https://github.com/ethereum/trinity/issues/2083>`__)
+- Update EIP1085 validation utils to strictly enforce address formatting. (`#2086 <https://github.com/ethereum/trinity/issues/2086>`__)
+- Update header validation strategy in NewBlock component to support multiple consensus types. (`#2089 <https://github.com/ethereum/trinity/issues/2089>`__)
+- Fix crash when Trinity was launched with a checkpoint too close from tip in Beam Sync mode (`#2091 <https://github.com/ethereum/trinity/issues/2091>`__)
+
+
+Performance improvements
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Speed up block import during Beam Sync using "Spread Beam". It asks multiple peers for the trie
+  node data that's on the critical path for importing the current block. (`#1101 <https://github.com/ethereum/trinity/issues/1101>`__)
+- Speed up Beam Sync a bit by only asking for critical state data from our fastest peer, instead of
+  bundling in the state data needed for pending blocks. (`#1947 <https://github.com/ethereum/trinity/issues/1947>`__)
+- Stop holding the event loop for so long when downloading state for Beam Sync.
+  It was causing performance issues. (`#1984 <https://github.com/ethereum/trinity/issues/1984>`__)
+- Transmit the logs to the logging aggregator process in a separate thread. This
+  helps avoid holding the async event loop for too long. (`#1989 <https://github.com/ethereum/trinity/issues/1989>`__)
+- Move the last of the Beam state download database calls out of the event loop. (`#1990 <https://github.com/ethereum/trinity/issues/1990>`__)
+- Move command decoding out of the event loop. (`#1991 <https://github.com/ethereum/trinity/issues/1991>`__)
+- More cooperative asyncio coroutines in a few places. (`#1992 <https://github.com/ethereum/trinity/issues/1992>`__)
+
+
+Improved Documentation
+~~~~~~~~~~~~~~~~~~~~~~
+
+- Mention Görli support in docs (homepage + cookbook) (`#1780 <https://github.com/ethereum/trinity/issues/1780>`__)
+- Now logs more information during Beam Sync about the intermediate progress in the middle of a block. (`#1916 <https://github.com/ethereum/trinity/issues/1916>`__)
+- Display the JSON-RPC API URL on the DappNode package view (`#2009 <https://github.com/ethereum/trinity/issues/2009>`__)
+- Extend the DappNode guide with a paragraph that explains how to connect Trinity
+  to DappNode's default Geth node. (`#2012 <https://github.com/ethereum/trinity/issues/2012>`__)
+- Trinity on DappNode:
+
+  - Ensure the package uses the timezone of the host machine.
+    This is to ensure the reported logs use the correct time and match the reported metrics.
+
+  - Allow HTTP requests from external addresses. This ensures the DappNode dashboard can
+    show syncing progress and users can perform requests against the node. Note that the
+    DappNode itself is shielded from the external world and only allows access via VPN or
+    its own local W-LAN.
+
+  - Don't map Trinity's source directory as volume because it is preventing us from having clean
+    updates. (`#2013 <https://github.com/ethereum/trinity/issues/2013>`__)
+- Create ``make create-dev-dappnode-image`` command to make the creation of temporary
+  dappnode packages easier and reduce the chances of human error. (`#2030 <https://github.com/ethereum/trinity/issues/2030>`__)
+
+
+Deprecations and Removals
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- BREAKING CHANGE: The ``--enable-http`` flag is no longer supported, use ``--enable-http-apis``
+  instead. Read the "feature" section for more information. (`#1911 <https://github.com/ethereum/trinity/issues/1911>`__)
+
+
+Internal Changes - for Trinity Contributors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Make TaskQueue.complete() async (`#1997 <https://github.com/ethereum/trinity/issues/1997>`__)
+- Upgrade some dependencies: geth to v1.10.0, eth-tester to v0.5.0-beta.3, pytest-xdist to v1.34.0, and coincurve to v15. Also fixed a couple flaky tests and removed the geth bootnodes (because of unresolved issues on Trinity's end, probably partially due to not having an eth/66 implementation). (`#2124 <https://github.com/ethereum/trinity/issues/2124>`__)
+- Refactored transaction handling into an obaque blob. Previousy, code assumed a fixed transaction
+  shape of a list of bytes, which is no longer accurate (as of EIP-2930). Also, don't default
+  maxfail=10 locally, and squash a couple test warnings. (`#2215 <https://github.com/ethereum/trinity/issues/2215>`__)
+
+
 Trinity 0.1.0-alpha.36 (2020-06-18)
 -----------------------------------
 
@@ -42,7 +189,7 @@ Features
 - Implement backfilling of gaps in the header chain (introduced through checkpointing) for
   sync modes ``header`` and ``beam``. This background job can be disable via
   the ``--disable-backfill`` flag. (`#1714 <https://github.com/ethereum/trinity/issues/1714>`__)
-- Upgraded py-evm to v0.3.0-alpha.16 -- See `py-evm's release notes
+- Upgraded py-evm to v0.3.0-alpha.16 -- See `py-evm v0.3.0-alpha.16 release notes
   <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-16-2020-05-27>`_ (`#1761 <https://github.com/ethereum/trinity/issues/1761>`__)
 - Upgraded py-evm to v0.3.0-alpha.17 -- See `py-evm v0.3.0-alpha.17 release notes
   <https://py-evm.readthedocs.io/en/latest/release_notes.html#py-evm-0-3-0-alpha-17-2020-06-02>`_ (`#1768 <https://github.com/ethereum/trinity/issues/1768>`__)
@@ -61,7 +208,7 @@ Bugfixes
   and web3.py v5.9.0 (`#1724 <https://github.com/ethereum/trinity/issues/1724>`__)
 - Return checksum address for ``to`` field in ``eth_getTransactionReceipt`` RPC API (`#1749 <https://github.com/ethereum/trinity/issues/1749>`__)
 - Fix etherscan checkpoint resolving for Ropsten and Görli. (`#1782 <https://github.com/ethereum/trinity/issues/1782>`__)
-- Fix beam sync crashing when running under Clique consensus (e.g. Görli) (`#1786 <https://github.com/ethereum/trinity/issues/1786>`__)
+- Fix Beam Sync crashing when running under Clique consensus (e.g. Görli) (`#1786 <https://github.com/ethereum/trinity/issues/1786>`__)
 
 
 Improved Documentation
@@ -276,7 +423,7 @@ Features
   propagate a proper error to the user in case the syntax is used for an unsupported networḱ. (`#1269 <https://github.com/ethereum/trinity/issues/1269>`__)
 - Automatically rotate logfiles across runs (`#1294 <https://github.com/ethereum/trinity/issues/1294>`__)
 - Add support for `eth_getTransactionByHash` JSON-RPC API (`#1329 <https://github.com/ethereum/trinity/issues/1329>`__)
-- When resuming beam sync, prefer to pick up from the canonical tip, if it's not too far behind. (`#1349 <https://github.com/ethereum/trinity/issues/1349>`__)
+- When resuming Beam Sync, prefer to pick up from the canonical tip, if it's not too far behind. (`#1349 <https://github.com/ethereum/trinity/issues/1349>`__)
 
 
 Bugfixes
@@ -288,7 +435,7 @@ Bugfixes
 Performance improvements
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-- Speed up beam sync shutdown, and second launch from checkpoint (`#1345 <https://github.com/ethereum/trinity/issues/1345>`__)
+- Speed up Beam Sync shutdown, and second launch from checkpoint (`#1345 <https://github.com/ethereum/trinity/issues/1345>`__)
 
 
 Deprecations and Removals
@@ -401,32 +548,32 @@ Features
   performing proper DevP2p handshakes using multiple sub-protocols without
   needing involvement of the ``BasePeer``. (`#869 <https://github.com/ethereum/trinity/issues/869>`__)
 - Use the new ``p2p.handshake`` APIs in the ``p2p.peer.BasePeer`` handshake logic. (`#887 <https://github.com/ethereum/trinity/issues/887>`__)
-- If Trinity is beam syncing and a call to `eth_getBalance` requests data which is not in
+- If Trinity is Beam Sync and a call to `eth_getBalance` requests data which is not in
   the local database, Trinity asks for the data over the network. (`#894 <https://github.com/ethereum/trinity/issues/894>`__)
 - Speculative Execution in Beam Sync: split block transactions to run them in parallel, for speedup. (`#899 <https://github.com/ethereum/trinity/issues/899>`__)
-- Allow beam sync to start from a trusted checkpoint.
+- Allow Beam Sync to start from a trusted checkpoint.
   Specify a checkpoint via CLI parameter such as:
 
   ``--beam-from-checkpoint="eth://block/byhash/<hash>?score=<score>"``
 
-  When given, beam sync will use this as a checkpoint
+  When given, Beam Sync will use this as a checkpoint
   to avoid having to download the entire chain of headers
   first. (`#921 <https://github.com/ethereum/trinity/issues/921>`__)
 - Expose the `force-beam-block-number` config as a command line parameter.
-  The config is useful for testing to force beam sync to activate on a given block number. (`#923 <https://github.com/ethereum/trinity/issues/923>`__)
+  The config is useful for testing to force Beam Sync to activate on a given block number. (`#923 <https://github.com/ethereum/trinity/issues/923>`__)
 - Add ``p2p_version`` to ``p2p.peer.BasePeerContext`` properties and use for handshake. (`#931 <https://github.com/ethereum/trinity/issues/931>`__)
-- If `eth_getCode` is called during beam sync but the requested data is not available
+- If `eth_getCode` is called during Beam Sync but the requested data is not available
   locally trinity will attempt to fetch the requested data from remote peers. (`#944 <https://github.com/ethereum/trinity/issues/944>`__)
 - Beam Sync: start backfilling data, especially as a way to gather performance data about peers, and
-  improve the performance of beam sync importing. (`#951 <https://github.com/ethereum/trinity/issues/951>`__)
+  improve the performance of Beam Sync importing. (`#951 <https://github.com/ethereum/trinity/issues/951>`__)
 - Add ``p2p.service.run_service`` which implements a context manager API for running a ``p2p.service.BaseService``. (`#955 <https://github.com/ethereum/trinity/issues/955>`__)
 - Add ``p2p.connection.Connection`` service which actively manages the ``p2p.multiplexer.Multiplexer`` exposing an API for registering handler callbacks for individuall protocol commands or entire protocols, as well as access to general metadata about the p2p connection. (`#956 <https://github.com/ethereum/trinity/issues/956>`__)
-- If `eth_getStorageAt` is called during beam sync but the requested data is not available
+- If `eth_getStorageAt` is called during Beam Sync but the requested data is not available
   locally trinity will attempt to fetch the requested data from remote peers. (`#957 <https://github.com/ethereum/trinity/issues/957>`__)
 - ``p2p.peer.BasePeer`` now uses ``ConnectionAPI`` for underlying protocol interactions. (`#962 <https://github.com/ethereum/trinity/issues/962>`__)
 - Allow Trinity to automatically resolve a checkpoint through the etherscan API
   using this syntax: ``--beam-from-checkpoint="eth://block/byetherscan/latest"`` (`#963 <https://github.com/ethereum/trinity/issues/963>`__)
-- Fetch missing data from remote peers, if requested over json-rpc during beam sync.
+- Fetch missing data from remote peers, if requested over json-rpc during Beam Sync.
   Requests for data at an old block will fail; remote peers probably don't have it. (`#975 <https://github.com/ethereum/trinity/issues/975>`__)
 - Expose the ``MiningChain`` on the `db-shell` REPL to allow creating blocks on a REPL (`#977 <https://github.com/ethereum/trinity/issues/977>`__)
 - Add ``ConnectionAPI.get_p2p_receipt`` for fetching the ``HandshakeReceipt`` for the base ``p2p`` protocol. (`#986 <https://github.com/ethereum/trinity/issues/986>`__)
@@ -484,7 +631,7 @@ Bugfixes
   Performance wise, both methods should be roughly compareable and since many
   task have already been moved to their own managed processes over time, using
   a ``ThreadPoolExecutor`` strikes as a simple solution to fix that bug. (`#1004 <https://github.com/ethereum/trinity/issues/1004>`__)
-- Fix a bug where trying to start beam sync from a checkpoint would throw an error
+- Fix a bug where trying to start Beam Sync from a checkpoint would throw an error
   due to an uninitialized var if a request to a peer would raise an error while
   we are trying to resolve a header from it. (`#1005 <https://github.com/ethereum/trinity/issues/1005>`__)
 - Fix for ``TrioService.run_task`` to ensure that when a background task throws an unhandled exception that it causes full service cancellation and that the exception is propagated. (`#1040 <https://github.com/ethereum/trinity/issues/1040>`__)
@@ -586,10 +733,10 @@ Bugfixes
 - Header syncing is now limited in how far ahead of block sync it will go (`#704 <https://github.com/ethereum/trinity/issues/704>`__)
 - Prevent ``KeyError`` exception raised at ``del self._dependencies[prune_task_id]`` during syncing (`#731 <https://github.com/ethereum/trinity/issues/731>`__)
 - Fix a race condition in Trinity's event bus announcement ceremony (`#763 <https://github.com/ethereum/trinity/issues/763>`__)
-- Several very uncommon issues during syncing, more likely during beam sync (`#772 <https://github.com/ethereum/trinity/issues/772>`__)
+- Several very uncommon issues during syncing, more likely during Beam Sync (`#772 <https://github.com/ethereum/trinity/issues/772>`__)
 - Squashed bug that redownloads block bodies and logs this warning:
   ``ValidationError: Cannot finish prereq BlockImportPrereqs.StoreBlockBodies of task`` (`#780 <https://github.com/ethereum/trinity/issues/780>`__)
-- When starting beam sync, download previous six block bodies, so that uncle validation can succeed.
+- When starting Beam Sync, download previous six block bodies, so that uncle validation can succeed.
   Import needs to verify that new block imports don't add uncles that were already added. (`#803 <https://github.com/ethereum/trinity/issues/803>`__)
 
 

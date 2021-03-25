@@ -1,5 +1,0 @@
-During Beam Sync, Trinity now collects account data that is not touched by
-active blocks. We often call this "state backfill".
-Obtaining the full state is the best way to make sure that your node cannot be
-knocked offline with a Denial-of-Service attack that accesses a bunch of state
-in a series of blocks.

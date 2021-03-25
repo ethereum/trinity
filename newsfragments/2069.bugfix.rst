@@ -1,1 +1,0 @@
-Use asks library for asyncio service http requests.

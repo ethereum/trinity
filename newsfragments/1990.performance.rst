@@ -1,1 +1,0 @@
-Move the last of the Beam state download database calls out of the event loop.

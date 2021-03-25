@@ -1,2 +1,0 @@
-Catch exception and present user friendly error when a request for an receipt
-to an unknown transaction is send to the ``eth_getTransactionReceipt`` API.

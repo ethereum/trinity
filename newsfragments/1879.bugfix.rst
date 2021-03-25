@@ -1,3 +1,0 @@
-Fix ``ConnectionBusy`` exception taking whole node down. The fix makes it so
-that additional``GetBlockHeaders`` request (for historical backfill) are allowed
-to be queued up.

@@ -1,2 +1,0 @@
-BREAKING CHANGE: The ``--enable-http`` flag is no longer supported, use ``--enable-http-apis``
-instead. Read the "feature" section for more additional information.

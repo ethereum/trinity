@@ -1,6 +1,0 @@
-Make it configurable which JSON-RPC modules are exposed via HTTP.
-Prior to this change, every JSON-RPC module was exposed via HTTP if Trinity was
-instructed to run with the HTTP server enabled. With this change, the HTTP
-server is enabled via the ``--enable-http-apis`` flag which takes a string
-value of either ``"*"`` to expose every module via HTTP or a comma seperated
-list of module names e.g. ``"eth, net"``.

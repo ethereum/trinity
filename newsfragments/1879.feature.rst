@@ -1,2 +1,0 @@
-Implement pause/resume for historical header backfill. The backfill will pause
-if beam sync starts lagging too far behind and will resume as it catches up again.

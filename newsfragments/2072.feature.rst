@@ -1,1 +1,0 @@
-Ensure Clique checkpoints align to epoch length when resolving via etherscan.

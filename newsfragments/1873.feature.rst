@@ -1,1 +1,0 @@
-Make ``eth_getTransactionCount`` work during beam sync by requesting state on-demand from peers.

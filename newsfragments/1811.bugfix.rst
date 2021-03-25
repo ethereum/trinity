@@ -1,3 +1,0 @@
-Beam Sync hung indefinitely if your best peer gave you an empty response for
-state data, and it was your only peer. Now, Beam Sync recovers gracefully and
-the best peer is asked for state data again, after a brief pause.

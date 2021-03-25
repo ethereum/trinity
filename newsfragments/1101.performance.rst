@@ -1,2 +1,0 @@
-Speed up block import during Beam Sync using "Spread Beam". It asks multiple peers for the trie
-node data that's on the critical path for importing the current block.

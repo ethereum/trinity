@@ -1,1 +1,0 @@
-Log a user-friendly message on JSON-RPC API errors

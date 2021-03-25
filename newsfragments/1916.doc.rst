@@ -1,1 +1,0 @@
-Now logs more information during beam sync about the intermediate progress in the middle of a block.

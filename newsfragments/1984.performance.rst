@@ -1,2 +1,0 @@
-Stop holding the event loop for so long when downloading state for Beam Sync.
-It was causing performance issues.

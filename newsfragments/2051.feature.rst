@@ -1,1 +1,0 @@
-Implement a preferred node component to support preferred nodes with discovery disabled.

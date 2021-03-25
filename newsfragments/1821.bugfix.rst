@@ -1,2 +1,0 @@
-Fix for when a connection is lost while sending ``Pong``: ``p2p.exceptions.PeerConnectionLost:
-Attempted to send msg with cmd id 3 to ...``

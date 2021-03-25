@@ -1,1 +1,0 @@
-Display the JSON-RPC API URL on the DappNode package view

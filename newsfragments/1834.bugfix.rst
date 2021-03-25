@@ -1,4 +1,0 @@
-Only return unique trie nodes in NodeData responses to peers. Before this fix, Trinity<->Trinity
-connections where one sends a GetNodeData with duplicate hashes would cause the receiving end to
-never get the response. (it failed a validation check, and couldn't be certain the response was even
-intended for the given request)

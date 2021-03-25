@@ -1,1 +1,0 @@
-Upgrade some dependencies: geth to v1.10.0, eth-tester to v0.5.0-beta.3, pytest-xdist to v1.34.0, and coincurve to v15. Also fixed a couple flaky tests and removed the geth bootnodes (because of unresolved issues on Trinity's end, probably partially due to not having a eth/66 implementation).

@@ -1,2 +1,0 @@
-Transmit the logs to the logging aggregator process in a separate thread. This
-helps avoid holding the async event loop for too long.
