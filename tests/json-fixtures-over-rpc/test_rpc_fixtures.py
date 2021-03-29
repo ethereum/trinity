@@ -84,6 +84,8 @@ SLOW_TESTS = (
     'loop-exp-nop-1M',
     'loop-mul',
     'loop-mulmod-2M',
+    'loopExp',
+    'loopMul',
     'randomStatetest94_Homestead',
     'randomStatetest94_Byzantium',
     'randomStatetest94_Constantinople',
