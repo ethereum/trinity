@@ -117,6 +117,16 @@ def add_disable_backfill_arg(arg_group: _ArgumentGroup) -> None:
     )
 
 
+def add_disable_block_backfill_arg(arg_group: _ArgumentGroup) -> None:
+    add_shared_argument(
+        arg_group,
+        '--disable-block-backfill',
+        action="store_true",
+        help="Disable only backfilling of blocks (maintaining historical headers)",
+        default=False,
+    )
+
+
 class BaseSyncStrategy(ABC):
 
     @classmethod
@@ -202,6 +212,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
             default=None,
         )
         add_disable_backfill_arg(arg_group)
+        add_disable_block_backfill_arg(arg_group)
         add_sync_from_checkpoint_arg(arg_group)
 
     async def sync(self,
@@ -228,6 +239,7 @@ class BeamSyncStrategy(BaseSyncStrategy):
             args.sync_from_checkpoint,
             args.force_beam_block_number,
             not args.disable_backfill,
+            not args.disable_block_backfill,
             sync_metrics_registry,
         )
 

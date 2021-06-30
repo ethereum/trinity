@@ -138,7 +138,8 @@ class BeamSyncer(Service):
             checkpoint: Checkpoint = None,
             force_beam_block_number: BlockNumber = None,
             enable_backfill: bool = True,
-            enable_state_backfill: bool = True) -> None:
+            enable_state_backfill: bool = True,
+            enable_block_backfill: bool = True) -> None:
         self.logger = get_logger('trinity.sync.beam.chain.BeamSyncer')
 
         self.metrics_registry = metrics_registry
@@ -230,8 +231,9 @@ class BeamSyncer(Service):
             self.manager.cancel()
             return
 
-        self.manager.run_daemon_child_service(self._block_importer)
-        self.manager.run_daemon_child_service(self._header_syncer)
+        if self.enable_block_backfill:
+            self.manager.run_daemon_child_service(self._block_importer)
+            self.manager.run_daemon_child_service(self._header_syncer)
 
         # Kick off the body syncer early (it hangs on the launchpoint header syncer anyway)
         # It needs to start early because we want to "re-run" the header at the tip,

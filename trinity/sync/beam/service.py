@@ -50,6 +50,7 @@ class BeamSyncService(Service):
             checkpoint: Checkpoint = None,
             force_beam_block_number: BlockNumber = None,
             enable_header_backfill: bool = False,
+            enable_block_backfill: bool = False,
             sync_metrics_registry: SyncMetricsRegistry = None) -> None:
         self.logger = get_logger('trinity.sync.beam.service.BeamSyncService')
         self.chain = chain
@@ -60,6 +61,7 @@ class BeamSyncService(Service):
         self.checkpoint = checkpoint
         self.force_beam_block_number = force_beam_block_number
         self.enable_header_backfill = enable_header_backfill
+        self.enable_block_backfill = enable_block_backfill
         self.sync_metrics_registry = sync_metrics_registry
 
     @cached_property
@@ -98,6 +100,7 @@ class BeamSyncService(Service):
                 self.checkpoint,
                 self.force_beam_block_number,
                 self.enable_header_backfill,
+                self.enable_block_backfill,
             )
             self.manager.run_child_service(beam_syncer)
             do_pivot = await self._monitor_for_pivot(beam_syncer)
